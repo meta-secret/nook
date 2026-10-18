@@ -208,6 +208,39 @@ impl PasskeyOrigin<'_> {
     }
 }
 
+/// The relying-party ids a page at `origin` may use for passkeys: its host and
+/// each parent domain above the public suffix, nearest first.
+pub struct PasskeySiteRelyingParties<'a> {
+    pub origin: &'a str,
+}
+
+impl PasskeySiteRelyingParties<'_> {
+    #[must_use]
+    pub fn rp_ids(&self) -> Vec<String> {
+        let Ok(url) = Url::parse(self.origin) else {
+            return Vec::new();
+        };
+        let Some(host) = url.host_str() else {
+            return Vec::new();
+        };
+        let mut candidate = host.to_ascii_lowercase();
+        let mut rp_ids = Vec::new();
+        loop {
+            let scope = PasskeyOrigin {
+                rp_id: &candidate,
+                origin: self.origin,
+            };
+            if scope.validate().is_ok() {
+                rp_ids.push(candidate.clone());
+            }
+            let Some((_, parent)) = candidate.split_once('.') else {
+                return rp_ids;
+            };
+            candidate = parent.to_owned();
+        }
+    }
+}
+
 impl PasskeyAssertionRequest {
     /// Whether the site's allow list admits this credential. A site that lists
     /// credentials accepts only those; an empty list admits any discoverable
@@ -264,6 +297,31 @@ mod tests {
                 }
                 .validate(),
                 self.expected
+            );
+        }
+    }
+
+    /// A Google sign-in page can use passkeys for its host and for google.com;
+    /// public suffixes and malformed origins offer nothing.
+    #[test]
+    fn site_relying_parties_run_from_host_to_registrable_domain() {
+        for (origin, expected) in [
+            (
+                "https://accounts.google.com",
+                vec!["accounts.google.com", "google.com"],
+            ),
+            (
+                "https://shop.example.co.uk",
+                vec!["shop.example.co.uk", "example.co.uk"],
+            ),
+            ("http://localhost:5173", vec!["localhost"]),
+            ("http://example.com", Vec::new()),
+            ("not an origin", Vec::new()),
+        ] {
+            assert_eq!(
+                PasskeySiteRelyingParties { origin }.rp_ids(),
+                expected,
+                "{origin}"
             );
         }
     }

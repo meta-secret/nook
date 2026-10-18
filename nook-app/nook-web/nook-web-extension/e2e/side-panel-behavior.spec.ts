@@ -36,6 +36,7 @@ const accountsSite: SidePanelSiteListing = {
       vaultLabel: 'Personal',
     },
   ],
+  passkeys: [],
 }
 
 const newsSite: SidePanelSiteListing = {
@@ -48,6 +49,7 @@ const newsSite: SidePanelSiteListing = {
       vaultLabel: 'Personal',
     },
   ],
+  passkeys: [],
 }
 
 const unlockedScenario: SidePanelStubScenario = {

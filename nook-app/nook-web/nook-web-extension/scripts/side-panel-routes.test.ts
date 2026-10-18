@@ -191,6 +191,7 @@ describe('side-panel This-site listing (T-2)', () => {
           vaultLabel: 'Work',
         },
       ],
+      passkeys: [],
     })
     expect(fixture.tabsQuery).toHaveBeenCalledWith({
       active: true,
@@ -427,6 +428,42 @@ describe('side-panel This-site listing (T-2)', () => {
     ).toEqual({
       kind: SidePanelSiteListingKind.ListFailed,
     })
+  })
+
+  test('lists the passkeys the page can use, read-only, from passkey vaults', async () => {
+    const fixture = new SidePanelRouteFixture()
+    fixture.passkeyGrants = [RouteData.grant('store_personal', 'Personal')]
+    fixture.passkeyListings.set(
+      'store_personal|example.com',
+      ok({
+        ok: true,
+        accounts: [
+          {
+            credentialId: 'credential-personal',
+            userName: 'person@example.com',
+            userDisplayName: 'Person',
+          },
+        ],
+      }),
+    )
+
+    const listing = await fixture.list()
+
+    if (listing.kind !== SidePanelSiteListingKind.Ready)
+      throw new Error('expected a ready listing')
+    expect(listing.passkeys).toEqual([
+      {
+        userName: 'person@example.com',
+        userDisplayName: 'Person',
+        vaultLabel: 'Personal',
+      },
+    ])
+    // Rust names every relying party the page may claim, nearest first.
+    expect(fixture.passkeyLookups()).toEqual([
+      'store_personal|www.example.com',
+      'store_personal|example.com',
+    ])
+    expect(JSON.stringify(listing)).not.toContain('credential-personal')
   })
 
   test('never asks the session for authenticators', async () => {

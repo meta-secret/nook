@@ -16,6 +16,7 @@ import {
   accountPickerSessions,
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
+import { WebsitePasskeyOptionsMessage } from '../../lib/webauthn-messages'
 import {
   SchemaRuntimeMessageRoute,
   type BackgroundRuntimeMessageRoute,
@@ -73,6 +74,11 @@ export class SidePanelSiteRoutes {
     passwordPairingGrants: extensionPairingIdentity.passwordPairingGrants.bind(
       extensionPairingIdentity,
     ),
+    passkeyPairingGrants: extensionPairingIdentity.passkeyPairingGrants.bind(
+      extensionPairingIdentity,
+    ),
+    passkeyRelyingPartyIds: (origin) =>
+      WebsitePasskeyOptionsMessage.relyingPartyIds(origin),
     sendSessionMessage: extensionPairingIdentity.sendSessionMessage.bind(
       extensionPairingIdentity,
     ),

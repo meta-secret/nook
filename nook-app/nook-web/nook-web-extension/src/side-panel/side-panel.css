@@ -497,6 +497,38 @@ html:has(.side-panel-body) {
   line-height: 1.35;
 }
 
+/* The site's passkeys: read-only rows under the logins; the site asks for
+ * them, so they carry no action. */
+.side-panel-passkeys {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.side-panel-passkeys-label {
+  padding: 14px var(--side-panel-gutter) 4px;
+}
+
+.side-panel-passkeys .side-panel-logins {
+  border-top: 0;
+}
+
+.side-panel-passkey {
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 52px;
+}
+
+.side-panel-passkey .side-panel-passkey-mark {
+  color: var(--muted-foreground);
+}
+
+.side-panel-passkeys-hint {
+  margin: 0;
+  padding: 0 var(--side-panel-gutter) 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .side-panel .side-panel-fill {
   position: relative;
   min-width: 64px;

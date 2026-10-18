@@ -123,12 +123,20 @@ function installSidePanelDemoRuntime(
           kind: protocol.ready,
           display_host: 'accounts.example.com',
           items: savedLogins,
+          passkeys: [
+            {
+              userName: 'alice.martin@example.com',
+              userDisplayName: 'Alice Martin',
+              vaultLabel: 'Personal',
+            },
+          ],
         }
       case protocol.siteEmpty:
         return {
           kind: protocol.ready,
           display_host: 'news.example.org',
           items: [],
+          passkeys: [],
         }
       case protocol.siteNonWeb:
         return { kind: protocol.nonWeb }
@@ -332,6 +340,10 @@ test('leads with This site and fills a saved login without signing in', async ({
     'accounts.example.com',
   )
   await expect(page.getByTestId('side-panel-login')).toHaveCount(2)
+  // The site's passkey is listed read-only under the logins.
+  await expect(page.getByTestId('side-panel-passkey')).toHaveText(
+    /Alice Martin\s*alice\.martin@example\.com · Personal/,
+  )
   await demoBeat(page)
   await page
     .getByRole('button', {

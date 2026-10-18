@@ -3,11 +3,12 @@ This site: the active tab's host and its saved logins, each with Fill. The
 service worker reads the panel's active tab itself; the panel sends only its
 window and, for Fill, a login's opaque id. Logins stay in this component's
 memory, in Rust's order, and are dropped when the tab, its address, the
-panel's visibility or the lock state changes. Authenticators never appear.
+panel's visibility or the lock state changes. The site's passkeys are listed
+read-only: the site asks for them. Authenticators never appear.
 -->
 <script lang="ts">
   import { tick, untrack } from 'svelte'
-  import { CircleAlert, LoaderCircle } from '@lucide/svelte'
+  import { CircleAlert, KeyRound, LoaderCircle } from '@lucide/svelte'
   import {
     I18N_KEYS,
     type I18nKey,
@@ -22,6 +23,7 @@ panel's visibility or the lock state changes. Authenticators never appear.
     sidePanelSite,
     type SidePanelLoginFillRequest,
     type SidePanelLoginItemId,
+    type SidePanelSitePasskey,
     type SidePanelWindowSelection,
   } from '../lib/side-panel-site'
   import ThisSiteLogin from './ThisSiteLogin.svelte'
@@ -78,6 +80,17 @@ panel's visibility or the lock state changes. Authenticators never appear.
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
+  }
+
+  /** The account the site named, falling back to its other name, then the vault. */
+  function passkeyName(passkey: SidePanelSitePasskey): string {
+    return passkey.userDisplayName || passkey.userName || passkey.vaultLabel
+  }
+
+  function passkeyDetail(passkey: SidePanelSitePasskey): string {
+    return passkey.userName && passkey.userName !== passkeyName(passkey)
+      ? `${passkey.userName} · ${passkey.vaultLabel}`
+      : passkey.vaultLabel
   }
 
   function emptyText(host: string): string {
@@ -304,18 +317,52 @@ panel's visibility or the lock state changes. Authenticators never appear.
       </p>
     </div>
   {:else if view.body.kind === ThisSiteBodyKind.Matches}
-    <ul class="side-panel-logins">
-      {#each view.body.items as login (`${login.itemId.vaultStoreId}:${login.itemId.secretId}`)}
-        <ThisSiteLogin
-          {i18n}
-          {login}
-          count={view.body.count}
-          {fill}
-          activity={fillActivity}
-          onfill={fillRow}
-        />
-      {/each}
-    </ul>
+    {#if view.body.items.length > 0}
+      <ul class="side-panel-logins">
+        {#each view.body.items as login (`${login.itemId.vaultStoreId}:${login.itemId.secretId}`)}
+          <ThisSiteLogin
+            {i18n}
+            {login}
+            count={view.body.count}
+            {fill}
+            activity={fillActivity}
+            onfill={fillRow}
+          />
+        {/each}
+      </ul>
+    {/if}
+    {#if view.body.passkeys.length > 0}
+      <div class="side-panel-passkeys" data-testid="side-panel-passkeys">
+        <h2 class="side-panel-label side-panel-passkeys-label">
+          {translatePlain(I18N_KEYS.ExtensionActionSitePasskeysLabel)}
+        </h2>
+        <ul class="side-panel-logins">
+          {#each view.body.passkeys as passkey, index (index)}
+            <li
+              class="side-panel-login side-panel-passkey"
+              data-testid="side-panel-passkey"
+            >
+              <KeyRound
+                size={16}
+                class="side-panel-passkey-mark"
+                aria-hidden="true"
+              />
+              <div class="side-panel-login-copy">
+                <span class="side-panel-login-name" title={passkey.userName}
+                  >{passkeyName(passkey)}</span
+                >
+                <span class="side-panel-login-vault"
+                  >{passkeyDetail(passkey)}</span
+                >
+              </div>
+            </li>
+          {/each}
+        </ul>
+        <p class="side-panel-passkeys-hint">
+          {translatePlain(I18N_KEYS.ExtensionActionSitePasskeysHint)}
+        </p>
+      </div>
+    {/if}
   {:else if view.body.kind === ThisSiteBodyKind.Empty}
     <div class="side-panel-site-status" data-testid="side-panel-site-empty">
       <p class="side-panel-site-status-lead">{emptyText(view.body.host)}</p>

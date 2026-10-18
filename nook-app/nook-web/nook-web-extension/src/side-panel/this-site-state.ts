@@ -8,12 +8,13 @@ import {
   type SidePanelLoginItemId,
   type SidePanelSiteListing,
   type SidePanelSiteLogins,
+  type SidePanelSitePasskeys,
 } from '../lib/side-panel-site'
 import { SidePanelChangeKind } from './side-panel-runtime'
 
 /**
- * This site: the saved logins for the active tab of the panel's window, as
- * the service worker and Rust answer them. The panel keeps them in memory
+ * This site: the saved logins and passkeys for the active tab of the panel's
+ * window, as the service worker and Rust answer them. The panel keeps them in memory
  * only, in Rust's order, and drops them when the tab, its address, the
  * panel's visibility or the lock state changes. Every answer ends in
  * something visible: logins, an empty or unavailable page, or a failure.
@@ -61,6 +62,7 @@ export type ThisSiteBody =
       readonly kind: ThisSiteBodyKind.Matches
       readonly items: SidePanelSiteLogins
       readonly count: ThisSiteMatchCount
+      readonly passkeys: SidePanelSitePasskeys
     }
   | { readonly kind: ThisSiteBodyKind.Empty; readonly host: string }
   | { readonly kind: ThisSiteBodyKind.NotWeb }
@@ -161,6 +163,7 @@ type ThisSiteFillAnswerRequest = {
 type ThisSiteMatchesRequest = {
   readonly host: string
   readonly items: SidePanelSiteLogins
+  readonly passkeys: SidePanelSitePasskeys
 }
 
 type ThisSiteRowRequest = {
@@ -201,6 +204,7 @@ export class ThisSiteViews {
         const matches: ThisSiteMatchesRequest = {
           host: listing.display_host,
           items: listing.items,
+          passkeys: listing.passkeys,
         }
         const ready: ThisSiteView = {
           host: { kind: ThisSiteHostKind.Named, host: listing.display_host },
@@ -390,8 +394,8 @@ export class ThisSiteViews {
   }
 
   private static matches(request: ThisSiteMatchesRequest): ThisSiteBody {
-    const { host, items } = request
-    switch (items.length) {
+    const { host, items, passkeys } = request
+    switch (items.length + passkeys.length) {
       case 0:
         return { kind: ThisSiteBodyKind.Empty, host }
       default:
@@ -399,6 +403,7 @@ export class ThisSiteViews {
           kind: ThisSiteBodyKind.Matches,
           items,
           count: ThisSiteViews.matchCount(items),
+          passkeys,
         }
     }
   }

@@ -1,5 +1,8 @@
 import { Effect } from 'effect'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import {
+  extensionSessionGrantIdentity,
+  type StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
   extensionSessionInteractiveDeadline,
@@ -9,7 +12,11 @@ import { ExtensionSessionMessageType } from '../../lib/extension-session-message
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
 import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
 import type { SidePanelPageFillMessage } from '../../lib/side-panel-page-fill'
-import type { SidePanelWindowSelection } from '../../lib/side-panel-site'
+import type {
+  SidePanelSitePasskey,
+  SidePanelSitePasskeys,
+  SidePanelWindowSelection,
+} from '../../lib/side-panel-site'
 import type { accountPickerSessions } from './account-pickers'
 import type { ExtensionSessionTransportResult } from './session-document'
 import {
@@ -18,6 +25,10 @@ import {
 } from './session-lifecycle'
 import type { SidePanelSenderAdmission } from './side-panel-sender'
 import type { SidePanelTabTarget } from './side-panel-tab-target'
+import {
+  decode_website_passkey_account_list,
+  WebsitePasskeyAccountListKind,
+} from './passkey-session-adapter'
 
 type LoginAvailabilityRequest = Parameters<
   typeof accountPickerSessions.loginAccountAvailabilityForOrigin
@@ -46,6 +57,11 @@ export interface SidePanelSiteDependencies {
   readonly authorizationIsCurrent: (generation: string) => boolean
   readonly authorizationCleanupPending: () => Promise<boolean>
   readonly passwordPairingGrants: () => Promise<SidePanelPairingGrants>
+  readonly passkeyPairingGrants: () => Promise<SidePanelPairingGrants>
+  /** Rust's relying-party ids for a page at this origin, nearest first. */
+  readonly passkeyRelyingPartyIds: (
+    origin: string,
+  ) => Promise<readonly string[]>
   readonly sendSessionMessage: (
     message: ExtensionSessionTransportRequest,
   ) => Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
@@ -92,6 +108,22 @@ export type SidePanelLogins =
 
 export interface SidePanelLoginsRequest {
   readonly grants: SidePanelPairingGrants
+  readonly origin: string
+}
+
+export enum SidePanelPasskeysKind {
+  Listed = 'listed',
+  Failed = 'failed',
+}
+
+export type SidePanelPasskeys =
+  | {
+      readonly kind: SidePanelPasskeysKind.Listed
+      readonly passkeys: SidePanelSitePasskeys
+    }
+  | { readonly kind: SidePanelPasskeysKind.Failed }
+
+export interface SidePanelPasskeysRequest {
   readonly origin: string
 }
 
@@ -187,6 +219,61 @@ export class SidePanelSiteAccess {
           return failed
         }
       }
+    },
+  )
+
+  /**
+   * The vault passkeys a page at this origin can use: Rust's listing for each
+   * relying party the origin may claim. Any failed lookup fails them all.
+   */
+  passkeys = Effect.fn(
+    this.generatorContext,
+    function* (request: SidePanelPasskeysRequest) {
+      const failed: SidePanelPasskeys = { kind: SidePanelPasskeysKind.Failed }
+      const grants = yield* Effect.tryPromise(() =>
+        this.dependencies.passkeyPairingGrants(),
+      )
+      const rpIds = yield* Effect.tryPromise(() =>
+        this.dependencies.passkeyRelyingPartyIds(request.origin),
+      )
+      const passkeys: SidePanelSitePasskey[] = []
+      for (const grant of grants) {
+        for (const rpId of rpIds) {
+          const lookup: ExtensionSessionTransportRequest = {
+            type: ExtensionSessionMessageType.ListPasskeys,
+            payload: {
+              ...extensionSessionGrantIdentity(grant),
+              rpId,
+              origin: request.origin,
+              queue: this.interactiveQueue(),
+            },
+          }
+          const delivery = yield* Effect.tryPromise(() =>
+            this.dependencies.sendSessionMessage(lookup),
+          )
+          if (delivery.isErr()) return failed
+          const list = decode_website_passkey_account_list(delivery.value)
+          if (
+            list.kind !== WebsitePasskeyAccountListKind.Ready ||
+            !('accounts' in list)
+          ) {
+            return failed
+          }
+          for (const account of list.accounts) {
+            const passkey: SidePanelSitePasskey = {
+              userName: account.userName,
+              userDisplayName: account.userDisplayName,
+              vaultLabel: grant.vaultName,
+            }
+            passkeys.push(passkey)
+          }
+        }
+      }
+      const listed: SidePanelPasskeys = {
+        kind: SidePanelPasskeysKind.Listed,
+        passkeys,
+      }
+      return listed
     },
   )
 

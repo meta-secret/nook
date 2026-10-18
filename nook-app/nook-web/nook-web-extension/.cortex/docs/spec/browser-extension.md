@@ -206,11 +206,15 @@ private identity.
 - This site names the active tab's display host and lists that site's saved
   logins, each with its username, vault label, and an explicit Fill.
   - It follows tab activation and URL changes in the panel's window.
-  - An empty list names the site.
+  - An empty list names the site. It is empty only when the site has neither
+    a saved login nor a passkey.
   - One matching login gets the primary Fill. Several matching logins each get
     a secondary Fill.
   - A tab without a website shows "No website in this tab". A Nook vault app
     shows "Nook can't fill on this page". Neither shows a Fill button.
+  - The site's passkeys follow the logins, read-only: name, account, and
+    vault, with no action. The site asks for a passkey, and the website passkey
+    card offers it then.
   - Authenticator items are never listed there.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
@@ -409,6 +413,10 @@ resolves it again at Fill time.
      guessed from an issuer, label, or host.
    - A failed or malformed grant answer returns `list-failed`, never an empty
      list.
+   - The passkey grants' Rust listing adds the site's passkeys. Rust names
+     the relying-party ids the origin may claim, nearest first, and any failed
+     lookup returns `list-failed`. The reply carries account names and the
+     vault label, never a credential id.
 7. The service worker checks the generation again after the listing.
    - A stale generation returns `locked`.
 

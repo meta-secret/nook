@@ -65,12 +65,24 @@ export interface SidePanelSiteLogin {
 
 export type SidePanelSiteLogins = readonly SidePanelSiteLogin[]
 
+/** One vault passkey this site can use. It has no action here: the site asks
+ * for it, and Nook offers it then. */
+export interface SidePanelSitePasskey {
+  readonly userName: string
+  readonly userDisplayName: string
+  readonly vaultLabel: string
+}
+
+export type SidePanelSitePasskeys = readonly SidePanelSitePasskey[]
+
 export interface SidePanelSiteReadyListing {
   readonly kind: SidePanelSiteListingKind.Ready
   /** The active tab's host as Rust displays it. */
   readonly display_host: string
   /** In the order Rust returned them. */
   readonly items: SidePanelSiteLogins
+  /** The passkeys a page on this host can use, in Rust's order. */
+  readonly passkeys: SidePanelSitePasskeys
 }
 
 export interface SidePanelSiteListingFailure {
@@ -133,6 +145,12 @@ type SidePanelSiteReadyListingFields = {
   readonly kind: Schema.Codec<SidePanelSiteListingKind.Ready>
   readonly display_host: BoundedTextSchema
   readonly items: Schema.Codec<SidePanelSiteLogins>
+  readonly passkeys: Schema.Codec<SidePanelSitePasskeys>
+}
+type SidePanelSitePasskeyFields = {
+  readonly userName: BoundedTextSchema
+  readonly userDisplayName: BoundedTextSchema
+  readonly vaultLabel: BoundedTextSchema
 }
 type SidePanelSiteListingFailureFields = {
   readonly kind: Schema.Codec<SidePanelSiteListingFailureKind>
@@ -195,11 +213,19 @@ export class SidePanelSiteMessages {
     username: SidePanelSiteMessages.label,
     vaultLabel: SidePanelSiteMessages.label,
   }
+  private static readonly passkeyFields: SidePanelSitePasskeyFields = {
+    userName: SidePanelSiteMessages.label,
+    userDisplayName: SidePanelSiteMessages.label,
+    vaultLabel: SidePanelSiteMessages.label,
+  }
   private static readonly readyListingFields: SidePanelSiteReadyListingFields =
     {
       kind: Schema.Literal(SidePanelSiteListingKind.Ready),
       display_host: SidePanelSiteMessages.host,
       items: Schema.Array(Schema.Struct(SidePanelSiteMessages.loginFields)),
+      passkeys: Schema.Array(
+        Schema.Struct(SidePanelSiteMessages.passkeyFields),
+      ),
     }
   // Keyed by every failure kind, so a new kind cannot be left undecodable.
   private static readonly listingFailureKinds: SidePanelSiteListingFailureKinds =

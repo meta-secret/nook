@@ -27,6 +27,7 @@ import {
   type BrowserRuntimeMessageValue,
 } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { WebsitePasskeyOptionsMessage } from '../src/lib/webauthn-messages'
 import type { WebsiteLoginAccountOption } from '../src/lib/login-fill-messages'
 import { SidePanelPageFillReplyKind } from '../src/lib/side-panel-page-fill'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
@@ -216,6 +217,9 @@ export class SidePanelRouteFixture {
     RouteData.grant('store_personal', 'Personal'),
     RouteData.grant('store_work', 'Work'),
   ]
+  /** Vaults that hold passkeys, and their listing per `vault|rpId`. */
+  passkeyGrants: StoredExtensionPairingGrant[] = []
+  readonly passkeyListings = new Map<string, SessionDelivery>()
   status: DeviceProtectionStatus = DeviceProtectionStatus.Unlocked
   listings = new Map<string, SessionDelivery>([
     [
@@ -279,6 +283,9 @@ export class SidePanelRouteFixture {
       authorizationIsCurrent: () => this.current,
       authorizationCleanupPending: async () => false,
       passwordPairingGrants: async () => this.grants,
+      passkeyPairingGrants: async () => this.passkeyGrants,
+      passkeyRelyingPartyIds: (origin) =>
+        WebsitePasskeyOptionsMessage.relyingPartyIds(origin),
       sendSessionMessage: async (message) => this.session(message),
       loginAccountAvailabilityForOrigin:
         accountPickerSessions.loginAccountAvailabilityForOrigin.bind(
@@ -296,6 +303,12 @@ export class SidePanelRouteFixture {
     this.sessionMessages.push(message)
     if (message.type === ExtensionSessionMessageType.Status)
       return ok({ ok: true, status: this.status })
+    if (message.type === ExtensionSessionMessageType.ListPasskeys) {
+      const passkeys = this.passkeyListings.get(
+        `${message.payload.vaultStoreId}|${message.payload.rpId}`,
+      )
+      return passkeys ? passkeys : ok({ ok: true, accounts: [] })
+    }
     if (message.type !== ExtensionSessionMessageType.ListLogins)
       throw new Error(`unexpected session request ${message.type}`)
     if (this.revokeAfterListing) this.current = false
@@ -353,6 +366,14 @@ export class SidePanelRouteFixture {
       case PageReplyKind.Answered:
         return Promise.resolve(this.pageReply.reply)
     }
+  }
+
+  passkeyLookups(): string[] {
+    return this.sessionMessages.flatMap((message) =>
+      message.type === ExtensionSessionMessageType.ListPasskeys
+        ? [`${message.payload.vaultStoreId}|${message.payload.rpId}`]
+        : [],
+    )
   }
 
   sessionTypes(): string[] {

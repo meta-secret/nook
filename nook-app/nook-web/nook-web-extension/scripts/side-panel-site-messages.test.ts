@@ -175,6 +175,7 @@ describe('side-panel This-site wire', () => {
       items: [
         { itemId, username: 'person@example.com', vaultLabel: 'Personal' },
       ],
+      passkeys: [],
     }
     expect(
       WireFixture.decodes(SidePanelSiteMessages.decodeListing(ready)),
@@ -256,11 +257,13 @@ describe('side-panel This-site client', () => {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
       items: [{ itemId, username: 'person', vaultLabel: 'Personal' }],
+      passkeys: [],
     }
     const fixture = new PanelRuntimeFixture({
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
       items: [{ itemId, username: 'person', vaultLabel: 'Personal' }],
+      passkeys: [],
     })
 
     const listing = await fixture.client().list({ windowId: 7 })
@@ -278,6 +281,7 @@ describe('side-panel This-site client', () => {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'a.test',
       items: [],
+      passkeys: [],
     }).withoutReceiver()
     const malformed = new PanelRuntimeFixture({ kind: 'ready', items: [] })
 

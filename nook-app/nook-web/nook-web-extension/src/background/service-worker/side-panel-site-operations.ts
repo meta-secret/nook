@@ -19,9 +19,11 @@ import {
 import {
   SidePanelAuthorizationKind,
   SidePanelLoginsKind,
+  SidePanelPasskeysKind,
   SidePanelSessionKind,
   SidePanelSiteAccess,
   type SidePanelLoginsRequest,
+  type SidePanelPasskeysRequest,
   type SidePanelPageDelivery,
   type SidePanelPairingGrants,
   type SidePanelSiteAccounts,
@@ -42,10 +44,11 @@ export interface SidePanelSiteOperationRequest {
 }
 
 /**
- * Lists the saved logins for the active tab of the panel's window: sender,
- * Rust tab target, authorization generation, password grants, unlocked
- * session, then Rust's fail-closed Login-only listing. The reply carries only
- * the display host and each item's id, username and vault label.
+ * Lists the saved logins and passkeys for the active tab of the panel's
+ * window: sender, Rust tab target, authorization generation, password grants,
+ * unlocked session, then Rust's fail-closed listings. The reply carries only
+ * the display host, each login's id, username and vault label, and each
+ * passkey's account names and vault label.
  */
 export class SidePanelSiteListingOperation {
   private readonly access: SidePanelSiteAccess
@@ -135,6 +138,16 @@ export class SidePanelSiteListingOperation {
         case SidePanelLoginsKind.Listed:
           break
       }
+      const passkeysRequest: SidePanelPasskeysRequest = {
+        origin: target.origin,
+      }
+      const passkeys = yield* this.access.passkeys(passkeysRequest)
+      switch (passkeys.kind) {
+        case SidePanelPasskeysKind.Failed:
+          return this.failure(SidePanelSiteListingKind.ListFailed)
+        case SidePanelPasskeysKind.Listed:
+          break
+      }
       const settled = yield* this.access.stillCurrent(authorization.generation)
       switch (settled.kind) {
         case SidePanelAuthorizationKind.Revoked:
@@ -146,6 +159,7 @@ export class SidePanelSiteListingOperation {
         kind: SidePanelSiteListingKind.Ready,
         display_host: target.display_host,
         items: new SidePanelSiteLoginProjection(logins.accounts).items,
+        passkeys: passkeys.passkeys,
       }
       return ready
     },

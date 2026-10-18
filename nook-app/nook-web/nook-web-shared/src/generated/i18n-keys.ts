@@ -584,6 +584,8 @@ export const I18N_KEYS = {
   ExtensionActionSiteNoFillingVault: 'extension.action.site_no_filling_vault',
   ExtensionActionSiteNotWeb: 'extension.action.site_not_web',
   ExtensionActionSiteNotWebHint: 'extension.action.site_not_web_hint',
+  ExtensionActionSitePasskeysHint: 'extension.action.site_passkeys_hint',
+  ExtensionActionSitePasskeysLabel: 'extension.action.site_passkeys_label',
   ExtensionActionSiteRestricted: 'extension.action.site_restricted',
   ExtensionActionStartFailed: 'extension.action.start_failed',
   ExtensionActionStateLocked: 'extension.action.state_locked',

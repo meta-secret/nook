@@ -4,6 +4,7 @@ import {
   decode_website_passkey_registration_request,
   decode_website_passkey_assertion_request,
   website_passkey_request_allows_credential,
+  website_passkey_relying_party_ids,
   type PasskeyRegistrationRequest,
   type PasskeyAssertionRequest,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -77,6 +78,12 @@ export class WebsitePasskeyOptionsMessage {
   }: WebsitePasskeyCredentialAllowanceArgs): Promise<boolean> {
     await extensionWasmRuntime.ensureNookWasm()
     return website_passkey_request_allows_credential(request, credentialId)
+  }
+
+  /** The relying-party ids a page at this origin may use; nook-core owns the rule. */
+  static async relyingPartyIds(origin: string): Promise<readonly string[]> {
+    await extensionWasmRuntime.ensureNookWasm()
+    return website_passkey_relying_party_ids(origin)
   }
 
   static websitePasskeyRequestJson(

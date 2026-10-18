@@ -1703,6 +1703,8 @@
       "site_loading": "Looking for saved logins…",
       "site_empty": "No saved logins for {host}.",
       "site_empty_hint": "Sign in on the page as usual — Nook can offer to save the login.",
+      "site_passkeys_label": "Passkeys",
+      "site_passkeys_hint": "Nook offers these when the site asks for a passkey.",
       "site_not_web": "No website in this tab",
       "site_not_web_hint": "Switch to a tab with a website to fill its logins.",
       "site_restricted": "Nook can't fill on this page.",

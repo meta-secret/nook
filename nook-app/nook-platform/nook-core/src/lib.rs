@@ -183,8 +183,8 @@ pub use passkey_authenticator::{
     CheckedPasskeyAssertion, CheckedPasskeyRegistration,
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
     PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyOrigin,
-    PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
-    PasskeyUserVerification,
+    PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty,
+    PasskeySiteRelyingParties, PasskeyUser, PasskeyUserVerification,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
 pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};

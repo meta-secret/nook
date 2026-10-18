@@ -57,6 +57,7 @@ function shownState(): ThisSiteState {
         kind: ThisSiteBodyKind.Matches,
         items: [work, personal],
         count: ThisSiteMatchCount.Several,
+        passkeys: [],
       },
     },
     fill: filled,
@@ -70,6 +71,7 @@ describe('This site listing', () => {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'accounts.example.com',
       items: [work, personal],
+      passkeys: [],
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
@@ -78,6 +80,33 @@ describe('This site listing', () => {
           kind: ThisSiteBodyKind.Matches,
           items: [work, personal],
           count: ThisSiteMatchCount.Several,
+          passkeys: [],
+        },
+      },
+      signal: ThisSitePanelSignal.None,
+    })
+  })
+
+  test('passkeys alone still list the site instead of saying nothing is saved', () => {
+    const passkey = {
+      userName: 'person@example.org',
+      userDisplayName: 'Person',
+      vaultLabel: 'Personal',
+    }
+    const listing: SidePanelSiteListing = {
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'news.example.org',
+      items: [],
+      passkeys: [passkey],
+    }
+    expect(ThisSiteViews.listing(listing)).toEqual({
+      view: {
+        host: { kind: ThisSiteHostKind.Named, host: 'news.example.org' },
+        body: {
+          kind: ThisSiteBodyKind.Matches,
+          items: [],
+          count: ThisSiteMatchCount.Several,
+          passkeys: [passkey],
         },
       },
       signal: ThisSitePanelSignal.None,
@@ -89,6 +118,7 @@ describe('This site listing', () => {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'news.example.org',
       items: [],
+      passkeys: [],
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
