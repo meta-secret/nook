@@ -18,6 +18,9 @@ explicit handoff.
   validation, or local preflight; use the terminal GitHub Actions outcome as
   execution evidence.
 - Wait for the complete terminal check wave.
+- Preserve the exact required check `PR validation / Verify and preview`.
+  Its final result requires the producer and every selected browser job to pass
+  before preview. A skipped full-browser matrix is valid only when not selected.
 - When changing Main aggregation, validate the
   [producer and consumer failure gates](../../teams/sre/workflows/ci-pipeline.md)
   in hosted CI. Removing a status-only job must preserve its required assertion.

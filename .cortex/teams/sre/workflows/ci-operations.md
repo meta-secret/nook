@@ -166,6 +166,19 @@ The portable WASM proof uses `wasm-proof` to compute the immutable dependency
 fingerprint. It performs no availability probes because the proof owns its
 explicit repair and verification refs.
 
+### Research image publication
+
+The research runtime-image publisher sets `GHA_CACHE_WRITE_ENABLED` to an
+empty value. It retains exact cache imports and publishes the final registry
+image without re-exporting native or WASM cache graphs. The dependency job
+retains its existing cache exports.
+
+**Prohibited:** enable cache exports in the research image publisher merely
+because it consumes native and WASM dependencies.
+
+**Required:** reuse those imports with exports disabled in the image job.
+Keep dependency-cache publication in its owning verified job.
+
 ### Network transport evidence
 
 The OVH registry sender and home worker use TCP BBR for new connections.
