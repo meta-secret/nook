@@ -23,7 +23,7 @@
     "markdown-it": "15.0.0",
     "mermaid": "^11.16.1",
     "qr-code-styling": "1.9.2",
-    "qr-scanner": "1.4.2",
+    "zxing-wasm": "3.1.4",
     "svelte": "5.56.8",
     "tailwind-merge": "3.6.0",
     "tailwind-variants": "3.3.1",
