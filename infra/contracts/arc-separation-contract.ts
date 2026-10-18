@@ -392,6 +392,6 @@ class ArcSeparationDrainContract {
         });
       }
     }
-    return ok(undefined);
+    return ok();
   }
 }
