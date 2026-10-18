@@ -56,6 +56,141 @@ impl PrDeliveryScenario<'_> {
                 && join.contains("- ci:pr:checks")
         );
     }
+    fn assert_artifact_backed_e2e_contract(&self) -> anyhow::Result<()> {
+        let root = self.root;
+        self.assert_artifact_backed_pr_fanout();
+        let pr = (root).read(".github/workflows/pr.yml");
+        let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
+        let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
+        let preflight = rust_host
+            .find("task: preflight")
+            .context("native Rust CI must run preflight")?;
+        let rust_export = rust_host
+            .find("task: docker:ci:rust:export")
+            .context("native Rust CI must export its artifacts")?;
+        assert!(
+            preflight < rust_export && rust_host.contains("cmds:") && !rust_host.contains("deps:"),
+            "repository preflight must finish before the native app Docker solve begins"
+        );
+        let artifact_e2e = section(
+            &ci_tasks,
+            "  ci:pr:e2e:web:artifacts:\n",
+            "  ci:pr:e2e:local:\n",
+        );
+        assert!(
+            artifact_e2e.contains("task: docker:ci:web:e2e:build")
+                && artifact_e2e.contains("vars: { TASK: _ci:main:web:e2e-only }")
+                && artifact_e2e.contains("vars: { TASK: _extension:test:e2e }")
+                && !artifact_e2e.contains("task: setup")
+                && !artifact_e2e.contains("task: preflight"),
+            "artifact-backed web and extension e2e must build only their browser images"
+        );
+        let e2e_only = section(
+            &ci_tasks,
+            "  _ci:main:web:e2e-only:\n",
+            "  _ci:pr:prepare:\n",
+        );
+        assert!(
+            e2e_only.contains("_web:test:e2e:parallel")
+                && e2e_only.contains("_web:test:e2e:isolation")
+                && !e2e_only.contains("internal: true")
+                && !e2e_only.contains("_extension:test:e2e")
+                && !e2e_only.contains("_ci:main:build"),
+            "artifact-backed web e2e must not repeat verification or compete with extension e2e"
+        );
+        assert!(!pr.contains("nook-pr-coverage"));
+        assert!(pr.contains("actions/download-artifact@v8"));
+        assert!(pr.contains("pr-browser-${{ github.run_id }}-${{ github.run_attempt }}"));
+        let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
+        assert!(deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"));
+        assert!(deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""));
+        let deploy_script = (root).read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
+        assert!(
+            deploy_script.contains("deploy_pages()")
+                && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
+                && deploy_script.contains(
+                    "node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler --version",
+                )
+                && deploy_script.contains("Dependency-locked Wrangler is missing")
+                && deploy_script.contains("ci-pr-host-pages-deploy.sh")
+                && deploy_script.contains(">\"$log\" 2>&1 &")
+                && deploy_script.contains("unified_pid=$!")
+                && deploy_script.contains("site_pid=$!")
+                && deploy_script.contains("simple_pid=$!")
+                && deploy_script.contains("sentinel_pid=$!")
+                && deploy_script.contains("\"$deploy_dir/unified.log\"")
+                && deploy_script.contains("wait_for_deploy"),
+            "independent Cloudflare preview uploads must use verified locked Wrangler, run concurrently, and all succeed before alias verification"
+        );
+        let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
+        assert!(
+            host_deploy
+                .contains("node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler \"$@\"",)
+                && host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
+                && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.120.0")
+                && host_deploy.contains("pages deploy"),
+            "host Pages deploy must prefer locked Wrangler and retain a pinned static-dist fallback"
+        );
+        assert!(
+            ci_tasks.contains("node \"{{.WEB_ROOT}}/node_modules/.bin/wrangler\"")
+                && !ci_tasks.contains("bun add wrangler"),
+            "preview deploys must use the dependency-locked Wrangler binary instead of installing it at runtime"
+        );
+        let e2e_pr = (root).read(".github/workflows/e2e-pr.yml");
+        assert!(
+            e2e_pr.contains("cache-write: \"false\"")
+                && e2e_pr.contains(
+                    "pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`"
+                )
+                && e2e_pr.contains("pr.user.login === 'dependabot[bot]'")
+                && e2e_pr.contains("cannot run on private ARC"),
+            "manual PR-head e2e must reject untrusted sources and must not overwrite default-branch scopes"
+        );
+        Ok(())
+    }
+
+    pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
+        let main_core = section(ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
+        assert!(
+            !main_core.contains("_web:e2e:build-dist"),
+            "main must not request the same e2e build before the e2e task checks its stamp"
+        );
+        assert!(
+            main_core.contains("_web:test:e2e:parallel")
+                && main_core.contains("_web:e2e:restore-prod-dist")
+                && !main_core.contains("_extension:test:e2e"),
+            "main web e2e core must restore prod dist without serializing extension e2e"
+        );
+        let main = section(ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
+        assert!(
+            main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
+            "full main gate must keep extension e2e after the web core"
+        );
+    }
+
+    pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
+        let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
+        assert_eq!(
+            e2e_builder.matches("bun run build:unified").count(),
+            1,
+            "e2e must compile the unified harness exactly once"
+        );
+        for required in [
+            "site_source=\"$WEB_ROOT/dist-prod/site\"",
+            "cp -a \"$site_source\" \"$DIST/site\"",
+            "bun run assemble:preview",
+        ] {
+            assert!(
+                e2e_builder.contains(required),
+                "e2e assembly contract missing: {required}"
+            );
+        }
+        assert!(
+            !e2e_builder.contains("bun run build:simple")
+                && !e2e_builder.contains("bun run build:sentinel"),
+            "e2e must reuse the sealed Simple and Sentinel artifacts"
+        );
+    }
 }
 
 #[test]
@@ -70,7 +205,10 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
         root: root.as_ref(),
     }
     .assert_workflow_contract()?;
-    assert_artifact_backed_e2e_contract(&root)?;
+    PrDeliveryScenario {
+        root: root.as_ref(),
+    }
+    .assert_artifact_backed_e2e_contract()?;
     assert_release_and_main_delivery_contract(&root)?;
     Ok(())
 }
@@ -268,141 +406,6 @@ fn assert_preflight_build_contract(root: &Path) {
     assert!(
         !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
         "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
-    );
-}
-
-fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
-    PrDeliveryScenario { root }.assert_artifact_backed_pr_fanout();
-    let pr = (root).read(".github/workflows/pr.yml");
-    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-    let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
-    let preflight = rust_host
-        .find("task: preflight")
-        .context("native Rust CI must run preflight")?;
-    let rust_export = rust_host
-        .find("task: docker:ci:rust:export")
-        .context("native Rust CI must export its artifacts")?;
-    assert!(
-        preflight < rust_export && rust_host.contains("cmds:") && !rust_host.contains("deps:"),
-        "repository preflight must finish before the native app Docker solve begins"
-    );
-    let artifact_e2e = section(
-        &ci_tasks,
-        "  ci:pr:e2e:web:artifacts:\n",
-        "  ci:pr:e2e:local:\n",
-    );
-    assert!(
-        artifact_e2e.contains("task: docker:ci:web:e2e:build")
-            && artifact_e2e.contains("vars: { TASK: _ci:main:web:e2e-only }")
-            && artifact_e2e.contains("vars: { TASK: _extension:test:e2e }")
-            && !artifact_e2e.contains("task: setup")
-            && !artifact_e2e.contains("task: preflight"),
-        "artifact-backed web and extension e2e must build only their browser images"
-    );
-    let e2e_only = section(
-        &ci_tasks,
-        "  _ci:main:web:e2e-only:\n",
-        "  _ci:pr:prepare:\n",
-    );
-    assert!(
-        e2e_only.contains("_web:test:e2e:parallel")
-            && e2e_only.contains("_web:test:e2e:isolation")
-            && !e2e_only.contains("internal: true")
-            && !e2e_only.contains("_extension:test:e2e")
-            && !e2e_only.contains("_ci:main:build"),
-        "artifact-backed web e2e must not repeat verification or compete with extension e2e"
-    );
-    assert!(!pr.contains("nook-pr-coverage"));
-    assert!(pr.contains("actions/download-artifact@v8"));
-    assert!(pr.contains("pr-browser-${{ github.run_id }}-${{ github.run_attempt }}"));
-    let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
-    assert!(deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"));
-    assert!(deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""));
-    let deploy_script = (root).read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
-    assert!(
-        deploy_script.contains("deploy_pages()")
-            && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
-            && deploy_script.contains(
-                "node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler --version",
-            )
-            && deploy_script.contains("Dependency-locked Wrangler is missing")
-            && deploy_script.contains("ci-pr-host-pages-deploy.sh")
-            && deploy_script.contains(">\"$log\" 2>&1 &")
-            && deploy_script.contains("unified_pid=$!")
-            && deploy_script.contains("site_pid=$!")
-            && deploy_script.contains("simple_pid=$!")
-            && deploy_script.contains("sentinel_pid=$!")
-            && deploy_script.contains("\"$deploy_dir/unified.log\"")
-            && deploy_script.contains("wait_for_deploy"),
-        "independent Cloudflare preview uploads must use verified locked Wrangler, run concurrently, and all succeed before alias verification"
-    );
-    let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
-    assert!(
-        host_deploy
-            .contains("node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler \"$@\"",)
-            && host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
-            && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.120.0")
-            && host_deploy.contains("pages deploy"),
-        "host Pages deploy must prefer locked Wrangler and retain a pinned static-dist fallback"
-    );
-    assert!(
-        ci_tasks.contains("node \"{{.WEB_ROOT}}/node_modules/.bin/wrangler\"")
-            && !ci_tasks.contains("bun add wrangler"),
-        "preview deploys must use the dependency-locked Wrangler binary instead of installing it at runtime"
-    );
-    let e2e_pr = (root).read(".github/workflows/e2e-pr.yml");
-    assert!(
-        e2e_pr.contains("cache-write: \"false\"")
-            && e2e_pr.contains(
-                "pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`"
-            )
-            && e2e_pr.contains("pr.user.login === 'dependabot[bot]'")
-            && e2e_pr.contains("cannot run on private ARC"),
-        "manual PR-head e2e must reject untrusted sources and must not overwrite default-branch scopes"
-    );
-    Ok(())
-}
-
-pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
-    let main_core = section(ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
-    assert!(
-        !main_core.contains("_web:e2e:build-dist"),
-        "main must not request the same e2e build before the e2e task checks its stamp"
-    );
-    assert!(
-        main_core.contains("_web:test:e2e:parallel")
-            && main_core.contains("_web:e2e:restore-prod-dist")
-            && !main_core.contains("_extension:test:e2e"),
-        "main web e2e core must restore prod dist without serializing extension e2e"
-    );
-    let main = section(ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
-    assert!(
-        main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
-        "full main gate must keep extension e2e after the web core"
-    );
-}
-
-pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
-    let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
-    assert_eq!(
-        e2e_builder.matches("bun run build:unified").count(),
-        1,
-        "e2e must compile the unified harness exactly once"
-    );
-    for required in [
-        "site_source=\"$WEB_ROOT/dist-prod/site\"",
-        "cp -a \"$site_source\" \"$DIST/site\"",
-        "bun run assemble:preview",
-    ] {
-        assert!(
-            e2e_builder.contains(required),
-            "e2e assembly contract missing: {required}"
-        );
-    }
-    assert!(
-        !e2e_builder.contains("bun run build:simple")
-            && !e2e_builder.contains("bun run build:sentinel"),
-        "e2e must reuse the sealed Simple and Sentinel artifacts"
     );
 }
 
