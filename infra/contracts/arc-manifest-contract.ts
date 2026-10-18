@@ -573,7 +573,7 @@ class ArcManifestContract {
       "needs: [prepare, browser]",
       "if: ${{ always() }}",
       "fail-fast: false",
-      "suite: [web, extension-1, extension-2]",
+      "suite: [web, extension-1, extension-2, extension-3]",
       "inputs.full_e2e_requested && needs.prepare.outputs.validation == 'true'",
       'test "$PREPARE_RESULT" = success',
       'test "$BROWSER_RESULT" = success',

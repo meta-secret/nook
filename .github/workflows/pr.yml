@@ -187,7 +187,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [web, extension-1, extension-2]
+        suite: [web, extension-1, extension-2, extension-3]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}

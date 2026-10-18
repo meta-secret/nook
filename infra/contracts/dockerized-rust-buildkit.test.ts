@@ -80,7 +80,7 @@ class DockerizedRustBuildKitContract {
     expect(workflow).toContain("needs: [prepare, browser]");
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
-    expect(workflow).toContain("suite: [web, extension-1, extension-2]");
+    expect(workflow).toContain("suite: [web, extension-1, extension-2, extension-3]");
     expect(
       workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g),
     ).toHaveLength(2);
@@ -91,10 +91,13 @@ class DockerizedRustBuildKitContract {
       "pr-playwright-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
     expect(tasks).toContain(
-      "E2E_SHARD=1/2 task --silent _extension:test:e2e:shard",
+      "E2E_SHARD=1/3 task --silent _extension:test:e2e:shard",
     );
     expect(tasks).toContain(
-      "E2E_SHARD=2/2 task --silent _extension:test:e2e:shard",
+      "E2E_SHARD=2/3 task --silent _extension:test:e2e:shard",
+    );
+    expect(tasks).toContain(
+      "E2E_SHARD=3/3 task --silent _extension:test:e2e:shard",
     );
     const validationStep = workflowStep(
       "Parallel validation and browser tests",

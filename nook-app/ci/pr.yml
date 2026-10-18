@@ -156,8 +156,9 @@ tasks:
       - |
         case '{{.PR_BROWSER_SUITE}}' in
           web) task --silent _ci:main:web:e2e-only ;;
-          extension-1) E2E_SHARD=1/2 task --silent _extension:test:e2e:shard ;;
-          extension-2) E2E_SHARD=2/2 task --silent _extension:test:e2e:shard ;;
+          extension-1) E2E_SHARD=1/3 task --silent _extension:test:e2e:shard ;;
+          extension-2) E2E_SHARD=2/3 task --silent _extension:test:e2e:shard ;;
+          extension-3) E2E_SHARD=3/3 task --silent _extension:test:e2e:shard ;;
           *) echo 'Unsupported PR browser suite' >&2; exit 1 ;;
         esac
 
