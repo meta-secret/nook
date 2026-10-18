@@ -5,25 +5,26 @@
 //! them from authenticated catalog metadata; no password, TOTP seed, key, or
 //! passkey private data ever enters this contract). The service worker passes
 //! every vault's matches here with the page need the tab's content script
-//! reported. Rust filters the kinds the page needs, groups rows under identity
-//! headers in a fixed order, and selects every translation key the panel shows,
-//! so TypeScript only renders the result.
+//! reported. Rust presents one section per identity:vault, filters each
+//! vault's matches by the kinds the page needs, orders sections and rows, and
+//! selects every translation key the panel shows, so TypeScript only renders
+//! the result.
 
 mod page_need;
 mod row_presentation;
+mod sections;
 
 pub use page_need::SitePageNeed;
 
 use nook_auth2::{SecretId, StoreId};
-use page_need::SiteSecretRelevance;
-use row_presentation::SiteSecretNaming;
+use sections::SiteSecretSectionGrouping;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-/// Site-bound secret kinds. Declaration order is the row order inside an
-/// identity group. Credit cards, notes, seed phrases, and files are not bound
-/// to a site and never appear in this listing.
+/// Site-bound secret kinds. Declaration order is the row order inside a
+/// section. Credit cards, notes, seed phrases, and files are not bound to a
+/// site and never appear in this listing.
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SiteSecretKind {
@@ -61,6 +62,8 @@ pub struct SiteSecretVaultName(String);
 pub struct SiteSecretIdentityName(String);
 
 /// The extension's app key for the identity, as the pairing grant records it.
+/// It only tells identities apart while sections are ordered; the listing
+/// never carries it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify, derive_more::From)]
 #[serde(transparent)]
 pub struct SiteSecretIdentityDevice(String);
@@ -120,23 +123,30 @@ pub struct SiteSecretVaults {
     pub vaults: Vec<SiteSecretVault>,
 }
 
-/// What the side panel shows for the active tab's site.
+/// What the side panel shows for the active tab's site: one section per
+/// paired vault in Rust's order, and whether any section lists a row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+pub struct SiteSecretListing {
+    pub summary: SiteSecretListingSummary,
+    pub sections: Vec<SiteSecretSection>,
+}
+
+/// Whether any section lists a row the page needs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
-pub enum SiteSecretListing {
-    /// At least one row the page needs, under identity headers in Rust's order.
-    Listed {
-        groups: Vec<SiteSecretIdentityGroup>,
-    },
-    /// Nothing the page needs is saved. `message_key` takes a `{host}`
-    /// replacement with the tab's display host.
+pub enum SiteSecretListingSummary {
+    /// At least one section lists a row.
+    Listed,
+    /// No section lists a row the page needs. `message_key` takes a `{host}`
+    /// replacement with the tab's display host; the panel shows it above the
+    /// sections.
     Empty {
         message_key: SiteSecretMessageKey,
         hint: SiteSecretEmptyHint,
     },
 }
 
-/// Guidance shown under an empty listing.
+/// Guidance shown under the empty listing message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
 pub enum SiteSecretEmptyHint {
@@ -144,14 +154,28 @@ pub enum SiteSecretEmptyHint {
     Absent,
 }
 
-/// Rows of one identity.
+/// One paired vault under its identity. The header shows the identity label
+/// and the vault label; `vault_store_id` names the vault the rows come from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-pub struct SiteSecretIdentityGroup {
-    pub header: SiteSecretIdentityHeader,
-    pub rows: Vec<SiteSecretRow>,
+pub struct SiteSecretSection {
+    pub vault_store_id: StoreId,
+    pub identity: SiteSecretIdentityHeader,
+    pub vault: SiteSecretVaultLabel,
+    pub content: SiteSecretSectionContent,
 }
 
-/// Identity header text: the saved name, or the catalog's unnamed label.
+/// A section's rows, or the line shown when its vault has none the page needs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind")]
+pub enum SiteSecretSectionContent {
+    /// The vault's rows the page needs, sorted by kind, title, then account.
+    Listed { rows: Vec<SiteSecretRow> },
+    /// The vault holds nothing the page needs for this site.
+    Empty { message_key: SiteSecretMessageKey },
+}
+
+/// Identity label of a section header: the saved name, or the catalog's
+/// unnamed label.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
 pub enum SiteSecretIdentityHeader {
@@ -159,7 +183,8 @@ pub enum SiteSecretIdentityHeader {
     Unnamed { message_key: SiteSecretMessageKey },
 }
 
-/// Vault label text: the saved name, or the catalog's unnamed label.
+/// Vault label of a section header: the saved name, or the catalog's unnamed
+/// label.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
 pub enum SiteSecretVaultLabel {
@@ -175,7 +200,8 @@ pub struct SiteSecretItemId {
 }
 
 /// The one action a row offers. Both fill labels take `{login}` and `{vault}`
-/// replacements in their accessible label.
+/// replacements in their accessible label; `{vault}` is the vault label of the
+/// row's section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
 pub enum SiteSecretAction {
@@ -194,7 +220,8 @@ pub struct SiteSecretActionLabels {
     pub accessible_label_key: SiteSecretMessageKey,
 }
 
-/// One display row. It carries no secret material.
+/// One display row. It carries no secret material; its section names the
+/// identity and vault.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 pub struct SiteSecretRow {
     #[tsify(type = "keyof typeof SiteSecretKind")]
@@ -204,7 +231,6 @@ pub struct SiteSecretRow {
     pub title: SiteSecretTitle,
     pub account: SiteSecretAccount,
     pub saved_host: SiteSecretSavedHost,
-    pub vault: SiteSecretVaultLabel,
     pub action: SiteSecretAction,
 }
 
@@ -215,143 +241,20 @@ pub struct SiteSecretListingRequest {
     pub vaults: SiteSecretVaults,
 }
 
-impl SiteSecretTitle {
-    fn sort_key(&self) -> String {
-        let Self(title) = self;
-        title.to_lowercase()
-    }
-}
-
-impl SiteSecretAccount {
-    fn sort_key(&self) -> String {
-        let Self(account) = self;
-        account.to_lowercase()
-    }
-}
-
-/// Rows collected for one identity while vaults are folded in grant order.
-struct SiteSecretGroupDraft {
-    identity: SiteSecretIdentity,
-    rows: Vec<SiteSecretRow>,
-}
-
-/// Identity groups in order of their first vault in the pairing grants.
-#[derive(Default)]
-struct SiteSecretGrouping {
-    drafts: Vec<SiteSecretGroupDraft>,
-}
-
-impl SiteSecretVault {
-    /// The vault's rows the page needs, in the vault's match order.
-    fn rows(self, need: SitePageNeed) -> SiteSecretRowsDraft {
-        let Self {
-            vault_store_id,
-            vault_name,
-            identity,
-            matches,
-        } = self;
-        let vault = SiteSecretVaultLabel::from(vault_name);
-        let rows = matches
-            .items
-            .into_iter()
-            .filter(|item| match item.kind.relevance(need) {
-                SiteSecretRelevance::Relevant => true,
-                SiteSecretRelevance::Hidden => false,
-            })
-            .map(|item| SiteSecretRow {
-                kind: item.kind,
-                item_id: SiteSecretItemId {
-                    vault_store_id: vault_store_id.clone(),
-                    secret_id: item.secret_id,
-                },
-                type_label_key: item.kind.type_label_key(),
-                title: item.title,
-                account: item.account,
-                saved_host: item.saved_host,
-                vault: vault.clone(),
-                action: item.kind.action(),
-            })
-            .collect();
-        SiteSecretRowsDraft { identity, rows }
-    }
-}
-
-/// One vault's admitted rows with the identity they belong under.
-struct SiteSecretRowsDraft {
-    identity: SiteSecretIdentity,
-    rows: Vec<SiteSecretRow>,
-}
-
-impl SiteSecretGrouping {
-    #[must_use]
-    fn with_rows(mut self, draft: SiteSecretRowsDraft) -> Self {
-        let SiteSecretRowsDraft { identity, mut rows } = draft;
-        let [_, ..] = rows.as_slice() else {
-            return self;
-        };
-        match self
-            .drafts
-            .iter_mut()
-            .find(|group| group.identity == identity)
-        {
-            Some(group) => group.rows.append(&mut rows),
-            None => self.drafts.push(SiteSecretGroupDraft { identity, rows }),
-        }
-        self
-    }
-
-    /// Named identities keep their first-appearance order; grants without a
-    /// recorded identity come last. Rows sort by kind, then by title, then by account.
-    fn listing(self, need: SitePageNeed) -> SiteSecretListing {
-        let (named, unnamed): (Vec<SiteSecretGroupDraft>, Vec<SiteSecretGroupDraft>) =
-            self.drafts.into_iter().partition(|group| {
-                let SiteSecretIdentityName(name) = &group.identity.name;
-                match SiteSecretNaming::of(name) {
-                    SiteSecretNaming::Named => true,
-                    SiteSecretNaming::Unnamed => false,
-                }
-            });
-        let groups: Vec<SiteSecretIdentityGroup> = named
-            .into_iter()
-            .chain(unnamed)
-            .map(|group| {
-                let SiteSecretGroupDraft { identity, mut rows } = group;
-                rows.sort_by_cached_key(|row| SiteSecretRowOrder {
-                    kind: row.kind,
-                    title: row.title.sort_key(),
-                    account: row.account.sort_key(),
-                });
-                SiteSecretIdentityGroup {
-                    header: SiteSecretIdentityHeader::from(identity.name),
-                    rows,
-                }
-            })
-            .collect();
-        match groups.as_slice() {
-            [] => need.empty_listing(),
-            [_, ..] => SiteSecretListing::Listed { groups },
-        }
-    }
-}
-
-/// Stable row sort key inside one identity group.
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct SiteSecretRowOrder {
-    kind: SiteSecretKind,
-    title: String,
-    account: String,
-}
-
 impl SiteSecretListingRequest {
-    /// Filters every vault's matches by the page need and groups them by identity.
+    /// Presents one section per vault, with the vault's matches filtered by the
+    /// page need, ordered by identity.
     #[must_use]
     pub fn present(self) -> SiteSecretListing {
         let Self { page_need, vaults } = self;
         vaults
             .vaults
             .into_iter()
-            .map(|vault| vault.rows(page_need))
-            .fold(SiteSecretGrouping::default(), SiteSecretGrouping::with_rows)
+            .map(|vault| vault.section(page_need))
+            .fold(
+                SiteSecretSectionGrouping::default(),
+                SiteSecretSectionGrouping::with_section,
+            )
             .listing(page_need)
     }
 }
@@ -361,18 +264,32 @@ mod tests {
     use super::*;
     use nook_app_common::i18n_keys;
 
+    /// One site-bound item saved for namecheap.com under account "bynull".
     struct ItemFixture {
         kind: SiteSecretKind,
         id: &'static str,
         title: &'static str,
     }
 
+    /// One paired vault and the items its session matched.
     struct VaultFixture {
         store: &'static str,
         vault_name: &'static str,
         device: &'static str,
         identity: &'static str,
         items: Vec<ItemFixture>,
+    }
+
+    /// Fixture vaults, in grant order, presented for one page need.
+    struct ListingScenario {
+        page_need: SitePageNeed,
+        vaults: Vec<VaultFixture>,
+    }
+
+    /// A string the encoded listing holds at a JSON pointer.
+    struct WireField {
+        pointer: String,
+        value: &'static str,
     }
 
     impl ItemFixture {
@@ -401,165 +318,178 @@ mod tests {
                 },
             })
         }
-    }
 
-    /// A vault holding one Namecheap login, for identity grouping cases.
-    struct LoginVaultCase {
-        store: &'static str,
-        vault_name: &'static str,
-        device: &'static str,
-        identity: &'static str,
-        id: &'static str,
-    }
-
-    impl LoginVaultCase {
-        fn vault(&self) -> anyhow::Result<SiteSecretVault> {
-            VaultFixture {
-                store: self.store,
-                vault_name: self.vault_name,
-                device: self.device,
-                identity: self.identity,
+        /// The personal vault with only a Namecheap login.
+        fn personal_login() -> Self {
+            Self {
+                store: "store_SMypl8K0w9a",
+                vault_name: "bynull",
+                device: "device-personal",
+                identity: "Personal",
                 items: vec![ItemFixture {
-                    kind: SiteSecretKind::Login,
-                    id: self.id,
-                    title: "namecheap.com",
-                }],
-            }
-            .vault()
-        }
-    }
-
-    /// The reported Namecheap case: a login and an authenticator in the
-    /// personal vault, and the same in vault "www" of the work identity, plus
-    /// a passkey and an API key so every kind is present.
-    fn namecheap_vaults() -> anyhow::Result<SiteSecretVaults> {
-        let personal = VaultFixture {
-            store: "store_SMypl8K0w9a",
-            vault_name: "bynull",
-            device: "device-personal",
-            identity: "Personal",
-            items: vec![
-                ItemFixture {
-                    kind: SiteSecretKind::ApiKey,
-                    id: "secret_personal_api",
-                    title: "namecheap.com",
-                },
-                ItemFixture {
-                    kind: SiteSecretKind::Authenticator,
-                    id: "secret_personal_totp",
-                    title: "Namecheap",
-                },
-                ItemFixture {
                     kind: SiteSecretKind::Login,
                     id: "secret_personal_login",
                     title: "namecheap.com",
-                },
-            ],
-        };
-        let work = VaultFixture {
-            store: "store_SMypl8K0w9b",
-            vault_name: "www",
-            device: "device-work",
-            identity: "work",
-            items: vec![
-                ItemFixture {
-                    kind: SiteSecretKind::Passkey,
-                    id: "secret_work_passkey",
-                    title: "Namecheap",
-                },
-                ItemFixture {
-                    kind: SiteSecretKind::Login,
-                    id: "secret_work_login",
-                    title: "namecheap.com",
-                },
-                ItemFixture {
-                    kind: SiteSecretKind::Authenticator,
-                    id: "secret_work_totp",
-                    title: "Namecheap",
-                },
-            ],
-        };
-        Ok(SiteSecretVaults {
-            vaults: vec![personal.vault()?, work.vault()?],
-        })
-    }
-
-    struct RowSummary {
-        kind: SiteSecretKind,
-        secret: String,
-    }
-
-    fn listed_groups(listing: SiteSecretListing) -> anyhow::Result<Vec<SiteSecretIdentityGroup>> {
-        let SiteSecretListing::Listed { groups } = listing else {
-            anyhow::bail!("expected a listed result, got {listing:?}");
-        };
-        Ok(groups)
-    }
-
-    fn row_summaries(group: &SiteSecretIdentityGroup) -> Vec<RowSummary> {
-        group
-            .rows
-            .iter()
-            .map(|row| RowSummary {
-                kind: row.kind,
-                secret: row.item_id.secret_id.as_str().to_owned(),
-            })
-            .collect()
-    }
-
-    fn header_name(group: &SiteSecretIdentityGroup) -> String {
-        match &group.header {
-            SiteSecretIdentityHeader::Named {
-                name: SiteSecretIdentityName(name),
-            } => name.clone(),
-            SiteSecretIdentityHeader::Unnamed { message_key } => {
-                let SiteSecretMessageKey(key) = message_key;
-                key.clone()
+                }],
             }
+        }
+
+        /// The reported Namecheap case: a login and an authenticator in the
+        /// personal vault, and the same in vault "www" of the work identity,
+        /// plus a passkey and an API key so every kind is present.
+        fn namecheap() -> Vec<Self> {
+            let personal = Self {
+                items: vec![
+                    ItemFixture {
+                        kind: SiteSecretKind::ApiKey,
+                        id: "secret_personal_api",
+                        title: "namecheap.com",
+                    },
+                    ItemFixture {
+                        kind: SiteSecretKind::Authenticator,
+                        id: "secret_personal_totp",
+                        title: "Namecheap",
+                    },
+                    ItemFixture {
+                        kind: SiteSecretKind::Login,
+                        id: "secret_personal_login",
+                        title: "namecheap.com",
+                    },
+                ],
+                ..Self::personal_login()
+            };
+            let work = Self {
+                store: "store_SMypl8K0w9b",
+                vault_name: "www",
+                device: "device-work",
+                identity: "work",
+                items: vec![
+                    ItemFixture {
+                        kind: SiteSecretKind::Passkey,
+                        id: "secret_work_passkey",
+                        title: "Namecheap",
+                    },
+                    ItemFixture {
+                        kind: SiteSecretKind::Login,
+                        id: "secret_work_login",
+                        title: "namecheap.com",
+                    },
+                    ItemFixture {
+                        kind: SiteSecretKind::Authenticator,
+                        id: "secret_work_totp",
+                        title: "Namecheap",
+                    },
+                ],
+            };
+            vec![personal, work]
+        }
+    }
+
+    impl ListingScenario {
+        fn present(&self) -> anyhow::Result<SiteSecretListing> {
+            let vaults = self
+                .vaults
+                .iter()
+                .map(VaultFixture::vault)
+                .collect::<anyhow::Result<_>>()?;
+            Ok(SiteSecretListingRequest {
+                page_need: self.page_need,
+                vaults: SiteSecretVaults { vaults },
+            }
+            .present())
+        }
+
+        /// The presented sections of a listing that lists at least one row.
+        fn listed_sections(&self) -> anyhow::Result<Vec<SiteSecretSection>> {
+            let SiteSecretListing { summary, sections } = self.present()?;
+            let SiteSecretListingSummary::Listed = summary else {
+                anyhow::bail!("expected a listed summary, got {summary:?}");
+            };
+            Ok(sections)
+        }
+
+        /// Every listed row, section by section.
+        fn listed_rows(&self) -> anyhow::Result<Vec<SiteSecretRow>> {
+            Ok(self
+                .listed_sections()?
+                .into_iter()
+                .flat_map(|section| match section.content {
+                    SiteSecretSectionContent::Listed { rows } => rows,
+                    SiteSecretSectionContent::Empty { .. } => Vec::new(),
+                })
+                .collect())
+        }
+    }
+
+    impl WireField {
+        fn assert_in(&self, json: &serde_json::Value) {
+            assert_eq!(
+                json.pointer(&self.pointer)
+                    .and_then(serde_json::Value::as_str),
+                Some(self.value),
+                "{}",
+                self.pointer
+            );
         }
     }
 
     #[test]
-    fn unrecognized_page_lists_every_kind_grouped_by_identity_in_grant_order() -> anyhow::Result<()>
-    {
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::AnySiteSecret,
-                vaults: namecheap_vaults()?,
-            }
-            .present(),
-        )?;
-        let headers: Vec<String> = groups.iter().map(header_name).collect();
-        assert_eq!(headers, ["Personal", "work"]);
-        let [personal, work] = groups.as_slice() else {
-            anyhow::bail!("expected two identity groups");
+    fn unrecognized_page_lists_every_kind_in_one_section_per_vault() -> anyhow::Result<()> {
+        let sections = ListingScenario {
+            page_need: SitePageNeed::AnySiteSecret,
+            vaults: VaultFixture::namecheap(),
+        }
+        .listed_sections()?;
+        let [personal, work] = sections.as_slice() else {
+            anyhow::bail!("expected one section per vault, got {sections:?}");
         };
-        let personal_rows = row_summaries(personal);
         assert_eq!(
-            personal_rows.iter().map(|row| row.kind).collect::<Vec<_>>(),
-            [
-                SiteSecretKind::Login,
-                SiteSecretKind::Authenticator,
-                SiteSecretKind::ApiKey
-            ]
+            personal.vault_store_id,
+            StoreId::parse("store_SMypl8K0w9a")?
         );
         assert_eq!(
-            work.rows.iter().map(|row| row.kind).collect::<Vec<_>>(),
-            [
-                SiteSecretKind::Login,
-                SiteSecretKind::Authenticator,
-                SiteSecretKind::Passkey
-            ]
+            personal.identity,
+            SiteSecretIdentityHeader::Named {
+                name: SiteSecretIdentityName::from("Personal".to_owned()),
+            }
         );
+        assert_eq!(
+            personal.vault,
+            SiteSecretVaultLabel::Named {
+                name: SiteSecretVaultName::from("bynull".to_owned()),
+            }
+        );
+        let SiteSecretSectionContent::Listed {
+            rows: personal_rows,
+        } = &personal.content
+        else {
+            anyhow::bail!("expected personal rows, got {:?}", personal.content);
+        };
         assert_eq!(
             personal_rows
                 .iter()
-                .map(|row| row.secret.as_str())
+                .map(|row| row.item_id.secret_id.clone())
                 .collect::<Vec<_>>(),
             [
                 "secret_personal_login",
                 "secret_personal_totp",
                 "secret_personal_api"
+            ]
+            .map(SecretId::from_vault_record)
+        );
+        for row in personal_rows {
+            assert_eq!(row.item_id.vault_store_id, personal.vault_store_id);
+        }
+        assert_eq!(work.vault_store_id, StoreId::parse("store_SMypl8K0w9b")?);
+        let SiteSecretSectionContent::Listed { rows: work_rows } = &work.content else {
+            anyhow::bail!("expected work rows, got {:?}", work.content);
+        };
+        assert_eq!(
+            work_rows.iter().map(|row| row.kind).collect::<Vec<_>>(),
+            [
+                SiteSecretKind::Login,
+                SiteSecretKind::Authenticator,
+                SiteSecretKind::Passkey
             ]
         );
         Ok(())
@@ -567,14 +497,11 @@ mod tests {
 
     #[test]
     fn one_time_code_page_lists_only_authenticators() -> anyhow::Result<()> {
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::OneTimeCode,
-                vaults: namecheap_vaults()?,
-            }
-            .present(),
-        )?;
-        let rows: Vec<&SiteSecretRow> = groups.iter().flat_map(|group| &group.rows).collect();
+        let rows = ListingScenario {
+            page_need: SitePageNeed::OneTimeCode,
+            vaults: VaultFixture::namecheap(),
+        }
+        .listed_rows()?;
         assert_eq!(rows.len(), 2);
         for row in rows {
             assert_eq!(row.kind, SiteSecretKind::Authenticator);
@@ -597,14 +524,11 @@ mod tests {
 
     #[test]
     fn credentials_page_lists_only_logins_with_fill() -> anyhow::Result<()> {
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::Credentials,
-                vaults: namecheap_vaults()?,
-            }
-            .present(),
-        )?;
-        let rows: Vec<&SiteSecretRow> = groups.iter().flat_map(|group| &group.rows).collect();
+        let rows = ListingScenario {
+            page_need: SitePageNeed::Credentials,
+            vaults: VaultFixture::namecheap(),
+        }
+        .listed_rows()?;
         assert_eq!(rows.len(), 2);
         for row in rows {
             assert_eq!(row.kind, SiteSecretKind::Login);
@@ -622,247 +546,68 @@ mod tests {
     }
 
     #[test]
-    fn filtered_empty_results_select_the_page_need_empty_state() -> anyhow::Result<()> {
-        let only_login = SiteSecretVaults {
-            vaults: vec![
-                VaultFixture {
-                    store: "store_SMypl8K0w9a",
-                    vault_name: "bynull",
-                    device: "device-personal",
-                    identity: "Personal",
-                    items: vec![ItemFixture {
-                        kind: SiteSecretKind::Login,
-                        id: "secret_personal_login",
-                        title: "namecheap.com",
-                    }],
-                }
-                .vault()?,
-            ],
+    fn listing_without_rows_names_the_page_need_beside_every_section() -> anyhow::Result<()> {
+        let save_hint = SiteSecretEmptyHint::Shown {
+            message_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_SITE_EMPTY_HINT),
         };
         assert_eq!(
-            SiteSecretListingRequest {
+            ListingScenario {
                 page_need: SitePageNeed::OneTimeCode,
-                vaults: only_login,
+                vaults: vec![VaultFixture::personal_login()],
             }
-            .present(),
-            SiteSecretListing::Empty {
-                message_key: SiteSecretMessageKey::catalog(
-                    i18n_keys::EXTENSION_ACTION_SITE_EMPTY_TOTP
-                ),
-                hint: SiteSecretEmptyHint::Absent,
-            }
-        );
-        let nothing = SiteSecretVaults { vaults: vec![] };
-        assert_eq!(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::Credentials,
-                vaults: nothing.clone(),
-            }
-            .present(),
-            SiteSecretListing::Empty {
-                message_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_SITE_EMPTY),
-                hint: SiteSecretEmptyHint::Shown {
+            .present()?,
+            SiteSecretListing {
+                summary: SiteSecretListingSummary::Empty {
                     message_key: SiteSecretMessageKey::catalog(
-                        i18n_keys::EXTENSION_ACTION_SITE_EMPTY_HINT
+                        i18n_keys::EXTENSION_ACTION_SITE_EMPTY_TOTP
                     ),
+                    hint: SiteSecretEmptyHint::Absent,
                 },
+                sections: vec![SiteSecretSection {
+                    vault_store_id: StoreId::parse("store_SMypl8K0w9a")?,
+                    identity: SiteSecretIdentityHeader::Named {
+                        name: SiteSecretIdentityName::from("Personal".to_owned()),
+                    },
+                    vault: SiteSecretVaultLabel::Named {
+                        name: SiteSecretVaultName::from("bynull".to_owned()),
+                    },
+                    content: SiteSecretSectionContent::Empty {
+                        message_key: SiteSecretMessageKey::catalog(
+                            i18n_keys::EXTENSION_ACTION_SITE_VAULT_EMPTY
+                        ),
+                    },
+                }],
             }
         );
         assert_eq!(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::AnySiteSecret,
-                vaults: nothing,
+            ListingScenario {
+                page_need: SitePageNeed::Credentials,
+                vaults: vec![],
             }
-            .present(),
-            SiteSecretListing::Empty {
+            .present()?,
+            SiteSecretListing {
+                summary: SiteSecretListingSummary::Empty {
+                    message_key: SiteSecretMessageKey::catalog(
+                        i18n_keys::EXTENSION_ACTION_SITE_EMPTY
+                    ),
+                    hint: save_hint.clone(),
+                },
+                sections: vec![],
+            }
+        );
+        assert_eq!(
+            ListingScenario {
+                page_need: SitePageNeed::AnySiteSecret,
+                vaults: vec![],
+            }
+            .present()?
+            .summary,
+            SiteSecretListingSummary::Empty {
                 message_key: SiteSecretMessageKey::catalog(
                     i18n_keys::EXTENSION_ACTION_SITE_EMPTY_ANY
                 ),
-                hint: SiteSecretEmptyHint::Shown {
-                    message_key: SiteSecretMessageKey::catalog(
-                        i18n_keys::EXTENSION_ACTION_SITE_EMPTY_HINT
-                    ),
-                },
+                hint: save_hint,
             }
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn identities_merge_by_device_and_name_and_unnamed_identity_comes_last() -> anyhow::Result<()> {
-        let vaults = SiteSecretVaults {
-            vaults: [
-                LoginVaultCase {
-                    store: "store_SMypl8K0w9a",
-                    vault_name: "old",
-                    device: "device-old",
-                    identity: "",
-                    id: "secret_a",
-                },
-                LoginVaultCase {
-                    store: "store_SMypl8K0w9b",
-                    vault_name: "bynull",
-                    device: "device-p",
-                    identity: "Personal",
-                    id: "secret_b",
-                },
-                LoginVaultCase {
-                    store: "store_SMypl8K0w9c",
-                    vault_name: "",
-                    device: "device-w",
-                    identity: "work",
-                    id: "secret_c",
-                },
-                LoginVaultCase {
-                    store: "store_SMypl8K0w9d",
-                    vault_name: "www",
-                    device: "device-p",
-                    identity: "Personal",
-                    id: "secret_d",
-                },
-                LoginVaultCase {
-                    store: "store_SMypl8K0w9e",
-                    vault_name: "twin",
-                    device: "device-x",
-                    identity: "Personal",
-                    id: "secret_e",
-                },
-            ]
-            .iter()
-            .map(LoginVaultCase::vault)
-            .collect::<anyhow::Result<_>>()?,
-        };
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::Credentials,
-                vaults,
-            }
-            .present(),
-        )?;
-        assert_eq!(
-            groups.iter().map(header_name).collect::<Vec<_>>(),
-            [
-                "Personal",
-                "work",
-                "Personal",
-                i18n_keys::EXTENSION_COMPANION_OTHER_VAULTS
-            ]
-        );
-        let [personal, work, _, _] = groups.as_slice() else {
-            anyhow::bail!("expected four identity groups");
-        };
-        assert_eq!(
-            row_summaries(personal)
-                .iter()
-                .map(|row| row.secret.as_str())
-                .collect::<Vec<_>>(),
-            ["secret_b", "secret_d"]
-        );
-        let [work_row] = work.rows.as_slice() else {
-            anyhow::bail!("expected one work row");
-        };
-        assert_eq!(
-            work_row.vault,
-            SiteSecretVaultLabel::Unnamed {
-                message_key: SiteSecretMessageKey::catalog(i18n_keys::LOGIN_VAULT_PICKER_UNNAMED),
-            }
-        );
-        assert_eq!(
-            work_row.item_id.vault_store_id,
-            StoreId::parse("store_SMypl8K0w9c")?
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rows_of_one_kind_sort_by_title_ignoring_case() -> anyhow::Result<()> {
-        let vaults = SiteSecretVaults {
-            vaults: vec![
-                VaultFixture {
-                    store: "store_SMypl8K0w9a",
-                    vault_name: "bynull",
-                    device: "device-personal",
-                    identity: "Personal",
-                    items: vec![
-                        ItemFixture {
-                            kind: SiteSecretKind::Authenticator,
-                            id: "secret_z",
-                            title: "zeta",
-                        },
-                        ItemFixture {
-                            kind: SiteSecretKind::Authenticator,
-                            id: "secret_a",
-                            title: "Alpha",
-                        },
-                    ],
-                }
-                .vault()?,
-            ],
-        };
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::OneTimeCode,
-                vaults,
-            }
-            .present(),
-        )?;
-        let [group] = groups.as_slice() else {
-            anyhow::bail!("expected one group");
-        };
-        assert_eq!(
-            row_summaries(group)
-                .iter()
-                .map(|row| row.secret.as_str())
-                .collect::<Vec<_>>(),
-            ["secret_a", "secret_z"]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn same_host_logins_sort_by_account_ignoring_case() -> anyhow::Result<()> {
-        let login = |id: &str, account: &str| SiteSecretItem {
-            kind: SiteSecretKind::Login,
-            secret_id: SecretId::from_vault_record(id),
-            title: SiteSecretTitle::from("namecheap.com".to_owned()),
-            account: SiteSecretAccount::from(account.to_owned()),
-            saved_host: SiteSecretSavedHost::from("namecheap.com".to_owned()),
-        };
-        let vault = SiteSecretVault {
-            matches: SiteSecretMatches {
-                items: vec![
-                    login("secret_zed", "zed"),
-                    login("secret_bynull", "bynull"),
-                    login("secret_alice", "Alice"),
-                ],
-            },
-            ..VaultFixture {
-                store: "store_SMypl8K0w9a",
-                vault_name: "bynull",
-                device: "device-personal",
-                identity: "Personal",
-                items: vec![],
-            }
-            .vault()?
-        };
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::Credentials,
-                vaults: SiteSecretVaults {
-                    vaults: vec![vault],
-                },
-            }
-            .present(),
-        )?;
-        let [group] = groups.as_slice() else {
-            anyhow::bail!("expected one group");
-        };
-        assert_eq!(
-            row_summaries(group)
-                .iter()
-                .map(|row| row.secret.as_str())
-                .collect::<Vec<_>>(),
-            ["secret_alice", "secret_bynull", "secret_zed"]
         );
         Ok(())
     }
@@ -884,28 +629,43 @@ mod tests {
     }
 
     #[test]
-    fn listing_wire_uses_tagged_display_values() -> anyhow::Result<()> {
-        let groups = listed_groups(
-            SiteSecretListingRequest {
-                page_need: SitePageNeed::OneTimeCode,
-                vaults: namecheap_vaults()?,
-            }
-            .present(),
-        )?;
-        let json = serde_json::to_value(SiteSecretListing::Listed { groups })?;
-        let row = "/groups/0/rows/0";
+    fn listed_wire_tags_sections_and_rows_without_vault_or_device() -> anyhow::Result<()> {
+        let listing = ListingScenario {
+            page_need: SitePageNeed::OneTimeCode,
+            vaults: VaultFixture::namecheap(),
+        }
+        .present()?;
+        let json = serde_json::to_value(&listing)?;
+        let section = "/sections/0";
+        let row = "/sections/0/content/rows/0";
         for expected in [
             WireField {
-                pointer: "/kind".to_owned(),
+                pointer: "/summary/kind".to_owned(),
                 value: "Listed",
             },
             WireField {
-                pointer: "/groups/0/header/kind".to_owned(),
+                pointer: format!("{section}/vault_store_id"),
+                value: "store_SMypl8K0w9a",
+            },
+            WireField {
+                pointer: format!("{section}/identity/kind"),
                 value: "Named",
             },
             WireField {
-                pointer: "/groups/0/header/name".to_owned(),
+                pointer: format!("{section}/identity/name"),
                 value: "Personal",
+            },
+            WireField {
+                pointer: format!("{section}/vault/kind"),
+                value: "Named",
+            },
+            WireField {
+                pointer: format!("{section}/vault/name"),
+                value: "bynull",
+            },
+            WireField {
+                pointer: format!("{section}/content/kind"),
+                value: "Listed",
             },
             WireField {
                 pointer: format!("{row}/kind"),
@@ -936,14 +696,6 @@ mod tests {
                 value: "namecheap.com",
             },
             WireField {
-                pointer: format!("{row}/vault/kind"),
-                value: "Named",
-            },
-            WireField {
-                pointer: format!("{row}/vault/name"),
-                value: "bynull",
-            },
-            WireField {
                 pointer: format!("{row}/action/kind"),
                 value: "FillCode",
             },
@@ -952,19 +704,55 @@ mod tests {
                 value: i18n_keys::EXTENSION_ACTION_FILL_CODE,
             },
         ] {
-            assert_eq!(
-                json.pointer(&expected.pointer)
-                    .and_then(serde_json::Value::as_str),
-                Some(expected.value),
-                "{}",
-                expected.pointer
-            );
+            expected.assert_in(&json);
+        }
+        for absent in [
+            format!("{row}/vault"),
+            format!("{section}/identity/device_id"),
+            "/summary/message_key".to_owned(),
+        ] {
+            assert_eq!(json.pointer(&absent), None, "{absent}");
+        }
+        let encoded = serde_json::to_string(&listing)?;
+        for device in ["device_id", "device-personal", "device-work"] {
+            assert!(!encoded.contains(device), "{device}");
         }
         Ok(())
     }
 
-    struct WireField {
-        pointer: String,
-        value: &'static str,
+    #[test]
+    fn empty_wire_tags_the_summary_and_the_section_line() -> anyhow::Result<()> {
+        let json = serde_json::to_value(
+            ListingScenario {
+                page_need: SitePageNeed::OneTimeCode,
+                vaults: vec![VaultFixture::personal_login()],
+            }
+            .present()?,
+        )?;
+        for expected in [
+            WireField {
+                pointer: "/summary/kind".to_owned(),
+                value: "Empty",
+            },
+            WireField {
+                pointer: "/summary/message_key".to_owned(),
+                value: i18n_keys::EXTENSION_ACTION_SITE_EMPTY_TOTP,
+            },
+            WireField {
+                pointer: "/summary/hint/kind".to_owned(),
+                value: "Absent",
+            },
+            WireField {
+                pointer: "/sections/0/content/kind".to_owned(),
+                value: "Empty",
+            },
+            WireField {
+                pointer: "/sections/0/content/message_key".to_owned(),
+                value: i18n_keys::EXTENSION_ACTION_SITE_VAULT_EMPTY,
+            },
+        ] {
+            expected.assert_in(&json);
+        }
+        Ok(())
     }
 }
