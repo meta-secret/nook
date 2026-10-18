@@ -50,6 +50,7 @@ visibility or the lock state changes.
     ThisSiteFillChoiceKind,
     ThisSiteFillKind,
     ThisSiteHostKind,
+    ThisSiteLiveAnnouncementKind,
     ThisSiteMemory,
     ThisSiteMemoryKind,
     ThisSiteNoticeKind,
@@ -121,13 +122,11 @@ visibility or the lock state changes.
 
   /** Pending and success are announced from one persistent region. */
   function liveText(): string {
-    switch (fill.kind) {
-      case ThisSiteFillKind.Pending:
-        return translatePlain(I18N_KEYS.ExtensionActionFillPending)
-      case ThisSiteFillKind.Filled:
-        return translatePlain(I18N_KEYS.ExtensionActionFillDone)
-      case ThisSiteFillKind.Idle:
-      case ThisSiteFillKind.Failed:
+    const announcement = ThisSiteViews.liveAnnouncement(fill)
+    switch (announcement.kind) {
+      case ThisSiteLiveAnnouncementKind.Announced:
+        return translatePlain(announcement.key)
+      case ThisSiteLiveAnnouncementKind.Silent:
         return ''
     }
   }

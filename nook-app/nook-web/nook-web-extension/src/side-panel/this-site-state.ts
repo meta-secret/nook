@@ -170,6 +170,19 @@ export type ThisSiteFillSend = {
   readonly windowId: number
 }
 
+export enum ThisSiteLiveAnnouncementKind {
+  Announced = 'announced',
+  Silent = 'silent',
+}
+
+/** The live region's text key for the section's fill result, or silence. */
+export type ThisSiteLiveAnnouncement =
+  | {
+      readonly kind: ThisSiteLiveAnnouncementKind.Announced
+      readonly key: I18nKey
+    }
+  | { readonly kind: ThisSiteLiveAnnouncementKind.Silent }
+
 /** Whether a Fill request is still on its way: one at a time, also after
  * the list it came from was dropped. */
 export enum ThisSiteFillActivity {
@@ -417,6 +430,24 @@ export class ThisSiteViews {
         return ThisSiteViews.filledKey(fill.action)
       case ThisSiteFillKind.Failed:
         return ThisSiteViews.failureKey(fill)
+    }
+  }
+
+  /**
+   * What the section's live region announces: pending and success with the
+   * same text as the row; a failure is announced by the row's own alert.
+   */
+  static liveAnnouncement(fill: ThisSiteFill): ThisSiteLiveAnnouncement {
+    switch (fill.kind) {
+      case ThisSiteFillKind.Pending:
+      case ThisSiteFillKind.Filled:
+        return {
+          kind: ThisSiteLiveAnnouncementKind.Announced,
+          key: ThisSiteViews.resultKey(fill),
+        }
+      case ThisSiteFillKind.Idle:
+      case ThisSiteFillKind.Failed:
+        return { kind: ThisSiteLiveAnnouncementKind.Silent }
     }
   }
 

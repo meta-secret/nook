@@ -20,6 +20,7 @@ import {
   ThisSiteFillFailure,
   ThisSiteFillKind,
   ThisSiteHostKind,
+  ThisSiteLiveAnnouncementKind,
   ThisSiteMatchCount,
   ThisSiteMemory,
   ThisSiteMemoryKind,
@@ -420,6 +421,43 @@ describe('This site Fill', () => {
     expect(codeAnswer(SidePanelCodeFillKind.TabChanged).notice).toBe(
       ThisSiteNoticeKind.SiteChanged,
     )
+  })
+
+  test('the live region announces each fill with its own text and leaves failures to the row', () => {
+    const pending: ThisSiteFill = {
+      kind: ThisSiteFillKind.Pending,
+      item: workId,
+      action: ThisSiteFillAction.Code,
+    }
+    expect(ThisSiteViews.liveAnnouncement(pending)).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillPending,
+    })
+    // A filled code is not announced as a filled login.
+    expect(
+      ThisSiteViews.liveAnnouncement(
+        codeAnswer(SidePanelCodeFillKind.Filled).fill,
+      ),
+    ).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillCodeDone,
+    })
+    expect(
+      ThisSiteViews.liveAnnouncement(
+        fillAnswer(SidePanelLoginFillKind.Filled).fill,
+      ),
+    ).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillDone,
+    })
+    for (const fill of [
+      codeAnswer(SidePanelCodeFillKind.FillFailed).fill,
+      ThisSiteMemory.initial().fill,
+    ]) {
+      expect(ThisSiteViews.liveAnnouncement(fill)).toEqual({
+        kind: ThisSiteLiveAnnouncementKind.Silent,
+      })
+    }
   })
 
   test('one match gets the primary Fill, several share secondary ones', () => {
