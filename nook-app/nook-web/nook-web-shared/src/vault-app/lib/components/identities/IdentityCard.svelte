@@ -406,6 +406,52 @@ panel sits inside the card, which then spans the full row.
       </div>
     </header>
 
+    {#if protection}
+      <section class="border-t border-border px-2 py-2">
+        <button
+          type="button"
+          class="nk-vault-row {protection.nudge === NookIdentityNudge.Urge
+            ? 'bg-destructive/5'
+            : 'bg-warning/5'}"
+          data-testid="identity-protection-toggle"
+          data-nudge={protection.nudge === NookIdentityNudge.Urge
+            ? 'urge'
+            : protection.nudge === NookIdentityNudge.Suggest
+              ? 'suggest'
+              : 'quiet'}
+          aria-expanded={protectionOpen}
+          {...protectionOpen ? { 'aria-current': 'true' } : {}}
+          disabled={busy}
+          onclick={toggleProtection}
+        >
+          <!-- Amber while a protection is missing; red once many items
+               live only in this browser. -->
+          <span
+            class="nk-vault-icon {protection.nudge === NookIdentityNudge.Urge
+              ? 'border-destructive/40 text-destructive'
+              : 'border-warning/50 text-warning'}"
+            aria-hidden="true"
+          >
+            <ShieldAlert class="size-4" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-[0.9375rem] font-medium"
+              >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
+            >
+            <span
+              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
+                ? 'text-destructive'
+                : 'text-warning'}">{protectionProgress}</span
+            >
+          </span>
+          <ChevronRight
+            class="size-4 flex-none text-muted-foreground opacity-60"
+            aria-hidden="true"
+          />
+        </button>
+      </section>
+    {/if}
+
     <section
       class="flex-1 border-t border-border px-2 pb-2 pt-1"
       aria-label={card.label}
@@ -531,52 +577,6 @@ panel sits inside the card, which then spans the full row.
         {/if}
       </ul>
     </section>
-
-    {#if protection}
-      <section class="border-t border-border px-2 py-2">
-        <button
-          type="button"
-          class="nk-vault-row {protection.nudge === NookIdentityNudge.Urge
-            ? 'bg-destructive/5'
-            : 'bg-warning/5'}"
-          data-testid="identity-protection-toggle"
-          data-nudge={protection.nudge === NookIdentityNudge.Urge
-            ? 'urge'
-            : protection.nudge === NookIdentityNudge.Suggest
-              ? 'suggest'
-              : 'quiet'}
-          aria-expanded={protectionOpen}
-          {...protectionOpen ? { 'aria-current': 'true' } : {}}
-          disabled={busy}
-          onclick={toggleProtection}
-        >
-          <!-- Amber while a protection is missing; red once many items
-               live only in this browser. -->
-          <span
-            class="nk-vault-icon {protection.nudge === NookIdentityNudge.Urge
-              ? 'border-destructive/40 text-destructive'
-              : 'border-warning/50 text-warning'}"
-            aria-hidden="true"
-          >
-            <ShieldAlert class="size-4" />
-          </span>
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-[0.9375rem] font-medium"
-              >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
-            >
-            <span
-              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
-                ? 'text-destructive'
-                : 'text-warning'}">{protectionProgress}</span
-            >
-          </span>
-          <ChevronRight
-            class="size-4 flex-none text-muted-foreground opacity-60"
-            aria-hidden="true"
-          />
-        </button>
-      </section>
-    {/if}
 
     {#if managesHere}
       <section
