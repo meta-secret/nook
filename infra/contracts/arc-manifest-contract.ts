@@ -365,7 +365,7 @@ class ArcManifestContract {
       'reservedSpace = "64GB"',
       'maxUsedSpace = "112GB"',
       'minFreeSpace = "16GB"',
-      'minFreeSpace = "25%"',
+      'minFreeSpace = "33%"',
       'filters = ["type==regular"]',
       'keepDuration = "24h"',
       "all = true",
