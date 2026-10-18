@@ -430,7 +430,7 @@ resolves it again at Fill time.
    - A failed or malformed grant answer returns `list-failed`, never an empty
      list.
 8. Rust filters every grant's matches by the page need and presents one
-   section for each grant.
+   section for each password-filling grant.
    - Identities follow the order of their first grant, with named identities
      before unnamed ones.
    - An identity's vaults stay adjacent, in grant order.
@@ -480,9 +480,9 @@ The listing obeys these rules:
 
 - **Prohibited:** omit a paired vault's section because it has no matching row,
   or show the page's empty state while another section lists a row.
-- **Required:** show a section for every grant, with "Nothing for this site"
-  in an empty one. Show the page's empty state above the sections only when no
-  section lists a row.
+- **Required:** show a section for every password-filling grant, with
+  "Nothing for this site" in an empty one. Show the page's empty state above
+  the sections only when no section lists a row.
 
 #### Fill
 
