@@ -111,7 +111,7 @@ jobs:
   e2e:
     name: Playwright (${{ inputs.suite }})
     needs: image
-    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
+    runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ needs.image.outputs.e2e-image-attempt }}

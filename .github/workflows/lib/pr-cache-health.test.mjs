@@ -745,7 +745,18 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
   assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
   const browserStart = workflow.indexOf("\n  browser:\n");
   assert.notEqual(browserStart, -1);
+  const validationStart = workflow.indexOf("\n  validation:\n", browserStart);
+  assert.notEqual(validationStart, -1);
   const prepare = workflow.slice(0, browserStart);
+  const browser = workflow.slice(browserStart, validationStart);
+  const validation = workflow.slice(validationStart);
+  const trustedRoute = "runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && ";
+  for (const mixedJob of [prepare, validation]) {
+    assert.ok(mixedJob.includes(`${trustedRoute}(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}`));
+    assert.doesNotMatch(mixedJob, /NOOK_BROWSER_RUNS_ON/);
+  }
+  assert.ok(browser.includes(`${trustedRoute}(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}`));
+  assert.doesNotMatch(browser, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
   assert.equal(
     prepare.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
     1,
@@ -808,6 +819,40 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
     assert.ok(workflow.includes(credential));
   }
   assert.match(workflow, /require-sccache: "true"/);
+});
+
+void test("sealed browser jobs use browser capacity while arbitrary remote tasks retain build capacity", () => {
+  const browserRoute = "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}";
+  const mixedRoute = "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}";
+  for (const { path, start, end } of [
+    { path: ".github/workflows/main.yml", start: "\n  web-e2e:\n", end: "\n  extension-e2e:\n" },
+    { path: ".github/workflows/main.yml", start: "\n  extension-e2e:\n", end: "\n  ui-demos:\n" },
+    { path: ".github/workflows/main.yml", start: "\n  ui-demos:\n", end: "\n  deploy:\n" },
+    { path: ".github/workflows/remote.yml", start: "\n  ci-pr-e2e-suite:\n", end: "\n  ci-pr-e2e:\n" },
+  ]) {
+    const workflow = fs.readFileSync(path, "utf8");
+    const jobStart = workflow.indexOf(start);
+    const jobEnd = workflow.indexOf(end, jobStart);
+    assert.notEqual(jobStart, -1, `${path}: ${start}`);
+    assert.notEqual(jobEnd, -1, `${path}: ${end}`);
+    const job = workflow.slice(jobStart, jobEnd);
+    assert.ok(job.includes(browserRoute), `${path}: ${start}`);
+    assert.doesNotMatch(job, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
+  }
+  const manualBrowser = fs.readFileSync(".github/workflows/e2e-pr.yml", "utf8");
+  const manualStart = manualBrowser.indexOf("\n  e2e:\n");
+  assert.notEqual(manualStart, -1);
+  const manualConsumer = manualBrowser.slice(manualStart);
+  assert.ok(manualConsumer.includes(browserRoute));
+  assert.doesNotMatch(manualConsumer, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
+  const remote = fs.readFileSync(".github/workflows/remote.yml", "utf8");
+  const genericStart = remote.indexOf("\n  web-e2e:\n");
+  const sealedStart = remote.indexOf("\n  ci-pr-e2e-suite:\n", genericStart);
+  assert.notEqual(genericStart, -1);
+  assert.notEqual(sealedStart, -1);
+  const generic = remote.slice(genericStart, sealedStart);
+  assert.ok(generic.includes(mixedRoute));
+  assert.doesNotMatch(generic, /NOOK_BROWSER_RUNS_ON/);
 });
 
 void test("remote browser checkout supplies repository actions before sealed task execution", () => {

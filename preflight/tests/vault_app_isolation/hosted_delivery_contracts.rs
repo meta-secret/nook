@@ -167,7 +167,10 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
         root: root.as_ref(),
     }
     .assert_artifact_backed_e2e_contract()?;
-    assert_release_and_main_delivery_contract(&root)?;
+    PrDeliveryScenario {
+        root: root.as_ref(),
+    }
+    .assert_release_and_main_delivery_contract()?;
     Ok(())
 }
 
@@ -410,117 +413,123 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
     );
 }
 
-fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> {
-    let release = (root).read(".github/workflows/release.yml");
-    let release_source = release
-        .find("- name: Checkout release source")
-        .context("release workflow must check out release source")?;
-    let release_setup = release
-        .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
-        .context("release workflow must configure BuildKit from current side-checkout tooling")?;
-    assert!(
-        release_source < release_setup,
-        "release must check out its requested source before connecting BuildKit"
-    );
-    assert!(release.contains(
-        "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
-    ));
-    assert!(
-        release.contains("release-sha: ${{ steps.release.outputs.sha }}")
-            && release.contains("release-version: ${{ steps.release.outputs.version }}")
-            && release.contains("ref: ${{ needs.prepare.outputs.release-sha }}")
-            && release.contains("PREPARED_RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}")
-            && release.contains("if [[ \"$sha\" != \"$PREPARED_RELEASE_SHA\" ]]")
-            && release.matches("inputs.ref || github.ref }}").count() == 1,
-        "release deployment must consume the immutable SHA prepared with its browser image"
-    );
-    assert!(
-        release.contains("path: .nook/release-workflow")
-            && release.contains(
-                "task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\""
-            )
-            && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
-        "historical release refs must use current workflow tooling against the immutable source root"
-    );
-    let main = (root).read(".github/workflows/main.yml");
-    let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
-    for required in [
-        "\n  rust:\n",
-        "\n  web:\n",
-        "\n  web-e2e:\n",
-        "\n  extension-e2e:\n",
-        "\n  ui-demos:\n",
-        "\n  deploy:\n",
-        "needs: [preflight]",
-        "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
-        "task _ci:main:web:e2e-only",
-        "task _extension:test:e2e",
-        "task _web:test:ui-demo",
-        "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
-        "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
-        // Re-run e2e jobs pull the image their producer attempt built; only
-        // the attempt number crosses jobs, since GitHub drops masked outputs.
-        "e2e_image_attempt: ${{ github.run_attempt }}",
-        "main-wasm-${{ github.run_id }}",
-        "task web:e2e:kubernetes-image:artifacts",
-        "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
-    ] {
+impl PrDeliveryScenario<'_> {
+    fn assert_release_and_main_delivery_contract(&self) -> anyhow::Result<()> {
+        let root = self.root;
+        let release = (root).read(".github/workflows/release.yml");
+        let release_source = release
+            .find("- name: Checkout release source")
+            .context("release workflow must check out release source")?;
+        let release_setup = release
+            .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
+            .context(
+                "release workflow must configure BuildKit from current side-checkout tooling",
+            )?;
         assert!(
-            main.contains(required),
-            "main parallel delivery contract missing: {required}"
+            release_source < release_setup,
+            "release must check out its requested source before connecting BuildKit"
         );
-    }
-    assert!(
-        !main.contains("e2e_image: "),
-        "a job output holding the registry path is dropped as possibly secret"
-    );
-    assert_eq!(
+        assert!(release.contains(
+            "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
+        ));
+        assert!(
+            release.contains("release-sha: ${{ steps.release.outputs.sha }}")
+                && release.contains("release-version: ${{ steps.release.outputs.version }}")
+                && release.contains("ref: ${{ needs.prepare.outputs.release-sha }}")
+                && release
+                    .contains("PREPARED_RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}")
+                && release.contains("if [[ \"$sha\" != \"$PREPARED_RELEASE_SHA\" ]]")
+                && release.matches("inputs.ref || github.ref }}").count() == 1,
+            "release deployment must consume the immutable SHA prepared with its browser image"
+        );
+        assert!(
+            release.contains("path: .nook/release-workflow")
+                && release.contains(
+                    "task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\""
+                )
+                && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
+            "historical release refs must use current workflow tooling against the immutable source root"
+        );
+        let main = (root).read(".github/workflows/main.yml");
+        let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
+        for required in [
+            "\n  rust:\n",
+            "\n  web:\n",
+            "\n  web-e2e:\n",
+            "\n  extension-e2e:\n",
+            "\n  ui-demos:\n",
+            "\n  deploy:\n",
+            "needs: [preflight]",
+            "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
+            "task _ci:main:web:e2e-only",
+            "task _extension:test:e2e",
+            "task _web:test:ui-demo",
+            "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
+            "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+            // Re-run e2e jobs pull the image their producer attempt built; only
+            // the attempt number crosses jobs, since GitHub drops masked outputs.
+            "e2e_image_attempt: ${{ github.run_attempt }}",
+            "main-wasm-${{ github.run_id }}",
+            "task web:e2e:kubernetes-image:artifacts",
+            "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
+        ] {
+            assert!(
+                main.contains(required),
+                "main parallel delivery contract missing: {required}"
+            );
+        }
+        assert!(
+            !main.contains("e2e_image: "),
+            "a job output holding the registry path is dropped as possibly secret"
+        );
+        assert_eq!(
         main.matches("image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}")
             .count(),
         3,
         "every Main browser consumer pulls the e2e image its web attempt built"
     );
-    assert!(
-        main_ui_demo_job.contains("name: UI demos\n    if: ${{ false }}")
-            && main_ui_demo_job.contains("task _web:test:ui-demo"),
-        "the disabled Main UI demo job must retain its implementation for later re-enable"
-    );
-    assert!(
-        !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
-        "same-runner Main suite coordinator was replaced by multi-job consumers"
-    );
-    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-    let web_ci = section(
-        &ci_tasks,
-        "  ci:main:web-e2e:ci:\n",
-        "\n  ci:main:web:artifacts:",
-    );
-    assert!(
-        web_ci.contains("task: docker:e2e:run")
-            && web_ci.contains("TASK: _ci:main:web:e2e-only")
-            && !web_ci.contains("TASK: _ci:main:core"),
-        "Main web e2e CI wrapper must run e2e-only without re-verifying the sealed build"
-    );
-    let web_e2e_artifacts = section(
-        &ci_tasks,
-        "  _ci:main:e2e:web:artifacts:host:\n",
-        "\n  ci:main:e2e:extension:artifacts:",
-    );
-    assert!(
-        web_e2e_artifacts.contains("task: docker:ci:web:e2e:build")
-            && web_e2e_artifacts.contains("TASK: _ci:main:web:e2e-only"),
-        "Main web e2e artifact consumer must bake the Chromium image then run e2e-only"
-    );
-    assert!(
-        !root.join(".github/workflows/runner-cleanup.yml").exists(),
-        "legacy registered-runner Docker cleanup must not return after ARC migration"
-    );
-    let prune_script = (root).read(".github/scripts/docker-prune-stale.sh");
-    assert!(
-        prune_script.contains("--filter until=168h"),
-        "runner cleanup must preserve the recent delivery cache"
-    );
-    Ok(())
+        assert!(
+            main_ui_demo_job.contains("name: UI demos\n    if: ${{ false }}")
+                && main_ui_demo_job.contains("task _web:test:ui-demo"),
+            "the disabled Main UI demo job must retain its implementation for later re-enable"
+        );
+        assert!(
+            !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
+            "same-runner Main suite coordinator was replaced by multi-job consumers"
+        );
+        let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
+        let web_ci = section(
+            &ci_tasks,
+            "  ci:main:web-e2e:ci:\n",
+            "\n  ci:main:web:artifacts:",
+        );
+        assert!(
+            web_ci.contains("task: docker:e2e:run")
+                && web_ci.contains("TASK: _ci:main:web:e2e-only")
+                && !web_ci.contains("TASK: _ci:main:core"),
+            "Main web e2e CI wrapper must run e2e-only without re-verifying the sealed build"
+        );
+        let web_e2e_artifacts = section(
+            &ci_tasks,
+            "  _ci:main:e2e:web:artifacts:host:\n",
+            "\n  ci:main:e2e:extension:artifacts:",
+        );
+        assert!(
+            web_e2e_artifacts.contains("task: docker:ci:web:e2e:build")
+                && web_e2e_artifacts.contains("TASK: _ci:main:web:e2e-only"),
+            "Main web e2e artifact consumer must bake the Chromium image then run e2e-only"
+        );
+        assert!(
+            !root.join(".github/workflows/runner-cleanup.yml").exists(),
+            "legacy registered-runner Docker cleanup must not return after ARC migration"
+        );
+        let prune_script = (root).read(".github/scripts/docker-prune-stale.sh");
+        assert!(
+            prune_script.contains("--filter until=168h"),
+            "runner cleanup must preserve the recent delivery cache"
+        );
+        Ok(())
+    }
 }
 
 #[test]

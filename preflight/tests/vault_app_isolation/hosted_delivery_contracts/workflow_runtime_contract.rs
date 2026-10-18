@@ -30,7 +30,13 @@ impl WorkflowRuntimeContract<'_> {
         let ecosystem = root.read(".github/workflows/rust-ecosystem-checks.yml");
         let ecosystem_entry = root.read(".github/workflows/ci.yml");
         assert!(
-            pr.contains("(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'")
+            pr.matches("(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'")
+                .count()
+                == 2
+                && pr
+                    .matches("(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest'")
+                    .count()
+                    == 1
                 && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                 && release.contains(
                     "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}"
@@ -67,7 +73,7 @@ impl WorkflowRuntimeContract<'_> {
                     .count()
                     >= 5
                 && main
-                    .matches("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}")
+                    .matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}")
                     .count()
                     >= 3
                 && main.contains("name: Portable WASM cache publication proof")

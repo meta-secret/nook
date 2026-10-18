@@ -7,250 +7,258 @@ use pr_producer_cache_contract::PrProducerCacheContract;
 #[test]
 fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
-    assert_hosted_buildkit_cache_contract(&root)?;
+    MainProducerCacheContract {
+        root: root.as_ref(),
+    }
+    .assert_hosted_buildkit_cache_contract()?;
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one hosted cache contract verifies the complete producer graph"
-)]
-fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
-    let app_bake = (root).read("nook-app/docker-bake.hcl");
-    let rust_toolchain_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_image_bake = (root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    let web_app_bake = (root).read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
-    let web_image = (root).read("nook-app/nook-web/nook-web-app/Dockerfile");
-    let web_toolchain_bake = (root).read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let preflight_bake = (root).read("preflight/docker-bake.hcl");
-    let bake_retry = (root).read(".github/scripts/bake-with-frontend-flake-retry.sh");
-    let bake = format!(
-        "{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{preflight_bake}"
-    );
-    for required in [
-        "GHA_CACHE_ENABLED",
-        "GHA_CACHE_WRITE_ENABLED",
-        "NOOK_REGISTRY_CACHE_HOST",
-        "default = \"registry.dev.nokey.sh\"",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v2",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v2",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
-        "nook-rust-ecosystem-policy-tools-v5",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v2",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4",
-        "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
-        "type=registry,ref=",
-        "compression=zstd,force-compression=true,timeout=10m",
-    ] {
-        assert!(
-            bake.contains(required),
-            "hosted BuildKit cache contract is missing: {required}"
+impl MainProducerCacheContract<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one hosted cache contract verifies the complete producer graph"
+    )]
+    fn assert_hosted_buildkit_cache_contract(&self) -> anyhow::Result<()> {
+        let root = self.root;
+        let app_bake = (root).read("nook-app/docker-bake.hcl");
+        let rust_toolchain_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+        let web_image_bake = (root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
+        let web_app_bake = (root).read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+        let web_image = (root).read("nook-app/nook-web/nook-web-app/Dockerfile");
+        let web_toolchain_bake = (root).read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+        let preflight_bake = (root).read("preflight/docker-bake.hcl");
+        let bake_retry = (root).read(".github/scripts/bake-with-frontend-flake-retry.sh");
+        let bake = format!(
+            "{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{preflight_bake}"
         );
-    }
-    assert!(
-        bake_retry.contains("nook-bake-flake.XXXXXX\"")
-            && !bake_retry.contains("nook-bake-flake.XXXXXX.log"),
-        "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
-    );
-    assert!(
-        !web_app_bake.contains("NOOK_SOURCE_REVISION")
-            && !web_image.contains("NOOK_SOURCE_REVISION")
-            && !web_image.contains("/opt/nook/source-revision")
-            && web_image.contains("BuildKit keys COPY from the source content")
-            && web_image.find("ARG NOOK_EXTENSION_COMMIT=")
-                > web_image.find("FROM nook-web-source AS nook-web-build")
-            && web_image.find("ARG VITE_BASE=/")
-                > web_image.find("FROM nook-web-source AS nook-web-build"),
-        "sealed web source must use BuildKit's content key and keep deployment arguments after the shared source graph"
-    );
-    assert!(
-        rust_toolchain_bake.contains("target \"rust-base-publish\"")
-            && rust_toolchain_bake.contains("target \"rust-base-restore\"")
-            && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
-            && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base-publish")
-            && !bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base")
-            && !bake_target_body(rust_toolchain_bake.as_str(), "rust-base")
-                .lines()
-                .any(|line| line.trim_start().starts_with("cache-from")),
-        "rust-base-restore/publish own the rust-base scope; context rust-base has no cache-from/to"
-    );
-    assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
-            && rust_toolchain_bake
-                .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
-                .count()
-                == 1
-            && !rust_toolchain_bake.contains("rust_ecosystem_policy_cache_to")
-            && rust_toolchain_bake.contains("target \"rust-ecosystem-dependency-policy\"")
-            && !rust_toolchain_bake.contains("type=docker"),
-        "policy-tools must own cache publication while dependency checks stay cache-only"
-    );
-    assert!(
-        !rust_toolchain_bake.contains("rust_ecosystem_nightly_cache_")
-            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
-            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
-        "dylint/fuzz own full-graph leaf caches with no standalone nightly cache"
-    );
-    assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
-        "ecosystem deterministic must seed its own hosted cache"
-    );
-    assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_kani_cache_to")
-            && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-kani"),
-        "Kani proofs must seed their full hosted toolchain and proof graph"
-    );
-    assert!(
-        !app_bake.contains("preflight_cache_from =")
-            && preflight_bake.contains("preflight_cache_from =")
-            && preflight_bake.contains("preflight_cache_to =")
-            && preflight_bake.contains("cache-from = preflight_cache_from")
-            && preflight_bake.contains("cache-to   = preflight_cache_to"),
-        "preflight must own its hosted chef/test cache scopes in preflight/docker-bake.hcl"
-    );
-    assert!(
-        !bake.contains("type=gha"),
-        "delivery caches must use registry.dev.nokey.sh, not the GitHub Actions cache service"
-    );
-    assert_eq!(
-        bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        16,
-        "every hosted cache exporter must honor the read-only workflow mode"
-    );
-    assert_rust_cache_export_hardening(&bake);
+        for required in [
+            "GHA_CACHE_ENABLED",
+            "GHA_CACHE_WRITE_ENABLED",
+            "NOOK_REGISTRY_CACHE_HOST",
+            "default = \"registry.dev.nokey.sh\"",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v2",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v4",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v4",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v2",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
+            "nook-rust-ecosystem-policy-tools-v5",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v2",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4",
+            "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
+            "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
+            "type=registry,ref=",
+            "compression=zstd,force-compression=true,timeout=10m",
+        ] {
+            assert!(
+                bake.contains(required),
+                "hosted BuildKit cache contract is missing: {required}"
+            );
+        }
+        assert!(
+            bake_retry.contains("nook-bake-flake.XXXXXX\"")
+                && !bake_retry.contains("nook-bake-flake.XXXXXX.log"),
+            "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
+        );
+        assert!(
+            !web_app_bake.contains("NOOK_SOURCE_REVISION")
+                && !web_image.contains("NOOK_SOURCE_REVISION")
+                && !web_image.contains("/opt/nook/source-revision")
+                && web_image.contains("BuildKit keys COPY from the source content")
+                && web_image.find("ARG NOOK_EXTENSION_COMMIT=")
+                    > web_image.find("FROM nook-web-source AS nook-web-build")
+                && web_image.find("ARG VITE_BASE=/")
+                    > web_image.find("FROM nook-web-source AS nook-web-build"),
+            "sealed web source must use BuildKit's content key and keep deployment arguments after the shared source graph"
+        );
+        assert!(
+            rust_toolchain_bake.contains("target \"rust-base-publish\"")
+                && rust_toolchain_bake.contains("target \"rust-base-restore\"")
+                && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
+                && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base-publish")
+                && !bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base")
+                && !bake_target_body(rust_toolchain_bake.as_str(), "rust-base")
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("cache-from")),
+            "rust-base-restore/publish own the rust-base scope; context rust-base has no cache-from/to"
+        );
+        assert!(
+            rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
+                && rust_toolchain_bake
+                    .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
+                    .count()
+                    == 1
+                && !rust_toolchain_bake.contains("rust_ecosystem_policy_cache_to")
+                && rust_toolchain_bake.contains("target \"rust-ecosystem-dependency-policy\"")
+                && !rust_toolchain_bake.contains("type=docker"),
+            "policy-tools must own cache publication while dependency checks stay cache-only"
+        );
+        assert!(
+            !rust_toolchain_bake.contains("rust_ecosystem_nightly_cache_")
+                && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
+                && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
+            "dylint/fuzz own full-graph leaf caches with no standalone nightly cache"
+        );
+        assert!(
+            rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
+            "ecosystem deterministic must seed its own hosted cache"
+        );
+        assert!(
+            rust_toolchain_bake.contains("cache-to   = rust_ecosystem_kani_cache_to")
+                && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-kani"),
+            "Kani proofs must seed their full hosted toolchain and proof graph"
+        );
+        assert!(
+            !app_bake.contains("preflight_cache_from =")
+                && preflight_bake.contains("preflight_cache_from =")
+                && preflight_bake.contains("preflight_cache_to =")
+                && preflight_bake.contains("cache-from = preflight_cache_from")
+                && preflight_bake.contains("cache-to   = preflight_cache_to"),
+            "preflight must own its hosted chef/test cache scopes in preflight/docker-bake.hcl"
+        );
+        assert!(
+            !bake.contains("type=gha"),
+            "delivery caches must use registry.dev.nokey.sh, not the GitHub Actions cache service"
+        );
+        assert_eq!(
+            bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
+            16,
+            "every hosted cache exporter must honor the read-only workflow mode"
+        );
+        assert_rust_cache_export_hardening(&bake);
 
-    let rust_bake = (root).read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    assert!(
-        !rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
-            && rust_bake
-                .contains("dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"",)
-            && rust_bake
-                .matches("cache-to   = rust_wasm_source_cache_to")
-                .count()
-                == 5
-            && bake_target_body(rust_bake.as_str(), "builder-wasm")
-                .contains("cache-from = rust_wasm_deps_cache_from")
-            && !bake_target_assigns_cache_to(rust_bake.as_str(), "builder-wasm"),
-        "WASM leaves persist source caches while Node verification restores only portable dependencies"
-    );
-    let core_bake = (root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let core_deps = bake_target_body(core_bake.as_str(), "builder-core-deps");
-    let wasm_deps = bake_target_body(core_bake.as_str(), "builder-wasm-deps");
-    assert!(
-        core_bake.contains("target \"builder-core-deps-publish\"")
-            && core_bake.contains("target \"builder-wasm-deps-publish\"")
-            && core_bake.contains("target \"builder-core-deps-restore\"")
-            && core_bake.contains("target \"builder-wasm-deps-restore\"")
-            && core_bake.contains("cache-to   = rust_deps_cache_to")
-            && core_bake.contains("cache-to   = rust_wasm_deps_cache_to")
-            && core_bake.contains("cache-from = rust_native_source_cache_from")
-            && core_bake.contains("cache-to   = rust_native_source_cache_to")
-            && bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps-publish")
-            && bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps-publish")
-            && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps")
-            && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps")
-            && !core_deps.contains("cache-from")
-            && !wasm_deps.contains("cache-from"),
-        "native/wasm dependency targets stay bare while restore/publish targets own cache I/O"
-    );
-    assert_release_wasm_cache_contract(root);
-    assert_parallel_web_pipeline(root);
-    assert!(
-        web_toolchain_bake.contains("target \"web-deps-publish\"")
-            && web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
-            && web_toolchain_bake.contains("web_deps_cache_from =")
-            && bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps-publish")
-            && !bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps"),
-        "web-deps-publish owns the web-deps scope; context web-deps has no cache-to"
-    );
-    assert!(
-        web_image_bake.contains("web_cache_from =")
-            && web_image_bake.contains("web_cache_to =")
-            && web_image_bake.contains("web_e2e_cache_from =")
-            && web_image_bake.contains("web_e2e_cache_to =")
-            && web_image_bake.contains("target \"web-base\"")
-            && web_image_bake.contains("target \"web-e2e-base\"")
-            && web_app_bake.contains("target \"nook-web-e2e-publish\"")
-            && bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e-publish")
-            && !bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e"),
-        "final web/e2e scopes must use a dedicated cache-only browser publisher"
-    );
-    let platform_docker_tasks = (root).read("nook-app/nook-platform/docker/Taskfile.yml");
-    let web_docker_tasks = (root).read("nook-app/nook-web/docker/Taskfile.yml");
-    let docker_tasks = format!("{platform_docker_tasks}\n{web_docker_tasks}");
-    assert!(
-        docker_tasks.contains("bake-with-frontend-flake-retry.sh")
-            && docker_tasks.contains("nook-web-ci")
-            && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\""),
-        "hosted web delivery must solve the joined validation/build target once and retry only the immediate BuildKit frontend flake"
-    );
-    let app_tasks = (root).read("nook-app/Taskfile.yml");
-    assert!(
-        app_tasks.contains("bake-with-frontend-flake-retry.sh")
-            && app_tasks.contains("setup: $setup_target"),
-        "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
-    );
-    for required in [
-        "is_buildkit_transport_flake",
-        "cache-export transport flakes",
-        "is_frontend_authorization_timeout",
-        "failed to read dockerfile",
-        "status=${PIPESTATUS[0]}",
-        "non-transient BuildKit failure; not retrying",
-        "transient BuildKit failure; retrying in 2s...",
-        "for attempt in 1 2; do",
-        "preparation_seconds=%.1f registry_send_seconds=%.1f",
-        "fatal error: concurrent map writes",
-        "BuildKit concurrent-map fault",
-    ] {
+        let rust_bake = (root).read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
         assert!(
-            bake_retry.contains(required),
-            "Bake frontend-flake retry helper is missing: {required}"
+            !rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
+                && rust_bake.contains(
+                    "dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"",
+                )
+                && rust_bake
+                    .matches("cache-to   = rust_wasm_source_cache_to")
+                    .count()
+                    == 5
+                && bake_target_body(rust_bake.as_str(), "builder-wasm")
+                    .contains("cache-from = rust_wasm_deps_cache_from")
+                && !bake_target_assigns_cache_to(rust_bake.as_str(), "builder-wasm"),
+            "WASM leaves persist source caches while Node verification restores only portable dependencies"
         );
-    }
-    let docker_setup = (root).read(".github/actions/nook-docker-setup/action.yml");
-    assert!(
-        docker_setup.contains("monitor-buildkit-storage")
-            && docker_setup.contains("timeout 8s docker buildx du")
-            && docker_setup.contains("BuildKit cache near GC ceiling")
-            && docker_setup.contains("112 GB max-use target"),
-        "Main must surface bounded actionable ARC BuildKit storage-pressure diagnostics"
-    );
-    for required in [
-        "docker:ci:cache:publish:rust-base",
-        "cache-publish:native-debug",
-        "cache-publish:preflight",
-        "docker:ci:cache:publish:wasm",
-        "docker:ci:cache:publish:web",
-    ] {
+        let core_bake = (root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+        let core_deps = bake_target_body(core_bake.as_str(), "builder-core-deps");
+        let wasm_deps = bake_target_body(core_bake.as_str(), "builder-wasm-deps");
         assert!(
-            docker_tasks.contains(required),
-            "verified cache publication must use the bounded BuildKit transport retry: {required}"
+            core_bake.contains("target \"builder-core-deps-publish\"")
+                && core_bake.contains("target \"builder-wasm-deps-publish\"")
+                && core_bake.contains("target \"builder-core-deps-restore\"")
+                && core_bake.contains("target \"builder-wasm-deps-restore\"")
+                && core_bake.contains("cache-to   = rust_deps_cache_to")
+                && core_bake.contains("cache-to   = rust_wasm_deps_cache_to")
+                && core_bake.contains("cache-from = rust_native_source_cache_from")
+                && core_bake.contains("cache-to   = rust_native_source_cache_to")
+                && bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps-publish")
+                && bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps-publish")
+                && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps")
+                && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps")
+                && !core_deps.contains("cache-from")
+                && !wasm_deps.contains("cache-from"),
+            "native/wasm dependency targets stay bare while restore/publish targets own cache I/O"
         );
+        assert_release_wasm_cache_contract(root);
+        assert_parallel_web_pipeline(root);
+        assert!(
+            web_toolchain_bake.contains("target \"web-deps-publish\"")
+                && web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
+                && web_toolchain_bake.contains("web_deps_cache_from =")
+                && bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps-publish")
+                && !bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps"),
+            "web-deps-publish owns the web-deps scope; context web-deps has no cache-to"
+        );
+        assert!(
+            web_image_bake.contains("web_cache_from =")
+                && web_image_bake.contains("web_cache_to =")
+                && web_image_bake.contains("web_e2e_cache_from =")
+                && web_image_bake.contains("web_e2e_cache_to =")
+                && web_image_bake.contains("target \"web-base\"")
+                && web_image_bake.contains("target \"web-e2e-base\"")
+                && web_app_bake.contains("target \"nook-web-e2e-publish\"")
+                && bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e-publish")
+                && !bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e"),
+            "final web/e2e scopes must use a dedicated cache-only browser publisher"
+        );
+        let platform_docker_tasks = (root).read("nook-app/nook-platform/docker/Taskfile.yml");
+        let web_docker_tasks = (root).read("nook-app/nook-web/docker/Taskfile.yml");
+        let docker_tasks = format!("{platform_docker_tasks}\n{web_docker_tasks}");
+        assert!(
+            docker_tasks.contains("bake-with-frontend-flake-retry.sh")
+                && docker_tasks.contains("nook-web-ci")
+                && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\""),
+            "hosted web delivery must solve the joined validation/build target once and retry only the immediate BuildKit frontend flake"
+        );
+        let app_tasks = (root).read("nook-app/Taskfile.yml");
+        assert!(
+            app_tasks.contains("bake-with-frontend-flake-retry.sh")
+                && app_tasks.contains("setup: $setup_target"),
+            "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
+        );
+        for required in [
+            "is_buildkit_transport_flake",
+            "cache-export transport flakes",
+            "is_frontend_authorization_timeout",
+            "failed to read dockerfile",
+            "status=${PIPESTATUS[0]}",
+            "non-transient BuildKit failure; not retrying",
+            "transient BuildKit failure; retrying in 2s...",
+            "for attempt in 1 2; do",
+            "preparation_seconds=%.1f registry_send_seconds=%.1f",
+            "fatal error: concurrent map writes",
+            "BuildKit concurrent-map fault",
+        ] {
+            assert!(
+                bake_retry.contains(required),
+                "Bake frontend-flake retry helper is missing: {required}"
+            );
+        }
+        let docker_setup = (root).read(".github/actions/nook-docker-setup/action.yml");
+        assert!(
+            docker_setup.contains("monitor-buildkit-storage")
+                && docker_setup.contains("timeout 8s docker buildx du")
+                && docker_setup.contains("BuildKit cache near GC ceiling")
+                && docker_setup.contains("112 GB max-use target"),
+            "Main must surface bounded actionable ARC BuildKit storage-pressure diagnostics"
+        );
+        for required in [
+            "docker:ci:cache:publish:rust-base",
+            "cache-publish:native-debug",
+            "cache-publish:preflight",
+            "docker:ci:cache:publish:wasm",
+            "docker:ci:cache:publish:web",
+        ] {
+            assert!(
+                docker_tasks.contains(required),
+                "verified cache publication must use the bounded BuildKit transport retry: {required}"
+            );
+        }
+        let isolation =
+            (root).read("nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts");
+        assert!(
+            isolation.contains("await companionWasmReady")
+                && isolation.contains("createManifest(productionManifestArgs)"),
+            "verify:isolation must await companion WASM before createManifest"
+        );
+        assert!(
+            app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
+                && app_tasks.contains("--set \"builder-core-deps.output=type=cacheonly\"")
+                && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
+            "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
+        );
+        MainProducerCacheContract { root }.assert()?;
+        PrProducerCacheContract::new(root).assert_contract()?;
+        self.assert_main_split_pipeline()?;
+        Ok(())
     }
-    let isolation = (root).read("nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts");
-    assert!(
-        isolation.contains("await companionWasmReady")
-            && isolation.contains("createManifest(productionManifestArgs)"),
-        "verify:isolation must await companion WASM before createManifest"
-    );
-    assert!(
-        app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
-            && app_tasks.contains("--set \"builder-core-deps.output=type=cacheonly\"")
-            && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
-        "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
-    );
-    MainProducerCacheContract { root }.assert()?;
-    PrProducerCacheContract::new(root).assert_contract()?;
-    assert_main_split_pipeline(root)?;
-    Ok(())
 }
 
 fn assert_rust_cache_export_hardening(bake: &str) {
@@ -455,7 +463,7 @@ impl MainProducerCacheContract<'_> {
             && web_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo.contains("needs: [web]")
-            && ui_demo.contains("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}")
+            && ui_demo.contains("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}")
             && ui_demo.contains("${{ needs.web.outputs.e2e_image_attempt }}")
             && ui_demo_verification.contains("task _web:test:ui-demo")
             && !ui_demo.contains("nook-docker-setup")
@@ -629,22 +637,24 @@ impl MainProducerCacheContract<'_> {
     }
 }
 
-fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
-    let main = (root).read(".github/workflows/main.yml");
-    let web_tasks = (root).read("nook-app/nook-web/docker/Taskfile.yml");
-    let wasm = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
-    let wasm_publish = section(
-        &main,
-        "      - name: Require successful WASM cache publication\n",
-        "\n  wasm-cache-proof:\n",
-    );
-    let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
-    let web = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
-    let deploy = main
-        .split("\n  deploy:\n")
-        .nth(1)
-        .context("Main must define the development deployment job")?;
-    assert!(
+impl MainProducerCacheContract<'_> {
+    fn assert_main_split_pipeline(&self) -> anyhow::Result<()> {
+        let root = self.root;
+        let main = (root).read(".github/workflows/main.yml");
+        let web_tasks = (root).read("nook-app/nook-web/docker/Taskfile.yml");
+        let wasm = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
+        let wasm_publish = section(
+            &main,
+            "      - name: Require successful WASM cache publication\n",
+            "\n  wasm-cache-proof:\n",
+        );
+        let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
+        let web = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
+        let deploy = main
+            .split("\n  deploy:\n")
+            .nth(1)
+            .context("Main must define the development deployment job")?;
+        assert!(
         main.contains("\n  rust:\n")
             && main.contains("\n  preflight:\n")
             && main.contains("\n  web:\n")
@@ -656,7 +666,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task _ci:main:web:e2e-only")
             && main.contains("task _extension:test:e2e")
             && main.contains("task _web:test:ui-demo")
-            && main.matches("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}").count() == 3
+            && main.matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}").count() == 3
             && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && !main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")
@@ -673,28 +683,29 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
-    assert!(
-        web_tasks.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
-            && web_tasks.contains("nook-web-ci.output=type=cacheonly"),
-        "daemon-free ARC web verification must retain its solved graph without exporting a Docker image"
-    );
-    assert!(
+        assert!(
+            web_tasks.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
+                && web_tasks.contains("nook-web-ci.output=type=cacheonly"),
+            "daemon-free ARC web verification must retain its solved graph without exporting a Docker image"
+        );
+        assert!(
         deploy.starts_with(
             "    name: Deploy development\n    if: github.ref == 'refs/heads/main'\n    needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"
         ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
         "the development deployment lane must use the general ARC scale set"
     );
-    let coverage_export = (root)
-        .read("nook-app/nook-platform/nook-core/docker-bake.hcl")
-        .split("target \"coverage-export\" {")
-        .nth(1)
-        .context("core bake file must define the coverage export target")?
-        .to_owned();
-    assert!(
-        coverage_export.contains("cache-to   = rust_native_source_cache_to"),
-        "coverage-export must retain the native-source GHA exporter for the Main native producer"
-    );
-    Ok(())
+        let coverage_export = (root)
+            .read("nook-app/nook-platform/nook-core/docker-bake.hcl")
+            .split("target \"coverage-export\" {")
+            .nth(1)
+            .context("core bake file must define the coverage export target")?
+            .to_owned();
+        assert!(
+            coverage_export.contains("cache-to   = rust_native_source_cache_to"),
+            "coverage-export must retain the native-source GHA exporter for the Main native producer"
+        );
+        Ok(())
+    }
 }
 
 fn assert_release_wasm_cache_contract(root: &Path) {
