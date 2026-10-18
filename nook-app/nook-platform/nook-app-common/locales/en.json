@@ -1937,7 +1937,6 @@
       "locked": "Nook is locked. Unlock it in the Nook panel, then try again on the site.",
       "no_vault": "No connected Nook vault keeps passkeys yet.",
       "check_failed": "Nook couldn't check its passkeys.",
-      "already_saved": "Nook already has a passkey for this account. Sign in with it, or remove it from your vault to save a new one.",
       "use_another": "Use another passkey",
       "use_browser": "Use browser or security key"
     },

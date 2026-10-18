@@ -4,7 +4,6 @@ import {
   decode_website_passkey_registration_request,
   decode_website_passkey_assertion_request,
   website_passkey_request_allows_credential,
-  website_passkey_request_excludes_credential,
   type PasskeyRegistrationRequest,
   type PasskeyAssertionRequest,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -78,15 +77,6 @@ export class WebsitePasskeyOptionsMessage {
   }: WebsitePasskeyCredentialAllowanceArgs): Promise<boolean> {
     await extensionWasmRuntime.ensureNookWasm()
     return website_passkey_request_allows_credential(request, credentialId)
-  }
-
-  /** Whether the site lists a vault passkey as one the account already has; nook-core owns the rule. */
-  static async excludesCredential({
-    request,
-    credentialId,
-  }: WebsitePasskeyCredentialExclusionArgs): Promise<boolean> {
-    await extensionWasmRuntime.ensureNookWasm()
-    return website_passkey_request_excludes_credential(request, credentialId)
   }
 
   static websitePasskeyRequestJson(
@@ -337,11 +327,6 @@ export type ParseWebsitePasskeyRequestArgs = {
 
 export type WebsitePasskeyCredentialAllowanceArgs = {
   request: PasskeyAssertionRequest
-  credentialId: string
-}
-
-export type WebsitePasskeyCredentialExclusionArgs = {
-  request: PasskeyRegistrationRequest
   credentialId: string
 }
 

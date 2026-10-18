@@ -43,8 +43,6 @@ pub enum PasskeyAuthenticatorError {
     RpOriginMismatch,
     #[error("ES256 is not offered by the relying party")]
     UnsupportedAlgorithm,
-    #[error("the requested credential is excluded")]
-    CredentialExcluded,
     #[error("no matching passkey is available")]
     CredentialNotFound,
     #[error("more than one discoverable passkey matches this request")]
@@ -118,6 +116,8 @@ pub struct PasskeyRegistrationRequest {
         )
     )]
     pub algorithms: Vec<i32>,
+    /// Accepted for the WebAuthn wire shape; Nook still registers another
+    /// passkey for an account whose existing passkeys the site lists here.
     #[serde(default)]
     pub exclude_credentials: Vec<PasskeyCredentialDescriptor>,
     pub resident_key_required: bool,
@@ -219,17 +219,6 @@ impl PasskeyAssertionRequest {
                 .allow_credentials
                 .iter()
                 .any(|descriptor| descriptor.id == credential_id)
-    }
-}
-
-impl PasskeyRegistrationRequest {
-    /// Whether the site lists this credential as one the account already has,
-    /// so the authenticator holding it must not register another.
-    #[must_use]
-    pub fn excludes_credential(&self, credential_id: &str) -> bool {
-        self.exclude_credentials
-            .iter()
-            .any(|descriptor| descriptor.id == credential_id)
     }
 }
 
@@ -390,32 +379,6 @@ mod tests {
                 "relying party public suffix"
             ))
         );
-        Ok(())
-    }
-
-    #[test]
-    fn a_listed_vault_passkey_blocks_another_registration_for_the_account() -> anyhow::Result<()> {
-        let saved = PasskeyRegistrationRequest::fixture()
-            .prepare(&[])
-            .and_then(CheckedPasskeyRegistration::generate)?
-            .credential;
-        let other = PasskeyRegistrationRequest::fixture()
-            .prepare(&[])
-            .and_then(CheckedPasskeyRegistration::generate)?
-            .credential;
-        let mut again = PasskeyRegistrationRequest::fixture();
-        again.exclude_credentials = vec![PasskeyCredentialDescriptor {
-            id: saved.credential_id.clone(),
-        }];
-
-        assert!(again.excludes_credential(&saved.credential_id));
-        assert!(!again.excludes_credential(&other.credential_id));
-        assert!(!PasskeyRegistrationRequest::fixture().excludes_credential(&saved.credential_id));
-        assert!(matches!(
-            again.prepare(&[saved]),
-            Err(PasskeyAuthenticatorError::CredentialExcluded)
-        ));
-        assert!(again.prepare(&[other]).is_ok());
         Ok(())
     }
 }

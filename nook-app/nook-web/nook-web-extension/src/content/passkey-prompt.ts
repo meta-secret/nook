@@ -94,8 +94,6 @@ const UNAVAILABLE_MESSAGES: Record<
     BROWSER_MESSAGE_KEYS.PasskeyNoVault,
   [WebsitePasskeyUnavailableReason.CheckFailed]:
     BROWSER_MESSAGE_KEYS.PasskeyCheckFailed,
-  [WebsitePasskeyUnavailableReason.AlreadySaved]:
-    BROWSER_MESSAGE_KEYS.PasskeyAlreadySaved,
 }
 
 const DISMISSED: PasskeyPromptChoice = {

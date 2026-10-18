@@ -19,7 +19,6 @@ import type {
   WebsitePasskeyPerformResponse,
 } from '../lib/webauthn-messages'
 import {
-  declinedPasskeyError,
   PageResponseAction,
   websitePasskeyOptionsDisposition,
   WebsitePasskeyOptionsDispositionKind,
@@ -236,7 +235,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
         : {
             requestId: request.requestId,
             action: PageResponseAction.Error,
-            value: declinedPasskeyError(disposition),
+            value: 'NotAllowedError',
           }
     respond(declined)
     return
