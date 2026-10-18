@@ -42,7 +42,11 @@ function installPasskeyCardChromeStub({
   localizedMessages,
 }: PasskeyCardStubArgs): void {
   const responses: string[] = []
-  Object.assign(window, { __nookDemoPasskeyResponses: responses })
+  const reasons: string[] = []
+  Object.assign(window, {
+    __nookDemoPasskeyResponses: responses,
+    __nookDemoPasskeyReasons: reasons,
+  })
   window.addEventListener('message', (event: MessageEvent) => {
     const data: unknown = event.data
     if (
@@ -54,6 +58,9 @@ function installPasskeyCardChromeStub({
       typeof data.action === 'string'
     ) {
       responses.push(data.action)
+      if ('reason' in data && typeof data.reason === 'string') {
+        reasons.push(data.reason)
+      }
     }
   })
   const runtime = {
@@ -65,18 +72,22 @@ function installPasskeyCardChromeStub({
       callback?: (response: unknown) => void,
     ) => {
       if (message.type === 'nook:website-passkey-options') {
-        // The demo vaults save passkeys but hold none the site asks for.
+        // The demo vaults save passkeys but hold none the site asks for,
+        // until the demo marks the account as one they already hold.
         const signIn = message.payload?.ceremony === 'get'
+        const alreadySaved =
+          Reflect.get(window, '__nookDemoPasskeyAlreadySaved') === true
         queueMicrotask(() =>
           callback?.({
             ok: true,
-            status: 'ready',
-            options: signIn
-              ? []
-              : [
-                  { vaultStoreId: 'demo', vaultName: 'Demo vault' },
-                  { vaultStoreId: 'work', vaultName: 'Work' },
-                ],
+            status: alreadySaved && !signIn ? 'already-saved' : 'ready',
+            options:
+              signIn || alreadySaved
+                ? []
+                : [
+                    { vaultStoreId: 'demo', vaultName: 'Demo vault' },
+                    { vaultStoreId: 'work', vaultName: 'Work' },
+                  ],
           }),
         )
       } else if (message.type === 'nook:website-passkey-perform') {
@@ -194,6 +205,34 @@ test('save a website passkey from the top-right Nook card', async ({
   await demoBeat(page)
   await page.keyboard.press('Enter')
   await expect.poll(responses).toEqual(['result', 'error', 'fallback'])
+  await expect(card).toBeHidden()
+
+  // Adding another passkey for an account a vault already holds: the card
+  // says so instead of offering Save, and closing it tells the site the
+  // passkey exists (InvalidStateError) rather than failing.
+  await page.evaluate(() =>
+    Object.assign(window, { __nookDemoPasskeyAlreadySaved: true }),
+  )
+  await page.evaluate(requestWebsitePasskey, 'create')
+  await expect(card).toBeVisible()
+  await expect(card).toContainText(
+    stubArgs.localizedMessages.passkeyAlreadySaved.message,
+  )
+  await expect(
+    card.getByRole('button', {
+      name: stubArgs.localizedMessages.passkeySaveAction.message,
+    }),
+  ).toHaveCount(0)
+  await demoBeat(page)
+  await page.keyboard.press('Escape')
+  await expect.poll(responses).toEqual(['result', 'error', 'fallback', 'error'])
+  await expect
+    .poll(() =>
+      page.evaluate((): unknown =>
+        Reflect.get(window, '__nookDemoPasskeyReasons'),
+      ),
+    )
+    .toEqual(['NotAllowedError', 'InvalidStateError'])
   await expect(card).toBeHidden()
 })
 
