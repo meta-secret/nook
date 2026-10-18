@@ -161,6 +161,9 @@ export class ArcSeparationContract {
       "kubectl get ephemeralrunnersets",
       "kubectl get ephemeralrunners",
       "kubectl get autoscalinglisteners",
+      'kubectl patch ephemeralrunnerset "$runner_set"',
+      '--type=merge -p \'{"spec":{"replicas":0,"patchID":0}}\'',
+      '.kind == "AutoscalingRunnerSet" and .uid == $uid',
       "nook-k0s:35 nook-k0s-container:16 nook-k0s-browser:4 nook-k0s-hive:10",
       "- task: arc:placement:hive",
       "- task: arc:separation:idle",
@@ -190,6 +193,11 @@ export class ArcSeparationContract {
       second: "- task: arc:placement:labels",
     });
     if (applyOrder.isErr()) return err(applyOrder.error);
+    const drainOrder = tasks.requireBefore({
+      first: "still has its old listener; inspect native reconciliation",
+      second: 'kubectl patch ephemeralrunnerset "$runner_set"',
+    });
+    if (drainOrder.isErr()) return err(drainOrder.error);
     return new ArcSeparationDrainContract(source).assert();
   }
 }
@@ -207,7 +215,10 @@ class ArcSeparationDrainContract {
     const replicaGuard = this.source.match(
       /jq -e '(all\(\.items\[\]; \(\.spec\.replicas[^']+)'/,
     )?.[1];
-    if (!podGuard || !templateGuard || !replicaGuard) {
+    const listenerGuard = this.source.match(
+      /jq -e --arg pool "\$pool" '([^']+)'/,
+    )?.[1];
+    if (!podGuard || !templateGuard || !replicaGuard || !listenerGuard) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
         message: "ARC separation drain guards are missing",
@@ -221,6 +232,59 @@ class ArcSeparationDrainContract {
       },
     };
     const fixtures: { guard: string; input: object; expected: string }[] = [
+      { guard: listenerGuard, input: { items: [] }, expected: "true" },
+      {
+        guard: listenerGuard,
+        input: {
+          items: [
+            {
+              spec: {
+                autoscalingRunnerSetNamespace: "arc-runners",
+                autoscalingRunnerSetName: "nook-k0s",
+              },
+            },
+          ],
+        },
+        expected: "true",
+      },
+      {
+        guard: listenerGuard,
+        input: {
+          items: [
+            {
+              spec: {
+                autoscalingRunnerSetNamespace: "arc-runners",
+                autoscalingRunnerSetName: "nook-k0s",
+                minRunners: 0,
+                maxRunners: 35,
+              },
+            },
+          ],
+        },
+        expected: "false",
+      },
+      {
+        guard: listenerGuard,
+        input: {
+          items: [
+            {
+              metadata: {
+                deletionTimestamp: "2026-10-18T00:00:00Z",
+                finalizers: [
+                  "autoscalinglistener.actions.github.com/finalizer",
+                ],
+              },
+              spec: {
+                autoscalingRunnerSetNamespace: "arc-runners",
+                autoscalingRunnerSetName: "nook-k0s",
+                minRunners: 0,
+                maxRunners: 35,
+              },
+            },
+          ],
+        },
+        expected: "false",
+      },
       {
         guard: templateGuard,
         input: { items: Array.from({ length: 4 }, () => currentTemplate) },
@@ -311,7 +375,7 @@ class ArcSeparationDrainContract {
           "--argjson",
           "input",
           JSON.stringify(fixture.input),
-          `$input | (${fixture.guard})`,
+          `"nook-k0s" as $pool | $input | (${fixture.guard})`,
         ],
         stdout: OperationalProbeStream.Pipe,
         stderr: OperationalProbeStream.Pipe,

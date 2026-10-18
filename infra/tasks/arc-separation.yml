@@ -15,6 +15,7 @@ tasks:
         chmod 0600 "$kubeconfig"
         sudo -n k0s kubeconfig admin > "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
+        kubectl() { sudo -n k0s kubectl "$@"; }
         # ARC's documented queue-drain mode. Keep every other Helm value.
         pools=(nook-k0s nook-k0s-container nook-k0s-hive)
         browser="$(sudo -n k0s kubectl get autoscalingrunnerset nook-k0s-browser \
@@ -25,6 +26,34 @@ tasks:
             --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
             --reuse-values --set minRunners=0 --set maxRunners=0 \
             --wait --timeout 10m
+        done
+        # ARC 0.14.2 can retain the old ERS desired count while replacing a
+        # listener after a min/max-only change. First confirm zero admission.
+        # A deleting old listener retains its positive limits and finalizer
+        # until its Pod is gone; absence is therefore safe, not a retry signal.
+        for pool in "${pools[@]}"; do
+          kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
+            jq -e '.spec.minRunners == 0 and .spec.maxRunners == 0' >/dev/null
+          if ! kubectl get autoscalinglisteners --namespace arc-systems -o json |
+            jq -e --arg pool "$pool" '[.items[] | select(
+              .spec.autoscalingRunnerSetNamespace == "arc-runners" and .spec.autoscalingRunnerSetName == $pool
+            )] | all(.[]; (.spec.minRunners // 0) == 0 and (.spec.maxRunners // 0) == 0)' >/dev/null; then
+            echo "$pool still has its old listener; inspect native reconciliation before rerunning drain." >&2
+            exit 1
+          fi
+        done
+        # Use the same native drain fields as the ARC controller. Its
+        # JobStillRunningError guard preserves busy runners until jobs finish.
+        for pool in "${pools[@]}"; do
+          pool_uid="$(kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o jsonpath='{.metadata.uid}')"
+          runner_sets="$(kubectl get ephemeralrunnersets --namespace arc-runners -o json |
+            jq -r --arg uid "$pool_uid" '.items[] | select(any(.metadata.ownerReferences[]?;
+              .kind == "AutoscalingRunnerSet" and .uid == $uid)) | .metadata.name')"
+          while IFS= read -r runner_set; do
+            test -n "$runner_set" || continue
+            kubectl patch ephemeralrunnerset "$runner_set" --namespace arc-runners \
+              --type=merge -p '{"spec":{"replicas":0,"patchID":0}}'
+          done <<<"$runner_sets"
         done
         echo "ARC admission is draining. Existing jobs finish normally; apply fails while any old runner remains."
         REMOTE
