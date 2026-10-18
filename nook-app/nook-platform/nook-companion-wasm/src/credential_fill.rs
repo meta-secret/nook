@@ -510,6 +510,7 @@ impl CredentialFillResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_companion_core::PageSecondFactorRoute;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -521,7 +522,7 @@ mod tests {
             vec!["current-password".to_owned()],
             "password".to_owned(),
             false,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -606,7 +607,7 @@ mod tests {
             vec!["current-password".to_owned()],
             "password".to_owned(),
             true,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -645,7 +646,7 @@ mod tests {
             Vec::new(),
             "search".to_owned(),
             false,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),

@@ -7,11 +7,14 @@ use super::control_text::AuthenticationIdentityPhraseEvidence;
 use super::form_identity::{AuthenticationRouteDecision, AuthenticationRouteIdentity};
 use super::input_role::{AuthenticationInputRole, OneTimeCode, Unrelated};
 use super::{
-    AuthenticationControlText, LoginContextObservation, PageInputFieldObservation, PageInputType,
+    AuthenticationControlText, AutocompleteTokenQuery, LoginContextObservation,
+    PageInputFieldObservation, PageInputType,
 };
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::wasm_bindgen;
 
-/// Whether the login-context path names a second-factor challenge route.
+/// Whether the login-context pathname names a second-factor challenge route.
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PageSecondFactorRoute {
     Unrelated,
@@ -27,26 +30,17 @@ impl PageSecondFactorRoute {
     ];
 }
 
-/// The WASM constructor receives this Rust decision back as a boolean transport value.
-impl From<bool> for PageSecondFactorRoute {
-    #[expect(
-        clippy::match_bool,
-        reason = "Convert the boolean transport value immediately into the owned route state"
-    )]
-    fn from(second_factor: bool) -> Self {
-        match second_factor {
-            true => Self::SecondFactor,
-            false => Self::Unrelated,
-        }
-    }
-}
-
 impl LoginContextObservation {
-    /// Decide whether the path names a second-factor challenge rather than its setup or management.
+    /// Decide whether the pathname (the `path_context` token before its first space; the
+    /// hostname never counts) names a second-factor challenge. Account-management,
+    /// destructive or transaction routes, and authenticator setup or enrollment are vetoed.
     #[must_use]
     pub fn second_factor_route(&self) -> PageSecondFactorRoute {
-        let route = AuthenticationRouteIdentity::new(&self.path_context);
-        match route.form_admission() {
+        let pathname = self
+            .path_context
+            .split_once(' ')
+            .map_or(self.path_context.as_str(), |(pathname, _)| pathname);
+        match AuthenticationRouteIdentity::new(pathname).form_admission() {
             AuthenticationRouteDecision::Eligible => {}
             AuthenticationRouteDecision::Destructive
             | AuthenticationRouteDecision::AccountManagement
@@ -55,11 +49,11 @@ impl LoginContextObservation {
                 return PageSecondFactorRoute::Unrelated;
             }
         }
-        let path = AuthenticationControlText::new(&self.path_context).expand_identity_text();
+        let path = AuthenticationControlText::new(pathname).expand_identity_text();
+        let path = AuthenticationControlText::new(&path);
         match (
-            route.indicates_authenticator_enrollment(),
-            AuthenticationControlText::new(&path)
-                .contains_any_word(PageSecondFactorRoute::ROUTE_WORDS),
+            path.contains_any_word(AuthenticationRouteIdentity::AUTHENTICATOR_ENROLLMENT_WORDS),
+            path.contains_any_word(PageSecondFactorRoute::ROUTE_WORDS),
         ) {
             (false, true) => PageSecondFactorRoute::SecondFactor,
             (true, _) | (false, false) => PageSecondFactorRoute::Unrelated,
@@ -100,10 +94,30 @@ pub enum PageInputMaxLength {
 }
 
 impl From<i32> for PageInputMaxLength {
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: decodes DOM HTMLInputElement.maxLength (-1 when absent)"
+        )
+    )]
     fn from(raw: i32) -> Self {
         match u32::try_from(raw) {
             Ok(limit) => Self::Limited(PageInputCharacterLimit(limit)),
             Err(_) => Self::Absent,
+        }
+    }
+}
+
+impl PageInputMaxLength {
+    /// A code fits an absent limit or one within the code length bounds.
+    fn code_length(self) -> CodeEntryShape {
+        match self {
+            Self::Absent
+            | Self::Limited(PageInputCharacterLimit(
+                PageInputCharacterLimit::SHORTEST_CODE..=PageInputCharacterLimit::LONGEST_CODE,
+            )) => CodeEntryShape::CodeShaped,
+            Self::Limited(_) => CodeEntryShape::Unshaped,
         }
     }
 }
@@ -159,15 +173,32 @@ enum CodeEntryShape {
     Unshaped,
 }
 
+/// Whether autocomplete declares the field an account password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CredentialAutocomplete {
+    Password,
+    Undeclared,
+}
+
 impl OneTimeCodeEntrySignals {
     /// Identity words that admit a code-shaped input without second-factor route evidence.
     const CODE_IDENTITY_WORDS: &[&str] = &["code", "passcode"];
+    /// Code-named identities that never satisfy the code-identity rule.
+    const NON_CODE_IDENTITY_WORDS: &[&str] = &[
+        "country code",
+        "area code",
+        "post code",
+        "postcode",
+        "sort code",
+        "captcha",
+    ];
 
     fn code_entry_shape(self, input_type: PageInputType) -> CodeEntryShape {
+        use CodeEntryShape::{CodeShaped, Unshaped};
         let digit_entry = match (input_type, self.input_mode, self.pattern) {
             (PageInputType::Tel | PageInputType::Number, _, _)
             | (_, PageInputMode::Numeric, _)
-            | (_, _, PageInputPattern::Digits) => CodeEntryShape::CodeShaped,
+            | (_, _, PageInputPattern::Digits) => CodeShaped,
             (
                 PageInputType::Text
                 | PageInputType::Email
@@ -175,59 +206,73 @@ impl OneTimeCodeEntrySignals {
                 | PageInputType::Other,
                 PageInputMode::Other,
                 PageInputPattern::Other,
-            ) => CodeEntryShape::Unshaped,
+            ) => Unshaped,
         };
-        match (digit_entry, self.max_length) {
-            (
-                CodeEntryShape::CodeShaped,
-                PageInputMaxLength::Absent
-                | PageInputMaxLength::Limited(PageInputCharacterLimit(
-                    PageInputCharacterLimit::SHORTEST_CODE..=PageInputCharacterLimit::LONGEST_CODE,
-                )),
-            ) => CodeEntryShape::CodeShaped,
-            (CodeEntryShape::CodeShaped, PageInputMaxLength::Limited(_))
-            | (
-                CodeEntryShape::Unshaped,
-                PageInputMaxLength::Absent | PageInputMaxLength::Limited(_),
-            ) => CodeEntryShape::Unshaped,
+        match (digit_entry, self.max_length.code_length()) {
+            (CodeShaped, CodeShaped) => CodeShaped,
+            (CodeShaped, Unshaped) | (Unshaped, CodeShaped | Unshaped) => Unshaped,
+        }
+    }
+
+    /// Whether the identity names a code, excluding codes that are not one-time codes.
+    fn code_identity(identity: &str) -> CodeEntryShape {
+        use AuthenticationIdentityPhraseEvidence::{Absent, Found};
+        let text = AuthenticationControlText::new(identity);
+        match (
+            text.identity_phrase_evidence(Self::NON_CODE_IDENTITY_WORDS),
+            text.identity_phrase_evidence(Self::CODE_IDENTITY_WORDS),
+        ) {
+            (Absent, Found(_)) => CodeEntryShape::CodeShaped,
+            (Found(_), _) | (Absent, Absent) => CodeEntryShape::Unshaped,
         }
     }
 }
 
 impl PageInputFieldObservation {
+    pub(super) fn credential_autocomplete(&self) -> CredentialAutocomplete {
+        let tokens = &self.autocomplete_tokens;
+        match ["current-password", "new-password"]
+            .into_iter()
+            .find(|expected| {
+                PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                    tokens,
+                    expected,
+                })
+            }) {
+            Some(_) => CredentialAutocomplete::Password,
+            None => CredentialAutocomplete::Undeclared,
+        }
+    }
+
     /// Classify a field without one-time-code words from route and entry-shape evidence.
     pub(super) fn one_time_code_entry_role(&self, identity: &str) -> AuthenticationInputRole {
+        use CodeEntryShape::{CodeShaped, Unshaped};
         let OneTimeCodeEntryEvidence::Observed(signals) = self.one_time_code_entry else {
             return AuthenticationInputRole::Unrelated(Unrelated);
         };
-        match self.input_type {
-            PageInputType::Text | PageInputType::Tel | PageInputType::Number => {}
-            PageInputType::Email | PageInputType::Password | PageInputType::Other => {
+        match (self.input_type, self.credential_autocomplete()) {
+            (
+                PageInputType::Text | PageInputType::Tel | PageInputType::Number,
+                CredentialAutocomplete::Undeclared,
+            ) => {}
+            (PageInputType::Email | PageInputType::Password | PageInputType::Other, _)
+            | (_, CredentialAutocomplete::Password) => {
                 return AuthenticationInputRole::Unrelated(Unrelated);
             }
         }
-        match (
-            signals.second_factor_route,
-            signals.code_entry_shape(self.input_type),
-        ) {
-            (PageSecondFactorRoute::SecondFactor, _) => {
-                AuthenticationInputRole::OneTimeCode(OneTimeCode)
-            }
-            (PageSecondFactorRoute::Unrelated, CodeEntryShape::Unshaped) => {
-                AuthenticationInputRole::Unrelated(Unrelated)
-            }
-            (PageSecondFactorRoute::Unrelated, CodeEntryShape::CodeShaped) => {
-                match AuthenticationControlText::new(identity)
-                    .identity_phrase_evidence(OneTimeCodeEntrySignals::CODE_IDENTITY_WORDS)
-                {
-                    AuthenticationIdentityPhraseEvidence::Found(_) => {
-                        AuthenticationInputRole::OneTimeCode(OneTimeCode)
-                    }
-                    AuthenticationIdentityPhraseEvidence::Absent => {
-                        AuthenticationInputRole::Unrelated(Unrelated)
-                    }
-                }
-            }
+        let shape = match signals.second_factor_route {
+            PageSecondFactorRoute::SecondFactor => signals.max_length.code_length(),
+            PageSecondFactorRoute::Unrelated => match (
+                signals.code_entry_shape(self.input_type),
+                OneTimeCodeEntrySignals::code_identity(identity),
+            ) {
+                (CodeShaped, CodeShaped) => CodeShaped,
+                (CodeShaped, Unshaped) | (Unshaped, CodeShaped | Unshaped) => Unshaped,
+            },
+        };
+        match shape {
+            CodeShaped => AuthenticationInputRole::OneTimeCode(OneTimeCode),
+            Unshaped => AuthenticationInputRole::Unrelated(Unrelated),
         }
     }
 }
@@ -280,7 +325,7 @@ mod tests {
         for path in "/twofa/totp/ www.namecheap.com|/sessions/two-factor github.com|/ap/mfa www.amazon.com|/signin/challenge/totp accounts.google.com|/login/2-step example.test".split('|') {
             assert_eq!(Fixture::route(path), PageSecondFactorRoute::SecondFactor, "{path}");
         }
-        for path in "/settings/two-factor/setup github.com|/account/security/2fa/enable example.test|/search www.namecheap.com|/cart/ www.namecheap.com|/login example.test".split('|') {
+        for path in "/settings/two-factor/setup github.com|/account/security/2fa/enable example.test|/search www.namecheap.com|/cart/ www.namecheap.com|/login example.test|/twofa/setup x.test|/two-step-verification/enroll x.test|/2sv/enroll x.test|/twofactor/setup x.test|/ mfa.gov.sg|/contact otp.example.com".split('|') {
             assert_eq!(Fixture::route(path), PageSecondFactorRoute::Unrelated, "{path}");
         }
     }
@@ -335,8 +380,22 @@ mod tests {
         };
         let fields = [Fixture::wordless(second_factor), tel];
         assert_eq!(Fixture::one_time_code(fields), [true; 2]);
-        let fields = [Fixture::wordless(numeric_six), unobserved, search];
-        assert_eq!(Fixture::one_time_code(fields), [false; 3]);
+        let too_long = OneTimeCodeEntrySignals {
+            max_length: 50.into(),
+            ..second_factor
+        };
+        let password_autocomplete = PageInputFieldObservation {
+            autocomplete_tokens: vec!["current-password".to_owned()],
+            ..Fixture::wordless(second_factor)
+        };
+        let fields = [
+            Fixture::wordless(numeric_six),
+            unobserved,
+            search,
+            Fixture::wordless(too_long),
+            password_autocomplete,
+        ];
+        assert_eq!(Fixture::one_time_code(fields), [false; 5]);
     }
 
     #[test]
@@ -362,8 +421,17 @@ mod tests {
             input_type: PageInputType::Tel,
             ..code_identity(Fixture::UNSHAPED)
         };
-        let fields = [code_identity(numeric(6)), code_identity(digit_pattern), tel];
-        assert_eq!(Fixture::one_time_code(fields), [true; 3]);
+        let passcode = PageInputFieldObservation {
+            identity_text: "Passcode".to_owned(),
+            ..Fixture::wordless(numeric(6))
+        };
+        let fields = [
+            code_identity(numeric(6)),
+            code_identity(digit_pattern),
+            tel,
+            passcode,
+        ];
+        assert_eq!(Fixture::one_time_code(fields), [true; 4]);
         let wordless_login = PageInputFieldObservation {
             login_context: PageLoginContext::Authentication,
             ..Fixture::wordless(numeric(6))
@@ -373,8 +441,17 @@ mod tests {
             code_identity(text_six),
             code_identity(numeric(20)),
             code_identity(numeric(3)),
+            PageInputFieldObservation {
+                input_type: PageInputType::Tel,
+                identity_text: "Country code".to_owned(),
+                ..Fixture::wordless(Fixture::UNSHAPED)
+            },
+            PageInputFieldObservation {
+                identity_text: "Sort code".to_owned(),
+                ..Fixture::wordless(numeric(6))
+            },
         ];
-        assert_eq!(Fixture::one_time_code(fields), [false; 4]);
+        assert_eq!(Fixture::one_time_code(fields), [false; 6]);
     }
 
     #[test]
@@ -394,7 +471,7 @@ mod tests {
             };
             assert!(!field.looks_like_one_time_code_field(), "{identity}");
         }
-        for identity in "Enter OTP Code|twofaCode|2-step code|2SV code|Passcode".split('|') {
+        for identity in "Enter OTP Code|twofaCode|2-step code|2SV code".split('|') {
             let masked = PageInputFieldObservation {
                 input_type: PageInputType::Password,
                 identity_text: identity.to_owned(),
@@ -403,5 +480,18 @@ mod tests {
             };
             assert!(masked.looks_like_one_time_code_field(), "{identity}");
         }
+        let account_password = PageInputFieldObservation {
+            input_type: PageInputType::Password,
+            identity_text: "passcode".to_owned(),
+            ..Fixture::wordless(Fixture::UNSHAPED)
+        };
+        let declared = PageInputFieldObservation {
+            autocomplete_tokens: vec!["current-password".to_owned()],
+            ..account_password.clone()
+        };
+        assert_eq!(
+            Fixture::one_time_code([account_password, declared]),
+            [false; 2]
+        );
     }
 }

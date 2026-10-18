@@ -6,8 +6,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_second_factor_route(observation: &NookLoginContextObservation) -> bool {
-    matches!(observation.inner.second_factor_route(), PageSecondFactorRoute::SecondFactor)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn second_factor_route(observation: &NookLoginContextObservation) -> PageSecondFactorRoute {
+    observation.inner.second_factor_route()
 }
 
 #[cfg(test)]
@@ -23,15 +23,21 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn second_factor_route_export_and_entry_arguments_reach_core_policy() {
         let route = |path: &str| {
-            has_second_factor_route(&NookLoginContextObservation::new(
+            second_factor_route(&NookLoginContextObservation::new(
                 "aspnetForm".to_owned(),
                 Vec::new(),
                 "Submit".to_owned(),
                 path.to_owned(),
             ))
         };
-        assert!(route("/twofa/totp/ www.namecheap.com"));
-        assert!(!route("/settings/two-factor/setup github.com"));
+        assert_eq!(
+            route("/twofa/totp/ www.namecheap.com"),
+            PageSecondFactorRoute::SecondFactor
+        );
+        assert_eq!(
+            route("/twofa/setup example.test"),
+            PageSecondFactorRoute::Unrelated
+        );
 
         let field = NookPageInputFieldObservation::new(
             PageInputType::Text,
@@ -40,7 +46,7 @@ mod tests {
             Vec::new(),
             "ctl00$MainContent$txtValue".to_owned(),
             false,
-            true,
+            PageSecondFactorRoute::SecondFactor,
             " numeric ".to_owned(),
             -1,
             r"\d{6}".to_owned(),

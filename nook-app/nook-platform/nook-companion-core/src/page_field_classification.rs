@@ -727,7 +727,6 @@ impl PageInputFieldObservation {
             "two step",
             "2 step",
             "2 sv",
-            "passcode",
         ])
     }
 }
