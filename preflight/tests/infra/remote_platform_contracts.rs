@@ -82,160 +82,162 @@ fn assert_no_shell_scripts(path: &Path) {
 
 #[test]
 fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
-    assert_remote_compose_contract()?;
+    RepositoryFixture::repository_root().assert_remote_compose_contract()?;
     assert_infrastructure_deploy_contract()?;
     assert_zot_registry_contract()?;
     assert_mesh_node_contract()?;
     Ok(())
 }
 
-fn assert_remote_compose_contract() -> anyhow::Result<()> {
-    let compose = RepositoryFixture::repository_root().read("infra/compose.yaml");
-    for required in [
-        "network_mode: host",
-        "chrislusf/seaweedfs:",
-        "-s3.port=8333",
-        "-s3.ip.bind=127.0.0.1",
-        "-s3.config=/etc/seaweedfs/s3.json",
-        "/var/lib/nook/seaweedfs:/data",
-        "./secrets/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro",
-        "--entryPoints.websecure.address=:443",
-        "traefik:v3.7.1@sha256:",
-        "--certificatesResolvers.letsencrypt.acme.tlsChallenge=true",
-        "./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro",
-        "traefik-data:/data",
-        "mem_limit: 2g",
-        "restart: unless-stopped",
-        "no-new-privileges:true",
-    ] {
+impl RepositoryFixture {
+    fn assert_remote_compose_contract(&self) -> anyhow::Result<()> {
+        let compose = self.read("infra/compose.yaml");
+        for required in [
+            "network_mode: host",
+            "chrislusf/seaweedfs:",
+            "-s3.port=8333",
+            "-s3.ip.bind=127.0.0.1",
+            "-s3.config=/etc/seaweedfs/s3.json",
+            "/var/lib/nook/seaweedfs:/data",
+            "./secrets/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro",
+            "--entryPoints.websecure.address=:443",
+            "traefik:v3.7.1@sha256:",
+            "--certificatesResolvers.letsencrypt.acme.tlsChallenge=true",
+            "./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro",
+            "traefik-data:/data",
+            "mem_limit: 2g",
+            "restart: unless-stopped",
+            "no-new-privileges:true",
+        ] {
+            assert!(
+                compose.contains(required),
+                "remote infrastructure is missing: {required}"
+            );
+        }
         assert!(
-            compose.contains(required),
-            "remote infrastructure is missing: {required}"
+            !compose.contains("\n  redis:")
+                && !compose.contains("redis-data")
+                && !compose.contains("redis-password")
+                && !compose.contains("--entryPoints.redis"),
+            "Redis must be fully retired from Compose after the SeaweedFS cutover"
         );
-    }
-    assert!(
-        !compose.contains("\n  redis:")
-            && !compose.contains("redis-data")
-            && !compose.contains("redis-password")
-            && !compose.contains("--entryPoints.redis"),
-        "Redis must be fully retired from Compose after the SeaweedFS cutover"
-    );
-    assert!(
-        !compose.contains("6380:6379")
-            && !compose.contains("5000:5000")
-            && !compose.contains("ports:"),
-        "host-network Traefik/SeaweedFS must not publish bridge port maps"
-    );
-    assert!(
-        !compose.contains("\n  registry:") && !compose.contains("registry-data"),
-        "the legacy Compose registry must be retired after the Zot migration"
-    );
-    assert!(
-        compose.matches("@sha256:").count() >= 2,
-        "infrastructure service images must be digest pinned"
-    );
+        assert!(
+            !compose.contains("6380:6379")
+                && !compose.contains("5000:5000")
+                && !compose.contains("ports:"),
+            "host-network Traefik/SeaweedFS must not publish bridge port maps"
+        );
+        assert!(
+            !compose.contains("\n  registry:") && !compose.contains("registry-data"),
+            "the legacy Compose registry must be retired after the Zot migration"
+        );
+        assert!(
+            compose.matches("@sha256:").count() >= 2,
+            "infrastructure service images must be digest pinned"
+        );
 
-    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
-    assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
-    let infra_root = RepositoryFixture::repository_root().read("infra/Taskfile.yml");
-    let expected_domains = [
-        "manifests",
-        "providers",
-        "mesh",
-        "operator-ssh",
-        "host-services",
-        "kubernetes-tools",
-        "k0s",
-        "k0s-workers",
-        "k0s-worker-restore",
-        "k0s-worker-mesh",
-        "kata",
-        "registry",
-        "arc",
-        "arc-operations",
-        "arc-placement",
-        "arc-smoke",
-        "sccache",
-        "operations",
-        "bake-cache",
-        "kubernetes-cache",
-        "pr-cache",
-        "webhook-ingress",
-    ];
-    for domain in expected_domains {
-        let include = format!(
-            "  {domain}:\n    taskfile: tasks/{domain}.yml\n    dir: ..\n    flatten: true"
-        );
-        assert!(
-            infra_root.contains(&include),
-            "infra Taskfile must flatten the {domain} operational domain"
-        );
-    }
-    let mut actual_domain_taskfiles =
-        fs::read_dir(RepositoryFixture::repository_root().join("infra/tasks"))?
+        let root_tasks = self.read("Taskfile.yml");
+        assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
+        let infra_root = self.read("infra/Taskfile.yml");
+        let expected_domains = [
+            "manifests",
+            "providers",
+            "mesh",
+            "operator-ssh",
+            "host-services",
+            "kubernetes-tools",
+            "k0s",
+            "k0s-workers",
+            "k0s-worker-restore",
+            "k0s-worker-mesh",
+            "kata",
+            "registry",
+            "arc",
+            "arc-operations",
+            "arc-placement",
+            "arc-separation",
+            "arc-smoke",
+            "sccache",
+            "operations",
+            "bake-cache",
+            "kubernetes-cache",
+            "pr-cache",
+            "webhook-ingress",
+        ];
+        for domain in expected_domains {
+            let include = format!(
+                "  {domain}:\n    taskfile: tasks/{domain}.yml\n    dir: ..\n    flatten: true"
+            );
+            assert!(
+                infra_root.contains(&include),
+                "infra Taskfile must flatten the {domain} operational domain"
+            );
+        }
+        let mut actual_domain_taskfiles = fs::read_dir(self.join("infra/tasks"))?
             .map(|entry| {
                 entry?.file_name().into_string().map_err(|name| {
                     anyhow::anyhow!("non-UTF-8 infra task filename: {}", name.display())
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-    actual_domain_taskfiles.sort();
-    let mut expected_domain_taskfiles = expected_domains
-        .map(|domain| format!("{domain}.yml"))
-        .to_vec();
-    expected_domain_taskfiles.sort();
-    assert_eq!(
-        actual_domain_taskfiles, expected_domain_taskfiles,
-        "every infra/tasks/*.yml domain must be reachable from the composition root"
-    );
-
-    assert_no_shell_scripts(&RepositoryFixture::repository_root().join("infra"));
-
-    let traefik = RepositoryFixture::repository_root().read("infra/traefik-dynamic.yaml");
-    for required in [
-        "certResolver: letsencrypt",
-        "Host(`registry.dev.nokey.sh`)",
-        "url: http://10.96.90.10:5000",
-        "Host(`sccache.dev.nokey.sh`)",
-        "url: http://127.0.0.1:8333",
-        "passHostHeader: true",
-    ] {
-        assert!(
-            traefik.contains(required),
-            "Traefik TLS routing is missing: {required}"
+        actual_domain_taskfiles.sort();
+        let mut expected_domain_taskfiles = expected_domains
+            .map(|domain| format!("{domain}.yml"))
+            .to_vec();
+        expected_domain_taskfiles.sort();
+        assert_eq!(
+            actual_domain_taskfiles, expected_domain_taskfiles,
+            "every infra/tasks/*.yml domain must be reachable from the composition root"
         );
-    }
-    assert!(
-        !traefik.contains("HostSNI(")
-            && !traefik.contains("127.0.0.1:6379")
-            && !traefik.contains("redis"),
-        "Traefik must not retain Redis TCP routing after the SeaweedFS cutover"
-    );
 
-    let nftables = RepositoryFixture::repository_root().read("infra/nftables.conf");
-    for required in [
-        "chain input",
-        "chain forward",
-        "policy drop",
-        "ct state established,related accept",
-        "tcp dport { 22, 443 } accept",
-        "iifname \"docker0\" accept",
-        "iifname \"br-*\" accept",
-        "oifname \"docker0\" accept",
-        "oifname \"br-*\" accept",
-        "chain output",
-        "policy accept",
-    ] {
+        assert_no_shell_scripts(&self.join("infra"));
+
+        let traefik = self.read("infra/traefik-dynamic.yaml");
+        for required in [
+            "certResolver: letsencrypt",
+            "Host(`registry.dev.nokey.sh`)",
+            "url: http://10.96.90.10:5000",
+            "Host(`sccache.dev.nokey.sh`)",
+            "url: http://127.0.0.1:8333",
+            "passHostHeader: true",
+        ] {
+            assert!(
+                traefik.contains(required),
+                "Traefik TLS routing is missing: {required}"
+            );
+        }
         assert!(
-            nftables.contains(required),
-            "host firewall must preserve default-drop filtering and Docker forwarding: {required}"
+            !traefik.contains("HostSNI(")
+                && !traefik.contains("127.0.0.1:6379")
+                && !traefik.contains("redis"),
+            "Traefik must not retain Redis TCP routing after the SeaweedFS cutover"
         );
+
+        let nftables = self.read("infra/nftables.conf");
+        for required in [
+            "chain input",
+            "chain forward",
+            "policy drop",
+            "ct state established,related accept",
+            "tcp dport { 22, 443 } accept",
+            "iifname \"docker0\" accept",
+            "iifname \"br-*\" accept",
+            "oifname \"docker0\" accept",
+            "oifname \"br-*\" accept",
+            "chain output",
+            "policy accept",
+        ] {
+            assert!(
+                nftables.contains(required),
+                "host firewall must preserve default-drop filtering and Docker forwarding: {required}"
+            );
+        }
+        assert!(
+            !nftables.contains("6380"),
+            "host firewall must not expose retired Redis TCP 6380"
+        );
+        Ok(())
     }
-    assert!(
-        !nftables.contains("6380"),
-        "host firewall must not expose retired Redis TCP 6380"
-    );
-    Ok(())
 }
 
 fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
