@@ -336,10 +336,11 @@ class WebsitePasskeyRequests {
           }
         }
         if (!alreadySaved) {
-          options.push({
+          const option: WebsitePasskeyVaultOption = {
             vaultStoreId: grant.vaultStoreId,
             vaultName: grant.vaultName,
-          })
+          }
+          options.push(option)
         }
       }
       return {
@@ -377,11 +378,12 @@ class WebsitePasskeyRequests {
         ) {
           continue
         }
-        options.push({
+        const option: WebsitePasskeyVaultOption = {
           vaultStoreId: grant.vaultStoreId,
           vaultName: grant.vaultName,
           account,
-        })
+        }
+        options.push(option)
       }
     }
     return { ok: true, status: WebsitePasskeyOptionsStatus.Ready, options }
