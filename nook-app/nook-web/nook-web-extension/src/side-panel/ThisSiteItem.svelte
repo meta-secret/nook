@@ -142,7 +142,7 @@ tab without submitting. Passkeys and API keys are shown for reference only.
       >
     {/if}
   </div>
-  {#if row.action.kind !== 'ViewOnly'}
+  {#if 'label_key' in row.action}
     <button
       type="button"
       class="side-panel-fill"

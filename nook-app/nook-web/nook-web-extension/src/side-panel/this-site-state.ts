@@ -4,6 +4,7 @@ import {
 } from '../../../nook-web-shared/src/generated/i18n-keys'
 import type {
   SiteSecretIdentityGroup,
+  SiteSecretEmptyHint,
   SiteSecretListing,
   SiteSecretRow,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -66,7 +67,10 @@ export enum ThisSiteMatchCount {
 export type ThisSiteGroups = readonly SiteSecretIdentityGroup[]
 
 /** Rust's empty state: its message (taking the host) and optional hint. */
-export type ThisSiteEmptyListing = Extract<SiteSecretListing, { kind: 'Empty' }>
+export type ThisSiteEmptyListing = Extract<
+  SiteSecretListing,
+  { hint: SiteSecretEmptyHint }
+>
 
 export type ThisSiteBody =
   | { readonly kind: ThisSiteBodyKind.Loading }

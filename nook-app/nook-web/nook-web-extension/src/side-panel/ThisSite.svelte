@@ -389,7 +389,7 @@ visibility or the lock state changes.
   {:else if view.body.kind === ThisSiteBodyKind.Empty}
     <div class="side-panel-site-status" data-testid="side-panel-site-empty">
       <p class="side-panel-site-status-lead">{emptyText(view.body)}</p>
-      {#if view.body.empty.hint.kind === 'Shown'}
+      {#if 'message_key' in view.body.empty.hint}
         <p>{translateSelected(view.body.empty.hint.message_key)}</p>
       {/if}
     </div>

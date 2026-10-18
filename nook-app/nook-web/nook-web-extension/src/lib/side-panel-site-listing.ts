@@ -29,7 +29,7 @@ type ItemIdFields = {
   readonly vault_store_id: BoundedTextSchema
   readonly secret_id: BoundedTextSchema
 }
-type FillActionFields<Kind extends 'FillLogin' | 'FillCode'> = {
+type FillActionFields<Kind extends SiteSecretAction['kind']> = {
   readonly kind: Schema.Codec<Kind>
   readonly label_key: BoundedTextSchema
   readonly accessible_label_key: BoundedTextSchema
