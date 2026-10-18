@@ -58,7 +58,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 **`pr.yml`**
 
 - One producer owns verification, tests/coverage, heavy gates and artifact preparation.
-- Full browser validation uses independent web and two extension-shard jobs.
+- Full browser validation uses independent web and three extension-shard jobs.
 - The final `PR validation / Verify and preview` job joins their results before preview.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Verification completes before test compilation; failure stops later phases.
@@ -401,7 +401,7 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   Browser tests never mutate the original checkout while BuildKit reads it.
 - The producer retains focused authentication and requested research checks.
   Full browser validation runs in a separate matrix after the producer succeeds.
-  Its web job and two extension shards have separate filesystems and browser ports.
+  Its web job and three extension shards have separate filesystems and browser ports.
   Each extension shard uses one worker; `fail-fast: false` retains every result.
 - The producer uploads `browser.tar` once, including requested research output.
   Each browser job and the final preview job restore that immutable artifact.
@@ -438,7 +438,7 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
 - **Label effect:** Runs the full web suite, including isolated application
-  servers, alongside two extension shards in separate jobs after the producer
+  servers, alongside three extension shards in separate jobs after the producer
   succeeds. Job isolation separates their fixed ports and Chromium budgets.
 - Authentication-sensitive changes run the focused extension regression when
   the full suite was not requested.
