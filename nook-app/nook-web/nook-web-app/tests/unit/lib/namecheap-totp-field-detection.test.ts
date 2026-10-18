@@ -49,10 +49,6 @@ ${codeInput}
 </form>`
   }
 
-  renderCart(codeInput: string): void {
-    document.body.innerHTML = `<form id="aspnetForm" name="aspnetForm" method="post" action="./"><div class="gb-scope cart"><div class="gb-panel__body">${codeInput}<input type="submit" name="${NamecheapTwoFactorPage.CONTROL}btnSubmit" value="Submit" class="gb-btn"></div></div></form>`
-  }
-
   codeFieldCount(): number {
     const query: PasswordFieldQuery = { root: document }
     return passwordFieldDiscovery.findOneTimeCodeFields(query).length
@@ -81,7 +77,8 @@ ${codeInput}
         ),
       ],
     }
-    const match = classify_companion_authentication_workflow_facts(workflowFacts)
+    const match =
+      classify_companion_authentication_workflow_facts(workflowFacts)
     if (!('snapshot' in match)) throw new Error('expected a matched workflow')
     return match.snapshot
   }
@@ -126,7 +123,7 @@ describe('Namecheap two-factor code field detection', () => {
   test('does not treat the wordless input as a code field on a non-auth path', () => {
     const page = new NamecheapTwoFactorPage()
     window.history.replaceState({}, '', '/cart/')
-    page.renderCart(NamecheapTwoFactorPage.WORDLESS_CODE_INPUT)
+    page.render(NamecheapTwoFactorPage.WORDLESS_CODE_INPUT)
     expect(page.codeFieldCount()).toBe(0)
 
     window.history.replaceState({}, '', NamecheapTwoFactorPage.ROUTE)
