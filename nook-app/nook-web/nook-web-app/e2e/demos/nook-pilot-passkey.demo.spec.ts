@@ -213,15 +213,18 @@ test('save a website passkey from the top-right Nook card', async ({
   await page.evaluate(() =>
     Object.assign(window, { __nookDemoPasskeyAlreadySaved: true }),
   )
+  const alreadySavedNotice = stubArgs.localizedMessages.passkeyAlreadySaved
+  const saveAction = stubArgs.localizedMessages.passkeySaveAction
+  if (!alreadySavedNotice || !saveAction) {
+    throw new Error(
+      'passkey demo messages are missing from the extension build',
+    )
+  }
   await page.evaluate(requestWebsitePasskey, 'create')
   await expect(card).toBeVisible()
-  await expect(card).toContainText(
-    stubArgs.localizedMessages.passkeyAlreadySaved.message,
-  )
+  await expect(card).toContainText(alreadySavedNotice.message)
   await expect(
-    card.getByRole('button', {
-      name: stubArgs.localizedMessages.passkeySaveAction.message,
-    }),
+    card.getByRole('button', { name: saveAction.message }),
   ).toHaveCount(0)
   await demoBeat(page)
   await page.keyboard.press('Escape')
