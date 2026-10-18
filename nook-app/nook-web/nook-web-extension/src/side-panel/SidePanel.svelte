@@ -38,7 +38,7 @@ closes it.
   } from '../popup/popup-app-state'
   import SidePanelGate from './SidePanelGate.svelte'
   import SidePanelHeader from './SidePanelHeader.svelte'
-  import SidePanelIdentities from './SidePanelIdentities.svelte'
+  import SidePanelConnections from './SidePanelConnections.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
   import {
@@ -553,13 +553,13 @@ closes it.
         <ThisSite
           {i18n}
           {panelWindow}
+          groups={view.vaults.groups}
+          device={view.device}
           onlocked={onSiteLocked}
           onunpaired={() => void loadVaults()}
         />
-        <SidePanelIdentities
+        <SidePanelConnections
           {i18n}
-          groups={view.vaults.groups}
-          device={view.device}
           identitySync={view.identitySync}
           {handOff}
           onconnect={() =>

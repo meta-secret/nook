@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, mock, test } from 'bun:test'
 import { err, ok } from 'neverthrow'
-import { SitePageNeed } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  SitePageNeed,
+  type SiteSecretSectionContent,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -183,7 +186,7 @@ describe('side-panel sender (T-1)', () => {
 })
 
 describe('side-panel This-site listing (T-2)', () => {
-  test("lists every grant's Rust-matched site secrets for the tab the worker read itself, grouped by Rust", async () => {
+  test("lists every grant's Rust-matched site secrets for the tab the worker read itself, one identity:vault section per grant", async () => {
     const fixture = new SidePanelRouteFixture()
 
     const listing = await fixture.list()
@@ -191,15 +194,27 @@ describe('side-panel This-site listing (T-2)', () => {
     if (listing.kind !== SidePanelSiteListingKind.Ready)
       throw new Error('expected a ready listing')
     expect(listing.display_host).toBe('www.example.com')
-    if (listing.listing.kind !== 'Listed') throw new Error('expected rows')
-    // Identity headers in grant order; rows in Rust's kind order.
-    expect(listing.listing.groups.map((group) => group.header)).toEqual([
-      { kind: 'Named', name: 'Personal identity' },
-      { kind: 'Named', name: 'Work identity' },
-    ])
+    expect(listing.listing.summary).toEqual({ kind: 'Listed' })
+    // One section per grant in grant order, headed by identity and vault.
     expect(
-      listing.listing.groups.map((group) =>
-        group.rows.map((row) => [row.kind, row.item_id.secret_id]),
+      listing.listing.sections.map(({ identity, vault }) => [identity, vault]),
+    ).toEqual([
+      [
+        { kind: 'Named', name: 'Personal identity' },
+        { kind: 'Named', name: 'Personal' },
+      ],
+      [
+        { kind: 'Named', name: 'Work identity' },
+        { kind: 'Named', name: 'Work' },
+      ],
+    ])
+    // Rows in Rust's kind order under their own vault's section.
+    expect(
+      listing.listing.sections.map((section) =>
+        RouteData.sectionRows(section).map((row) => [
+          row.kind,
+          row.item_id.secret_id,
+        ]),
       ),
     ).toEqual([
       [
@@ -254,12 +269,15 @@ describe('side-panel This-site listing (T-2)', () => {
     const codes = await totp.list()
     if (codes.kind !== SidePanelSiteListingKind.Ready)
       throw new Error('expected a ready listing')
-    if (codes.listing.kind !== 'Listed') throw new Error('expected rows')
+    expect(codes.listing.summary).toEqual({ kind: 'Listed' })
     expect(
-      codes.listing.groups.flatMap((group) =>
-        group.rows.map((row) => [row.kind, row.action.kind]),
+      codes.listing.sections.map((section) =>
+        RouteData.sectionRows(section).map((row) => [
+          row.kind,
+          row.action.kind,
+        ]),
       ),
-    ).toEqual([['Authenticator', 'FillCode']])
+    ).toEqual([[], [['Authenticator', 'FillCode']]])
 
     const noCodes = new SidePanelRouteFixture()
     noCodes.pageNeed = totp.pageNeed
@@ -267,15 +285,23 @@ describe('side-panel This-site listing (T-2)', () => {
       'store_workvaultxx',
       ok({ ok: true, matches: { items: [] } }),
     )
-    expect(await noCodes.list()).toEqual({
-      kind: SidePanelSiteListingKind.Ready,
-      display_host: 'www.example.com',
-      listing: {
-        kind: 'Empty',
-        message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
-        hint: { kind: 'Absent' },
-      },
+    const none = await noCodes.list()
+    if (none.kind !== SidePanelSiteListingKind.Ready)
+      throw new Error('expected a ready listing')
+    expect(none.listing.summary).toEqual({
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+      hint: { kind: 'Absent' },
     })
+    // Every vault keeps its section, each with Rust's muted line.
+    const vaultEmpty: SiteSecretSectionContent = {
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+    }
+    expect(none.listing.sections.map((section) => section.content)).toEqual([
+      vaultEmpty,
+      vaultEmpty,
+    ])
   })
 
   test('a tab no content script reaches is unavailable; an unusable page need fails the listing', async () => {

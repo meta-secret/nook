@@ -6,11 +6,11 @@
 //! Registration admission precedes credential randomness and generation.
 use super::{
     AttestationObject, CanonicalPasskeyField, ClientData, CoseEncodedPoint, ES256_ALGORITHM,
-    EncodePrivateKey, Generate, HashSet, MAX_CREDENTIAL_ID_BYTES, PASSKEY_SECRET_VERSION,
-    PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin,
-    PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeyRegistrationRequest,
-    PasskeyRegistrationResult, PasskeySecret, PasskeySignatureCount, RegistrationAuthenticatorData,
-    SecretKey, ToSec1Point, URL_SAFE_NO_PAD, Zeroize,
+    EncodePrivateKey, Generate, PASSKEY_SECRET_VERSION, PasskeyAuthenticatorError,
+    PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin, PasskeyPrivateKeyPkcs8,
+    PasskeyPublicKeyCose, PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeySecret,
+    PasskeySignatureCount, RegistrationAuthenticatorData, SecretKey, ToSec1Point, URL_SAFE_NO_PAD,
+    Zeroize,
 };
 use base64::Engine;
 /// Admitted request data, with the original request and exclusion input still borrowed.
@@ -89,28 +89,8 @@ impl PasskeyRegistrationRequest {
             cross_origin: false,
         }
         .encode()?;
-        let excluded = request
-            .exclude_credentials
-            .iter()
-            .map(|descriptor| {
-                CanonicalPasskeyField {
-                    name: "excluded credential id",
-                    value: &descriptor.id,
-                    min: 16,
-                    max: MAX_CREDENTIAL_ID_BYTES,
-                }
-                .decode()?;
-                Ok(descriptor.id.as_str())
-            })
-            .collect::<PasskeyAuthenticatorResult<HashSet<_>>>()?;
-        if existing_credentials.iter().any(|credential| {
-            credential
-                .rp_id
-                .eq_ignore_ascii_case(&request.relying_party.id)
-                && excluded.contains(credential.credential_id.as_str())
-        }) {
-            return Err(PasskeyAuthenticatorError::CredentialExcluded);
-        }
+        // A site's excludeCredentials never blocks registration: a vault may
+        // keep several passkeys for one account.
 
         Ok(CheckedPasskeyRegistration {
             request,
@@ -168,7 +148,7 @@ impl CheckedPasskeyRegistration<'_> {
             rp_id: &credential.rp_id,
             credential_id: &credential_id,
             cose_key: &cose_key,
-            user_verified: request.user_verification_required,
+            user_verified: request.user_verification.verifies_user(),
         }
         .encode()?;
         credential_id.zeroize();
@@ -186,7 +166,9 @@ impl CheckedPasskeyRegistration<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Deserialize, PasskeyCredentialDescriptor, Value, de};
+    use super::super::{
+        Deserialize, PasskeyCredentialDescriptor, PasskeyUserVerification, Value, de,
+    };
     use super::*;
     use std::ptr;
 
@@ -216,8 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn admission_preserves_origin_algorithm_user_challenge_descriptor_order() -> anyhow::Result<()>
-    {
+    fn admission_preserves_origin_algorithm_user_challenge_order() -> anyhow::Result<()> {
         let mut request = PasskeyRegistrationRequest::fixture();
         request.origin = "https://unrelated.example.net".to_owned();
         request.algorithms.clear();
@@ -250,11 +231,8 @@ mod tests {
         }
         .check()?;
         request.challenge = Engine::encode(&URL_SAFE_NO_PAD, [2_u8; 16]);
-        RegistrationRejection {
-            request,
-            expected: PasskeyAuthenticatorError::InvalidRequest("excluded credential id"),
-        }
-        .check()?;
+        // Excluded credentials are not admission input, even when malformed.
+        request.prepare(&[])?;
         Ok(())
     }
 
@@ -264,7 +242,7 @@ mod tests {
         let mut request = PasskeyRegistrationRequest::fixture();
         request.origin = "https://LOGIN.example.com/".to_owned();
         request.relying_party.id = "EXAMPLE.com".to_owned();
-        request.user_verification_required = false;
+        request.user_verification = PasskeyUserVerification::Discouraged;
         let before = request.clone();
         let existing = Vec::new();
         let checked = request.prepare(&existing)?;
@@ -316,6 +294,18 @@ mod tests {
                 .iter()
                 .any(|(key, value)| key == &Value::Text("fmt".to_owned())
                     && value == &Value::Text("none".to_owned()))
+        );
+        // Sites read the provider from the attested AAGUID, so it is Nook's own.
+        let auth_data = entries
+            .iter()
+            .find_map(|(key, value)| match (key, value) {
+                (Value::Text(name), Value::Bytes(bytes)) if name == "authData" => Some(bytes),
+                _ => None,
+            })
+            .ok_or_else(|| anyhow::anyhow!("attestation must carry authData"))?;
+        assert_eq!(
+            auth_data.get(37..53),
+            Some(super::super::encoding::NOOK_PASSKEY_AAGUID.as_slice())
         );
         Ok(())
     }

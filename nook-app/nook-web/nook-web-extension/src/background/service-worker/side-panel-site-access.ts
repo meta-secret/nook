@@ -278,7 +278,8 @@ export class SidePanelSiteAccess {
     },
   )
 
-  /** Rust filters the vaults' matches by the page need and groups them by identity. */
+  /** Rust filters each vault's matches by the page need and presents one
+   * identity:vault section per vault. */
   presentSiteSecrets = Effect.fn(
     this.generatorContext,
     function* (request: SidePanelSiteSecretsPresentation) {
@@ -320,7 +321,8 @@ export class SidePanelSiteAccess {
     }
   }
 
-  /** The grant's labels Rust groups by; a grant paired before identities has no name. */
+  /** The grant's labels a section header shows; a grant paired before
+   * identities has no name. */
   private siteVault({
     grant,
     matches,

@@ -54,6 +54,7 @@ const extensionDiagnosticBuildPolicy = new ExtensionDiagnosticBuildPolicy()
 const extensionDiagnosticsEnabled =
   extensionDiagnosticBuildPolicy.availability({
     channel: deployment.channel,
+    requested: process.env.NOOK_EXTENSION_DIAGNOSTICS?.trim() || '',
   }) === ExtensionDiagnosticBuildAvailability.Enabled
 const requestedVersion =
   process.env.NOOK_EXTENSION_VERSION?.trim() || packageJson.version

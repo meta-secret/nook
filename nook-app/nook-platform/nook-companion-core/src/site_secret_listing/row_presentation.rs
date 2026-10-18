@@ -1,5 +1,5 @@
-//! Rust-selected display text of listing rows: type labels, row actions, and
-//! saved names with their catalog fallbacks.
+//! Rust-selected display text of listing rows and section headers: type labels,
+//! row actions, and saved names with their catalog fallbacks.
 
 use super::{
     SiteSecretAction, SiteSecretActionLabels, SiteSecretIdentityHeader, SiteSecretIdentityName,

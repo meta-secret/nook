@@ -41,7 +41,7 @@ fetch_from_selected_origin() {
   local output="$2"
   local effective_url
   effective_url="$(
-    curl --connect-timeout 5 --max-time 60 \
+    curl --connect-timeout 30 --max-time 60 \
       --proto '=https' --proto-redir '=https' \
       -fsSL --output "$output" --write-out '%{url_effective}' "$url"
   )"

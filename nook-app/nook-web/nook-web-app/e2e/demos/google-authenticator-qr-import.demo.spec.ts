@@ -11,12 +11,12 @@ import {
 
 const DEMO_BEAT_MS = 700
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
-const exportQrImage = path.join(
-  demoDir,
-  'fixtures/google-authenticator-export-demo.png',
-)
+const exportQrImages = [
+  'fixtures/google-authenticator-export-demo-1-of-2.png',
+  'fixtures/google-authenticator-export-demo-2-of-2.png',
+].map((fixture) => path.join(demoDir, fixture))
 
-test('import Google Authenticator accounts from a QR image', async ({
+test('import a two-part Google Authenticator export by choosing both QR images at once', async ({
   page,
 }) => {
   await connectLocalVault(page)
@@ -34,10 +34,10 @@ test('import Google Authenticator accounts from a QR image', async ({
 
   await page
     .getByTestId('google-authenticator-qr-image')
-    .setInputFiles(exportQrImage)
+    .setInputFiles(exportQrImages)
   await expect(
     page.getByTestId('google-authenticator-scanned-count'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  ).toContainText('QR codes scanned: 2', { timeout: UI_TIMEOUT_MS })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.getByTestId('google-authenticator-import-submit').click()

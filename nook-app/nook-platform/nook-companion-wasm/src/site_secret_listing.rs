@@ -22,8 +22,8 @@ pub fn site_page_need(
         .map_err(|_| JsError::new("Invalid authentication workflow match."))
 }
 
-/// Filters every paired vault's matches by the page need and groups them
-/// under identity headers for the side panel.
+/// Presents one identity:vault section per paired vault, with each vault's
+/// matches filtered by the page need, for the side panel.
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -45,7 +45,8 @@ pub fn present_site_secret_listing(
 #[cfg(test)]
 mod tests {
     use nook_companion_core::{
-        SiteSecretItem, SiteSecretListing, SiteSecretMatches, SiteSecretRow, SiteSecretVault,
+        SiteSecretItem, SiteSecretListing, SiteSecretListingSummary, SiteSecretMatches,
+        SiteSecretRow, SiteSecretSection, SiteSecretSectionContent, SiteSecretVault,
     };
     use tsify::Tsify;
 
@@ -56,9 +57,18 @@ mod tests {
         assert!(SiteSecretMatches::DECL.contains("items: SiteSecretItem[]"));
         assert!(SiteSecretVault::DECL.contains("vault_store_id: StoreId"));
         assert!(SiteSecretVault::DECL.contains("matches: SiteSecretMatches"));
+        assert!(SiteSecretListing::DECL.contains("summary: SiteSecretListingSummary"));
+        assert!(SiteSecretListing::DECL.contains("sections: SiteSecretSection[]"));
+        assert!(SiteSecretListingSummary::DECL.contains(r#"kind: "Listed""#));
+        assert!(SiteSecretListingSummary::DECL.contains(r#"kind: "Empty""#));
+        assert!(SiteSecretSection::DECL.contains("vault_store_id: StoreId"));
+        assert!(SiteSecretSection::DECL.contains("identity: SiteSecretIdentityHeader"));
+        assert!(SiteSecretSection::DECL.contains("vault: SiteSecretVaultLabel"));
+        assert!(SiteSecretSection::DECL.contains("content: SiteSecretSectionContent"));
+        assert!(SiteSecretSectionContent::DECL.contains("rows: SiteSecretRow[]"));
+        assert!(SiteSecretSectionContent::DECL.contains(r#"kind: "Empty""#));
         assert!(SiteSecretRow::DECL.contains("kind: keyof typeof SiteSecretKind"));
         assert!(SiteSecretRow::DECL.contains("action: SiteSecretAction"));
-        assert!(SiteSecretListing::DECL.contains(r#"kind: "Listed""#));
-        assert!(SiteSecretListing::DECL.contains(r#"kind: "Empty""#));
+        assert!(!SiteSecretRow::DECL.contains("vault:"));
     }
 }

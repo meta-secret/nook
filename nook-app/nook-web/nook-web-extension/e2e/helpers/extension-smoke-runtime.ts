@@ -351,9 +351,14 @@ export async function registerWebsitePasskeyThroughExtension(
     }
     return credential.id
   })
-  await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
+  const card = page.locator('aside[aria-label="Nook passkey"]')
+  await expect(card).toBeVisible()
   await page.keyboard.press('Enter')
-  return ceremony
+  const credentialId = await ceremony
+  // The Saved confirmation stays up for a few seconds. Let it go, so the next
+  // ceremony's Enter reaches that ceremony's card and not this one.
+  await expect(card).toBeHidden({ timeout: 10_000 })
+  return credentialId
 }
 
 export type WebsitePasskeyAssertionBrowserFlow = {

@@ -11,16 +11,24 @@ export enum ExtensionDiagnosticBuildAvailability {
 
 export type ExtensionDiagnosticBuildRequest = {
   readonly channel: ExtensionChannel
+  /** The build's `NOOK_EXTENSION_DIAGNOSTICS` value, empty when unset. */
+  readonly requested: string
 }
 
-/** Owns the build-time production gate for browser diagnostics. */
+/**
+ * Owns the build-time gate for the console detector trace. The trace logs on
+ * every page scan, so it stays off unless a non-production build asks for it
+ * with `NOOK_EXTENSION_DIAGNOSTICS=enabled`.
+ */
 export class ExtensionDiagnosticBuildPolicy {
   availability({
     channel,
+    requested,
   }: ExtensionDiagnosticBuildRequest): ExtensionDiagnosticBuildAvailability {
-    return channel === ExtensionReleaseChannel.Production
-      ? ExtensionDiagnosticBuildAvailability.Disabled
-      : ExtensionDiagnosticBuildAvailability.Enabled
+    return channel !== ExtensionReleaseChannel.Production &&
+      requested === ExtensionDiagnosticBuildAvailability.Enabled
+      ? ExtensionDiagnosticBuildAvailability.Enabled
+      : ExtensionDiagnosticBuildAvailability.Disabled
   }
 }
 

@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { SiteSecretRow } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  SiteSecretRow,
+  SiteSecretSection,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import {
@@ -35,7 +38,6 @@ class SiteRows {
       title: 'accounts.example.com',
       account,
       saved_host: 'accounts.example.com',
-      vault: { kind: 'Named', name: 'Personal' },
       action: {
         kind: 'FillLogin',
         label_key: I18N_KEYS.ExtensionActionFill,
@@ -52,7 +54,6 @@ class SiteRows {
       title: 'Namecheap',
       account: 'bynull',
       saved_host: 'www.namecheap.com',
-      vault: { kind: 'Named', name: 'www' },
       action: {
         kind: 'FillCode',
         label_key: I18N_KEYS.ExtensionActionFillCode,
@@ -69,30 +70,65 @@ class SiteRows {
       title: 'Namecheap',
       account: 'bynull',
       saved_host: 'www.namecheap.com',
-      vault: { kind: 'Named', name: 'www' },
       action: { kind: 'ViewOnly' },
     }
   }
 
-  static listing(host: string, rows: SiteSecretRow[]): SidePanelSiteListing {
+  /** Alice Martin's Personal vault: the stub's one paired, unlocked vault. */
+  static personal(rows: SiteSecretRow[]): SiteSecretSection {
+    return {
+      vault_store_id: 'store-personal',
+      identity: { kind: 'Named', name: 'Alice Martin' },
+      vault: { kind: 'Named', name: 'Personal' },
+      content: { kind: 'Listed', rows },
+    }
+  }
+
+  /** A vault the panel's loaded identities do not hold, saved unnamed. */
+  static sideProject(rows: SiteSecretRow[]): SiteSecretSection {
+    return {
+      vault_store_id: 'store-work',
+      identity: { kind: 'Named', name: 'Side project' },
+      vault: {
+        kind: 'Unnamed',
+        message_key: I18N_KEYS.LoginVaultPickerUnnamed,
+      },
+      content: { kind: 'Listed', rows },
+    }
+  }
+
+  /** Alice Martin's Personal vault with nothing this page needs. */
+  static personalEmpty(): SiteSecretSection {
+    return {
+      ...SiteRows.personal([]),
+      content: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+      },
+    }
+  }
+
+  static listing(
+    host: string,
+    sections: SiteSecretSection[],
+  ): SidePanelSiteListing {
     return {
       kind: SidePanelSiteListingKind.Ready,
       display_host: host,
-      listing: {
-        kind: 'Listed',
-        groups: [{ header: { kind: 'Named', name: 'Alice Martin' }, rows }],
-      },
+      listing: { summary: { kind: 'Listed' }, sections },
     }
   }
 }
 
 const accountsSite = SiteRows.listing('accounts.example.com', [
-  SiteRows.login('login-alice', 'alice@example.com'),
-  SiteRows.login('login-work', 'alice@company.example'),
+  SiteRows.personal([
+    SiteRows.login('login-alice', 'alice@example.com'),
+    SiteRows.login('login-work', 'alice@company.example'),
+  ]),
 ])
 
 const newsSite = SiteRows.listing('news.example.org', [
-  SiteRows.login('login-news', 'reader@example.com'),
+  SiteRows.personal([SiteRows.login('login-news', 'reader@example.com')]),
 ])
 
 const unlockedScenario: SidePanelStubScenario = {
@@ -257,36 +293,53 @@ test('a tab switch or a new address drops the list and lists the tab again', asy
   expect(await panel.sent(SidePanelSiteMessageType.ListLogins)).toBe(listed + 2)
 })
 
-test('typed rows sit under identity headers; authenticators Fill code and the rest view only', async ({
+test('typed rows sit under identity · vault sections; authenticators Fill code and the rest view only', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
   await panel.open({
     ...unlockedScenario,
     listing: SiteRows.listing('www.namecheap.com', [
-      SiteRows.authenticator(),
-      SiteRows.passkey(),
+      SiteRows.personalEmpty(),
+      SiteRows.sideProject([SiteRows.authenticator(), SiteRows.passkey()]),
     ]),
   })
-  await expect(page.getByTestId('side-panel-site-group')).toHaveText(
-    'Alice Martin',
-  )
-  const rows = page.getByTestId('side-panel-item')
+  const sections = page.getByTestId('side-panel-site-section')
+  await expect(sections).toHaveCount(2)
+  await expect(page.getByTestId('side-panel-site-group-name')).toHaveText([
+    'Alice Martin · Personal',
+    'Side project · Unnamed vault',
+  ])
+  // Every connected vault shows, even with nothing for this site.
+  await expect(
+    sections.nth(0).getByTestId('side-panel-site-vault-empty'),
+  ).toHaveText('Nothing for this site')
+  await expect(sections.nth(0).getByTestId('side-panel-item')).toHaveCount(0)
+  // Only the vault the unlocked identity does not hold is tagged.
+  await expect(
+    sections.nth(0).getByTestId('side-panel-site-other-identity'),
+  ).toHaveCount(0)
+  await expect(
+    sections.nth(1).getByTestId('side-panel-site-other-identity'),
+  ).toHaveText('Locked')
+  const rows = sections.nth(1).getByTestId('side-panel-item')
   await expect(rows).toHaveCount(2)
+  // The section names the vault, so the row does not repeat it.
   await expect(rows.nth(0).getByTestId('side-panel-item-type')).toHaveText(
-    'Authenticator · www',
+    'Authenticator',
   )
   await expect(rows.nth(0).getByTestId('side-panel-item-subtitle')).toHaveText(
     'bynull · www.namecheap.com',
   )
   await expect(rows.nth(1).getByTestId('side-panel-item-type')).toHaveText(
-    'Passkey · www',
+    'Passkey',
   )
   // Passkeys and API keys are shown for reference only.
   await expect(rows.nth(1).getByTestId('side-panel-fill')).toHaveCount(0)
 
+  // The accessible label names the row's section vault.
   const fillCode = page.getByRole('button', {
-    name: 'Fill a 2FA code for bynull from www',
+    name: 'Fill a 2FA code for bynull from Unnamed vault',
   })
   await expect(fillCode).toHaveText('Fill code')
   const result = page.getByTestId('side-panel-fill-result')
@@ -302,7 +355,7 @@ test('typed rows sit under identity headers; authenticators Fill code and the re
   expect(await panel.sent(SidePanelSiteMessageType.FillCode)).toBe(2)
 })
 
-test("a page that needs only 2FA codes shows Rust's typed empty state", async ({
+test("a page that needs only 2FA codes shows Rust's typed empty state above the sections", async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
@@ -312,15 +365,49 @@ test("a page that needs only 2FA codes shows Rust's typed empty state", async ({
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.namecheap.com',
       listing: {
-        kind: 'Empty',
-        message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
-        hint: { kind: 'Absent' },
+        summary: {
+          kind: 'Empty',
+          message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+          hint: { kind: 'Absent' },
+        },
+        sections: [SiteRows.personalEmpty()],
       },
     },
   })
   const empty = page.getByTestId('side-panel-site-empty')
   await expect(empty).toHaveText('No 2FA codes saved for www.namecheap.com.')
+  await expect(empty.locator('xpath=following-sibling::*[1]')).toHaveAttribute(
+    'data-testid',
+    'side-panel-site-section',
+  )
+  await expect(page.getByTestId('side-panel-site-group-name')).toHaveText(
+    'Alice Martin · Personal',
+  )
+  await expect(page.getByTestId('side-panel-site-vault-empty')).toHaveText(
+    'Nothing for this site',
+  )
   await expect(page.getByTestId('side-panel-item')).toHaveCount(0)
+})
+
+test('the identities list is gone; sync, Connect another identity and its hand-off stay under the sections', async ({
+  page,
+}) => {
+  await openUnlocked(page)
+  await expect(page.getByTestId('side-panel-identities')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-identity')).toHaveCount(0)
+  await expect(page.getByText('Identities', { exact: true })).toHaveCount(0)
+  const connections = page.getByTestId('side-panel-connections')
+  await expect(
+    page
+      .getByTestId('side-panel-site')
+      .locator('xpath=following-sibling::*[1]'),
+  ).toHaveAttribute('data-testid', 'side-panel-connections')
+  const connect = connections.getByTestId('side-panel-connect')
+  await expect(connect).toHaveText('Connect another identity')
+  await connect.click()
+  await expect(connections.getByTestId('side-panel-handoff')).toHaveText(
+    'Continue in the Nook tab.',
+  )
 })
 
 test('a failed listing offers Try again', async ({ page }) => {
@@ -351,7 +438,7 @@ test('vaults that do not fill passwords say so and the panel re-reads them', asy
   await expect
     .poll(() => panel.sent(PairedVaultsMessageType.Query))
     .toBeGreaterThan(1)
-  await expect(page.getByTestId('side-panel-identities')).toBeVisible()
+  await expect(page.getByTestId('side-panel-connections')).toBeVisible()
 })
 
 test('an unreadable vault list offers Try again', async ({ page }) => {
@@ -365,7 +452,7 @@ test('an unreadable vault list offers Try again', async ({ page }) => {
   ).toBeVisible()
   await panel.update({ vaults: SidePanelStubVaults.Paired })
   await page.getByTestId('side-panel-retry-identities').click()
-  await expect(page.getByTestId('side-panel-identities')).toBeVisible()
+  await expect(page.getByTestId('side-panel-connections')).toBeVisible()
 })
 
 test('Open vault and Lock failures show a page alert', async ({ page }) => {

@@ -163,6 +163,13 @@ impl PasskeyPrivateKeyPkcs8 {
         Ok(())
     }
 }
+/// Nook's authenticator GUID (AAGUID), `7cd62a4c-b484-4f37-a4e2-3ac3b0c33c9e`.
+/// Every passkey Nook creates reports it, so a site can name the provider
+/// instead of guessing one from the browser. Assertions carry no AAGUID.
+pub(super) const NOOK_PASSKEY_AAGUID: [u8; 16] = [
+    0x7c, 0xd6, 0x2a, 0x4c, 0xb4, 0x84, 0x4f, 0x37, 0xa4, 0xe2, 0x3a, 0xc3, 0xb0, 0xc3, 0x3c, 0x9e,
+];
+
 pub(super) enum AuthenticatorDataKind {
     Registration,
     Assertion,
@@ -191,7 +198,7 @@ impl RegistrationAuthenticatorData<'_> {
         data.extend_from_slice(&Sha256::digest(rp_id.as_bytes()));
         data.push(AuthenticatorDataKind::Registration.flags(user_verified));
         data.extend_from_slice(&0_u32.to_be_bytes());
-        data.extend_from_slice(&[0_u8; 16]);
+        data.extend_from_slice(&NOOK_PASSKEY_AAGUID);
         let credential_id_len = u16::try_from(credential_id.len())
             .map_err(|_| PasskeyAuthenticatorError::InvalidRequest("credential id"))?;
         data.extend_from_slice(&credential_id_len.to_be_bytes());
@@ -316,7 +323,8 @@ mod tests {
                 data.get(32).copied(),
                 Some(if user_verified { 0x5d } else { 0x59 })
             );
-            assert_eq!(data.get(33..53), Some([0; 20].as_slice()));
+            assert_eq!(data.get(33..37), Some([0; 4].as_slice()));
+            assert_eq!(data.get(37..53), Some(NOOK_PASSKEY_AAGUID.as_slice()));
             assert_eq!(data.get(53..), Some([0, 2, 7, 8, 9, 10].as_slice()));
         }
         Ok(())

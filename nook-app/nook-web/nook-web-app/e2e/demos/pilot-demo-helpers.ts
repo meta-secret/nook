@@ -66,3 +66,10 @@ export async function injectPilotAutofill(page: Page): Promise<void> {
     type: 'module',
   })
 }
+
+/** Loads the built website passkey content script, which shows the Nook card. */
+export async function injectPasskeyContent(page: Page): Promise<void> {
+  await page.addScriptTag({
+    path: path.join(extensionDist, 'content/webauthn-content.js'),
+  })
+}

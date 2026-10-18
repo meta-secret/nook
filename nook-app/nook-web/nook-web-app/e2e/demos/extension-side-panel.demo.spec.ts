@@ -14,6 +14,10 @@ import {
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
 } from '../../../nook-web-extension/src/lib/side-panel-site'
+import type {
+  SiteSecretRow,
+  SiteSecretSectionContent,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -37,6 +41,14 @@ type SidePanelDemoSession = {
   readonly initialStatus: DeviceProtectionStatus
   readonly vaults: SidePanelDemoVaults
   readonly site: SidePanelDemoSite
+}
+
+/** One identity:vault section the demo runtime lists: its names and its
+ * rows or empty line, as the worker forwards Rust's presentation. */
+type SidePanelDemoSection = {
+  readonly identity: string
+  readonly vault: string
+  readonly content: SiteSecretSectionContent
 }
 
 // The runtime below runs inside the page, where module imports do not
@@ -66,6 +78,7 @@ const sidePanelDemoProtocol = {
   fillCodeLabel: I18N_KEYS.ExtensionActionFillCodeFor,
   emptyAny: I18N_KEYS.ExtensionActionSiteEmptyAny,
   emptyHint: I18N_KEYS.ExtensionActionSiteEmptyHint,
+  vaultEmpty: I18N_KEYS.ExtensionActionSiteVaultEmpty,
   ready: SidePanelSiteListingKind.Ready,
   nonWeb: SidePanelSiteListingKind.NonWeb,
   filled: SidePanelLoginFillKind.Filled,
@@ -117,7 +130,11 @@ function installSidePanelDemoRuntime(
       managesPasskeys: false,
     },
   ]
-  const login = (vault: string, secretId: string, account: string) => ({
+  const login = (
+    vault: string,
+    secretId: string,
+    account: string,
+  ): SiteSecretRow => ({
     kind: 'Login',
     item_id: {
       vault_store_id: `side-panel-demo-${vault.toLowerCase()}`,
@@ -127,56 +144,91 @@ function installSidePanelDemoRuntime(
     title: 'accounts.example.com',
     account,
     saved_host: 'accounts.example.com',
-    vault: { kind: 'Named', name: vault },
     action: {
       kind: 'FillLogin',
       label_key: protocol.fill,
       accessible_label_key: protocol.fillLoginLabel,
     },
   })
-  const siteGroups = [
-    {
-      header: { kind: 'Named', name: 'Alice Martin' },
-      rows: [
-        login('Personal', 'login-1', 'alice.martin@example.com'),
-        login('Family', 'login-2', 'alice+family@example.com'),
-        {
-          kind: 'Authenticator',
-          item_id: {
-            vault_store_id: 'side-panel-demo-personal',
-            secret_id: 'totp-1',
-          },
-          type_label_key: protocol.authenticatorType,
-          title: 'Example Accounts',
-          account: 'alice.martin@example.com',
-          saved_host: 'accounts.example.com',
-          vault: { kind: 'Named', name: 'Personal' },
-          action: {
-            kind: 'FillCode',
-            label_key: protocol.fillCodeKey,
-            accessible_label_key: protocol.fillCodeLabel,
-          },
-        },
-      ],
+  // One section per paired vault, headed "identity · vault"; a vault with
+  // nothing for this site keeps its section with a muted line.
+  const section = (request: SidePanelDemoSection) => ({
+    vault_store_id: `side-panel-demo-${request.vault.toLowerCase()}`,
+    identity: { kind: 'Named', name: request.identity },
+    vault: { kind: 'Named', name: request.vault },
+    content: request.content,
+  })
+  const nothingHere: SiteSecretSectionContent = {
+    kind: 'Empty',
+    message_key: protocol.vaultEmpty,
+  }
+  const authenticator: SiteSecretRow = {
+    kind: 'Authenticator',
+    item_id: {
+      vault_store_id: 'side-panel-demo-personal',
+      secret_id: 'totp-1',
     },
-    {
-      header: { kind: 'Named', name: 'Side project' },
-      rows: [
-        {
-          kind: 'Passkey',
-          item_id: {
-            vault_store_id: 'side-panel-demo-startup',
-            secret_id: 'passkey-1',
-          },
-          type_label_key: protocol.passkeyType,
-          title: 'Example Accounts',
-          account: 'alice',
-          saved_host: 'accounts.example.com',
-          vault: { kind: 'Named', name: 'Startup' },
-          action: { kind: 'ViewOnly' },
-        },
-      ],
+    type_label_key: protocol.authenticatorType,
+    title: 'Example Accounts',
+    account: 'alice.martin@example.com',
+    saved_host: 'accounts.example.com',
+    action: {
+      kind: 'FillCode',
+      label_key: protocol.fillCodeKey,
+      accessible_label_key: protocol.fillCodeLabel,
     },
+  }
+  const passkey: SiteSecretRow = {
+    kind: 'Passkey',
+    item_id: {
+      vault_store_id: 'side-panel-demo-startup',
+      secret_id: 'passkey-1',
+    },
+    type_label_key: protocol.passkeyType,
+    title: 'Example Accounts',
+    account: 'alice',
+    saved_host: 'accounts.example.com',
+    action: { kind: 'ViewOnly' },
+  }
+  const siteSections = [
+    section({
+      identity: 'Alice Martin',
+      vault: 'Personal',
+      content: {
+        kind: 'Listed',
+        rows: [
+          login('Personal', 'login-1', 'alice.martin@example.com'),
+          authenticator,
+        ],
+      },
+    }),
+    section({
+      identity: 'Alice Martin',
+      vault: 'Family',
+      content: nothingHere,
+    }),
+    section({
+      identity: 'Side project',
+      vault: 'Startup',
+      content: { kind: 'Listed', rows: [passkey] },
+    }),
+  ]
+  const emptySections = [
+    section({
+      identity: 'Alice Martin',
+      vault: 'Personal',
+      content: nothingHere,
+    }),
+    section({
+      identity: 'Alice Martin',
+      vault: 'Family',
+      content: nothingHere,
+    }),
+    section({
+      identity: 'Side project',
+      vault: 'Startup',
+      content: nothingHere,
+    }),
   ]
   const listing = (): unknown => {
     switch (session.site) {
@@ -184,16 +236,19 @@ function installSidePanelDemoRuntime(
         return {
           kind: protocol.ready,
           display_host: 'accounts.example.com',
-          listing: { kind: 'Listed', groups: siteGroups },
+          listing: { summary: { kind: 'Listed' }, sections: siteSections },
         }
       case protocol.siteEmpty:
         return {
           kind: protocol.ready,
           display_host: 'news.example.org',
           listing: {
-            kind: 'Empty',
-            message_key: protocol.emptyAny,
-            hint: { kind: 'Shown', message_key: protocol.emptyHint },
+            summary: {
+              kind: 'Empty',
+              message_key: protocol.emptyAny,
+              hint: { kind: 'Shown', message_key: protocol.emptyHint },
+            },
+            sections: emptySections,
           },
         }
       case protocol.siteNonWeb:
@@ -316,7 +371,7 @@ test('sets up in place, starting from the passkey the person already has', async
   await demoBeat(page)
 })
 
-test('unlocks a PIN in place, lists identities, and locks again', async ({
+test('unlocks a PIN in place, shows identity · vault sections, and locks again', async ({
   page,
 }) => {
   await openSidePanel({
@@ -334,10 +389,10 @@ test('unlocks a PIN in place, lists identities, and locks again', async ({
   await pin.fill('123456')
   await pin.press('Enter')
   await expect(page.getByTestId('side-panel-state')).toHaveText('Unlocked')
-  await expect(page.getByTestId('side-panel-identity')).toHaveCount(2)
-  await expect(page.getByTestId('side-panel-identities')).toContainText(
-    'Alice Martin',
-  )
+  // Each identity:vault shows its own section; no separate identities list.
+  await expect(page.getByTestId('side-panel-site-section')).toHaveCount(3)
+  await expect(page.getByTestId('side-panel-identities')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-connections')).toBeVisible()
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
   await demoBeat(page)
   // Connecting another identity continues in the Nook tab; the panel stays.
@@ -399,11 +454,24 @@ test('leads with This site and fills a saved login without signing in', async ({
   await expect(page.getByTestId('side-panel-site-host')).toHaveText(
     'accounts.example.com',
   )
-  await expect(page.getByTestId('side-panel-item')).toHaveCount(4)
-  await expect(page.getByTestId('side-panel-site-group')).toHaveText([
-    'Alice Martin',
-    'Side project',
+  await expect(page.getByTestId('side-panel-item')).toHaveCount(3)
+  await expect(page.getByTestId('side-panel-site-group-name')).toHaveText([
+    'Alice Martin · Personal',
+    'Alice Martin · Family',
+    'Side project · Startup',
   ])
+  const sections = page.getByTestId('side-panel-site-section')
+  // A vault with nothing for this site keeps its section and says so.
+  await expect(
+    sections.nth(1).getByTestId('side-panel-site-vault-empty'),
+  ).toHaveText('Nothing for this site')
+  // Only the identity that is not unlocked carries the tag.
+  await expect(page.getByTestId('side-panel-site-other-identity')).toHaveCount(
+    1,
+  )
+  await expect(
+    sections.nth(2).getByTestId('side-panel-site-other-identity'),
+  ).toHaveText('Locked')
   await demoBeat(page)
   await page
     .getByRole('button', {
@@ -426,8 +494,14 @@ test('names the site when it has no saved items', async ({ page }) => {
     },
   })
   await expect(page.getByTestId('side-panel-site-empty')).toContainText(
-    'No saved logins for news.example.org.',
+    'No saved items for news.example.org.',
   )
+  // Every connected vault still shows, each with its muted line.
+  await expect(page.getByTestId('side-panel-site-vault-empty')).toHaveText([
+    'Nothing for this site',
+    'Nothing for this site',
+    'Nothing for this site',
+  ])
   await expect(page.getByTestId('side-panel-fill')).toHaveCount(0)
   await demoBeat(page)
 })

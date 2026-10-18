@@ -20,13 +20,182 @@ import {
 } from '../../../nook-web-extension/e2e/helpers/passkey-vault-discovery'
 import {
   demoBeat,
+  injectPasskeyContent,
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
-import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
+import {
+  demoDomainEnumArgs,
+  installDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 type PairedVaultReopenOperations = readonly [Promise<Page>, Promise<void>]
 type PasskeyVaultDemoVisibilityWait = { readonly timeout: number }
+
+/** A Nook runtime that offers two vaults and saves after a short pause. */
+type PasskeyCardStubArgs = {
+  readonly localizedMessages: Record<string, ChromeMessage>
+}
+
+function installPasskeyCardChromeStub({
+  localizedMessages,
+}: PasskeyCardStubArgs): void {
+  const responses: string[] = []
+  Object.assign(window, { __nookDemoPasskeyResponses: responses })
+  window.addEventListener('message', (event: MessageEvent) => {
+    const data: unknown = event.data
+    if (
+      data &&
+      typeof data === 'object' &&
+      'source' in data &&
+      data.source === 'nook-passkey-extension-v1' &&
+      'action' in data &&
+      typeof data.action === 'string'
+    ) {
+      responses.push(data.action)
+    }
+  })
+  const runtime = {
+    id: 'demo-extension',
+    getURL: (resource: string) =>
+      resource === 'icons/nook.png' ? '/favicon.png' : resource,
+    sendMessage: (
+      message: { type?: string; payload?: { ceremony?: string } },
+      callback?: (response: unknown) => void,
+    ) => {
+      if (message.type === 'nook:website-passkey-options') {
+        // The demo vaults save passkeys but hold none the site asks for.
+        const signIn = message.payload?.ceremony === 'get'
+        queueMicrotask(() =>
+          callback?.({
+            ok: true,
+            status: 'ready',
+            options: signIn
+              ? []
+              : [
+                  { vaultStoreId: 'demo', vaultName: 'Demo vault' },
+                  { vaultStoreId: 'work', vaultName: 'Work' },
+                ],
+          }),
+        )
+      } else if (message.type === 'nook:website-passkey-perform') {
+        setTimeout(
+          () =>
+            callback?.({
+              ok: true,
+              credentialId: 'ZGVtby1jcmVkZW50aWFs',
+              clientDataJSON: 'e30',
+              attestationObject: 'oA',
+            }),
+          900,
+        )
+      }
+    },
+  }
+  const i18n = {
+    getMessage: (key: string, substitution?: string) => {
+      const entry = localizedMessages[key]
+      const message = entry ? entry.message : ''
+      return substitution ? message.replaceAll('$1', substitution) : message
+    },
+  }
+  const browserGlobal = globalThis as typeof globalThis & {
+    chrome?: Record<string, unknown>
+  }
+  if (browserGlobal.chrome) {
+    Object.defineProperties(browserGlobal.chrome, {
+      i18n: { configurable: true, value: i18n },
+      runtime: { configurable: true, value: runtime },
+    })
+  } else {
+    Object.defineProperty(browserGlobal, 'chrome', {
+      configurable: true,
+      value: { runtime, i18n },
+    })
+  }
+}
+
+function requestWebsitePasskey(ceremony: string): void {
+  window.postMessage(
+    {
+      source: 'nook-passkey-page-v1',
+      type: 'request',
+      requestId: `demo-${ceremony}-request-0001`,
+      ceremony,
+      request: {
+        relyingParty: { id: 'example.com', name: 'Example' },
+        user: { name: 'alice@example.com', displayName: 'Alice' },
+        rpId: 'example.com',
+      },
+      expiresAt: Date.now() + 60_000,
+    },
+    location.origin,
+  )
+}
+
+test('save a website passkey from the top-right Nook card', async ({
+  page,
+}) => {
+  const stubArgs: PasskeyCardStubArgs = {
+    localizedMessages: await loadPilotMessages(),
+  }
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Example passkeys</title>
+        <style>
+          :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          body { min-height: 100vh; margin: 0; background: #1f1f1f; color: #e3e3e3; }
+          main { max-width: 640px; padding: 48px; }
+          section { margin-top: 24px; padding: 24px; border-radius: 16px; background: #2a2a2a; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Passkeys and security keys</h1>
+          <section>Create a passkey to sign in with your fingerprint, face, or screen lock.</section>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installPasskeyCardChromeStub, stubArgs)
+  await injectPasskeyContent(page)
+  const card = page.locator('aside[aria-label="Nook passkey"]')
+  const responses = () =>
+    page.evaluate((): unknown =>
+      Reflect.get(window, '__nookDemoPasskeyResponses'),
+    )
+
+  // The card docks top-right and leaves the page usable; Save is focused.
+  await page.evaluate(requestWebsitePasskey, 'create')
+  await expect(card).toBeVisible()
+  const box = await card.boundingBox()
+  expect(box?.y).toBeLessThan(40)
+  await demoBeat(page)
+  await page.keyboard.press('Enter')
+  await expect.poll(responses).toEqual(['result'])
+  await demoBeat(page)
+  // The saved confirmation leaves on its own.
+  await expect(card).toBeHidden({ timeout: 5_000 })
+
+  // Escape declines the way cancelling the browser dialog does.
+  await page.evaluate(requestWebsitePasskey, 'create')
+  await expect(card).toBeVisible()
+  await demoBeat(page)
+  await page.keyboard.press('Escape')
+  await expect.poll(responses).toEqual(['result', 'error'])
+  await expect(card).toBeHidden()
+
+  // A sign-in Nook has no passkey for still gets the card, which says so;
+  // the browser runs only when the person picks Use another passkey.
+  await page.evaluate(requestWebsitePasskey, 'get')
+  await expect(card).toBeVisible()
+  await demoBeat(page)
+  await page.keyboard.press('Enter')
+  await expect.poll(responses).toEqual(['result', 'error', 'fallback'])
+  await expect(card).toBeHidden()
+})
 
 test('propose Create passkey through Nook Pilot without silent ceremony', async ({
   page,

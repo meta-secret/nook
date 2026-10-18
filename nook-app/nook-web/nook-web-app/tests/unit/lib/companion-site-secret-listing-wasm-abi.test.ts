@@ -10,6 +10,8 @@ import {
   type AuthenticationWorkflowMatch,
   type AuthenticationWorkflowSnapshot,
   type SiteSecretItem,
+  type SiteSecretRow,
+  type SiteSecretSection,
   type SiteSecretVault,
   type SiteSecretVaults,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -79,6 +81,19 @@ class SiteListingInputs {
   }
 }
 
+/** Reads the sections Rust presents. */
+class SiteListingSections {
+  /** A section's rows; none when its vault holds nothing the page needs. */
+  static rows(section: SiteSecretSection): SiteSecretRow[] {
+    switch (section.content.kind) {
+      case 'Listed':
+        return section.content.rows
+      case 'Empty':
+        return []
+    }
+  }
+}
+
 describe('companion site-secret listing WASM ABI', () => {
   test('site_page_need maps the classified workflow to what This site lists', () => {
     expect(
@@ -95,19 +110,33 @@ describe('companion site-secret listing WASM ABI', () => {
     expect(site_page_need(noMatch)).toBe(SitePageNeed.AnySiteSecret)
   })
 
-  test('present_site_secret_listing groups rows under identities in grant order and filters by need', () => {
+  test('present_site_secret_listing shows one identity:vault section per vault in grant order and filters by need', () => {
     const listing = present_site_secret_listing(
       SitePageNeed.AnySiteSecret,
       SiteListingInputs.vaults(),
     )
-    if (listing.kind !== 'Listed') throw new Error('expected rows')
-    expect(listing.groups.map((group) => group.header)).toEqual([
-      { kind: 'Named', name: 'Personal' },
-      { kind: 'Named', name: 'work' },
+    expect(listing.summary).toEqual({ kind: 'Listed' })
+    expect(
+      listing.sections.map((section) => [
+        section.vault_store_id,
+        section.identity,
+        section.vault,
+      ]),
+    ).toEqual([
+      [
+        'store_personalvlt',
+        { kind: 'Named', name: 'Personal' },
+        { kind: 'Named', name: 'www' },
+      ],
+      [
+        'store_workvaultxx',
+        { kind: 'Named', name: 'work' },
+        { kind: 'Named', name: 'www' },
+      ],
     ])
     expect(
-      listing.groups.map((group) =>
-        group.rows.map((row) => [
+      listing.sections.map((section) =>
+        SiteListingSections.rows(section).map((row) => [
           row.kind,
           row.type_label_key,
           row.action.kind,
@@ -125,22 +154,43 @@ describe('companion site-secret listing WASM ABI', () => {
       SitePageNeed.OneTimeCode,
       SiteListingInputs.vaults(),
     )
-    if (codes.kind !== 'Listed') throw new Error('expected rows')
-    expect(
-      codes.groups.flatMap((group) => group.rows.map((row) => row.kind)),
-    ).toEqual(['Authenticator'])
+    expect(codes.summary).toEqual({ kind: 'Listed' })
+    // The vault without a code keeps its section with Rust's muted line.
+    expect(codes.sections.map((section) => section.content)).toEqual([
+      {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+      },
+      {
+        kind: 'Listed',
+        rows: [expect.objectContaining({ kind: 'Authenticator' })],
+      },
+    ])
   })
 
-  test('present_site_secret_listing types an empty result by need', () => {
+  test('present_site_secret_listing types an empty result by need above every section', () => {
     const empty: SiteSecretVaults = {
       vaults: [SiteListingInputs.vault('store_personalvlt', 'Personal', [])],
     }
     expect(
       present_site_secret_listing(SitePageNeed.OneTimeCode, empty),
     ).toEqual({
-      kind: 'Empty',
-      message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
-      hint: { kind: 'Absent' },
+      summary: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+        hint: { kind: 'Absent' },
+      },
+      sections: [
+        {
+          vault_store_id: 'store_personalvlt',
+          identity: { kind: 'Named', name: 'Personal' },
+          vault: { kind: 'Named', name: 'www' },
+          content: {
+            kind: 'Empty',
+            message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+          },
+        },
+      ],
     })
   })
 
