@@ -434,6 +434,8 @@ pub enum ExtensionSessionRequest {
     ListPasskeys(PasskeyLookupPayload),
     #[serde(rename = "nook:extension-session-list-logins")]
     ListLogins(OriginGrantPayload),
+    #[serde(rename = "nook:extension-session-list-site-secrets")]
+    ListSiteSecrets(OriginGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-login")]
     RevealLogin(SecretGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-focused-login")]
@@ -549,6 +551,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::VaultSummary(_)
             | ExtensionSessionRequest::ListPasskeys(_)
             | ExtensionSessionRequest::ListLogins(_)
+            | ExtensionSessionRequest::ListSiteSecrets(_)
             | ExtensionSessionRequest::RevealLogin(_)
             | ExtensionSessionRequest::RevealFocusedLogin(_)
             | ExtensionSessionRequest::ListAuthenticators(_)

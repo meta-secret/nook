@@ -175,6 +175,8 @@ pub fn companion_pairing_provider_manifest_digest(
 pub enum NookError {
     #[error("Invalid requesting login origin: {0}")]
     LoginFillOrigin(#[from] WebsiteHostError),
+    #[error(transparent)]
+    AuthenticatorIssuerHosts(#[from] nook_core::AuthenticatorIssuerHostsError),
 
     #[error("App protection is unavailable")]
     AppProtectionUnavailable,
