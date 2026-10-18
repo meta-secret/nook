@@ -7,6 +7,7 @@ import {
   type PasskeyPromptRequest,
 } from '../../../../nook-web-extension/src/content/passkey-prompt'
 import { WIDGET_HOST_ID } from '../../../../nook-web-extension/src/content/in-page-surface'
+import { WebsitePasskeyUnavailableReason } from '../../../../nook-web-extension/src/content/webauthn-options-response'
 
 const createRequest: PasskeyPromptRequest = {
   ceremony: WebsitePasskeyCeremony.Create,
@@ -201,6 +202,42 @@ describe('passkey sign-in card', () => {
     expect(text(panel)).toContain('passkeySigningIn')
     panel.showFailed()
     expect(text(panel)).toContain('passkeyUseFailed')
+  })
+})
+
+describe('passkey card with nothing to offer', () => {
+  test('says why and hands the request to the browser only when asked', async () => {
+    const request: PasskeyPromptRequest = {
+      ...getRequest,
+      options: [],
+      unavailable: WebsitePasskeyUnavailableReason.NoMatch,
+    }
+    const { panel } = openPanel(request)
+
+    expect(text(panel)).toContain('passkeyNoMatch')
+    expect(panel.element.querySelectorAll('.account-option')).toHaveLength(0)
+    button(panel, 'passkeyUseAnother').click()
+
+    await expect(panel.choice).resolves.toEqual({
+      kind: PasskeyPromptChoiceKind.BrowserFallback,
+    })
+  })
+
+  test('a locked Nook says so and closing declines', async () => {
+    const request: PasskeyPromptRequest = {
+      ...createRequest,
+      options: [],
+      unavailable: WebsitePasskeyUnavailableReason.Locked,
+    }
+    const { panel } = openPanel(request)
+
+    expect(text(panel)).toContain('passkeyLocked')
+    expect(panel.element.querySelectorAll('input')).toHaveLength(0)
+    button(panel, 'passkeyClose').click()
+
+    await expect(panel.choice).resolves.toEqual({
+      kind: PasskeyPromptChoiceKind.Dismissed,
+    })
   })
 })
 

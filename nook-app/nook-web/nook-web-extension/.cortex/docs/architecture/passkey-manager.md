@@ -11,8 +11,9 @@
 Nook can act as a software WebAuthn authenticator for websites. The Chromium
 extension intercepts explicit `navigator.credentials.create()` and `get()`
 requests, offers an approved Simple Vault after user consent, and returns a
-standard credential response. The browser remains available through an
-explicit fallback action. Conditional mediation is left to the browser.
+standard credential response. Nook never hands an intercepted request to the
+browser on its own: the browser runs only when the person chooses it on the
+Nook card. Conditional mediation is left to the browser.
 
 ## Trust and ownership boundaries
 
@@ -51,8 +52,8 @@ explicit fallback action. Conditional mediation is left to the browser.
     sign-in without it. Only `discouraged` leaves the flag clear. Extension
     sessions unlock only with a passkey or PIN, so an unlocked session vouches
     for the user. Rust owns this decision.
-  - Expire that session after 15 minutes. A locked session falls back to the
-    browser.
+  - Expire that session after 15 minutes. A locked session shows the card's
+    locked notice; the browser runs only on request.
 - **Commit ordering and provider failure:**
   - Commit registration as `SecretCreated` before returning its response.
   - Commit each incremented assertion counter as `SecretReplaced` before
@@ -87,7 +88,9 @@ explicit fallback action. Conditional mediation is left to the browser.
 - **Malformed or oversized page input**
   - **Required behavior:** Reject over 64 KiB in the isolated bridge and runtime validator, then apply typed bounded parsing in Rust.
 - **Extension is locked or unavailable**
-  - **Required behavior:** Invoke the browser's original WebAuthn method.
+  - **Required behavior:** Show the Nook card with the reason. Invoke the
+    browser's original WebAuthn method only when the person chooses **Use
+    another passkey**.
 - **Nook ceremony fails after selection**
   - **Required behavior:** Return a generic `NotAllowedError`.
 - **Spoofed Pilot HUD proposes Create/Use passkey**
@@ -119,6 +122,9 @@ share that corner.
   preselected. **Save passkey** is the consent.
 - **Assertion:** one row per matching account with its vault. Choosing a row is
   the consent.
+- **Nothing to offer:** when no vault passkey is one the site asked for, Nook is
+  locked, no vault keeps passkeys, or the lookup failed, the card says which and
+  offers **Use another passkey**. It lists no account.
 - **Progress and result:** after consent the card shows Saving or Signing in.
   A saved passkey shows its vault for three seconds. A failure stays until the
   user closes it. The website still receives only `NotAllowedError`.

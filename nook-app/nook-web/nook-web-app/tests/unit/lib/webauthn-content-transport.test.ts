@@ -207,4 +207,51 @@ describe('WebAuthn content transport', () => {
       document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
     ).toBeFalsy()
   })
+
+  test('a site Nook has no passkey for gets the card, not the browser', async () => {
+    Object.assign(globalThis, {
+      chrome: {
+        i18n: { getMessage: (key: string) => key },
+        runtime: {
+          getURL: (path: string) => path,
+          sendMessage: (
+            _message: WebsitePasskeyOptionsMessage,
+            callback: (response: WebsitePasskeyOptionsResponse) => void,
+          ) => {
+            callback({
+              ok: true,
+              status: WebsitePasskeyOptionsStatus.Ready,
+              options: [],
+            })
+          },
+        },
+      },
+    })
+    const postMessage = vi.spyOn(window, 'postMessage')
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: window,
+        origin: location.origin,
+        data: {
+          source: 'nook-passkey-page-v1',
+          type: 'request',
+          requestId: 'request-00000004',
+          ceremony: WebsitePasskeyCeremony.Get,
+          request: { rpId: 'example.test' },
+          expiresAt: Date.now() + 10_000,
+        },
+      }),
+    )
+
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
+      ).toBeTruthy(),
+    )
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: PageResponseAction.Fallback }),
+      location.origin,
+    )
+  })
 })

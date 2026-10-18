@@ -61,18 +61,22 @@ function installPasskeyCardChromeStub({
     getURL: (resource: string) =>
       resource === 'icons/nook.png' ? '/favicon.png' : resource,
     sendMessage: (
-      message: { type?: string },
+      message: { type?: string; payload?: { ceremony?: string } },
       callback?: (response: unknown) => void,
     ) => {
       if (message.type === 'nook:website-passkey-options') {
+        // The demo vaults save passkeys but hold none the site asks for.
+        const signIn = message.payload?.ceremony === 'get'
         queueMicrotask(() =>
           callback?.({
             ok: true,
             status: 'ready',
-            options: [
-              { vaultStoreId: 'demo', vaultName: 'Demo vault' },
-              { vaultStoreId: 'work', vaultName: 'Work' },
-            ],
+            options: signIn
+              ? []
+              : [
+                  { vaultStoreId: 'demo', vaultName: 'Demo vault' },
+                  { vaultStoreId: 'work', vaultName: 'Work' },
+                ],
           }),
         )
       } else if (message.type === 'nook:website-passkey-perform') {
@@ -181,6 +185,15 @@ test('save a website passkey from the top-right Nook card', async ({
   await demoBeat(page)
   await page.keyboard.press('Escape')
   await expect.poll(responses).toEqual(['result', 'error'])
+  await expect(card).toBeHidden()
+
+  // A sign-in Nook has no passkey for still gets the card, which says so;
+  // the browser runs only when the person picks Use another passkey.
+  await page.evaluate(requestWebsitePasskey, 'get')
+  await expect(card).toBeVisible()
+  await demoBeat(page)
+  await page.keyboard.press('Enter')
+  await expect.poll(responses).toEqual(['result', 'error', 'fallback'])
   await expect(card).toBeHidden()
 })
 

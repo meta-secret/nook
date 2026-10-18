@@ -10,6 +10,7 @@ import {
 } from '../lib/browser-message-keys'
 import { WebsitePasskeyCeremony } from '../lib/webauthn-message-types'
 import { IN_PAGE_SURFACE_TOKENS, WIDGET_HOST_ID } from './in-page-surface'
+import { WebsitePasskeyUnavailableReason } from './webauthn-options-response'
 
 export type PasskeyOption = {
   vaultStoreId: string
@@ -41,6 +42,8 @@ export type PasskeyPromptRequest = {
   /** The account the site is registering, as the site names it. */
   userName?: string
   options: PasskeyOption[]
+  /** Set when Nook has nothing to offer: the card says why. */
+  unavailable?: WebsitePasskeyUnavailableReason
 }
 
 enum PasskeyPromptState {
@@ -79,6 +82,19 @@ type PasskeyPromptPanelArgs = {
 }
 
 const SAVED_CARD_MS = 3_000
+
+const UNAVAILABLE_MESSAGES: Record<
+  WebsitePasskeyUnavailableReason,
+  BrowserMessageKey
+> = {
+  [WebsitePasskeyUnavailableReason.NoMatch]:
+    BROWSER_MESSAGE_KEYS.PasskeyNoMatch,
+  [WebsitePasskeyUnavailableReason.Locked]: BROWSER_MESSAGE_KEYS.PasskeyLocked,
+  [WebsitePasskeyUnavailableReason.NoVault]:
+    BROWSER_MESSAGE_KEYS.PasskeyNoVault,
+  [WebsitePasskeyUnavailableReason.CheckFailed]:
+    BROWSER_MESSAGE_KEYS.PasskeyCheckFailed,
+}
 
 const DISMISSED: PasskeyPromptChoice = {
   kind: PasskeyPromptChoiceKind.Dismissed,
@@ -498,6 +514,13 @@ export class PasskeyPromptPanel {
       substitution: request.siteName,
     }
     this.title.textContent = translateWith(title)
+    if (request.unavailable) {
+      this.body.replaceChildren(
+        this.siteRow(),
+        ...this.unavailableChoices(request.unavailable),
+      )
+      return
+    }
     const choices = this.creating ? this.saveChoices() : this.accountChoices()
     const browser = classed('text-button')('button')
     browser.type = 'button'
@@ -506,6 +529,26 @@ export class PasskeyPromptPanel {
       this.resolveChoice(BROWSER_FALLBACK),
     )
     this.body.replaceChildren(this.siteRow(), ...choices, browser)
+  }
+
+  /**
+   * Nothing Nook can offer: say why, and let the person hand the request to
+   * the browser. Nook never does that on its own.
+   */
+  private unavailableChoices(
+    reason: WebsitePasskeyUnavailableReason,
+  ): HTMLElement[] {
+    const notice: PasskeyPromptStatus = {
+      tone: PasskeyPromptTone.Warning,
+      text: translate(UNAVAILABLE_MESSAGES[reason]),
+    }
+    const another = classed('primary-button')('button')
+    another.type = 'button'
+    another.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeyUseAnother)
+    another.addEventListener('click', () =>
+      this.resolveChoice(BROWSER_FALLBACK),
+    )
+    return [this.statusElement(notice), another]
   }
 
   /** Registration: who the site is saving, where it goes, one Save. */
@@ -584,7 +627,7 @@ export class PasskeyPromptPanel {
     return [field]
   }
 
-  private showStatus({ tone, text }: PasskeyPromptStatus): void {
+  private statusElement({ tone, text }: PasskeyPromptStatus): HTMLElement {
     const status = classed('status')('p')
     status.dataset.tone = tone
     status.setAttribute('role', 'status')
@@ -602,8 +645,12 @@ export class PasskeyPromptPanel {
     const copy = document.createElement('span')
     copy.textContent = text
     status.append(mark, copy)
+    return status
+  }
+
+  private showStatus(status: PasskeyPromptStatus): void {
     const focusInside = this.element.contains(document.activeElement)
-    this.body.replaceChildren(this.siteRow(), status)
+    this.body.replaceChildren(this.siteRow(), this.statusElement(status))
     if (focusInside) this.element.focus()
   }
 }

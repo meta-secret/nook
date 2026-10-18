@@ -1926,6 +1926,11 @@
       "saved_detail": "Saved in $1. Nook offers it the next time you sign in.",
       "save_failed": "Nook couldn't save this passkey. Try again from the site.",
       "use_failed": "Nook couldn't sign in with this passkey. Try again from the site.",
+      "no_match": "None of your Nook passkeys is one this site asked for. A passkey you just saved may still be waiting for the site's approval.",
+      "locked": "Nook is locked. Unlock it in the Nook panel, then try again on the site.",
+      "no_vault": "No connected Nook vault keeps passkeys yet.",
+      "check_failed": "Nook couldn't check its passkeys.",
+      "use_another": "Use another passkey",
       "use_browser": "Use browser or security key"
     },
     "consent": {

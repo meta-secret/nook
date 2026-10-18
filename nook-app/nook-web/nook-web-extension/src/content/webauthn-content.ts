@@ -202,7 +202,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     const nookTypedArgs0_2: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
       action: disposition.action,
-      ...('reason' in disposition ? { value: disposition.reason } : {}),
+      value: disposition.reason,
     }
     respond(nookTypedArgs0_2)
     return
@@ -220,6 +220,9 @@ async function handleRequest(request: PageRequest): Promise<void> {
         : site,
     ...(request.userName ? { userName: request.userName } : {}),
     options,
+    ...(disposition.kind === WebsitePasskeyOptionsDispositionKind.Explain
+      ? { unavailable: disposition.reason }
+      : {}),
   }
   const prompt = PasskeyPrompt.open(promptRequest)
   prompts.set(request.requestId, prompt)
