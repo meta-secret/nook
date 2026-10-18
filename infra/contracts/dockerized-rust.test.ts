@@ -59,6 +59,7 @@ class DockerizedRustContract {
 
   previewGates(): void {
     const stepContract = z.object({
+      name: z.string().optional(),
       run: z.string().optional(),
       uses: z.string().optional(),
       if: z.string().optional(),
@@ -86,13 +87,30 @@ class DockerizedRustContract {
       previous = index;
     }
     const finalSteps = jobContract.parse(workflow.jobs.validation).steps;
+    const checkoutStep = stepContract.parse(finalSteps[0]);
+    expect(checkoutStep.uses).toBe("actions/checkout@v7");
+    expect(checkoutStep).not.toHaveProperty("if");
+    const guard = finalSteps.findIndex(
+      (step) => step.name === "Require every selected validation branch",
+    );
+    expect(guard).toBeGreaterThan(0);
+    expect(finalSteps.findIndex((step) => Object.hasOwn(step, "run"))).toBe(
+      guard,
+    );
+    const guardStep = stepContract.parse(finalSteps[guard]);
+    expect(guardStep.run).toContain('test "$PREPARE_RESULT" = success');
+    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = success');
+    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = skipped');
+    expect(guardStep).not.toHaveProperty("if");
+    expect(guardStep["continue-on-error"]).not.toBe(true);
+    const restore = finalSteps.findIndex(
+      (step) => step.uses === "actions/download-artifact@v8",
+    );
+    expect(restore).toBeGreaterThan(guard);
     const preview = finalSteps.findIndex(
       (step) => step.uses === "./.github/actions/nook-pr-preview",
     );
-    expect(preview).toBeGreaterThan(0);
-    expect(finalSteps[0]?.run).toContain('test "$PREPARE_RESULT" = success');
-    expect(finalSteps[0]?.run).toContain('test "$BROWSER_RESULT" = success');
-    expect(finalSteps[0]?.run).toContain('test "$BROWSER_RESULT" = skipped');
+    expect(preview).toBeGreaterThan(restore);
     const previewStep = stepContract.parse(finalSteps[preview]);
     expect(previewStep.if).not.toContain("always()");
     expect(previewStep.if).toContain(
