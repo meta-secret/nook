@@ -61,6 +61,7 @@ mod search_catalog;
 mod secrets;
 mod sentinel;
 mod session;
+mod site_secret_listing;
 mod sync;
 mod verified_access;
 

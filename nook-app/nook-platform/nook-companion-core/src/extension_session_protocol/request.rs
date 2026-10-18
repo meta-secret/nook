@@ -434,6 +434,8 @@ pub enum ExtensionSessionRequest {
     ListPasskeys(PasskeyLookupPayload),
     #[serde(rename = "nook:extension-session-list-logins")]
     ListLogins(OriginGrantPayload),
+    #[serde(rename = "nook:extension-session-list-site-secrets")]
+    ListSiteSecrets(OriginGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-login")]
     RevealLogin(SecretGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-focused-login")]
@@ -549,6 +551,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::VaultSummary(_)
             | ExtensionSessionRequest::ListPasskeys(_)
             | ExtensionSessionRequest::ListLogins(_)
+            | ExtensionSessionRequest::ListSiteSecrets(_)
             | ExtensionSessionRequest::RevealLogin(_)
             | ExtensionSessionRequest::RevealFocusedLogin(_)
             | ExtensionSessionRequest::ListAuthenticators(_)
@@ -824,6 +827,11 @@ mod tests {
             (
                 "origin grant",
                 r#"{"type":"nook:extension-session-list-logins","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""origin":"https://example.com","#,
+            ),
+            (
+                "site secrets",
+                r#"{"type":"nook:extension-session-list-site-secrets","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
                 r#""origin":"https://example.com","#,
             ),
             (

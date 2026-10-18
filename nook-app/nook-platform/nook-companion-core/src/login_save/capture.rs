@@ -7,7 +7,8 @@ use super::{
 };
 use crate::{
     CompanionEpochMilliseconds, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, PageInputFieldObservation, PageInputType,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, OneTimeCodeEntryEvidence, PageInputFieldObservation,
+    PageInputType,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -46,6 +47,9 @@ impl LoginSubmissionFieldMetadata {
             autocomplete_tokens: self.autocomplete_tokens,
             identity_text: self.identity_text,
             login_context: self.login_context.into(),
+            // Capture metadata carries no entry signals; login save admits only
+            // username/current-password submissions, so word evidence alone decides here.
+            one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
         })
         .with_password_history(self.password_history))
     }

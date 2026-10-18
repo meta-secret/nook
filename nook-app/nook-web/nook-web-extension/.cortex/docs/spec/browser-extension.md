@@ -70,10 +70,8 @@ application capability checks enforce the vault-type boundary.
 - **Content script**
   - **Responsibility:** DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials
 
-Authenticator items remain standalone.
-They are not guessed from an issuer name or silently associated with the current
-origin.
-The in-page gate opens an extension-controlled picker for every OTP fill.
+The in-page gate never guesses an authenticator item from the current origin.
+It opens an extension-controlled picker for every OTP fill.
 That picker searches all authenticator items through Rust/WASM.
 It shows issuer/account labels only inside the extension document.
 It returns the selected opaque item identity to the origin-bound content script.
@@ -94,10 +92,11 @@ QR decoding begins only after the trusted action click.
 "No vault UI in the extension" means no second vault-management UI. The side
 panel and the shared authentication tab contain the standard device-protection
 component because WebAuthn needs an extension-owned document and a user
-gesture. The side panel also shows non-secret login metadata (username and
-vault label) for the current site, with a Fill action for each login. It is not
-a vault browser: it cannot search other sites, reveal a password, or create,
-edit, delete, recover, or administer vault items. A bounded extension-owned
+gesture. The side panel also shows non-secret metadata of the site-bound items
+Rust matches to the current site (type, title, account, saved host, identity
+and vault), with Fill for a login and Fill code for an authenticator. It is not
+a vault browser: it cannot search other sites, reveal a password, code or key,
+or create, edit, delete, recover, or administer vault items. A bounded extension-owned
 authenticator picker may show searchable non-secret 2FA metadata for one
 explicit fill choice. It cannot create, reveal, edit, delete, recover, or
 administer vault items.
@@ -203,15 +202,17 @@ private identity.
   the authentication tab or by Pilot, or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
   broadcasts.
-- This site names the active tab's display host and lists that site's saved
-  logins, each with its username, vault label, and an explicit Fill.
+- This site names the active tab's display host and lists the site-bound
+  items (logins, authenticators, passkeys and API keys) Rust matches to that
+  site, filtered by what the page needs, under identity headers. Each row shows
+  a type icon and label, title, and account with saved host. Logins offer an
+  explicit Fill, authenticators Fill code; passkeys and API keys are view-only.
   - It follows tab activation and URL changes in the panel's window.
-  - An empty list names the site.
-  - One matching login gets the primary Fill. Several matching logins each get
-    a secondary Fill.
+  - An empty list names the site with Rust's copy for the page's need.
+  - One listed row gets the primary action. Several rows each get a secondary
+    action.
   - A tab without a website shows "No website in this tab". A Nook vault app
     shows "Nook can't fill on this page". Neither shows a Fill button.
-  - Authenticator items are never listed there.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
 - The Pilot lock entry and the side panel's connection actions use the same
@@ -317,13 +318,14 @@ bound to the configured Simple origin only.
 
 ### Side-panel This site and Fill route
 
-Accepted requirement: the extension side panel lists the active tab's saved
-logins under This site and fills one only after an explicit Fill. The panel
-sends only an opaque item identity and a window selector. The service worker
-derives the tab and origin itself. Rust classifies the page and re-matches the
-item. The top-frame content script reveals the login through the existing
-sender-bound path and fills it. Fill never submits, and no plaintext reaches
-the panel.
+Accepted requirement: the extension side panel lists the active tab's
+site-bound items under This site and fills a login or an authenticator code
+only after an explicit Fill or Fill code. The panel sends only an opaque item
+identity and a window selector. The service worker derives the tab and origin
+itself. Rust classifies the page, matches and filters the items, and
+re-matches the item before a fill. The top-frame content script obtains the
+login or code through the existing sender-bound path and fills it. A fill never
+submits, and no plaintext reaches the panel.
 
 #### Panel sender and payload
 
@@ -336,8 +338,8 @@ the panel.
   - the authentication tab and the offscreen document;
   - other extensions and side-panel path variants;
   - the side-panel page opened in a normal tab.
-- A listing request carries only `windowId`. A Fill request carries only
-  `windowId` and the opaque `itemId` (`vaultStoreId`, `secretId`).
+- A listing request carries only `windowId`. A Fill or Fill code request
+  carries only `windowId` and the opaque `itemId` (`vaultStoreId`, `secretId`).
   - Strict decoding rejects unknown fields and bounds every string.
   - An undecodable request receives `forbidden`.
   - No request carries an origin, URL, host, tab id, frame id, or username.
@@ -403,44 +405,52 @@ resolves it again at Fill time.
 5. A session status probe must report an unlocked session.
    - A locked session returns `locked`.
    - A failed probe returns `list-failed`.
-6. The fail-closed Rust login listing for the derived origin supplies the
-   rows under [general login website matching](#general-login-website-matching).
-   - It lists Login items only. Authenticators are never requested, merged, or
-     guessed from an issuer, label, or host.
+6. The service worker asks frame 0 of the tab once for its page need. The
+   content script classifies its forms with Rust when asked, and Rust maps the
+   workflow: a one-time-code challenge needs authenticators, a login, sign-up
+   or password-change form needs logins, and any other page needs every
+   site-bound kind. Nothing caches the need.
+   - No content script answering returns `page-unavailable`; an unusable answer
+     returns `list-failed`.
+7. Each password-filling grant's worker-only `ListSiteSecrets` session request
+   returns the Logins, Authenticators, Passkeys and API keys Rust matched to the
+   derived origin, as display fields only. Logins follow
+   [general login website matching](#general-login-website-matching).
    - A failed or malformed grant answer returns `list-failed`, never an empty
      list.
-7. The service worker checks the generation again after the listing.
+8. Rust filters every grant's matches by the page need, groups rows under
+   identity headers in grant order, orders them, and selects every label,
+   action and empty-state key.
+9. The service worker checks the generation again after the listing.
    - A stale generation returns `locked`.
 
 The listing obeys these rules:
 
-- The reply holds the Rust display host and, for each login, its opaque item
-  id, username, and vault label. The service worker adds the vault label from
-  the grant and drops the saved website URL and host that the session listing
-  returned.
-- The reply carries no password, saved website URL or host, tab URL,
-  authorization generation, or device key.
+- The reply holds the Rust display host and Rust's presentation: identity
+  groups of rows (type, opaque item id, type label key, title, account, saved
+  host, vault label and action), or a typed empty state.
+- The reply carries no password, TOTP seed or code, key, passkey private data,
+  saved website URL, tab URL, authorization generation, or device key.
 - The route never opens the authentication tab.
 - The panel keeps the listing in component memory. It clears the listing on
   lock or session-state change, on tab activation or URL change in its window,
   and when the panel hides or unloads.
 - The panel never reads, logs, or stores the tab URL or origin.
-- One matching login gets the primary Fill. Several matching logins each get
-  a secondary Fill.
+- One listed row gets the primary action. Several rows each get a secondary
+  action.
 - The listing outcomes form a closed set. The panel renders every outcome with
   English and Russian catalog text:
-  - **Ready:** `ready` with its logins. The empty state naming the site
-    appears only for a ready listing with no logins.
+  - **Ready:** `ready` with Rust's rows. Rust's empty state for the page's
+    need, naming the site, appears only for a ready listing with no row.
   - **Request or page:** `forbidden`, `non-web`, and `page-unavailable`.
   - **Session and grants:** `unpaired` and `locked`.
   - **Failure:** `list-failed`.
 
-- **Prohibited:** show "no saved logins" after a grant transport fails, list an
-  authenticator whose issuer names the site, or show an unlocked list after a
-  lock cleanup started.
-- **Required:** return `list-failed` for that failure and list only
-  Rust-matched Login items. Return `locked` while the generation is stale or a
-  cleanup is pending.
+- **Prohibited:** show "nothing saved" after a grant transport fails, match,
+  filter or order items in TypeScript, or show an unlocked list after a lock
+  cleanup started.
+- **Required:** return `list-failed` for that failure and list only Rust's
+  rows. Return `locked` while the generation is stale or a cleanup is pending.
 
 #### Fill
 
@@ -535,6 +545,23 @@ The route enforces these limits:
   listing. Return `tab-changed` when the page's origin changed before delivery.
   Fill only the revalidated fields, then reply `filled` alone.
 
+#### Fill code
+
+Fill code runs the Fill gates above with these differences:
+
+- After the session probe, the service worker runs a fresh `ListSiteSecrets`
+  for the item's vault and the derived origin. The exact item must be an
+  Authenticator there, because the code session request is not bound to a
+  site. Otherwise it returns `item-not-found` and sends nothing to the tab.
+- The frame-0 trigger carries the derived origin, the item's opaque identity
+  and the current generation, and no code.
+- The content script requires Rust's fill-TOTP action for the document's
+  workflow, or returns `no-code-field`. It revalidates the workflow, obtains
+  the code for that same item through the existing sender-bound authenticator
+  route, revalidates again, and writes the unexpired code only into the
+  Rust-detected one-time-code field. It never submits or advances the form.
+- The outcomes add `no-code-field` and otherwise match the Fill outcomes.
+
 #### Session gate and panel isolation
 
 - The offscreen session refuses every request from a content script or any
@@ -554,7 +581,7 @@ The route enforces these limits:
     extension pages may request it.
 - The panel registers no `chrome.runtime.onMessage` listener, because runtime
   broadcasts can carry plaintext.
-- The panel's outgoing messages form a closed set. The set holds the two
+- The panel's outgoing messages form a closed set. The set holds the three
   side-panel requests, lock, open vault, open tab, and paired-vault queries. It
   also holds the status, setup, and unlock requests of the shared
   device-protection component.
@@ -594,6 +621,10 @@ Rust/WASM.
 Username detection uses autocomplete tokens plus identity heuristics
 (`loginfmt`, `login_email`, account/email labels).
 It still ignores newsletter-style email fields.
+One-time-code detection uses autocomplete tokens and identity words plus
+Rust-decided second-factor route evidence and code-shaped entry hints
+(`inputmode`, `maxlength`, `pattern`); a masked field that Rust classifies as a
+one-time code is not counted as a password.
 Credential matching follows the [general login website matching](#general-login-website-matching)
 policy for every site.
 It performs explicit login selection/fill/submit and TOTP selection/fill.

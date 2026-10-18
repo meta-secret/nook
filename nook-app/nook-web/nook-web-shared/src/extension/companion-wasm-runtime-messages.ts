@@ -49,6 +49,8 @@ import type {
   AuthenticationImplicitSubmitActuationObservation,
   LoginSaveOutcomeObservation,
   LoginSaveOutcomeDecision,
+  PageSecondFactorRoute,
+  SitePageNeed,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -79,6 +81,7 @@ export enum CompanionWasmSessionMessageType {
   DecodeContentRuntimeResponse = "nook:extension-session-decode-content-runtime-response",
   EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
   RevalidateApprovedAuthenticationWorkflow = "nook:extension-session-revalidate-approved-authentication-workflow",
+  SitePageNeed = "nook:extension-session-site-page-need",
 }
 
 export enum CompanionWasmLabelKind {
@@ -120,6 +123,12 @@ export type CompanionWasmLoginContextObservation = {
   readonly pathContext: string;
 };
 
+/**
+ * Raw input attributes for `NookPageInputFieldObservation`; Rust decides every role.
+ * Migration decision: the content-script producers and the offscreen consumer ship
+ * atomically, so mixed-version payloads are unsupported and fail closed. Every field
+ * is required; there are no defaults and no compatibility branch.
+ */
 export type CompanionWasmPageInputFieldObservation = {
   readonly inputType: string;
   readonly disabled: boolean;
@@ -127,6 +136,13 @@ export type CompanionWasmPageInputFieldObservation = {
   readonly autocompleteTokens: readonly string[];
   readonly identityText: string;
   readonly loginContext: boolean;
+  readonly secondFactorRoute: PageSecondFactorRoute;
+  /** Raw `inputmode` attribute, empty when absent. */
+  readonly inputMode: string;
+  /** Raw DOM `maxLength`, which the browser reports as -1 when absent. */
+  readonly maxLength: number;
+  /** Raw `pattern` attribute, empty when absent. */
+  readonly pattern: string;
 };
 
 export type CompanionWasmPageInputFieldRequest = {
@@ -280,6 +296,10 @@ export type CompanionWasmSessionMessage =
       };
     }
   | {
+      readonly type: CompanionWasmSessionMessageType.SitePageNeed;
+      readonly payload: { readonly workflowMatch: AuthenticationWorkflowMatch };
+    }
+  | {
       readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
       readonly payload: { readonly response: unknown };
     }
@@ -389,6 +409,7 @@ export type CompanionWasmSessionResponse =
   | {
       readonly revalidationDecision: ApprovedAuthenticationWorkflowDecision;
     }
+  | { readonly sitePageNeed: SitePageNeed }
   | {
       readonly transportability: readonly boolean[];
       readonly advanceControls: readonly boolean[];

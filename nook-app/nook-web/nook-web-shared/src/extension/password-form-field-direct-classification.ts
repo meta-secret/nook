@@ -12,8 +12,10 @@ import {
   looks_like_passkey_control_label,
   looks_like_username_field,
   parse_page_input_type,
+  second_factor_route,
   strongest_authentication_username_evidence,
   type AuthenticationUsernameEvidence,
+  type PageSecondFactorRoute,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   CompanionWasmLabelKind,
@@ -43,17 +45,34 @@ export type DirectFieldClassification = {
 /** Synchronous Rust policy adapter for non-extension hosts such as unit tests. */
 export class PasswordFormFieldDirectClassification {
   loginContext(observation: LoginContextObservation): boolean {
-    const value = new NookLoginContextObservation(
-      observation.formIdentity,
-      observation.ancestorIdentities,
-      observation.advanceControlLabel,
-      observation.pathContext,
-    );
+    const value = this.loginContextValue(observation);
     try {
       return has_login_context(value);
     } finally {
       value.free();
     }
+  }
+
+  secondFactorRoute(
+    observation: LoginContextObservation,
+  ): PageSecondFactorRoute {
+    const value = this.loginContextValue(observation);
+    try {
+      return second_factor_route(value);
+    } finally {
+      value.free();
+    }
+  }
+
+  private loginContextValue(
+    observation: LoginContextObservation,
+  ): NookLoginContextObservation {
+    return new NookLoginContextObservation(
+      observation.formIdentity,
+      observation.ancestorIdentities,
+      observation.advanceControlLabel,
+      observation.pathContext,
+    );
   }
 
   field(
@@ -66,6 +85,10 @@ export class PasswordFormFieldDirectClassification {
       [...observation.autocompleteTokens],
       observation.identityText,
       observation.loginContext,
+      observation.secondFactorRoute,
+      observation.inputMode,
+      observation.maxLength,
+      observation.pattern,
     );
     try {
       return {

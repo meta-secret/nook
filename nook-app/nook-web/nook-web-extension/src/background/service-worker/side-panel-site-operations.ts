@@ -14,26 +14,27 @@ import {
   type SidePanelLoginItemId,
   type SidePanelSiteListing,
   type SidePanelSiteListingFailureKind,
-  type SidePanelSiteLogin,
 } from '../../lib/side-panel-site'
 import {
   SidePanelAuthorizationKind,
+  SidePanelGrantSelectionKind,
   SidePanelLoginsKind,
+  SidePanelPageNeedReadingKind,
   SidePanelSessionKind,
   SidePanelSiteAccess,
+  SidePanelSiteSecretsKind,
+  SidePanelTargetContinuity,
+  type SidePanelGrantRequest,
   type SidePanelLoginsRequest,
   type SidePanelPageDelivery,
-  type SidePanelPairingGrants,
   type SidePanelSiteAccounts,
   type SidePanelSiteDependencies,
+  type SidePanelSiteSecretsPresentation,
+  type SidePanelTargetContinuityRequest,
 } from './side-panel-site-access'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import { SidePanelPageNeedReplyKind } from '../../lib/side-panel-page-need'
 import { SidePanelSenderAdmission } from './side-panel-sender'
-import {
-  SidePanelTabTargetKind,
-  type SidePanelWebTabTarget,
-} from './side-panel-tab-target'
-import type { SidePanelWindowSelection } from '../../lib/side-panel-site'
+import { SidePanelTabTargetKind } from './side-panel-tab-target'
 
 /** One admitted runtime delivery of a side-panel request. */
 export interface SidePanelSiteOperationRequest {
@@ -42,10 +43,11 @@ export interface SidePanelSiteOperationRequest {
 }
 
 /**
- * Lists the saved logins for the active tab of the panel's window: sender,
- * Rust tab target, authorization generation, password grants, unlocked
- * session, then Rust's fail-closed Login-only listing. The reply carries only
- * the display host and each item's id, username and vault label.
+ * Lists the site-bound secrets for the active tab of the panel's window:
+ * sender, Rust tab target, authorization generation, password grants,
+ * unlocked session, the tab's Rust page need, then every grant's fail-closed
+ * Rust match listing, which Rust filters by that need and groups by identity.
+ * The reply carries only the display host and Rust's display rows.
  */
 export class SidePanelSiteListingOperation {
   private readonly access: SidePanelSiteAccess
@@ -124,17 +126,38 @@ export class SidePanelSiteListingOperation {
         case SidePanelSessionKind.Unlocked:
           break
       }
-      const loginsRequest: SidePanelLoginsRequest = {
+      // Once per listing, the tab's top document says what its page needs.
+      const reading = yield* this.access.pageNeed(target)
+      switch (reading.kind) {
+        case SidePanelPageNeedReadingKind.NoReceiver:
+          return this.failure(SidePanelSiteListingKind.PageUnavailable)
+        case SidePanelPageNeedReadingKind.Answered:
+          break
+      }
+      const reply = reading.reply
+      switch (reply.kind) {
+        case SidePanelPageNeedReplyKind.TabChanged:
+        case SidePanelPageNeedReplyKind.Unavailable:
+          return this.failure(SidePanelSiteListingKind.ListFailed)
+        case SidePanelPageNeedReplyKind.Needed:
+          break
+      }
+      const secretsRequest: SidePanelLoginsRequest = {
         grants,
         origin: target.origin,
       }
-      const logins = yield* this.access.logins(loginsRequest)
-      switch (logins.kind) {
-        case SidePanelLoginsKind.Failed:
+      const secrets = yield* this.access.siteSecrets(secretsRequest)
+      switch (secrets.kind) {
+        case SidePanelSiteSecretsKind.Failed:
           return this.failure(SidePanelSiteListingKind.ListFailed)
-        case SidePanelLoginsKind.Listed:
+        case SidePanelSiteSecretsKind.Listed:
           break
       }
+      const presentation: SidePanelSiteSecretsPresentation = {
+        need: reply.need,
+        vaults: secrets.vaults,
+      }
+      const listing = yield* this.access.presentSiteSecrets(presentation)
       const settled = yield* this.access.stillCurrent(authorization.generation)
       switch (settled.kind) {
         case SidePanelAuthorizationKind.Revoked:
@@ -145,30 +168,11 @@ export class SidePanelSiteListingOperation {
       const ready: SidePanelSiteListing = {
         kind: SidePanelSiteListingKind.Ready,
         display_host: target.display_host,
-        items: new SidePanelSiteLoginProjection(logins.accounts).items,
+        listing,
       }
       return ready
     },
   )
-}
-
-/** Keeps only what the panel shows: no password, saved URL or generation. */
-class SidePanelSiteLoginProjection {
-  constructor(private readonly accounts: SidePanelSiteAccounts) {}
-
-  get items(): readonly SidePanelSiteLogin[] {
-    return this.accounts.map((account) => {
-      const item: SidePanelSiteLogin = {
-        itemId: {
-          vaultStoreId: account.vaultStoreId,
-          secretId: account.secretId,
-        },
-        username: account.username,
-        vaultLabel: account.vaultName,
-      }
-      return item
-    })
-  }
 }
 
 enum SidePanelItemPresence {
@@ -255,7 +259,7 @@ export class SidePanelLoginFillOperation {
           break
       }
       const grantRequest: SidePanelGrantRequest = { grants, itemId }
-      const granted = this.grantFor(grantRequest)
+      const granted = this.access.grantFor(grantRequest)
       switch (granted.kind) {
         case SidePanelGrantSelectionKind.NotGranted:
           return this.outcome(SidePanelLoginFillKind.ItemNotFound)
@@ -305,7 +309,7 @@ export class SidePanelLoginFillOperation {
         selection: decoded.success.payload,
         derived: target,
       }
-      switch (yield* this.continuity(continuity)) {
+      switch (yield* this.access.continuity(continuity)) {
         case SidePanelTargetContinuity.Changed:
           return this.outcome(SidePanelLoginFillKind.TabChanged)
         case SidePanelTargetContinuity.Unreadable:
@@ -346,51 +350,6 @@ export class SidePanelLoginFillOperation {
     },
   )
 
-  /** Re-resolves the panel's window and compares it with the tab the Fill derived. */
-  private continuity = Effect.fn(
-    this.generatorContext,
-    function* (request: SidePanelTargetContinuityRequest) {
-      const current = yield* Effect.tryPromise(() =>
-        this.dependencies.tabTarget(request.selection),
-      )
-      switch (current.kind) {
-        case SidePanelTabTargetKind.Failed:
-          return SidePanelTargetContinuity.Unreadable
-        case SidePanelTabTargetKind.NonWeb:
-        case SidePanelTabTargetKind.PageUnavailable:
-          return SidePanelTargetContinuity.Changed
-        case SidePanelTabTargetKind.Web:
-          break
-      }
-      const same =
-        current.tabId === request.derived.tabId &&
-        current.origin === request.derived.origin
-      switch (same) {
-        case true:
-          return SidePanelTargetContinuity.Same
-        case false:
-          return SidePanelTargetContinuity.Changed
-      }
-    },
-  )
-
-  /** The item's vault must hold a password-filling grant. */
-  private grantFor({
-    grants,
-    itemId,
-  }: SidePanelGrantRequest): SidePanelGrantSelection {
-    const grant = grants.find(
-      (candidate) => candidate.vaultStoreId === itemId.vaultStoreId,
-    )
-    switch (true) {
-      case !!grant:
-        return { kind: SidePanelGrantSelectionKind.Granted, grant }
-      case true:
-      default:
-        return { kind: SidePanelGrantSelectionKind.NotGranted }
-    }
-  }
-
   /** Rust's listing for the derived origin must still contain the exact item. */
   private presence({
     accounts,
@@ -425,39 +384,10 @@ export class SidePanelLoginFillOperation {
   }
 }
 
-/** Whether the tab the Fill derived is still the active tab of the window. */
-enum SidePanelTargetContinuity {
-  Same = 'same',
-  Changed = 'changed',
-  Unreadable = 'unreadable',
-}
-
-type SidePanelTargetContinuityRequest = {
-  readonly selection: SidePanelWindowSelection
-  readonly derived: SidePanelWebTabTarget
-}
-
 type SidePanelItemPresenceRequest = {
   readonly accounts: SidePanelSiteAccounts
   readonly itemId: SidePanelLoginItemId
 }
-
-type SidePanelGrantRequest = {
-  readonly grants: SidePanelPairingGrants
-  readonly itemId: SidePanelLoginItemId
-}
-
-enum SidePanelGrantSelectionKind {
-  Granted = 'granted',
-  NotGranted = 'not-granted',
-}
-
-type SidePanelGrantSelection =
-  | {
-      readonly kind: SidePanelGrantSelectionKind.Granted
-      readonly grant: StoredExtensionPairingGrant
-    }
-  | { readonly kind: SidePanelGrantSelectionKind.NotGranted }
 
 type SidePanelSiteListingGeneratorContext = {
   readonly self: SidePanelSiteListingOperation

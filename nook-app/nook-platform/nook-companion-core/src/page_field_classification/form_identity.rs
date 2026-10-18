@@ -323,25 +323,27 @@ impl AuthenticationRouteIdentity<'_> {
                 "authenticator",
             ])
     }
+    /// Expanded words naming authenticator enrollment or setup rather than a challenge.
+    pub(super) const AUTHENTICATOR_ENROLLMENT_WORDS: &'static [&'static str] = &[
+        "enroll",
+        "enrollment",
+        "setup",
+        "set up",
+        "register",
+        "create",
+        "enable",
+        "add",
+        "configure",
+        "activate",
+        "pair",
+        "pairing",
+        "provision",
+        "provisioning",
+    ];
     pub(super) fn indicates_authenticator_enrollment(&self) -> bool {
         let identity = self.identity;
         let identity = AuthenticationControlText::new(identity).expand_identity_text();
         AuthenticationControlText::new(&identity).contains_any_word(&[
-            "enroll",
-            "enrollment",
-            "setup",
-            "set up",
-            "register",
-            "create",
-            "enable",
-            "add",
-            "configure",
-            "activate",
-            "pair",
-            "pairing",
-            "provision",
-            "provisioning",
-        ]) && AuthenticationControlText::new(&identity).contains_any_word(&[
             "otp",
             "totp",
             "2 fa",
@@ -350,7 +352,8 @@ impl AuthenticationRouteIdentity<'_> {
             "two factor",
             "one time code",
             "authenticator",
-        ])
+        ]) && AuthenticationControlText::new(&identity)
+            .contains_any_word(Self::AUTHENTICATOR_ENROLLMENT_WORDS)
     }
 }
 

@@ -1,9 +1,12 @@
 <!--
-This site: the active tab's host and its saved logins, each with Fill. The
-service worker reads the panel's active tab itself; the panel sends only its
-window and, for Fill, a login's opaque id. Logins stay in this component's
-memory, in Rust's order, and are dropped when the tab, its address, the
-panel's visibility or the lock state changes. Authenticators never appear.
+This site: the active tab's host and its site-bound secrets (logins,
+authenticators, passkeys and API keys) under identity headers, as Rust
+filtered them for what the page needs and grouped them. Logins offer Fill and
+authenticators Fill code; passkeys and API keys are shown only. The service
+worker reads the panel's active tab itself; the panel sends only its window
+and, for a fill, the item's opaque id. Rows stay in this component's memory,
+in Rust's order, and are dropped when the tab, its address, the panel's
+visibility or the lock state changes.
 -->
 <script lang="ts">
   import { tick, untrack } from 'svelte'
@@ -18,13 +21,16 @@ panel's visibility or the lock state changes. Authenticators never appear.
     type ExtensionTranslationRequest,
     extensionLocaleCatalog,
   } from '../lib/i18n'
+  import type {
+    SiteSecretIdentityHeader,
+    SiteSecretRow,
+  } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
   import {
     sidePanelSite,
     type SidePanelLoginFillRequest,
-    type SidePanelLoginItemId,
     type SidePanelWindowSelection,
   } from '../lib/side-panel-site'
-  import ThisSiteLogin from './ThisSiteLogin.svelte'
+  import ThisSiteItem from './ThisSiteItem.svelte'
   import {
     SidePanelChangeKind,
     SidePanelRuntime,
@@ -39,16 +45,22 @@ panel's visibility or the lock state changes. Authenticators never appear.
   import { ThisSiteFocus } from './this-site-focus'
   import {
     ThisSiteBodyKind,
+    ThisSiteFillAction,
     ThisSiteFillActivity,
+    ThisSiteFillChoiceKind,
     ThisSiteFillKind,
     ThisSiteHostKind,
+    ThisSiteLiveAnnouncementKind,
     ThisSiteMemory,
     ThisSiteMemoryKind,
     ThisSiteNoticeKind,
     ThisSitePanelSignal,
     ThisSiteReload,
     ThisSiteViews,
+    type ThisSiteEmptyBody,
     type ThisSiteFill,
+    type ThisSiteFillOutcome,
+    type ThisSiteFillSend,
     type ThisSiteState,
     type ThisSiteView,
   } from './this-site-state'
@@ -80,24 +92,41 @@ panel's visibility or the lock state changes. Authenticators never appear.
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
 
-  function emptyText(host: string): string {
+  /** Rust's empty-state message for what the page needs, naming the site. */
+  function emptyText(body: ThisSiteEmptyBody): string {
     const request: ExtensionTranslationRequest = {
-      kind: ExtensionTranslationRequestKind.WithReplacements,
-      key: I18N_KEYS.ExtensionActionSiteEmpty,
-      replacements: { host },
+      kind: ExtensionTranslationRequestKind.SelectedWithReplacements,
+      key: body.empty.message_key,
+      replacements: { host: body.host },
     }
     return i18n.t(request)
   }
 
+  /** A catalog key Rust chose. */
+  function translateSelected(key: string): string {
+    const request: ExtensionTranslationRequest = {
+      kind: ExtensionTranslationRequestKind.Selected,
+      key,
+    }
+    return i18n.t(request)
+  }
+
+  function headerText(header: SiteSecretIdentityHeader): string {
+    switch (header.kind) {
+      case 'Named':
+        return header.name
+      case 'Unnamed':
+        return translateSelected(header.message_key)
+    }
+  }
+
   /** Pending and success are announced from one persistent region. */
   function liveText(): string {
-    switch (fill.kind) {
-      case ThisSiteFillKind.Pending:
-        return translatePlain(I18N_KEYS.ExtensionActionFillPending)
-      case ThisSiteFillKind.Filled:
-        return translatePlain(I18N_KEYS.ExtensionActionFillDone)
-      case ThisSiteFillKind.Idle:
-      case ThisSiteFillKind.Failed:
+    const announcement = ThisSiteViews.liveAnnouncement(fill)
+    switch (announcement.kind) {
+      case ThisSiteLiveAnnouncementKind.Announced:
+        return translatePlain(announcement.key)
+      case ThisSiteLiveAnnouncementKind.Silent:
         return ''
     }
   }
@@ -160,7 +189,42 @@ panel's visibility or the lock state changes. Authenticators never appear.
     signal(outcome.signal)
   }
 
-  async function fillLogin(item: SidePanelLoginItemId): Promise<void> {
+  /** Sends the row's fill request and maps its answer to what the row shows. */
+  async function sendFill(
+    request: ThisSiteFillSend,
+  ): Promise<ThisSiteFillOutcome> {
+    const fillRequest: SidePanelLoginFillRequest = {
+      windowId: request.windowId,
+      itemId: request.item,
+    }
+    switch (request.action) {
+      case ThisSiteFillAction.Login: {
+        const answer = await sidePanelSite.fill(fillRequest)
+        const loginAnswer: Parameters<typeof ThisSiteViews.fill>[0] = {
+          kind: answer.kind,
+          item: request.item,
+        }
+        return ThisSiteViews.fill(loginAnswer)
+      }
+      case ThisSiteFillAction.Code: {
+        const answer = await sidePanelSite.fillCode(fillRequest)
+        const codeAnswer: Parameters<typeof ThisSiteViews.codeFill>[0] = {
+          kind: answer.kind,
+          item: request.item,
+        }
+        return ThisSiteViews.codeFill(codeAnswer)
+      }
+    }
+  }
+
+  async function fillItem(row: SiteSecretRow): Promise<void> {
+    const choice = ThisSiteViews.fillChoice(row)
+    switch (choice.kind) {
+      case ThisSiteFillChoiceKind.ViewOnly:
+        return
+      case ThisSiteFillChoiceKind.Fills:
+        break
+    }
     switch (fillActivity) {
       case ThisSiteFillActivity.Running:
         return
@@ -174,16 +238,22 @@ panel's visibility or the lock state changes. Authenticators never appear.
       case SidePanelWindowKind.Known:
         break
     }
+    const item = ThisSiteViews.itemId(row)
     const read = fills.begin()
     fillActivity = ThisSiteFillActivity.Running
     showNotice(ThisSiteNoticeKind.None)
-    const pending: ThisSiteFill = { kind: ThisSiteFillKind.Pending, item }
-    showFill(pending)
-    const request: SidePanelLoginFillRequest = {
-      windowId: panelWindow.id,
-      itemId: item,
+    const pending: ThisSiteFill = {
+      kind: ThisSiteFillKind.Pending,
+      item,
+      action: choice.action,
     }
-    const answer = await sidePanelSite.fill(request)
+    showFill(pending)
+    const send: ThisSiteFillSend = {
+      action: choice.action,
+      item,
+      windowId: panelWindow.id,
+    }
+    const outcome = await sendFill(send)
     fillActivity = ThisSiteFillActivity.Idle
     switch (read.freshness()) {
       // The list it came from was dropped: its answer shows nowhere.
@@ -192,11 +262,6 @@ panel's visibility or the lock state changes. Authenticators never appear.
       case SidePanelReadFreshness.Current:
         break
     }
-    const outcomeRequest: Parameters<typeof ThisSiteViews.fill>[0] = {
-      kind: answer.kind,
-      item,
-    }
-    const outcome = ThisSiteViews.fill(outcomeRequest)
     showFill(outcome.fill)
     showNotice(outcome.notice)
     switch (outcome.reload) {
@@ -209,8 +274,8 @@ panel's visibility or the lock state changes. Authenticators never appear.
     signal(outcome.signal)
   }
 
-  function fillRow(item: SidePanelLoginItemId): void {
-    void fillLogin(item)
+  function fillRow(row: SiteSecretRow): void {
+    void fillItem(row)
   }
 
   function changed(change: SidePanelChangeKind): void {
@@ -304,22 +369,29 @@ panel's visibility or the lock state changes. Authenticators never appear.
       </p>
     </div>
   {:else if view.body.kind === ThisSiteBodyKind.Matches}
-    <ul class="side-panel-logins">
-      {#each view.body.items as login (`${login.itemId.vaultStoreId}:${login.itemId.secretId}`)}
-        <ThisSiteLogin
-          {i18n}
-          {login}
-          count={view.body.count}
-          {fill}
-          activity={fillActivity}
-          onfill={fillRow}
-        />
-      {/each}
-    </ul>
+    {#each view.body.groups as group, index (index)}
+      <h2 class="side-panel-site-group" data-testid="side-panel-site-group">
+        {headerText(group.header)}
+      </h2>
+      <ul class="side-panel-logins">
+        {#each group.rows as row (`${row.item_id.vault_store_id}:${row.item_id.secret_id}`)}
+          <ThisSiteItem
+            {i18n}
+            {row}
+            count={view.body.count}
+            {fill}
+            activity={fillActivity}
+            onfill={fillRow}
+          />
+        {/each}
+      </ul>
+    {/each}
   {:else if view.body.kind === ThisSiteBodyKind.Empty}
     <div class="side-panel-site-status" data-testid="side-panel-site-empty">
-      <p class="side-panel-site-status-lead">{emptyText(view.body.host)}</p>
-      <p>{translatePlain(I18N_KEYS.ExtensionActionSiteEmptyHint)}</p>
+      <p class="side-panel-site-status-lead">{emptyText(view.body)}</p>
+      {#if 'message_key' in view.body.empty.hint}
+        <p>{translateSelected(view.body.empty.hint.message_key)}</p>
+      {/if}
     </div>
   {:else if view.body.kind === ThisSiteBodyKind.NotWeb}
     <div class="side-panel-site-status">

@@ -1,4 +1,10 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
+import type {
+  SiteSecretIdentityGroup,
+  SiteSecretListing,
+  SiteSecretRow,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { Effect } from 'effect'
 import {
   BrowserRuntimeMessage,
@@ -7,6 +13,7 @@ import {
 } from '../src/lib/browser-runtime-message'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 import {
+  SidePanelCodeFillKind,
   SidePanelLoginFillKind,
   sidePanelSite,
   type SidePanelSiteClient,
@@ -169,24 +176,59 @@ describe('side-panel This-site wire', () => {
   })
 
   test('a listing answer admits no secret, saved URL or extra field', () => {
+    const row = {
+      kind: 'Login',
+      item_id: {
+        vault_store_id: 'store_abcdefghijk',
+        secret_id: 'secret_login',
+      },
+      type_label_key: I18N_KEYS.VaultTypesLogin,
+      title: 'www.example.com',
+      account: 'person@example.com',
+      saved_host: 'www.example.com',
+      vault: { kind: 'Named', name: 'Personal' },
+      action: {
+        kind: 'FillLogin',
+        label_key: I18N_KEYS.ExtensionActionFill,
+        accessible_label_key: I18N_KEYS.ExtensionActionFillLogin,
+      },
+    }
+    const group = { header: { kind: 'Named', name: 'Personal' }, rows: [row] }
     const ready = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
-      items: [
-        { itemId, username: 'person@example.com', vaultLabel: 'Personal' },
-      ],
+      listing: { kind: 'Listed', groups: [group] },
     }
-    expect(
-      WireFixture.decodes(SidePanelSiteMessages.decodeListing(ready)),
-    ).toBe(true)
-    const leaking: BrowserRuntimeMessageValue[] = [
-      { ...ready, items: [{ ...ready.items[0], password: 'hunter2' }] },
-      {
-        ...ready,
-        items: [{ ...ready.items[0], websiteUrl: 'https://example.com/?t=1' }],
+    const empty = {
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'www.example.com',
+      listing: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
+        hint: {
+          kind: 'Shown',
+          message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+        },
       },
+    }
+    for (const admitted of [ready, empty]) {
+      expect(
+        WireFixture.decodes(SidePanelSiteMessages.decodeListing(admitted)),
+      ).toBe(true)
+    }
+    const withRow = (extra: BrowserRuntimeMessageValue) => ({
+      ...ready,
+      listing: { kind: 'Listed', groups: [{ ...group, rows: [extra] }] },
+    })
+    const leaking: BrowserRuntimeMessageValue[] = [
+      withRow({ ...row, password: 'hunter2' }),
+      withRow({ ...row, code: '123456' }),
+      withRow({ ...row, websiteUrl: 'https://example.com/?t=1' }),
+      withRow({ ...row, action: { kind: 'Reveal' } }),
+      { ...ready, items: [] },
       { ...ready, url: 'https://www.example.com/login' },
       { ...ready, authorizationGeneration: 'generation' },
+      { ...empty, listing: { ...empty.listing, host: 'www.example.com' } },
       { kind: SidePanelSiteListingKind.Locked, reason: 'login-locked' },
       { kind: 'empty' },
     ]
@@ -251,16 +293,39 @@ describe('side-panel This-site wire', () => {
 })
 
 describe('side-panel This-site client', () => {
+  const row = {
+    kind: 'Authenticator',
+    item_id: { vault_store_id: 'store_abcdefghijk', secret_id: 'totp_one' },
+    type_label_key: I18N_KEYS.VaultTypesAuthenticator,
+    title: 'Namecheap',
+    account: 'person',
+    saved_host: 'www.namecheap.com',
+    vault: { kind: 'Named', name: 'Personal' },
+    action: {
+      kind: 'FillCode',
+      label_key: I18N_KEYS.ExtensionActionFillCode,
+      accessible_label_key: I18N_KEYS.ExtensionActionFillCodeFor,
+    },
+  } satisfies SiteSecretRow
+  const group = {
+    header: { kind: 'Named', name: 'work' },
+    rows: [row],
+  } satisfies SiteSecretIdentityGroup
+  const listed = {
+    kind: 'Listed',
+    groups: [group],
+  } satisfies SiteSecretListing
+
   test('lists through one runtime request and never listens for broadcasts', async () => {
     const expected: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
-      items: [{ itemId, username: 'person', vaultLabel: 'Personal' }],
+      listing: listed,
     }
     const fixture = new PanelRuntimeFixture({
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
-      items: [{ itemId, username: 'person', vaultLabel: 'Personal' }],
+      listing: listed,
     })
 
     const listing = await fixture.client().list({ windowId: 7 })
@@ -277,9 +342,31 @@ describe('side-panel This-site client', () => {
     const unanswered = new PanelRuntimeFixture({
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'a.test',
-      items: [],
+      listing: listed,
     }).withoutReceiver()
     const malformed = new PanelRuntimeFixture({ kind: 'ready', items: [] })
+    // A row carrying anything beyond Rust's display fields is refused.
+    const leaky = new PanelRuntimeFixture({
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'a.test',
+      listing: {
+        ...listed,
+        groups: [{ ...group, rows: [{ ...row, code: '123456' }] }],
+      },
+    })
+    const unknownKind = new PanelRuntimeFixture({
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'a.test',
+      listing: {
+        ...listed,
+        groups: [{ ...group, rows: [{ ...row, kind: 'CreditCard' }] }],
+      },
+    })
+    for (const fixture of [leaky, unknownKind]) {
+      expect(await fixture.client().list({ windowId: 7 })).toEqual({
+        kind: SidePanelSiteListingKind.ListFailed,
+      })
+    }
 
     expect(await unanswered.client().list({ windowId: 7 })).toEqual({
       kind: SidePanelSiteListingKind.ListFailed,
@@ -305,6 +392,29 @@ describe('side-panel This-site client', () => {
       },
     ])
     expect(fixture.addListener).not.toHaveBeenCalled()
+  })
+
+  test('fills a code by sending the opaque item id and returns the typed outcome', async () => {
+    const fixture = new PanelRuntimeFixture({
+      kind: SidePanelCodeFillKind.NoCodeField,
+    })
+    const request: SidePanelLoginFillRequest = { windowId: 7, itemId }
+
+    expect(await fixture.client().fillCode(request)).toEqual({
+      kind: SidePanelCodeFillKind.NoCodeField,
+    })
+    expect(fixture.sent.map(([message]) => message)).toEqual([
+      {
+        type: SidePanelSiteMessageType.FillCode,
+        payload: { windowId: 7, itemId },
+      },
+    ])
+    const unanswered = new PanelRuntimeFixture({
+      kind: SidePanelCodeFillKind.Filled,
+    }).withoutReceiver()
+    expect(await unanswered.client().fillCode(request)).toEqual({
+      kind: SidePanelCodeFillKind.FillFailed,
+    })
   })
 
   test('an unanswered Fill is a typed failure', async () => {

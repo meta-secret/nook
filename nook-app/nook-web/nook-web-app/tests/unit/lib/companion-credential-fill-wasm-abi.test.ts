@@ -20,11 +20,25 @@ import {
   CredentialFillRejection,
   CredentialFillResult,
   CredentialKind,
+  NookLoginContextObservation,
   NookPageInputFieldObservation,
   PageInputType,
+  PageSecondFactorRoute,
   classify_companion_credential_fill_field,
+  looks_like_one_time_code_field,
   plan_companion_credential_fill,
+  second_factor_route,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+/** Raw values for no second-factor route and no inputmode, maxlength, or pattern. */
+class AbsentEntryHints {
+  static readonly ARGUMENTS = [
+    PageSecondFactorRoute.Unrelated,
+    '',
+    -1,
+    '',
+  ] as const
+}
 
 describe('companion credential-fill WASM ABI', () => {
   test.each([
@@ -39,6 +53,7 @@ describe('companion credential-fill WASM ABI', () => {
           [],
           'search',
           false,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
     },
     {
@@ -52,6 +67,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code', 'new-password', 'current-password'],
           'verification code password',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
     },
     {
@@ -65,6 +81,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['current-password', 'new-password'],
           'search',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
     },
     {
@@ -78,6 +95,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['cc-csc'],
           'card security code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
     },
     {
@@ -91,6 +109,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['username', 'cc-csc'],
           'account username',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
     },
   ])('returns closed Ignored for $name', (classifierCase) => {
@@ -125,6 +144,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['username'],
           'account username',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedCredential: CredentialKind.Username,
     },
@@ -139,6 +159,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['current-password'],
           'password',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedCredential: CredentialKind.CurrentPassword,
     },
@@ -153,6 +174,7 @@ describe('companion credential-fill WASM ABI', () => {
           [],
           'password',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedCredential: CredentialKind.CurrentPassword,
     },
@@ -167,6 +189,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['username'],
           'verification code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedCredential: CredentialKind.Username,
     },
@@ -181,6 +204,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['email'],
           'one time code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedCredential: CredentialKind.Username,
     },
@@ -266,6 +290,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['username'],
           'account username',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.NoCredentialField,
     },
@@ -280,6 +305,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['current-password'],
           'password',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.PasswordFieldsReadonly,
     },
@@ -294,6 +320,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['new-password'],
           'new password',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.NewPasswordFieldPresent,
     },
@@ -308,6 +335,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code'],
           'verification code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -322,6 +350,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code'],
           '',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -336,6 +365,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code'],
           'card security code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -350,6 +380,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code'],
           'account email username',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -364,6 +395,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['username', 'one-time-code'],
           'account email',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -378,6 +410,7 @@ describe('companion credential-fill WASM ABI', () => {
           ['one-time-code', 'cc-csc'],
           'card security code',
           true,
+          ...AbsentEntryHints.ARGUMENTS,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
     },
@@ -696,6 +729,42 @@ describe('companion credential-fill WASM ABI', () => {
       usernameRole.free()
       fieldIndex.free()
       maxCount.free()
+    }
+  })
+
+  test('passes raw entry hints and the route enum through the generated ABI', () => {
+    type EntryHints = { readonly inputMode: string; readonly pattern: string }
+    const field = ({ inputMode, pattern }: EntryHints) =>
+      new NookPageInputFieldObservation(
+        PageInputType.Text,
+        false,
+        false,
+        [],
+        'Access code',
+        false,
+        PageSecondFactorRoute.Unrelated,
+        inputMode,
+        6,
+        pattern,
+      )
+    const codeShaped = field({ inputMode: 'numeric', pattern: '' })
+    const swapped = field({ inputMode: '', pattern: 'numeric' })
+    const route = (pathContext: string) =>
+      new NookLoginContextObservation('', [], '', pathContext)
+    const challenge = route('/twofa/totp/ www.namecheap.com')
+    const hostOnly = route('/ otp.example.com')
+    try {
+      expect(looks_like_one_time_code_field(codeShaped)).toBe(true)
+      expect(looks_like_one_time_code_field(swapped)).toBe(false)
+      expect(second_factor_route(challenge)).toBe(
+        PageSecondFactorRoute.SecondFactor,
+      )
+      expect(second_factor_route(hostOnly)).toBe(
+        PageSecondFactorRoute.Unrelated,
+      )
+    } finally {
+      for (const value of [codeShaped, swapped, challenge, hostOnly])
+        value.free()
     }
   })
 })

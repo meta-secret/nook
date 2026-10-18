@@ -614,6 +614,71 @@ describe('generated companion protocol composition', () => {
     return Effect.runPromise(scenario.verify())
   })
 
+  test('real WASM lists the site-bound kinds matched to an origin as display fields only', async () => {
+    const login = NookSecretFormFields.login(
+      'https://www.sitelisting.example/login',
+      'site-user',
+      'site-listing-password',
+      '',
+    )
+    const authenticator = NookSecretFormFields.authenticator(
+      'Sitelisting',
+      'site-user',
+      'https://www.sitelisting.example',
+      'JBSWY3DPEHPK3PXP',
+      'SHA1',
+      '6',
+      '30',
+      '',
+    )
+    const apiKey = NookSecretFormFields.api_key(
+      'https://www.sitelisting.example',
+      'sk-site-listing-key',
+      '',
+    )
+    const added: Array<[string, SecretType, NookSecretFormFields]> = [
+      ['secret_SiteLst0001', SecretType.Login, login],
+      ['secret_SiteLst0002', SecretType.Authenticator, authenticator],
+      ['secret_SiteLst0003', SecretType.ApiKey, apiKey],
+    ]
+    try {
+      for (const [secretId, type, fields] of added) {
+        const records = await extension.add_secret(
+          secretId,
+          type,
+          build_secret_yaml(fields),
+        )
+        for (const record of records) record.free()
+      }
+    } finally {
+      for (const [, , fields] of added) fields.free()
+    }
+
+    const matches = await extension.list_website_site_secrets(
+      'https://www.sitelisting.example',
+    )
+    expect(
+      matches.items.map((item) => [item.kind, item.secret_id]).sort(),
+    ).toEqual([
+      ['ApiKey', 'secret_SiteLst0003'],
+      ['Authenticator', 'secret_SiteLst0002'],
+      ['Login', 'secret_SiteLst0001'],
+    ])
+    const wire = JSON.stringify(matches)
+    for (const secret of [
+      'site-listing-password',
+      'JBSWY3DPEHPK3PXP',
+      'sk-site-listing-key',
+    ]) {
+      expect(wire).not.toContain(secret)
+    }
+    const unrelated = await extension.list_website_site_secrets(
+      'https://unrelated.example',
+    )
+    expect(unrelated.items).toEqual([])
+    await rejects(extension.list_website_site_secrets(''), Error)
+  })
+
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
     const previous = beginHandoff('fresh-discovery-prior')
     expect(previous.endpoint.status.status).toBe('unlocked')

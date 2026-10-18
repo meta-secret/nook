@@ -21,6 +21,30 @@ pub(crate) enum AuthenticationInputRole {
     Unrelated(Unrelated),
 }
 
+/// Whether autocomplete declares the field an account password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CredentialAutocomplete {
+    Password,
+    Undeclared,
+}
+
+impl PageInputFieldObservation {
+    pub(super) fn credential_autocomplete(&self) -> CredentialAutocomplete {
+        let tokens = &self.autocomplete_tokens;
+        match ["current-password", "new-password"]
+            .into_iter()
+            .find(|expected| {
+                PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                    tokens,
+                    expected,
+                })
+            }) {
+            Some(_) => CredentialAutocomplete::Password,
+            None => CredentialAutocomplete::Undeclared,
+        }
+    }
+}
+
 impl PageInputFieldObservation {
     pub(crate) fn classify_authentication_input_role(&self) -> AuthenticationInputRole {
         let field = self;
@@ -61,6 +85,10 @@ impl PageInputFieldObservation {
                 | PageInputType::Number
                 | PageInputType::Password
         ) && !identity.is_empty()
+            && matches!(
+                field.credential_autocomplete(),
+                CredentialAutocomplete::Undeclared
+            )
             && PageInputFieldObservation::one_time_code_positive(&identity)
         {
             return AuthenticationInputRole::OneTimeCode(OneTimeCode);
@@ -77,7 +105,7 @@ impl PageInputFieldObservation {
             return AuthenticationInputRole::Username(Username);
         }
 
-        AuthenticationInputRole::Unrelated(Unrelated)
+        field.one_time_code_entry_role(&identity)
     }
 }
 
@@ -85,7 +113,7 @@ impl PageInputFieldObservation {
 mod tests {
     use super::super::{
         AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-        PageInputFieldObservation, PageInputType,
+        OneTimeCodeEntryEvidence, PageInputFieldObservation, PageInputType,
     };
 
     impl PageInputFieldObservation {
@@ -97,6 +125,7 @@ mod tests {
                 autocomplete_tokens: vec!["tel-national".to_owned()],
                 identity_text: "tel-national Phone number or email".to_owned(),
                 login_context: true.into(),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
             }
         }
     }

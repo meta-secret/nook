@@ -159,6 +159,7 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:
       case ExtensionSessionMessageType.ListLogins:
+      case ExtensionSessionMessageType.ListSiteSecrets:
       case ExtensionSessionMessageType.RevealLogin:
       case ExtensionSessionMessageType.RevealFocusedLogin:
       case ExtensionSessionMessageType.ListAuthenticators:
@@ -226,6 +227,7 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:
       case ExtensionSessionMessageType.ListLogins:
+      case ExtensionSessionMessageType.ListSiteSecrets:
       case ExtensionSessionMessageType.RevealLogin:
       case ExtensionSessionMessageType.RevealFocusedLogin:
       case ExtensionSessionMessageType.ListAuthenticators:
