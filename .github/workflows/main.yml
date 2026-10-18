@@ -369,6 +369,9 @@ jobs:
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
     runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -402,6 +405,9 @@ jobs:
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
     runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -429,6 +435,9 @@ jobs:
     # Consume the immutable browser image published by the web producer.
     needs: [web]
     runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
