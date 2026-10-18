@@ -144,9 +144,19 @@ Each replica uses:
 - rootless BuildKit `v0.32.2`;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
-- garbage collection with a 112 GB maximum-use target, 16 GB free-space
-  target, and 64 GB reserved floor; and
+- garbage collection through the shared policy below; and
 - no CPU or memory requests or limits.
+
+The shared four-node ConfigMap retains its preceding age-filtered GC policies.
+The ordinary layer policy keeps configured `112GB` maximum use, `16GB` free
+space, and `64GB` reserved space.
+Its final `all = true` policy uses `minFreeSpace = "33%"` and retains the
+`64GB` reserved floor, which BuildKit parses as 64 GiB.
+BuildKit measures `statfs.Bfree`, including filesystem-reserved blocks, rather
+than usable `Bavail`. Its native percentage conversion targets approximately
+25% usable space on the assessed Rise-S-2 filesystem. This is not a universal
+usable-space guarantee: actual reclamation depends on native GC eligibility
+and the retained floor.
 
 Build-host key quotas follow these rules:
 
