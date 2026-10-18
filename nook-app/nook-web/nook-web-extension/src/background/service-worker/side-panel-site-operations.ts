@@ -46,8 +46,9 @@ export interface SidePanelSiteOperationRequest {
  * Lists the site-bound secrets for the active tab of the panel's window:
  * sender, Rust tab target, authorization generation, password grants,
  * unlocked session, the tab's Rust page need, then every grant's fail-closed
- * Rust match listing, which Rust filters by that need and groups by identity.
- * The reply carries only the display host and Rust's display rows.
+ * Rust match listing, which Rust filters by that need and presents as one
+ * identity:vault section per vault. The reply carries only the display host
+ * and Rust's sections of display rows.
  */
 export class SidePanelSiteListingOperation {
   private readonly access: SidePanelSiteAccess

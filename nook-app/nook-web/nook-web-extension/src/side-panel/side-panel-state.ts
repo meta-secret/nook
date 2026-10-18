@@ -11,6 +11,7 @@ import {
   PairedVaultsLoadKind,
   pairedVaultGroups,
   type PairedVaultGroup,
+  type PairedVaultSummary,
   type PairedVaultsLoad,
 } from '../lib/paired-vaults'
 import { SidePanelNookTabIntent } from './side-panel-runtime'
@@ -144,7 +145,8 @@ export type SidePanelCeremony =
     }
   | { readonly kind: SidePanelCeremonyKind.None }
 
-/** Whether an identity group is the one unlocked now. */
+/** Whether an identity group, or a This site section's vault, belongs to
+ * the identity unlocked now. */
 export enum SidePanelIdentityRelation {
   Current = 'current',
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
@@ -153,6 +155,14 @@ export enum SidePanelIdentityRelation {
 
 type SidePanelIdentityRelationRequest = {
   readonly group: PairedVaultGroup
+  readonly device: ExtensionSessionDeviceState
+}
+
+type SidePanelSectionRelationRequest = {
+  /** The vault a This site section lists. */
+  readonly vaultStoreId: PairedVaultSummary['vaultStoreId']
+  /** The paired vaults the panel loaded, under their identities. */
+  readonly groups: readonly PairedVaultGroup[]
   readonly device: ExtensionSessionDeviceState
 }
 
@@ -428,6 +438,28 @@ export class SidePanelViews {
         break
     }
     switch (group.deviceId === device.device.deviceId) {
+      case true:
+        return SidePanelIdentityRelation.Current
+      case false:
+        return SidePanelIdentityRelation.Other
+    }
+  }
+
+  /** A This site section is current only when the loaded group holding its
+   * vault is the unlocked identity; a vault no loaded group holds counts as
+   * another identity's. */
+  static sectionRelation(
+    request: SidePanelSectionRelationRequest,
+  ): SidePanelIdentityRelation {
+    const { vaultStoreId, groups, device } = request
+    const holding = groups.filter((group) =>
+      group.vaults.some((vault) => vault.vaultStoreId === vaultStoreId),
+    )
+    const relations = holding.map((group) => {
+      const relation: SidePanelIdentityRelationRequest = { group, device }
+      return SidePanelViews.identityRelation(relation)
+    })
+    switch (relations.includes(SidePanelIdentityRelation.Current)) {
       case true:
         return SidePanelIdentityRelation.Current
       case false:

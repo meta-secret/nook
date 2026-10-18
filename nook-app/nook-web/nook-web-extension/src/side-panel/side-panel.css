@@ -472,8 +472,12 @@ html:has(.side-panel-body) {
   border-bottom: 0;
 }
 
-/* Identity header above that identity's rows, in Rust's order. */
+/* "Identity · vault" header above that vault's rows, in Rust's order; a
+   section of another identity carries its tag at the end. */
 .side-panel-site-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   padding: 12px var(--side-panel-gutter) 6px;
   border-top: 1px solid var(--border);
@@ -484,11 +488,21 @@ html:has(.side-panel-body) {
   line-height: 1.4;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.side-panel-site-group-name {
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .side-panel-site-group + .side-panel-logins {
   border-top: 0;
+}
+
+/* A section whose vault holds nothing this page needs. */
+.side-panel-site-vault-empty {
+  padding: 0 var(--side-panel-gutter) 12px;
 }
 
 .side-panel-login-icon {
@@ -601,9 +615,8 @@ html:has(.side-panel-body) {
   color: var(--destructive-fg);
 }
 
-/* Site-changed note between the heading and a reloaded list. */
-.side-panel-site-status:has(+ .side-panel-logins),
-.side-panel-site-status:has(+ .side-panel-site-group) {
+/* A site-changed note, or Rust's empty state, directly above the sections. */
+.side-panel-site-status:has(+ .side-panel-site-section) {
   padding-bottom: 12px;
 }
 
@@ -611,43 +624,10 @@ html:has(.side-panel-body) {
   margin-left: -8px;
 }
 
-.side-panel-identities {
+.side-panel-connections {
   display: grid;
   gap: 10px;
   padding: 20px var(--side-panel-gutter) 16px;
-}
-
-.side-panel-identity-list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.side-panel-identity {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.side-panel-identity:first-child {
-  border-top: 1px solid var(--border);
-}
-
-.side-panel-identity-name {
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.side-panel-identity.is-other .side-panel-identity-name,
-.side-panel-identity.is-other .side-panel-vault {
-  color: var(--muted-foreground);
 }
 
 .side-panel-tag {
@@ -663,40 +643,6 @@ html:has(.side-panel-body) {
   white-space: nowrap;
 }
 
-.side-panel-vaults {
-  display: flex;
-  flex-wrap: wrap;
-  grid-column: 1 / -1;
-  gap: 2px 12px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.4;
-  list-style: none;
-}
-
-.side-panel-vault {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.side-panel-vault.is-default {
-  color: var(--foreground);
-}
-
-.side-panel-vault.is-default::before {
-  content: '';
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin: 0 6px 1px 0;
-  background: var(--success);
-}
-
 .side-panel-note {
   margin: 0;
   color: var(--muted-foreground);
@@ -704,7 +650,7 @@ html:has(.side-panel-body) {
   line-height: 1.45;
 }
 
-.side-panel-identities > .side-panel-text-button {
+.side-panel-connections > .side-panel-text-button {
   justify-self: start;
   margin-left: -8px;
 }

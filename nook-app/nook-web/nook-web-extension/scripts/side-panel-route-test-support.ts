@@ -5,6 +5,8 @@ import {
   type BrowserTabTarget,
   type BrowserTabUrlObservation,
   type SiteSecretItem,
+  type SiteSecretRow,
+  type SiteSecretSection,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
@@ -105,6 +107,16 @@ export class RouteData {
       username,
       websiteUrl: 'https://www.example.com/login?session=token',
       websiteHost: 'www.example.com',
+    }
+  }
+
+  /** The rows one presented section lists; none when its vault has none. */
+  static sectionRows(section: SiteSecretSection): readonly SiteSecretRow[] {
+    switch (section.content.kind) {
+      case 'Listed':
+        return section.content.rows
+      case 'Empty':
+        return []
     }
   }
 

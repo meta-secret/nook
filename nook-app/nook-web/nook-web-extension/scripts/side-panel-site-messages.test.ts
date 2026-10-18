@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import type {
-  SiteSecretIdentityGroup,
   SiteSecretListing,
   SiteSecretRow,
+  SiteSecretSection,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { Effect } from 'effect'
 import {
@@ -186,29 +186,44 @@ describe('side-panel This-site wire', () => {
       title: 'www.example.com',
       account: 'person@example.com',
       saved_host: 'www.example.com',
-      vault: { kind: 'Named', name: 'Personal' },
       action: {
         kind: 'FillLogin',
         label_key: I18N_KEYS.ExtensionActionFill,
         accessible_label_key: I18N_KEYS.ExtensionActionFillLogin,
       },
     }
-    const group = { header: { kind: 'Named', name: 'Personal' }, rows: [row] }
+    const section = {
+      vault_store_id: 'store_abcdefghijk',
+      identity: { kind: 'Named', name: 'Personal' },
+      vault: { kind: 'Named', name: 'test' },
+      content: { kind: 'Listed', rows: [row] },
+    }
     const ready = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
-      listing: { kind: 'Listed', groups: [group] },
+      listing: { summary: { kind: 'Listed' }, sections: [section] },
     }
     const empty = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
       listing: {
-        kind: 'Empty',
-        message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
-        hint: {
-          kind: 'Shown',
-          message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+        summary: {
+          kind: 'Empty',
+          message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
+          hint: {
+            kind: 'Shown',
+            message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+          },
         },
+        sections: [
+          {
+            ...section,
+            content: {
+              kind: 'Empty',
+              message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+            },
+          },
+        ],
       },
     }
     for (const admitted of [ready, empty]) {
@@ -218,16 +233,29 @@ describe('side-panel This-site wire', () => {
     }
     const withRow = (extra: BrowserRuntimeMessageValue) => ({
       ...ready,
-      listing: { kind: 'Listed', groups: [{ ...group, rows: [extra] }] },
+      listing: {
+        ...ready.listing,
+        sections: [{ ...section, content: { kind: 'Listed', rows: [extra] } }],
+      },
     })
     const leaking: BrowserRuntimeMessageValue[] = [
       withRow({ ...row, password: 'hunter2' }),
       withRow({ ...row, code: '123456' }),
       withRow({ ...row, websiteUrl: 'https://example.com/?t=1' }),
       withRow({ ...row, action: { kind: 'Reveal' } }),
+      // The section names the vault; a row naming it again is refused.
+      withRow({ ...row, vault: { kind: 'Named', name: 'test' } }),
       { ...ready, items: [] },
       { ...ready, url: 'https://www.example.com/login' },
       { ...ready, authorizationGeneration: 'generation' },
+      // No device key or id travels with a section.
+      {
+        ...ready,
+        listing: {
+          ...ready.listing,
+          sections: [{ ...section, device_id: 'device-personal' }],
+        },
+      },
       { ...empty, listing: { ...empty.listing, host: 'www.example.com' } },
       { kind: SidePanelSiteListingKind.Locked, reason: 'login-locked' },
       { kind: 'empty' },
@@ -300,20 +328,33 @@ describe('side-panel This-site client', () => {
     title: 'Namecheap',
     account: 'person',
     saved_host: 'www.namecheap.com',
-    vault: { kind: 'Named', name: 'Personal' },
     action: {
       kind: 'FillCode',
       label_key: I18N_KEYS.ExtensionActionFillCode,
       accessible_label_key: I18N_KEYS.ExtensionActionFillCodeFor,
     },
   } satisfies SiteSecretRow
-  const group = {
-    header: { kind: 'Named', name: 'work' },
-    rows: [row],
-  } satisfies SiteSecretIdentityGroup
+  const section = {
+    vault_store_id: 'store_abcdefghijk',
+    identity: { kind: 'Named', name: 'work' },
+    vault: { kind: 'Named', name: 'Personal' },
+    content: { kind: 'Listed', rows: [row] },
+  } satisfies SiteSecretSection
+  const emptySection = {
+    vault_store_id: 'store_bcdefghijkl',
+    identity: {
+      kind: 'Unnamed',
+      message_key: I18N_KEYS.ExtensionCompanionOtherVaults,
+    },
+    vault: { kind: 'Unnamed', message_key: I18N_KEYS.LoginVaultPickerUnnamed },
+    content: {
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+    },
+  } satisfies SiteSecretSection
   const listed = {
-    kind: 'Listed',
-    groups: [group],
+    summary: { kind: 'Listed' },
+    sections: [section, emptySection],
   } satisfies SiteSecretListing
 
   test('lists through one runtime request and never listens for broadcasts', async () => {
@@ -338,6 +379,67 @@ describe('side-panel This-site client', () => {
     expect(fixture.tabsSendMessage).not.toHaveBeenCalled()
   })
 
+  test("decodes Rust's empty state above every section's muted line", async () => {
+    const empty = {
+      summary: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
+        hint: {
+          kind: 'Shown',
+          message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+        },
+      },
+      sections: [emptySection],
+    } satisfies SiteSecretListing
+    const expected: SidePanelSiteListing = {
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'news.example.org',
+      listing: empty,
+    }
+    const fixture = new PanelRuntimeFixture({
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'news.example.org',
+      listing: empty,
+    })
+
+    expect(await fixture.client().list({ windowId: 7 })).toEqual(expected)
+  })
+
+  test('refuses a row naming its vault, the former groups shape, and an unbounded section', async () => {
+    const refused = [
+      // The section header names the vault; a row carries no vault.
+      {
+        ...listed,
+        sections: [
+          {
+            ...section,
+            content: {
+              kind: 'Listed',
+              rows: [{ ...row, vault: { kind: 'Named', name: 'Personal' } }],
+            },
+          },
+        ],
+      },
+      { kind: 'Listed', groups: [{ header: section.identity, rows: [row] }] },
+      { ...listed, sections: [{ ...section, vault_store_id: '' }] },
+      {
+        ...listed,
+        sections: [{ ...emptySection, content: { kind: 'Empty' } }],
+      },
+      { summary: { kind: 'Empty' }, sections: [] },
+    ]
+    for (const listing of refused) {
+      const fixture = new PanelRuntimeFixture({
+        kind: SidePanelSiteListingKind.Ready,
+        display_host: 'a.test',
+        listing,
+      })
+      expect(await fixture.client().list({ windowId: 7 })).toEqual({
+        kind: SidePanelSiteListingKind.ListFailed,
+      })
+    }
+  })
+
   test('an unanswered or malformed listing is a visible list failure, never an empty list', async () => {
     const unanswered = new PanelRuntimeFixture({
       kind: SidePanelSiteListingKind.Ready,
@@ -351,7 +453,12 @@ describe('side-panel This-site client', () => {
       display_host: 'a.test',
       listing: {
         ...listed,
-        groups: [{ ...group, rows: [{ ...row, code: '123456' }] }],
+        sections: [
+          {
+            ...section,
+            content: { kind: 'Listed', rows: [{ ...row, code: '123456' }] },
+          },
+        ],
       },
     })
     const unknownKind = new PanelRuntimeFixture({
@@ -359,7 +466,12 @@ describe('side-panel This-site client', () => {
       display_host: 'a.test',
       listing: {
         ...listed,
-        groups: [{ ...group, rows: [{ ...row, kind: 'CreditCard' }] }],
+        sections: [
+          {
+            ...section,
+            content: { kind: 'Listed', rows: [{ ...row, kind: 'CreditCard' }] },
+          },
+        ],
       },
     })
     for (const fixture of [leaky, unknownKind]) {
