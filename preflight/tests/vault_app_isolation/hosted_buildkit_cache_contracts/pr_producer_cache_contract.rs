@@ -43,7 +43,7 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(pr.contains("needs: [prepare, browser]"));
         assert!(pr.contains("if: ${{ always() }}"));
         assert!(pr.contains("fail-fast: false"));
-        assert!(pr.contains("suite: [web, extension-1, extension-2]"));
+        assert!(pr.contains("suite: [web, extension-1, extension-2, extension-3]"));
         assert!(pr.contains("pr-browser-${{ github.run_id }}-${{ github.run_attempt }}"));
         assert_eq!(
             pr.matches("name: ${{ needs.prepare.outputs.browser_artifact }}")
