@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  DeclinedPasskeyError,
   declinedPasskeyError,
   PageResponseAction,
   websitePasskeyOptionsDisposition,
@@ -90,17 +91,17 @@ describe('WebAuthn options content response', () => {
         kind: WebsitePasskeyOptionsDispositionKind.Explain,
         reason: WebsitePasskeyUnavailableReason.AlreadySaved,
       }),
-    ).toBe('InvalidStateError')
+    ).toBe(DeclinedPasskeyError.InvalidState)
     expect(
       declinedPasskeyError({
         kind: WebsitePasskeyOptionsDispositionKind.Explain,
         reason: WebsitePasskeyUnavailableReason.NoVault,
       }),
-    ).toBe('NotAllowedError')
+    ).toBe(DeclinedPasskeyError.NotAllowed)
     expect(
       declinedPasskeyError({
         kind: WebsitePasskeyOptionsDispositionKind.Continue,
       }),
-    ).toBe('NotAllowedError')
+    ).toBe(DeclinedPasskeyError.NotAllowed)
   })
 })

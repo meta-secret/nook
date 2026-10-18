@@ -76,6 +76,12 @@ export function websitePasskeyOptionsDisposition({
   }
 }
 
+/** The DOMException name a closed card hands the site. */
+export enum DeclinedPasskeyError {
+  InvalidState = 'InvalidStateError',
+  NotAllowed = 'NotAllowedError',
+}
+
 /**
  * The error a closed card hands the site. WebAuthn answers a registration for
  * an account the authenticator already holds with InvalidStateError, so the
@@ -83,9 +89,9 @@ export function websitePasskeyOptionsDisposition({
  */
 export function declinedPasskeyError(
   disposition: WebsitePasskeyOptionsDisposition,
-): 'InvalidStateError' | 'NotAllowedError' {
+): DeclinedPasskeyError {
   return disposition.kind === WebsitePasskeyOptionsDispositionKind.Explain &&
     disposition.reason === WebsitePasskeyUnavailableReason.AlreadySaved
-    ? 'InvalidStateError'
-    : 'NotAllowedError'
+    ? DeclinedPasskeyError.InvalidState
+    : DeclinedPasskeyError.NotAllowed
 }
