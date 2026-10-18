@@ -750,6 +750,15 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
   const prepare = workflow.slice(0, browserStart);
   const browser = workflow.slice(browserStart, validationStart);
   const validation = workflow.slice(validationStart);
+  assert.match(validation, /needs: \[prepare, browser\]\n {4}if: \$\{\{ always\(\) \}\}/);
+  assert.match(
+    validation,
+    / {4}steps:\n {6}- uses: actions\/checkout@v7\n {8}with:\n {10}ref: \$\{\{ inputs\.source_sha \|\| github\.event\.pull_request\.head\.sha \}\}\n {10}persist-credentials: false\n {6}- name: Require every selected validation branch\n/,
+  );
+  const guardStart = validation.indexOf("      - name: Require every selected validation branch\n");
+  const restoreStart = validation.indexOf("      - name: Import production artifacts after all validation succeeds\n");
+  const previewStart = validation.indexOf("      - name: Deploy and report preview\n");
+  assert.ok(guardStart >= 0 && restoreStart > guardStart && previewStart > restoreStart);
   const trustedRoute = "runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && ";
   for (const mixedJob of [prepare, validation]) {
     assert.ok(mixedJob.includes(`${trustedRoute}(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}`));

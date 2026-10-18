@@ -270,6 +270,10 @@ jobs:
     env:
       CI: "true"
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Require every selected validation branch
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
@@ -282,11 +286,6 @@ jobs:
           else
             test "$BROWSER_RESULT" = skipped
           fi
-      - uses: actions/checkout@v7
-        if: needs.prepare.outputs.validation == 'true'
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          persist-credentials: false
       - uses: ./.github/actions/nook-node-setup
         if: needs.prepare.outputs.validation == 'true'
       - uses: actions/download-artifact@v8
