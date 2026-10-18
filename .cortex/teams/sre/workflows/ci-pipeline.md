@@ -46,7 +46,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 **`remote.yml`**
 
 - One or more selected Taskfile commands on one configured ARC runner.
-  Browser selections use the container scale set.
+  The explicit `ci-pr-e2e-suite` image consumer uses the browser-only scale set.
+  Generic runtime tasks remain on the mixed container scale set.
 - Checkout, Docker setup, and cache connection happen once per batch.
 - Selected tasks run sequentially and report individual results.
 - Git-commit-scoped Zot writes (`-git-<sha>`), with Main used only while the
@@ -295,14 +296,17 @@ provider, those handlers read and write real event files under a temp directory.
 ## Runner placement
 
 Trusted PR producers use `nook-k0s-container` with a persistent node-local
-BuildKit shard. Full browser suites run in separate container jobs without
-BuildKit setup. The final `PR validation / Verify and preview` job checks the
+BuildKit shard on the build pool. Full browser suites use the browser-only
+scale set on Rise-S-2 without BuildKit access. The final
+`PR validation / Verify and preview` job stays on the mixed scale set and checks the
 complete result join. Fork and Dependabot jobs remain secret-free on
 GitHub-hosted runners. Jobs may select different nodes; artifacts carry the
 same source revision across them.
 
-The ARC container hook injects a Docker client, not a daemon or socket, and
-allows job Pods to reach their node-local BuildKit Service. Publish the
+The mixed ARC container hook injects a Docker client, not a daemon or socket,
+and allows job Pods to reach their node-local BuildKit Service.
+The browser-only hook has no BuildKit client mount, init container, environment,
+or ingress permission. Publish the
 source-free `web-e2e-base` through the trusted remote
 `ci:pr:runner:publish` task and configure `NOOK_PR_RUNNER_IMAGE` with its
 immutable GHCR digest. PR jobs authenticate with their scoped package-read
@@ -312,6 +316,21 @@ remote workflows retain their existing image and portable Zot contracts.
 PR solves disable registry cache imports and exports; compiler-object sccache,
 telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 
+**Browser-only routing:**
+
+- `NOOK_BROWSER_RUNS_ON` selects `nook-k0s-browser` for these trusted consumers.
+- PR full-browser jobs consume the producer's immutable `browser.tar`.
+- Main web and extension jobs consume their prepared image.
+- Main's disabled UI-demo job retains browser-only placement for later re-enable.
+- `e2e-pr.yml` consumes its prepared browser image.
+- Remote's explicit `ci-pr-e2e-suite` consumer uses the browser-only pool.
+- PR preparation, including focused auth and research checks, stays build-capable.
+- Final preview, generic Remote runtime tasks, release, and research deploy jobs
+  retain mixed placement because their existing paths are not browser-only.
+
+See [ARC placement](../docs/architecture/arc-kata-runner-platform.md#compute-and-placement)
+for pool ceilings, queue behavior, retained caches, and rollout constraints.
+
 **Focused remote jobs:**
 
 - `preflight`, `rust:ci`, and `arc:runtime` may use disposable ordinary Pods in
@@ -320,7 +339,7 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
   Docker daemon, Podman, DinD, or host socket.
 - Runtime-backed selectors build a run-scoped image on the general ARC set.
   They then execute their internal daemonless task inside an ordinary Pod
-  created by `nook-k0s-container` hooks.
+  created by the applicable mixed or browser-only container hook.
 - No cluster Pod hosts or controls Docker, Podman, DinD, or another nested
   runtime. BuildKit is build-only. Browser tasks run Playwright directly inside
   the selected Pod image.
@@ -651,12 +670,13 @@ coverage solve and package floors in the verified Rust graph.
 - Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
   producers run in disposable ARC Pods.
 - Fork and Dependabot pull requests run on fresh `ubuntu-latest` VMs. Trusted
-  container workloads use the dedicated `nook-k0s-container` scale set.
+  mixed container workloads use `nook-k0s-container`. Known immutable browser
+  consumers use the separate browser-only scale set.
 - On ARC, the shared setup creates a `remote` Buildx builder connected to the
   persistent rootless BuildKit shard on the selected node.
-- Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
-  pushes the exact-source image. ARC lifecycle hooks then create an ordinary
-  job Pod from that immutable run tag on `nook-k0s-container`.
+- Image-backed browser jobs use a two-stage Kubernetes path. `nook-k0s` builds
+  and pushes the exact-source image. ARC lifecycle hooks then create an ordinary
+  job Pod from that immutable image on the browser-only scale set.
 - ARC image jobs keep the Actions runner workspace as the hook-level working
   directory. They enter the prepared image's `/meta-secret/nook` source inside
   the shell command; Main browser jobs and the research deploy job copy that
