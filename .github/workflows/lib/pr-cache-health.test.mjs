@@ -766,6 +766,11 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
     workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g)?.length,
     2,
   );
+  assert.equal(
+    workflow.match(/git config --global --add safe\.directory "\$GITHUB_WORKSPACE"\n {10}task --silent ci:pr:browser:restore/g)?.length,
+    2,
+  );
+  assert.doesNotMatch(workflow, /safe\.directory ["']?\*/);
   const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(
     rootWorkflow,

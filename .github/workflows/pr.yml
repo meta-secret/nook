@@ -227,7 +227,9 @@ jobs:
           name: ${{ needs.prepare.outputs.browser_artifact }}
           path: ${{ runner.temp }}/nook-pr-artifacts
       - name: Restore browser artifacts
-        run: task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
       - name: Run isolated browser suite
         env:
           PR_BROWSER_SUITE: ${{ matrix.suite }}
@@ -294,7 +296,9 @@ jobs:
           path: ${{ runner.temp }}/nook-pr-artifacts
       - name: Import production artifacts after all validation succeeds
         if: needs.prepare.outputs.validation == 'true'
-        run: task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
       - name: Deploy and report preview
         id: previews
         if: needs.prepare.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
