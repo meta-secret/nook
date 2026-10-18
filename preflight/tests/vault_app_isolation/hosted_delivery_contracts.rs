@@ -56,6 +56,7 @@ impl PrDeliveryScenario<'_> {
                 && join.contains("- ci:pr:checks")
         );
     }
+
     fn assert_artifact_backed_e2e_contract(&self) -> anyhow::Result<()> {
         let root = self.root;
         self.assert_artifact_backed_pr_fanout();
@@ -147,49 +148,6 @@ impl PrDeliveryScenario<'_> {
             "manual PR-head e2e must reject untrusted sources and must not overwrite default-branch scopes"
         );
         Ok(())
-    }
-
-    pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
-        let main_core = section(ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
-        assert!(
-            !main_core.contains("_web:e2e:build-dist"),
-            "main must not request the same e2e build before the e2e task checks its stamp"
-        );
-        assert!(
-            main_core.contains("_web:test:e2e:parallel")
-                && main_core.contains("_web:e2e:restore-prod-dist")
-                && !main_core.contains("_extension:test:e2e"),
-            "main web e2e core must restore prod dist without serializing extension e2e"
-        );
-        let main = section(ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
-        assert!(
-            main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
-            "full main gate must keep extension e2e after the web core"
-        );
-    }
-
-    pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
-        let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
-        assert_eq!(
-            e2e_builder.matches("bun run build:unified").count(),
-            1,
-            "e2e must compile the unified harness exactly once"
-        );
-        for required in [
-            "site_source=\"$WEB_ROOT/dist-prod/site\"",
-            "cp -a \"$site_source\" \"$DIST/site\"",
-            "bun run assemble:preview",
-        ] {
-            assert!(
-                e2e_builder.contains(required),
-                "e2e assembly contract missing: {required}"
-            );
-        }
-        assert!(
-            !e2e_builder.contains("bun run build:simple")
-                && !e2e_builder.contains("bun run build:sentinel"),
-            "e2e must reuse the sealed Simple and Sentinel artifacts"
-        );
     }
 }
 
@@ -406,6 +364,49 @@ fn assert_preflight_build_contract(root: &Path) {
     assert!(
         !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
         "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
+    );
+}
+
+pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
+    let main_core = section(ci, "  _ci:main:core:\n", "\n  _ci:main:\n");
+    assert!(
+        !main_core.contains("_web:e2e:build-dist"),
+        "main must not request the same e2e build before the e2e task checks its stamp"
+    );
+    assert!(
+        main_core.contains("_web:test:e2e:parallel")
+            && main_core.contains("_web:e2e:restore-prod-dist")
+            && !main_core.contains("_extension:test:e2e"),
+        "main web e2e core must restore prod dist without serializing extension e2e"
+    );
+    let main = section(ci, "  _ci:main:\n", "\n  _ci:main:web:e2e-only:");
+    assert!(
+        main.contains("_ci:main:core") && main.contains("_extension:test:e2e"),
+        "full main gate must keep extension e2e after the web core"
+    );
+}
+
+pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
+    let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
+    assert_eq!(
+        e2e_builder.matches("bun run build:unified").count(),
+        1,
+        "e2e must compile the unified harness exactly once"
+    );
+    for required in [
+        "site_source=\"$WEB_ROOT/dist-prod/site\"",
+        "cp -a \"$site_source\" \"$DIST/site\"",
+        "bun run assemble:preview",
+    ] {
+        assert!(
+            e2e_builder.contains(required),
+            "e2e assembly contract missing: {required}"
+        );
+    }
+    assert!(
+        !e2e_builder.contains("bun run build:simple")
+            && !e2e_builder.contains("bun run build:sentinel"),
+        "e2e must reuse the sealed Simple and Sentinel artifacts"
     );
 }
 
