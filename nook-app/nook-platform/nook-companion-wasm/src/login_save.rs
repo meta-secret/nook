@@ -147,6 +147,10 @@ mod tests {
             vec!["username".to_owned()],
             "User".to_owned(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         let password = NookPageInputFieldObservation::new(
             PageInputType::Text,
@@ -155,6 +159,10 @@ mod tests {
             vec!["current-password".to_owned()],
             "Password".to_owned(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         let request = NookLoginSubmissionObservation::new(&intent.into_ts()?)?
             .add_field(&NookLoginSubmissionField::new(&username))?

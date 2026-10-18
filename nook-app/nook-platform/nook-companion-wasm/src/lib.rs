@@ -268,6 +268,10 @@ mod tests {
             vec!["email".to_owned()],
             "account email".to_owned(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             field.as_core().authentication_username_evidence(),
@@ -280,6 +284,10 @@ mod tests {
             vec!["email".to_owned(), "webauthn".to_owned()],
             "identity".to_owned(),
             false,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             tesla.as_core().authentication_username_evidence(),
@@ -292,6 +300,10 @@ mod tests {
             vec!["tel-national".to_owned()],
             "tel-national Phone number or email".to_owned(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             airbnb.as_core().authentication_username_evidence(),
@@ -771,6 +783,10 @@ mod ingress_tests {
             vec!["email".into()],
             "account email".into(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             authentication_username_evidence(&field)?.to_rust()?,

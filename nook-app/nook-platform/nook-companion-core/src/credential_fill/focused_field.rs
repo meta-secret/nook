@@ -77,7 +77,7 @@ impl FocusedCredentialOpportunity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PageInputType, PageLoginContext};
+    use crate::{OneTimeCodeEntryEvidence, PageInputType, PageLoginContext};
 
     #[test]
     fn selector_uses_canonical_credential_and_rejects_unavailable() -> anyhow::Result<()> {
@@ -114,6 +114,7 @@ mod tests {
                 autocomplete_tokens: vec!["username".to_owned()],
                 identity_text: "account email".to_owned(),
                 login_context: PageLoginContext::from(false),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
             }
         }
 
