@@ -6,11 +6,11 @@
 //! Registration admission precedes credential randomness and generation.
 use super::{
     AttestationObject, CanonicalPasskeyField, ClientData, CoseEncodedPoint, ES256_ALGORITHM,
-    EncodePrivateKey, Generate, HashSet, MAX_CREDENTIAL_ID_BYTES, PASSKEY_SECRET_VERSION,
-    PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin,
-    PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeyRegistrationRequest,
-    PasskeyRegistrationResult, PasskeySecret, PasskeySignatureCount, RegistrationAuthenticatorData,
-    SecretKey, ToSec1Point, URL_SAFE_NO_PAD, Zeroize,
+    EncodePrivateKey, Generate, PASSKEY_SECRET_VERSION, PasskeyAuthenticatorError,
+    PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin, PasskeyPrivateKeyPkcs8,
+    PasskeyPublicKeyCose, PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeySecret,
+    PasskeySignatureCount, RegistrationAuthenticatorData, SecretKey, ToSec1Point, URL_SAFE_NO_PAD,
+    Zeroize,
 };
 use base64::Engine;
 /// Admitted request data, with the original request and exclusion input still borrowed.
@@ -89,28 +89,8 @@ impl PasskeyRegistrationRequest {
             cross_origin: false,
         }
         .encode()?;
-        let excluded = request
-            .exclude_credentials
-            .iter()
-            .map(|descriptor| {
-                CanonicalPasskeyField {
-                    name: "excluded credential id",
-                    value: &descriptor.id,
-                    min: 16,
-                    max: MAX_CREDENTIAL_ID_BYTES,
-                }
-                .decode()?;
-                Ok(descriptor.id.as_str())
-            })
-            .collect::<PasskeyAuthenticatorResult<HashSet<_>>>()?;
-        if existing_credentials.iter().any(|credential| {
-            credential
-                .rp_id
-                .eq_ignore_ascii_case(&request.relying_party.id)
-                && excluded.contains(credential.credential_id.as_str())
-        }) {
-            return Err(PasskeyAuthenticatorError::CredentialExcluded);
-        }
+        // A site's excludeCredentials never blocks registration: a vault may
+        // keep several passkeys for one account.
 
         Ok(CheckedPasskeyRegistration {
             request,
@@ -218,8 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn admission_preserves_origin_algorithm_user_challenge_descriptor_order() -> anyhow::Result<()>
-    {
+    fn admission_preserves_origin_algorithm_user_challenge_order() -> anyhow::Result<()> {
         let mut request = PasskeyRegistrationRequest::fixture();
         request.origin = "https://unrelated.example.net".to_owned();
         request.algorithms.clear();
@@ -252,11 +231,8 @@ mod tests {
         }
         .check()?;
         request.challenge = Engine::encode(&URL_SAFE_NO_PAD, [2_u8; 16]);
-        RegistrationRejection {
-            request,
-            expected: PasskeyAuthenticatorError::InvalidRequest("excluded credential id"),
-        }
-        .check()?;
+        // Excluded credentials are not admission input, even when malformed.
+        request.prepare(&[])?;
         Ok(())
     }
 

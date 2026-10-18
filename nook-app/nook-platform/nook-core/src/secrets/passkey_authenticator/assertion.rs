@@ -358,21 +358,24 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed() -> anyhow::Result<()> {
+    fn excluded_credentials_register_and_bad_descriptors_or_counters_fail_closed()
+    -> anyhow::Result<()> {
         let credential = PasskeyRegistrationRequest::fixture()
             .prepare(&[])
             .and_then(CheckedPasskeyRegistration::generate)?
             .credential;
+        // A vault that already holds the account's passkey registers another
+        // one even when the site lists the first in excludeCredentials.
         let mut excluded_request = PasskeyRegistrationRequest::fixture();
         excluded_request.exclude_credentials = vec![PasskeyCredentialDescriptor {
             id: credential.credential_id.clone(),
         }];
-        assert_eq!(
-            excluded_request
-                .prepare(slice::from_ref(&credential))
-                .and_then(CheckedPasskeyRegistration::generate),
-            Err(PasskeyAuthenticatorError::CredentialExcluded)
-        );
+        let another = excluded_request
+            .prepare(slice::from_ref(&credential))
+            .and_then(CheckedPasskeyRegistration::generate)?
+            .credential;
+        assert_ne!(another.credential_id, credential.credential_id);
+        assert_eq!(another.user_handle, credential.user_handle);
 
         let mut assertion_request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
