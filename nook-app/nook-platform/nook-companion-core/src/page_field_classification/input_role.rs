@@ -1,3 +1,4 @@
+use super::one_time_code_entry::CredentialAutocomplete;
 use super::{AutocompleteTokenQuery, PageInputFieldObservation, PageInputType};
 use crate::AuthenticationControlText;
 
@@ -61,6 +62,10 @@ impl PageInputFieldObservation {
                 | PageInputType::Number
                 | PageInputType::Password
         ) && !identity.is_empty()
+            && matches!(
+                field.credential_autocomplete(),
+                CredentialAutocomplete::Undeclared
+            )
             && PageInputFieldObservation::one_time_code_positive(&identity)
         {
             return AuthenticationInputRole::OneTimeCode(OneTimeCode);

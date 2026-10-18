@@ -1,12 +1,14 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
 use nook_companion_core::PageInputType;
-use nook_companion_core::{OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals};
+use nook_companion_core::{
+    OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageSecondFactorRoute,
+};
 mod observation_priority;
 mod one_time_code_entry;
 mod passkey_control;
 
-pub use one_time_code_entry::has_second_factor_route;
+pub use one_time_code_entry::second_factor_route;
 
 pub use observation_priority::{
     authentication_form_observation_priority, authentication_page_observation_facts_priority,
@@ -43,7 +45,6 @@ impl NookPageInputFieldObservation {
 impl NookPageInputFieldObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
-    #[allow(clippy::fn_params_excessive_bools)]
     #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(raw_numeric_public_api, reason = "FFI boundary: converts the DOM maxLength (-1 when absent) into PageInputMaxLength"))]
     pub fn new(
         input_type: nook_companion_core::PageInputType,
@@ -52,7 +53,7 @@ impl NookPageInputFieldObservation {
         autocomplete_tokens: Vec<String>,
         identity_text: String,
         login_context: bool,
-        second_factor_route: bool,
+        second_factor_route: PageSecondFactorRoute,
         input_mode: String,
         max_length: i32,
         pattern: String,
@@ -66,7 +67,7 @@ impl NookPageInputFieldObservation {
                 identity_text,
                 login_context: login_context.into(),
                 one_time_code_entry: OneTimeCodeEntryEvidence::Observed(OneTimeCodeEntrySignals {
-                    second_factor_route: second_factor_route.into(),
+                    second_factor_route,
                     input_mode: input_mode.as_str().into(),
                     max_length: max_length.into(),
                     pattern: pattern.as_str().into(),
@@ -272,7 +273,7 @@ mod tests {
             Vec::new(),
             "Enter OTP Code".to_owned(),
             false,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -309,7 +310,7 @@ mod tests {
             Vec::new(),
             "loginfmt".to_owned(),
             false,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),

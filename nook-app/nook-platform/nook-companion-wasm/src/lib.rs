@@ -218,6 +218,7 @@ mod tests {
     #[cfg(test)]
     #[cfg(test)]
     use nook_companion_core::PageInputType;
+    use nook_companion_core::PageSecondFactorRoute;
     use nook_companion_core::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
         AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch,
@@ -268,7 +269,7 @@ mod tests {
             vec!["email".to_owned()],
             "account email".to_owned(),
             true,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -284,7 +285,7 @@ mod tests {
             vec!["email".to_owned(), "webauthn".to_owned()],
             "identity".to_owned(),
             false,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -300,7 +301,7 @@ mod tests {
             vec!["tel-national".to_owned()],
             "tel-national Phone number or email".to_owned(),
             true,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
@@ -767,6 +768,7 @@ mod ingress_tests {
     use nook_companion_core::{
         AuthenticationOutcomeClassification, AuthenticationOutcomeObservation,
         AuthenticationOutcomeVerdict, AuthenticationUsernameEvidence, PageInputType,
+        PageSecondFactorRoute,
     };
     use serde::Serialize;
     use serde_wasm_bindgen::Serializer;
@@ -783,7 +785,7 @@ mod ingress_tests {
             vec!["email".into()],
             "account email".into(),
             true,
-            false,
+            PageSecondFactorRoute::Unrelated,
             String::new(),
             -1,
             String::new(),
