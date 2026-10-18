@@ -4,7 +4,7 @@
 //! as it does for the in-page widget; this module derives the listing filter
 //! from that classification, so the workflow vocabulary has a single owner.
 
-use super::{SiteSecretEmptyHint, SiteSecretKind, SiteSecretListing, SiteSecretMessageKey};
+use super::{SiteSecretEmptyHint, SiteSecretKind, SiteSecretListingSummary, SiteSecretMessageKey};
 use crate::{AuthenticationWorkflowKind, AuthenticationWorkflowMatch};
 use nook_app_common::i18n_keys;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -49,23 +49,23 @@ impl From<AuthenticationWorkflowMatch> for SitePageNeed {
 }
 
 impl SitePageNeed {
-    /// The empty state when no saved item serves this need.
-    pub(super) fn empty_listing(self) -> SiteSecretListing {
+    /// The listing summary when no section has a row this need admits.
+    pub(super) fn empty_summary(self) -> SiteSecretListingSummary {
         let save_hint = SiteSecretEmptyHint::Shown {
             message_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_SITE_EMPTY_HINT),
         };
         match self {
-            Self::OneTimeCode => SiteSecretListing::Empty {
+            Self::OneTimeCode => SiteSecretListingSummary::Empty {
                 message_key: SiteSecretMessageKey::catalog(
                     i18n_keys::EXTENSION_ACTION_SITE_EMPTY_TOTP,
                 ),
                 hint: SiteSecretEmptyHint::Absent,
             },
-            Self::Credentials => SiteSecretListing::Empty {
+            Self::Credentials => SiteSecretListingSummary::Empty {
                 message_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_SITE_EMPTY),
                 hint: save_hint,
             },
-            Self::AnySiteSecret => SiteSecretListing::Empty {
+            Self::AnySiteSecret => SiteSecretListingSummary::Empty {
                 message_key: SiteSecretMessageKey::catalog(
                     i18n_keys::EXTENSION_ACTION_SITE_EMPTY_ANY,
                 ),

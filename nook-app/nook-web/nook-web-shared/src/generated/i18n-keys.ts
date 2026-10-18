@@ -593,6 +593,7 @@ export const I18N_KEYS = {
   ExtensionActionSiteNotWeb: 'extension.action.site_not_web',
   ExtensionActionSiteNotWebHint: 'extension.action.site_not_web_hint',
   ExtensionActionSiteRestricted: 'extension.action.site_restricted',
+  ExtensionActionSiteVaultEmpty: 'extension.action.site_vault_empty',
   ExtensionActionStartFailed: 'extension.action.start_failed',
   ExtensionActionStateLocked: 'extension.action.state_locked',
   ExtensionActionStateSetup: 'extension.action.state_setup',

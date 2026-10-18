@@ -3,10 +3,14 @@ import {
   type I18nKey,
 } from '../../../nook-web-shared/src/generated/i18n-keys'
 import type {
-  SiteSecretIdentityGroup,
   SiteSecretEmptyHint,
+  SiteSecretIdentityHeader,
   SiteSecretListing,
+  SiteSecretListingSummary,
   SiteSecretRow,
+  SiteSecretSection,
+  SiteSecretSectionContent,
+  SiteSecretVaultLabel,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   SidePanelCodeFillKind,
@@ -19,12 +23,12 @@ import { SidePanelChangeKind } from './side-panel-runtime'
 
 /**
  * This site: the site-bound secrets for the active tab of the panel's window,
- * as the service worker and Rust answer them: rows Rust filtered by the
- * page's need and grouped under identity headers. The panel keeps them in
- * memory only, in Rust's order, and drops them when the tab, its address, the
- * panel's visibility or the lock state changes. Every answer ends in
- * something visible: rows, Rust's empty state, an unavailable page, or a
- * failure.
+ * as the service worker and Rust answer them: one section per identity:vault,
+ * each with the rows Rust filtered by the page's need or its empty line. The
+ * panel keeps them in memory only, in Rust's order, and drops them when the
+ * tab, its address, the panel's visibility or the lock state changes. Every
+ * answer ends in something visible: sections, Rust's empty state above them,
+ * an unavailable page, or a failure.
  */
 export enum ThisSiteHostKind {
   /** The active tab's host, as Rust displays it. */
@@ -57,18 +61,35 @@ export enum ThisSiteBodyKind {
   Failed = 'failed',
 }
 
-/** Whether one row or several are listed: a single row gets the primary action. */
+/** How many rows the sections list together, across every section: a
+ * single row gets the primary action. */
 export enum ThisSiteMatchCount {
+  /** No section lists a row; Rust's empty state says so. */
+  None = 'none',
   One = 'one',
   Several = 'several',
 }
 
-/** Rust's identity groups, each with its ordered display rows. */
-export type ThisSiteGroups = readonly SiteSecretIdentityGroup[]
+/** Rust's identity:vault sections, in Rust's order. */
+export type ThisSiteSections = readonly SiteSecretSection[]
 
-/** Rust's empty state: its message (taking the host) and optional hint. */
+/** One section's display rows, in Rust's order. */
+type ThisSiteRows = readonly SiteSecretRow[]
+
+/** What a section header names: its identity or its vault, saved or unnamed. */
+export type ThisSiteSectionLabel =
+  SiteSecretIdentityHeader | SiteSecretVaultLabel
+
+/** The sections a ready listing shows, and how many rows they list. */
+export type ThisSiteSectionList = {
+  readonly sections: ThisSiteSections
+  readonly count: ThisSiteMatchCount
+}
+
+/** Rust's empty state for the page's need: its message (taking the host)
+ * and optional hint, shown above the sections. */
 export type ThisSiteEmptyListing = Extract<
-  SiteSecretListing,
+  SiteSecretListingSummary,
   { hint: SiteSecretEmptyHint }
 >
 
@@ -76,13 +97,15 @@ export type ThisSiteBody =
   | { readonly kind: ThisSiteBodyKind.Loading }
   | {
       readonly kind: ThisSiteBodyKind.Matches
-      readonly groups: ThisSiteGroups
+      readonly sections: ThisSiteSections
       readonly count: ThisSiteMatchCount
     }
   | {
       readonly kind: ThisSiteBodyKind.Empty
       readonly host: string
       readonly empty: ThisSiteEmptyListing
+      readonly sections: ThisSiteSections
+      readonly count: ThisSiteMatchCount
     }
   | { readonly kind: ThisSiteBodyKind.NotWeb }
   | { readonly kind: ThisSiteBodyKind.Restricted }
@@ -515,12 +538,28 @@ export class ThisSiteViews {
     }
   }
 
-  static matchCount(groups: ThisSiteGroups): ThisSiteMatchCount {
-    switch (groups.flatMap((group) => group.rows).length) {
+  /** Rows count across every section, whichever identity or vault. */
+  static matchCount(sections: ThisSiteSections): ThisSiteMatchCount {
+    const rows = sections.flatMap((section) =>
+      ThisSiteViews.sectionRows(section.content),
+    )
+    switch (rows.length) {
+      case 0:
+        return ThisSiteMatchCount.None
       case 1:
         return ThisSiteMatchCount.One
       default:
         return ThisSiteMatchCount.Several
+    }
+  }
+
+  /** A section's rows in Rust's order; none when its vault has none. */
+  static sectionRows(content: SiteSecretSectionContent): ThisSiteRows {
+    switch (content.kind) {
+      case 'Listed':
+        return content.rows
+      case 'Empty':
+        return []
     }
   }
 
@@ -611,17 +650,22 @@ export class ThisSiteViews {
     }
   }
 
+  /** Every section shows; Rust's empty state leads them when none lists a row. */
   private static listed(request: ThisSiteListedRequest): ThisSiteBody {
     const { host, listing } = request
-    switch (listing.kind) {
+    const { summary, sections } = listing
+    const count = ThisSiteViews.matchCount(sections)
+    switch (summary.kind) {
       case 'Empty':
-        return { kind: ThisSiteBodyKind.Empty, host, empty: listing }
-      case 'Listed':
         return {
-          kind: ThisSiteBodyKind.Matches,
-          groups: listing.groups,
-          count: ThisSiteViews.matchCount(listing.groups),
+          kind: ThisSiteBodyKind.Empty,
+          host,
+          empty: summary,
+          sections,
+          count,
         }
+      case 'Listed':
+        return { kind: ThisSiteBodyKind.Matches, sections, count }
     }
   }
 }

@@ -1,12 +1,13 @@
 <!--
-This site: the active tab's host and its site-bound secrets (logins,
-authenticators, passkeys and API keys) under identity headers, as Rust
-filtered them for what the page needs and grouped them. Logins offer Fill and
-authenticators Fill code; passkeys and API keys are shown only. The service
-worker reads the panel's active tab itself; the panel sends only its window
-and, for a fill, the item's opaque id. Rows stay in this component's memory,
-in Rust's order, and are dropped when the tab, its address, the panel's
-visibility or the lock state changes.
+This site: the active tab's host and, for every connected identity:vault, a
+section with its site-bound secrets (logins, authenticators, passkeys and API
+keys) as Rust filtered them for what the page needs, or one muted line when
+the vault holds none. A section of an identity other than the unlocked one is
+tagged. Logins offer Fill and authenticators Fill code; passkeys and API keys
+are shown only. The service worker reads the panel's active tab itself; the
+panel sends only its window and, for a fill, the item's opaque id. Rows stay
+in this component's memory, in Rust's order, and are dropped when the tab,
+its address, the panel's visibility or the lock state changes.
 -->
 <script lang="ts">
   import { tick, untrack } from 'svelte'
@@ -22,9 +23,11 @@ visibility or the lock state changes.
     extensionLocaleCatalog,
   } from '../lib/i18n'
   import type {
-    SiteSecretIdentityHeader,
     SiteSecretRow,
+    SiteSecretSection,
   } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+  import type { ExtensionSessionDeviceState } from '../lib/nook-wasm'
+  import type { PairedVaultGroup } from '../lib/paired-vaults'
   import {
     sidePanelSite,
     type SidePanelLoginFillRequest,
@@ -38,9 +41,11 @@ visibility or the lock state changes.
     type SidePanelWindow,
   } from './side-panel-runtime'
   import {
+    SidePanelIdentityRelation,
     SidePanelLockReasonKind,
     SidePanelReadFreshness,
     SidePanelReadSequence,
+    SidePanelViews,
   } from './side-panel-state'
   import { ThisSiteFocus } from './this-site-focus'
   import {
@@ -61,6 +66,8 @@ visibility or the lock state changes.
     type ThisSiteFill,
     type ThisSiteFillOutcome,
     type ThisSiteFillSend,
+    type ThisSiteSectionLabel,
+    type ThisSiteSectionList,
     type ThisSiteState,
     type ThisSiteView,
   } from './this-site-state'
@@ -68,13 +75,24 @@ visibility or the lock state changes.
   type ThisSiteProps = {
     readonly i18n: ExtensionI18n
     readonly panelWindow: SidePanelWindow
+    /** The paired vaults under their identities, as the panel loaded them. */
+    readonly groups: readonly PairedVaultGroup[]
+    /** The unlocked key, which names the current identity. */
+    readonly device: ExtensionSessionDeviceState
     /** The extension locked; a Fill that found it locked says so. */
     readonly onlocked: (reason: SidePanelLockReasonKind) => void
     /** No identity is paired any more. */
     readonly onunpaired: () => void
   }
 
-  let { i18n, panelWindow, onlocked, onunpaired }: ThisSiteProps = $props()
+  let {
+    i18n,
+    panelWindow,
+    groups,
+    device,
+    onlocked,
+    onunpaired,
+  }: ThisSiteProps = $props()
 
   const runtime = new SidePanelRuntime()
   const reads = new SidePanelReadSequence()
@@ -111,13 +129,24 @@ visibility or the lock state changes.
     return i18n.t(request)
   }
 
-  function headerText(header: SiteSecretIdentityHeader): string {
-    switch (header.kind) {
+  /** A section's identity or vault name: saved, or Rust's unnamed label. */
+  function labelText(label: ThisSiteSectionLabel): string {
+    switch (label.kind) {
       case 'Named':
-        return header.name
+        return label.name
       case 'Unnamed':
-        return translateSelected(header.message_key)
+        return translateSelected(label.message_key)
     }
+  }
+
+  /** Whether the section's vault belongs to the unlocked identity. */
+  function relation(section: SiteSecretSection): SidePanelIdentityRelation {
+    const request: Parameters<typeof SidePanelViews.sectionRelation>[0] = {
+      vaultStoreId: section.vault_store_id,
+      groups,
+      device,
+    }
+    return SidePanelViews.sectionRelation(request)
   }
 
   /** Pending and success are announced from one persistent region. */
@@ -314,6 +343,53 @@ visibility or the lock state changes.
   })
 </script>
 
+<!-- One section per identity:vault, in Rust's order: "identity · vault",
+the other-identity tag, then its rows or Rust's muted empty line. -->
+{#snippet siteSections(list: ThisSiteSectionList)}
+  {#each list.sections as section (section.vault_store_id)}
+    <div class="side-panel-site-section" data-testid="side-panel-site-section">
+      <h2 class="side-panel-site-group" data-testid="side-panel-site-group">
+        <span
+          class="side-panel-site-group-name"
+          data-testid="side-panel-site-group-name"
+        >
+          {labelText(section.identity)} · {labelText(section.vault)}
+        </span>
+        {#if relation(section) === SidePanelIdentityRelation.Other}
+          <span
+            class="side-panel-tag"
+            data-testid="side-panel-site-other-identity"
+          >
+            {translatePlain(I18N_KEYS.ExtensionActionOtherIdentity)}
+          </span>
+        {/if}
+      </h2>
+      {#if 'message_key' in section.content}
+        <p
+          class="side-panel-note side-panel-site-vault-empty"
+          data-testid="side-panel-site-vault-empty"
+        >
+          {translateSelected(section.content.message_key)}
+        </p>
+      {:else}
+        <ul class="side-panel-logins">
+          {#each ThisSiteViews.sectionRows(section.content) as row (`${row.item_id.vault_store_id}:${row.item_id.secret_id}`)}
+            <ThisSiteItem
+              {i18n}
+              {row}
+              vault={labelText(section.vault)}
+              count={list.count}
+              {fill}
+              activity={fillActivity}
+              onfill={fillRow}
+            />
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/each}
+{/snippet}
+
 <section
   class="side-panel-section"
   aria-labelledby="side-panel-site-heading"
@@ -369,23 +445,7 @@ visibility or the lock state changes.
       </p>
     </div>
   {:else if view.body.kind === ThisSiteBodyKind.Matches}
-    {#each view.body.groups as group, index (index)}
-      <h2 class="side-panel-site-group" data-testid="side-panel-site-group">
-        {headerText(group.header)}
-      </h2>
-      <ul class="side-panel-logins">
-        {#each group.rows as row (`${row.item_id.vault_store_id}:${row.item_id.secret_id}`)}
-          <ThisSiteItem
-            {i18n}
-            {row}
-            count={view.body.count}
-            {fill}
-            activity={fillActivity}
-            onfill={fillRow}
-          />
-        {/each}
-      </ul>
-    {/each}
+    {@render siteSections(view.body)}
   {:else if view.body.kind === ThisSiteBodyKind.Empty}
     <div class="side-panel-site-status" data-testid="side-panel-site-empty">
       <p class="side-panel-site-status-lead">{emptyText(view.body)}</p>
@@ -393,6 +453,7 @@ visibility or the lock state changes.
         <p>{translateSelected(view.body.empty.hint.message_key)}</p>
       {/if}
     </div>
+    {@render siteSections(view.body)}
   {:else if view.body.kind === ThisSiteBodyKind.NotWeb}
     <div class="side-panel-site-status">
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteNotWebHint)}</p>

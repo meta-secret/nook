@@ -1,9 +1,10 @@
 <!--
 One site-bound secret for This site, as Rust presented it: a type icon, its
-type label and vault, its title, and "account · saved host". The row itself
-is not a control. A Login offers Fill and an Authenticator Fill code; both
-send only the item's opaque id, and the service worker fills the active
-tab without submitting. Passkeys and API keys are shown for reference only.
+type label, its title, and "account · saved host"; its section header names
+the identity and vault. The row itself is not a control. A Login offers Fill
+and an Authenticator Fill code; both send only the item's opaque id, and the
+service worker fills the active tab without submitting. Passkeys and API keys
+are shown for reference only.
 -->
 <script lang="ts">
   import {
@@ -38,6 +39,8 @@ tab without submitting. Passkeys and API keys are shown for reference only.
   type ThisSiteItemProps = {
     readonly i18n: ExtensionI18n
     readonly row: SiteSecretRow
+    /** The vault name its section header shows; the fill label names it. */
+    readonly vault: string
     readonly count: ThisSiteMatchCount
     readonly fill: ThisSiteFill
     /** A fill on its way keeps every fill unavailable, focus included. */
@@ -45,7 +48,8 @@ tab without submitting. Passkeys and API keys are shown for reference only.
     readonly onfill: (row: SiteSecretRow) => void
   }
 
-  let { i18n, row, count, fill, activity, onfill }: ThisSiteItemProps = $props()
+  let { i18n, row, vault, count, fill, activity, onfill }: ThisSiteItemProps =
+    $props()
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -74,15 +78,6 @@ tab without submitting. Passkeys and API keys are shown for reference only.
     }
   }
 
-  function vaultName(): string {
-    switch (row.vault.kind) {
-      case 'Named':
-        return row.vault.name
-      case 'Unnamed':
-        return translateSelected(row.vault.message_key)
-    }
-  }
-
   /** What the accessible label names for an item saved without an account. */
   function accountName(): string {
     switch (row.account) {
@@ -105,7 +100,7 @@ tab without submitting. Passkeys and API keys are shown for reference only.
     const request: ExtensionTranslationRequest = {
       kind: ExtensionTranslationRequestKind.SelectedWithReplacements,
       key,
-      replacements: { login: accountName(), vault: vaultName() },
+      replacements: { login: accountName(), vault },
     }
     return i18n.t(request)
   }
@@ -132,7 +127,7 @@ tab without submitting. Passkeys and API keys are shown for reference only.
   </span>
   <div class="side-panel-login-copy">
     <span class="side-panel-login-type" data-testid="side-panel-item-type">
-      {translateSelected(row.type_label_key)} · {vaultName()}
+      {translateSelected(row.type_label_key)}
     </span>
     <span class="side-panel-login-name" title={row.title}>{row.title}</span>
     {#if subtitle() !== ''}

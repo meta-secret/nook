@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type {
-  SiteSecretIdentityGroup,
+  SiteSecretListingSummary,
   SiteSecretRow,
+  SiteSecretSection,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import {
@@ -43,7 +44,6 @@ class Rows {
       title: 'accounts.example.com',
       account,
       saved_host: 'accounts.example.com',
-      vault: { kind: 'Named', name: 'Work' },
       action: {
         kind: 'FillLogin',
         label_key: I18N_KEYS.ExtensionActionFill,
@@ -60,7 +60,6 @@ class Rows {
       title: 'Example',
       account: 'alice@company.example',
       saved_host: 'accounts.example.com',
-      vault: { kind: 'Named', name: 'Work' },
       action: {
         kind: 'FillCode',
         label_key: I18N_KEYS.ExtensionActionFillCode,
@@ -77,11 +76,44 @@ class Rows {
       title: 'Example',
       account: 'alice',
       saved_host: 'accounts.example.com',
+      action: { kind: 'ViewOnly' },
+    }
+  }
+}
+
+/** One vault that lists rows: which vault, and its rows in Rust's order. */
+type ListedSectionRequest = {
+  readonly vaultStoreId: string
+  readonly rows: SiteSecretRow[]
+}
+
+/** Identity:vault sections as Rust presents them, in Rust's order. */
+class Sections {
+  static listed(request: ListedSectionRequest): SiteSecretSection {
+    return {
+      vault_store_id: request.vaultStoreId,
+      identity: { kind: 'Named', name: 'work' },
+      vault: { kind: 'Named', name: 'Work' },
+      content: { kind: 'Listed', rows: request.rows },
+    }
+  }
+
+  /** A vault with nothing the page needs: Rust's muted line. */
+  static empty(vaultStoreId: string): SiteSecretSection {
+    return {
+      vault_store_id: vaultStoreId,
+      identity: {
+        kind: 'Unnamed',
+        message_key: I18N_KEYS.ExtensionCompanionOtherVaults,
+      },
       vault: {
         kind: 'Unnamed',
         message_key: I18N_KEYS.LoginVaultPickerUnnamed,
       },
-      action: { kind: 'ViewOnly' },
+      content: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteVaultEmpty,
+      },
     }
   }
 }
@@ -89,18 +121,18 @@ class Rows {
 const work = Rows.login('login-work', 'alice@company.example')
 const personal = Rows.login('login-personal', 'alice@example.com')
 const workId: SidePanelLoginItemId = ThisSiteViews.itemId(work)
-const groups: SiteSecretIdentityGroup[] = [
-  {
-    header: { kind: 'Named', name: 'work' },
-    rows: [work, Rows.authenticator()],
-  },
-  {
-    header: {
-      kind: 'Unnamed',
-      message_key: I18N_KEYS.ExtensionCompanionOtherVaults,
-    },
-    rows: [personal, Rows.passkey()],
-  },
+const workVault: ListedSectionRequest = {
+  vaultStoreId: 'store-work',
+  rows: [work, personal, Rows.authenticator()],
+}
+const personalVault: ListedSectionRequest = {
+  vaultStoreId: 'store-personal',
+  rows: [Rows.passkey()],
+}
+const sections: SiteSecretSection[] = [
+  Sections.listed(workVault),
+  Sections.listed(personalVault),
+  Sections.empty('store-archive'),
 ]
 
 function fillAnswer(kind: SidePanelLoginFillKind) {
@@ -130,7 +162,7 @@ function shownState(): ThisSiteState {
       host: { kind: ThisSiteHostKind.Named, host: 'accounts.example.com' },
       body: {
         kind: ThisSiteBodyKind.Matches,
-        groups,
+        sections,
         count: ThisSiteMatchCount.Several,
       },
     },
@@ -140,18 +172,18 @@ function shownState(): ThisSiteState {
 }
 
 describe('This site listing', () => {
-  test("shows Rust's identity groups and rows for the host Rust named, in Rust's order", () => {
+  test("shows every identity:vault section Rust presented, empty ones included, in Rust's order", () => {
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'accounts.example.com',
-      listing: { kind: 'Listed', groups },
+      listing: { summary: { kind: 'Listed' }, sections },
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
         host: { kind: ThisSiteHostKind.Named, host: 'accounts.example.com' },
         body: {
           kind: ThisSiteBodyKind.Matches,
-          groups,
+          sections,
           count: ThisSiteMatchCount.Several,
         },
       },
@@ -159,16 +191,20 @@ describe('This site listing', () => {
     })
   })
 
-  test("an empty answer keeps Rust's typed empty state and names the site", () => {
-    const empty = {
+  test("with no row anywhere, Rust's empty state names the site above the sections", () => {
+    const empty: SiteSecretListingSummary = {
       kind: 'Empty',
       message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
-      hint: { kind: 'Absent' },
-    } as const
+      hint: {
+        kind: 'Shown',
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+      },
+    }
+    const vaults = [Sections.empty('store-work'), Sections.empty('store-home')]
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.namecheap.com',
-      listing: empty,
+      listing: { summary: empty, sections: vaults },
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
@@ -177,9 +213,31 @@ describe('This site listing', () => {
           kind: ThisSiteBodyKind.Empty,
           host: 'www.namecheap.com',
           empty,
+          sections: vaults,
+          count: ThisSiteMatchCount.None,
         },
       },
       signal: ThisSitePanelSignal.None,
+    })
+  })
+
+  test('a ready answer with no connected vault shows its empty state and no section', () => {
+    const empty: SiteSecretListingSummary = {
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
+      hint: { kind: 'Absent' },
+    }
+    const listing: SidePanelSiteListing = {
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'news.example.org',
+      listing: { summary: empty, sections: [] },
+    }
+    expect(ThisSiteViews.listing(listing).view.body).toEqual({
+      kind: ThisSiteBodyKind.Empty,
+      host: 'news.example.org',
+      empty,
+      sections: [],
+      count: ThisSiteMatchCount.None,
     })
   })
 
@@ -461,12 +519,42 @@ describe('This site Fill', () => {
   })
 
   test('one match gets the primary Fill, several share secondary ones', () => {
-    const one: SiteSecretIdentityGroup[] = [
-      { header: { kind: 'Named', name: 'work' }, rows: [work] },
+    // Empty sections list no row; the one row elsewhere stays primary.
+    const workOnly: ListedSectionRequest = {
+      vaultStoreId: 'store-work',
+      rows: [work],
+    }
+    const one: SiteSecretSection[] = [
+      Sections.empty('store-home'),
+      Sections.listed(workOnly),
+      Sections.empty('store-archive'),
     ]
     expect(ThisSiteViews.matchCount(one)).toBe(ThisSiteMatchCount.One)
-    // Rows count across identity groups.
-    expect(ThisSiteViews.matchCount(groups)).toBe(ThisSiteMatchCount.Several)
+    // Rows count across sections, whichever identity or vault lists them.
+    const acrossVaults: SiteSecretSection[] = [
+      Sections.listed(workOnly),
+      Sections.listed(personalVault),
+    ]
+    expect(ThisSiteViews.matchCount(acrossVaults)).toBe(
+      ThisSiteMatchCount.Several,
+    )
+    expect(ThisSiteViews.matchCount(sections)).toBe(ThisSiteMatchCount.Several)
+    expect(ThisSiteViews.matchCount([Sections.empty('store-home')])).toBe(
+      ThisSiteMatchCount.None,
+    )
+    expect(ThisSiteViews.matchCount([])).toBe(ThisSiteMatchCount.None)
+  })
+
+  test("a section lists its own rows in Rust's order, or none with its empty line", () => {
+    const twoLogins: ListedSectionRequest = {
+      vaultStoreId: 'store-work',
+      rows: [work, personal],
+    }
+    const listed = Sections.listed(twoLogins)
+    expect(ThisSiteViews.sectionRows(listed.content)).toEqual([work, personal])
+    expect(
+      ThisSiteViews.sectionRows(Sections.empty('store-archive').content),
+    ).toEqual([])
   })
 })
 

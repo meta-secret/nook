@@ -1,7 +1,8 @@
 <!--
 What the identity check after an unlock found: still checking, vaults that
 wait for a grant, or a failed check. It shows wherever the unlocked panel
-lists identities or says none is connected, so a failure is never silent.
+shows its identity:vault sections or says none is connected, so a failure is
+never silent.
 -->
 <script lang="ts">
   import {

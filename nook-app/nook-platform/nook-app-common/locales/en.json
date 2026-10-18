@@ -1705,6 +1705,7 @@
       "site_empty_hint": "Sign in on the page as usual — Nook can offer to save the login.",
       "site_empty_totp": "No 2FA codes saved for {host}.",
       "site_empty_any": "No saved items for {host}.",
+      "site_vault_empty": "Nothing for this site",
       "site_not_web": "No website in this tab",
       "site_not_web_hint": "Switch to a tab with a website to see its saved items.",
       "site_restricted": "Nook can't fill on this page.",
