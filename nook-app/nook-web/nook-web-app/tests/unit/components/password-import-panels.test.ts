@@ -1,11 +1,13 @@
 import { ok, err } from 'neverthrow'
+import { Effect } from 'effect'
+import type { QrCodeReader } from '$lib/qr/qr-code-reader'
 import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { NookImportResult } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -19,17 +21,45 @@ import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorI
 import type { TranslationRequest } from '$lib/vault/translation'
 import { TranslationMessage } from '$lib/vault/translation'
 
-const scanImage = vi.hoisted(() => vi.fn())
+const qrReads = vi.hoisted(() => ({
+  image: vi.fn<QrCodeReader['readImage']>(),
+  frame: vi.fn<QrCodeReader['readVideoFrame']>(),
+}))
 
-vi.mock('qr-scanner', () => ({
-  default: class MockQrScanner {
-    static scanImage = scanImage
-
-    start = vi.fn(async () => {})
-    stop = vi.fn()
-    destroy = vi.fn()
+vi.mock('$lib/qr/qr-code-reader', () => ({
+  QrCodeReader: class MockQrCodeReader {
+    readImage = qrReads.image
+    readVideoFrame = qrReads.frame
   },
 }))
+
+/** A camera stream whose one video track the panel must stop. */
+class CameraStreamFixture extends MediaStream {
+  constructor() {
+    super(document.createElement('canvas').captureStream().getVideoTracks())
+  }
+
+  override getTracks(): MediaStreamTrack[] {
+    return this.getVideoTracks()
+  }
+}
+
+/** Installs `navigator.mediaDevices` for one test. */
+class CameraFixture {
+  readonly stream = new CameraStreamFixture()
+  readonly getUserMedia = vi.fn(async () => this.stream)
+
+  install(): void {
+    const mediaDevices: PropertyDescriptor = {
+      configurable: true,
+      value: { getUserMedia: this.getUserMedia },
+    }
+    Object.defineProperty(navigator, 'mediaDevices', mediaDevices)
+    onTestFinished(() => {
+      Reflect.deleteProperty(navigator, 'mediaDevices')
+    })
+  }
+}
 
 const vault = VaultStateTestFixture.create()
 vi.spyOn(vault, 't').mockImplementation((request: TranslationRequest) => {
@@ -357,9 +387,9 @@ describe('Google Authenticator import panel', () => {
   test('collects QR images and submits the migration batch without displaying its contents', async () => {
     const firstUri = 'otpauth-migration://offline?data=first-secret-payload'
     const secondUri = 'otpauth-migration://offline?data=second-secret-payload'
-    scanImage
-      .mockResolvedValueOnce({ data: firstUri, cornerPoints: [] })
-      .mockResolvedValueOnce({ data: secondUri, cornerPoints: [] })
+    qrReads.image
+      .mockReturnValueOnce(Effect.succeed([firstUri]))
+      .mockReturnValueOnce(Effect.succeed([secondUri]))
     const onImport = vi.fn(async () => importResult())
     const view = render(GoogleAuthenticatorImportPanel, {
       vault,
@@ -377,7 +407,7 @@ describe('Google Authenticator import panel', () => {
     await fireEvent.change(input, {
       target: { files: [new File(['first'], 'first.png')] },
     })
-    await waitFor(() => expect(scanImage).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(qrReads.image).toHaveBeenCalledTimes(1))
     await fireEvent.change(input, {
       target: { files: [new File(['second'], 'second.png')] },
     })
@@ -400,12 +430,13 @@ describe('Google Authenticator import panel', () => {
     expect(submit.disabled).toBe(true)
   })
 
-  test('rejects duplicate and unrelated QR codes before import', async () => {
+  test('rejects duplicate, unrelated, and unreadable QR images before import', async () => {
     const migrationUri = 'otpauth-migration://offline?data=secret-payload'
-    scanImage
-      .mockResolvedValueOnce({ data: migrationUri, cornerPoints: [] })
-      .mockResolvedValueOnce({ data: migrationUri, cornerPoints: [] })
-      .mockResolvedValueOnce({ data: 'https://example.com', cornerPoints: [] })
+    qrReads.image
+      .mockReturnValueOnce(Effect.succeed([migrationUri]))
+      .mockReturnValueOnce(Effect.succeed([migrationUri]))
+      .mockReturnValueOnce(Effect.succeed(['https://example.com']))
+      .mockReturnValueOnce(Effect.succeed([]))
     const view = render(GoogleAuthenticatorImportPanel, {
       vault,
       isSaving: false,
@@ -414,24 +445,96 @@ describe('Google Authenticator import panel', () => {
     const input = requireInputElement(
       view.getByTestId('google-authenticator-qr-image'),
     )
-
-    for (const name of ['first.png', 'duplicate.png']) {
+    const upload = async (name: string) => {
       await fireEvent.change(input, {
         target: { files: [new File([name], name)] },
       })
     }
+    const errorText = () =>
+      view.getByTestId('google-authenticator-import-error').textContent
+
+    await upload('first.png')
+    await upload('duplicate.png')
+    await waitFor(() => {
+      expect(errorText()).toContain(
+        I18N_KEYS.GoogleAuthenticatorImportDuplicateQr,
+      )
+    })
+    await upload('other.png')
+    await waitFor(() => {
+      expect(errorText()).toContain(
+        I18N_KEYS.GoogleAuthenticatorImportInvalidQr,
+      )
+    })
+    await upload('blank.png')
+    await waitFor(() => {
+      expect(errorText()).toContain(
+        I18N_KEYS.GoogleAuthenticatorImportImageFailed,
+      )
+    })
+  })
+
+  test('keeps the camera scanning and ignores codes it already collected', async () => {
+    const firstUri = 'otpauth-migration://offline?data=first-batch'
+    const secondUri = 'otpauth-migration://offline?data=second-batch'
+    const camera = new CameraFixture()
+    camera.install()
+    qrReads.frame
+      .mockReturnValueOnce(Effect.succeed([firstUri]))
+      .mockReturnValueOnce(Effect.succeed([firstUri]))
+      .mockReturnValueOnce(Effect.succeed([secondUri]))
+      .mockReturnValue(Effect.succeed([]))
+    const view = render(GoogleAuthenticatorImportPanel, {
+      vault,
+      isSaving: false,
+      onImport: vi.fn(async () => importResult()),
+    })
+    const toggle = view.getByTestId('google-authenticator-camera-toggle')
+
+    await fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(
+        view.getByTestId('google-authenticator-scanned-count').textContent,
+      ).toContain('google_authenticator_import.scanned_count 2')
+    })
+    expect(qrReads.frame.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(
+      view.queryAllByTestId('google-authenticator-import-error'),
+    ).toHaveLength(0)
+    expect(toggle.textContent).toContain(
+      I18N_KEYS.GoogleAuthenticatorImportStopCamera,
+    )
+
+    await fireEvent.click(toggle)
+    const [track] = camera.stream.getVideoTracks()
+    await waitFor(() => expect(track?.readyState).toBe('ended'))
+    expect(camera.getUserMedia).toHaveBeenCalledTimes(1)
+    expect(toggle.textContent).toContain(
+      I18N_KEYS.GoogleAuthenticatorImportScanCamera,
+    )
+  })
+
+  test('reports a camera that cannot start', async () => {
+    const camera = new CameraFixture()
+    camera.getUserMedia.mockRejectedValueOnce(
+      new DOMException('Permission denied', 'NotAllowedError'),
+    )
+    camera.install()
+    const view = render(GoogleAuthenticatorImportPanel, {
+      vault,
+      isSaving: false,
+      onImport: vi.fn(async () => importResult()),
+    })
+    const toggle = view.getByTestId('google-authenticator-camera-toggle')
+
+    await fireEvent.click(toggle)
     await waitFor(() => {
       expect(
         view.getByTestId('google-authenticator-import-error').textContent,
-      ).toContain(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
+      ).toContain(I18N_KEYS.GoogleAuthenticatorImportCameraFailed)
     })
-    await fireEvent.change(input, {
-      target: { files: [new File(['other'], 'other.png')] },
-    })
-    await waitFor(() => {
-      expect(
-        view.getByTestId('google-authenticator-import-error').textContent,
-      ).toContain(I18N_KEYS.GoogleAuthenticatorImportInvalidQr)
-    })
+    expect(toggle.textContent).toContain(
+      I18N_KEYS.GoogleAuthenticatorImportScanCamera,
+    )
   })
 })

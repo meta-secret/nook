@@ -353,7 +353,11 @@ for (const forbidden of [
 const vaultArtifacts = await Promise.all(
   [simpleRoot, sentinelRoot].map(async (root) => {
     const files = await filesBelow(join(root, 'dist'))
-    const wasmFiles = files.filter((path) => path.endsWith('.wasm'))
+    // Feature WASM (the zxing QR reader) ships beside the vault engine; select
+    // the engine by the same name the HTML preload uses.
+    const wasmFiles = files.filter(
+      (path) => path.includes('nook_wasm_bg') && path.endsWith('.wasm'),
+    )
     if (wasmFiles.length !== 1) {
       throw new Error(
         `${root} must contain exactly one vault WASM asset, found ${wasmFiles.length}.`,

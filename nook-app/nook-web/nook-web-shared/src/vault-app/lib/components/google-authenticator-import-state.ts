@@ -1,14 +1,15 @@
-import type QrScanner from "qr-scanner";
+import type { Fiber } from "effect";
 import type { NookImportResult } from "$lib/nook";
 
-export enum ScannerLifecycleKind {
-  NotCreated = "not-created",
-  Created = "created",
+export enum CameraScanKind {
+  Off = "off",
+  Scanning = "scanning",
 }
 
-export type ScannerLifecycle =
-  | { kind: ScannerLifecycleKind.NotCreated }
-  | { kind: ScannerLifecycleKind.Created; scanner: QrScanner };
+/** The panel camera; a scan runs in its fiber until that fiber is interrupted. */
+export type CameraScan =
+  | { kind: CameraScanKind.Off }
+  | { kind: CameraScanKind.Scanning; fiber: Fiber.Fiber<void> };
 
 export enum AuthenticatorImportOutcomeKind {
   NotRun = "not-run",

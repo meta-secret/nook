@@ -49,7 +49,7 @@ type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
   platform: string;
   userAgent: string;
-  userAgentData?: Navigator["userAgentData"] | { mobile?: boolean };
+  userAgentData?: { mobile?: boolean };
 };
 
 type ExtensionDeploymentMetadata = {

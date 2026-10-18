@@ -7,28 +7,24 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { onDestroy } from 'svelte'
+  import { Effect, Fiber } from 'effect'
   import { Camera, ImageUp, QrCode, Trash2, Upload, X } from '@lucide/svelte'
-  import QrScanner from 'qr-scanner'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
+  import { QrCodeReader, type QrCodeTexts } from '$lib/qr/qr-code-reader'
+  import { QrCameraScan, type QrCameraScanTarget } from '$lib/qr/qr-camera-scan'
   import {
     AuthenticatorImportOutcomeKind,
-    ScannerLifecycleKind,
+    CameraScanKind,
     type AuthenticatorImportOutcome,
-    type ScannerLifecycle,
+    type CameraScan,
   } from './google-authenticator-import-state'
 
-  type CameraScannerOptions = {
-    readonly preferredCamera: 'environment'
-    readonly highlightScanRegion: boolean
-    readonly highlightCodeOutline: boolean
-    readonly returnDetailedScanResult: true
-  }
-
-  type QrImageScanOptions = {
-    readonly returnDetailedScanResult: true
+  type QrImageReadHandling = {
+    readonly onSuccess: (texts: QrCodeTexts) => void
+    readonly onFailure: () => void
   }
 
   let {
@@ -45,9 +41,9 @@
     embedded?: boolean
   } = $props()
 
+  const reader = new QrCodeReader()
   let videoElement: HTMLVideoElement
-  let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated }
-  let scanning = $state(false)
+  let camera = $state.raw<CameraScan>({ kind: CameraScanKind.Off })
   let migrationUris = $state<string[]>([])
   let result = $state<AuthenticatorImportOutcome>({
     kind: AuthenticatorImportOutcomeKind.NotRun,
@@ -55,9 +51,13 @@
   let error = $state('')
 
   function stopCamera() {
-    if (scannerState.kind === ScannerLifecycleKind.Created)
-      scannerState.scanner.stop()
-    scanning = false
+    switch (camera.kind) {
+      case CameraScanKind.Off:
+        return
+      case CameraScanKind.Scanning:
+        Effect.runFork(Fiber.interrupt(camera.fiber))
+        camera = { kind: CameraScanKind.Off }
+    }
   }
 
   function addMigrationUri(value: string) {
@@ -68,44 +68,53 @@
     }
     if (migrationUris.includes(uri)) {
       error = vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
-      stopCamera()
       return
     }
     migrationUris = [...migrationUris, uri]
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
     error = ''
-    stopCamera()
   }
 
-  async function toggleCamera() {
-    if (scanning) {
-      stopCamera()
-      return
-    }
+  /** A live camera sees each code for many frames; only unseen codes count. */
+  function collectCameraTexts(texts: QrCodeTexts) {
+    const unseen = texts.filter((text) => !migrationUris.includes(text.trim()))
+    for (const text of unseen) addMigrationUri(text)
+  }
+
+  function showCameraFailure() {
+    camera = { kind: CameraScanKind.Off }
+    error = vault.t(I18N_KEYS.GoogleAuthenticatorImportCameraFailed)
+  }
+
+  function startCamera() {
     error = ''
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
-    if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
-      const scannerOptions: CameraScannerOptions = {
-        preferredCamera: 'environment' as const,
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-        returnDetailedScanResult: true as const,
-      }
-      scannerState = {
-        kind: ScannerLifecycleKind.Created,
-        scanner: new QrScanner(
-          videoElement,
-          (scanResult) => addMigrationUri(scanResult.data),
-          scannerOptions,
-        ),
-      }
+    const target: QrCameraScanTarget = { video: videoElement, reader }
+    const scan = new QrCameraScan(target)
+      .run(collectCameraTexts)
+      .pipe(Effect.catch(() => Effect.sync(showCameraFailure)))
+    camera = { kind: CameraScanKind.Scanning, fiber: Effect.runFork(scan) }
+  }
+
+  function toggleCamera() {
+    switch (camera.kind) {
+      case CameraScanKind.Off:
+        return startCamera()
+      case CameraScanKind.Scanning:
+        return stopCamera()
     }
-    scanning = true
-    try {
-      await scannerState.scanner.start()
-    } catch {
-      scanning = false
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportCameraFailed)
+  }
+
+  function showImageFailure() {
+    error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed)
+  }
+
+  function addImageTexts(texts: QrCodeTexts) {
+    switch (texts.length) {
+      case 0:
+        return showImageFailure()
+      default:
+        for (const text of texts) addMigrationUri(text)
     }
   }
 
@@ -117,15 +126,11 @@
     if (!file) return
     error = ''
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
-    try {
-      const scanImageOptions: QrImageScanOptions = {
-        returnDetailedScanResult: true as const,
-      }
-      const scanResult = await QrScanner.scanImage(file, scanImageOptions)
-      addMigrationUri(scanResult.data)
-    } catch {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed)
+    const handling: QrImageReadHandling = {
+      onSuccess: addImageTexts,
+      onFailure: showImageFailure,
     }
+    await Effect.runPromise(Effect.match(reader.readImage(file), handling))
   }
 
   function clearScans() {
@@ -137,6 +142,7 @@
 
   async function importScans() {
     if (migrationUris.length === 0 || isSaving) return
+    stopCamera()
     error = ''
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
     const imported = await onImport(migrationUris)
@@ -152,9 +158,7 @@
   }
 
   onDestroy(() => {
-    if (scannerState.kind === ScannerLifecycleKind.Created)
-      scannerState.scanner.destroy()
-    scannerState = { kind: ScannerLifecycleKind.NotCreated }
+    stopCamera()
     migrationUris = []
   })
 </script>
@@ -191,9 +195,9 @@
           variant="outline"
           data-testid="google-authenticator-camera-toggle"
           disabled={isSaving}
-          onclick={() => void toggleCamera()}
+          onclick={toggleCamera}
         >
-          {#if scanning}
+          {#if camera.kind === CameraScanKind.Scanning}
             <X class="size-4" />
             {vault.t(I18N_KEYS.GoogleAuthenticatorImportStopCamera)}
           {:else}
@@ -218,14 +222,34 @@
         </label>
       </div>
 
-      <div class:hidden={!scanning} class="overflow-hidden rounded-lg bg-black">
+      <div
+        class:hidden={camera.kind === CameraScanKind.Off}
+        class="relative overflow-hidden rounded-lg bg-black"
+      >
         <video
           bind:this={videoElement}
           muted
           playsinline
           data-testid="google-authenticator-camera-preview"
-          class="aspect-square max-h-80 w-full object-cover"
+          class="max-h-80 w-full object-contain"
         ></video>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 100 100"
+          class="pointer-events-none absolute inset-0 size-full text-white/80"
+        >
+          <rect
+            x="22"
+            y="22"
+            width="56"
+            height="56"
+            rx="4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
       </div>
 
       {#if migrationUris.length > 0}
