@@ -487,6 +487,7 @@ mod tests {
         };
         let declared = PageInputFieldObservation {
             autocomplete_tokens: vec!["current-password".to_owned()],
+            identity_text: "Enter OTP code".to_owned(),
             ..account_password.clone()
         };
         assert_eq!(
