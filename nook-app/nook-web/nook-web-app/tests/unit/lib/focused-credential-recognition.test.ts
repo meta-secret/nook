@@ -20,6 +20,10 @@ class FocusedPolicyFixture {
       [...metadata.autocompleteTokens],
       metadata.identityText,
       metadata.loginContext,
+      metadata.secondFactorRoute,
+      metadata.inputMode,
+      metadata.maxLength,
+      metadata.pattern,
     )
   }
   classify(): FocusedCredentialOpportunity {

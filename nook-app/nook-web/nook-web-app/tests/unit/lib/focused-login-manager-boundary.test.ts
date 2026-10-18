@@ -22,6 +22,10 @@ class ManagerCredentialSelection {
       [this.metadata.autocomplete],
       '',
       false,
+      false,
+      '',
+      -1,
+      '',
     )
     const recognition = classify_companion_focused_credential_field(field)
     try {

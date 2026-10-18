@@ -88,6 +88,10 @@ export class FocusedFieldRecognitionOperation {
       [...observation.autocompleteTokens],
       observation.identityText,
       observation.loginContext,
+      observation.secondFactorRoute,
+      observation.inputMode,
+      observation.maxLength,
+      observation.pattern,
     )
     try {
       return this.response(this.recognition(field))

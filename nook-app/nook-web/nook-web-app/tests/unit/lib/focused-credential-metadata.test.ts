@@ -19,6 +19,10 @@ describe('focused browser metadata observation', () => {
           disabled: false,
           readOnly: false,
           loginContext: false,
+          secondFactorRoute: false,
+          inputMode: '',
+          maxLength: -1,
+          pattern: '',
         }
         expect(observation).toMatchObject(expected)
         expect(observation.identityText).toContain('account-email')
@@ -43,5 +47,19 @@ describe('focused browser metadata observation', () => {
     expect(after.autocompleteTokens).toEqual(['one-time-code'])
     expect(after.disabled).toBe(true)
     expect(after.readOnly).toBe(true)
+  })
+
+  test('transports raw code-entry hints for Rust to interpret', () => {
+    const input = document.createElement('input')
+    input.setAttribute('inputmode', 'numeric')
+    input.setAttribute('maxlength', '6')
+    input.setAttribute('pattern', '\\d{6}')
+    document.body.append(input)
+    const expected: Partial<
+      ReturnType<typeof passwordFieldDiscovery.focusedFieldObservation>
+    > = { inputMode: 'numeric', maxLength: 6, pattern: '\\d{6}' }
+    expect(passwordFieldDiscovery.focusedFieldObservation(input)).toMatchObject(
+      expected,
+    )
   })
 })

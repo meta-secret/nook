@@ -594,6 +594,10 @@ Rust/WASM.
 Username detection uses autocomplete tokens plus identity heuristics
 (`loginfmt`, `login_email`, account/email labels).
 It still ignores newsletter-style email fields.
+One-time-code detection uses autocomplete tokens and identity words plus
+Rust-decided second-factor route evidence and code-shaped entry hints
+(`inputmode`, `maxlength`, `pattern`), and never counts a masked code field
+as a password.
 Credential matching follows the [general login website matching](#general-login-website-matching)
 policy for every site.
 It performs explicit login selection/fill/submit and TOTP selection/fill.

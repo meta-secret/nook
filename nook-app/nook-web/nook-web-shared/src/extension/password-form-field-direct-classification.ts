@@ -3,6 +3,7 @@ import {
   NookPageInputFieldObservation,
   authentication_username_evidence,
   has_login_context,
+  has_second_factor_route,
   looks_like_email_verification_body,
   looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
@@ -43,17 +44,32 @@ export type DirectFieldClassification = {
 /** Synchronous Rust policy adapter for non-extension hosts such as unit tests. */
 export class PasswordFormFieldDirectClassification {
   loginContext(observation: LoginContextObservation): boolean {
-    const value = new NookLoginContextObservation(
-      observation.formIdentity,
-      observation.ancestorIdentities,
-      observation.advanceControlLabel,
-      observation.pathContext,
-    );
+    const value = this.loginContextValue(observation);
     try {
       return has_login_context(value);
     } finally {
       value.free();
     }
+  }
+
+  secondFactorRoute(observation: LoginContextObservation): boolean {
+    const value = this.loginContextValue(observation);
+    try {
+      return has_second_factor_route(value);
+    } finally {
+      value.free();
+    }
+  }
+
+  private loginContextValue(
+    observation: LoginContextObservation,
+  ): NookLoginContextObservation {
+    return new NookLoginContextObservation(
+      observation.formIdentity,
+      observation.ancestorIdentities,
+      observation.advanceControlLabel,
+      observation.pathContext,
+    );
   }
 
   field(
@@ -66,6 +82,10 @@ export class PasswordFormFieldDirectClassification {
       [...observation.autocompleteTokens],
       observation.identityText,
       observation.loginContext,
+      observation.secondFactorRoute,
+      observation.inputMode,
+      observation.maxLength,
+      observation.pattern,
     );
     try {
       return {

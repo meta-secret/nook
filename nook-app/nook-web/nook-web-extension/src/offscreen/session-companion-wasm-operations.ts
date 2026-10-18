@@ -53,6 +53,7 @@ import {
   authentication_implicit_submit_actuation_is_safe,
   bind_authentication_page_observation_facts,
   has_login_context,
+  has_second_factor_route,
   looks_like_email_verification_body,
   looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
@@ -89,6 +90,10 @@ function classifyPageInputField(
     [...observation.autocompleteTokens],
     observation.identityText,
     observation.loginContext,
+    observation.secondFactorRoute,
+    observation.inputMode,
+    observation.maxLength,
+    observation.pattern,
   )
   try {
     return {
@@ -122,6 +127,10 @@ function classifyPageInputs(
         [...request.observation.autocompleteTokens],
         request.observation.identityText,
         loginContext,
+        has_second_factor_route(loginContextObservation),
+        request.observation.inputMode,
+        request.observation.maxLength,
+        request.observation.pattern,
       )
       try {
         return {

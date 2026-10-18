@@ -267,6 +267,10 @@ function fixtureFieldObservation(
     autocompleteTokens,
     identityText,
     true,
+    false,
+    '',
+    -1,
+    '',
   )
 }
 

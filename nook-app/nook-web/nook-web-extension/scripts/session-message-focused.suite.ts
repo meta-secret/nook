@@ -103,6 +103,10 @@ class FocusedSessionRouteFixture {
         autocompleteTokens: ['username'],
         identityText: 'email',
         loginContext: false,
+        secondFactorRoute: false,
+        inputMode: '',
+        maxLength: -1,
+        pattern: '',
       },
     },
   }
