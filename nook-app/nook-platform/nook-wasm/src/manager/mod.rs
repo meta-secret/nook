@@ -60,8 +60,8 @@ mod remote_vault_choice;
 mod search_catalog;
 mod secrets;
 mod sentinel;
-mod site_secret_listing;
 mod session;
+mod site_secret_listing;
 mod sync;
 mod verified_access;
 

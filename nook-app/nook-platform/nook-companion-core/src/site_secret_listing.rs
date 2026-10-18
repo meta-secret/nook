@@ -10,11 +10,13 @@
 //! so TypeScript only renders the result.
 
 mod page_need;
+mod row_presentation;
 
 pub use page_need::SitePageNeed;
 
-use nook_app_common::i18n_keys;
 use nook_auth2::{SecretId, StoreId};
+use page_need::SiteSecretRelevance;
+use row_presentation::SiteSecretNaming;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -123,7 +125,9 @@ pub struct SiteSecretVaults {
 #[serde(tag = "kind")]
 pub enum SiteSecretListing {
     /// At least one row the page needs, under identity headers in Rust's order.
-    Listed { groups: Vec<SiteSecretIdentityGroup> },
+    Listed {
+        groups: Vec<SiteSecretIdentityGroup>,
+    },
     /// Nothing the page needs is saved. `message_key` takes a `{host}`
     /// replacement with the tab's display host.
     Empty {
@@ -211,108 +215,10 @@ pub struct SiteSecretListingRequest {
     pub vaults: SiteSecretVaults,
 }
 
-/// Whether a kind serves the page's current need.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SiteSecretRelevance {
-    Relevant,
-    Hidden,
-}
-
-/// Whether a saved name is empty prose.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SiteSecretNaming {
-    Named,
-    Unnamed,
-}
-
-impl SiteSecretNaming {
-    fn of(text: &str) -> Self {
-        match text.trim() {
-            "" => Self::Unnamed,
-            _ => Self::Named,
-        }
-    }
-}
-
-impl SiteSecretKind {
-    /// Exhaustive page-need filter: a code challenge shows authenticators,
-    /// a login or sign-up form shows logins, any other page every kind.
-    const fn relevance(self, need: SitePageNeed) -> SiteSecretRelevance {
-        match need {
-            SitePageNeed::OneTimeCode => match self {
-                Self::Authenticator => SiteSecretRelevance::Relevant,
-                Self::Login | Self::Passkey | Self::ApiKey => SiteSecretRelevance::Hidden,
-            },
-            SitePageNeed::Credentials => match self {
-                Self::Login => SiteSecretRelevance::Relevant,
-                Self::Authenticator | Self::Passkey | Self::ApiKey => SiteSecretRelevance::Hidden,
-            },
-            SitePageNeed::AnySiteSecret => match self {
-                Self::Login | Self::Authenticator | Self::Passkey | Self::ApiKey => {
-                    SiteSecretRelevance::Relevant
-                }
-            },
-        }
-    }
-
-    fn type_label_key(self) -> SiteSecretMessageKey {
-        SiteSecretMessageKey::catalog(match self {
-            Self::Login => i18n_keys::VAULT_TYPES_LOGIN,
-            Self::Authenticator => i18n_keys::VAULT_TYPES_AUTHENTICATOR,
-            Self::Passkey => i18n_keys::VAULT_TYPES_PASSKEY,
-            Self::ApiKey => i18n_keys::VAULT_TYPES_API_KEY,
-        })
-    }
-
-    fn action(self) -> SiteSecretAction {
-        match self {
-            Self::Login => SiteSecretAction::FillLogin(SiteSecretActionLabels {
-                label_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_FILL),
-                accessible_label_key: SiteSecretMessageKey::catalog(
-                    i18n_keys::EXTENSION_ACTION_FILL_LOGIN,
-                ),
-            }),
-            Self::Authenticator => SiteSecretAction::FillCode(SiteSecretActionLabels {
-                label_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_FILL_CODE),
-                accessible_label_key: SiteSecretMessageKey::catalog(
-                    i18n_keys::EXTENSION_ACTION_FILL_CODE_FOR,
-                ),
-            }),
-            Self::Passkey | Self::ApiKey => SiteSecretAction::ViewOnly,
-        }
-    }
-}
-
 impl SiteSecretTitle {
     fn sort_key(&self) -> String {
         let Self(title) = self;
         title.to_lowercase()
-    }
-}
-
-impl From<SiteSecretVaultName> for SiteSecretVaultLabel {
-    fn from(name: SiteSecretVaultName) -> Self {
-        let SiteSecretVaultName(text) = &name;
-        match SiteSecretNaming::of(text) {
-            SiteSecretNaming::Named => Self::Named { name },
-            SiteSecretNaming::Unnamed => Self::Unnamed {
-                message_key: SiteSecretMessageKey::catalog(i18n_keys::LOGIN_VAULT_PICKER_UNNAMED),
-            },
-        }
-    }
-}
-
-impl From<SiteSecretIdentityName> for SiteSecretIdentityHeader {
-    fn from(name: SiteSecretIdentityName) -> Self {
-        let SiteSecretIdentityName(text) = &name;
-        match SiteSecretNaming::of(text) {
-            SiteSecretNaming::Named => Self::Named { name },
-            SiteSecretNaming::Unnamed => Self::Unnamed {
-                message_key: SiteSecretMessageKey::catalog(
-                    i18n_keys::EXTENSION_COMPANION_OTHER_VAULTS,
-                ),
-            },
-        }
     }
 }
 
@@ -444,6 +350,7 @@ impl SiteSecretListingRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_app_common::i18n_keys;
 
     struct ItemFixture {
         kind: SiteSecretKind,
@@ -705,56 +612,6 @@ mod tests {
         Ok(())
     }
 
-    struct KindPresentationCase {
-        kind: SiteSecretKind,
-        type_label: &'static str,
-        action: SiteSecretAction,
-    }
-
-    #[test]
-    fn every_kind_maps_to_its_type_label_and_action() {
-        let fill_login = SiteSecretAction::FillLogin(SiteSecretActionLabels {
-            label_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_FILL),
-            accessible_label_key: SiteSecretMessageKey::catalog(
-                i18n_keys::EXTENSION_ACTION_FILL_LOGIN,
-            ),
-        });
-        let fill_code = SiteSecretAction::FillCode(SiteSecretActionLabels {
-            label_key: SiteSecretMessageKey::catalog(i18n_keys::EXTENSION_ACTION_FILL_CODE),
-            accessible_label_key: SiteSecretMessageKey::catalog(
-                i18n_keys::EXTENSION_ACTION_FILL_CODE_FOR,
-            ),
-        });
-        for case in [
-            KindPresentationCase {
-                kind: SiteSecretKind::Login,
-                type_label: i18n_keys::VAULT_TYPES_LOGIN,
-                action: fill_login,
-            },
-            KindPresentationCase {
-                kind: SiteSecretKind::Authenticator,
-                type_label: i18n_keys::VAULT_TYPES_AUTHENTICATOR,
-                action: fill_code,
-            },
-            KindPresentationCase {
-                kind: SiteSecretKind::Passkey,
-                type_label: i18n_keys::VAULT_TYPES_PASSKEY,
-                action: SiteSecretAction::ViewOnly,
-            },
-            KindPresentationCase {
-                kind: SiteSecretKind::ApiKey,
-                type_label: i18n_keys::VAULT_TYPES_API_KEY,
-                action: SiteSecretAction::ViewOnly,
-            },
-        ] {
-            assert_eq!(
-                case.kind.type_label_key(),
-                SiteSecretMessageKey::catalog(case.type_label)
-            );
-            assert_eq!(case.kind.action(), case.action);
-        }
-    }
-
     #[test]
     fn filtered_empty_results_select_the_page_need_empty_state() -> anyhow::Result<()> {
         let only_login = SiteSecretVaults {
@@ -901,7 +758,10 @@ mod tests {
                 message_key: SiteSecretMessageKey::catalog(i18n_keys::LOGIN_VAULT_PICKER_UNNAMED),
             }
         );
-        assert_eq!(work_row.item_id.vault_store_id, StoreId::parse("store_SMypl8K0w9c")?);
+        assert_eq!(
+            work_row.item_id.vault_store_id,
+            StoreId::parse("store_SMypl8K0w9c")?
+        );
         Ok(())
     }
 
@@ -976,21 +836,78 @@ mod tests {
             .present(),
         )?;
         let json = serde_json::to_value(SiteSecretListing::Listed { groups })?;
-        assert_eq!(json["kind"], "Listed");
-        let row = &json["groups"][0]["rows"][0];
-        assert_eq!(json["groups"][0]["header"]["kind"], "Named");
-        assert_eq!(json["groups"][0]["header"]["name"], "Personal");
-        assert_eq!(row["kind"], "Authenticator");
-        assert_eq!(row["item_id"]["vault_store_id"], "store_SMypl8K0w9a");
-        assert_eq!(row["item_id"]["secret_id"], "secret_personal_totp");
-        assert_eq!(row["type_label_key"], i18n_keys::VAULT_TYPES_AUTHENTICATOR);
-        assert_eq!(row["title"], "Namecheap");
-        assert_eq!(row["account"], "bynull");
-        assert_eq!(row["saved_host"], "namecheap.com");
-        assert_eq!(row["vault"]["kind"], "Named");
-        assert_eq!(row["vault"]["name"], "bynull");
-        assert_eq!(row["action"]["kind"], "FillCode");
-        assert_eq!(row["action"]["label_key"], i18n_keys::EXTENSION_ACTION_FILL_CODE);
+        let row = "/groups/0/rows/0";
+        for expected in [
+            WireField {
+                pointer: "/kind".to_owned(),
+                value: "Listed",
+            },
+            WireField {
+                pointer: "/groups/0/header/kind".to_owned(),
+                value: "Named",
+            },
+            WireField {
+                pointer: "/groups/0/header/name".to_owned(),
+                value: "Personal",
+            },
+            WireField {
+                pointer: format!("{row}/kind"),
+                value: "Authenticator",
+            },
+            WireField {
+                pointer: format!("{row}/item_id/vault_store_id"),
+                value: "store_SMypl8K0w9a",
+            },
+            WireField {
+                pointer: format!("{row}/item_id/secret_id"),
+                value: "secret_personal_totp",
+            },
+            WireField {
+                pointer: format!("{row}/type_label_key"),
+                value: i18n_keys::VAULT_TYPES_AUTHENTICATOR,
+            },
+            WireField {
+                pointer: format!("{row}/title"),
+                value: "Namecheap",
+            },
+            WireField {
+                pointer: format!("{row}/account"),
+                value: "bynull",
+            },
+            WireField {
+                pointer: format!("{row}/saved_host"),
+                value: "namecheap.com",
+            },
+            WireField {
+                pointer: format!("{row}/vault/kind"),
+                value: "Named",
+            },
+            WireField {
+                pointer: format!("{row}/vault/name"),
+                value: "bynull",
+            },
+            WireField {
+                pointer: format!("{row}/action/kind"),
+                value: "FillCode",
+            },
+            WireField {
+                pointer: format!("{row}/action/label_key"),
+                value: i18n_keys::EXTENSION_ACTION_FILL_CODE,
+            },
+        ] {
+            assert_eq!(
+                json.pointer(&expected.pointer)
+                    .and_then(serde_json::Value::as_str),
+                Some(expected.value),
+                "{}",
+                expected.pointer
+            );
+        }
         Ok(())
+    }
+
+    struct WireField {
+        pointer: String,
+        value: &'static str,
     }
 }

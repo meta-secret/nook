@@ -4,7 +4,7 @@
 //! as it does for the in-page widget; this module derives the listing filter
 //! from that classification, so the workflow vocabulary has a single owner.
 
-use super::{SiteSecretEmptyHint, SiteSecretListing, SiteSecretMessageKey};
+use super::{SiteSecretEmptyHint, SiteSecretKind, SiteSecretListing, SiteSecretMessageKey};
 use crate::{AuthenticationWorkflowKind, AuthenticationWorkflowMatch};
 use nook_app_common::i18n_keys;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -70,6 +70,35 @@ impl SitePageNeed {
                     i18n_keys::EXTENSION_ACTION_SITE_EMPTY_ANY,
                 ),
                 hint: save_hint,
+            },
+        }
+    }
+}
+
+/// Whether a kind serves the page's current need.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SiteSecretRelevance {
+    Relevant,
+    Hidden,
+}
+
+impl SiteSecretKind {
+    /// Exhaustive page-need filter: a code challenge shows authenticators,
+    /// a login or sign-up form shows logins, any other page every kind.
+    pub(super) const fn relevance(self, need: SitePageNeed) -> SiteSecretRelevance {
+        match need {
+            SitePageNeed::OneTimeCode => match self {
+                Self::Authenticator => SiteSecretRelevance::Relevant,
+                Self::Login | Self::Passkey | Self::ApiKey => SiteSecretRelevance::Hidden,
+            },
+            SitePageNeed::Credentials => match self {
+                Self::Login => SiteSecretRelevance::Relevant,
+                Self::Authenticator | Self::Passkey | Self::ApiKey => SiteSecretRelevance::Hidden,
+            },
+            SitePageNeed::AnySiteSecret => match self {
+                Self::Login | Self::Authenticator | Self::Passkey | Self::ApiKey => {
+                    SiteSecretRelevance::Relevant
+                }
             },
         }
     }

@@ -830,6 +830,11 @@ mod tests {
                 r#""origin":"https://example.com","#,
             ),
             (
+                "site secrets",
+                r#"{"type":"nook:extension-session-list-site-secrets","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""origin":"https://example.com","#,
+            ),
+            (
                 "secret grant",
                 r#"{"type":"nook:extension-session-reveal-login","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","secretId":"secret","queue":{"kind":"message-default"}}}"#,
                 r#""secretId":"secret","#,

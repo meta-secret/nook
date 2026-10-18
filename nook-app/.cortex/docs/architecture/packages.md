@@ -15,7 +15,7 @@ Team owner: development core.
 ### Shared Leaf: `nook-app-common`
 
 - **Cross-cutting primitives:** Owns dependency-light facilities needed by sibling portable crates without depending on their auth, event, or vault domains.
-- **Localization source of truth:** Owns locale catalogs, translation behavior, and the single generated Rust translation-key registry. `nook-auth2` and `nook-core` consume it; `nook-core` may re-export the API for compatibility.
+- **Localization source of truth:** Owns locale catalogs, translation behavior, and the single generated Rust translation-key registry. `nook-auth2`, `nook-companion-core`, and `nook-core` consume it; `nook-core` may re-export the API for compatibility.
 - **Strict scope:** Authentication policy stays in `nook-auth2`, vault semantics stay in `nook-core`, and browser behavior stays in `nook-wasm` or the web packages.
 
 ### Authenticator Domain: `nook-authenticator-domain`
@@ -55,7 +55,7 @@ Team owner: development core.
 ### Extension Companion Domain: `nook-companion-core`
 
 - **Portable extension policy:** Owns authentication workflow, pairing records, host classification, and form-field classification.
-- **Shared domain inputs:** Depends on `nook-authenticator-domain` and `nook-event-log` without importing browser APIs.
+- **Shared domain inputs:** Depends on `nook-authenticator-domain`, `nook-event-log`, and the `nook-app-common` translation-key registry without importing browser APIs.
 - **Strict scope:** Chrome lifecycle, DOM observation, WASM adaptation, and presentation stay outside this crate.
 
 ### Application Domain Core: `nook-core`
