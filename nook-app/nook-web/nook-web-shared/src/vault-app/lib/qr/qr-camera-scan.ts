@@ -74,7 +74,9 @@ export class QrCameraScan {
       try: () => this.play(stream),
       catch: () => new QrCameraUnavailable(),
     };
-    return Effect.acquireRelease(Effect.tryPromise(playing), () => this.hide());
+    return Effect.acquireRelease(Effect.tryPromise(playing), () =>
+      this.hide(stream),
+    );
   }
 
   private play(stream: MediaStream): Promise<void> {
@@ -82,11 +84,20 @@ export class QrCameraScan {
     return this.target.video.play();
   }
 
-  /** Detaches the camera stream by replacing it with an empty one. */
-  private hide(): Effect.Effect<void> {
+  /**
+   * Detaches this scan's stream by replacing it with an empty one. A newer scan
+   * may already own the preview after a quick restart; its stream stays.
+   */
+  private hide(stream: MediaStream): Effect.Effect<void> {
     return Effect.sync(() => {
-      this.target.video.pause();
-      this.target.video.srcObject = new MediaStream();
+      switch (this.target.video.srcObject) {
+        case stream:
+          this.target.video.pause();
+          this.target.video.srcObject = new MediaStream();
+          return;
+        default:
+          return;
+      }
     });
   }
 
