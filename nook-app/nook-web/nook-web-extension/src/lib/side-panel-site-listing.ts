@@ -4,11 +4,13 @@ import type {
   SiteSecretMatches,
   SiteSecretAction,
   SiteSecretEmptyHint,
-  SiteSecretIdentityGroup,
   SiteSecretIdentityHeader,
   SiteSecretItemId,
   SiteSecretListing,
+  SiteSecretListingSummary,
   SiteSecretRow,
+  SiteSecretSection,
+  SiteSecretSectionContent,
   SiteSecretVaultLabel,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -42,7 +44,6 @@ type RowFields = {
   readonly title: BoundedTextSchema
   readonly account: BoundedTextSchema
   readonly saved_host: BoundedTextSchema
-  readonly vault: Schema.Codec<SiteSecretVaultLabel>
   readonly action: Schema.Codec<SiteSecretAction>
 }
 type ItemFields = {
@@ -55,29 +56,41 @@ type ItemFields = {
 type MatchesFields = {
   readonly items: Schema.Codec<SiteSecretItem[]>
 }
-type GroupFields = {
-  readonly header: Schema.Codec<SiteSecretIdentityHeader>
+type ListedContentFields = {
+  readonly kind: Schema.Codec<'Listed'>
   readonly rows: Schema.Codec<SiteSecretRow[]>
 }
-type ListedFields = {
-  readonly kind: Schema.Codec<'Listed'>
-  readonly groups: Schema.Codec<SiteSecretIdentityGroup[]>
+type EmptyContentFields = {
+  readonly kind: Schema.Codec<'Empty'>
+  readonly message_key: BoundedTextSchema
 }
+type SectionFields = {
+  readonly vault_store_id: BoundedTextSchema
+  readonly identity: Schema.Codec<SiteSecretIdentityHeader>
+  readonly vault: Schema.Codec<SiteSecretVaultLabel>
+  readonly content: Schema.Codec<SiteSecretSectionContent>
+}
+type ListedSummaryFields = { readonly kind: Schema.Codec<'Listed'> }
 type ShownHintFields = {
   readonly kind: Schema.Codec<'Shown'>
   readonly message_key: BoundedTextSchema
 }
 type AbsentHintFields = { readonly kind: Schema.Codec<'Absent'> }
-type EmptyFields = {
+type EmptySummaryFields = {
   readonly kind: Schema.Codec<'Empty'>
   readonly message_key: BoundedTextSchema
   readonly hint: Schema.Codec<SiteSecretEmptyHint>
+}
+type ListingFields = {
+  readonly summary: Schema.Codec<SiteSecretListingSummary>
+  readonly sections: Schema.Codec<SiteSecretSection[]>
 }
 
 /**
  * Strict codec for the Rust-presented This-site listing the worker forwards
  * to the panel. It checks the shape and bounds every string; Rust already
- * filtered, grouped and ordered the rows and chose every translation key.
+ * filtered and ordered the rows into identity:vault sections and chose every
+ * translation key.
  */
 export class SiteSecretListingCodec {
   private constructor() {}
@@ -138,24 +151,33 @@ export class SiteSecretListingCodec {
     title: SiteSecretListingCodec.text,
     account: SiteSecretListingCodec.text,
     saved_host: SiteSecretListingCodec.text,
-    vault: SiteSecretListingCodec.label,
     action: Schema.Union([
       Schema.Struct(SiteSecretListingCodec.fillLoginFields),
       Schema.Struct(SiteSecretListingCodec.fillCodeFields),
       Schema.Struct(SiteSecretListingCodec.viewOnlyFields),
     ]),
   }
-  private static readonly groupFields: GroupFields = {
-    header: SiteSecretListingCodec.label,
+  private static readonly listedContentFields: ListedContentFields = {
+    kind: Schema.Literal('Listed'),
     rows: Schema.mutable(
       Schema.Array(Schema.Struct(SiteSecretListingCodec.rowFields)),
     ),
   }
-  private static readonly listedFields: ListedFields = {
+  private static readonly emptyContentFields: EmptyContentFields = {
+    kind: Schema.Literal('Empty'),
+    message_key: SiteSecretListingCodec.key,
+  }
+  private static readonly sectionFields: SectionFields = {
+    vault_store_id: SiteSecretListingCodec.identifier,
+    identity: SiteSecretListingCodec.label,
+    vault: SiteSecretListingCodec.label,
+    content: Schema.Union([
+      Schema.Struct(SiteSecretListingCodec.listedContentFields),
+      Schema.Struct(SiteSecretListingCodec.emptyContentFields),
+    ]),
+  }
+  private static readonly listedSummaryFields: ListedSummaryFields = {
     kind: Schema.Literal('Listed'),
-    groups: Schema.mutable(
-      Schema.Array(Schema.Struct(SiteSecretListingCodec.groupFields)),
-    ),
   }
   private static readonly shownHintFields: ShownHintFields = {
     kind: Schema.Literal('Shown'),
@@ -164,13 +186,22 @@ export class SiteSecretListingCodec {
   private static readonly absentHintFields: AbsentHintFields = {
     kind: Schema.Literal('Absent'),
   }
-  private static readonly emptyFields: EmptyFields = {
+  private static readonly emptySummaryFields: EmptySummaryFields = {
     kind: Schema.Literal('Empty'),
     message_key: SiteSecretListingCodec.key,
     hint: Schema.Union([
       Schema.Struct(SiteSecretListingCodec.shownHintFields),
       Schema.Struct(SiteSecretListingCodec.absentHintFields),
     ]),
+  }
+  private static readonly listingFields: ListingFields = {
+    summary: Schema.Union([
+      Schema.Struct(SiteSecretListingCodec.listedSummaryFields),
+      Schema.Struct(SiteSecretListingCodec.emptySummaryFields),
+    ]),
+    sections: Schema.mutable(
+      Schema.Array(Schema.Struct(SiteSecretListingCodec.sectionFields)),
+    ),
   }
 
   private static readonly itemFields: ItemFields = {
@@ -191,8 +222,7 @@ export class SiteSecretListingCodec {
     SiteSecretListingCodec.matchesFields,
   )
 
-  static readonly listing: Schema.Codec<SiteSecretListing> = Schema.Union([
-    Schema.Struct(SiteSecretListingCodec.listedFields),
-    Schema.Struct(SiteSecretListingCodec.emptyFields),
-  ])
+  static readonly listing: Schema.Codec<SiteSecretListing> = Schema.Struct(
+    SiteSecretListingCodec.listingFields,
+  )
 }

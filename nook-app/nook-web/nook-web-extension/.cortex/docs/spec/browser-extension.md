@@ -56,7 +56,8 @@ application capability checks enforce the vault-type boundary.
     state has at most one primary action, such as Use my passkey, Unlock,
     Connect an identity, or the Fill of a single listed login. PIN and passkey
     setup and unlock run in place. The panel also offers Open vault, Lock, and
-    the connected identities with their vaults.
+    Connect another identity. It groups This site's items by connected
+    identity and vault.
 - **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
     tab for the locked Pilot action, identity connection, and All connections.
@@ -188,9 +189,10 @@ private identity.
     the ceremony offers PIN setup.
   - **PIN locked:** a PIN field and Unlock.
   - **Passkey locked:** Unlock with passkey, run in place.
-  - **Unlocked with a paired vault:** This site leads. A compact block of the
-    connected identities and their vaults follows, with Connect another
-    identity. The footer offers All connections.
+  - **Unlocked with a paired vault:** This site leads, with one section for
+    each connected identity and vault. The identity sync status and Connect
+    another identity follow those sections. The panel has no separate list of
+    identities. The footer offers All connections.
   - **Unlocked with no paired vault:** Connect an identity.
   - **Failure:** a device-status error or an initialization failure shows a
     failure view, never the setup ceremony. A paired-vault load failure shows
@@ -202,15 +204,24 @@ private identity.
   the authentication tab or by Pilot, or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
   broadcasts.
-- This site names the active tab's display host and lists the site-bound
-  items (logins, authenticators, passkeys and API keys) Rust matches to that
-  site, filtered by what the page needs, under identity headers. Each row shows
-  a type icon and label, title, and account with saved host. Logins offer an
-  explicit Fill, authenticators Fill code; passkeys and API keys are view-only.
+- This site names the active tab's display host. It lists the site-bound items
+  (logins, authenticators, passkeys and API keys) Rust matches to that site,
+  filtered by what the page needs. Each row shows a type icon and label, title,
+  and account with saved host. Logins offer an explicit Fill, authenticators
+  Fill code; passkeys and API keys are view-only.
   - It follows tab activation and URL changes in the panel's window.
-  - An empty list names the site with Rust's copy for the page's need.
-  - One listed row gets the primary action. Several rows each get a secondary
-    action.
+  - It shows one section for each paired identity and vault that a
+    password-filling grant covers. The header names both, as in
+    "Personal · test". Rust supplies "Other vaults" for a missing identity
+    name and "Unnamed vault" for a missing vault name.
+  - A row does not repeat its vault name.
+  - A section with no matching row shows "Nothing for this site".
+  - A section of an identity other than the unlocked one carries the
+    other-identity tag ("Locked" in English).
+  - When no section lists a row, Rust's copy for the page's need names the site
+    above the sections.
+  - One listed row, counted across all sections, gets the primary action.
+    Several rows each get a secondary action.
   - A tab without a website shows "No website in this tab". A Nook vault app
     shows "Nook can't fill on this page". Neither shows a Fill button.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
@@ -418,39 +429,60 @@ resolves it again at Fill time.
    [general login website matching](#general-login-website-matching).
    - A failed or malformed grant answer returns `list-failed`, never an empty
      list.
-8. Rust filters every grant's matches by the page need, groups rows under
-   identity headers in grant order, orders them, and selects every label,
-   action and empty-state key.
+8. Rust filters every grant's matches by the page need and presents one
+   section for each password-filling grant.
+   - Identities follow the order of their first grant, with named identities
+     before unnamed ones.
+   - An identity's vaults stay adjacent, in grant order.
+   - Rows follow kind, then title, then account.
+   - Rust selects every label, action, section-empty and empty-state key.
 9. The service worker checks the generation again after the listing.
    - A stale generation returns `locked`.
 
 The listing obeys these rules:
 
-- The reply holds the Rust display host and Rust's presentation: identity
-  groups of rows (type, opaque item id, type label key, title, account, saved
-  host, vault label and action), or a typed empty state.
+- The reply holds the Rust display host and Rust's presentation: the sections
+  and a summary.
+  - A section holds the identity label, the vault label, the vault's store id,
+    and either its rows or Rust's section-empty key. A label is a saved name
+    or Rust's unnamed-label key.
+  - A row holds the type, opaque item id, type label key, title, account,
+    saved host, and action. It holds no vault label.
+  - The summary is `Listed` when any section lists a row. Otherwise it is
+    `Empty`, with Rust's empty state for the page's need.
 - The reply carries no password, TOTP seed or code, key, passkey private data,
   saved website URL, tab URL, authorization generation, or device key.
+- The panel derives a section's other-identity tag from the section's vault
+  store id and the paired-vault groups it already holds. A section is current
+  only when the group that holds its vault has the unlocked key.
 - The route never opens the authentication tab.
 - The panel keeps the listing in component memory. It clears the listing on
   lock or session-state change, on tab activation or URL change in its window,
   and when the panel hides or unloads.
 - The panel never reads, logs, or stores the tab URL or origin.
-- One listed row gets the primary action. Several rows each get a secondary
-  action.
+- One listed row, counted across all sections, gets the primary action.
+  Several rows each get a secondary action.
 - The listing outcomes form a closed set. The panel renders every outcome with
   English and Russian catalog text:
-  - **Ready:** `ready` with Rust's rows. Rust's empty state for the page's
-    need, naming the site, appears only for a ready listing with no row.
+  - **Ready:** `ready` with Rust's sections. Rust's empty state for the page's
+    need, naming the site, appears above the sections only when no section
+    lists a row.
   - **Request or page:** `forbidden`, `non-web`, and `page-unavailable`.
   - **Session and grants:** `unpaired` and `locked`.
   - **Failure:** `list-failed`.
 
 - **Prohibited:** show "nothing saved" after a grant transport fails, match,
-  filter or order items in TypeScript, or show an unlocked list after a lock
-  cleanup started.
+  filter, group or order items in TypeScript, or show an unlocked list after a
+  lock cleanup started.
 - **Required:** return `list-failed` for that failure and list only Rust's
-  rows. Return `locked` while the generation is stale or a cleanup is pending.
+  sections and rows. Return `locked` while the generation is stale or a cleanup
+  is pending.
+
+- **Prohibited:** omit a paired vault's section because it has no matching row,
+  or show the page's empty state while another section lists a row.
+- **Required:** show a section for every password-filling grant, with
+  "Nothing for this site" in an empty one. Show the page's empty state above
+  the sections only when no section lists a row.
 
 #### Fill
 
@@ -1090,10 +1122,11 @@ scope. See
 Each stored pairing grant carries `identityLabel`, the name of the identity
 the vault belongs to, taken from the web app's identity snapshot at approval.
 It is display-only and carries no authority: it groups vaults in the companion
-home and the side panel. The field is additive and decoded with a serde
-default, so grants stored before it existed read back with an empty label and
-need no migration. Re-pairing the vault records the label. Approvals from a
-web app that predates the field are admitted with an empty label.
+home and names the identity in each This site section of the side panel. The
+field is additive and decoded with a serde default, so grants stored before it
+existed read back with an empty label and need no migration. Re-pairing the
+vault records the label. Approvals from a web app that predates the field are
+admitted with an empty label.
 
 ### Identity membership
 
@@ -1127,7 +1160,8 @@ phone or computer is.
 - **Switching:** One identity is unlocked at a time. Grants keep their key's app
   id, so the authentication tab groups vaults by key and offers Use this
   identity for the others, which selects that identity and locks the current
-  one. The side panel shows the same groups without per-identity actions.
+  one. The side panel shows no identity groups. Its This site sections name
+  each identity and vault and offer no per-identity actions.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.

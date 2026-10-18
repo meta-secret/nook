@@ -327,6 +327,74 @@ describe('side panel vaults', () => {
       SidePanelIdentityRelation.Other,
     )
   })
+
+  test("a This site section is current only when the unlocked identity's loaded group holds its vault", () => {
+    const familyVault: PairedVaultSummary = {
+      ...personalVault,
+      vaultStoreId: 'store-family',
+      vaultName: 'Family',
+      isDefault: false,
+    }
+    const groups: PairedVaultGroup[] = [
+      {
+        identityLabel: 'Me',
+        deviceId: 'device-personal',
+        vaults: [personalVault, familyVault],
+      },
+      { identityLabel: 'Acme', deviceId: 'device-work', vaults: [workVault] },
+    ]
+    const locked: ExtensionSessionDeviceState = {
+      kind: ExtensionSessionDeviceStateKind.Locked,
+    }
+    type SectionRelationCase = {
+      readonly request: Parameters<typeof SidePanelViews.sectionRelation>[0]
+      readonly relation: SidePanelIdentityRelation
+    }
+    const cases: readonly SectionRelationCase[] = [
+      // Every vault of the unlocked identity is current, not only its first.
+      {
+        request: {
+          vaultStoreId: 'store-personal',
+          groups,
+          device: activeDevice,
+        },
+        relation: SidePanelIdentityRelation.Current,
+      },
+      {
+        request: { vaultStoreId: 'store-family', groups, device: activeDevice },
+        relation: SidePanelIdentityRelation.Current,
+      },
+      {
+        request: { vaultStoreId: 'store-work', groups, device: activeDevice },
+        relation: SidePanelIdentityRelation.Other,
+      },
+      // A vault no loaded group holds is not claimed for the unlocked identity.
+      {
+        request: {
+          vaultStoreId: 'store-unloaded',
+          groups,
+          device: activeDevice,
+        },
+        relation: SidePanelIdentityRelation.Other,
+      },
+      {
+        request: {
+          vaultStoreId: 'store-personal',
+          groups: [],
+          device: activeDevice,
+        },
+        relation: SidePanelIdentityRelation.Other,
+      },
+      // A locked extension has no current identity.
+      {
+        request: { vaultStoreId: 'store-personal', groups, device: locked },
+        relation: SidePanelIdentityRelation.Other,
+      },
+    ]
+    for (const { request, relation } of cases) {
+      expect(SidePanelViews.sectionRelation(request)).toBe(relation)
+    }
+  })
 })
 
 describe('side panel hand-offs to the Nook tab', () => {

@@ -78,7 +78,8 @@ export interface SidePanelSiteReadyListing {
   readonly kind: SidePanelSiteListingKind.Ready
   /** The active tab's host as Rust displays it. */
   readonly display_host: string
-  /** Rust's filtered, grouped and ordered display rows, or its empty state. */
+  /** Rust's identity:vault sections of filtered, ordered display rows, and
+   * its empty state when no section lists a row. */
   readonly listing: SiteSecretListing
 }
 

@@ -747,6 +747,7 @@ pub const EXTENSION_ACTION_SITE_NO_FILLING_VAULT: &str = "extension.action.site_
 pub const EXTENSION_ACTION_SITE_NOT_WEB: &str = "extension.action.site_not_web";
 pub const EXTENSION_ACTION_SITE_NOT_WEB_HINT: &str = "extension.action.site_not_web_hint";
 pub const EXTENSION_ACTION_SITE_RESTRICTED: &str = "extension.action.site_restricted";
+pub const EXTENSION_ACTION_SITE_VAULT_EMPTY: &str = "extension.action.site_vault_empty";
 pub const EXTENSION_ACTION_START_FAILED: &str = "extension.action.start_failed";
 pub const EXTENSION_ACTION_STATE_LOCKED: &str = "extension.action.state_locked";
 pub const EXTENSION_ACTION_STATE_SETUP: &str = "extension.action.state_setup";
