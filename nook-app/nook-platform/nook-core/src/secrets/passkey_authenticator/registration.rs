@@ -319,6 +319,18 @@ mod tests {
                 .any(|(key, value)| key == &Value::Text("fmt".to_owned())
                     && value == &Value::Text("none".to_owned()))
         );
+        // Sites read the provider from the attested AAGUID, so it is Nook's own.
+        let auth_data = entries
+            .iter()
+            .find_map(|(key, value)| match (key, value) {
+                (Value::Text(name), Value::Bytes(bytes)) if name == "authData" => Some(bytes),
+                _ => None,
+            })
+            .ok_or_else(|| anyhow::anyhow!("attestation must carry authData"))?;
+        assert_eq!(
+            auth_data.get(37..53),
+            Some(super::super::encoding::NOOK_PASSKEY_AAGUID.as_slice())
+        );
         Ok(())
     }
 }
