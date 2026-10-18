@@ -263,7 +263,11 @@ export class SidePanelRouteFixture {
       ok({
         ok: true,
         accounts: [
-          RouteData.account('store_workvaultxx', 'secret_two', 'work@example.com'),
+          RouteData.account(
+            'store_workvaultxx',
+            'secret_two',
+            'work@example.com',
+          ),
         ],
       }),
     ],

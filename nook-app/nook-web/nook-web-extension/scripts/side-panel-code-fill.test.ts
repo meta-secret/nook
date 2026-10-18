@@ -181,10 +181,7 @@ class CodePageFixture {
     RevalidatedAuthenticationActionOutcomeKind.Acted,
     RevalidatedAuthenticationActionOutcomeKind.Acted,
   ]
-  answer: CodeDelivery = CodePageData.ready(
-    '123456',
-    CodePageData.now + 30_000,
-  )
+  answer: CodeDelivery = CodePageData.ready('123456', CodePageData.now + 30_000)
   now = CodePageData.now
   beforeCode: () => void = () => {}
   private readonly facts = CodePageData.approvedFacts()
@@ -417,7 +414,8 @@ describe('side-panel Fill code into the page', () => {
   test('without a Rust one-time-code challenge it answers no-code-field and asks for no code', async () => {
     const login = new CodePageFixture()
     const page = login.page
-    if (page.kind !== SidePanelPageWorkflowKind.Selected) throw new Error('page')
+    if (page.kind !== SidePanelPageWorkflowKind.Selected)
+      throw new Error('page')
     login.page = {
       ...page,
       snapshot: CodePageData.snapshot(

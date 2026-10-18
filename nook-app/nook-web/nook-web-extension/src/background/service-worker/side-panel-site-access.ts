@@ -4,7 +4,6 @@ import { SiteSecretListingCodec } from '../../lib/side-panel-site-listing'
 import {
   present_site_secret_listing,
   type SitePageNeed,
-  type SiteSecretListing,
   type SiteSecretMatches,
   type SiteSecretVault,
   type SiteSecretVaults,
@@ -265,7 +264,10 @@ export class SidePanelSiteAccess {
           case SidePanelVaultMatchesKind.Listed:
             break
         }
-        const vault: SidePanelSiteVaultRequest = { grant, matches: listed.matches }
+        const vault: SidePanelSiteVaultRequest = {
+          grant,
+          matches: listed.matches,
+        }
         vaults.push(this.siteVault(vault))
       }
       const listed: SidePanelSiteSecrets = {
@@ -287,7 +289,9 @@ export class SidePanelSiteAccess {
     },
   )
 
-  private siteMatches(response: ExtensionSessionResponse): SidePanelVaultMatches {
+  private siteMatches(
+    response: ExtensionSessionResponse,
+  ): SidePanelVaultMatches {
     switch (true) {
       case typeof response === 'object' && 'matches' in response:
         return this.decodedMatches(
@@ -332,13 +336,10 @@ export class SidePanelSiteAccess {
     }
   }
 
+  /** A grant stored before identities were recorded names none: an empty name. */
   private identityName(grant: StoredExtensionPairingGrant): string {
-    switch (typeof grant.identityLabel) {
-      case 'string':
-        return grant.identityLabel
-      default:
-        return ''
-    }
+    const { identityLabel = '' } = grant
+    return identityLabel
   }
 
   /**
@@ -473,8 +474,6 @@ export interface SidePanelSiteSecretsPresentation {
   readonly need: SitePageNeed
   readonly vaults: SiteSecretVaults
 }
-
-export type { SiteSecretListing }
 
 export enum SidePanelPageNeedReadingKind {
   Answered = 'answered',

@@ -191,7 +191,9 @@ visibility or the lock state changes.
   }
 
   /** Sends the row's fill request and maps its answer to what the row shows. */
-  async function sendFill(request: ThisSiteFillSend): Promise<ThisSiteFillOutcome> {
+  async function sendFill(
+    request: ThisSiteFillSend,
+  ): Promise<ThisSiteFillOutcome> {
     const fillRequest: SidePanelLoginFillRequest = {
       windowId: request.windowId,
       itemId: request.item,

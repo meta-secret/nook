@@ -76,7 +76,10 @@ class Rows {
       title: 'Example',
       account: 'alice',
       saved_host: 'accounts.example.com',
-      vault: { kind: 'Unnamed', message_key: I18N_KEYS.LoginVaultPickerUnnamed },
+      vault: {
+        kind: 'Unnamed',
+        message_key: I18N_KEYS.LoginVaultPickerUnnamed,
+      },
       action: { kind: 'ViewOnly' },
     }
   }
@@ -86,7 +89,10 @@ const work = Rows.login('login-work', 'alice@company.example')
 const personal = Rows.login('login-personal', 'alice@example.com')
 const workId: SidePanelLoginItemId = ThisSiteViews.itemId(work)
 const groups: SiteSecretIdentityGroup[] = [
-  { header: { kind: 'Named', name: 'work' }, rows: [work, Rows.authenticator()] },
+  {
+    header: { kind: 'Named', name: 'work' },
+    rows: [work, Rows.authenticator()],
+  },
   {
     header: {
       kind: 'Unnamed',
@@ -166,7 +172,11 @@ describe('This site listing', () => {
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
         host: { kind: ThisSiteHostKind.Named, host: 'www.namecheap.com' },
-        body: { kind: ThisSiteBodyKind.Empty, host: 'www.namecheap.com', empty },
+        body: {
+          kind: ThisSiteBodyKind.Empty,
+          host: 'www.namecheap.com',
+          empty,
+        },
       },
       signal: ThisSitePanelSignal.None,
     })

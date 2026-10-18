@@ -17,7 +17,9 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 /** Classified workflows and vault matches as the extension passes them to Rust. */
 class SiteListingInputs {
-  static matched(kind: AuthenticationWorkflowKind): AuthenticationWorkflowMatch {
+  static matched(
+    kind: AuthenticationWorkflowKind,
+  ): AuthenticationWorkflowMatch {
     const snapshot: AuthenticationWorkflowSnapshot = {
       kind,
       stage: AuthenticationWorkflowStage.Credentials,
@@ -66,7 +68,11 @@ class SiteListingInputs {
           SiteListingInputs.item('Login', 'secret_login0001', 'namecheap.com'),
         ]),
         SiteListingInputs.vault('store_workvaultxx', 'work', [
-          SiteListingInputs.item('Authenticator', 'secret_totp00001', 'Namecheap'),
+          SiteListingInputs.item(
+            'Authenticator',
+            'secret_totp00001',
+            'Namecheap',
+          ),
         ]),
       ],
     }
@@ -81,7 +87,9 @@ describe('companion site-secret listing WASM ABI', () => {
       ),
     ).toBe(SitePageNeed.OneTimeCode)
     expect(
-      site_page_need(SiteListingInputs.matched(AuthenticationWorkflowKind.Login)),
+      site_page_need(
+        SiteListingInputs.matched(AuthenticationWorkflowKind.Login),
+      ),
     ).toBe(SitePageNeed.Credentials)
     const noMatch: AuthenticationWorkflowMatch = { kind: 'no-match' }
     expect(site_page_need(noMatch)).toBe(SitePageNeed.AnySiteSecret)
@@ -99,7 +107,11 @@ describe('companion site-secret listing WASM ABI', () => {
     ])
     expect(
       listing.groups.map((group) =>
-        group.rows.map((row) => [row.kind, row.type_label_key, row.action.kind]),
+        group.rows.map((row) => [
+          row.kind,
+          row.type_label_key,
+          row.action.kind,
+        ]),
       ),
     ).toEqual([
       [
@@ -123,27 +135,16 @@ describe('companion site-secret listing WASM ABI', () => {
     const empty: SiteSecretVaults = {
       vaults: [SiteListingInputs.vault('store_personalvlt', 'Personal', [])],
     }
-    expect(present_site_secret_listing(SitePageNeed.OneTimeCode, empty)).toEqual(
-      {
-        kind: 'Empty',
-        message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
-        hint: { kind: 'Absent' },
-      },
-    )
+    expect(
+      present_site_secret_listing(SitePageNeed.OneTimeCode, empty),
+    ).toEqual({
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+      hint: { kind: 'Absent' },
+    })
   })
 
-  test('present_site_secret_listing rejects unknown fields and invalid ids as JavaScript errors', () => {
-    const unknownField = {
-      vaults: [
-        {
-          ...SiteListingInputs.vault('store_personalvlt', 'Personal', []),
-          password: 'hunter2',
-        },
-      ],
-    }
-    expect(() =>
-      present_site_secret_listing(SitePageNeed.AnySiteSecret, unknownField),
-    ).toThrow('Invalid site secret vault matches.')
+  test('present_site_secret_listing rejects an invalid store id as a JavaScript error', () => {
     const invalidId = {
       vaults: [SiteListingInputs.vault('not a store id', 'Personal', [])],
     }

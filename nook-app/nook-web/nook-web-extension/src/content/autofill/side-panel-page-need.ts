@@ -26,7 +26,9 @@ import {
 
 /** Asks Rust for the page need of a classified workflow match. */
 export interface SidePanelPageNeedSource {
-  pageNeed(workflowMatch: AuthenticationWorkflowMatch): Promise<SidePanelPageNeedReply>
+  pageNeed(
+    workflowMatch: AuthenticationWorkflowMatch,
+  ): Promise<SidePanelPageNeedReply>
 }
 
 /**

@@ -386,7 +386,9 @@ export class SidePanelSiteClient {
   }
 
   /** Fills the current code of a listed authenticator into the active tab. */
-  fillCode(request: SidePanelLoginFillRequest): Promise<SidePanelCodeFillOutcome> {
+  fillCode(
+    request: SidePanelLoginFillRequest,
+  ): Promise<SidePanelCodeFillOutcome> {
     const message: SidePanelCodeFillMessage = {
       type: SidePanelSiteMessageType.FillCode,
       payload: {

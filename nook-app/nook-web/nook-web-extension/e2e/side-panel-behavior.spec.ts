@@ -275,9 +275,9 @@ test('typed rows sit under identity headers; authenticators Fill code and the re
   await expect(rows.nth(0).getByTestId('side-panel-item-type')).toHaveText(
     'Authenticator · www',
   )
-  await expect(
-    rows.nth(0).getByTestId('side-panel-item-subtitle'),
-  ).toHaveText('bynull · www.namecheap.com')
+  await expect(rows.nth(0).getByTestId('side-panel-item-subtitle')).toHaveText(
+    'bynull · www.namecheap.com',
+  )
   await expect(rows.nth(1).getByTestId('side-panel-item-type')).toHaveText(
     'Passkey · www',
   )
@@ -290,7 +290,9 @@ test('typed rows sit under identity headers; authenticators Fill code and the re
   await expect(fillCode).toHaveText('Fill code')
   const result = page.getByTestId('side-panel-fill-result')
   await fillCode.click()
-  await expect(result).toHaveText('Code filled. Review the page, then continue.')
+  await expect(result).toHaveText(
+    'Code filled. Review the page, then continue.',
+  )
   await panel.update({ codeFill: { kind: SidePanelCodeFillKind.NoCodeField } })
   await fillCode.click()
   await expect(result).toHaveText(

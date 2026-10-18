@@ -263,7 +263,10 @@ describe('side-panel This-site listing (T-2)', () => {
 
     const noCodes = new SidePanelRouteFixture()
     noCodes.pageNeed = totp.pageNeed
-    noCodes.siteListings.set('store_workvaultxx', ok({ ok: true, matches: { items: [] } }))
+    noCodes.siteListings.set(
+      'store_workvaultxx',
+      ok({ ok: true, matches: { items: [] } }),
+    )
     expect(await noCodes.list()).toEqual({
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
@@ -836,7 +839,10 @@ describe('side-panel Fill code route', () => {
     })
 
     const failing = new SidePanelRouteFixture()
-    failing.siteListings.set('store_workvaultxx', ok({ ok: false, reason: 'x' }))
+    failing.siteListings.set(
+      'store_workvaultxx',
+      ok({ ok: false, reason: 'x' }),
+    )
     expect(await failing.fillCode()).toEqual({
       kind: SidePanelCodeFillKind.FillFailed,
     })

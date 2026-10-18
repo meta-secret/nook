@@ -119,7 +119,10 @@ function installSidePanelDemoRuntime(
   ]
   const login = (vault: string, secretId: string, account: string) => ({
     kind: 'Login',
-    item_id: { vault_store_id: `side-panel-demo-${vault.toLowerCase()}`, secret_id: secretId },
+    item_id: {
+      vault_store_id: `side-panel-demo-${vault.toLowerCase()}`,
+      secret_id: secretId,
+    },
     type_label_key: protocol.loginType,
     title: 'accounts.example.com',
     account,
@@ -139,7 +142,10 @@ function installSidePanelDemoRuntime(
         login('Family', 'login-2', 'alice+family@example.com'),
         {
           kind: 'Authenticator',
-          item_id: { vault_store_id: 'side-panel-demo-personal', secret_id: 'totp-1' },
+          item_id: {
+            vault_store_id: 'side-panel-demo-personal',
+            secret_id: 'totp-1',
+          },
           type_label_key: protocol.authenticatorType,
           title: 'Example Accounts',
           account: 'alice.martin@example.com',
@@ -158,7 +164,10 @@ function installSidePanelDemoRuntime(
       rows: [
         {
           kind: 'Passkey',
-          item_id: { vault_store_id: 'side-panel-demo-startup', secret_id: 'passkey-1' },
+          item_id: {
+            vault_store_id: 'side-panel-demo-startup',
+            secret_id: 'passkey-1',
+          },
           type_label_key: protocol.passkeyType,
           title: 'Example Accounts',
           account: 'alice',

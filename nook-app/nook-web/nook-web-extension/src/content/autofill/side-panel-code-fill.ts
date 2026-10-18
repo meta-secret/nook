@@ -178,7 +178,9 @@ export class SidePanelCodeFillAction {
     return { kind }
   }
 
-  private challenge(action: AuthenticationWorkflowAction): SidePanelCodeChallenge {
+  private challenge(
+    action: AuthenticationWorkflowAction,
+  ): SidePanelCodeChallenge {
     switch (action) {
       case AuthenticationWorkflowAction.FillTotp:
         return SidePanelCodeChallenge.Present
@@ -295,9 +297,10 @@ export class SidePanelCodeFillAction {
   private rejection(
     response: AuthenticatorCodeResponse,
   ): SidePanelPageCodeFillReplyKind {
-    switch ('reason' in response && response.reason) {
-      case 'authenticator-locked':
+    switch (true) {
+      case 'reason' in response && response.reason === 'authenticator-locked':
         return SidePanelPageCodeFillReplyKind.Locked
+      case true:
       default:
         return SidePanelPageCodeFillReplyKind.FillFailed
     }

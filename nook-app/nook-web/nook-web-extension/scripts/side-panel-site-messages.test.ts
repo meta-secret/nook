@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import type {
   SiteSecretIdentityGroup,
   SiteSecretListing,
@@ -177,16 +178,19 @@ describe('side-panel This-site wire', () => {
   test('a listing answer admits no secret, saved URL or extra field', () => {
     const row = {
       kind: 'Login',
-      item_id: { vault_store_id: 'store_abcdefghijk', secret_id: 'secret_login' },
-      type_label_key: 'vault.types.login',
+      item_id: {
+        vault_store_id: 'store_abcdefghijk',
+        secret_id: 'secret_login',
+      },
+      type_label_key: I18N_KEYS.VaultTypesLogin,
       title: 'www.example.com',
       account: 'person@example.com',
       saved_host: 'www.example.com',
       vault: { kind: 'Named', name: 'Personal' },
       action: {
         kind: 'FillLogin',
-        label_key: 'extension.action.fill',
-        accessible_label_key: 'extension.action.fill_login',
+        label_key: I18N_KEYS.ExtensionActionFill,
+        accessible_label_key: I18N_KEYS.ExtensionActionFillLogin,
       },
     }
     const group = { header: { kind: 'Named', name: 'Personal' }, rows: [row] }
@@ -200,8 +204,11 @@ describe('side-panel This-site wire', () => {
       display_host: 'www.example.com',
       listing: {
         kind: 'Empty',
-        message_key: 'extension.action.site_empty_any',
-        hint: { kind: 'Shown', message_key: 'extension.action.site_empty_hint' },
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyAny,
+        hint: {
+          kind: 'Shown',
+          message_key: I18N_KEYS.ExtensionActionSiteEmptyHint,
+        },
       },
     }
     for (const admitted of [ready, empty]) {
@@ -289,15 +296,15 @@ describe('side-panel This-site client', () => {
   const row = {
     kind: 'Authenticator',
     item_id: { vault_store_id: 'store_abcdefghijk', secret_id: 'totp_one' },
-    type_label_key: 'vault.types.authenticator',
+    type_label_key: I18N_KEYS.VaultTypesAuthenticator,
     title: 'Namecheap',
     account: 'person',
     saved_host: 'www.namecheap.com',
     vault: { kind: 'Named', name: 'Personal' },
     action: {
       kind: 'FillCode',
-      label_key: 'extension.action.fill_code',
-      accessible_label_key: 'extension.action.fill_code_for',
+      label_key: I18N_KEYS.ExtensionActionFillCode,
+      accessible_label_key: I18N_KEYS.ExtensionActionFillCodeFor,
     },
   } satisfies SiteSecretRow
   const group = {
@@ -344,9 +351,7 @@ describe('side-panel This-site client', () => {
       display_host: 'a.test',
       listing: {
         ...listed,
-        groups: [
-          { ...group, rows: [{ ...row, code: '123456' }] },
-        ],
+        groups: [{ ...group, rows: [{ ...row, code: '123456' }] }],
       },
     })
     const unknownKind = new PanelRuntimeFixture({
@@ -354,9 +359,7 @@ describe('side-panel This-site client', () => {
       display_host: 'a.test',
       listing: {
         ...listed,
-        groups: [
-          { ...group, rows: [{ ...row, kind: 'CreditCard' }] },
-        ],
+        groups: [{ ...group, rows: [{ ...row, kind: 'CreditCard' }] }],
       },
     })
     for (const fixture of [leaky, unknownKind]) {

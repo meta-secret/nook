@@ -337,7 +337,9 @@ export async function handleCompanionWasmMessage(
         })
       case CompanionWasmSessionMessageType.SitePageNeed:
         // Rust maps the classified workflow to what This site lists.
-        return ok({ sitePageNeed: site_page_need(message.payload.workflowMatch) })
+        return ok({
+          sitePageNeed: site_page_need(message.payload.workflowMatch),
+        })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:

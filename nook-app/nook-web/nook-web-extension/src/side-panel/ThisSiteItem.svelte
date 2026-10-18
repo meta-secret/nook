@@ -45,8 +45,7 @@ tab without submitting. Passkeys and API keys are shown for reference only.
     readonly onfill: (row: SiteSecretRow) => void
   }
 
-  let { i18n, row, count, fill, activity, onfill }: ThisSiteItemProps =
-    $props()
+  let { i18n, row, count, fill, activity, onfill }: ThisSiteItemProps = $props()
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -137,8 +136,9 @@ tab without submitting. Passkeys and API keys are shown for reference only.
     </span>
     <span class="side-panel-login-name" title={row.title}>{row.title}</span>
     {#if subtitle() !== ''}
-      <span class="side-panel-login-vault" data-testid="side-panel-item-subtitle"
-        >{subtitle()}</span
+      <span
+        class="side-panel-login-vault"
+        data-testid="side-panel-item-subtitle">{subtitle()}</span
       >
     {/if}
   </div>

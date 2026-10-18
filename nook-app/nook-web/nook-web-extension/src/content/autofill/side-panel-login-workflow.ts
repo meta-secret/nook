@@ -49,7 +49,9 @@ export class SidePanelLoginWorkflowDiscovery implements SidePanelLoginWorkflowSo
     }
   }
 
-  private fillable(page: SidePanelSelectedPageWorkflow): SidePanelLoginWorkflow {
+  private fillable(
+    page: SidePanelSelectedPageWorkflow,
+  ): SidePanelLoginWorkflow {
     switch (page.savedLoginCapability) {
       case 'unavailable':
         return this.absent

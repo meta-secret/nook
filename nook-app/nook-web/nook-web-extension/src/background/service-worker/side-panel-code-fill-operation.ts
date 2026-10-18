@@ -59,7 +59,9 @@ export class SidePanelCodeFillOperation {
     this.access = new SidePanelSiteAccess(dependencies)
   }
 
-  run(request: SidePanelSiteOperationRequest): Promise<SidePanelCodeFillOutcome> {
+  run(
+    request: SidePanelSiteOperationRequest,
+  ): Promise<SidePanelCodeFillOutcome> {
     return Effect.runPromise(
       this.fill(request).pipe(
         Effect.catch(() =>

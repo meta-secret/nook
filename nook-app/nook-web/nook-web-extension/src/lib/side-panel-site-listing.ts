@@ -13,7 +13,7 @@ import type {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 /** A site-bound secret kind as Rust names it on a listing row. */
-export type SiteSecretRowKind = SiteSecretRow['kind']
+type SiteSecretRowKind = SiteSecretRow['kind']
 
 type BoundedTextSchema = Schema.Codec<string>
 type SiteSecretRowKinds = Readonly<Record<SiteSecretRowKind, SiteSecretRowKind>>

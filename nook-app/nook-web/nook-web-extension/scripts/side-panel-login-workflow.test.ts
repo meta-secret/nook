@@ -147,7 +147,10 @@ class ContentPageHarness {
     const receiver = new SidePanelPageNeedReceiver(collaborators)
     const replies = Promise.withResolvers<SidePanelPageNeedReply>()
     const reception = receiver.receive({
-      message: { type: SidePanelPageNeedMessageType.Query, payload: { origin } },
+      message: {
+        type: SidePanelPageNeedMessageType.Query,
+        payload: { origin },
+      },
       sender,
       sendResponse: replies.resolve,
     })
