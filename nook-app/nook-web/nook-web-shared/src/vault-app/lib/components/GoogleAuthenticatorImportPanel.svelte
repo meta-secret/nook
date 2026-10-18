@@ -26,6 +26,7 @@
     readonly onSuccess: (texts: QrCodeTexts) => void
     readonly onFailure: () => void
   }
+  type ScanFailures = string[]
 
   let {
     vault,
@@ -60,19 +61,25 @@
     }
   }
 
-  function addMigrationUri(value: string) {
+  /** Adds one scanned code to the batch, recording why it was rejected. */
+  function collectMigrationUri(value: string, failures: ScanFailures) {
     const uri = value.trim()
     if (!uri.startsWith('otpauth-migration://offline?')) {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportInvalidQr)
+      failures.push(vault.t(I18N_KEYS.GoogleAuthenticatorImportInvalidQr))
       return
     }
     if (migrationUris.includes(uri)) {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
+      failures.push(vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr))
       return
     }
     migrationUris = [...migrationUris, uri]
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
-    error = ''
+  }
+
+  function addMigrationUri(value: string) {
+    const failures: ScanFailures = []
+    collectMigrationUri(value, failures)
+    error = failures.at(-1) ?? ''
   }
 
   /** A live camera sees each code for many frames; only unseen codes count. */
@@ -105,32 +112,34 @@
     }
   }
 
-  function showImageFailure() {
-    error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed)
-  }
-
-  function addImageTexts(texts: QrCodeTexts) {
+  function collectImageTexts(texts: QrCodeTexts, failures: ScanFailures) {
     switch (texts.length) {
       case 0:
-        return showImageFailure()
+        failures.push(vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed))
+        return
       default:
-        for (const text of texts) addMigrationUri(text)
+        for (const text of texts) collectMigrationUri(text, failures)
     }
   }
 
-  async function scanImage(event: Event) {
+  /** Reads every chosen image in order; a later success never hides an earlier failure. */
+  async function scanImages(event: Event) {
     const input = event.currentTarget
     if (!(input instanceof HTMLInputElement)) return
-    const file = input.files?.[0]
+    const files = Array.from(input.files ?? [])
     input.value = ''
-    if (!file) return
+    if (files.length === 0) return
     error = ''
     result = { kind: AuthenticatorImportOutcomeKind.NotRun }
-    const handling: QrImageReadHandling = {
-      onSuccess: addImageTexts,
-      onFailure: showImageFailure,
+    const failures: ScanFailures = []
+    for (const file of files) {
+      const handling: QrImageReadHandling = {
+        onSuccess: (texts) => collectImageTexts(texts, failures),
+        onFailure: () => collectImageTexts([], failures),
+      }
+      await Effect.runPromise(Effect.match(reader.readImage(file), handling))
     }
-    await Effect.runPromise(Effect.match(reader.readImage(file), handling))
+    error = failures.at(-1) ?? ''
   }
 
   function clearScans() {
@@ -214,9 +223,10 @@
           <input
             type="file"
             accept="image/*"
+            multiple
             data-testid="google-authenticator-qr-image"
             disabled={isSaving}
-            onchange={(event) => void scanImage(event)}
+            onchange={(event) => void scanImages(event)}
             class="sr-only"
           />
         </label>
