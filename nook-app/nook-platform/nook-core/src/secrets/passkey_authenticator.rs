@@ -29,7 +29,10 @@ use zeroize::{Zeroize, Zeroizing};
 
 const ES256_ALGORITHM: i32 = -7;
 const MIN_CHALLENGE_BYTES: usize = 16;
-const MAX_CHALLENGE_BYTES: usize = 1024;
+/// `WebAuthn` sets no maximum, and Google's sign-in challenges run past 8 KiB. The
+/// browser bridge already caps a whole request at 64 KiB, so this only bounds a
+/// challenge that still fits there once base64url-encoded.
+const MAX_CHALLENGE_BYTES: usize = 32 * 1024;
 const MAX_CREDENTIAL_ID_BYTES: usize = 1024;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

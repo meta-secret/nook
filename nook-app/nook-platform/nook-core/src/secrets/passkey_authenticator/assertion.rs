@@ -182,8 +182,8 @@ impl PasskeySecret {
 mod tests {
     use super::super::encoding::CoseKeyBytes;
     use super::super::{
-        CheckedPasskeyRegistration, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
-        PasskeyUserVerification,
+        CheckedPasskeyRegistration, Deserialize, PasskeyCredentialDescriptor,
+        PasskeyRegistrationRequest, PasskeyUserVerification,
     };
     use super::*;
     use p256::ecdsa::{VerifyingKey, signature::Verifier};
@@ -431,6 +431,30 @@ mod tests {
             let auth_data = Engine::decode(&URL_SAFE_NO_PAD, &assertion.authenticator_data)?;
             assert_eq!(auth_data.get(32), Some(&flags), "{verification:?}");
         }
+        Ok(())
+    }
+
+    #[derive(Deserialize)]
+    struct SignedClientData {
+        challenge: String,
+    }
+
+    /// Google's sign-in challenge is 8,244 bytes; Nook signs it like any other.
+    #[test]
+    fn google_sized_sign_in_challenge_is_signed() -> anyhow::Result<()> {
+        let credential = PasskeyRegistrationRequest::fixture()
+            .prepare(&[])
+            .and_then(CheckedPasskeyRegistration::generate)?
+            .credential;
+        let mut request = PasskeyAssertionRequest::fixture();
+        request.origin = "https://accounts.example.com".to_owned();
+        request.challenge = Engine::encode(&URL_SAFE_NO_PAD, vec![0x5a_u8; 8_244]);
+        let assertion = request
+            .prepare(slice::from_ref(&credential))
+            .and_then(CheckedPasskeyAssertion::sign)?;
+        let client_data = Engine::decode(&URL_SAFE_NO_PAD, &assertion.client_data_json)?;
+        let signed: SignedClientData = serde_json::from_slice(&client_data)?;
+        assert_eq!(signed.challenge, request.challenge);
         Ok(())
     }
 }
