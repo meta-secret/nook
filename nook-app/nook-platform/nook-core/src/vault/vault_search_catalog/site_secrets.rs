@@ -9,10 +9,11 @@
 //! copies only titles, accounts, and hosts.
 
 use super::SecretSearchCatalog;
+use super::login_accounts::{SavedWebsiteMatch, SavedWebsiteRequest};
 use crate::{
     AuthenticatorGroupKeyRequest, AuthenticatorHostResolution, AuthenticatorIssuerHostsError,
-    LoginHostMatch, LoginWebsiteHost, PasskeyOrigin, SecretListItem, SecretListItemData,
-    WebsiteHost, WebsiteHostError,
+    LoginWebsiteHost, PasskeyOrigin, SecretListItem, SecretListItemData, WebsiteHost,
+    WebsiteHostError,
 };
 use nook_companion_core::{
     SiteSecretAccount, SiteSecretItem, SiteSecretKind, SiteSecretMatches, SiteSecretSavedHost,
@@ -41,12 +42,6 @@ impl TryFrom<&str> for SiteSecretOrigin {
 /// Whether one catalog row is bound to the requesting site.
 enum SiteSecretMatch {
     Matched(SiteSecretItem),
-    Unmatched,
-}
-
-/// Whether a saved website belongs to the requesting site, with its display host.
-enum SiteSavedHostMatch {
-    Matched(WebsiteHost),
     Unmatched,
 }
 
@@ -146,29 +141,25 @@ impl SiteSecretCandidate<'_> {
         }
     }
 
-    fn saved_host(&self, saved: &str) -> SiteSavedHostMatch {
-        let Ok(saved_host) = LoginWebsiteHost::try_from(saved) else {
-            return SiteSavedHostMatch::Unmatched;
-        };
-        let Ok(display_host) = WebsiteHost::normalize(saved) else {
-            return SiteSavedHostMatch::Unmatched;
-        };
-        match saved_host.matches(&self.origin.host) {
-            LoginHostMatch::Matched => SiteSavedHostMatch::Matched(display_host),
-            LoginHostMatch::Unmatched => SiteSavedHostMatch::Unmatched,
+    /// The login registrable-domain policy, shared with login account listing.
+    fn saved_host(&self, saved: &str) -> SavedWebsiteMatch {
+        SavedWebsiteRequest {
+            saved,
+            origin: &self.origin.host,
         }
+        .assess()
     }
 
     fn website_secret(&self, secret: &SiteWebsiteSecret<'_>) -> SiteSecretMatch {
         match self.saved_host(secret.website_url) {
-            SiteSavedHostMatch::Matched(host) => SiteSecretMatch::Matched(SiteSecretItem {
+            SavedWebsiteMatch::Matched(host) => SiteSecretMatch::Matched(SiteSecretItem {
                 kind: secret.kind,
                 secret_id: self.item.id.clone(),
                 title: SiteSecretTitle::from(host.as_str().to_owned()),
                 account: SiteSecretAccount::from(secret.account.trim().to_owned()),
                 saved_host: SiteSecretSavedHost::from(host.into_string()),
             }),
-            SiteSavedHostMatch::Unmatched => SiteSecretMatch::Unmatched,
+            SavedWebsiteMatch::Unmatched => SiteSecretMatch::Unmatched,
         }
     }
 }
@@ -208,12 +199,12 @@ impl SiteSecretCandidate<'_> {
             return Ok(SiteSecretMatch::Unmatched);
         };
         Ok(match self.saved_host(resolved.as_str()) {
-            SiteSavedHostMatch::Matched(host) => self.authenticator_item(&SiteAuthenticator {
+            SavedWebsiteMatch::Matched(host) => self.authenticator_item(&SiteAuthenticator {
                 host: &host,
                 issuer: row.issuer,
                 account: row.account,
             }),
-            SiteSavedHostMatch::Unmatched => SiteSecretMatch::Unmatched,
+            SavedWebsiteMatch::Unmatched => SiteSecretMatch::Unmatched,
         })
     }
 
