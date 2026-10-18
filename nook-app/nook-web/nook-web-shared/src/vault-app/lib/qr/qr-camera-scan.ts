@@ -90,12 +90,12 @@ export class QrCameraScan {
    */
   private hide(stream: MediaStream): Effect.Effect<void> {
     return Effect.sync(() => {
-      switch (this.target.video.srcObject) {
-        case stream:
+      switch (this.target.video.srcObject === stream) {
+        case true:
           this.target.video.pause();
           this.target.video.srcObject = new MediaStream();
           return;
-        default:
+        case false:
           return;
       }
     });
