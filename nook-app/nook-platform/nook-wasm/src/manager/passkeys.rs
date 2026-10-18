@@ -486,3 +486,18 @@ pub fn website_passkey_request_allows_credential(
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
     Ok(request.allows_credential(credential_id))
 }
+/// Whether the site already lists a vault passkey as this account's; nook-core owns the rule.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn website_passkey_request_excludes_credential(
+    request: &tsify::Ts<nook_core::PasskeyRegistrationRequest>,
+    credential_id: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    Ok(request.excludes_credential(credential_id))
+}

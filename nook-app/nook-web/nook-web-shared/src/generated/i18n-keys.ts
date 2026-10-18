@@ -713,6 +713,7 @@ export const I18N_KEYS = {
   ExtensionManifestDescription: 'extension.manifest.description',
   ExtensionManifestName: 'extension.manifest.name',
   ExtensionPasskeyAccountLabel: 'extension.passkey.account_label',
+  ExtensionPasskeyAlreadySaved: 'extension.passkey.already_saved',
   ExtensionPasskeyCheckFailed: 'extension.passkey.check_failed',
   ExtensionPasskeyChooseAccount: 'extension.passkey.choose_account',
   ExtensionPasskeyClose: 'extension.passkey.close',

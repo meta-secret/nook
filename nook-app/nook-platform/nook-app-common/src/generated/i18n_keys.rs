@@ -895,6 +895,7 @@ pub const EXTENSION_MANIFEST_DEFAULT_TITLE: &str = "extension.manifest.default_t
 pub const EXTENSION_MANIFEST_DESCRIPTION: &str = "extension.manifest.description";
 pub const EXTENSION_MANIFEST_NAME: &str = "extension.manifest.name";
 pub const EXTENSION_PASSKEY_ACCOUNT_LABEL: &str = "extension.passkey.account_label";
+pub const EXTENSION_PASSKEY_ALREADY_SAVED: &str = "extension.passkey.already_saved";
 pub const EXTENSION_PASSKEY_CHECK_FAILED: &str = "extension.passkey.check_failed";
 pub const EXTENSION_PASSKEY_CHOOSE_ACCOUNT: &str = "extension.passkey.choose_account";
 pub const EXTENSION_PASSKEY_CLOSE: &str = "extension.passkey.close";

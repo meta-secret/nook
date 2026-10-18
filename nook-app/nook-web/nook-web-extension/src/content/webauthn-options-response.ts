@@ -22,6 +22,8 @@ export enum WebsitePasskeyUnavailableReason {
   NoVault = 'no-vault',
   /** Nook could not ask its vaults. */
   CheckFailed = 'check-failed',
+  /** Every vault already holds this account's passkey; the site listed it as excluded. */
+  AlreadySaved = 'already-saved',
 }
 
 export type WebsitePasskeyOptionsDisposition =
@@ -65,9 +67,31 @@ export function websitePasskeyOptionsDisposition({
       return explain(WebsitePasskeyUnavailableReason.Locked)
     case WebsitePasskeyOptionsStatus.Unavailable:
       return explain(WebsitePasskeyUnavailableReason.NoVault)
+    case WebsitePasskeyOptionsStatus.AlreadySaved:
+      return explain(WebsitePasskeyUnavailableReason.AlreadySaved)
     case WebsitePasskeyOptionsStatus.Ready:
       return hasOptions
         ? { kind: WebsitePasskeyOptionsDispositionKind.Continue }
         : explain(WebsitePasskeyUnavailableReason.NoMatch)
   }
+}
+
+/** The DOMException name a closed card hands the site. */
+export enum DeclinedPasskeyError {
+  InvalidState = 'InvalidStateError',
+  NotAllowed = 'NotAllowedError',
+}
+
+/**
+ * The error a closed card hands the site. WebAuthn answers a registration for
+ * an account the authenticator already holds with InvalidStateError, so the
+ * site can say the passkey exists instead of reporting a failure.
+ */
+export function declinedPasskeyError(
+  disposition: WebsitePasskeyOptionsDisposition,
+): DeclinedPasskeyError {
+  return disposition.kind === WebsitePasskeyOptionsDispositionKind.Explain &&
+    disposition.reason === WebsitePasskeyUnavailableReason.AlreadySaved
+    ? DeclinedPasskeyError.InvalidState
+    : DeclinedPasskeyError.NotAllowed
 }

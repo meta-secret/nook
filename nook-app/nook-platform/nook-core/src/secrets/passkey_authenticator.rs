@@ -222,6 +222,17 @@ impl PasskeyAssertionRequest {
     }
 }
 
+impl PasskeyRegistrationRequest {
+    /// Whether the site lists this credential as one the account already has,
+    /// so the authenticator holding it must not register another.
+    #[must_use]
+    pub fn excludes_credential(&self, credential_id: &str) -> bool {
+        self.exclude_credentials
+            .iter()
+            .any(|descriptor| descriptor.id == credential_id)
+    }
+}
+
 #[cfg(test)]
 impl PasskeyRegistrationRequest {
     fn fixture() -> Self {
@@ -379,6 +390,32 @@ mod tests {
                 "relying party public suffix"
             ))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_listed_vault_passkey_blocks_another_registration_for_the_account() -> anyhow::Result<()> {
+        let saved = PasskeyRegistrationRequest::fixture()
+            .prepare(&[])
+            .and_then(CheckedPasskeyRegistration::generate)?
+            .credential;
+        let other = PasskeyRegistrationRequest::fixture()
+            .prepare(&[])
+            .and_then(CheckedPasskeyRegistration::generate)?
+            .credential;
+        let mut again = PasskeyRegistrationRequest::fixture();
+        again.exclude_credentials = vec![PasskeyCredentialDescriptor {
+            id: saved.credential_id.clone(),
+        }];
+
+        assert!(again.excludes_credential(&saved.credential_id));
+        assert!(!again.excludes_credential(&other.credential_id));
+        assert!(!PasskeyRegistrationRequest::fixture().excludes_credential(&saved.credential_id));
+        assert!(matches!(
+            again.prepare(&[saved]),
+            Err(PasskeyAuthenticatorError::CredentialExcluded)
+        ));
+        assert!(again.prepare(&[other]).is_ok());
         Ok(())
     }
 }

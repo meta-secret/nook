@@ -282,26 +282,7 @@ class WebsitePasskeyRequests {
         options: [],
       }
     }
-    if (message.payload.ceremony === WebsitePasskeyCeremony.Create) {
-      return {
-        ok: true,
-        status: WebsitePasskeyOptionsStatus.Ready,
-        options: grants.map((grant) => ({
-          vaultStoreId: grant.vaultStoreId,
-          vaultName: grant.vaultName,
-        })),
-      }
-    }
-    if (context.request.ceremony !== WebsitePasskeyCeremony.Get) {
-      return {
-        ok: true,
-        status: WebsitePasskeyOptionsStatus.Invalid,
-        options: [],
-      }
-    }
-    const assertionRequest = context.request.value
-    const options: WebsitePasskeyVaultOption[] = []
-    for (const grant of grants) {
+    const vaultAccounts = async (grant: (typeof grants)[number]) => {
       const nookTypedArgs0_4: Parameters<
         typeof extensionPairingIdentity.sendSessionMessage
       >[0] = {
@@ -315,43 +296,94 @@ class WebsitePasskeyRequests {
       }
       const delivery =
         await resolvedDependencies.sendSessionMessage(nookTypedArgs0_4)
-      if (delivery.isErr()) return delivery.error.response
-      const response = delivery.value
-      const accountList = decode_website_passkey_account_list(response)
+      return delivery.map(decode_website_passkey_account_list)
+    }
+    const invalid: WebsitePasskeyOptionsResponse = {
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.Invalid,
+      options: [],
+    }
+    const options: WebsitePasskeyVaultOption[] = []
+    if (context.request.ceremony === WebsitePasskeyCeremony.Create) {
+      const registrationRequest = context.request.value
+      for (const grant of grants) {
+        const listing = await vaultAccounts(grant)
+        if (listing.isErr()) return listing.error.response
+        const accountList = listing.value
+        if (
+          accountList.kind !== WebsitePasskeyAccountListKind.Ready ||
+          !('accounts' in accountList)
+        ) {
+          return invalid
+        }
+        // A vault already holding a passkey the site lists for this account
+        // must not register another one (WebAuthn excludeCredentials).
+        let alreadySaved = false
+        for (const account of accountList.accounts) {
+          const exclusion: Parameters<
+            typeof WebsitePasskeyOptionsMessageSchema.excludesCredential
+          >[0] = {
+            request: registrationRequest,
+            credentialId: account.credentialId,
+          }
+          if (
+            await WebsitePasskeyOptionsMessageSchema.excludesCredential(
+              exclusion,
+            )
+          ) {
+            alreadySaved = true
+            break
+          }
+        }
+        if (!alreadySaved) {
+          const option: WebsitePasskeyVaultOption = {
+            vaultStoreId: grant.vaultStoreId,
+            vaultName: grant.vaultName,
+          }
+          options.push(option)
+        }
+      }
+      return {
+        ok: true,
+        status:
+          options.length > 0
+            ? WebsitePasskeyOptionsStatus.Ready
+            : WebsitePasskeyOptionsStatus.AlreadySaved,
+        options,
+      }
+    }
+    const assertionRequest = context.request.value
+    for (const grant of grants) {
+      const listing = await vaultAccounts(grant)
+      if (listing.isErr()) return listing.error.response
+      const accountList = listing.value
       if (
         accountList.kind !== WebsitePasskeyAccountListKind.Ready ||
         !('accounts' in accountList)
       ) {
-        return {
-          ok: true,
-          status: WebsitePasskeyOptionsStatus.Invalid,
-          options: [],
-        }
+        return invalid
       }
-      const { accounts } = accountList
-      if (accounts.length > 0) {
-        for (const account of accounts) {
-          // A site that lists its credentials can only use those.
-          const allowance: Parameters<
-            typeof WebsitePasskeyOptionsMessageSchema.allowsCredential
-          >[0] = {
-            request: assertionRequest,
-            credentialId: account.credentialId,
-          }
-          if (
-            !(await WebsitePasskeyOptionsMessageSchema.allowsCredential(
-              allowance,
-            ))
-          ) {
-            continue
-          }
-          const nookTypedArgs0_5: Parameters<typeof options.push>[0] = {
-            vaultStoreId: grant.vaultStoreId,
-            vaultName: grant.vaultName,
-            account,
-          }
-          options.push(nookTypedArgs0_5)
+      for (const account of accountList.accounts) {
+        // A site that lists its credentials can only use those.
+        const allowance: Parameters<
+          typeof WebsitePasskeyOptionsMessageSchema.allowsCredential
+        >[0] = {
+          request: assertionRequest,
+          credentialId: account.credentialId,
         }
+        if (
+          !(await WebsitePasskeyOptionsMessageSchema.allowsCredential(
+            allowance,
+          ))
+        ) {
+          continue
+        }
+        const option: WebsitePasskeyVaultOption = {
+          vaultStoreId: grant.vaultStoreId,
+          vaultName: grant.vaultName,
+          account,
+        }
+        options.push(option)
       }
     }
     return { ok: true, status: WebsitePasskeyOptionsStatus.Ready, options }

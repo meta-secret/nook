@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  DeclinedPasskeyError,
+  declinedPasskeyError,
   PageResponseAction,
   websitePasskeyOptionsDisposition,
   WebsitePasskeyOptionsDispositionKind,
@@ -59,6 +61,14 @@ describe('WebAuthn options content response', () => {
         },
         WebsitePasskeyUnavailableReason.CheckFailed,
       ],
+      [
+        {
+          ok: true,
+          status: WebsitePasskeyOptionsStatus.AlreadySaved,
+          hasOptions: false,
+        },
+        WebsitePasskeyUnavailableReason.AlreadySaved,
+      ],
     ]
     for (const [args, reason] of cases) {
       expect(websitePasskeyOptionsDisposition(args)).toEqual({
@@ -73,5 +83,25 @@ describe('WebAuthn options content response', () => {
         hasOptions: true,
       }),
     ).toEqual({ kind: WebsitePasskeyOptionsDispositionKind.Continue })
+  })
+
+  test('closing the already-saved card tells the site the passkey exists', () => {
+    expect(
+      declinedPasskeyError({
+        kind: WebsitePasskeyOptionsDispositionKind.Explain,
+        reason: WebsitePasskeyUnavailableReason.AlreadySaved,
+      }),
+    ).toBe(DeclinedPasskeyError.InvalidState)
+    expect(
+      declinedPasskeyError({
+        kind: WebsitePasskeyOptionsDispositionKind.Explain,
+        reason: WebsitePasskeyUnavailableReason.NoVault,
+      }),
+    ).toBe(DeclinedPasskeyError.NotAllowed)
+    expect(
+      declinedPasskeyError({
+        kind: WebsitePasskeyOptionsDispositionKind.Continue,
+      }),
+    ).toBe(DeclinedPasskeyError.NotAllowed)
   })
 })

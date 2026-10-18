@@ -172,6 +172,7 @@ type NookLocaleCatalogShape = {
       locked: string
       no_vault: string
       check_failed: string
+      already_saved: string
       use_another: string
       use_browser: string
     }
@@ -972,6 +973,9 @@ export async function buildChromeLocales({
         },
         passkeyCheckFailed: {
           message: catalog.extension.passkey.message('check_failed', locale),
+        },
+        passkeyAlreadySaved: {
+          message: catalog.extension.passkey.message('already_saved', locale),
         },
         passkeyUseAnother: {
           message: catalog.extension.passkey.message('use_another', locale),
