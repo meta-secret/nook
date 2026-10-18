@@ -20,7 +20,10 @@ import {
   observeAirbnbLoginModalRoute,
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
-import { type AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  PageSecondFactorRoute,
+  type AuthenticationUsernameEvidence,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
@@ -79,7 +82,7 @@ type PageInputClassificationRequest = {
 };
 
 type PageInputObservationRequest = PageInputClassificationRequest & {
-  secondFactorRoute: boolean;
+  secondFactorRoute: PageSecondFactorRoute;
 };
 
 type CompanionWasmFieldClassification = DirectFieldClassification;
@@ -198,7 +201,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const request: PageInputObservationRequest = {
       field,
       loginContext: false,
-      secondFactorRoute: false,
+      secondFactorRoute: PageSecondFactorRoute.Unrelated,
     };
     return this.fieldObservation(request);
   }

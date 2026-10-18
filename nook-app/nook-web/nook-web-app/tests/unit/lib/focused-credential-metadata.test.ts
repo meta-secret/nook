@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
+import { PageSecondFactorRoute } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-forms'
 
 afterEach(() => document.body.replaceChildren())
@@ -19,7 +20,7 @@ describe('focused browser metadata observation', () => {
           disabled: false,
           readOnly: false,
           loginContext: false,
-          secondFactorRoute: false,
+          secondFactorRoute: PageSecondFactorRoute.Unrelated,
           inputMode: '',
           maxLength: -1,
           pattern: '',

@@ -596,8 +596,8 @@ Username detection uses autocomplete tokens plus identity heuristics
 It still ignores newsletter-style email fields.
 One-time-code detection uses autocomplete tokens and identity words plus
 Rust-decided second-factor route evidence and code-shaped entry hints
-(`inputmode`, `maxlength`, `pattern`), and never counts a masked code field
-as a password.
+(`inputmode`, `maxlength`, `pattern`); a masked field that Rust classifies as a
+one-time code is not counted as a password.
 Credential matching follows the [general login website matching](#general-login-website-matching)
 policy for every site.
 It performs explicit login selection/fill/submit and TOTP selection/fill.

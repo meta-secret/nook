@@ -49,6 +49,7 @@ import type {
   AuthenticationImplicitSubmitActuationObservation,
   LoginSaveOutcomeObservation,
   LoginSaveOutcomeDecision,
+  PageSecondFactorRoute,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -133,7 +134,7 @@ export type CompanionWasmPageInputFieldObservation = {
   readonly autocompleteTokens: readonly string[];
   readonly identityText: string;
   readonly loginContext: boolean;
-  readonly secondFactorRoute: boolean;
+  readonly secondFactorRoute: PageSecondFactorRoute;
   /** Raw `inputmode` attribute, empty when absent. */
   readonly inputMode: string;
   /** Raw DOM `maxLength`, which the browser reports as -1 when absent. */

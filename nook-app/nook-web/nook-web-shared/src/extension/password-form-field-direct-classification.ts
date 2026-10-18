@@ -3,7 +3,6 @@ import {
   NookPageInputFieldObservation,
   authentication_username_evidence,
   has_login_context,
-  has_second_factor_route,
   looks_like_email_verification_body,
   looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
@@ -13,8 +12,10 @@ import {
   looks_like_passkey_control_label,
   looks_like_username_field,
   parse_page_input_type,
+  second_factor_route,
   strongest_authentication_username_evidence,
   type AuthenticationUsernameEvidence,
+  type PageSecondFactorRoute,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   CompanionWasmLabelKind,
@@ -52,10 +53,12 @@ export class PasswordFormFieldDirectClassification {
     }
   }
 
-  secondFactorRoute(observation: LoginContextObservation): boolean {
+  secondFactorRoute(
+    observation: LoginContextObservation,
+  ): PageSecondFactorRoute {
     const value = this.loginContextValue(observation);
     try {
-      return has_second_factor_route(value);
+      return second_factor_route(value);
     } finally {
       value.free();
     }

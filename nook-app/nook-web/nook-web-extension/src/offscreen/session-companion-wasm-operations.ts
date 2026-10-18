@@ -53,7 +53,6 @@ import {
   authentication_implicit_submit_actuation_is_safe,
   bind_authentication_page_observation_facts,
   has_login_context,
-  has_second_factor_route,
   looks_like_email_verification_body,
   looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
@@ -68,6 +67,7 @@ import {
   revalidate_approved_authentication_workflow,
   strongest_authentication_username_evidence,
   can_activate_authentication_route_control,
+  second_factor_route,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   SessionOperationFailure,
@@ -127,7 +127,7 @@ function classifyPageInputs(
         [...request.observation.autocompleteTokens],
         request.observation.identityText,
         loginContext,
-        has_second_factor_route(loginContextObservation),
+        second_factor_route(loginContextObservation),
         request.observation.inputMode,
         request.observation.maxLength,
         request.observation.pattern,

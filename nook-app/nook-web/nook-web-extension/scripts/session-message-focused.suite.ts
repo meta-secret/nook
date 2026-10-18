@@ -18,7 +18,10 @@ import type {
   CompanionWasmSessionResponse,
   CompanionWasmFocusedRecognitionResponse,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
-import { FocusedCredentialOpportunity } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import {
+  FocusedCredentialOpportunity,
+  PageSecondFactorRoute,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type { ParsedExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
 
 type FocusedRuntimeGlobalFixture = {
@@ -103,7 +106,7 @@ class FocusedSessionRouteFixture {
         autocompleteTokens: ['username'],
         identityText: 'email',
         loginContext: false,
-        secondFactorRoute: false,
+        secondFactorRoute: PageSecondFactorRoute.Unrelated,
         inputMode: '',
         maxLength: -1,
         pattern: '',

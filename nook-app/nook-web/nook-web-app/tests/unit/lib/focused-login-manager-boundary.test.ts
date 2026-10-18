@@ -4,6 +4,7 @@ import { NookVaultManager } from '$app-wasm'
 import {
   NookPageInputFieldObservation,
   PageInputType,
+  PageSecondFactorRoute,
   classify_companion_focused_credential_field,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 
@@ -22,7 +23,7 @@ class ManagerCredentialSelection {
       [this.metadata.autocomplete],
       '',
       false,
-      false,
+      PageSecondFactorRoute.Unrelated,
       '',
       -1,
       '',

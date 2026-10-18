@@ -20,15 +20,24 @@ import {
   CredentialFillRejection,
   CredentialFillResult,
   CredentialKind,
+  NookLoginContextObservation,
   NookPageInputFieldObservation,
   PageInputType,
+  PageSecondFactorRoute,
   classify_companion_credential_fill_field,
+  looks_like_one_time_code_field,
   plan_companion_credential_fill,
+  second_factor_route,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 /** Raw values for no second-factor route and no inputmode, maxlength, or pattern. */
 class AbsentEntryHints {
-  static readonly ARGUMENTS = [false, '', -1, ''] as const
+  static readonly ARGUMENTS = [
+    PageSecondFactorRoute.Unrelated,
+    '',
+    -1,
+    '',
+  ] as const
 }
 
 describe('companion credential-fill WASM ABI', () => {
@@ -720,6 +729,42 @@ describe('companion credential-fill WASM ABI', () => {
       usernameRole.free()
       fieldIndex.free()
       maxCount.free()
+    }
+  })
+
+  test('passes raw entry hints and the route enum through the generated ABI', () => {
+    type EntryHints = { readonly inputMode: string; readonly pattern: string }
+    const field = ({ inputMode, pattern }: EntryHints) =>
+      new NookPageInputFieldObservation(
+        PageInputType.Text,
+        false,
+        false,
+        [],
+        'Access code',
+        false,
+        PageSecondFactorRoute.Unrelated,
+        inputMode,
+        6,
+        pattern,
+      )
+    const codeShaped = field({ inputMode: 'numeric', pattern: '' })
+    const swapped = field({ inputMode: '', pattern: 'numeric' })
+    const route = (pathContext: string) =>
+      new NookLoginContextObservation('', [], '', pathContext)
+    const challenge = route('/twofa/totp/ www.namecheap.com')
+    const hostOnly = route('/ otp.example.com')
+    try {
+      expect(looks_like_one_time_code_field(codeShaped)).toBe(true)
+      expect(looks_like_one_time_code_field(swapped)).toBe(false)
+      expect(second_factor_route(challenge)).toBe(
+        PageSecondFactorRoute.SecondFactor,
+      )
+      expect(second_factor_route(hostOnly)).toBe(
+        PageSecondFactorRoute.Unrelated,
+      )
+    } finally {
+      for (const value of [codeShaped, swapped, challenge, hostOnly])
+        value.free()
     }
   })
 })

@@ -36,6 +36,7 @@ import {
   AuthenticationWorkflowStage,
   LoginPickerOpenResponseKind,
   NookPageInputFieldObservation,
+  PageSecondFactorRoute,
   classify_companion_focused_credential_field,
   parse_page_input_type,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -206,7 +207,7 @@ class FocusedInteractionFixture {
       [this.input.autocomplete],
       this.input.name,
       false,
-      false,
+      PageSecondFactorRoute.Unrelated,
       '',
       -1,
       '',
