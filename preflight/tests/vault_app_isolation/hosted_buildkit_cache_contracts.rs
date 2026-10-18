@@ -247,7 +247,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
-    assert_main_producer_owned_cache_publish(root)?;
+    MainProducerCacheContract { root }.assert()?;
     PrProducerCacheContract::new(root).assert_contract()?;
     assert_main_split_pipeline(root)?;
     Ok(())
@@ -269,109 +269,115 @@ fn assert_rust_cache_export_hardening(bake: &str) {
     );
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one producer contract verifies the complete Main publish graph"
-)]
-fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
-    let main = (root).read(".github/workflows/main.yml");
-    let preflight = section(&main, "  preflight:\n", "\n  rust:\n");
-    let preflight_cache_publish = section(
-        &main,
-        "      - name: Require successful preflight cache publication\n",
-        "\n  rust:\n",
-    );
-    let rust = section(&main, "  rust:\n", "\n  web:\n");
-    let native_cache_publish = section(
-        &main,
-        "      - name: Require successful native cache publication\n",
-        "\n  web:\n",
-    );
-    let wasm = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
-    let wasm_cache_publish = section(
-        &main,
-        "      - name: Require successful WASM cache publication\n",
-        "\n  wasm-cache-proof:\n",
-    );
-    let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
-    let web = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
-    let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
-    let rust_verify = rust
-        .find("task ci:main:rust")
-        .context("Main Rust job must verify")?;
-    let preflight_verify = preflight
-        .find("task preflight")
-        .context("Main preflight job must verify")?;
-    let preflight_publish_id = preflight
-        .find("id: publish_preflight_cache")
-        .context("Main preflight producer must expose its cache publication outcome")?;
-    let preflight_publish = preflight
-        .find("task ci:main:publish-preflight-cache")
-        .context("Main preflight producer must export its verified cache")?;
-    let rust_publish_id = rust
-        .find("id: publish_native_cache")
-        .context("Main Rust producer must expose its cache publication outcome")?;
-    let rust_publish = rust
-        .find("task ci:main:publish-native-cache")
-        .context("Main Rust producer must export its verified cache")?;
-    let wasm_verify = wasm
-        .find("task ci:pr:wasm")
-        .context("Main WASM job must verify")?;
-    let wasm_node = wasm
-        .find("task ci:main:wasm-node-test")
-        .context("Main WASM job must run Node tests")?;
-    let wasm_publish_id = wasm
-        .find("id: prepare_web")
-        .context("Main WASM producer must expose its cache publication outcome")?;
-    let wasm_publish = wasm
-        .find("task ci:main:publish-wasm-cache")
-        .context("Main WASM producer must publish its verified graph")?;
-    let web_verify = web
-        .find("task ci:main:web:artifacts")
-        .context("Main web job must build verified artifacts")?;
-    let web_publish = web
-        .find("task ci:main:publish-web-cache")
-        .context("Main web job must publish its cache")?;
-    let web_browser_image = web
-        .find("task web:e2e:kubernetes-image:artifacts")
-        .context("Main web producer must publish the exact browser image")?;
-    let ui_demo_step = ui_demo
-        .find("- name: Headless UI demos")
-        .context("Main UI demo job must declare its verification step")?;
-    let preflight_publish_step = preflight
-        .get(preflight_publish_id..preflight_publish)
-        .context("Main preflight publication-step section must have valid boundaries")?;
-    let preflight_publish_section = preflight
-        .get(preflight_publish..)
-        .context("Main preflight publication section must have a valid boundary")?;
-    let rust_verification_to_publish = rust
-        .get(rust_verify..rust_publish)
-        .context("Main Rust verification-to-publication section must have valid boundaries")?;
-    let rust_publish_step = rust
-        .get(rust_publish_id..rust_publish)
-        .context("Main Rust publication-step section must have valid boundaries")?;
-    let rust_publish_section = rust
-        .get(rust_publish..)
-        .context("Main Rust publication section must have a valid boundary")?;
-    let wasm_verification_to_publish = wasm
-        .get(wasm_verify..wasm_publish)
-        .context("Main WASM verification-to-publication section must have valid boundaries")?;
-    let wasm_publish_step = wasm
-        .get(wasm_publish_id..wasm_publish)
-        .context("Main WASM publication-step section must have valid boundaries")?;
-    let wasm_publish_section = wasm
-        .get(wasm_publish..)
-        .context("Main WASM publication section must have a valid boundary")?;
-    let web_verification_to_publish = web
-        .get(web_verify..web_publish)
-        .context("Main web verification-to-publication section must have valid boundaries")?;
-    let web_publish_section = web
-        .get(web_publish..)
-        .context("Main web publication section must have a valid boundary")?;
-    let ui_demo_verification = ui_demo
-        .get(ui_demo_step..)
-        .context("Main UI demo verification section must have a valid boundary")?;
-    assert!(
+struct MainProducerCacheContract<'a> {
+    root: &'a Path,
+}
+
+impl MainProducerCacheContract<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one producer contract verifies the complete Main publish graph"
+    )]
+    fn assert(&self) -> anyhow::Result<()> {
+        let root = self.root;
+        let main = (root).read(".github/workflows/main.yml");
+        let preflight = section(&main, "  preflight:\n", "\n  rust:\n");
+        let preflight_cache_publish = section(
+            &main,
+            "      - name: Require successful preflight cache publication\n",
+            "\n  rust:\n",
+        );
+        let rust = section(&main, "  rust:\n", "\n  web:\n");
+        let native_cache_publish = section(
+            &main,
+            "      - name: Require successful native cache publication\n",
+            "\n  web:\n",
+        );
+        let wasm = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
+        let wasm_cache_publish = section(
+            &main,
+            "      - name: Require successful WASM cache publication\n",
+            "\n  wasm-cache-proof:\n",
+        );
+        let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
+        let web = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
+        let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
+        let rust_verify = rust
+            .find("task ci:main:rust")
+            .context("Main Rust job must verify")?;
+        let preflight_verify = preflight
+            .find("task preflight")
+            .context("Main preflight job must verify")?;
+        let preflight_publish_id = preflight
+            .find("id: publish_preflight_cache")
+            .context("Main preflight producer must expose its cache publication outcome")?;
+        let preflight_publish = preflight
+            .find("task ci:main:publish-preflight-cache")
+            .context("Main preflight producer must export its verified cache")?;
+        let rust_publish_id = rust
+            .find("id: publish_native_cache")
+            .context("Main Rust producer must expose its cache publication outcome")?;
+        let rust_publish = rust
+            .find("task ci:main:publish-native-cache")
+            .context("Main Rust producer must export its verified cache")?;
+        let wasm_verify = wasm
+            .find("task ci:pr:wasm")
+            .context("Main WASM job must verify")?;
+        let wasm_node = wasm
+            .find("task ci:main:wasm-node-test")
+            .context("Main WASM job must run Node tests")?;
+        let wasm_publish_id = wasm
+            .find("id: prepare_web")
+            .context("Main WASM producer must expose its cache publication outcome")?;
+        let wasm_publish = wasm
+            .find("task ci:main:publish-wasm-cache")
+            .context("Main WASM producer must publish its verified graph")?;
+        let web_verify = web
+            .find("task ci:main:web:artifacts")
+            .context("Main web job must build verified artifacts")?;
+        let web_publish = web
+            .find("task ci:main:publish-web-cache")
+            .context("Main web job must publish its cache")?;
+        let web_browser_image = web
+            .find("task web:e2e:kubernetes-image:artifacts")
+            .context("Main web producer must publish the exact browser image")?;
+        let ui_demo_step = ui_demo
+            .find("- name: Headless UI demos")
+            .context("Main UI demo job must declare its verification step")?;
+        let preflight_publish_step = preflight
+            .get(preflight_publish_id..preflight_publish)
+            .context("Main preflight publication-step section must have valid boundaries")?;
+        let preflight_publish_section = preflight
+            .get(preflight_publish..)
+            .context("Main preflight publication section must have a valid boundary")?;
+        let rust_verification_to_publish = rust
+            .get(rust_verify..rust_publish)
+            .context("Main Rust verification-to-publication section must have valid boundaries")?;
+        let rust_publish_step = rust
+            .get(rust_publish_id..rust_publish)
+            .context("Main Rust publication-step section must have valid boundaries")?;
+        let rust_publish_section = rust
+            .get(rust_publish..)
+            .context("Main Rust publication section must have a valid boundary")?;
+        let wasm_verification_to_publish = wasm
+            .get(wasm_verify..wasm_publish)
+            .context("Main WASM verification-to-publication section must have valid boundaries")?;
+        let wasm_publish_step = wasm
+            .get(wasm_publish_id..wasm_publish)
+            .context("Main WASM publication-step section must have valid boundaries")?;
+        let wasm_publish_section = wasm
+            .get(wasm_publish..)
+            .context("Main WASM publication section must have a valid boundary")?;
+        let web_verification_to_publish = web
+            .get(web_verify..web_publish)
+            .context("Main web verification-to-publication section must have valid boundaries")?;
+        let web_publish_section = web
+            .get(web_publish..)
+            .context("Main web publication section must have a valid boundary")?;
+        let ui_demo_verification = ui_demo
+            .get(ui_demo_step..)
+            .context("Main UI demo verification section must have a valid boundary")?;
+        assert!(
         preflight.contains("task preflight")
             && !preflight.contains("cache-selection:")
             && preflight_verify < preflight_publish_id
@@ -417,8 +423,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm.contains("preflight-cache-publish")
             && !wasm.contains("cache-selection:")
             && wasm_verify < wasm_node
-            && wasm_node < wasm_publish_id
-            && wasm_publish_id < wasm_publish
+            && wasm_publish_id < web_verify
+            && web_verify < wasm_node
+            && wasm_node < wasm_publish
             && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm.contains("cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}")
             && wasm_publish_step.contains("shell: bash")
@@ -458,7 +465,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !main.contains("task ci:main:publish-gha-cache"),
         "Main must export the producer-owned graph once while product consumers and the in-producer cache gates remain fail-closed"
     );
-    assert!(
+        assert!(
         !main.contains("\n  preflight-cache-publish:\n")
             && !main.contains("\n  native-cache-publish:\n")
             && !main.contains("\n  wasm-cache-publish:\n")
@@ -468,96 +475,98 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && main.matches("if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}").count() == 2,
         "cache failure must fail its producer without suppressing verified product consumers; deployment still requires every producer"
     );
-    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-    assert!(
-        !ci_tasks.contains("warm-gha-cache")
-            && !ci_tasks.contains("publish-gha-cache")
-            && !root
-                .join(".github/scripts/warm-buildkit-gha-cache.sh")
-                .exists()
-            && !root
-                .join(".github/scripts/publish-buildkit-gha-cache.sh")
-                .exists(),
-        "obsolete deferred cache reconstruction commands and scripts must stay removed"
-    );
-    let docker_tasks = format!(
-        "{}{}",
-        (root).read("nook-app/nook-platform/docker/Taskfile.yml"),
-        (root).read("nook-app/nook-web/docker/Taskfile.yml")
-    );
-    let rust_cache_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let core_cache_bake = (root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    assert!(
-        docker_tasks.contains("rust-format-check.output=type=cacheonly\" ci-rust'")
-            && !docker_tasks.contains("ci-rust builder-core-deps")
-            && !docker_tasks.contains("wasm-export builder-wasm-deps")
-            && docker_tasks.contains("nook-web-ci web-deps")
-            && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
-            && docker_tasks.contains("docker:ci:cache:publish:native:")
-            && docker_tasks.contains("docker:ci:cache:publish:preflight:")
-            && docker_tasks.contains("docker:ci:cache:publish:wasm:")
-            && docker_tasks.contains("docker:ci:cache:publish:web:")
-            && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
-            && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
-            && docker_tasks.contains("rust-base-publish")
-            && !docker_tasks.contains("builder-core-deps-publish")
-            && docker_tasks.contains("web-app-deps-publish")
-            && docker_tasks.contains("web-research-deps-publish")
-            && docker_tasks.contains("web-deps-publish")
-            && docker_tasks.contains("nook-web-e2e-publish")
-            && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX")
-            && core_cache_bake.contains("target \"builder-core-deps-publish\"")
-            && core_cache_bake.contains("cache-to   = rust_deps_cache_to")
-            && rust_cache_bake.contains("rust_native_source_cache_to")
-            && rust_cache_bake.contains("nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}"),
-        "scoped producer targets must remain available while Main owns one portable native source graph and not the portable WASM dependency ref"
-    );
-    assert_no_empty_cache_overrides(&docker_tasks);
-    let native_publish = docker_tasks
-        .split("docker:ci:cache:publish:native:")
-        .nth(1)
-        .and_then(|tail| tail.split("docker:ci:cache:publish:preflight:").next())
-        .unwrap_or("");
-    assert!(
-        native_publish.contains("builder-debug")
-            && !native_publish.contains("preflight-test")
-            && !native_publish.contains("task: docker:ci:cache:publish:rust-base")
-            && !native_publish.contains("builder-core-deps-publish")
-            && native_publish.matches("buildx bake").count() == 1,
-        "native cache publish must export only the complete source graph and avoid overlapping full-graph preparation"
-    );
-    let wasm_publish = docker_tasks
-        .split("docker:ci:cache:publish:wasm:")
-        .nth(1)
-        .and_then(|tail| tail.split("docker:rust-base:").next())
-        .unwrap_or("");
-    let wasm_source_idx = wasm_publish
-        .find("wasm-export")
-        .unwrap_or_else(|| panic!("wasm publish must bake wasm-export"));
-    let wasm_rust_base_idx = wasm_publish
-        .find("task: docker:ci:cache:publish:rust-base")
-        .unwrap_or_else(|| panic!("wasm publish must still seed rust-base after deps/source"));
-    assert!(
-        wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
-        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to the dedicated proof job"
-    );
-    let cache_verifier = (root).read(".github/scripts/verify-wasm-gha-cache.sh");
-    assert!(
-        !cache_verifier.contains("docker-container")
-            && !cache_verifier.contains("buildx create")
-            && !cache_verifier.contains("buildx rm")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
-            && cache_verifier
-                .contains("builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}")
-            && cache_verifier.contains("verify-registry-cache-blobs.ts")
-            && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
-            && cache_verifier.contains("refs/heads/main")
-            && cache_verifier.contains("repair solve never imports the ref it is replacing"),
-        "trusted Main must publish through ARC BuildKit and reject the result until Zot proves every manifest and blob"
-    );
-    let base_dockerfile = (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
-    assert!(
+        let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
+        assert!(
+            !ci_tasks.contains("warm-gha-cache")
+                && !ci_tasks.contains("publish-gha-cache")
+                && !root
+                    .join(".github/scripts/warm-buildkit-gha-cache.sh")
+                    .exists()
+                && !root
+                    .join(".github/scripts/publish-buildkit-gha-cache.sh")
+                    .exists(),
+            "obsolete deferred cache reconstruction commands and scripts must stay removed"
+        );
+        let docker_tasks = format!(
+            "{}{}",
+            (root).read("nook-app/nook-platform/docker/Taskfile.yml"),
+            (root).read("nook-app/nook-web/docker/Taskfile.yml")
+        );
+        let rust_cache_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+        let core_cache_bake = (root).read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+        assert!(
+            docker_tasks.contains("rust-format-check.output=type=cacheonly\" ci-rust'")
+                && !docker_tasks.contains("ci-rust builder-core-deps")
+                && !docker_tasks.contains("wasm-export builder-wasm-deps")
+                && docker_tasks.contains("nook-web-ci web-deps")
+                && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
+                && docker_tasks.contains("docker:ci:cache:publish:native:")
+                && docker_tasks.contains("docker:ci:cache:publish:preflight:")
+                && docker_tasks.contains("docker:ci:cache:publish:wasm:")
+                && docker_tasks.contains("docker:ci:cache:publish:web:")
+                && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
+                && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
+                && docker_tasks.contains("rust-base-publish")
+                && !docker_tasks.contains("builder-core-deps-publish")
+                && docker_tasks.contains("web-app-deps-publish")
+                && docker_tasks.contains("web-research-deps-publish")
+                && docker_tasks.contains("web-deps-publish")
+                && docker_tasks.contains("nook-web-e2e-publish")
+                && docker_tasks.contains("preflight-test")
+                && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX")
+                && core_cache_bake.contains("target \"builder-core-deps-publish\"")
+                && core_cache_bake.contains("cache-to   = rust_deps_cache_to")
+                && rust_cache_bake.contains("rust_native_source_cache_to")
+                && rust_cache_bake.contains("nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}"),
+            "scoped producer targets must remain available while Main owns one portable native source graph and not the portable WASM dependency ref"
+        );
+        assert_no_empty_cache_overrides(&docker_tasks);
+        let native_publish = docker_tasks
+            .split("docker:ci:cache:publish:native:")
+            .nth(1)
+            .and_then(|tail| tail.split("docker:ci:cache:publish:preflight:").next())
+            .unwrap_or("");
+        assert!(
+            native_publish.contains("builder-debug")
+                && !native_publish.contains("preflight-test")
+                && !native_publish.contains("task: docker:ci:cache:publish:rust-base")
+                && !native_publish.contains("builder-core-deps-publish")
+                && native_publish.matches("buildx bake").count() == 1,
+            "native cache publish must export only the complete source graph and avoid overlapping full-graph preparation"
+        );
+        let wasm_publish = docker_tasks
+            .split("docker:ci:cache:publish:wasm:")
+            .nth(1)
+            .and_then(|tail| tail.split("docker:rust-base:").next())
+            .unwrap_or("");
+        let wasm_source_idx = wasm_publish
+            .find("wasm-export")
+            .unwrap_or_else(|| panic!("wasm publish must bake wasm-export"));
+        let wasm_rust_base_idx = wasm_publish
+            .find("task: docker:ci:cache:publish:rust-base")
+            .unwrap_or_else(|| panic!("wasm publish must still seed rust-base after deps/source"));
+        assert!(
+            wasm_source_idx < wasm_rust_base_idx
+                && !wasm_publish.contains("builder-wasm-deps-publish"),
+            "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to the dedicated proof job"
+        );
+        let cache_verifier = (root).read(".github/scripts/verify-wasm-gha-cache.sh");
+        assert!(
+            !cache_verifier.contains("docker-container")
+                && !cache_verifier.contains("buildx create")
+                && !cache_verifier.contains("buildx rm")
+                && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
+                && cache_verifier.contains(
+                    "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}"
+                )
+                && cache_verifier.contains("verify-registry-cache-blobs.ts")
+                && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
+                && cache_verifier.contains("refs/heads/main")
+                && cache_verifier.contains("repair solve never imports the ref it is replacing"),
+            "trusted Main must publish through ARC BuildKit and reject the result until Zot proves every manifest and blob"
+        );
+        let base_dockerfile = (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+        assert!(
         base_dockerfile.contains("FROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base")
             && base_dockerfile.contains("FROM rust-base AS chef-deps")
             && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")
@@ -577,45 +586,47 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !base_dockerfile.contains("latest-rust-1."),
         "Rust dependency stages must use a digest-pinned rust base and a single chef-deps prepare/cook stage"
     );
-    let web_dockerfile = (root).read("nook-app/nook-web/docker/web.Dockerfile");
-    let rust_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_bake = (root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    for (path, dockerfile) in [
-        (
-            "nook-app/nook-platform/docker/rust/base/Dockerfile",
-            base_dockerfile.as_str(),
-        ),
-        (
-            "nook-app/nook-web/docker/web.Dockerfile",
-            web_dockerfile.as_str(),
-        ),
-    ] {
+        let web_dockerfile = (root).read("nook-app/nook-web/docker/web.Dockerfile");
+        let rust_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+        let web_bake = (root).read("nook-app/nook-web/docker/web.docker-bake.hcl");
+        for (path, dockerfile) in [
+            (
+                "nook-app/nook-platform/docker/rust/base/Dockerfile",
+                base_dockerfile.as_str(),
+            ),
+            (
+                "nook-app/nook-web/docker/web.Dockerfile",
+                web_dockerfile.as_str(),
+            ),
+        ] {
+            assert!(
+                dockerfile.contains("NODE_VERSION=")
+                    && dockerfile.contains("NODE_SHA256=")
+                    && dockerfile.contains("https://nodejs.org/dist/v${NODE_VERSION}/")
+                    && dockerfile.contains("sha256sum -c -")
+                    && dockerfile.contains("install -m 0755")
+                    && dockerfile.contains("/usr/local/bin/node")
+                    && !dockerfile.contains("NODE_IMAGE=")
+                    && !dockerfile.contains("playwright-node")
+                    && !dockerfile.contains("FROM node:"),
+                "{path} must install a binary-only Node runtime via a pinned curl download"
+            );
+        }
         assert!(
-            dockerfile.contains("NODE_VERSION=")
-                && dockerfile.contains("NODE_SHA256=")
-                && dockerfile.contains("https://nodejs.org/dist/v${NODE_VERSION}/")
-                && dockerfile.contains("sha256sum -c -")
-                && dockerfile.contains("install -m 0755")
-                && dockerfile.contains("/usr/local/bin/node")
-                && !dockerfile.contains("NODE_IMAGE=")
-                && !dockerfile.contains("playwright-node")
-                && !dockerfile.contains("FROM node:"),
-            "{path} must install a binary-only Node runtime via a pinned curl download"
+            rust_bake
+                .contains("dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"")
+                && rust_bake.contains("target \"rust-base\"")
+                && !rust_bake.contains("web.Dockerfile")
+                && web_bake.contains("dockerfile = \"nook-app/nook-web/docker/web.Dockerfile\"")
+                && web_bake.contains("target \"web-base\"")
+                && web_bake.contains("target \"web-e2e-base\"")
+                && !web_bake.contains("rust.Dockerfile")
+                && !rust_bake.contains("base.Dockerfile")
+                && !web_bake.contains("base.Dockerfile"),
+            "Bake must split rust-base and web-base across rust/web docker-bake files"
         );
+        Ok(())
     }
-    assert!(
-        rust_bake.contains("dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"")
-            && rust_bake.contains("target \"rust-base\"")
-            && !rust_bake.contains("web.Dockerfile")
-            && web_bake.contains("dockerfile = \"nook-app/nook-web/docker/web.Dockerfile\"")
-            && web_bake.contains("target \"web-base\"")
-            && web_bake.contains("target \"web-e2e-base\"")
-            && !web_bake.contains("rust.Dockerfile")
-            && !rust_bake.contains("base.Dockerfile")
-            && !web_bake.contains("base.Dockerfile"),
-        "Bake must split rust-base and web-base across rust/web docker-bake files"
-    );
-    Ok(())
 }
 
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
