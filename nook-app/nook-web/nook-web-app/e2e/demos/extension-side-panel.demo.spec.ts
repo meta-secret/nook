@@ -9,10 +9,12 @@ import { ExtensionRuntimeRequestType } from '../../../nook-web-extension/src/lib
 import { ExtensionSessionMessageType } from '../../../nook-web-extension/src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../../nook-web-extension/src/lib/paired-vaults'
 import {
+  SidePanelCodeFillKind,
   SidePanelLoginFillKind,
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
 } from '../../../nook-web-extension/src/lib/side-panel-site'
+import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
@@ -53,6 +55,17 @@ const sidePanelDemoProtocol = {
   pairedVaultList: SidePanelDemoVaults.Paired,
   listLogins: SidePanelSiteMessageType.ListLogins,
   fillLogin: SidePanelSiteMessageType.FillLogin,
+  fillCode: SidePanelSiteMessageType.FillCode,
+  codeFilled: SidePanelCodeFillKind.Filled,
+  loginType: I18N_KEYS.VaultTypesLogin,
+  authenticatorType: I18N_KEYS.VaultTypesAuthenticator,
+  passkeyType: I18N_KEYS.VaultTypesPasskey,
+  fill: I18N_KEYS.ExtensionActionFill,
+  fillLoginLabel: I18N_KEYS.ExtensionActionFillLogin,
+  fillCodeKey: I18N_KEYS.ExtensionActionFillCode,
+  fillCodeLabel: I18N_KEYS.ExtensionActionFillCodeFor,
+  emptyAny: I18N_KEYS.ExtensionActionSiteEmptyAny,
+  emptyHint: I18N_KEYS.ExtensionActionSiteEmptyHint,
   ready: SidePanelSiteListingKind.Ready,
   nonWeb: SidePanelSiteListingKind.NonWeb,
   filled: SidePanelLoginFillKind.Filled,
@@ -104,16 +117,65 @@ function installSidePanelDemoRuntime(
       managesPasskeys: false,
     },
   ]
-  const savedLogins = [
+  const login = (vault: string, secretId: string, account: string) => ({
+    kind: 'Login',
+    item_id: {
+      vault_store_id: `side-panel-demo-${vault.toLowerCase()}`,
+      secret_id: secretId,
+    },
+    type_label_key: protocol.loginType,
+    title: 'accounts.example.com',
+    account,
+    saved_host: 'accounts.example.com',
+    vault: { kind: 'Named', name: vault },
+    action: {
+      kind: 'FillLogin',
+      label_key: protocol.fill,
+      accessible_label_key: protocol.fillLoginLabel,
+    },
+  })
+  const siteGroups = [
     {
-      itemId: { vaultStoreId: 'side-panel-demo-personal', secretId: 'login-1' },
-      username: 'alice.martin@example.com',
-      vaultLabel: 'Personal',
+      header: { kind: 'Named', name: 'Alice Martin' },
+      rows: [
+        login('Personal', 'login-1', 'alice.martin@example.com'),
+        login('Family', 'login-2', 'alice+family@example.com'),
+        {
+          kind: 'Authenticator',
+          item_id: {
+            vault_store_id: 'side-panel-demo-personal',
+            secret_id: 'totp-1',
+          },
+          type_label_key: protocol.authenticatorType,
+          title: 'Example Accounts',
+          account: 'alice.martin@example.com',
+          saved_host: 'accounts.example.com',
+          vault: { kind: 'Named', name: 'Personal' },
+          action: {
+            kind: 'FillCode',
+            label_key: protocol.fillCodeKey,
+            accessible_label_key: protocol.fillCodeLabel,
+          },
+        },
+      ],
     },
     {
-      itemId: { vaultStoreId: 'side-panel-demo-family', secretId: 'login-2' },
-      username: 'alice+family@example.com',
-      vaultLabel: 'Family',
+      header: { kind: 'Named', name: 'Side project' },
+      rows: [
+        {
+          kind: 'Passkey',
+          item_id: {
+            vault_store_id: 'side-panel-demo-startup',
+            secret_id: 'passkey-1',
+          },
+          type_label_key: protocol.passkeyType,
+          title: 'Example Accounts',
+          account: 'alice',
+          saved_host: 'accounts.example.com',
+          vault: { kind: 'Named', name: 'Startup' },
+          action: { kind: 'ViewOnly' },
+        },
+      ],
     },
   ]
   const listing = (): unknown => {
@@ -122,21 +184,17 @@ function installSidePanelDemoRuntime(
         return {
           kind: protocol.ready,
           display_host: 'accounts.example.com',
-          items: savedLogins,
-          passkeys: [
-            {
-              userName: 'alice.martin@example.com',
-              userDisplayName: 'Alice Martin',
-              vaultLabel: 'Personal',
-            },
-          ],
+          listing: { kind: 'Listed', groups: siteGroups },
         }
       case protocol.siteEmpty:
         return {
           kind: protocol.ready,
           display_host: 'news.example.org',
-          items: [],
-          passkeys: [],
+          listing: {
+            kind: 'Empty',
+            message_key: protocol.emptyAny,
+            hint: { kind: 'Shown', message_key: protocol.emptyHint },
+          },
         }
       case protocol.siteNonWeb:
         return { kind: protocol.nonWeb }
@@ -150,6 +208,8 @@ function installSidePanelDemoRuntime(
         return listing()
       case protocol.fillLogin:
         return { kind: protocol.filled }
+      case protocol.fillCode:
+        return { kind: protocol.codeFilled }
       case protocol.status:
         return { ok: true, status, device }
       case protocol.unlockPin:
@@ -339,11 +399,11 @@ test('leads with This site and fills a saved login without signing in', async ({
   await expect(page.getByTestId('side-panel-site-host')).toHaveText(
     'accounts.example.com',
   )
-  await expect(page.getByTestId('side-panel-login')).toHaveCount(2)
-  // The site's passkey is listed read-only under the logins.
-  await expect(page.getByTestId('side-panel-passkey')).toHaveText(
-    /Alice Martin\s*alice\.martin@example\.com · Personal/,
-  )
+  await expect(page.getByTestId('side-panel-item')).toHaveCount(4)
+  await expect(page.getByTestId('side-panel-site-group')).toHaveText([
+    'Alice Martin',
+    'Side project',
+  ])
   await demoBeat(page)
   await page
     .getByRole('button', {
@@ -356,7 +416,7 @@ test('leads with This site and fills a saved login without signing in', async ({
   await demoBeat(page)
 })
 
-test('names the site when it has no saved logins', async ({ page }) => {
+test('names the site when it has no saved items', async ({ page }) => {
   await openSidePanel({
     page,
     session: {

@@ -32,6 +32,34 @@ pub struct LoginAccountMetadata {
     pub website_host: WebsiteHost,
 }
 
+/// Whether a saved website belongs to the requesting site, with its display host.
+pub(super) enum SavedWebsiteMatch {
+    Matched(WebsiteHost),
+    Unmatched,
+}
+
+/// One saved website assessed against the requesting site's host.
+pub(super) struct SavedWebsiteRequest<'a> {
+    pub(super) saved: &'a str,
+    pub(super) origin: &'a LoginWebsiteHost,
+}
+
+impl SavedWebsiteRequest<'_> {
+    /// The registrable-domain login policy; unparsable saved websites never match.
+    pub(super) fn assess(&self) -> SavedWebsiteMatch {
+        let Ok(website_host) = WebsiteHost::normalize(self.saved) else {
+            return SavedWebsiteMatch::Unmatched;
+        };
+        let Ok(login_host) = LoginWebsiteHost::try_from(self.saved) else {
+            return SavedWebsiteMatch::Unmatched;
+        };
+        match login_host.matches(self.origin) {
+            LoginHostMatch::Matched => SavedWebsiteMatch::Matched(website_host),
+            LoginHostMatch::Unmatched => SavedWebsiteMatch::Unmatched,
+        }
+    }
+}
+
 impl SecretSearchCatalog {
     /// Applies the same registrable-domain policy as selected-record reveal without
     /// opening any full record. Catalog reconciliation authenticates these rows.
@@ -46,15 +74,13 @@ impl SecretSearchCatalog {
             else {
                 continue;
             };
-            let Ok(website_host) = WebsiteHost::normalize(website_url) else {
-                continue;
+            let request = SavedWebsiteRequest {
+                saved: website_url,
+                origin,
             };
-            let Ok(login_host) = LoginWebsiteHost::try_from(website_url.as_str()) else {
-                continue;
-            };
-            match login_host.matches(origin) {
-                LoginHostMatch::Unmatched => {}
-                LoginHostMatch::Matched => accounts.push(LoginAccountMetadata {
+            match request.assess() {
+                SavedWebsiteMatch::Unmatched => {}
+                SavedWebsiteMatch::Matched(website_host) => accounts.push(LoginAccountMetadata {
                     secret_id: entry.item.id.clone(),
                     username: LoginAccountUsername(username.clone()),
                     website_url: LoginAccountWebsiteUrl(website_url.clone()),

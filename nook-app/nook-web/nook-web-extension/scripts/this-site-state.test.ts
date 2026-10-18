@@ -1,19 +1,26 @@
 import { describe, expect, test } from 'bun:test'
+import type {
+  SiteSecretIdentityGroup,
+  SiteSecretRow,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import {
+  SidePanelCodeFillKind,
   SidePanelLoginFillKind,
   SidePanelSiteListingKind,
   type SidePanelLoginItemId,
-  type SidePanelSiteLogin,
   type SidePanelSiteListing,
   type SidePanelSiteListingFailureKind,
 } from '../src/lib/side-panel-site'
 import { SidePanelChangeKind } from '../src/side-panel/side-panel-runtime'
 import {
   ThisSiteBodyKind,
+  ThisSiteFillAction,
+  ThisSiteFillChoiceKind,
   ThisSiteFillFailure,
   ThisSiteFillKind,
   ThisSiteHostKind,
+  ThisSiteLiveAnnouncementKind,
   ThisSiteMatchCount,
   ThisSiteMemory,
   ThisSiteMemoryKind,
@@ -26,38 +33,105 @@ import {
   type ThisSiteState,
 } from '../src/side-panel/this-site-state'
 
-const work: SidePanelSiteLogin = {
-  itemId: { vaultStoreId: 'store-work', secretId: 'login-work' },
-  username: 'alice@company.example',
-  vaultLabel: 'Work',
+/** Display rows as Rust presents them: no secret, every text chosen by key. */
+class Rows {
+  static login(secretId: string, account: string): SiteSecretRow {
+    return {
+      kind: 'Login',
+      item_id: { vault_store_id: 'store-work', secret_id: secretId },
+      type_label_key: I18N_KEYS.VaultTypesLogin,
+      title: 'accounts.example.com',
+      account,
+      saved_host: 'accounts.example.com',
+      vault: { kind: 'Named', name: 'Work' },
+      action: {
+        kind: 'FillLogin',
+        label_key: I18N_KEYS.ExtensionActionFill,
+        accessible_label_key: I18N_KEYS.ExtensionActionFillLogin,
+      },
+    }
+  }
+
+  static authenticator(): SiteSecretRow {
+    return {
+      kind: 'Authenticator',
+      item_id: { vault_store_id: 'store-work', secret_id: 'totp-work' },
+      type_label_key: I18N_KEYS.VaultTypesAuthenticator,
+      title: 'Example',
+      account: 'alice@company.example',
+      saved_host: 'accounts.example.com',
+      vault: { kind: 'Named', name: 'Work' },
+      action: {
+        kind: 'FillCode',
+        label_key: I18N_KEYS.ExtensionActionFillCode,
+        accessible_label_key: I18N_KEYS.ExtensionActionFillCodeFor,
+      },
+    }
+  }
+
+  static passkey(): SiteSecretRow {
+    return {
+      kind: 'Passkey',
+      item_id: { vault_store_id: 'store-personal', secret_id: 'passkey-one' },
+      type_label_key: I18N_KEYS.VaultTypesPasskey,
+      title: 'Example',
+      account: 'alice',
+      saved_host: 'accounts.example.com',
+      vault: {
+        kind: 'Unnamed',
+        message_key: I18N_KEYS.LoginVaultPickerUnnamed,
+      },
+      action: { kind: 'ViewOnly' },
+    }
+  }
 }
-const personal: SidePanelSiteLogin = {
-  itemId: { vaultStoreId: 'store-personal', secretId: 'login-personal' },
-  username: 'alice@example.com',
-  vaultLabel: 'Personal',
-}
+
+const work = Rows.login('login-work', 'alice@company.example')
+const personal = Rows.login('login-personal', 'alice@example.com')
+const workId: SidePanelLoginItemId = ThisSiteViews.itemId(work)
+const groups: SiteSecretIdentityGroup[] = [
+  {
+    header: { kind: 'Named', name: 'work' },
+    rows: [work, Rows.authenticator()],
+  },
+  {
+    header: {
+      kind: 'Unnamed',
+      message_key: I18N_KEYS.ExtensionCompanionOtherVaults,
+    },
+    rows: [personal, Rows.passkey()],
+  },
+]
 
 function fillAnswer(kind: SidePanelLoginFillKind) {
   const request: Parameters<typeof ThisSiteViews.fill>[0] = {
     kind,
-    item: work.itemId,
+    item: workId,
   }
   return ThisSiteViews.fill(request)
+}
+
+function codeAnswer(kind: SidePanelCodeFillKind) {
+  const request: Parameters<typeof ThisSiteViews.codeFill>[0] = {
+    kind,
+    item: workId,
+  }
+  return ThisSiteViews.codeFill(request)
 }
 
 function shownState(): ThisSiteState {
   const filled: ThisSiteFill = {
     kind: ThisSiteFillKind.Filled,
-    item: work.itemId,
+    item: workId,
+    action: ThisSiteFillAction.Login,
   }
   return {
     view: {
       host: { kind: ThisSiteHostKind.Named, host: 'accounts.example.com' },
       body: {
         kind: ThisSiteBodyKind.Matches,
-        items: [work, personal],
+        groups,
         count: ThisSiteMatchCount.Several,
-        passkeys: [],
       },
     },
     fill: filled,
@@ -66,66 +140,64 @@ function shownState(): ThisSiteState {
 }
 
 describe('This site listing', () => {
-  test('shows the logins for the host Rust named, in Rust order', () => {
+  test("shows Rust's identity groups and rows for the host Rust named, in Rust's order", () => {
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'accounts.example.com',
-      items: [work, personal],
-      passkeys: [],
+      listing: { kind: 'Listed', groups },
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
         host: { kind: ThisSiteHostKind.Named, host: 'accounts.example.com' },
         body: {
           kind: ThisSiteBodyKind.Matches,
-          items: [work, personal],
+          groups,
           count: ThisSiteMatchCount.Several,
-          passkeys: [],
         },
       },
       signal: ThisSitePanelSignal.None,
     })
   })
 
-  test('passkeys alone still list the site instead of saying nothing is saved', () => {
-    const passkey = {
-      userName: 'person@example.org',
-      userDisplayName: 'Person',
-      vaultLabel: 'Personal',
-    }
+  test("an empty answer keeps Rust's typed empty state and names the site", () => {
+    const empty = {
+      kind: 'Empty',
+      message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+      hint: { kind: 'Absent' },
+    } as const
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
-      display_host: 'news.example.org',
-      items: [],
-      passkeys: [passkey],
+      display_host: 'www.namecheap.com',
+      listing: empty,
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
-        host: { kind: ThisSiteHostKind.Named, host: 'news.example.org' },
+        host: { kind: ThisSiteHostKind.Named, host: 'www.namecheap.com' },
         body: {
-          kind: ThisSiteBodyKind.Matches,
-          items: [],
-          count: ThisSiteMatchCount.Several,
-          passkeys: [passkey],
+          kind: ThisSiteBodyKind.Empty,
+          host: 'www.namecheap.com',
+          empty,
         },
       },
       signal: ThisSitePanelSignal.None,
     })
   })
 
-  test('an empty list names the site; only a ready answer can be empty', () => {
-    const listing: SidePanelSiteListing = {
-      kind: SidePanelSiteListingKind.Ready,
-      display_host: 'news.example.org',
-      items: [],
-      passkeys: [],
-    }
-    expect(ThisSiteViews.listing(listing)).toEqual({
-      view: {
-        host: { kind: ThisSiteHostKind.Named, host: 'news.example.org' },
-        body: { kind: ThisSiteBodyKind.Empty, host: 'news.example.org' },
-      },
-      signal: ThisSitePanelSignal.None,
+  test('each row action chooses its request; passkeys and API keys send none', () => {
+    expect(ThisSiteViews.fillChoice(work)).toEqual({
+      kind: ThisSiteFillChoiceKind.Fills,
+      action: ThisSiteFillAction.Login,
+    })
+    expect(ThisSiteViews.fillChoice(Rows.authenticator())).toEqual({
+      kind: ThisSiteFillChoiceKind.Fills,
+      action: ThisSiteFillAction.Code,
+    })
+    expect(ThisSiteViews.fillChoice(Rows.passkey())).toEqual({
+      kind: ThisSiteFillChoiceKind.ViewOnly,
+    })
+    expect(ThisSiteViews.itemId(Rows.authenticator())).toEqual({
+      vaultStoreId: 'store-work',
+      secretId: 'totp-work',
     })
   })
 
@@ -192,7 +264,8 @@ describe('This site Fill', () => {
   test('a filled login says to review the page and sign in', () => {
     const filled: ThisSiteFill = {
       kind: ThisSiteFillKind.Filled,
-      item: work.itemId,
+      item: workId,
+      action: ThisSiteFillAction.Login,
     }
     expect(fillAnswer(SidePanelLoginFillKind.Filled)).toEqual({
       fill: filled,
@@ -209,7 +282,8 @@ describe('This site Fill', () => {
     const noForm = fillAnswer(SidePanelLoginFillKind.NoLoginForm)
     expect(noForm.fill).toEqual({
       kind: ThisSiteFillKind.Failed,
-      item: work.itemId,
+      item: workId,
+      action: ThisSiteFillAction.Login,
       failure: ThisSiteFillFailure.NoLoginForm,
     })
     expect(ThisSiteViews.resultKey(noForm.fill)).toBe(
@@ -223,7 +297,8 @@ describe('This site Fill', () => {
       const outcome = fillAnswer(kind)
       expect(outcome.fill).toEqual({
         kind: ThisSiteFillKind.Failed,
-        item: work.itemId,
+        item: workId,
+        action: ThisSiteFillAction.Login,
         failure: ThisSiteFillFailure.Other,
       })
       expect(outcome.reload).toBe(ThisSiteReload.None)
@@ -237,7 +312,8 @@ describe('This site Fill', () => {
     const outcome = fillAnswer(SidePanelLoginFillKind.Locked)
     expect(outcome.fill).toEqual({
       kind: ThisSiteFillKind.Failed,
-      item: work.itemId,
+      item: workId,
+      action: ThisSiteFillAction.Login,
       failure: ThisSiteFillFailure.Locked,
     })
     expect(outcome.signal).toBe(ThisSitePanelSignal.FillLocked)
@@ -282,15 +358,16 @@ describe('This site Fill', () => {
   test('the result shows on the filled row only', () => {
     const pending: ThisSiteFill = {
       kind: ThisSiteFillKind.Pending,
-      item: work.itemId,
+      item: workId,
+      action: ThisSiteFillAction.Login,
     }
     const workRow: Parameters<typeof ThisSiteViews.rowResult>[0] = {
       fill: pending,
-      item: work.itemId,
+      item: workId,
     }
     const otherItem: SidePanelLoginItemId = {
-      vaultStoreId: work.itemId.vaultStoreId,
-      secretId: personal.itemId.secretId,
+      vaultStoreId: workId.vaultStoreId,
+      secretId: personal.item_id.secret_id,
     }
     const otherRow: Parameters<typeof ThisSiteViews.rowResult>[0] = {
       fill: pending,
@@ -303,11 +380,93 @@ describe('This site Fill', () => {
     )
   })
 
-  test('one match gets the primary Fill, several share secondary ones', () => {
-    expect(ThisSiteViews.matchCount([work])).toBe(ThisSiteMatchCount.One)
-    expect(ThisSiteViews.matchCount([work, personal])).toBe(
-      ThisSiteMatchCount.Several,
+  test('a code fill reports its own outcomes on the authenticator row', () => {
+    const filled = codeAnswer(SidePanelCodeFillKind.Filled)
+    expect(filled.fill).toEqual({
+      kind: ThisSiteFillKind.Filled,
+      item: workId,
+      action: ThisSiteFillAction.Code,
+    })
+    expect(ThisSiteViews.resultKey(filled.fill)).toBe(
+      I18N_KEYS.ExtensionActionFillCodeDone,
     )
+    const noField = codeAnswer(SidePanelCodeFillKind.NoCodeField)
+    expect(noField.fill).toEqual({
+      kind: ThisSiteFillKind.Failed,
+      item: workId,
+      action: ThisSiteFillAction.Code,
+      failure: ThisSiteFillFailure.NoCodeField,
+    })
+    expect(ThisSiteViews.resultKey(noField.fill)).toBe(
+      I18N_KEYS.ExtensionActionFillNoCodeField,
+    )
+    const failed = codeAnswer(SidePanelCodeFillKind.FillFailed)
+    expect(ThisSiteViews.resultKey(failed.fill)).toBe(
+      I18N_KEYS.ExtensionActionFillCodeFailed,
+    )
+    const locked = codeAnswer(SidePanelCodeFillKind.Locked)
+    expect(locked.signal).toBe(ThisSitePanelSignal.FillLocked)
+    expect(ThisSiteViews.resultKey(locked.fill)).toBe(
+      I18N_KEYS.ExtensionActionFillLocked,
+    )
+    expect(codeAnswer(SidePanelCodeFillKind.ItemNotFound)).toEqual({
+      fill: { kind: ThisSiteFillKind.Idle },
+      notice: ThisSiteNoticeKind.CodeMissing,
+      reload: ThisSiteReload.List,
+      signal: ThisSitePanelSignal.None,
+    })
+    expect(ThisSiteViews.noticeKey(ThisSiteNoticeKind.CodeMissing)).toBe(
+      I18N_KEYS.ExtensionActionFillCodeMissing,
+    )
+    expect(codeAnswer(SidePanelCodeFillKind.TabChanged).notice).toBe(
+      ThisSiteNoticeKind.SiteChanged,
+    )
+  })
+
+  test('the live region announces each fill with its own text and leaves failures to the row', () => {
+    const pending: ThisSiteFill = {
+      kind: ThisSiteFillKind.Pending,
+      item: workId,
+      action: ThisSiteFillAction.Code,
+    }
+    expect(ThisSiteViews.liveAnnouncement(pending)).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillPending,
+    })
+    // A filled code is not announced as a filled login.
+    expect(
+      ThisSiteViews.liveAnnouncement(
+        codeAnswer(SidePanelCodeFillKind.Filled).fill,
+      ),
+    ).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillCodeDone,
+    })
+    expect(
+      ThisSiteViews.liveAnnouncement(
+        fillAnswer(SidePanelLoginFillKind.Filled).fill,
+      ),
+    ).toEqual({
+      kind: ThisSiteLiveAnnouncementKind.Announced,
+      key: I18N_KEYS.ExtensionActionFillDone,
+    })
+    for (const fill of [
+      codeAnswer(SidePanelCodeFillKind.FillFailed).fill,
+      ThisSiteMemory.initial().fill,
+    ]) {
+      expect(ThisSiteViews.liveAnnouncement(fill)).toEqual({
+        kind: ThisSiteLiveAnnouncementKind.Silent,
+      })
+    }
+  })
+
+  test('one match gets the primary Fill, several share secondary ones', () => {
+    const one: SiteSecretIdentityGroup[] = [
+      { header: { kind: 'Named', name: 'work' }, rows: [work] },
+    ]
+    expect(ThisSiteViews.matchCount(one)).toBe(ThisSiteMatchCount.One)
+    // Rows count across identity groups.
+    expect(ThisSiteViews.matchCount(groups)).toBe(ThisSiteMatchCount.Several)
   })
 })
 

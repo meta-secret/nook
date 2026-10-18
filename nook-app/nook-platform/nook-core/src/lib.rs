@@ -183,8 +183,8 @@ pub use passkey_authenticator::{
     CheckedPasskeyAssertion, CheckedPasskeyRegistration,
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
     PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyOrigin,
-    PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty,
-    PasskeySiteRelyingParties, PasskeyUser, PasskeyUserVerification,
+    PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
+    PasskeyUserVerification,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
 pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};
@@ -417,7 +417,7 @@ pub use vault_runtime_policy::{
 pub use vault_search_catalog::{
     LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl,
     SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SecretSearchCatalog,
-    SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
+    SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile, SiteSecretOrigin,
 };
 pub use vault_sentinel_genesis::{
     SentinelDeliveryNotPending, SentinelGenesisOutput, SentinelGenesisPhase,

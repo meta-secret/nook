@@ -20,11 +20,15 @@ import {
   observeAirbnbLoginModalRoute,
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
-import { type AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  PageSecondFactorRoute,
+  type AuthenticationUsernameEvidence,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
   type CompanionWasmLabelRequest,
+  type CompanionWasmPageInputFieldObservation,
   type CompanionWasmPageInputFieldRequest,
 } from "./companion-wasm-runtime-messages";
 import {
@@ -75,6 +79,10 @@ type ScopedInputFieldQuery = {
 type PageInputClassificationRequest = {
   field: HTMLInputElement;
   loginContext: boolean;
+};
+
+type PageInputObservationRequest = PageInputClassificationRequest & {
+  secondFactorRoute: PageSecondFactorRoute;
 };
 
 type CompanionWasmFieldClassification = DirectFieldClassification;
@@ -189,30 +197,42 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
   /** Captures field metadata without a value or a whole-page authentication assumption. */
   focusedFieldObservation(
     field: HTMLInputElement,
-  ): CompanionWasmPageInputFieldRequest["observation"] {
+  ): CompanionWasmPageInputFieldObservation {
+    const request: PageInputObservationRequest = {
+      field,
+      loginContext: false,
+      secondFactorRoute: PageSecondFactorRoute.Unrelated,
+    };
+    return this.fieldObservation(request);
+  }
+
+  /** Collects one input's raw attributes for every producer; Rust decides its role. */
+  private fieldObservation({
+    field,
+    loginContext,
+    secondFactorRoute,
+  }: PageInputObservationRequest): CompanionWasmPageInputFieldObservation {
     return {
       inputType: field.type,
       disabled: field.disabled,
       readOnly: field.readOnly,
       autocompleteTokens: this.autocompleteTokens(field),
       identityText: this.authenticationFieldIdentityText(field),
-      loginContext: false,
+      loginContext,
+      secondFactorRoute,
+      inputMode: ((v) => (v ? v : ""))(field.getAttribute("inputmode")),
+      maxLength: field.maxLength,
+      pattern: ((v) => (v ? v : ""))(field.getAttribute("pattern")),
     };
   }
 
   async prepareCompanionClassification(root: ParentNode): Promise<void> {
     const fields = Array.from(root.querySelectorAll<HTMLInputElement>("input"));
+    // The offscreen runtime derives both page contexts from the login-context observation.
     const fieldRequests: CompanionWasmPageInputFieldRequest[] = fields.map(
       (field, index) => ({
         index,
-        observation: {
-          inputType: field.type,
-          disabled: field.disabled,
-          readOnly: field.readOnly,
-          autocompleteTokens: this.autocompleteTokens(field),
-          identityText: this.authenticationFieldIdentityText(field),
-          loginContext: false,
-        },
+        observation: this.focusedFieldObservation(field),
         loginContextObservation: this.loginContextObservation(field),
       }),
     );
@@ -627,10 +647,12 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     };
     if (formScope) query.formScope = formScope;
     return this.findFields(query).flatMap((field) => {
+      // A masked input that Rust classifies as a one-time code is a second factor.
       const accepted =
         !this.inputIsEffectivelyDisabled(field) &&
         field.type === "password" &&
-        this.isRenderedInput(field);
+        this.isRenderedInput(field) &&
+        !this.looksLikeOneTimeCodeField(field);
       const diagnosticRequest: Parameters<
         AuthenticationFieldCandidateDiagnosticBuilder["build"]
       >[0] = {
@@ -672,15 +694,16 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const classification = this.companionFieldClassifications.get(field);
     if (classification) return classification;
     if (!this.directClassificationAvailable()) return false;
-    const observation: CompanionWasmPageInputFieldRequest["observation"] = {
-      inputType: field.type,
-      disabled: field.disabled,
-      readOnly: field.readOnly,
-      autocompleteTokens: this.autocompleteTokens(field),
-      identityText: this.authenticationFieldIdentityText(field),
+    const observationRequest: PageInputObservationRequest = {
+      field,
       loginContext,
+      secondFactorRoute: this.directClassification.secondFactorRoute(
+        this.loginContextObservation(field),
+      ),
     };
-    return this.directClassification.field(observation);
+    return this.directClassification.field(
+      this.fieldObservation(observationRequest),
+    );
   }
 
   private authenticationFieldIdentityText(field: HTMLInputElement): string {

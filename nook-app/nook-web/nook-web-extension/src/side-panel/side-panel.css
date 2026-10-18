@@ -460,7 +460,7 @@ html:has(.side-panel-body) {
 
 .side-panel-login {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 12px;
   min-height: 56px;
@@ -470,6 +470,47 @@ html:has(.side-panel-body) {
 
 .side-panel-login:last-child {
   border-bottom: 0;
+}
+
+/* Identity header above that identity's rows, in Rust's order. */
+.side-panel-site-group {
+  margin: 0;
+  padding: 12px var(--side-panel-gutter) 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.side-panel-site-group + .side-panel-logins {
+  border-top: 0;
+}
+
+.side-panel-login-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--foreground);
+}
+
+.side-panel-login-type {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-panel-login-copy {
@@ -495,38 +536,6 @@ html:has(.side-panel-body) {
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.35;
-}
-
-/* The site's passkeys: read-only rows under the logins; the site asks for
- * them, so they carry no action. */
-.side-panel-passkeys {
-  display: grid;
-  border-top: 1px solid var(--border);
-}
-
-.side-panel-passkeys-label {
-  padding: 14px var(--side-panel-gutter) 4px;
-}
-
-.side-panel-passkeys .side-panel-logins {
-  border-top: 0;
-}
-
-.side-panel-passkey {
-  grid-template-columns: auto minmax(0, 1fr);
-  min-height: 52px;
-}
-
-.side-panel-passkey .side-panel-passkey-mark {
-  color: var(--muted-foreground);
-}
-
-.side-panel-passkeys-hint {
-  margin: 0;
-  padding: 0 var(--side-panel-gutter) 16px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .side-panel .side-panel-fill {
@@ -593,7 +602,8 @@ html:has(.side-panel-body) {
 }
 
 /* Site-changed note between the heading and a reloaded list. */
-.side-panel-site-status:has(+ .side-panel-logins) {
+.side-panel-site-status:has(+ .side-panel-logins),
+.side-panel-site-status:has(+ .side-panel-site-group) {
   padding-bottom: 12px;
 }
 

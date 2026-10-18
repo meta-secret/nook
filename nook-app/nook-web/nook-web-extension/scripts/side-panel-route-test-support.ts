@@ -1,8 +1,10 @@
 import { expect, mock } from 'bun:test'
 import { ok } from 'neverthrow'
-import type {
-  BrowserTabTarget,
-  BrowserTabUrlObservation,
+import {
+  SitePageNeed,
+  type BrowserTabTarget,
+  type BrowserTabUrlObservation,
+  type SiteSecretItem,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
@@ -16,6 +18,7 @@ import {
   SidePanelLoginFillOperation,
   SidePanelSiteListingOperation,
 } from '../src/background/service-worker/side-panel-site-operations'
+import { SidePanelCodeFillOperation } from '../src/background/service-worker/side-panel-code-fill-operation'
 import {
   CompanionSidePanelTabClassifier,
   SidePanelTabTargetResolver,
@@ -27,9 +30,16 @@ import {
   type BrowserRuntimeMessageValue,
 } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import { WebsitePasskeyOptionsMessage } from '../src/lib/webauthn-messages'
 import type { WebsiteLoginAccountOption } from '../src/lib/login-fill-messages'
-import { SidePanelPageFillReplyKind } from '../src/lib/side-panel-page-fill'
+import {
+  SidePanelPageCodeFillReplyKind,
+  SidePanelPageFillMessageType,
+  SidePanelPageFillReplyKind,
+} from '../src/lib/side-panel-page-fill'
+import {
+  SidePanelPageNeedMessageType,
+  SidePanelPageNeedReplyKind,
+} from '../src/lib/side-panel-page-need'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 import { SidePanelSiteMessageType } from '../src/lib/side-panel-site'
 import type { ExtensionSessionResponse } from '../src/offscreen/session'
@@ -69,6 +79,7 @@ export class RouteData {
       vaultType: 'simple',
       vaultStoreId,
       vaultName,
+      identityLabel: `${vaultName} identity`,
       deviceId: `${vaultStoreId}-device`,
       devicePublicKey: `${vaultStoreId}-public`,
       deviceSigningPublicKey: `${vaultStoreId}-signing`,
@@ -94,6 +105,21 @@ export class RouteData {
       username,
       websiteUrl: 'https://www.example.com/login?session=token',
       websiteHost: 'www.example.com',
+    }
+  }
+
+  /** One site-bound item a vault session matched, as Rust projects it. */
+  static secret(
+    kind: SiteSecretItem['kind'],
+    secretId: string,
+    account: string,
+  ): SiteSecretItem {
+    return {
+      kind,
+      secret_id: secretId,
+      title: 'www.example.com',
+      account,
+      saved_host: 'www.example.com',
     }
   }
 
@@ -214,21 +240,18 @@ export class SidePanelRouteFixture {
   ]
   window: FixtureWindow = RouteData.present(RouteData.window())
   grants: StoredExtensionPairingGrant[] = [
-    RouteData.grant('store_personal', 'Personal'),
-    RouteData.grant('store_work', 'Work'),
+    RouteData.grant('store_personalvlt', 'Personal'),
+    RouteData.grant('store_workvaultxx', 'Work'),
   ]
-  /** Vaults that hold passkeys, and their listing per `vault|rpId`. */
-  passkeyGrants: StoredExtensionPairingGrant[] = []
-  readonly passkeyListings = new Map<string, SessionDelivery>()
   status: DeviceProtectionStatus = DeviceProtectionStatus.Unlocked
   listings = new Map<string, SessionDelivery>([
     [
-      'store_personal',
+      'store_personalvlt',
       ok({
         ok: true,
         accounts: [
           RouteData.account(
-            'store_personal',
+            'store_personalvlt',
             'secret_one',
             'person@example.com',
           ),
@@ -236,12 +259,43 @@ export class SidePanelRouteFixture {
       }),
     ],
     [
-      'store_work',
+      'store_workvaultxx',
       ok({
         ok: true,
         accounts: [
-          RouteData.account('store_work', 'secret_two', 'work@example.com'),
+          RouteData.account(
+            'store_workvaultxx',
+            'secret_two',
+            'work@example.com',
+          ),
         ],
+      }),
+    ],
+  ])
+  /** Every grant's Rust site-secret matches for the derived origin. */
+  siteListings = new Map<string, SessionDelivery>([
+    [
+      'store_personalvlt',
+      ok({
+        ok: true,
+        matches: {
+          items: [
+            RouteData.secret('Login', 'secret_one', 'person@example.com'),
+            RouteData.secret('Passkey', 'passkey_one', 'person'),
+          ],
+        },
+      }),
+    ],
+    [
+      'store_workvaultxx',
+      ok({
+        ok: true,
+        matches: {
+          items: [
+            RouteData.secret('Authenticator', 'totp_two', 'work@example.com'),
+            RouteData.secret('Login', 'secret_two', 'work@example.com'),
+          ],
+        },
       }),
     ],
   ])
@@ -249,6 +303,14 @@ export class SidePanelRouteFixture {
   revokeAfterListing = false
   pageReply: PageReply = RouteData.answered({
     kind: SidePanelPageFillReplyKind.Filled,
+  })
+  /** What the tab's content script answers the page-need query with. */
+  pageNeed: PageReply = RouteData.answered({
+    kind: SidePanelPageNeedReplyKind.Needed,
+    need: SitePageNeed.AnySiteSecret,
+  })
+  codeReply: PageReply = RouteData.answered({
+    kind: SidePanelPageCodeFillReplyKind.Filled,
   })
 
   install(): void {
@@ -283,9 +345,6 @@ export class SidePanelRouteFixture {
       authorizationIsCurrent: () => this.current,
       authorizationCleanupPending: async () => false,
       passwordPairingGrants: async () => this.grants,
-      passkeyPairingGrants: async () => this.passkeyGrants,
-      passkeyRelyingPartyIds: (origin) =>
-        WebsitePasskeyOptionsMessage.relyingPartyIds(origin),
       sendSessionMessage: async (message) => this.session(message),
       loginAccountAvailabilityForOrigin:
         accountPickerSessions.loginAccountAvailabilityForOrigin.bind(
@@ -293,7 +352,7 @@ export class SidePanelRouteFixture {
         ),
       sendPageMessage: async (delivery) => {
         this.pageDeliveries.push(delivery)
-        return this.answer()
+        return this.answer(delivery)
       },
       now: () => 1_000,
     }
@@ -303,11 +362,11 @@ export class SidePanelRouteFixture {
     this.sessionMessages.push(message)
     if (message.type === ExtensionSessionMessageType.Status)
       return ok({ ok: true, status: this.status })
-    if (message.type === ExtensionSessionMessageType.ListPasskeys) {
-      const passkeys = this.passkeyListings.get(
-        `${message.payload.vaultStoreId}|${message.payload.rpId}`,
-      )
-      return passkeys ? passkeys : ok({ ok: true, accounts: [] })
+    if (message.type === ExtensionSessionMessageType.ListSiteSecrets) {
+      if (this.revokeAfterListing) this.current = false
+      const matches = this.siteListings.get(message.payload.vaultStoreId)
+      if (!matches) throw new Error('unexpected vault')
+      return matches
     }
     if (message.type !== ExtensionSessionMessageType.ListLogins)
       throw new Error(`unexpected session request ${message.type}`)
@@ -359,20 +418,34 @@ export class SidePanelRouteFixture {
   }
 
   /** Chrome rejects a tab message that no content script receives. */
-  private answer(): Promise<BrowserRuntimeMessageValue> {
-    switch (this.pageReply.kind) {
+  private answer(
+    delivery: SidePanelPageDelivery,
+  ): Promise<BrowserRuntimeMessageValue> {
+    const reply = this.replyTo(delivery)
+    switch (reply.kind) {
       case PageReplyKind.NoReceiver:
         return Promise.reject(new Error('Could not establish connection'))
       case PageReplyKind.Answered:
-        return Promise.resolve(this.pageReply.reply)
+        return Promise.resolve(reply.reply)
     }
   }
 
-  passkeyLookups(): string[] {
-    return this.sessionMessages.flatMap((message) =>
-      message.type === ExtensionSessionMessageType.ListPasskeys
-        ? [`${message.payload.vaultStoreId}|${message.payload.rpId}`]
-        : [],
+  private replyTo(delivery: SidePanelPageDelivery): PageReply {
+    switch (delivery.message.type) {
+      case SidePanelPageNeedMessageType.Query:
+        return this.pageNeed
+      case SidePanelPageFillMessageType.FillCode:
+        return this.codeReply
+      case SidePanelPageFillMessageType.Fill:
+        return this.pageReply
+    }
+  }
+
+  /** The page deliveries other than the listing's page-need query. */
+  fillDeliveries(): SidePanelPageDelivery[] {
+    return this.pageDeliveries.filter(
+      (delivery) =>
+        delivery.message.type !== SidePanelPageNeedMessageType.Query,
     )
   }
 
@@ -395,12 +468,24 @@ export class SidePanelRouteFixture {
   }
 
   async fill(
-    itemId = { vaultStoreId: 'store_work', secretId: 'secret_two' },
+    itemId = { vaultStoreId: 'store_workvaultxx', secretId: 'secret_two' },
     payload: BrowserRuntimeMessageValue = { windowId: 7, itemId },
   ) {
     const operation = new SidePanelLoginFillOperation(await this.dependencies())
     const message = RouteData.message({
       type: SidePanelSiteMessageType.FillLogin,
+      payload,
+    })
+    return operation.run({ message, sender: RouteData.panelSender })
+  }
+
+  async fillCode(
+    itemId = { vaultStoreId: 'store_workvaultxx', secretId: 'totp_two' },
+    payload: BrowserRuntimeMessageValue = { windowId: 7, itemId },
+  ) {
+    const operation = new SidePanelCodeFillOperation(await this.dependencies())
+    const message = RouteData.message({
+      type: SidePanelSiteMessageType.FillCode,
       payload,
     })
     return operation.run({ message, sender: RouteData.panelSender })

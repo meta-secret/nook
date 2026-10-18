@@ -486,14 +486,3 @@ pub fn website_passkey_request_allows_credential(
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
     Ok(request.allows_credential(credential_id))
 }
-
-/// The relying-party ids a page at `origin` may use; nook-core owns the rule.
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-#[must_use]
-pub fn website_passkey_relying_party_ids(origin: &str) -> Vec<String> {
-    nook_core::PasskeySiteRelyingParties { origin }.rp_ids()
-}

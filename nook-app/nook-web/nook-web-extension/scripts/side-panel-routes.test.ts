@@ -1,10 +1,14 @@
 import { beforeAll, describe, expect, mock, test } from 'bun:test'
 import { err, ok } from 'neverthrow'
+import { SitePageNeed } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
+import type { ExtensionSessionTransportResult } from '../src/background/service-worker/session-document'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
 import {
   SidePanelSender,
   SidePanelSenderAdmission,
@@ -20,10 +24,16 @@ import {
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
+  SidePanelPageCodeFillReplyKind,
   SidePanelPageFillMessageType,
   SidePanelPageFillReplyKind,
 } from '../src/lib/side-panel-page-fill'
 import {
+  SidePanelPageNeedMessageType,
+  SidePanelPageNeedReplyKind,
+} from '../src/lib/side-panel-page-need'
+import {
+  SidePanelCodeFillKind,
   SidePanelLoginFillKind,
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
@@ -38,6 +48,8 @@ import {
   PageReplyKind,
   type PageReply,
 } from './side-panel-route-test-support'
+
+type SessionDelivery = ExtensionSessionTransportResult<ExtensionSessionResponse>
 
 beforeAll(async () => {
   const { companionWasmReady } =
@@ -157,7 +169,7 @@ describe('side-panel sender (T-1)', () => {
         type: SidePanelSiteMessageType.FillLogin,
         payload: {
           windowId: 7,
-          itemId: { vaultStoreId: 'store_work', secretId: 'secret_two' },
+          itemId: { vaultStoreId: 'store_workvaultxx', secretId: 'secret_two' },
         },
       })
       expect(await fill.run({ message, sender })).toEqual({
@@ -171,55 +183,53 @@ describe('side-panel sender (T-1)', () => {
 })
 
 describe('side-panel This-site listing (T-2)', () => {
-  test('lists Rust-matched logins for the active tab the worker read itself', async () => {
+  test("lists every grant's Rust-matched site secrets for the tab the worker read itself, grouped by Rust", async () => {
     const fixture = new SidePanelRouteFixture()
 
     const listing = await fixture.list()
 
-    expect(listing).toEqual({
-      kind: SidePanelSiteListingKind.Ready,
-      display_host: 'www.example.com',
-      items: [
-        {
-          itemId: { vaultStoreId: 'store_personal', secretId: 'secret_one' },
-          username: 'person@example.com',
-          vaultLabel: 'Personal',
-        },
-        {
-          itemId: { vaultStoreId: 'store_work', secretId: 'secret_two' },
-          username: 'work@example.com',
-          vaultLabel: 'Work',
-        },
+    if (listing.kind !== SidePanelSiteListingKind.Ready)
+      throw new Error('expected a ready listing')
+    expect(listing.display_host).toBe('www.example.com')
+    if (listing.listing.kind !== 'Listed') throw new Error('expected rows')
+    // Identity headers in grant order; rows in Rust's kind order.
+    expect(listing.listing.groups.map((group) => group.header)).toEqual([
+      { kind: 'Named', name: 'Personal identity' },
+      { kind: 'Named', name: 'Work identity' },
+    ])
+    expect(
+      listing.listing.groups.map((group) =>
+        group.rows.map((row) => [row.kind, row.item_id.secret_id]),
+      ),
+    ).toEqual([
+      [
+        ['Login', 'secret_one'],
+        ['Passkey', 'passkey_one'],
       ],
-      passkeys: [],
-    })
+      [
+        ['Login', 'secret_two'],
+        ['Authenticator', 'totp_two'],
+      ],
+    ])
     expect(fixture.tabsQuery).toHaveBeenCalledWith({
       active: true,
       windowId: 7,
     })
-    expect(fixture.listedOrigins()).toEqual([
-      'https://www.example.com:8443',
-      'https://www.example.com:8443',
+    // One page-need query to frame 0 of the derived tab, for the derived origin.
+    expect(fixture.pageDeliveries).toEqual([
+      {
+        tabId: 41,
+        message: {
+          type: SidePanelPageNeedMessageType.Query,
+          payload: { origin: 'https://www.example.com:8443' },
+        },
+      },
     ])
     expect(fixture.sessionTypes()).toEqual([
       ExtensionSessionMessageType.Status,
-      ExtensionSessionMessageType.ListLogins,
-      ExtensionSessionMessageType.ListLogins,
+      ExtensionSessionMessageType.ListSiteSecrets,
+      ExtensionSessionMessageType.ListSiteSecrets,
     ])
-    if (listing.kind !== SidePanelSiteListingKind.Ready)
-      throw new Error('expected a ready listing')
-    for (const item of listing.items) {
-      expect(Object.keys(item).sort()).toEqual([
-        'itemId',
-        'username',
-        'vaultLabel',
-      ])
-      expect(Object.keys(item.itemId).sort()).toEqual([
-        'secretId',
-        'vaultStoreId',
-      ])
-    }
-
     const wire = JSON.stringify(listing)
     for (const leaked of [
       'password',
@@ -228,10 +238,96 @@ describe('side-panel This-site listing (T-2)', () => {
       'user:pass',
       'generation',
       'device',
+      'seed',
     ]) {
       expect(wire).not.toContain(leaked)
     }
     fixture.expectNoSideEffects()
+  })
+
+  test("Rust filters the rows by the page's need and types the empty state", async () => {
+    const totp = new SidePanelRouteFixture()
+    totp.pageNeed = RouteData.answered({
+      kind: SidePanelPageNeedReplyKind.Needed,
+      need: SitePageNeed.OneTimeCode,
+    })
+    const codes = await totp.list()
+    if (codes.kind !== SidePanelSiteListingKind.Ready)
+      throw new Error('expected a ready listing')
+    if (codes.listing.kind !== 'Listed') throw new Error('expected rows')
+    expect(
+      codes.listing.groups.flatMap((group) =>
+        group.rows.map((row) => [row.kind, row.action.kind]),
+      ),
+    ).toEqual([['Authenticator', 'FillCode']])
+
+    const noCodes = new SidePanelRouteFixture()
+    noCodes.pageNeed = totp.pageNeed
+    noCodes.siteListings.set(
+      'store_workvaultxx',
+      ok({ ok: true, matches: { items: [] } }),
+    )
+    expect(await noCodes.list()).toEqual({
+      kind: SidePanelSiteListingKind.Ready,
+      display_host: 'www.example.com',
+      listing: {
+        kind: 'Empty',
+        message_key: I18N_KEYS.ExtensionActionSiteEmptyTotp,
+        hint: { kind: 'Absent' },
+      },
+    })
+  })
+
+  test('a tab no content script reaches is unavailable; an unusable page need fails the listing', async () => {
+    const unreached = new SidePanelRouteFixture()
+    unreached.pageNeed = { kind: PageReplyKind.NoReceiver }
+    expect(await unreached.list()).toEqual({
+      kind: SidePanelSiteListingKind.PageUnavailable,
+    })
+    expect(unreached.sessionTypes()).toEqual([
+      ExtensionSessionMessageType.Status,
+    ])
+    for (const reply of [
+      { kind: SidePanelPageNeedReplyKind.Unavailable },
+      { kind: SidePanelPageNeedReplyKind.TabChanged },
+      { kind: SidePanelPageNeedReplyKind.Needed, need: 'logins' },
+      { kind: 'classified', workflow: 3 },
+    ]) {
+      const fixture = new SidePanelRouteFixture()
+      fixture.pageNeed = RouteData.answered(reply)
+      expect(await fixture.list()).toEqual({
+        kind: SidePanelSiteListingKind.ListFailed,
+      })
+      expect(fixture.sessionTypes()).toEqual([
+        ExtensionSessionMessageType.Status,
+      ])
+    }
+  })
+
+  test('one failing or malformed grant listing fails the whole listing', async () => {
+    const answers: SessionDelivery[] = [
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.DeliveryFailed,
+        ),
+      ),
+      ok({ ok: false, reason: 'vault-locked' }),
+      ok({
+        ok: true,
+        matches: {
+          items: [
+            { ...RouteData.secret('Login', 'secret_two', 'w'), password: 'x' },
+          ],
+        },
+      }),
+    ]
+    for (const answer of answers) {
+      const fixture = new SidePanelRouteFixture()
+      fixture.siteListings.set('store_workvaultxx', answer)
+      expect(await fixture.list()).toEqual({
+        kind: SidePanelSiteListingKind.ListFailed,
+      })
+    }
   })
 
   test('a request naming an origin, URL or tab is not admitted', async () => {
@@ -382,10 +478,10 @@ describe('side-panel This-site listing (T-2)', () => {
     })
   })
 
-  test('one failing grant fails the listing instead of showing no saved logins', async () => {
+  test('one failing grant fails the listing instead of showing nothing saved', async () => {
     const transport = new SidePanelRouteFixture()
-    transport.listings.set(
-      'store_work',
+    transport.siteListings.set(
+      'store_workvaultxx',
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.DeliveryFailed,
@@ -397,8 +493,8 @@ describe('side-panel This-site listing (T-2)', () => {
     })
 
     const malformed = new SidePanelRouteFixture()
-    malformed.listings.set(
-      'store_work',
+    malformed.siteListings.set(
+      'store_workvaultxx',
       ok({ ok: false, reason: 'vault-locked' }),
     )
     expect(await malformed.list()).toEqual({
@@ -430,51 +526,17 @@ describe('side-panel This-site listing (T-2)', () => {
     })
   })
 
-  test('lists the passkeys the page can use, read-only, from passkey vaults', async () => {
-    const fixture = new SidePanelRouteFixture()
-    fixture.passkeyGrants = [RouteData.grant('store_personal', 'Personal')]
-    fixture.passkeyListings.set(
-      'store_personal|example.com',
-      ok({
-        ok: true,
-        accounts: [
-          {
-            credentialId: 'credential-personal',
-            userName: 'person@example.com',
-            userDisplayName: 'Person',
-          },
-        ],
-      }),
-    )
-
-    const listing = await fixture.list()
-
-    if (listing.kind !== SidePanelSiteListingKind.Ready)
-      throw new Error('expected a ready listing')
-    expect(listing.passkeys).toEqual([
-      {
-        userName: 'person@example.com',
-        userDisplayName: 'Person',
-        vaultLabel: 'Personal',
-      },
-    ])
-    // Rust names every relying party the page may claim, nearest first.
-    expect(fixture.passkeyLookups()).toEqual([
-      'store_personal|www.example.com',
-      'store_personal|example.com',
-    ])
-    expect(JSON.stringify(listing)).not.toContain('credential-personal')
-  })
-
-  test('never asks the session for authenticators', async () => {
+  test('lists authenticators only as display rows: no code, search or reveal', async () => {
     const fixture = new SidePanelRouteFixture()
     await fixture.list()
-    expect(fixture.sessionTypes()).not.toContain(
+    for (const type of [
       ExtensionSessionMessageType.ListAuthenticators,
-    )
-    expect(fixture.sessionTypes()).not.toContain(
       ExtensionSessionMessageType.AuthenticatorCode,
-    )
+      ExtensionSessionMessageType.RevealLogin,
+      ExtensionSessionMessageType.ListLogins,
+    ]) {
+      expect(fixture.sessionTypes()).not.toContain(type)
+    }
   })
 })
 
@@ -496,7 +558,7 @@ describe('side-panel Fill route (T-3)', () => {
           payload: {
             origin: 'https://www.example.com:8443',
             account: {
-              vaultStoreId: 'store_work',
+              vaultStoreId: 'store_workvaultxx',
               secretId: 'secret_two',
               authorizationGeneration: 'generation-1',
             },
@@ -545,7 +607,7 @@ describe('side-panel Fill route (T-3)', () => {
 
   test('extra request fields are not admitted and nothing reaches the tab', async () => {
     const fixture = new SidePanelRouteFixture()
-    const itemId = { vaultStoreId: 'store_work', secretId: 'secret_two' }
+    const itemId = { vaultStoreId: 'store_workvaultxx', secretId: 'secret_two' }
     for (const payload of [
       { windowId: 7, itemId, origin: 'https://www.example.com' },
       { windowId: 7, itemId, tabId: 41 },
@@ -564,7 +626,7 @@ describe('side-panel Fill route (T-3)', () => {
     const missing = new SidePanelRouteFixture()
     expect(
       await missing.fill({
-        vaultStoreId: 'store_work',
+        vaultStoreId: 'store_workvaultxx',
         secretId: 'secret_elsewhere',
       }),
     ).toEqual({ kind: SidePanelLoginFillKind.ItemNotFound })
@@ -573,7 +635,7 @@ describe('side-panel Fill route (T-3)', () => {
     const ungranted = new SidePanelRouteFixture()
     expect(
       await ungranted.fill({
-        vaultStoreId: 'store_unpaired',
+        vaultStoreId: 'store_unpairedxxx',
         secretId: 'secret_two',
       }),
     ).toEqual({ kind: SidePanelLoginFillKind.ItemNotFound })
@@ -582,7 +644,7 @@ describe('side-panel Fill route (T-3)', () => {
 
     const moved = new SidePanelRouteFixture()
     moved.activeTabs = [RouteData.tab(41, 'https://accounts.other.test/login')]
-    moved.listings.set('store_work', ok({ ok: true, accounts: [] }))
+    moved.listings.set('store_workvaultxx', ok({ ok: true, accounts: [] }))
     expect(await moved.fill()).toEqual({
       kind: SidePanelLoginFillKind.ItemNotFound,
     })
@@ -702,6 +764,123 @@ describe('side-panel Fill route (T-3)', () => {
   })
 })
 
+describe('side-panel Fill code route', () => {
+  test("requires the item as an authenticator in Rust's fresh listing, then sends frame 0 a trigger without the code", async () => {
+    const fixture = new SidePanelRouteFixture()
+
+    const outcome = await fixture.fillCode()
+
+    expect(outcome).toEqual({ kind: SidePanelCodeFillKind.Filled })
+    expect(fixture.tabsQuery).toHaveBeenCalledTimes(2)
+    expect(fixture.pageDeliveries).toEqual([
+      {
+        tabId: 41,
+        message: {
+          type: SidePanelPageFillMessageType.FillCode,
+          payload: {
+            origin: 'https://www.example.com:8443',
+            account: {
+              vaultStoreId: 'store_workvaultxx',
+              secretId: 'totp_two',
+              authorizationGeneration: 'generation-1',
+            },
+          },
+        },
+      },
+    ])
+    // Only the item's vault is re-listed; the worker reads no code itself.
+    expect(fixture.sessionTypes()).toEqual([
+      ExtensionSessionMessageType.Status,
+      ExtensionSessionMessageType.ListSiteSecrets,
+    ])
+    fixture.expectNoSideEffects()
+  })
+
+  test('a login, an unmatched or an ungranted item is not found and nothing reaches the tab', async () => {
+    const itemIds = [
+      { vaultStoreId: 'store_workvaultxx', secretId: 'secret_two' },
+      { vaultStoreId: 'store_workvaultxx', secretId: 'totp_elsewhere' },
+      { vaultStoreId: 'store_personalvlt', secretId: 'totp_two' },
+      { vaultStoreId: 'store_unpairedxxx', secretId: 'totp_two' },
+    ]
+    for (const itemId of itemIds) {
+      const fixture = new SidePanelRouteFixture()
+      expect(await fixture.fillCode(itemId)).toEqual({
+        kind: SidePanelCodeFillKind.ItemNotFound,
+      })
+      expect(fixture.pageDeliveries).toEqual([])
+    }
+  })
+
+  test('the same gates as Fill: sender, payload, lock, tab change and listing failure', async () => {
+    const extra = new SidePanelRouteFixture()
+    const itemId = { vaultStoreId: 'store_workvaultxx', secretId: 'totp_two' }
+    expect(
+      await extra.fillCode(itemId, { windowId: 7, itemId, tabId: 41 }),
+    ).toEqual({ kind: SidePanelCodeFillKind.Forbidden })
+    expect(extra.sessionMessages).toEqual([])
+
+    const locked = new SidePanelRouteFixture()
+    locked.status = DeviceProtectionStatus.Pin
+    expect(await locked.fillCode()).toEqual({
+      kind: SidePanelCodeFillKind.Locked,
+    })
+
+    const revoked = new SidePanelRouteFixture()
+    revoked.revokeAfterListing = true
+    expect(await revoked.fillCode()).toEqual({
+      kind: SidePanelCodeFillKind.Locked,
+    })
+
+    const moved = new SidePanelRouteFixture()
+    moved.tabSwitches = [[RouteData.tab(41, 'https://accounts.other.test/')]]
+    expect(await moved.fillCode()).toEqual({
+      kind: SidePanelCodeFillKind.TabChanged,
+    })
+
+    const failing = new SidePanelRouteFixture()
+    failing.siteListings.set(
+      'store_workvaultxx',
+      ok({ ok: false, reason: 'x' }),
+    )
+    expect(await failing.fillCode()).toEqual({
+      kind: SidePanelCodeFillKind.FillFailed,
+    })
+    for (const fixture of [locked, revoked, moved, failing]) {
+      expect(fixture.pageDeliveries).toEqual([])
+      fixture.expectNoSideEffects()
+    }
+  })
+
+  test('maps the page answer to a typed outcome and a missing receiver to page-unavailable', async () => {
+    const cases: Array<[PageReply, SidePanelCodeFillKind]> = [
+      [
+        { kind: PageReplyKind.NoReceiver },
+        SidePanelCodeFillKind.PageUnavailable,
+      ],
+      [
+        RouteData.answered({
+          kind: SidePanelPageCodeFillReplyKind.NoCodeField,
+        }),
+        SidePanelCodeFillKind.NoCodeField,
+      ],
+      [
+        RouteData.answered({ kind: SidePanelPageCodeFillReplyKind.Locked }),
+        SidePanelCodeFillKind.Locked,
+      ],
+      [
+        RouteData.answered({ kind: 'filled', code: '123456' }),
+        SidePanelCodeFillKind.FillFailed,
+      ],
+    ]
+    for (const [reply, kind] of cases) {
+      const fixture = new SidePanelRouteFixture()
+      fixture.codeReply = reply
+      expect(await fixture.fillCode()).toEqual({ kind })
+    }
+  })
+})
+
 describe('website routes stay website-only (T-5)', () => {
   test('a side-panel sender cannot use the content-script reveal route', async () => {
     const storage = new Map<string, string>()
@@ -732,7 +911,7 @@ describe('website routes stay website-only (T-5)', () => {
       message: {
         payload: {
           origin: 'https://www.example.com',
-          vaultStoreId: 'store_work',
+          vaultStoreId: 'store_workvaultxx',
           secretId: 'secret_two',
           authorizationGeneration,
         },

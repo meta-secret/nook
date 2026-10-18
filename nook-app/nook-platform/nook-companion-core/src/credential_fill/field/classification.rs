@@ -156,6 +156,7 @@ mod tests {
                     .collect(),
                 identity_text: identity_text.to_owned(),
                 login_context: (true).into(),
+                one_time_code_entry: crate::OneTimeCodeEntryEvidence::Unobserved,
             }
         }
     }

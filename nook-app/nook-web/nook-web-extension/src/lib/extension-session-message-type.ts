@@ -25,6 +25,7 @@ export const ExtensionSessionMessageType = {
   VaultSummary: 'nook:extension-session-vault-summary',
   ListPasskeys: 'nook:extension-session-list-passkeys',
   ListLogins: 'nook:extension-session-list-logins',
+  ListSiteSecrets: 'nook:extension-session-list-site-secrets',
   RevealLogin: 'nook:extension-session-reveal-login',
   RevealFocusedLogin: 'nook:extension-session-reveal-focused-login',
   ListAuthenticators: 'nook:extension-session-list-authenticators',

@@ -34,6 +34,7 @@ import {
   decode_authenticator_options_response,
   NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
+  site_page_need,
   authentication_page_observation_facts_match_binding,
   authentication_page_observation_facts_priority,
   authentication_page_observation_facts_is_admissible,
@@ -67,6 +68,7 @@ import {
   revalidate_approved_authentication_workflow,
   strongest_authentication_username_evidence,
   can_activate_authentication_route_control,
+  second_factor_route,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   SessionOperationFailure,
@@ -89,6 +91,10 @@ function classifyPageInputField(
     [...observation.autocompleteTokens],
     observation.identityText,
     observation.loginContext,
+    observation.secondFactorRoute,
+    observation.inputMode,
+    observation.maxLength,
+    observation.pattern,
   )
   try {
     return {
@@ -122,6 +128,10 @@ function classifyPageInputs(
         [...request.observation.autocompleteTokens],
         request.observation.identityText,
         loginContext,
+        second_factor_route(loginContextObservation),
+        request.observation.inputMode,
+        request.observation.maxLength,
+        request.observation.pattern,
       )
       try {
         return {
@@ -324,6 +334,11 @@ export async function handleCompanionWasmMessage(
             approved: message.payload.approved,
             live: message.payload.live,
           }),
+        })
+      case CompanionWasmSessionMessageType.SitePageNeed:
+        // Rust maps the classified workflow to what This site lists.
+        return ok({
+          sitePageNeed: site_page_need(message.payload.workflowMatch),
         })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))

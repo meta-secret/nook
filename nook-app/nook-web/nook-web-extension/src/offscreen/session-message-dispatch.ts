@@ -118,6 +118,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach:
     case ExtensionSessionMessageType.ListLogins:
+    case ExtensionSessionMessageType.ListSiteSecrets:
     case ExtensionSessionMessageType.ExportVaultEventLog:
     case ExtensionSessionMessageType.ListAuthenticators:
     case ExtensionSessionMessageType.RegisterPasskey:

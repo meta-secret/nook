@@ -348,6 +348,7 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.VaultSummary]: [],
   [ExtensionSessionMessageType.ListPasskeys]: [],
   [ExtensionSessionMessageType.ListLogins]: [],
+  [ExtensionSessionMessageType.ListSiteSecrets]: [],
   [ExtensionSessionMessageType.RevealLogin]: [],
   [ExtensionSessionMessageType.RevealFocusedLogin]: [],
   [ExtensionSessionMessageType.ListAuthenticators]: [],
