@@ -8,6 +8,7 @@ import { ExtensionSessionMessageType } from '../../src/lib/extension-session-mes
 import { PairedVaultsMessageType } from '../../src/lib/paired-vaults'
 import { SIDE_PANEL_PAGE_PATH } from '../../src/lib/side-panel-page-path'
 import {
+  SidePanelCodeFillKind,
   SidePanelSiteMessageType,
   type SidePanelLoginFillKind,
   type SidePanelSiteListing,
@@ -39,6 +40,7 @@ export enum SidePanelStubFillDelivery {
 }
 
 type SidePanelStubFillAnswer = { readonly kind: SidePanelLoginFillKind }
+type SidePanelStubCodeFillAnswer = { readonly kind: SidePanelCodeFillKind }
 
 type SidePanelStubActivatedListener = Parameters<
   typeof chrome.tabs.onActivated.addListener
@@ -58,6 +60,7 @@ export type SidePanelStubState = {
   vaults: SidePanelStubVaults
   listing: SidePanelSiteListing
   fill: SidePanelStubFillAnswer
+  codeFill: SidePanelStubCodeFillAnswer
   fillDelivery: SidePanelStubFillDelivery
   heldFills: Array<() => void>
   openVault: SidePanelStubAnswer
@@ -92,6 +95,8 @@ const sidePanelStubProtocol = {
   openLauncher: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
   listLogins: SidePanelSiteMessageType.ListLogins,
   fillLogin: SidePanelSiteMessageType.FillLogin,
+  fillCode: SidePanelSiteMessageType.FillCode,
+  codeFilled: SidePanelCodeFillKind.Filled,
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   paired: SidePanelStubVaults.Paired,
@@ -132,6 +137,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     vaults: scenario.vaults,
     listing: scenario.listing,
     fill: scenario.fill,
+    codeFill: { kind: protocol.codeFilled },
     fillDelivery: protocol.immediate,
     heldFills: [],
     openVault: protocol.accept,
@@ -202,13 +208,16 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         return { ok: false, reason: 'side-panel-stub-unhandled' }
     }
   }
-  const deliverFill = (callback: (reply: unknown) => void) => {
+  const deliverFill = (
+    callback: (reply: unknown) => void,
+    reply: () => unknown,
+  ) => {
     switch (state.fillDelivery) {
       case protocol.immediate:
-        queueMicrotask(() => callback(state.fill))
+        queueMicrotask(() => callback(reply()))
         return
       case protocol.held:
-        state.heldFills.push(() => callback(state.fill))
+        state.heldFills.push(() => callback(reply()))
     }
   }
   const listeners = <Listener>(list: Listener[]) => ({
@@ -237,7 +246,10 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         state.sent.push(message.type)
         switch (message.type) {
           case protocol.fillLogin:
-            deliverFill(callback)
+            deliverFill(callback, () => state.fill)
+            return
+          case protocol.fillCode:
+            deliverFill(callback, () => state.codeFill)
             return
           default:
             queueMicrotask(() => callback(answer(message.type)))
