@@ -831,7 +831,7 @@ void test(
 
     assert.match(
       step,
-      /^ {8}if: always\(\) && \(inputs\.full_e2e_requested \|\| steps\.browser-scope\.outputs\.auth == 'true'\)$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
     );
     assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(
@@ -855,7 +855,7 @@ void test(
     assert.doesNotMatch(validationStep, /^ {8}continue-on-error:/m);
     assert.equal(
       workflow.match(/^ {8}uses: actions\/upload-artifact@v7$/gm)?.length,
-      1,
+      3,
     );
   },
 );

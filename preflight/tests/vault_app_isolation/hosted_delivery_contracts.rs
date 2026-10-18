@@ -27,8 +27,12 @@ impl PrDeliveryScenario<'_> {
             );
             previous = position;
         }
-        assert_eq!(pr.matches("    runs-on:").count(), 1);
-        assert!(!pr.contains("    needs:"));
+        assert_eq!(pr.matches("    runs-on:").count(), 3);
+        assert!(pr.contains("needs: [prepare, browser]"));
+        assert!(pr.contains("if: ${{ always() }}"));
+        assert!(pr.contains("test \"$PREPARE_RESULT\" = success"));
+        assert!(pr.contains("test \"$BROWSER_RESULT\" = success"));
+        assert!(pr.contains("test \"$BROWSER_RESULT\" = skipped"));
         assert!(!pr.contains("continue-on-error:"));
         assert!(!pr.contains("type=registry"));
         assert!(pr.contains("PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}"));
@@ -309,7 +313,8 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
     assert!(!pr.contains("nook-pr-coverage"));
-    assert!(!pr.contains("actions/download-artifact"));
+    assert!(pr.contains("actions/download-artifact@v8"));
+    assert!(pr.contains("pr-browser-${{ github.run_id }}-${{ github.run_attempt }}"));
     let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
     assert!(deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"));
     assert!(deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""));
