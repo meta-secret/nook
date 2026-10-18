@@ -430,6 +430,50 @@ describe('Google Authenticator import panel', () => {
     expect(submit.disabled).toBe(true)
   })
 
+  test('reads every QR image chosen at once and keeps an unreadable one visible', async () => {
+    const firstUri = 'otpauth-migration://offline?data=first-of-many'
+    const lastUri = 'otpauth-migration://offline?data=last-of-many'
+    qrReads.image
+      .mockReturnValueOnce(Effect.succeed([firstUri]))
+      .mockReturnValueOnce(Effect.succeed([]))
+      .mockReturnValueOnce(Effect.succeed([lastUri]))
+    const onImport = vi.fn(async () => importResult())
+    const view = render(GoogleAuthenticatorImportPanel, {
+      vault,
+      isSaving: false,
+      onImport,
+    })
+    const input = requireInputElement(
+      view.getByTestId('google-authenticator-qr-image'),
+    )
+
+    expect(input.multiple).toBe(true)
+    await fireEvent.change(input, {
+      target: {
+        files: [
+          new File(['1'], '1.jpg'),
+          new File(['2'], '2.jpg'),
+          new File(['3'], '3.jpg'),
+        ],
+      },
+    })
+    await waitFor(() => {
+      expect(
+        view.getByTestId('google-authenticator-scanned-count').textContent,
+      ).toContain('google_authenticator_import.scanned_count 2')
+      expect(
+        view.getByTestId('google-authenticator-import-error').textContent,
+      ).toContain(I18N_KEYS.GoogleAuthenticatorImportImageFailed)
+    })
+
+    await fireEvent.click(
+      view.getByTestId('google-authenticator-import-submit'),
+    )
+    await waitFor(() =>
+      expect(onImport).toHaveBeenCalledWith([firstUri, lastUri]),
+    )
+  })
+
   test('rejects duplicate, unrelated, and unreadable QR images before import', async () => {
     const migrationUri = 'otpauth-migration://offline?data=secret-payload'
     qrReads.image
