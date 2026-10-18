@@ -430,6 +430,7 @@ describe('side panel sources', () => {
     for (const type of [
       ExtensionSessionMessageType.RevealLogin,
       ExtensionSessionMessageType.ListAuthenticators,
+      ExtensionSessionMessageType.ListSiteSecrets,
       ExtensionSessionMessageType.PlanLoginSave,
     ]) {
       expect(policy.admission(type)).toBe(

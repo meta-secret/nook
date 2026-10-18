@@ -52,6 +52,7 @@ mod google_two_step_login;
 mod grant_authority;
 mod page_form_policy;
 mod response_decoding;
+mod site_secret_listing;
 mod vault_host_policy;
 
 pub use account_picker_authorization::*;
@@ -69,6 +70,7 @@ pub use google_two_step_login::*;
 pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
+pub use site_secret_listing::*;
 pub use vault_host_policy::*;
 
 #[wasm_bindgen]
@@ -218,6 +220,7 @@ mod tests {
     #[cfg(test)]
     #[cfg(test)]
     use nook_companion_core::PageInputType;
+    use nook_companion_core::PageSecondFactorRoute;
     use nook_companion_core::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
         AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch,
@@ -268,6 +271,10 @@ mod tests {
             vec!["email".to_owned()],
             "account email".to_owned(),
             true,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             field.as_core().authentication_username_evidence(),
@@ -280,6 +287,10 @@ mod tests {
             vec!["email".to_owned(), "webauthn".to_owned()],
             "identity".to_owned(),
             false,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             tesla.as_core().authentication_username_evidence(),
@@ -292,6 +303,10 @@ mod tests {
             vec!["tel-national".to_owned()],
             "tel-national Phone number or email".to_owned(),
             true,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             airbnb.as_core().authentication_username_evidence(),
@@ -755,6 +770,7 @@ mod ingress_tests {
     use nook_companion_core::{
         AuthenticationOutcomeClassification, AuthenticationOutcomeObservation,
         AuthenticationOutcomeVerdict, AuthenticationUsernameEvidence, PageInputType,
+        PageSecondFactorRoute,
     };
     use serde::Serialize;
     use serde_wasm_bindgen::Serializer;
@@ -771,6 +787,10 @@ mod ingress_tests {
             vec!["email".into()],
             "account email".into(),
             true,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             authentication_username_evidence(&field)?.to_rust()?,

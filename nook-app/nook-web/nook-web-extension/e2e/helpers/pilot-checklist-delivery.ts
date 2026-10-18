@@ -164,6 +164,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.companion.DecodeContentRuntimeResponse:
         case install.companion.EvaluateAuthenticationPolicies:
         case install.companion.RevalidateApprovedAuthenticationWorkflow:
+        case install.companion.SitePageNeed:
         case install.session.ClassifyGrantAuthority:
         case install.session.ExportVaultEventLog:
         case install.session.Reset:
@@ -185,6 +186,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.UpdateVault:
         case install.session.ListPasskeys:
         case install.session.ListLogins:
+        case install.session.ListSiteSecrets:
         case install.session.RevealLogin:
         case install.session.RevealFocusedLogin:
         case install.session.ListAuthenticators:

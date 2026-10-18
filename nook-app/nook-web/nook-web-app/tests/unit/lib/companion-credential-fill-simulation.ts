@@ -13,6 +13,7 @@ import {
   CredentialFillRejection,
   CredentialKind,
   NookPageInputFieldObservation,
+  PageSecondFactorRoute,
   classify_companion_credential_fill_field,
   parse_page_input_type,
   plan_companion_credential_fill,
@@ -267,6 +268,10 @@ function fixtureFieldObservation(
     autocompleteTokens,
     identityText,
     true,
+    PageSecondFactorRoute.Unrelated,
+    '',
+    -1,
+    '',
   )
 }
 

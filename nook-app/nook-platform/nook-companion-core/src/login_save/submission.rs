@@ -9,7 +9,7 @@ use crate::credential_fill::{Assignment, CredentialKind, Plan};
 use crate::page_field_classification::{
     SubmittedLoginControlAdmission, SubmittedLoginControlRequest,
 };
-use crate::{PageControlActionability, PageInputType, PageLoginContext};
+use crate::{OneTimeCodeEntryEvidence, PageControlActionability, PageInputType, PageLoginContext};
 
 use crate::{
     AuthenticationControlText, AuthenticationFieldObservationFacts, AuthenticationPageObservation,
@@ -56,6 +56,7 @@ pub struct LoginSubmissionField {
     autocomplete_tokens: Vec<String>,
     identity_text: String,
     login_context: PageLoginContext,
+    one_time_code_entry: OneTimeCodeEntryEvidence,
     password_history: LoginPasswordFieldHistory,
 }
 impl From<PageInputFieldObservation> for LoginSubmissionField {
@@ -77,6 +78,7 @@ impl From<PageInputFieldObservation> for LoginSubmissionField {
             autocomplete_tokens: field.autocomplete_tokens,
             identity_text: field.identity_text,
             login_context: field.login_context,
+            one_time_code_entry: field.one_time_code_entry,
             password_history: LoginPasswordFieldHistory::Unobserved,
         }
     }
@@ -95,6 +97,7 @@ impl LoginSubmissionField {
             autocomplete_tokens: self.autocomplete_tokens.clone(),
             identity_text: self.identity_text.clone(),
             login_context: self.login_context,
+            one_time_code_entry: self.one_time_code_entry,
         }
     }
     fn classification(&self, index: Index) -> Classification {
@@ -572,6 +575,7 @@ mod tests {
                 autocomplete_tokens: vec!["username".to_owned()],
                 identity_text: "User ID".to_owned(),
                 login_context: true.into(),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
             };
             let password = PageInputFieldObservation {
                 input_type: PageInputType::Password,
@@ -808,6 +812,7 @@ mod tests {
                 autocomplete_tokens: Vec::new(),
                 identity_text: "Search".to_owned(),
                 login_context: false.into(),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
             }
             .into(),
         )?;

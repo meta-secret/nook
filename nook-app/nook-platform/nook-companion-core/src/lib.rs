@@ -47,6 +47,7 @@ mod oauth_origin_policy;
 mod outcome_evidence;
 pub use login_save::*;
 mod page_field_classification;
+mod site_secret_listing;
 mod vault_host_policy;
 mod website_login_options_response;
 mod website_login_save_offer_response;
@@ -54,6 +55,15 @@ mod website_passkey_account_list;
 mod website_passkey_proposal;
 
 pub use nook_auth2::StoreId;
+
+pub use site_secret_listing::{
+    SitePageNeed, SiteSecretAccount, SiteSecretAction, SiteSecretActionLabels, SiteSecretEmptyHint,
+    SiteSecretIdentity, SiteSecretIdentityDevice, SiteSecretIdentityGroup,
+    SiteSecretIdentityHeader, SiteSecretIdentityName, SiteSecretItem, SiteSecretItemId,
+    SiteSecretKind, SiteSecretListing, SiteSecretListingRequest, SiteSecretMatches,
+    SiteSecretMessageKey, SiteSecretRow, SiteSecretSavedHost, SiteSecretTitle, SiteSecretVault,
+    SiteSecretVaultLabel, SiteSecretVaultName, SiteSecretVaults,
+};
 
 pub use account_picker_authorization::{
     AccountPickerAuthorizationLifecycle, AccountPickerAuthorizationTransition, CleanupEvidence,
@@ -220,7 +230,9 @@ pub use page_field_classification::{
 pub use page_field_classification::{
     CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
     LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, PageInputFieldObservation, PageInputType,
+    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals,
+    PageInputCharacterLimit, PageInputFieldObservation, PageInputMaxLength, PageInputMode,
+    PageInputPattern, PageInputType, PageSecondFactorRoute,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{

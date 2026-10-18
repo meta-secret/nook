@@ -309,6 +309,7 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
     .onRejected(() => ({ kind: PilotAttemptLoadKind.None })),
   SidePanelSiteRoutes.listing(),
   SidePanelSiteRoutes.fill(),
+  SidePanelSiteRoutes.codeFill(),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
     .respondWith((request) => {
       const operation: ConstructorParameters<

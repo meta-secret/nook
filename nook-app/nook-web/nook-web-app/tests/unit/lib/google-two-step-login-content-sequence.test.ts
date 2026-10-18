@@ -385,7 +385,8 @@ class GoogleLoginContentSequence {
       case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
-      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow: {
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
+      case CompanionWasmSessionMessageType.SitePageNeed: {
         const result = yield* Effect.promise(() => this.session.handle(message))
         return this.chromeSessionResponse(result)
       }

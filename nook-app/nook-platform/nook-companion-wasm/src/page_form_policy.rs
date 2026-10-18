@@ -1,8 +1,13 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
-use nook_companion_core::PageInputType;
+use nook_companion_core::{PageInputType, PageSecondFactorRoute};
+mod input_field_observation;
 mod observation_priority;
 mod passkey_control;
+
+pub use input_field_observation::{
+    NookPageInputFieldObservation, looks_like_one_time_code_field, looks_like_username_field,
+};
 
 pub use observation_priority::{
     authentication_form_observation_priority, authentication_page_observation_facts_priority,
@@ -20,43 +25,6 @@ use nook_companion_core::AuthenticationControlText;
 use nook_companion_core::AuthenticationRouteActuation;
 use nook_companion_core::AuthenticationRouteEvidence;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-#[wasm_bindgen]
-#[derive(Clone, Debug)]
-pub struct NookPageInputFieldObservation {
-    inner: nook_companion_core::PageInputFieldObservation,
-}
-
-impl NookPageInputFieldObservation {
-    pub(crate) const fn as_core(&self) -> &nook_companion_core::PageInputFieldObservation {
-        &self.inner
-    }
-}
-
-#[wasm_bindgen]
-impl NookPageInputFieldObservation {
-    #[wasm_bindgen(constructor)]
-    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
-    pub fn new(
-        input_type: nook_companion_core::PageInputType,
-        disabled: bool,
-        read_only: bool,
-        autocomplete_tokens: Vec<String>,
-        identity_text: String,
-        login_context: bool,
-    ) -> Self {
-        Self {
-            inner: nook_companion_core::PageInputFieldObservation {
-                input_type,
-                disabled,
-                read_only,
-                autocomplete_tokens,
-                identity_text,
-                login_context: login_context.into(),
-            },
-        }
-    }
-}
 
 #[wasm_bindgen]
 #[must_use]
@@ -99,14 +67,8 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    field.inner.looks_like_username_field()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    field.inner.looks_like_one_time_code_field()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn second_factor_route(observation: &NookLoginContextObservation) -> PageSecondFactorRoute {
+    observation.inner.second_factor_route()
 }
 
 #[wasm_bindgen]
@@ -254,6 +216,10 @@ mod tests {
             Vec::new(),
             "Enter OTP Code".to_owned(),
             false,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert!(looks_like_one_time_code_field(&otp));
         assert!(
@@ -287,6 +253,10 @@ mod tests {
             Vec::new(),
             "loginfmt".to_owned(),
             false,
+            PageSecondFactorRoute::Unrelated,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert!(looks_like_username_field(&username));
         assert!(looks_like_login_advance_control_label("Entrar Entrar"));

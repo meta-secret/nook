@@ -9,6 +9,7 @@ import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
+  SitePageNeed,
   type AuthenticationWorkflowSnapshot,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -34,6 +35,18 @@ import {
   type AuthenticationWorkflowSnapshotMessage,
 } from '../src/lib/auth-workflow-messages'
 import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
+import {
+  SidePanelPageNeedMessageType,
+  SidePanelPageNeedReplyKind,
+  type SidePanelPageNeedReply,
+} from '../src/lib/side-panel-page-need'
+import {
+  CompanionSidePanelPageNeed,
+  SidePanelPageNeedReception,
+  SidePanelPageNeedReceiver,
+  type SidePanelPageNeedCollaborators,
+} from '../src/content/autofill/side-panel-page-need'
+import { SidePanelPageWorkflowDiscovery } from '../src/content/autofill/side-panel-page-workflow'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 
 await companionWasmReady
@@ -120,6 +133,33 @@ class ContentPageHarness {
 
   discover() {
     return new SidePanelLoginWorkflowDiscovery().loginWorkflow()
+  }
+
+  /** Sends the worker's page-need query to this top document. */
+  async need(
+    origin = 'https://login.example.test',
+    sender: chrome.runtime.MessageSender = { id: 'nook-extension' },
+  ) {
+    const collaborators: SidePanelPageNeedCollaborators = {
+      pages: new SidePanelPageWorkflowDiscovery(),
+      needs: new CompanionSidePanelPageNeed(),
+    }
+    const receiver = new SidePanelPageNeedReceiver(collaborators)
+    const replies = Promise.withResolvers<SidePanelPageNeedReply>()
+    const reception = receiver.receive({
+      message: {
+        type: SidePanelPageNeedMessageType.Query,
+        payload: { origin },
+      },
+      sender,
+      sendResponse: replies.resolve,
+    })
+    switch (reception) {
+      case SidePanelPageNeedReception.Ignored:
+        return { reception }
+      case SidePanelPageNeedReception.Responding:
+        return { reception, reply: await replies.promise }
+    }
   }
 
   private route(message: PageRuntimeMessage, callback: PageRuntimeCallback) {
@@ -341,5 +381,59 @@ describe('side-panel Login workflow discovery (substituted classifier snapshots)
     expect((await page.discover()).kind).toBe(
       SidePanelLoginWorkflowKind.Unavailable,
     )
+  })
+})
+
+const totpForm =
+  '<form method="post" action="/twofa/totp/"><label for="otp">Authentication code</label><input id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" maxlength="6"><button type="submit">Verify</button></form>'
+
+describe('side-panel page need (real Rust classification)', () => {
+  test("answers Rust's page need for the workflow it classifies in the top document", async () => {
+    const cases: Array<[string, SitePageNeed]> = [
+      [loginForm, SitePageNeed.Credentials],
+      [signupForm, SitePageNeed.Credentials],
+      [totpForm, SitePageNeed.OneTimeCode],
+    ]
+    for (const [markup, need] of cases) {
+      const page = new ContentPageHarness(markup)
+      expect(await page.need()).toEqual({
+        reception: SidePanelPageNeedReception.Responding,
+        reply: { kind: SidePanelPageNeedReplyKind.Needed, need },
+      })
+      expect(page.snapshotRequests).toHaveLength(1)
+    }
+  })
+
+  test('a page without authentication forms needs any site secret and classifies nothing', async () => {
+    const page = new ContentPageHarness('<main><p>Welcome back</p></main>')
+    expect((await page.need()).reply).toEqual({
+      kind: SidePanelPageNeedReplyKind.Needed,
+      need: SitePageNeed.AnySiteSecret,
+    })
+    expect(page.snapshotRequests).toEqual([])
+  })
+
+  test('an unavailable snapshot transport is unavailable, not unrecognized', async () => {
+    const page = new ContentPageHarness(loginForm)
+    page.transport = SnapshotTransport.Unavailable
+    expect((await page.need()).reply).toEqual({
+      kind: SidePanelPageNeedReplyKind.Unavailable,
+    })
+  })
+
+  test('another origin answers tab-changed and classifies nothing', async () => {
+    const page = new ContentPageHarness(loginForm)
+    expect((await page.need('https://other.example.test')).reply).toEqual({
+      kind: SidePanelPageNeedReplyKind.TabChanged,
+    })
+    expect(page.snapshotRequests).toEqual([])
+  })
+
+  test('a foreign sender is ignored without an answer', async () => {
+    const page = new ContentPageHarness(loginForm)
+    expect(
+      await page.need('https://login.example.test', { id: 'other-extension' }),
+    ).toEqual({ reception: SidePanelPageNeedReception.Ignored })
+    expect(page.snapshotRequests).toEqual([])
   })
 })

@@ -24,6 +24,8 @@ use std::hash::BuildHasher;
 
 mod login_accounts;
 pub use login_accounts::{LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl};
+mod site_secrets;
+pub use site_secrets::SiteSecretOrigin;
 
 const SEARCH_CATALOG_VERSION: u8 = 2;
 const SEARCH_CATALOG_BUCKET_VERSION: u8 = 1;
