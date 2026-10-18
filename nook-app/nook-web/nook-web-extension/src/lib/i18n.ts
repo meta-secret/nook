@@ -49,6 +49,11 @@ export type ExtensionTranslationRequest =
       key: typeof I18N_KEYS.ExtensionActionFillLogin
       replacements: { login: string; vault: string }
     }
+  | {
+      kind: ExtensionTranslationRequestKind.WithReplacements
+      key: typeof I18N_KEYS.ExtensionActionFillCodeFor
+      replacements: { account: string; vault: string }
+    }
 
 export type ExtensionI18n = {
   locale: NookAppLocale

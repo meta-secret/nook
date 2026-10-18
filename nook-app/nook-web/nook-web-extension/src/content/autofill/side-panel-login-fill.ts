@@ -31,6 +31,10 @@ import {
   type SidePanelLoginWorkflowSource,
 } from './side-panel-login-workflow'
 import {
+  SidePanelPageSender,
+  SidePanelPageSenderAdmission,
+} from './side-panel-page-sender'
+import {
   WidgetCredentialActuation,
   WidgetSelectionAdmission,
   widgetState,
@@ -401,12 +405,10 @@ export class SidePanelLoginFillReceiver {
       case 'Success':
         break
     }
-    const ownTopDocument =
-      delivery.sender.id === chrome.runtime.id && window === window.top
-    switch (ownTopDocument) {
-      case true:
+    switch (new SidePanelPageSender(delivery.sender).admission()) {
+      case SidePanelPageSenderAdmission.OwnTopDocument:
         return SidePanelFillTriggerAdmission.Trigger
-      case false:
+      case SidePanelPageSenderAdmission.OtherContext:
         return SidePanelFillTriggerAdmission.OtherContext
     }
   }

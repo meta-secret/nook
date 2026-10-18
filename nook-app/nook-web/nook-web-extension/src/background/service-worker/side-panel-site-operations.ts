@@ -18,22 +18,20 @@ import {
 } from '../../lib/side-panel-site'
 import {
   SidePanelAuthorizationKind,
+  SidePanelGrantSelectionKind,
   SidePanelLoginsKind,
   SidePanelSessionKind,
   SidePanelSiteAccess,
+  SidePanelTargetContinuity,
+  type SidePanelGrantRequest,
   type SidePanelLoginsRequest,
   type SidePanelPageDelivery,
-  type SidePanelPairingGrants,
   type SidePanelSiteAccounts,
   type SidePanelSiteDependencies,
+  type SidePanelTargetContinuityRequest,
 } from './side-panel-site-access'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import { SidePanelSenderAdmission } from './side-panel-sender'
-import {
-  SidePanelTabTargetKind,
-  type SidePanelWebTabTarget,
-} from './side-panel-tab-target'
-import type { SidePanelWindowSelection } from '../../lib/side-panel-site'
+import { SidePanelTabTargetKind } from './side-panel-tab-target'
 
 /** One admitted runtime delivery of a side-panel request. */
 export interface SidePanelSiteOperationRequest {
@@ -255,7 +253,7 @@ export class SidePanelLoginFillOperation {
           break
       }
       const grantRequest: SidePanelGrantRequest = { grants, itemId }
-      const granted = this.grantFor(grantRequest)
+      const granted = this.access.grantFor(grantRequest)
       switch (granted.kind) {
         case SidePanelGrantSelectionKind.NotGranted:
           return this.outcome(SidePanelLoginFillKind.ItemNotFound)
@@ -305,7 +303,7 @@ export class SidePanelLoginFillOperation {
         selection: decoded.success.payload,
         derived: target,
       }
-      switch (yield* this.continuity(continuity)) {
+      switch (yield* this.access.continuity(continuity)) {
         case SidePanelTargetContinuity.Changed:
           return this.outcome(SidePanelLoginFillKind.TabChanged)
         case SidePanelTargetContinuity.Unreadable:
@@ -346,51 +344,6 @@ export class SidePanelLoginFillOperation {
     },
   )
 
-  /** Re-resolves the panel's window and compares it with the tab the Fill derived. */
-  private continuity = Effect.fn(
-    this.generatorContext,
-    function* (request: SidePanelTargetContinuityRequest) {
-      const current = yield* Effect.tryPromise(() =>
-        this.dependencies.tabTarget(request.selection),
-      )
-      switch (current.kind) {
-        case SidePanelTabTargetKind.Failed:
-          return SidePanelTargetContinuity.Unreadable
-        case SidePanelTabTargetKind.NonWeb:
-        case SidePanelTabTargetKind.PageUnavailable:
-          return SidePanelTargetContinuity.Changed
-        case SidePanelTabTargetKind.Web:
-          break
-      }
-      const same =
-        current.tabId === request.derived.tabId &&
-        current.origin === request.derived.origin
-      switch (same) {
-        case true:
-          return SidePanelTargetContinuity.Same
-        case false:
-          return SidePanelTargetContinuity.Changed
-      }
-    },
-  )
-
-  /** The item's vault must hold a password-filling grant. */
-  private grantFor({
-    grants,
-    itemId,
-  }: SidePanelGrantRequest): SidePanelGrantSelection {
-    const grant = grants.find(
-      (candidate) => candidate.vaultStoreId === itemId.vaultStoreId,
-    )
-    switch (true) {
-      case !!grant:
-        return { kind: SidePanelGrantSelectionKind.Granted, grant }
-      case true:
-      default:
-        return { kind: SidePanelGrantSelectionKind.NotGranted }
-    }
-  }
-
   /** Rust's listing for the derived origin must still contain the exact item. */
   private presence({
     accounts,
@@ -425,39 +378,10 @@ export class SidePanelLoginFillOperation {
   }
 }
 
-/** Whether the tab the Fill derived is still the active tab of the window. */
-enum SidePanelTargetContinuity {
-  Same = 'same',
-  Changed = 'changed',
-  Unreadable = 'unreadable',
-}
-
-type SidePanelTargetContinuityRequest = {
-  readonly selection: SidePanelWindowSelection
-  readonly derived: SidePanelWebTabTarget
-}
-
 type SidePanelItemPresenceRequest = {
   readonly accounts: SidePanelSiteAccounts
   readonly itemId: SidePanelLoginItemId
 }
-
-type SidePanelGrantRequest = {
-  readonly grants: SidePanelPairingGrants
-  readonly itemId: SidePanelLoginItemId
-}
-
-enum SidePanelGrantSelectionKind {
-  Granted = 'granted',
-  NotGranted = 'not-granted',
-}
-
-type SidePanelGrantSelection =
-  | {
-      readonly kind: SidePanelGrantSelectionKind.Granted
-      readonly grant: StoredExtensionPairingGrant
-    }
-  | { readonly kind: SidePanelGrantSelectionKind.NotGranted }
 
 type SidePanelSiteListingGeneratorContext = {
   readonly self: SidePanelSiteListingOperation

@@ -5,10 +5,11 @@ import type {
   BrowserRuntimeMessageValue,
 } from './browser-runtime-message'
 
-/** The panel's two requests. Neither carries an origin, URL, tab or frame. */
+/** The panel's requests. None carries an origin, URL, tab or frame. */
 export enum SidePanelSiteMessageType {
   ListLogins = 'nook:side-panel-site-logins',
   FillLogin = 'nook:side-panel-login-fill',
+  FillCode = 'nook:side-panel-code-fill',
 }
 
 /** Every answer to a This-site listing request. */
@@ -38,6 +39,21 @@ export enum SidePanelLoginFillKind {
   ItemNotFound = 'item-not-found',
   TabChanged = 'tab-changed',
   NoLoginForm = 'no-login-form',
+  FillFailed = 'fill-failed',
+}
+
+/** Every answer to a Fill code request: filled, or why nothing was filled. */
+export enum SidePanelCodeFillKind {
+  Filled = 'filled',
+  Forbidden = 'forbidden',
+  NonWeb = 'non-web',
+  PageUnavailable = 'page-unavailable',
+  Locked = 'locked',
+  Unpaired = 'unpaired',
+  ItemNotFound = 'item-not-found',
+  TabChanged = 'tab-changed',
+  /** Rust found no one-time-code challenge on the page. */
+  NoCodeField = 'no-code-field',
   FillFailed = 'fill-failed',
 }
 
@@ -89,6 +105,10 @@ export interface SidePanelLoginFillOutcome {
   readonly kind: SidePanelLoginFillKind
 }
 
+export interface SidePanelCodeFillOutcome {
+  readonly kind: SidePanelCodeFillKind
+}
+
 export interface SidePanelSiteLoginsMessage {
   readonly type: SidePanelSiteMessageType.ListLogins
   readonly payload: SidePanelWindowSelection
@@ -96,6 +116,12 @@ export interface SidePanelSiteLoginsMessage {
 
 export interface SidePanelLoginFillMessage {
   readonly type: SidePanelSiteMessageType.FillLogin
+  readonly payload: SidePanelLoginFillRequest
+}
+
+/** A Fill code request carries the same window selector and opaque item id as Fill. */
+export interface SidePanelCodeFillMessage {
+  readonly type: SidePanelSiteMessageType.FillCode
   readonly payload: SidePanelLoginFillRequest
 }
 
@@ -121,6 +147,10 @@ type SidePanelLoginFillMessageFields = {
   readonly type: Schema.Codec<SidePanelSiteMessageType.FillLogin>
   readonly payload: Schema.Codec<SidePanelLoginFillRequest>
 }
+type SidePanelCodeFillMessageFields = {
+  readonly type: Schema.Codec<SidePanelSiteMessageType.FillCode>
+  readonly payload: Schema.Codec<SidePanelLoginFillRequest>
+}
 type SidePanelSiteMessageTypeFields<Type extends SidePanelSiteMessageType> = {
   readonly type: Schema.Codec<Type>
 }
@@ -139,6 +169,9 @@ type SidePanelSiteListingFailureFields = {
 }
 type SidePanelLoginFillOutcomeFields = {
   readonly kind: Schema.Codec<SidePanelLoginFillKind>
+}
+type SidePanelCodeFillOutcomeFields = {
+  readonly kind: Schema.Codec<SidePanelCodeFillKind>
 }
 type SidePanelSiteListingFailureKinds = Readonly<
   Record<SidePanelSiteListingFailureKind, SidePanelSiteListingFailureKind>
@@ -186,10 +219,16 @@ export class SidePanelSiteMessages {
     type: Schema.Literal(SidePanelSiteMessageType.FillLogin),
     payload: Schema.Struct(SidePanelSiteMessages.fillRequestFields),
   }
+  private static readonly fillCodeFields: SidePanelCodeFillMessageFields = {
+    type: Schema.Literal(SidePanelSiteMessageType.FillCode),
+    payload: Schema.Struct(SidePanelSiteMessages.fillRequestFields),
+  }
   private static readonly listLoginsTypeFields: SidePanelSiteMessageTypeFields<SidePanelSiteMessageType.ListLogins> =
     { type: Schema.Literal(SidePanelSiteMessageType.ListLogins) }
   private static readonly fillLoginTypeFields: SidePanelSiteMessageTypeFields<SidePanelSiteMessageType.FillLogin> =
     { type: Schema.Literal(SidePanelSiteMessageType.FillLogin) }
+  private static readonly fillCodeTypeFields: SidePanelSiteMessageTypeFields<SidePanelSiteMessageType.FillCode> =
+    { type: Schema.Literal(SidePanelSiteMessageType.FillCode) }
   private static readonly loginFields: SidePanelSiteLoginFields = {
     itemId: SidePanelSiteMessages.itemId,
     username: SidePanelSiteMessages.label,
@@ -222,6 +261,8 @@ export class SidePanelSiteMessages {
   private static readonly fillOutcomeFields: SidePanelLoginFillOutcomeFields = {
     kind: Schema.Enum(SidePanelLoginFillKind),
   }
+  private static readonly codeFillOutcomeFields: SidePanelCodeFillOutcomeFields =
+    { kind: Schema.Enum(SidePanelCodeFillKind) }
   private static readonly listing: Schema.Codec<SidePanelSiteListing> =
     Schema.Union([
       Schema.Struct(SidePanelSiteMessages.readyListingFields),
@@ -229,6 +270,8 @@ export class SidePanelSiteMessages {
     ])
   private static readonly fillOutcome: Schema.Codec<SidePanelLoginFillOutcome> =
     Schema.Struct(SidePanelSiteMessages.fillOutcomeFields)
+  private static readonly codeFillOutcome: Schema.Codec<SidePanelCodeFillOutcome> =
+    Schema.Struct(SidePanelSiteMessages.codeFillOutcomeFields)
 
   /** Matches a listing request by type only; the operation decodes it strictly. */
   static matchesListLogins(message: BrowserRuntimeMessage) {
@@ -241,6 +284,13 @@ export class SidePanelSiteMessages {
   static matchesFillLogin(message: BrowserRuntimeMessage) {
     return Schema.decodeUnknownEffect(
       Schema.Struct(SidePanelSiteMessages.fillLoginTypeFields),
+    )(message).pipe(Effect.as(message))
+  }
+
+  /** Matches a Fill code request by type only; the operation decodes it strictly. */
+  static matchesFillCode(message: BrowserRuntimeMessage) {
+    return Schema.decodeUnknownEffect(
+      Schema.Struct(SidePanelSiteMessages.fillCodeTypeFields),
     )(message).pipe(Effect.as(message))
   }
 
@@ -258,6 +308,13 @@ export class SidePanelSiteMessages {
     )(message)
   }
 
+  static decodeFillCode(message: BrowserRuntimeMessage) {
+    return Schema.decodeUnknownEffect(
+      Schema.Struct(SidePanelSiteMessages.fillCodeFields),
+      SidePanelSiteMessages.strict,
+    )(message)
+  }
+
   static decodeListing(response: BrowserRuntimeMessageValue) {
     return Schema.decodeUnknownEffect(
       SidePanelSiteMessages.listing,
@@ -268,6 +325,13 @@ export class SidePanelSiteMessages {
   static decodeFillOutcome(response: BrowserRuntimeMessageValue) {
     return Schema.decodeUnknownEffect(
       SidePanelSiteMessages.fillOutcome,
+      SidePanelSiteMessages.strict,
+    )(response)
+  }
+
+  static decodeCodeFillOutcome(response: BrowserRuntimeMessageValue) {
+    return Schema.decodeUnknownEffect(
+      SidePanelSiteMessages.codeFillOutcome,
       SidePanelSiteMessages.strict,
     )(response)
   }
@@ -286,7 +350,9 @@ type SidePanelRuntimeReply =
   | { readonly kind: SidePanelRuntimeReplyKind.Unavailable }
 
 type SidePanelRuntimeRequest =
-  SidePanelSiteLoginsMessage | SidePanelLoginFillMessage
+  | SidePanelSiteLoginsMessage
+  | SidePanelLoginFillMessage
+  | SidePanelCodeFillMessage
 
 type SidePanelSiteClientConfiguration = { readonly browser: typeof globalThis }
 
@@ -300,6 +366,9 @@ export class SidePanelSiteClient {
   }
   private readonly fillFailed: SidePanelLoginFillOutcome = {
     kind: SidePanelLoginFillKind.FillFailed,
+  }
+  private readonly codeFillFailed: SidePanelCodeFillOutcome = {
+    kind: SidePanelCodeFillKind.FillFailed,
   }
 
   constructor(
@@ -336,6 +405,25 @@ export class SidePanelSiteClient {
     )
   }
 
+  /** Fills the current code of a listed authenticator into the active tab. */
+  fillCode(request: SidePanelLoginFillRequest): Promise<SidePanelCodeFillOutcome> {
+    const message: SidePanelCodeFillMessage = {
+      type: SidePanelSiteMessageType.FillCode,
+      payload: {
+        windowId: request.windowId,
+        itemId: {
+          vaultStoreId: request.itemId.vaultStoreId,
+          secretId: request.itemId.secretId,
+        },
+      },
+    }
+    return Effect.runPromise(
+      this.request(message).pipe(
+        Effect.flatMap((reply) => this.codeFillOutcome(reply)),
+      ),
+    )
+  }
+
   private listing(
     reply: SidePanelRuntimeReply,
   ): Effect.Effect<SidePanelSiteListing> {
@@ -358,6 +446,19 @@ export class SidePanelSiteClient {
       case SidePanelRuntimeReplyKind.Delivered:
         return SidePanelSiteMessages.decodeFillOutcome(reply.response).pipe(
           Effect.catch(() => Effect.succeed(this.fillFailed)),
+        )
+    }
+  }
+
+  private codeFillOutcome(
+    reply: SidePanelRuntimeReply,
+  ): Effect.Effect<SidePanelCodeFillOutcome> {
+    switch (reply.kind) {
+      case SidePanelRuntimeReplyKind.Unavailable:
+        return Effect.succeed(this.codeFillFailed)
+      case SidePanelRuntimeReplyKind.Delivered:
+        return SidePanelSiteMessages.decodeCodeFillOutcome(reply.response).pipe(
+          Effect.catch(() => Effect.succeed(this.codeFillFailed)),
         )
     }
   }

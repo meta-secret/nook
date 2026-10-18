@@ -32,6 +32,16 @@ import {
   type SidePanelLoginFillDelivery,
 } from './side-panel-login-fill'
 import {
+  SidePanelCodeFillReception,
+  sidePanelCodeFill,
+  type SidePanelCodeFillDelivery,
+} from './side-panel-code-fill'
+import {
+  SidePanelPageNeedReception,
+  sidePanelPageNeed,
+  type SidePanelPageNeedDelivery,
+} from './side-panel-page-need'
+import {
   PendingPickerTakeKind,
   pickerState,
   scanState,
@@ -78,6 +88,28 @@ export const routeAutofillMessage: AutofillMessageListener = (
     case SidePanelLoginFillReception.Ignored:
       break
   }
+  const sidePanelCode: SidePanelCodeFillDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (sidePanelCodeFill.receive(sidePanelCode)) {
+    case SidePanelCodeFillReception.Responding:
+      return true
+    case SidePanelCodeFillReception.Ignored:
+      break
+  }
+  const sidePanelNeed: SidePanelPageNeedDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (sidePanelPageNeed.receive(sidePanelNeed)) {
+    case SidePanelPageNeedReception.Responding:
+      return true
+    case SidePanelPageNeedReception.Ignored:
+      break
+  }
   const verification = Schema.decodeUnknownResult(LoginPickerPageVerification)(
     message,
   )
@@ -99,6 +131,7 @@ export const routeAutofillMessage: AutofillMessageListener = (
     scanState.sequence += 1
     widgetState.busy = false
     sidePanelLoginFill.withdraw()
+    sidePanelCodeFill.withdraw()
     void clearAuthenticationSurface()
       .then(() => {
         scanState.schedule()

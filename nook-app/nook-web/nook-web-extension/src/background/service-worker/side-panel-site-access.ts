@@ -8,7 +8,17 @@ import {
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
 import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
-import type { SidePanelPageFillMessage } from '../../lib/side-panel-page-fill'
+import type {
+  SidePanelPageCodeFillMessage,
+  SidePanelPageFillMessage,
+} from '../../lib/side-panel-page-fill'
+import {
+  SidePanelPageNeedMessageType,
+  SidePanelPageNeedMessages,
+  type SidePanelPageNeedMessage,
+  type SidePanelPageNeedReply,
+} from '../../lib/side-panel-page-need'
+import type { SidePanelLoginItemId } from '../../lib/side-panel-site'
 import type { SidePanelWindowSelection } from '../../lib/side-panel-site'
 import type { accountPickerSessions } from './account-pickers'
 import type { ExtensionSessionTransportResult } from './session-document'
@@ -17,7 +27,11 @@ import {
   extensionSessionLifecycle,
 } from './session-lifecycle'
 import type { SidePanelSenderAdmission } from './side-panel-sender'
-import type { SidePanelTabTarget } from './side-panel-tab-target'
+import {
+  SidePanelTabTargetKind,
+  type SidePanelTabTarget,
+  type SidePanelWebTabTarget,
+} from './side-panel-tab-target'
 
 type LoginAvailabilityRequest = Parameters<
   typeof accountPickerSessions.loginAccountAvailabilityForOrigin
@@ -26,10 +40,17 @@ type LoginAvailability = Awaited<
   ReturnType<typeof accountPickerSessions.loginAccountAvailabilityForOrigin>
 >
 
-/** One Fill trigger for frame 0 of the tab the worker resolved. */
+/** What the worker sends frame 0 of the tab it resolved: a Fill or Fill code
+ * trigger without credentials, or the page-need query. */
+export type SidePanelPageMessage =
+  | SidePanelPageFillMessage
+  | SidePanelPageCodeFillMessage
+  | SidePanelPageNeedMessage
+
+/** One page message for frame 0 of the tab the worker resolved. */
 export interface SidePanelPageDelivery {
   readonly tabId: number
-  readonly message: SidePanelPageFillMessage
+  readonly message: SidePanelPageMessage
 }
 
 export type SidePanelPairingGrants = readonly StoredExtensionPairingGrant[]
@@ -190,6 +211,82 @@ export class SidePanelSiteAccess {
     },
   )
 
+  /**
+   * Asks the tab's top document, once for this listing, which workflow Rust
+   * classifies there. No receiver is a page no content script reaches.
+   */
+  pageNeed = Effect.fn(
+    this.generatorContext,
+    function* (target: SidePanelWebTabTarget) {
+      const message: SidePanelPageNeedMessage = {
+        type: SidePanelPageNeedMessageType.Query,
+        payload: { origin: target.origin },
+      }
+      const delivery: SidePanelPageDelivery = { tabId: target.tabId, message }
+      const sent = yield* Effect.result(
+        Effect.tryPromise(() => this.dependencies.sendPageMessage(delivery)),
+      )
+      switch (sent._tag) {
+        case 'Failure': {
+          const unreached: SidePanelPageNeedReading = {
+            kind: SidePanelPageNeedReadingKind.NoReceiver,
+          }
+          return unreached
+        }
+        case 'Success':
+          break
+      }
+      const reply = yield* SidePanelPageNeedMessages.decodeReply(sent.success)
+      const answered: SidePanelPageNeedReading = {
+        kind: SidePanelPageNeedReadingKind.Answered,
+        reply,
+      }
+      return answered
+    },
+  )
+
+  /** Re-resolves the panel's window and compares it with the tab a Fill derived. */
+  continuity = Effect.fn(
+    this.generatorContext,
+    function* (request: SidePanelTargetContinuityRequest) {
+      const current = yield* Effect.tryPromise(() =>
+        this.dependencies.tabTarget(request.selection),
+      )
+      switch (current.kind) {
+        case SidePanelTabTargetKind.Failed:
+          return SidePanelTargetContinuity.Unreadable
+        case SidePanelTabTargetKind.NonWeb:
+        case SidePanelTabTargetKind.PageUnavailable:
+          return SidePanelTargetContinuity.Changed
+        case SidePanelTabTargetKind.Web:
+          break
+      }
+      const same =
+        current.tabId === request.derived.tabId &&
+        current.origin === request.derived.origin
+      switch (same) {
+        case true:
+          return SidePanelTargetContinuity.Same
+        case false:
+          return SidePanelTargetContinuity.Changed
+      }
+    },
+  )
+
+  /** The item's vault must hold a password-filling grant. */
+  grantFor({ grants, itemId }: SidePanelGrantRequest): SidePanelGrantSelection {
+    const grant = grants.find(
+      (candidate) => candidate.vaultStoreId === itemId.vaultStoreId,
+    )
+    switch (true) {
+      case !!grant:
+        return { kind: SidePanelGrantSelectionKind.Granted, grant }
+      case true:
+      default:
+        return { kind: SidePanelGrantSelectionKind.NotGranted }
+    }
+  }
+
   private interactiveQueue() {
     return extensionSessionInteractiveDeadline(
       this.dependencies.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
@@ -205,6 +302,49 @@ export class SidePanelSiteAccess {
     }
   }
 }
+
+export enum SidePanelPageNeedReadingKind {
+  Answered = 'answered',
+  /** No content script answered in the tab's top frame. */
+  NoReceiver = 'no-receiver',
+}
+
+/** The top document's page-need answer, or that no content script received the query. */
+export type SidePanelPageNeedReading =
+  | {
+      readonly kind: SidePanelPageNeedReadingKind.Answered
+      readonly reply: SidePanelPageNeedReply
+    }
+  | { readonly kind: SidePanelPageNeedReadingKind.NoReceiver }
+
+/** Whether the tab a Fill derived is still the active tab of the window. */
+export enum SidePanelTargetContinuity {
+  Same = 'same',
+  Changed = 'changed',
+  Unreadable = 'unreadable',
+}
+
+export type SidePanelTargetContinuityRequest = {
+  readonly selection: SidePanelWindowSelection
+  readonly derived: SidePanelWebTabTarget
+}
+
+export type SidePanelGrantRequest = {
+  readonly grants: SidePanelPairingGrants
+  readonly itemId: SidePanelLoginItemId
+}
+
+export enum SidePanelGrantSelectionKind {
+  Granted = 'granted',
+  NotGranted = 'not-granted',
+}
+
+export type SidePanelGrantSelection =
+  | {
+      readonly kind: SidePanelGrantSelectionKind.Granted
+      readonly grant: StoredExtensionPairingGrant
+    }
+  | { readonly kind: SidePanelGrantSelectionKind.NotGranted }
 
 type SidePanelSiteAccessGeneratorContext = {
   readonly self: SidePanelSiteAccess
