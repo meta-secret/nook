@@ -222,6 +222,13 @@ impl SiteSecretTitle {
     }
 }
 
+impl SiteSecretAccount {
+    fn sort_key(&self) -> String {
+        let Self(account) = self;
+        account.to_lowercase()
+    }
+}
+
 /// Rows collected for one identity while vaults are folded in grant order.
 struct SiteSecretGroupDraft {
     identity: SiteSecretIdentity,
@@ -294,7 +301,7 @@ impl SiteSecretGrouping {
     }
 
     /// Named identities keep their first-appearance order; grants without a
-    /// recorded identity come last. Rows sort by kind, then by title.
+    /// recorded identity come last. Rows sort by kind, then by title, then by account.
     fn listing(self, need: SitePageNeed) -> SiteSecretListing {
         let (named, unnamed): (Vec<SiteSecretGroupDraft>, Vec<SiteSecretGroupDraft>) =
             self.drafts.into_iter().partition(|group| {
@@ -312,6 +319,7 @@ impl SiteSecretGrouping {
                 rows.sort_by_cached_key(|row| SiteSecretRowOrder {
                     kind: row.kind,
                     title: row.title.sort_key(),
+                    account: row.account.sort_key(),
                 });
                 SiteSecretIdentityGroup {
                     header: SiteSecretIdentityHeader::from(identity.name),
@@ -331,6 +339,7 @@ impl SiteSecretGrouping {
 struct SiteSecretRowOrder {
     kind: SiteSecretKind,
     title: String,
+    account: String,
 }
 
 impl SiteSecretListingRequest {
@@ -806,6 +815,54 @@ mod tests {
                 .map(|row| row.secret.as_str())
                 .collect::<Vec<_>>(),
             ["secret_a", "secret_z"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn same_host_logins_sort_by_account_ignoring_case() -> anyhow::Result<()> {
+        let login = |id: &str, account: &str| SiteSecretItem {
+            kind: SiteSecretKind::Login,
+            secret_id: SecretId::from_vault_record(id),
+            title: SiteSecretTitle::from("namecheap.com".to_owned()),
+            account: SiteSecretAccount::from(account.to_owned()),
+            saved_host: SiteSecretSavedHost::from("namecheap.com".to_owned()),
+        };
+        let vault = SiteSecretVault {
+            matches: SiteSecretMatches {
+                items: vec![
+                    login("secret_zed", "zed"),
+                    login("secret_bynull", "bynull"),
+                    login("secret_alice", "Alice"),
+                ],
+            },
+            ..VaultFixture {
+                store: "store_SMypl8K0w9a",
+                vault_name: "bynull",
+                device: "device-personal",
+                identity: "Personal",
+                items: vec![],
+            }
+            .vault()?
+        };
+        let groups = listed_groups(
+            SiteSecretListingRequest {
+                page_need: SitePageNeed::Credentials,
+                vaults: SiteSecretVaults {
+                    vaults: vec![vault],
+                },
+            }
+            .present(),
+        )?;
+        let [group] = groups.as_slice() else {
+            anyhow::bail!("expected one group");
+        };
+        assert_eq!(
+            row_summaries(group)
+                .iter()
+                .map(|row| row.secret.as_str())
+                .collect::<Vec<_>>(),
+            ["secret_alice", "secret_bynull", "secret_zed"]
         );
         Ok(())
     }
