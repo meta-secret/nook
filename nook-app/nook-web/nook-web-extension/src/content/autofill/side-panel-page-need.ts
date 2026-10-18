@@ -55,17 +55,16 @@ export class CompanionSidePanelPageNeed implements SidePanelPageNeedSource {
         break
     }
     const response = delivery.response
-    switch (
-      typeof response === 'object' &&
-      !!response &&
-      'sitePageNeed' in response
-    ) {
-      case true:
+    switch (true) {
+      case typeof response === 'object' &&
+        !!response &&
+        'sitePageNeed' in response:
         return {
           kind: SidePanelPageNeedReplyKind.Needed,
           need: response.sitePageNeed,
         }
-      case false:
+      case true:
+      default:
         return this.unavailable
     }
   }

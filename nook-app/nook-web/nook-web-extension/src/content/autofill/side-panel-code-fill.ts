@@ -269,25 +269,26 @@ export class SidePanelCodeFillAction {
         case AuthenticatorCodeResponseKind.Ready:
           break
       }
-      switch ('code' in response && 'expiresAt' in response) {
-        case false:
-          return this.reply(SidePanelPageCodeFillReplyKind.FillFailed)
+      switch (true) {
+        case 'code' in response && 'expiresAt' in response: {
+          const writeRequest: SidePanelCodeWriteRequest = {
+            code: response.code,
+            expiresAt: response.expiresAt,
+            collaborators: this.collaborators,
+          }
+          response.code = ''
+          const releaseRequest: SidePanelCodeReleaseRequest = {
+            workflow,
+            binding,
+            write: new SidePanelCodeWrite(writeRequest),
+            approvalIsActive,
+          }
+          return yield* this.write(releaseRequest)
+        }
         case true:
-          break
+        default:
+          return this.reply(SidePanelPageCodeFillReplyKind.FillFailed)
       }
-      const writeRequest: SidePanelCodeWriteRequest = {
-        code: response.code,
-        expiresAt: response.expiresAt,
-        collaborators: this.collaborators,
-      }
-      response.code = ''
-      const releaseRequest: SidePanelCodeReleaseRequest = {
-        workflow,
-        binding,
-        write: new SidePanelCodeWrite(writeRequest),
-        approvalIsActive,
-      }
-      return yield* this.write(releaseRequest)
     },
   )
 

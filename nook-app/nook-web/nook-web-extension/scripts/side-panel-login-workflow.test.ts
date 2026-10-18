@@ -9,6 +9,7 @@ import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
+  SitePageNeed,
   type AuthenticationWorkflowSnapshot,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -40,8 +41,10 @@ import {
   type SidePanelPageNeedReply,
 } from '../src/lib/side-panel-page-need'
 import {
+  CompanionSidePanelPageNeed,
   SidePanelPageNeedReception,
   SidePanelPageNeedReceiver,
+  type SidePanelPageNeedCollaborators,
 } from '../src/content/autofill/side-panel-page-need'
 import { SidePanelPageWorkflowDiscovery } from '../src/content/autofill/side-panel-page-workflow'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
@@ -137,9 +140,11 @@ class ContentPageHarness {
     origin = 'https://login.example.test',
     sender: chrome.runtime.MessageSender = { id: 'nook-extension' },
   ) {
-    const receiver = new SidePanelPageNeedReceiver(
-      new SidePanelPageWorkflowDiscovery(),
-    )
+    const collaborators: SidePanelPageNeedCollaborators = {
+      pages: new SidePanelPageWorkflowDiscovery(),
+      needs: new CompanionSidePanelPageNeed(),
+    }
+    const receiver = new SidePanelPageNeedReceiver(collaborators)
     const replies = Promise.withResolvers<SidePanelPageNeedReply>()
     const reception = receiver.receive({
       message: { type: SidePanelPageNeedMessageType.Query, payload: { origin } },
@@ -380,26 +385,27 @@ const totpForm =
   '<form method="post" action="/twofa/totp/"><label for="otp">Authentication code</label><input id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" maxlength="6"><button type="submit">Verify</button></form>'
 
 describe('side-panel page need (real Rust classification)', () => {
-  test('answers the workflow kind Rust selects for the top document', async () => {
-    const cases: Array<[string, AuthenticationWorkflowKind]> = [
-      [loginForm, AuthenticationWorkflowKind.Login],
-      [signupForm, AuthenticationWorkflowKind.Signup],
-      [totpForm, AuthenticationWorkflowKind.TotpChallenge],
+  test("answers Rust's page need for the workflow it classifies in the top document", async () => {
+    const cases: Array<[string, SitePageNeed]> = [
+      [loginForm, SitePageNeed.Credentials],
+      [signupForm, SitePageNeed.Credentials],
+      [totpForm, SitePageNeed.OneTimeCode],
     ]
-    for (const [markup, workflow] of cases) {
+    for (const [markup, need] of cases) {
       const page = new ContentPageHarness(markup)
       expect(await page.need()).toEqual({
         reception: SidePanelPageNeedReception.Responding,
-        reply: { kind: SidePanelPageNeedReplyKind.Classified, workflow },
+        reply: { kind: SidePanelPageNeedReplyKind.Needed, need },
       })
       expect(page.snapshotRequests).toHaveLength(1)
     }
   })
 
-  test('a page without authentication forms is unrecognized and asks nothing', async () => {
+  test('a page without authentication forms needs any site secret and classifies nothing', async () => {
     const page = new ContentPageHarness('<main><p>Welcome back</p></main>')
     expect((await page.need()).reply).toEqual({
-      kind: SidePanelPageNeedReplyKind.Unrecognized,
+      kind: SidePanelPageNeedReplyKind.Needed,
+      need: SitePageNeed.AnySiteSecret,
     })
     expect(page.snapshotRequests).toEqual([])
   })

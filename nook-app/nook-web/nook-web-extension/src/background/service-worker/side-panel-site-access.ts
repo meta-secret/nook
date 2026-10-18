@@ -1,5 +1,19 @@
-import { Effect } from 'effect'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import { Effect, Schema, type Result } from 'effect'
+import type * as SchemaAST from 'effect/SchemaAST'
+import { SiteSecretListingCodec } from '../../lib/side-panel-site-listing'
+import {
+  present_site_secret_listing,
+  type SitePageNeed,
+  type SiteSecretListing,
+  type SiteSecretMatches,
+  type SiteSecretVault,
+  type SiteSecretVaults,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import {
+  extensionSessionGrantIdentity,
+  type StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
   extensionSessionInteractiveDeadline,
@@ -125,6 +139,15 @@ export class SidePanelSiteAccess {
   private readonly revoked: SidePanelAuthorization = {
     kind: SidePanelAuthorizationKind.Revoked,
   }
+  private readonly strict: SchemaAST.ParseOptions = {
+    onExcessProperty: 'error',
+  }
+  private readonly unlistedVault: SidePanelVaultMatches = {
+    kind: SidePanelVaultMatchesKind.Failed,
+  }
+  private readonly unlistedSite: SidePanelSiteSecrets = {
+    kind: SidePanelSiteSecretsKind.Failed,
+  }
   private readonly generatorContext: SidePanelSiteAccessGeneratorContext = {
     self: this,
   }
@@ -210,6 +233,113 @@ export class SidePanelSiteAccess {
       }
     },
   )
+
+  /**
+   * Every grant's Rust-matched site secrets for the origin, in grant order.
+   * Any grant whose session listing fails or answers without matches fails
+   * the whole listing, so a failure never reads as nothing saved.
+   */
+  siteSecrets = Effect.fn(
+    this.generatorContext,
+    function* (request: SidePanelLoginsRequest) {
+      const vaults: SiteSecretVault[] = []
+      for (const grant of request.grants) {
+        const message: ExtensionSessionTransportRequest = {
+          type: ExtensionSessionMessageType.ListSiteSecrets,
+          payload: {
+            ...extensionSessionGrantIdentity(grant),
+            origin: request.origin,
+            queue: this.interactiveQueue(),
+          },
+        }
+        const delivery = yield* Effect.tryPromise(() =>
+          this.dependencies.sendSessionMessage(message),
+        )
+        const listed = delivery.match(
+          (response) => this.siteMatches(response),
+          () => this.unlistedVault,
+        )
+        switch (listed.kind) {
+          case SidePanelVaultMatchesKind.Failed:
+            return this.unlistedSite
+          case SidePanelVaultMatchesKind.Listed:
+            break
+        }
+        const vault: SidePanelSiteVaultRequest = { grant, matches: listed.matches }
+        vaults.push(this.siteVault(vault))
+      }
+      const listed: SidePanelSiteSecrets = {
+        kind: SidePanelSiteSecretsKind.Listed,
+        vaults: { vaults },
+      }
+      return listed
+    },
+  )
+
+  /** Rust filters the vaults' matches by the page need and groups them by identity. */
+  presentSiteSecrets = Effect.fn(
+    this.generatorContext,
+    function* (request: SidePanelSiteSecretsPresentation) {
+      yield* Effect.promise(() => companionWasmReady)
+      return yield* Effect.try(() =>
+        present_site_secret_listing(request.need, request.vaults),
+      )
+    },
+  )
+
+  private siteMatches(response: ExtensionSessionResponse): SidePanelVaultMatches {
+    switch (true) {
+      case typeof response === 'object' && 'matches' in response:
+        return this.decodedMatches(
+          Schema.decodeUnknownResult(
+            SiteSecretListingCodec.matches,
+            this.strict,
+          )(response.matches),
+        )
+      case true:
+      default:
+        return this.unlistedVault
+    }
+  }
+
+  private decodedMatches(
+    decoded: SidePanelDecodedMatches,
+  ): SidePanelVaultMatches {
+    switch (decoded._tag) {
+      case 'Failure':
+        return this.unlistedVault
+      case 'Success':
+        return {
+          kind: SidePanelVaultMatchesKind.Listed,
+          matches: decoded.success,
+        }
+    }
+  }
+
+  /** The grant's labels Rust groups by; a grant paired before identities has no name. */
+  private siteVault({
+    grant,
+    matches,
+  }: SidePanelSiteVaultRequest): SiteSecretVault {
+    return {
+      vault_store_id: grant.vaultStoreId,
+      vault_name: grant.vaultName,
+      identity: {
+        device_id: grant.deviceId,
+        name: this.identityName(grant),
+      },
+      matches,
+    }
+  }
+
+  private identityName(grant: StoredExtensionPairingGrant): string {
+    switch (typeof grant.identityLabel) {
+      case 'string':
+        return grant.identityLabel
+      default:
+        return ''
+    }
+  }
 
   /**
    * Asks the tab's top document, once for this listing, which workflow Rust
@@ -302,6 +432,49 @@ export class SidePanelSiteAccess {
     }
   }
 }
+
+enum SidePanelVaultMatchesKind {
+  Listed = 'listed',
+  Failed = 'failed',
+}
+
+/** One grant's session answer: its Rust matches, or a failed listing. */
+type SidePanelVaultMatches =
+  | {
+      readonly kind: SidePanelVaultMatchesKind.Listed
+      readonly matches: SiteSecretMatches
+    }
+  | { readonly kind: SidePanelVaultMatchesKind.Failed }
+
+type SidePanelDecodedMatches = Result.Result<
+  SiteSecretMatches,
+  Schema.SchemaError
+>
+
+type SidePanelSiteVaultRequest = {
+  readonly grant: StoredExtensionPairingGrant
+  readonly matches: SiteSecretMatches
+}
+
+export enum SidePanelSiteSecretsKind {
+  Listed = 'listed',
+  Failed = 'failed',
+}
+
+/** Every grant's matches for Rust to present, or a failed listing. */
+export type SidePanelSiteSecrets =
+  | {
+      readonly kind: SidePanelSiteSecretsKind.Listed
+      readonly vaults: SiteSecretVaults
+    }
+  | { readonly kind: SidePanelSiteSecretsKind.Failed }
+
+export interface SidePanelSiteSecretsPresentation {
+  readonly need: SitePageNeed
+  readonly vaults: SiteSecretVaults
+}
+
+export type { SiteSecretListing }
 
 export enum SidePanelPageNeedReadingKind {
   Answered = 'answered',

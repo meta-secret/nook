@@ -1,9 +1,11 @@
 import { Effect, Schema } from 'effect'
 import type * as SchemaAST from 'effect/SchemaAST'
+import type { SiteSecretListing } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageValue,
 } from './browser-runtime-message'
+import { SiteSecretListingCodec } from './side-panel-site-listing'
 
 /** The panel's requests. None carries an origin, URL, tab or frame. */
 export enum SidePanelSiteMessageType {
@@ -66,27 +68,18 @@ export interface SidePanelWindowSelection {
   readonly windowId: number
 }
 
-/** Opaque identity of one saved login; a lookup key, never authority. */
+/** Opaque identity of one listed item; a lookup key, never authority. */
 export interface SidePanelLoginItemId {
   readonly vaultStoreId: string
   readonly secretId: string
 }
 
-/** One saved login for the active tab's site, without any secret. */
-export interface SidePanelSiteLogin {
-  readonly itemId: SidePanelLoginItemId
-  readonly username: string
-  readonly vaultLabel: string
-}
-
-export type SidePanelSiteLogins = readonly SidePanelSiteLogin[]
-
 export interface SidePanelSiteReadyListing {
   readonly kind: SidePanelSiteListingKind.Ready
   /** The active tab's host as Rust displays it. */
   readonly display_host: string
-  /** In the order Rust returned them. */
-  readonly items: SidePanelSiteLogins
+  /** Rust's filtered, grouped and ordered display rows, or its empty state. */
+  readonly listing: SiteSecretListing
 }
 
 export interface SidePanelSiteListingFailure {
@@ -154,15 +147,10 @@ type SidePanelCodeFillMessageFields = {
 type SidePanelSiteMessageTypeFields<Type extends SidePanelSiteMessageType> = {
   readonly type: Schema.Codec<Type>
 }
-type SidePanelSiteLoginFields = {
-  readonly itemId: Schema.Codec<SidePanelLoginItemId>
-  readonly username: BoundedTextSchema
-  readonly vaultLabel: BoundedTextSchema
-}
 type SidePanelSiteReadyListingFields = {
   readonly kind: Schema.Codec<SidePanelSiteListingKind.Ready>
   readonly display_host: BoundedTextSchema
-  readonly items: Schema.Codec<SidePanelSiteLogins>
+  readonly listing: Schema.Codec<SiteSecretListing>
 }
 type SidePanelSiteListingFailureFields = {
   readonly kind: Schema.Codec<SidePanelSiteListingFailureKind>
@@ -189,9 +177,6 @@ export class SidePanelSiteMessages {
   }
   private static readonly identifier: BoundedTextSchema = Schema.String.check(
     Schema.isBetweenLength(1, SidePanelSiteMessages.IDENTIFIER_MAX_LENGTH),
-  )
-  private static readonly label: BoundedTextSchema = Schema.String.check(
-    Schema.isMaxLength(SidePanelSiteMessages.LABEL_MAX_LENGTH),
   )
   private static readonly host: BoundedTextSchema = Schema.String.check(
     Schema.isBetweenLength(1, SidePanelSiteMessages.LABEL_MAX_LENGTH),
@@ -229,16 +214,11 @@ export class SidePanelSiteMessages {
     { type: Schema.Literal(SidePanelSiteMessageType.FillLogin) }
   private static readonly fillCodeTypeFields: SidePanelSiteMessageTypeFields<SidePanelSiteMessageType.FillCode> =
     { type: Schema.Literal(SidePanelSiteMessageType.FillCode) }
-  private static readonly loginFields: SidePanelSiteLoginFields = {
-    itemId: SidePanelSiteMessages.itemId,
-    username: SidePanelSiteMessages.label,
-    vaultLabel: SidePanelSiteMessages.label,
-  }
   private static readonly readyListingFields: SidePanelSiteReadyListingFields =
     {
       kind: Schema.Literal(SidePanelSiteListingKind.Ready),
       display_host: SidePanelSiteMessages.host,
-      items: Schema.Array(Schema.Struct(SidePanelSiteMessages.loginFields)),
+      listing: SiteSecretListingCodec.listing,
     }
   // Keyed by every failure kind, so a new kind cannot be left undecodable.
   private static readonly listingFailureKinds: SidePanelSiteListingFailureKinds =

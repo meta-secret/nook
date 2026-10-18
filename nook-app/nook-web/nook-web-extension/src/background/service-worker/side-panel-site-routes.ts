@@ -3,9 +3,11 @@ import type {
   BrowserRuntimeMessageValue,
 } from '../../lib/browser-runtime-message'
 import {
+  SidePanelCodeFillKind,
   SidePanelLoginFillKind,
   SidePanelSiteListingKind,
   SidePanelSiteMessages,
+  type SidePanelCodeFillOutcome,
   type SidePanelLoginFillOutcome,
   type SidePanelSiteListing,
 } from '../../lib/side-panel-site'
@@ -16,6 +18,7 @@ import {
   accountPickerSessions,
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
+import { SidePanelCodeFillOperation } from './side-panel-code-fill-operation'
 import {
   SchemaRuntimeMessageRoute,
   type BackgroundRuntimeMessageRoute,
@@ -94,8 +97,13 @@ export class SidePanelSiteRoutes {
   }
   private static readonly listLogins: RuntimeMessageSchema<BrowserRuntimeMessage> =
     { decode: SidePanelSiteMessages.matchesListLogins }
+  private static readonly codeFillFailed: SidePanelCodeFillOutcome = {
+    kind: SidePanelCodeFillKind.FillFailed,
+  }
   private static readonly fillLogin: RuntimeMessageSchema<BrowserRuntimeMessage> =
     { decode: SidePanelSiteMessages.matchesFillLogin }
+  private static readonly fillCode: RuntimeMessageSchema<BrowserRuntimeMessage> =
+    { decode: SidePanelSiteMessages.matchesFillCode }
 
   /** The listing route; its operation decodes the request strictly. */
   static listing(): BackgroundRuntimeMessageRoute {
@@ -115,5 +123,15 @@ export class SidePanelSiteRoutes {
     return SchemaRuntimeMessageRoute.matching(SidePanelSiteRoutes.fillLogin)
       .respondWith(operation.run.bind(operation))
       .onRejected(() => SidePanelSiteRoutes.fillFailed)
+  }
+
+  /** The Fill code route; its operation decodes the request strictly. */
+  static codeFill(): BackgroundRuntimeMessageRoute {
+    const operation = new SidePanelCodeFillOperation(
+      SidePanelSiteRoutes.dependencies,
+    )
+    return SchemaRuntimeMessageRoute.matching(SidePanelSiteRoutes.fillCode)
+      .respondWith(operation.run.bind(operation))
+      .onRejected(() => SidePanelSiteRoutes.codeFillFailed)
   }
 }

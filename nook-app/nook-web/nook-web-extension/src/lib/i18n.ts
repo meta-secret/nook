@@ -12,12 +12,16 @@ import {
   I18N_KEYS,
   type I18nKey,
 } from '../../../nook-web-shared/src/generated/i18n-keys'
+import type { SiteSecretMessageKey } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export const NOOK_LOCALE_STORAGE_KEY = 'nook_locale'
 
 export enum ExtensionTranslationRequestKind {
   Plain = 'plain',
   WithReplacements = 'with-replacements',
+  /** A catalog key Rust selected, such as a This-site label. */
+  Selected = 'selected',
+  SelectedWithReplacements = 'selected-with-replacements',
 }
 
 export type ExtensionTranslationRequest =
@@ -47,6 +51,20 @@ export type ExtensionTranslationRequest =
   | {
       kind: ExtensionTranslationRequestKind.WithReplacements
       key: typeof I18N_KEYS.ExtensionActionFillLogin
+      replacements: { login: string; vault: string }
+    }
+  | {
+      kind: ExtensionTranslationRequestKind.Selected
+      key: SiteSecretMessageKey
+    }
+  | {
+      kind: ExtensionTranslationRequestKind.SelectedWithReplacements
+      key: SiteSecretMessageKey
+      replacements: { host: string }
+    }
+  | {
+      kind: ExtensionTranslationRequestKind.SelectedWithReplacements
+      key: SiteSecretMessageKey
       replacements: { login: string; vault: string }
     }
 
@@ -130,7 +148,11 @@ class ExtensionLocaleCatalog {
       locale,
       t(request) {
         let text = translate_from_catalog(catalog, locale, request.key)
-        if (request.kind === ExtensionTranslationRequestKind.WithReplacements) {
+        if (
+          request.kind === ExtensionTranslationRequestKind.WithReplacements ||
+          request.kind ===
+            ExtensionTranslationRequestKind.SelectedWithReplacements
+        ) {
           for (const [name, value] of Object.entries(request.replacements)) {
             text = text.replaceAll(`{${name}}`, value)
           }
