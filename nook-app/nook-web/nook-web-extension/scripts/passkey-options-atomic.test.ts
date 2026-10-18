@@ -249,6 +249,99 @@ describe('website passkey options', () => {
     })
   })
 
+  test('offers saving only to vaults that do not already hold the account passkey', async () => {
+    const [{ websitePasskeyRequests }, { WebsitePasskeyRequestContextKind }] =
+      await Promise.all([
+        import('../src/background/service-worker/passkey-operations'),
+        import('../src/background/service-worker/pairing-identity'),
+      ])
+    const saved = {
+      credentialId: 'saved-account-credential',
+      userName: 'person@example.test',
+      userDisplayName: 'Person',
+    }
+    const registration: WebsitePasskeyRequestContext = {
+      kind: WebsitePasskeyRequestContextKind.Validated,
+      origin: 'https://accounts.example.test',
+      rpId: 'example.test',
+      request: {
+        ceremony: WebsitePasskeyCeremony.Create,
+        value: {
+          origin: 'https://accounts.example.test',
+          challenge: 'challenge',
+          relyingParty: { id: 'example.test', name: 'Example' },
+          user: {
+            id: 'dXNlcg',
+            name: 'person@example.test',
+            displayName: 'Person',
+          },
+          algorithms: [-7],
+          excludeCredentials: [{ id: saved.credentialId }],
+          residentKeyRequired: true,
+          userVerification: 'required',
+        },
+      },
+    }
+    const options = async (
+      grants: StoredExtensionPairingGrant[],
+      responses: ExtensionSessionResponse[],
+    ) => {
+      const sessionTransport = new PasskeySessionTransportFixture({
+        responses,
+      })
+      const dependencies: WebsitePasskeyOptionsDependencies = {
+        ensureExtensionSessionDocument: mock(() =>
+          Promise.resolve(ok(unusedSessionTransport)),
+        ),
+        isAuthorizedWebsiteSender: mock(() => true),
+        isUnlockedSessionStatus: mock(() => true),
+        passkeyPairingGrants: mock(() => Promise.resolve(grants)),
+        requestOriginAndRpId: mock(
+          async (): Promise<WebsitePasskeyRequestContext> => registration,
+        ),
+        sendSessionMessage: (message: ExtensionSessionTransportRequest) =>
+          sessionTransport.sendMessage({ message }),
+      }
+      return websitePasskeyRequests.websitePasskeyOptions({
+        message: {
+          payload: {
+            requestId: 'excluded-passkey-request',
+            ceremony: WebsitePasskeyCeremony.Create,
+            requestJson: '{}',
+            expiresAt: Date.now() + 60_000,
+          },
+        },
+        sender: { id: 'nook-extension' },
+        dependencies,
+      })
+    }
+
+    expect(
+      await options(
+        [pairingGrant('a'), pairingGrant('b')],
+        [
+          { ok: true },
+          { ok: true, accounts: [saved] },
+          { ok: true, accounts: [] },
+        ],
+      ),
+    ).toEqual({
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.Ready,
+      options: [{ vaultStoreId: 'b', vaultName: 'Vault b' }],
+    })
+    expect(
+      await options(
+        [pairingGrant('a')],
+        [{ ok: true }, { ok: true, accounts: [saved] }],
+      ),
+    ).toEqual({
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.AlreadySaved,
+      options: [],
+    })
+  })
+
   test('classifies unavailable passkey lookup as closed passkey evidence', async () => {
     const {
       MatchingPasskeyAvailabilityKind,

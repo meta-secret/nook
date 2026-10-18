@@ -44,6 +44,7 @@ export const BROWSER_MESSAGE_KEYS = {
   PasskeyLocked: 'passkeyLocked',
   PasskeyNoVault: 'passkeyNoVault',
   PasskeyCheckFailed: 'passkeyCheckFailed',
+  PasskeyAlreadySaved: 'passkeyAlreadySaved',
   PasskeyUseAnother: 'passkeyUseAnother',
   PasskeyUseBrowser: 'passkeyUseBrowser',
   WidgetAuthenticatorFillFailed: 'widgetAuthenticatorFillFailed',

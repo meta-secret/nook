@@ -20,4 +20,6 @@ export enum WebsitePasskeyOptionsStatus {
   Locked = 'locked',
   Invalid = 'invalid',
   Ready = 'ready',
+  /** Every connected vault already holds this account's passkey for the site. */
+  AlreadySaved = 'already-saved',
 }

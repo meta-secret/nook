@@ -125,6 +125,11 @@ share that corner.
 - **Registration:** the title names the site. The card shows the account the
   site is registering and a vault choice with the first approved vault
   preselected. **Save passkey** is the consent.
+- **Already saved:** a vault holding a passkey the site lists in
+  `excludeCredentials` is not offered; Rust owns that match. When every vault
+  holds one, the card says Nook already has this account's passkey, and
+  closing it returns `InvalidStateError` as `WebAuthn` requires, so the site
+  reports an existing passkey instead of a failure.
 - **Assertion:** one row per matching account with its vault. Choosing a row is
   the consent.
 - **Nothing to offer:** when no vault passkey is one the site asked for, Nook is
