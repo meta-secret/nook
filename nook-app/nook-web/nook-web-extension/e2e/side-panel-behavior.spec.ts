@@ -416,7 +416,7 @@ test('a failed listing offers Try again', async ({ page }) => {
   }
   await panel.open({ ...unlockedScenario, listing: failed })
   await expect(page.getByTestId('side-panel-site-failed')).toHaveText(
-    'Nook could not load logins for this site.',
+    'Nook could not load saved items for this site.',
   )
   await panel.update({ listing: accountsSite })
   await page.getByTestId('side-panel-site-retry').click()

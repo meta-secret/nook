@@ -81,17 +81,20 @@ class Rows {
   }
 }
 
+/** One vault that lists rows: which vault, and its rows in Rust's order. */
+type ListedSectionRequest = {
+  readonly vaultStoreId: string
+  readonly rows: SiteSecretRow[]
+}
+
 /** Identity:vault sections as Rust presents them, in Rust's order. */
 class Sections {
-  static listed(
-    vaultStoreId: string,
-    rows: SiteSecretRow[],
-  ): SiteSecretSection {
+  static listed(request: ListedSectionRequest): SiteSecretSection {
     return {
-      vault_store_id: vaultStoreId,
+      vault_store_id: request.vaultStoreId,
       identity: { kind: 'Named', name: 'work' },
       vault: { kind: 'Named', name: 'Work' },
-      content: { kind: 'Listed', rows },
+      content: { kind: 'Listed', rows: request.rows },
     }
   }
 
@@ -118,9 +121,17 @@ class Sections {
 const work = Rows.login('login-work', 'alice@company.example')
 const personal = Rows.login('login-personal', 'alice@example.com')
 const workId: SidePanelLoginItemId = ThisSiteViews.itemId(work)
+const workVault: ListedSectionRequest = {
+  vaultStoreId: 'store-work',
+  rows: [work, personal, Rows.authenticator()],
+}
+const personalVault: ListedSectionRequest = {
+  vaultStoreId: 'store-personal',
+  rows: [Rows.passkey()],
+}
 const sections: SiteSecretSection[] = [
-  Sections.listed('store-work', [work, personal, Rows.authenticator()]),
-  Sections.listed('store-personal', [Rows.passkey()]),
+  Sections.listed(workVault),
+  Sections.listed(personalVault),
   Sections.empty('store-archive'),
 ]
 
@@ -509,16 +520,20 @@ describe('This site Fill', () => {
 
   test('one match gets the primary Fill, several share secondary ones', () => {
     // Empty sections list no row; the one row elsewhere stays primary.
+    const workOnly: ListedSectionRequest = {
+      vaultStoreId: 'store-work',
+      rows: [work],
+    }
     const one: SiteSecretSection[] = [
       Sections.empty('store-home'),
-      Sections.listed('store-work', [work]),
+      Sections.listed(workOnly),
       Sections.empty('store-archive'),
     ]
     expect(ThisSiteViews.matchCount(one)).toBe(ThisSiteMatchCount.One)
     // Rows count across sections, whichever identity or vault lists them.
     const acrossVaults: SiteSecretSection[] = [
-      Sections.listed('store-work', [work]),
-      Sections.listed('store-personal', [Rows.passkey()]),
+      Sections.listed(workOnly),
+      Sections.listed(personalVault),
     ]
     expect(ThisSiteViews.matchCount(acrossVaults)).toBe(
       ThisSiteMatchCount.Several,
@@ -531,7 +546,11 @@ describe('This site Fill', () => {
   })
 
   test("a section lists its own rows in Rust's order, or none with its empty line", () => {
-    const listed = Sections.listed('store-work', [work, personal])
+    const twoLogins: ListedSectionRequest = {
+      vaultStoreId: 'store-work',
+      rows: [work, personal],
+    }
+    const listed = Sections.listed(twoLogins)
     expect(ThisSiteViews.sectionRows(listed.content)).toEqual([work, personal])
     expect(
       ThisSiteViews.sectionRows(Sections.empty('store-archive').content),

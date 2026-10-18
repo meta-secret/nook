@@ -14,6 +14,10 @@ import {
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
 } from '../../../nook-web-extension/src/lib/side-panel-site'
+import type {
+  SiteSecretRow,
+  SiteSecretSectionContent,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -44,7 +48,7 @@ type SidePanelDemoSession = {
 type SidePanelDemoSection = {
   readonly identity: string
   readonly vault: string
-  readonly content: unknown
+  readonly content: SiteSecretSectionContent
 }
 
 // The runtime below runs inside the page, where module imports do not
@@ -126,7 +130,11 @@ function installSidePanelDemoRuntime(
       managesPasskeys: false,
     },
   ]
-  const login = (vault: string, secretId: string, account: string) => ({
+  const login = (
+    vault: string,
+    secretId: string,
+    account: string,
+  ): SiteSecretRow => ({
     kind: 'Login',
     item_id: {
       vault_store_id: `side-panel-demo-${vault.toLowerCase()}`,
@@ -150,8 +158,11 @@ function installSidePanelDemoRuntime(
     vault: { kind: 'Named', name: request.vault },
     content: request.content,
   })
-  const nothingHere = { kind: 'Empty', message_key: protocol.vaultEmpty }
-  const authenticator = {
+  const nothingHere: SiteSecretSectionContent = {
+    kind: 'Empty',
+    message_key: protocol.vaultEmpty,
+  }
+  const authenticator: SiteSecretRow = {
     kind: 'Authenticator',
     item_id: {
       vault_store_id: 'side-panel-demo-personal',
@@ -167,7 +178,7 @@ function installSidePanelDemoRuntime(
       accessible_label_key: protocol.fillCodeLabel,
     },
   }
-  const passkey = {
+  const passkey: SiteSecretRow = {
     kind: 'Passkey',
     item_id: {
       vault_store_id: 'side-panel-demo-startup',

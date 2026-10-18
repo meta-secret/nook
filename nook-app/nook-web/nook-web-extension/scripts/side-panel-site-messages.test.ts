@@ -405,7 +405,7 @@ describe('side-panel This-site client', () => {
     expect(await fixture.client().list({ windowId: 7 })).toEqual(expected)
   })
 
-  test('refuses a row naming its vault, the former groups shape, and an unbounded section', async () => {
+  test('refuses a row naming its vault, the former groups shape, an empty vault id, and incomplete empty states', async () => {
     const refused = [
       // The section header names the vault; a row carries no vault.
       {
