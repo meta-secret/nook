@@ -58,7 +58,7 @@ function openPanel(request: PasskeyPromptRequest): PanelFixture {
 }
 
 function text(panel: PasskeyPromptPanel): string {
-  return panel.element.textContent ?? ''
+  return panel.element.textContent || ''
 }
 
 function button(panel: PasskeyPromptPanel, label: string): HTMLButtonElement {
@@ -78,7 +78,7 @@ beforeEach(() => {
     chrome: {
       i18n: {
         getMessage: (key: string, substitution?: string) =>
-          substitution === undefined ? key : `${key}(${substitution})`,
+          substitution ? `${key}(${substitution})` : key,
       },
       runtime: { getURL: (path: string) => path },
     },
@@ -130,7 +130,7 @@ describe('passkey save card', () => {
 
     panel.showWorking()
     expect(text(panel)).toContain('passkeySaving')
-    expect(panel.element.querySelector('input')).toBeNull()
+    expect(panel.element.querySelectorAll('input')).toHaveLength(0)
     expect(button(panel, 'passkeyClose').hidden).toBe(true)
     panel.dismiss()
     expect(onClose).not.toHaveBeenCalled()

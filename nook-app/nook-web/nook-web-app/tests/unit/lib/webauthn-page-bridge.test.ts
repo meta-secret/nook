@@ -24,7 +24,7 @@ async function bridgeRequest(
 ): Promise<BridgeRequest> {
   const postMessage = vi.spyOn(window, 'postMessage')
   const controller = new AbortController()
-  const ceremony = start(controller.signal).catch(() => undefined)
+  const ceremony = start(controller.signal).catch((): string => 'aborted')
   const sent: unknown = postMessage.mock.calls[0]?.[0]
   controller.abort()
   await ceremony

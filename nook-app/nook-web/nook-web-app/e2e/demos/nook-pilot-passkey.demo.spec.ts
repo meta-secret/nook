@@ -91,7 +91,8 @@ function installPasskeyCardChromeStub({
   }
   const i18n = {
     getMessage: (key: string, substitution?: string) => {
-      const message = localizedMessages[key]?.message ?? ''
+      const entry = localizedMessages[key]
+      const message = entry ? entry.message : ''
       return substitution ? message.replaceAll('$1', substitution) : message
     },
   }

@@ -36,8 +36,8 @@ import {
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
 const prompts = new Map<string, PasskeyPrompt>()
-/** A finished card still showing Saved or a failure; the next request replaces it. */
-let settledPrompt: PasskeyPrompt | undefined
+/** Finished cards still showing Saved or a failure; the next request replaces them. */
+const settledPrompts = new Set<PasskeyPrompt>()
 
 enum PageRequestType {
   Request = 'request',
@@ -207,9 +207,9 @@ async function handleRequest(request: PageRequest): Promise<void> {
     respond(nookTypedArgs0_2)
     return
   }
-  settledPrompt?.close()
-  settledPrompt = undefined
-  const site = request.rpId ?? location.hostname
+  for (const settled of settledPrompts) settled.close()
+  settledPrompts.clear()
+  const site = request.rpId ? request.rpId : location.hostname
   const promptRequest: Parameters<typeof PasskeyPrompt.open>[0] = {
     ceremony: request.ceremony,
     site,
@@ -266,7 +266,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     respond(nookTypedArgs0_5)
     if (request.ceremony === WebsitePasskeyCeremony.Create) {
       prompt.showSaved(selected.vaultName)
-      settledPrompt = prompt
+      settledPrompts.add(prompt)
     } else {
       prompt.close()
     }
@@ -278,7 +278,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     }
     respond(nookTypedArgs0_6)
     prompt.showFailed()
-    settledPrompt = prompt
+    settledPrompts.add(prompt)
   }
 }
 
@@ -297,12 +297,10 @@ class WebAuthnPageIngress {
     if (!requestJson || requestJson.length > 65_536) {
       return { kind: PageRequestBodyDecodeKind.Rejected }
     }
-    const party = WebAuthnPageIngress.displayStrings(
-      'relyingParty' in value ? value.relyingParty : undefined,
-    )
-    const account = WebAuthnPageIngress.displayStrings(
-      'user' in value ? value.user : undefined,
-    )
+    const relyingParty: unknown = Reflect.get(value, 'relyingParty')
+    const user: unknown = Reflect.get(value, 'user')
+    const party = WebAuthnPageIngress.displayStrings(relyingParty)
+    const account = WebAuthnPageIngress.displayStrings(user)
     const requestRpId = WebAuthnPageIngress.displayStrings(value)('rpId')
     const accountName = account('name')
     return {
@@ -325,10 +323,10 @@ class WebAuthnPageIngress {
     container: unknown,
   ): (key: string) => PageRequestBodyStringField {
     return (key) => {
-      const field: unknown =
-        container && typeof container === 'object' && key in container
-          ? Reflect.get(container, key)
-          : undefined
+      if (!container || typeof container !== 'object') {
+        return { kind: PageRequestBodyStringFieldKind.Absent }
+      }
+      const field: unknown = Reflect.get(container, key)
       return typeof field === 'string' && field
         ? { kind: PageRequestBodyStringFieldKind.Present, value: field }
         : { kind: PageRequestBodyStringFieldKind.Absent }

@@ -616,7 +616,7 @@ export class PasskeyPrompt {
   private readonly host = document.createElement('aside')
   private readonly panel: PasskeyPromptPanel
   private readonly pilot = document.getElementById(WIDGET_HOST_ID)
-  private closeTimer: ReturnType<typeof setTimeout> | undefined
+  private readonly closeTimers: ReturnType<typeof setTimeout>[] = []
 
   private constructor(request: PasskeyPromptRequest) {
     const panelArgs: PasskeyPromptPanelArgs = {
@@ -659,7 +659,7 @@ export class PasskeyPrompt {
   /** Confirms the save, then leaves on its own. */
   showSaved(vaultName: string): void {
     this.panel.showSaved(vaultName)
-    this.closeTimer = setTimeout(() => this.close(), SAVED_CARD_MS)
+    this.closeTimers.push(setTimeout(() => this.close(), SAVED_CARD_MS))
   }
 
   /** Stays until the user closes it, so a failure is never silent. */
@@ -668,7 +668,7 @@ export class PasskeyPrompt {
   }
 
   close(): void {
-    clearTimeout(this.closeTimer)
+    for (const timer of this.closeTimers) clearTimeout(timer)
     this.host.remove()
     this.pilot?.style.removeProperty('visibility')
   }
