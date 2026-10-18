@@ -29,7 +29,10 @@ use zeroize::{Zeroize, Zeroizing};
 
 const ES256_ALGORITHM: i32 = -7;
 const MIN_CHALLENGE_BYTES: usize = 16;
-const MAX_CHALLENGE_BYTES: usize = 1024;
+/// `WebAuthn` sets no maximum, and Google's sign-in challenges run past 8 KiB. The
+/// browser bridge already caps a whole request at 64 KiB, so this only bounds a
+/// challenge that still fits there once base64url-encoded.
+const MAX_CHALLENGE_BYTES: usize = 32 * 1024;
 const MAX_CREDENTIAL_ID_BYTES: usize = 1024;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -79,6 +82,27 @@ pub struct PasskeyCredentialDescriptor {
     pub id: String,
 }
 
+/// A website's `userVerification` request, in `WebAuthn` terms. An absent value
+/// means `preferred`, the `WebAuthn` default.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[serde(rename_all = "lowercase")]
+pub enum PasskeyUserVerification {
+    Required,
+    #[default]
+    Preferred,
+    Discouraged,
+}
+
+impl PasskeyUserVerification {
+    /// Whether Nook reports the user as verified. Extension sessions open only
+    /// with a passkey or PIN and expire after 15 minutes, so Nook verifies the
+    /// user whenever a site asks for it, whether required or preferred.
+    #[must_use]
+    pub const fn verifies_user(self) -> bool {
+        !matches!(self, Self::Discouraged)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationRequest {
@@ -97,7 +121,8 @@ pub struct PasskeyRegistrationRequest {
     #[serde(default)]
     pub exclude_credentials: Vec<PasskeyCredentialDescriptor>,
     pub resident_key_required: bool,
-    pub user_verification_required: bool,
+    #[serde(default)]
+    pub user_verification: PasskeyUserVerification,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
@@ -108,7 +133,8 @@ pub struct PasskeyAssertionRequest {
     pub rp_id: String,
     #[serde(default)]
     pub allow_credentials: Vec<PasskeyCredentialDescriptor>,
-    pub user_verification_required: bool,
+    #[serde(default)]
+    pub user_verification: PasskeyUserVerification,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -182,6 +208,20 @@ impl PasskeyOrigin<'_> {
     }
 }
 
+impl PasskeyAssertionRequest {
+    /// Whether the site's allow list admits this credential. A site that lists
+    /// credentials accepts only those; an empty list admits any discoverable
+    /// passkey for the relying party.
+    #[must_use]
+    pub fn allows_credential(&self, credential_id: &str) -> bool {
+        self.allow_credentials.is_empty()
+            || self
+                .allow_credentials
+                .iter()
+                .any(|descriptor| descriptor.id == credential_id)
+    }
+}
+
 #[cfg(test)]
 impl PasskeyRegistrationRequest {
     fn fixture() -> Self {
@@ -200,7 +240,7 @@ impl PasskeyRegistrationRequest {
             algorithms: vec![-257, ES256_ALGORITHM],
             exclude_credentials: Vec::new(),
             resident_key_required: true,
-            user_verification_required: true,
+            user_verification: PasskeyUserVerification::Required,
         }
     }
 }
@@ -320,7 +360,7 @@ mod tests {
             challenge: URL_SAFE_NO_PAD.encode([3_u8; 32]),
             rp_id: "example.com".to_owned(),
             allow_credentials: Vec::new(),
-            user_verification_required: true,
+            user_verification: PasskeyUserVerification::Required,
         };
         assert_eq!(
             assertion

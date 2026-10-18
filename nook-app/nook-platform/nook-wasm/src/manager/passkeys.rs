@@ -154,7 +154,7 @@ mod tests {
                 "algorithms": [-257, -7],
                 "excludeCredentials": [],
                 "residentKeyRequired": true,
-                "userVerificationRequired": true
+                "userVerification": "required"
             }))?;
         let registration = request
             .prepare(&[])
@@ -259,13 +259,13 @@ mod browser_tests {
 
         assert!(
             manager
-                .register_website_passkey(&super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
+                .register_website_passkey(&super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerification":"required"}"#)?, &inactive)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .assert_website_passkey(&super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
+                .assert_website_passkey(&super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerification":"required"}"#)?, &inactive)
                 .await
                 .is_err()
         );
@@ -470,4 +470,19 @@ pub fn decode_website_passkey_assertion_request(
 ) -> Result<tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>, wasm_bindgen::JsError> {
     let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+}
+/// Whether the site's allow list admits a vault passkey; nook-core owns the rule.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn website_passkey_request_allows_credential(
+    request: &tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>,
+    credential_id: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    Ok(request.allows_credential(credential_id))
 }

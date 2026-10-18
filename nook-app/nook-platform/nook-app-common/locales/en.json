@@ -1917,8 +1917,26 @@
       "checklist_label": "Sign-in steps"
     },
     "passkey": {
-      "save_title": "Save a passkey with Nook?",
-      "use_title": "Use a Nook passkey?",
+      "prompt_label": "Nook passkey",
+      "label": "Passkey",
+      "close": "Close",
+      "save_title": "Save a passkey for $1?",
+      "use_title": "Sign in to $1 with a passkey",
+      "account_label": "Account",
+      "save_to_label": "Save to",
+      "choose_account": "Choose an account",
+      "save_action": "Save passkey",
+      "saving": "Saving passkey…",
+      "signing_in": "Signing in…",
+      "saved_title": "Passkey saved",
+      "saved_detail": "Saved in $1. Nook offers it the next time you sign in.",
+      "save_failed": "Nook couldn't save this passkey. Try again from the site.",
+      "use_failed": "Nook couldn't sign in with this passkey. Try again from the site.",
+      "no_match": "None of your Nook passkeys is one this site asked for. A passkey you just saved may still be waiting for the site's approval.",
+      "locked": "Nook is locked. Unlock it in the Nook panel, then try again on the site.",
+      "no_vault": "No connected Nook vault keeps passkeys yet.",
+      "check_failed": "Nook couldn't check its passkeys.",
+      "use_another": "Use another passkey",
       "use_browser": "Use browser or security key"
     },
     "consent": {

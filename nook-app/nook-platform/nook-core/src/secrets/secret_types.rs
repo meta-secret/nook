@@ -649,7 +649,7 @@ mod tests {
             algorithms: vec![-7],
             exclude_credentials: Vec::new(),
             resident_key_required: true,
-            user_verification_required: true,
+            user_verification: crate::PasskeyUserVerification::Required,
         };
         let mut passkey = request
             .prepare(&[])

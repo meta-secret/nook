@@ -33,20 +33,19 @@ test('uses classic IIFE output for content scripts and module output elsewhere',
   ).toBe(ExtensionEntrypointBuildFormat.Module)
 })
 
-test('enables authentication diagnostics only for non-production channels', () => {
+test('keeps the detector trace off unless a non-production build asks', () => {
   const policy = new ExtensionDiagnosticBuildPolicy()
-  expect(policy.availability({ channel: 'production' })).toBe(
-    ExtensionDiagnosticBuildAvailability.Disabled,
-  )
-  expect(policy.availability({ channel: 'development' })).toBe(
-    ExtensionDiagnosticBuildAvailability.Enabled,
-  )
-  expect(policy.availability({ channel: 'local' })).toBe(
-    ExtensionDiagnosticBuildAvailability.Enabled,
-  )
-  expect(policy.availability({ channel: 'pr-408' })).toBe(
-    ExtensionDiagnosticBuildAvailability.Enabled,
-  )
+  for (const channel of ['development', 'local', 'pr-408']) {
+    expect(policy.availability({ channel, requested: '' })).toBe(
+      ExtensionDiagnosticBuildAvailability.Disabled,
+    )
+    expect(policy.availability({ channel, requested: 'enabled' })).toBe(
+      ExtensionDiagnosticBuildAvailability.Enabled,
+    )
+  }
+  expect(
+    policy.availability({ channel: 'production', requested: 'enabled' }),
+  ).toBe(ExtensionDiagnosticBuildAvailability.Disabled)
 })
 
 test('emits an executable self-contained classic autofill bundle', async () => {

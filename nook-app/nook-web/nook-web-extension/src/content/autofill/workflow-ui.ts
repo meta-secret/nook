@@ -22,8 +22,6 @@ import { WidgetHostKind, saveOfferState, widgetState } from './state'
 
 export type { PilotVaultConnection } from './widget-presentation-state'
 
-export const WIDGET_HOST_ID = 'nook-auth-widget'
-
 export const DRAG_THRESHOLD_PX = 4
 
 export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
