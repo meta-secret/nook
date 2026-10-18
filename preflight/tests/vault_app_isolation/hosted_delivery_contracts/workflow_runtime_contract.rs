@@ -118,7 +118,7 @@ impl WorkflowRuntimeContract<'_> {
             "  wasm-cache-proof:\n",
             [
                 "name: WASM and web verification",
-                "Prepare web artifacts alongside verified WASM cache publication",
+                "Verify Node and web concurrently, then publish verified artifacts",
                 "Stamp WASM run attempt",
                 "Upload WASM handoff",
                 "uses: ./.github/actions/nook-cache-telemetry",
