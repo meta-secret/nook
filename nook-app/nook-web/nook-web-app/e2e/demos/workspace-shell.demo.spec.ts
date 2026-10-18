@@ -33,11 +33,18 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   // Manage on the identity card holds actions, adding a device first;
-  // a fresh identity also offers its protection checklist.
+  // a fresh identity also offers its protection checklist, above its vaults.
   await page.getByTestId('header-identities-btn').click()
-  await expect(page.getByTestId('identity-protection-toggle')).toContainText(
-    'Protect this identity',
-  )
+  const protection = page.getByTestId('identity-protection-toggle')
+  await expect(protection).toContainText('Protect this identity')
+  const vaultRow = page.getByTestId('identity-vault-row').first()
+  await expect(vaultRow).toBeVisible()
+  const protectionBox = await protection.boundingBox()
+  const vaultRowBox = await vaultRow.boundingBox()
+  if (!protectionBox || !vaultRowBox) {
+    throw new Error('Protection and vault rows must have layout boxes')
+  }
+  expect(protectionBox.y).toBeLessThan(vaultRowBox.y)
   await page.getByTestId('identity-manage').first().click()
   const menu = page.getByTestId('identity-menu')
   await expect(menu).toBeVisible()
