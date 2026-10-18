@@ -743,7 +743,9 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
     "utf8",
   );
   assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
-  const prepare = workflow.split("\n  browser:\n")[0];
+  const browserStart = workflow.indexOf("\n  browser:\n");
+  assert.notEqual(browserStart, -1);
+  const prepare = workflow.slice(0, browserStart);
   assert.equal(
     prepare.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
     1,
