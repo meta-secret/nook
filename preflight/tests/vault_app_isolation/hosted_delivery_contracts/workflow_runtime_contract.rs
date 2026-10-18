@@ -106,7 +106,8 @@ impl WorkflowRuntimeContract<'_> {
     fn assert_native_build_envelope(&self) {
         let root = self.root;
         let pr = root.read(".github/workflows/pr.yml");
-        assert_eq!(pr.matches("    runs-on:").count(), 1);
+        assert_eq!(pr.matches("    runs-on:").count(), 3);
+        assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 1);
         assert!(pr.contains("timeout-minutes: 240"));
     }
 
@@ -117,7 +118,7 @@ impl WorkflowRuntimeContract<'_> {
             "  wasm-cache-proof:\n",
             [
                 "name: WASM and web verification",
-                "Prepare web artifacts alongside verified WASM cache publication",
+                "Verify Node and web concurrently, then publish verified artifacts",
                 "Stamp WASM run attempt",
                 "Upload WASM handoff",
                 "uses: ./.github/actions/nook-cache-telemetry",

@@ -70,8 +70,12 @@ class DockerizedRustContract {
         jobs: z.record(z.string(), jobContract),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    expect(Object.keys(workflow.jobs)).toEqual(["validation"]);
-    const steps = jobContract.parse(workflow.jobs.validation).steps;
+    expect(Object.keys(workflow.jobs)).toEqual([
+      "prepare",
+      "browser",
+      "validation",
+    ]);
+    const steps = jobContract.parse(workflow.jobs.prepare).steps;
     let previous = -1;
     for (const command of ["task --silent ci:pr:validate"]) {
       const index = steps.findIndex((step) => step.run === command);
@@ -81,11 +85,15 @@ class DockerizedRustContract {
       expect(step["continue-on-error"]).not.toBe(true);
       previous = index;
     }
-    const preview = steps.findIndex(
+    const finalSteps = jobContract.parse(workflow.jobs.validation).steps;
+    const preview = finalSteps.findIndex(
       (step) => step.uses === "./.github/actions/nook-pr-preview",
     );
-    expect(preview).toBeGreaterThan(previous);
-    const previewStep = stepContract.parse(steps[preview]);
+    expect(preview).toBeGreaterThan(0);
+    expect(finalSteps[0]?.run).toContain('test "$PREPARE_RESULT" = success');
+    expect(finalSteps[0]?.run).toContain('test "$BROWSER_RESULT" = success');
+    expect(finalSteps[0]?.run).toContain('test "$BROWSER_RESULT" = skipped');
+    const previewStep = stepContract.parse(finalSteps[preview]);
     expect(previewStep.if).not.toContain("always()");
     expect(previewStep.if).toContain(
       "github.event.pull_request.head.repo.full_name == github.repository",

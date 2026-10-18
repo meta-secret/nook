@@ -23,8 +23,12 @@ permissions:
   issues: write
 
 jobs:
-  validation:
-    name: Verify and preview
+  prepare:
+    name: Prepare and verify
+    outputs:
+      validation: ${{ steps.browser-scope.outputs.validation }}
+      research: ${{ steps.browser-scope.outputs.research }}
+      browser_artifact: pr-browser-${{ github.run_id }}-${{ github.run_attempt }}
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
     # Source-free Debian Trixie browser base, published only when tooling changes.
     # Configure an immutable digest; the scoped Actions token can read its repository package.
@@ -131,6 +135,7 @@ jobs:
         if: steps.browser-scope.outputs.validation == 'true'
         env:
           PR_FULL_E2E: ${{ inputs.full_e2e_requested }}
+          PR_BROWSER_JOBS: "true"
           PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}
           PR_RESEARCH: ${{ steps.browser-scope.outputs.research }}
         run: task --silent ci:pr:validate
@@ -141,7 +146,7 @@ jobs:
         if: steps.browser-scope.outputs.validation != 'true'
         run: task --silent ci:pr:tests:policy-with-delivery-helpers
       - name: Report failed extension browser context
-        if: failure() && inputs.full_e2e_requested
+        if: failure() && !inputs.full_e2e_requested
         run: |
           shopt -s globstar nullglob
           for context in "$PR_ARTIFACT_DIR"/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md; do
@@ -149,7 +154,7 @@ jobs:
             cat "$context"
           done
       - name: Preserve failed extension Playwright diagnostics
-        if: always() && (inputs.full_e2e_requested || steps.browser-scope.outputs.auth == 'true')
+        if: always() && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: pr-extension-playwright-${{ github.run_id }}-${{ github.run_attempt }}
@@ -159,27 +164,148 @@ jobs:
             ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/*.png
           if-no-files-found: warn
           retention-days: 15
-      - name: Import production artifacts after all validation succeeds
+      - name: Complete browser and preview handoff
         if: steps.browser-scope.outputs.validation == 'true'
         run: |
-          # These are generated trees in this ephemeral checkout, never sources.
-          rm -rf nook-app/nook-web/nook-web-app/dist nook-app/nook-web/nook-vault-simple/dist nook-app/nook-web/nook-vault-sentinel/dist nook-app/nook-web/nook-web-extension/dist
-          cp -a "$PR_ARTIFACT_DIR/browser/nook-app/." nook-app/
-          test -e nook-app/nook-web/node_modules || ln -s nook-web-app/node_modules nook-app/nook-web/node_modules
           if [ '${{ steps.browser-scope.outputs.research }}' = true ]; then
-            cp -a "$PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-research/dist" nook-app/nook-web/nook-web-research/
+            tar -rf "$PR_ARTIFACT_DIR/browser.tar" -C "$PR_ARTIFACT_DIR/runtime" nook-app/nook-web/nook-web-research/dist
           fi
+          wc -c "$PR_ARTIFACT_DIR/browser.tar"
+      - name: Upload browser and preview handoff
+        if: steps.browser-scope.outputs.validation == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-pr-artifacts/browser.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  browser:
+    name: Browser tests (${{ matrix.suite }})
+    needs: [prepare]
+    if: ${{ inputs.full_e2e_requested && needs.prepare.outputs.validation == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [web, extension-1, extension-2]
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
+    container:
+      image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "true"
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+      NOOK_E2E_SYNC_PROVIDER: file
+      WASM_BUILD_MODE: dev
+      NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+      NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+      NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+      VITE_BASE: /
+      VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+      VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+      VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+      VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/nook-node-setup
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.prepare.outputs.browser_artifact }}
+          path: ${{ runner.temp }}/nook-pr-artifacts
+      - name: Restore browser artifacts
+        run: task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
+      - name: Run isolated browser suite
+        env:
+          PR_BROWSER_SUITE: ${{ matrix.suite }}
+        run: task --silent ci:pr:browser:suite
+      - name: Report failed extension browser context
+        if: failure() && matrix.suite != 'web'
+        run: |
+          shopt -s globstar nullglob
+          for context in nook-app/nook-web/nook-web-extension/test-results/**/error-context.md; do
+            printf '%s\n' "$context"
+            cat "$context"
+          done
+      - name: Preserve browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-playwright-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            nook-app/nook-web/**/test-results/**
+            nook-app/nook-web/**/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 15
+
+  validation:
+    name: Verify and preview
+    needs: [prepare, browser]
+    if: ${{ always() }}
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
+    container:
+      image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "true"
+    steps:
+      - name: Require every selected validation branch
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          BROWSER_REQUIRED: ${{ inputs.full_e2e_requested && needs.prepare.outputs.validation == 'true' }}
+        run: |
+          test "$PREPARE_RESULT" = success
+          if [ "$BROWSER_REQUIRED" = true ]; then
+            test "$BROWSER_RESULT" = success
+          else
+            test "$BROWSER_RESULT" = skipped
+          fi
+      - uses: actions/checkout@v7
+        if: needs.prepare.outputs.validation == 'true'
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/nook-node-setup
+        if: needs.prepare.outputs.validation == 'true'
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.validation == 'true'
+        with:
+          name: ${{ needs.prepare.outputs.browser_artifact }}
+          path: ${{ runner.temp }}/nook-pr-artifacts
+      - name: Import production artifacts after all validation succeeds
+        if: needs.prepare.outputs.validation == 'true'
+        run: task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
       - name: Deploy and report preview
         id: previews
-        if: steps.browser-scope.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        if: needs.prepare.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-preview
         with:
           cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           source-sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          research-requested: ${{ steps.browser-scope.outputs.research }}
+          research-requested: ${{ needs.prepare.outputs.research }}
       - name: Report research preview
-        if: steps.browser-scope.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        if: needs.prepare.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-research-preview
         with:
           deployment-url: ${{ steps.previews.outputs.research-url }}
