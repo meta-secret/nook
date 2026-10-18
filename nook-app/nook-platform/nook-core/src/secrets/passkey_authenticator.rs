@@ -412,10 +412,10 @@ mod tests {
         assert!(!again.excludes_credential(&other.credential_id));
         assert!(!PasskeyRegistrationRequest::fixture().excludes_credential(&saved.credential_id));
         assert!(matches!(
-            again.prepare(std::slice::from_ref(&saved)),
+            again.prepare(&[saved]),
             Err(PasskeyAuthenticatorError::CredentialExcluded)
         ));
-        assert!(again.prepare(std::slice::from_ref(&other)).is_ok());
+        assert!(again.prepare(&[other]).is_ok());
         Ok(())
     }
 }
