@@ -71,7 +71,8 @@ The separation assessment observed a 466 GiB disk with 97 GiB free.
 These are capacity observations, not reserved resources or performance promises.
 
 - Browser concurrency is bounded by the four-runner ceiling.
-- Rise-S-2 failure or saturation leaves browser work queued.
+- Exhausting four runner slots queues additional browser work.
+- An unavailable or unschedulable Rise-S-2 leaves browser work queued.
 - There is no automatic overflow to build nodes.
 - Its retained BuildKit shard may still perform idle garbage collection or
   background I/O. Separation removes ordinary build scheduling, not the daemon.
@@ -294,6 +295,12 @@ already selects `nook-k0s-browser` when the variable is absent.
 These steps preserve active jobs, BuildKit daemons, all retained PVs, and the
 node-local Service. They do not restart the ARC controller, buy capacity, or
 perform broad platform deployment.
+
+- Drain and resume update pools through sequential Helm calls. A partial
+  failure can leave earlier pools changed and later pools unchanged.
+- Inspect native Helm and ARC status after a partial failure. Diagnose the
+  failure before rerunning the relevant ordinary phase. There is no automatic recovery.
+- Apply keeps admission at zero after its idle check succeeds.
 
 **Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
 old runner Pods to bypass the drain, or claim a speedup from registration alone.
