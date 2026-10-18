@@ -58,6 +58,7 @@ data:
               mountPath: /mnt/github
       nodeSelector:
         nook.nokey.sh/arc-build: "true"
+        nook.nokey.sh/arc-workload: build
         nook.nokey.sh/arc-container-job: "true"
       affinity:
         nodeAffinity:

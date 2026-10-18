@@ -21,6 +21,8 @@ type SelectorDecodeOutcome =
 
 enum RunnerDrainCase {
   Both = "both",
+  SeparatedBrowser = "separated-browser",
+  SeparatedBrowserTerminating = "separated-browser-terminating",
   BrowserOnly = "browser-only",
   BrowserTerminating = "browser-terminating",
   Disappeared = "disappeared",
@@ -421,6 +423,7 @@ class ArcWorkloadDrainContract {
       metadata: { labels: { "nook.nokey.sh/role": "arc-job-container" } },
       status: { phase: "Pending" },
     };
+    const separatedBrowserPod = { ...browserPod, metadata: { labels: { "nook.nokey.sh/role": "arc-browser-job" } } };
     const terminatingScaleSetPod = {
       ...scaleSetPod,
       metadata: {
@@ -436,6 +439,8 @@ class ArcWorkloadDrainContract {
       },
     };
     const fixtures = new Map([
+      [RunnerDrainCase.SeparatedBrowser, { expected: [1, 1], pods: [separatedBrowserPod] }],
+      [RunnerDrainCase.SeparatedBrowserTerminating, { expected: [0, 1], pods: [{ ...separatedBrowserPod, metadata: { ...separatedBrowserPod.metadata, deletionTimestamp: "2026-10-18T00:00:00Z" } }] }],
       [RunnerDrainCase.ScaleSetOnly, { expected: [1, 1], pods: [scaleSetPod] }],
       [RunnerDrainCase.BrowserOnly, { expected: [1, 1], pods: [browserPod] }],
       [

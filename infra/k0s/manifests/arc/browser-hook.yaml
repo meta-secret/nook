@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nook-arc-browser-hook
+  namespace: arc-runners
+data:
+  content.yaml: |
+    apiVersion: v1
+    kind: PodTemplate
+    metadata:
+      labels:
+        nook.nokey.sh/role: arc-browser-job
+        nook.nokey.sh/arc-spread-group: browser
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      # kubernetes-novolume creates the repository workspace as uid 1001 with
+      # mode 2755. The sealed browser image runs as root with every capability
+      # dropped, so root intentionally cannot bypass that mode. Preserve the
+      # hook's mounts and make its generated work tree group-writable instead.
+      initContainers:
+        - name: fs-init
+          image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /mnt/externals /mnt/work /mnt/github
+              && mv /home/runner/externals/* /mnt/externals/
+              && mkdir -p /mnt/work/nook/nook
+              && chmod -R g+rwX /mnt/work/nook
+          securityContext:
+            runAsGroup: 1001
+            runAsUser: 1001
+          volumeMounts:
+            - name: externals
+              mountPath: /mnt/externals
+            - name: work
+              mountPath: /mnt/work
+            - name: github
+              mountPath: /mnt/github
+      nodeSelector:
+        nook.nokey.sh/arc-build: "true"
+        nook.nokey.sh/arc-workload: browser
+        nook.nokey.sh/arc-container-job: "true"
+      containers:
+        - name: "$job"
+          env:
+            - name: NOOK_ARC_RUNNER
+              value: "1"
+          volumeMounts:
+            # Composite-action expressions resolve against the runner-side
+            # workspace path. Mount the same work volume at that alias so
+            # local action scripts and their helper modules stay reachable.
+            - name: work
+              mountPath: /home/runner/_work
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
