@@ -116,7 +116,7 @@ pub struct PasskeyRegistrationRequest {
         )
     )]
     pub algorithms: Vec<i32>,
-    /// Accepted for the WebAuthn wire shape; Nook still registers another
+    /// Accepted for the `WebAuthn` wire shape; Nook still registers another
     /// passkey for an account whose existing passkeys the site lists here.
     #[serde(default)]
     pub exclude_credentials: Vec<PasskeyCredentialDescriptor>,
