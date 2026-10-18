@@ -208,6 +208,20 @@ impl PasskeyOrigin<'_> {
     }
 }
 
+impl PasskeyAssertionRequest {
+    /// Whether the site's allow list admits this credential. A site that lists
+    /// credentials accepts only those; an empty list admits any discoverable
+    /// passkey for the relying party.
+    #[must_use]
+    pub fn allows_credential(&self, credential_id: &str) -> bool {
+        self.allow_credentials.is_empty()
+            || self
+                .allow_credentials
+                .iter()
+                .any(|descriptor| descriptor.id == credential_id)
+    }
+}
+
 #[cfg(test)]
 impl PasskeyRegistrationRequest {
     fn fixture() -> Self {

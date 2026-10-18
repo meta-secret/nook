@@ -3,6 +3,7 @@ import { Schema } from 'effect'
 import {
   decode_website_passkey_registration_request,
   decode_website_passkey_assertion_request,
+  website_passkey_request_allows_credential,
   type PasskeyRegistrationRequest,
   type PasskeyAssertionRequest,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -67,6 +68,15 @@ export class WebsitePasskeyOptionsMessage {
     } catch {
       return { kind: WebsitePasskeyRequestParseKind.Rejected }
     }
+  }
+
+  /** Whether the site's allow list admits a vault passkey; nook-core owns the rule. */
+  static async allowsCredential({
+    request,
+    credentialId,
+  }: WebsitePasskeyCredentialAllowanceArgs): Promise<boolean> {
+    await extensionWasmRuntime.ensureNookWasm()
+    return website_passkey_request_allows_credential(request, credentialId)
   }
 
   static websitePasskeyRequestJson(
@@ -313,6 +323,11 @@ export type WebsitePasskeyRequest =
 export type ParseWebsitePasskeyRequestArgs = {
   ceremony: WebsitePasskeyCeremony
   requestJson: string
+}
+
+export type WebsitePasskeyCredentialAllowanceArgs = {
+  request: PasskeyAssertionRequest
+  credentialId: string
 }
 
 export type WebsitePasskeyRequestJsonArgs = {

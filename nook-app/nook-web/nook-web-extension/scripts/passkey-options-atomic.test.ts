@@ -171,6 +171,84 @@ describe('website passkey options', () => {
     expect(sessionTransport.deliveryCount).toBe(3)
   })
 
+  test('offers only the passkeys a listing site asked for', async () => {
+    const [{ websitePasskeyRequests }, { WebsitePasskeyRequestContextKind }] =
+      await Promise.all([
+        import('../src/background/service-worker/passkey-operations'),
+        import('../src/background/service-worker/pairing-identity'),
+      ])
+    const registered = {
+      credentialId: 'registered-credential',
+      userName: 'person@example.test',
+      userDisplayName: 'Person',
+    }
+    const sessionTransport = new PasskeySessionTransportFixture({
+      responses: [
+        { ok: true },
+        {
+          ok: true,
+          accounts: [
+            registered,
+            {
+              credentialId: 'vault-only-credential',
+              userName: 'person@example.test',
+              userDisplayName: 'Person',
+            },
+          ],
+        },
+      ],
+    })
+    const dependencies: WebsitePasskeyOptionsDependencies = {
+      ensureExtensionSessionDocument: mock(() =>
+        Promise.resolve(ok(unusedSessionTransport)),
+      ),
+      isAuthorizedWebsiteSender: mock(() => true),
+      isUnlockedSessionStatus: mock(() => true),
+      passkeyPairingGrants: mock(() => Promise.resolve([pairingGrant('a')])),
+      requestOriginAndRpId: mock(
+        async (): Promise<WebsitePasskeyRequestContext> => ({
+          kind: WebsitePasskeyRequestContextKind.Validated,
+          origin: 'https://accounts.example.test',
+          rpId: 'example.test',
+          request: {
+            ceremony: WebsitePasskeyCeremony.Get,
+            value: {
+              origin: 'https://accounts.example.test',
+              rpId: 'example.test',
+              challenge: 'challenge',
+              userVerification: 'preferred',
+              allowCredentials: [{ id: 'registered-credential' }],
+            },
+          },
+        }),
+      ),
+      sendSessionMessage: (message: ExtensionSessionTransportRequest) =>
+        sessionTransport.sendMessage({ message }),
+    }
+    const args: Parameters<
+      typeof websitePasskeyRequests.websitePasskeyOptions
+    >[0] = {
+      message: {
+        payload: {
+          requestId: 'listed-passkey-request',
+          ceremony: WebsitePasskeyCeremony.Get,
+          requestJson: '{}',
+          expiresAt: Date.now() + 60_000,
+        },
+      },
+      sender: { id: 'nook-extension' },
+      dependencies,
+    }
+
+    expect(await websitePasskeyRequests.websitePasskeyOptions(args)).toEqual({
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.Ready,
+      options: [
+        { vaultStoreId: 'a', vaultName: 'Vault a', account: registered },
+      ],
+    })
+  })
+
   test('classifies unavailable passkey lookup as closed passkey evidence', async () => {
     const {
       MatchingPasskeyAvailabilityKind,

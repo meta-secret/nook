@@ -457,4 +457,17 @@ mod tests {
         assert_eq!(signed.challenge, request.challenge);
         Ok(())
     }
+
+    /// A site that lists its credentials admits only those, so a vault passkey
+    /// the site never registered is not offered; an empty list admits any.
+    #[test]
+    fn a_listing_site_admits_only_its_own_credentials() {
+        let mut request = PasskeyAssertionRequest::fixture();
+        assert!(request.allows_credential("any-vault-credential"));
+        request.allow_credentials = vec![PasskeyCredentialDescriptor {
+            id: "registered-credential".to_owned(),
+        }];
+        assert!(request.allows_credential("registered-credential"));
+        assert!(!request.allows_credential("vault-only-credential"));
+    }
 }

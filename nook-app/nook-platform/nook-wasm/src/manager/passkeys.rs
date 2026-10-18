@@ -471,3 +471,18 @@ pub fn decode_website_passkey_assertion_request(
     let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
+/// Whether the site's allow list admits a vault passkey; nook-core owns the rule.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn website_passkey_request_allows_credential(
+    request: &tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>,
+    credential_id: &str,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+    Ok(request.allows_credential(credential_id))
+}

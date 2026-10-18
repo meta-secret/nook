@@ -292,6 +292,14 @@ class WebsitePasskeyRequests {
         })),
       }
     }
+    if (context.request.ceremony !== WebsitePasskeyCeremony.Get) {
+      return {
+        ok: true,
+        status: WebsitePasskeyOptionsStatus.Invalid,
+        options: [],
+      }
+    }
+    const assertionRequest = context.request.value
     const options: WebsitePasskeyVaultOption[] = []
     for (const grant of grants) {
       const nookTypedArgs0_4: Parameters<
@@ -323,6 +331,20 @@ class WebsitePasskeyRequests {
       const { accounts } = accountList
       if (accounts.length > 0) {
         for (const account of accounts) {
+          // A site that lists its credentials can only use those.
+          const allowance: Parameters<
+            typeof WebsitePasskeyOptionsMessageSchema.allowsCredential
+          >[0] = {
+            request: assertionRequest,
+            credentialId: account.credentialId,
+          }
+          if (
+            !(await WebsitePasskeyOptionsMessageSchema.allowsCredential(
+              allowance,
+            ))
+          ) {
+            continue
+          }
           const nookTypedArgs0_5: Parameters<typeof options.push>[0] = {
             vaultStoreId: grant.vaultStoreId,
             vaultName: grant.vaultName,
@@ -375,6 +397,24 @@ class WebsitePasskeyRequests {
         (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
       )
       if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
+      if (
+        message.payload.credentialId &&
+        context.request.ceremony === WebsitePasskeyCeremony.Get
+      ) {
+        const allowance: Parameters<
+          typeof WebsitePasskeyOptionsMessageSchema.allowsCredential
+        >[0] = {
+          request: context.request.value,
+          credentialId: message.payload.credentialId,
+        }
+        if (
+          !(await WebsitePasskeyOptionsMessageSchema.allowsCredential(
+            allowance,
+          ))
+        ) {
+          return { ok: false, reason: 'passkey-credential-not-allowed' }
+        }
+      }
       const credentialSelection: WebsitePasskeyCredentialSelection = message
         .payload.credentialId
         ? {
