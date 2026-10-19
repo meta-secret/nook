@@ -178,6 +178,8 @@ pub enum NookError {
     LoginFillOrigin(#[from] WebsiteHostError),
     #[error(transparent)]
     AuthenticatorIssuerHosts(#[from] nook_core::AuthenticatorIssuerHostsError),
+    #[error(transparent)]
+    AuthenticatorEnrollment(#[from] nook_core::AuthenticatorEnrollmentError),
 
     #[error("App protection is unavailable")]
     AppProtectionUnavailable,

@@ -18,11 +18,14 @@ use sha2::{Sha256, Sha512};
 use zeroize::Zeroize;
 
 mod backup_codes;
+mod enrollment;
 mod setup_key;
 mod uri;
+mod uri_encoding;
 use uri::{FormProtocolInput, OtpauthInput, ProtocolParameters};
 
 pub use backup_codes::*;
+pub use enrollment::*;
 pub use nook_authenticator_domain::{BackupCodeAttachMode, TotpAlgorithm, TotpDigits, TotpPeriod};
 
 /// Non-secret metadata from a validated `otpauth://totp/...` URI.

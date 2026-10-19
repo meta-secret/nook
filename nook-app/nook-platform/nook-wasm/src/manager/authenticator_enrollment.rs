@@ -4,7 +4,8 @@ use super::NookVaultManager;
 use super::secrets::{SecretProjectionVerification, SecretReplacementInput};
 use crate::NookError;
 use nook_core::{
-    AuthenticatorSecret, BackupCodeAttachMode, SecretId, SecretType, SecretValue, ValidationError,
+    AuthenticatorEnrollmentSave, BackupCodeAttachMode, SecretId, SecretType, SecretValue,
+    ValidationError,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
@@ -122,7 +123,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
-    use nook_core::VaultApplication;
+    use nook_core::{AuthenticatorSecret, VaultApplication};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -218,22 +219,26 @@ mod wasm_tests {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Create an authenticator from a consented `otpauth://totp/...` URI.
+    /// Create an authenticator from a consented `otpauth://totp/...` URI with
+    /// the service and account labels the user reviewed in the preview.
     #[wasm_bindgen]
     pub async fn add_authenticator_from_otpauth_js(
         &mut self,
         uri: &str,
         page_origin: &str,
+        reviewed_issuer: &str,
+        reviewed_account: &str,
     ) -> Result<String, JsError> {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let mut authenticator =
-            AuthenticatorSecret::from_otpauth_uri(uri).map_err(NookError::from)?;
-        let origin = page_origin.trim();
-        if !origin.is_empty() {
-            authenticator.website_url = origin.to_owned();
+        let authenticator = AuthenticatorEnrollmentSave {
+            otpauth_uri: uri,
+            page_origin,
+            reviewed_issuer,
+            reviewed_account,
         }
-        let authenticator = authenticator.normalize().map_err(NookError::from)?;
+        .authenticator()
+        .map_err(NookError::from)?;
         let yaml = Zeroizing::new(
             SecretValue::Authenticator(authenticator)
                 .to_yaml()

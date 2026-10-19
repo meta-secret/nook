@@ -324,6 +324,25 @@ impl NookSecretFormFields {
         .map_err(Into::into)
 }
 
+/// Resolve page material captured after the trusted **Add 2FA from this page**
+/// click into previewable `otpauth://totp/...` candidates. Non-otpauth QR
+/// content and implausible setup-key text are dropped inside Rust.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn resolve_authenticator_enrollment_candidates(
+    request: &tsify::Ts<nook_core::NookAuthenticatorEnrollmentCandidateRequest>,
+) -> Result<tsify::Ts<nook_core::NookAuthenticatorEnrollmentCandidates>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let candidates = request.resolve().map_err(NookError::from)?;
+    tsify::Tsify::into_ts(&candidates)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+}
+
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn current_code_from_otpauth_uri(
     uri: &str,
