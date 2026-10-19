@@ -19,7 +19,7 @@ import {
   openSimpleVaultConnection,
   readExtensionStorage,
   removeExtensionStorageKeys,
-  readPersistedAppLogs,
+  countIdentityAdoptions,
   registerWebsitePasskeyThroughExtension,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
@@ -47,6 +47,7 @@ import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
+  flushNookLogPersistQueue,
 } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
@@ -336,6 +337,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await leaveFirstRunReady(simplePage)
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    // Whether the reused tab's connect-route load adopts before the spec
+    // navigates it away is timing-dependent, so later counts are relative.
+    await flushNookLogPersistQueue(simplePage)
+    const adoptionsBeforeReopen = await countIdentityAdoptions({
+      page: simplePage,
+      label: 'read lifecycle logs before reopening the paired vault',
+    })
     await simplePage.close()
 
     const connectedPopupPage = await context.newPage()
@@ -384,22 +392,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
     // Reopening a paired vault completes the paired-vault handoff through the
     // strict Rust session payload. The stored grant above deliberately carries
-    // routing and display metadata that must not enter that payload. Three
-    // adoptions: the created vault, the reused Nook tab returning to the vault
-    // after the reconnect, and this reopened page.
+    // routing and display metadata that must not enter that payload. The
+    // reopened page adopts exactly once.
     await expect
-      .poll(async () => {
-        const entries = await withE2eDeadline(
-          readPersistedAppLogs(reopenedVaultPage),
-          'read lifecycle logs after reopening the paired vault',
-        )
-        return entries.filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted',
-        ).length
-      })
-      .toBe(3)
+      .poll(() =>
+        countIdentityAdoptions({
+          page: reopenedVaultPage,
+          label: 'read lifecycle logs after reopening the paired vault',
+        }),
+      )
+      .toBe(adoptionsBeforeReopen + 1)
 
     await test.step('present empty authenticator picker', async () => {
       await unlockExtensionThroughCompanion({ context, extensionId })
@@ -603,19 +605,15 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ),
       ).toBe(extensionDeviceId)
     }
+    // The companion unlock adopts exactly once more.
     await expect
-      .poll(async () => {
-        const entries = await withE2eDeadline(
-          readPersistedAppLogs(reopenedVaultPage),
-          'read lifecycle logs after unlocking the paired vault',
-        )
-        return entries.filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted',
-        ).length
-      })
-      .toBe(3)
+      .poll(() =>
+        countIdentityAdoptions({
+          page: reopenedVaultPage,
+          label: 'read lifecycle logs after unlocking the paired vault',
+        }),
+      )
+      .toBe(adoptionsBeforeReopen + 2)
     if (
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created

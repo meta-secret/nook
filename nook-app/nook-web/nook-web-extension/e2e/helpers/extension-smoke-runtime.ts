@@ -83,6 +83,22 @@ export async function withE2eDeadline<Result>(
   })
 }
 
+/** Count the persisted vault-lifecycle extension identity adoptions. */
+export async function countIdentityAdoptions(read: {
+  page: Page
+  label: string
+}): Promise<number> {
+  const entries = await withE2eDeadline(
+    readPersistedAppLogs(read.page),
+    read.label,
+  )
+  return entries.filter(
+    (entry) =>
+      entry.scope === 'vault-lifecycle' &&
+      entry.message === 'extension identity adopted',
+  ).length
+}
+
 function pageAddress(page: Page): string {
   try {
     const url = new URL(page.url())
