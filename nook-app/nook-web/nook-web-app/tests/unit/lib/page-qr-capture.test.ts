@@ -566,6 +566,12 @@ describe('authenticator setup dialogs', () => {
       expect(request?.payload.pictureDataUrls).toEqual([
         QrRasterDecodeFixture.PNG_DATA_URL,
       ])
+      // The page keeps no copy of the captured picture once it is sent.
+      expect(
+        fixture.resolveMessages.flatMap(
+          (message) => message.payload.pictureDataUrls,
+        ),
+      ).toEqual([''])
     } finally {
       raster.restore()
     }

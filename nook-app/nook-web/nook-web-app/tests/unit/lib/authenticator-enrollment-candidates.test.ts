@@ -166,18 +166,20 @@ describe('offscreen authenticator enrollment candidates', () => {
   })
 
   test('maps a Rust rejection to the generic failure without its text', async () => {
+    // Rust bounds each decoded QR payload at 2048 bytes and fails closed.
+    const oversized = `otpauth://totp/A:b?secret=${'A'.repeat(2049)}`
     const result = await CandidateFixture.resolver(
-      CandidateFixture.decoding([]),
+      CandidateFixture.decoding([oversized]),
     ).resolve(
-      CandidateFixture.message(
-        { pictureDataUrls: [], setupKeyTexts: [SETUP_KEY] },
-        'https://demo.example.test/settings',
-      ),
+      CandidateFixture.message({
+        pictureDataUrls: [PICTURE],
+        setupKeyTexts: [],
+      }),
     )
 
-    expect(result._unsafeUnwrapErr().kind).toBe(
-      SessionOperationFailureKind.Failed,
-    )
+    const failure = result._unsafeUnwrapErr()
+    expect(failure.kind).toBe(SessionOperationFailureKind.Failed)
+    expect(failure.message).toBe(SessionOperationFailureKind.Failed)
   })
 
   test.each([

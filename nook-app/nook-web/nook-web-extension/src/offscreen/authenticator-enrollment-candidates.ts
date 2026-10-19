@@ -85,6 +85,14 @@ export class AuthenticatorEnrollmentCandidateResolver {
   resolve(
     message: AuthenticatorEnrollmentCandidatesMessage,
   ): Promise<CandidateResolutionResult> {
+    // Decoded QR texts and the copied setup-key texts are cleared however the
+    // request ends, including when the vault WASM cannot start.
+    const qrPayloads: string[] = []
+    const setupKeyTexts: string[] = []
+    const clearTexts = Effect.sync(() => {
+      qrPayloads.fill('')
+      setupKeyTexts.fill('')
+    })
     return Effect.runPromise(
       Effect.gen(
         function* resolveCandidates(
@@ -98,7 +106,7 @@ export class AuthenticatorEnrollmentCandidateResolver {
             ),
           )
           const reader = this.resolution.reader()
-          const qrPayloads: string[] = []
+          setupKeyTexts.push(...request.payload.setupKeyTexts)
           for (const pngDataUrl of request.payload.pictureDataUrls) {
             const pictureRequest: PictureTextsRequest = { reader, pngDataUrl }
             const texts = yield* this.pictureTexts(pictureRequest)
@@ -112,7 +120,7 @@ export class AuthenticatorEnrollmentCandidateResolver {
           const candidateRequest: NookAuthenticatorEnrollmentCandidateRequest =
             {
               qrPayloads,
-              setupKeyTexts: [...request.payload.setupKeyTexts],
+              setupKeyTexts,
               pageOrigin: request.origin,
             }
           return yield* Effect.try(() =>
@@ -121,15 +129,9 @@ export class AuthenticatorEnrollmentCandidateResolver {
             Effect.mapError(() =>
               this.failure(SessionOperationFailureKind.Failed),
             ),
-            Effect.ensuring(
-              Effect.sync(() => {
-                qrPayloads.fill('')
-                candidateRequest.setupKeyTexts.fill('')
-              }),
-            ),
           )
         }.bind(this),
-      ).pipe(Effect.match(this.resultOutcome)),
+      ).pipe(Effect.ensuring(clearTexts), Effect.match(this.resultOutcome)),
     )
   }
 

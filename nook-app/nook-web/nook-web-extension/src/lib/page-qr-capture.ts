@@ -630,7 +630,7 @@ class PageQrCapture {
           this.nearbyInstructionCandidates(item.element),
         )
       case true:
-        return this.manualKeyScopes().map((scope) => scope.candidates)
+        return this.manualKeyDialogs().map((scope) => scope.candidates)
     }
   }
 
@@ -790,10 +790,11 @@ class PageQrCapture {
     const setupKeyTexts = this.setupKeyTexts.collect(
       this.setupKeySources(media),
     )
+    const pictureDataUrls = await this.capturedPictures(media)
     const message: CompanionWasmRuntimeMessage = {
       type: CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates,
       payload: {
-        pictureDataUrls: await this.capturedPictures(media),
+        pictureDataUrls,
         setupKeyTexts,
       },
       origin: this.browser.location.origin,
@@ -801,7 +802,11 @@ class PageQrCapture {
     const delivery = await sendCompanionWasmRuntimeMessage(
       this.browser,
       message,
-    ).finally(() => setupKeyTexts.fill(''))
+    ).finally(() => {
+      // The page keeps no copy of the captured pictures or texts once sent.
+      pictureDataUrls.fill('')
+      setupKeyTexts.fill('')
+    })
     switch (delivery.kind) {
       case CompanionWasmRuntimeDeliveryKind.Unavailable:
         return this.failedCandidates()
