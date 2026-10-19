@@ -12,6 +12,12 @@ import {
   sendCompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { Effect, Schema } from 'effect'
+import {
+  QrBitmapCaptureKind,
+  QrMediaKind,
+  QrMediaRaster,
+  type QrMedia,
+} from './qr-media-raster'
 
 enum SetupObservationPreparationKind {
   Unprepared = 'unprepared',
@@ -77,14 +83,29 @@ enum InstructionElementCapture {
   Visible = 'visible',
 }
 
-enum QrBitmapCaptureKind {
-  Captured = 'captured',
-  Unavailable = 'unavailable',
+enum InstructionCandidateKind {
+  /** Headings, paragraphs, and a dialog's own label or description. */
+  Prose = 'prose',
+  /** A dialog div or span before the QR that counts only for its own text. */
+  TextLeaf = 'text-leaf',
 }
 
-type QrBitmapCapture =
-  | { kind: QrBitmapCaptureKind.Captured; bitmap: ImageBitmap }
-  | { kind: QrBitmapCaptureKind.Unavailable }
+type InstructionCandidate = {
+  readonly kind: InstructionCandidateKind
+  readonly element: HTMLElement
+}
+
+/** One dialog's instruction lookup for the QR media it contains. */
+type DialogInstructionRequest = {
+  readonly dialog: HTMLElement
+  readonly media: Element
+}
+
+/** One dialog element considered as instruction copy for that media. */
+type DialogContentRequest = {
+  readonly element: HTMLElement
+  readonly media: Element
+}
 
 export enum DecodeVisibleOtpauthCandidatesResultStatus {
   Ready = 'ready',
@@ -97,10 +118,25 @@ type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PageQrCapture {
+  static readonly INSTRUCTION_SCOPE_SELECTOR =
+    'section, article, form, [role="group"]'
+  /** A modal's own title and body describe the QR it shows. */
+  static readonly DIALOG_SCOPE_SELECTOR =
+    'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]'
+  static readonly DIALOG_REFERENCE_ATTRIBUTES: readonly string[] = [
+    'aria-labelledby',
+    'aria-describedby',
+  ]
+  static readonly PROSE_SELECTOR = 'h1,h2,h3,h4,h5,h6,p'
+  static readonly DIALOG_TEXT_LEAF_SELECTOR = 'div,span'
+
   private setupObservation: SetupObservationPreparation = {
     kind: SetupObservationPreparationKind.Unprepared,
   }
-  constructor(private readonly browser: BarcodeDetectorGlobal) {}
+  private readonly raster: QrMediaRaster
+  constructor(private readonly browser: BarcodeDetectorGlobal) {
+    this.raster = new QrMediaRaster(browser)
+  }
 
   private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
     const candidate = this.browser.BarcodeDetector
@@ -110,36 +146,41 @@ class PageQrCapture {
   }
 
   private isVisibleElement(element: Element): boolean {
-    if (!(element instanceof HTMLElement)) return false
-    if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
-      return false
-    }
-    const style = this.browser.window.getComputedStyle(element)
+    // SVG media has no `hidden` property; the attribute covers both namespaces.
     if (
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.opacity === '0'
+      element.hasAttribute('hidden') ||
+      element.getAttribute('aria-hidden') === 'true'
     ) {
       return false
     }
+    // The size and viewport gate runs first so small icons skip computed style.
     const rect = element.getBoundingClientRect()
+    if (
+      rect.width < MIN_QR_EDGE_PX ||
+      rect.height < MIN_QR_EDGE_PX ||
+      rect.bottom <= 0 ||
+      rect.right <= 0 ||
+      rect.top >= this.browser.window.innerHeight ||
+      rect.left >= this.browser.window.innerWidth
+    ) {
+      return false
+    }
+    const style = this.browser.window.getComputedStyle(element)
     return (
-      rect.width >= MIN_QR_EDGE_PX &&
-      rect.height >= MIN_QR_EDGE_PX &&
-      rect.bottom > 0 &&
-      rect.right > 0 &&
-      rect.top < this.browser.window.innerHeight &&
-      rect.left < this.browser.window.innerWidth
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0'
     )
   }
 
-  private looksLikeQrMedia(element: HTMLElement): boolean {
+  private looksLikeQrMedia(element: Element): boolean {
     const tokens = [
       ((v) => (v ? v : ''))(element.getAttribute('alt')),
       ((v) => (v ? v : ''))(element.getAttribute('aria-label')),
       ((v) => (v ? v : ''))(element.getAttribute('title')),
       element.id,
-      element.className.toString(),
+      // SVG className is an SVGAnimatedString; the attribute is the class list.
+      ((v) => (v ? v : ''))(element.getAttribute('class')),
     ]
       .join(' ')
       .toLowerCase()
@@ -159,7 +200,7 @@ class PageQrCapture {
 
   private authenticatorSetupMetadata(): AuthenticationAuthenticatorSetupBatch {
     const visibleInstructionCopies = this.collectQrMedia().map((media) =>
-      this.nearbyInstructionCopy(media),
+      this.nearbyInstructionCopy(media.element),
     )
     switch (visibleInstructionCopies.length === 0) {
       case true:
@@ -243,33 +284,133 @@ class PageQrCapture {
     }
   }
 
-  private nearbyInstructionCopy(media: HTMLElement): string {
+  private nearbyInstructionCopy(media: Element): string {
     let copy = ''
-    for (const paragraph of this.nearbyInstructionElements(media)) {
-      switch (this.instructionElementVisibility(paragraph)) {
+    for (const instruction of this.capturedInstructionElements(media)) {
+      copy = this.boundedInstructionCopy(`${copy}\n${instruction.innerText}`)
+    }
+    return copy
+  }
+
+  /** Visible candidates in order, without text that another one already holds. */
+  private capturedInstructionElements(media: Element): HTMLElement[] {
+    const captured: HTMLElement[] = []
+    for (const candidate of this.nearbyInstructionCandidates(media)) {
+      switch (this.instructionCandidateCapture(candidate)) {
         case InstructionElementCapture.Excluded:
           continue
         case InstructionElementCapture.Visible:
           break
       }
-      copy = this.boundedInstructionCopy(`${copy}\n${paragraph.innerText}`)
+      const overlapsCaptured = captured.some(
+        (kept) =>
+          kept.contains(candidate.element) || candidate.element.contains(kept),
+      )
+      switch (overlapsCaptured) {
+        case true:
+          continue
+        case false:
+          captured.push(candidate.element)
+      }
     }
-    return copy
+    return captured
   }
 
-  private nearbyInstructionElements(media: HTMLElement): HTMLElement[] {
-    const scopeSelector = 'section, article, form, [role="group"]'
+  private nearbyInstructionCandidates(media: Element): InstructionCandidate[] {
+    const dialog = media.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR)
+    if (dialog instanceof HTMLElement) {
+      const request: DialogInstructionRequest = { dialog, media }
+      return this.dialogInstructionCandidates(request)
+    }
+    return this.nearbyInstructionElements(media).map(
+      (element): InstructionCandidate => ({
+        kind: InstructionCandidateKind.Prose,
+        element,
+      }),
+    )
+  }
+
+  /**
+   * The dialog's own label and description come first so they fit the copy
+   * bound; its remaining headings, paragraphs, and text-bearing div/span
+   * leaves follow in document order. Nested dialogs keep their own copy.
+   */
+  private dialogInstructionCandidates(
+    request: DialogInstructionRequest,
+  ): InstructionCandidate[] {
+    const { dialog, media } = request
+    const referencedIds = PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES.map(
+      (attribute) => dialog.getAttribute(attribute),
+    )
+      .filter((value) => typeof value === 'string')
+      .join(' ')
+      .split(/\s+/)
+      .filter((id) => id.length > 0)
+    const references = referencedIds
+      .map((id) => this.browser.document.getElementById(id))
+      .filter((element) => element instanceof HTMLElement)
+      .filter((element) => dialog.contains(element))
+      .map((element): InstructionCandidate => ({
+        kind: InstructionCandidateKind.Prose,
+        element,
+      }))
+    const contents = Array.from(
+      dialog.querySelectorAll(
+        `${PageQrCapture.PROSE_SELECTOR},${PageQrCapture.DIALOG_TEXT_LEAF_SELECTOR}`,
+      ),
+    )
+      .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (element) =>
+          element.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR) === dialog,
+      )
+      .flatMap((element) => {
+        const content: DialogContentRequest = { element, media }
+        return this.dialogContentCandidates(content)
+      })
+    return [...references, ...contents]
+  }
+
+  /**
+   * Prose always qualifies. A div or span leaf qualifies only before the QR
+   * media in document order, so text shown after the code (such as a setup
+   * key revealed below it) never enters the instruction copy.
+   */
+  private dialogContentCandidates(
+    request: DialogContentRequest,
+  ): InstructionCandidate[] {
+    const { element, media } = request
+    switch (element.matches(PageQrCapture.PROSE_SELECTOR)) {
+      case true:
+        return [{ kind: InstructionCandidateKind.Prose, element }]
+      case false:
+        break
+    }
+    const position = element.compareDocumentPosition(media)
+    const precedesMedia =
+      (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+      (position & Node.DOCUMENT_POSITION_CONTAINED_BY) === 0
+    switch (precedesMedia) {
+      case true:
+        return [{ kind: InstructionCandidateKind.TextLeaf, element }]
+      case false:
+        return []
+    }
+  }
+
+  private nearbyInstructionElements(media: Element): HTMLElement[] {
+    const scopeSelector = PageQrCapture.INSTRUCTION_SCOPE_SELECTOR
     const scopes = [media.closest(scopeSelector)].filter(
       (element) => element instanceof HTMLElement,
     )
     for (const scope of scopes) {
-      return Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6,p'))
+      return Array.from(scope.querySelectorAll(PageQrCapture.PROSE_SELECTOR))
         .filter((element) => element instanceof HTMLElement)
         .filter((element) => element.closest(scopeSelector) === scope)
     }
     return [media.previousElementSibling, media.nextElementSibling]
       .filter((element) => element instanceof HTMLElement)
-      .filter((element) => element.matches('h1,h2,h3,h4,h5,h6,p'))
+      .filter((element) => element.matches(PageQrCapture.PROSE_SELECTOR))
   }
 
   authenticationAuthenticatorSetupMutationRequiresScan(
@@ -277,15 +418,46 @@ class PageQrCapture {
   ): boolean {
     if (record.type !== 'childList' && record.type !== 'characterData')
       return false
+    // Only candidates holding the mutated node need the visibility check.
     return this.collectQrMedia().some((media) =>
-      this.nearbyInstructionElements(media).some(
-        (instruction) =>
-          this.instructionElementVisibility(instruction) ===
-            InstructionElementCapture.Visible &&
-          (instruction === record.target ||
-            instruction.contains(record.target)),
-      ),
+      this.nearbyInstructionCandidates(media.element)
+        .filter((candidate) => candidate.element.contains(record.target))
+        .some(
+          (candidate) =>
+            this.instructionCandidateCapture(candidate) ===
+            InstructionElementCapture.Visible,
+        ),
     )
+  }
+
+  private instructionCandidateCapture(
+    candidate: InstructionCandidate,
+  ): InstructionElementCapture {
+    switch (this.instructionElementVisibility(candidate.element)) {
+      case InstructionElementCapture.Excluded:
+        return InstructionElementCapture.Excluded
+      case InstructionElementCapture.Visible:
+        break
+    }
+    switch (candidate.kind) {
+      case InstructionCandidateKind.Prose:
+        return InstructionElementCapture.Visible
+      case InstructionCandidateKind.TextLeaf:
+        return this.textLeafCapture(candidate.element)
+    }
+  }
+
+  /** A div or span counts only for text it holds itself, not a wrapper's. */
+  private textLeafCapture(element: HTMLElement): InstructionElementCapture {
+    const ownsText = Array.from(element.childNodes).some(
+      (node) => node instanceof Text && node.data.trim().length > 0,
+    )
+    switch (ownsText) {
+      case true:
+        return InstructionElementCapture.Visible
+      case false:
+        return InstructionElementCapture.Excluded
+    }
   }
 
   private instructionElementVisibility(
@@ -371,56 +543,39 @@ class PageQrCapture {
     return copy
   }
 
-  private async bitmapFromElement(
-    element: HTMLElement,
-  ): Promise<QrBitmapCapture> {
-    try {
-      if (element instanceof HTMLCanvasElement) {
-        return {
-          kind: QrBitmapCaptureKind.Captured,
-          bitmap: await this.browser.createImageBitmap(element),
-        }
-      }
-      if (element instanceof HTMLImageElement) {
-        if (!element.complete || element.naturalWidth === 0) {
-          return { kind: QrBitmapCaptureKind.Unavailable }
-        }
-        return {
-          kind: QrBitmapCaptureKind.Captured,
-          bitmap: await this.browser.createImageBitmap(element),
-        }
-      }
-      if (element instanceof SVGSVGElement) {
-        const serialized = new XMLSerializer().serializeToString(element)
-        const blobOptions: BlobPropertyBag = { type: 'image/svg+xml' }
-        const blob = new Blob([serialized], blobOptions)
-        return {
-          kind: QrBitmapCaptureKind.Captured,
-          bitmap: await this.browser.createImageBitmap(blob),
-        }
-      }
-    } catch {
-      return { kind: QrBitmapCaptureKind.Unavailable }
+  /** Decodes one queried page element into the QR media it can be. */
+  private qrMedia(element: Element): QrMedia[] {
+    if (element instanceof HTMLCanvasElement) {
+      return [{ kind: QrMediaKind.Canvas, element }]
     }
-    return { kind: QrBitmapCaptureKind.Unavailable }
+    if (element instanceof HTMLImageElement) {
+      return [{ kind: QrMediaKind.Image, element }]
+    }
+    if (element instanceof SVGSVGElement) {
+      return [{ kind: QrMediaKind.Vector, element }]
+    }
+    return []
   }
 
-  private collectQrMedia(): HTMLElement[] {
-    const media = [
-      ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
-    return media
+  private collectQrMedia(): QrMedia[] {
+    return [...this.browser.document.querySelectorAll('canvas, img, svg')]
+      .flatMap((element) => this.qrMedia(element))
       .filter(
-        (element) =>
-          this.isVisibleElement(element) && this.looksLikeQrMedia(element),
+        (media) =>
+          this.isVisibleElement(media.element) &&
+          this.looksLikeQrMedia(media.element),
       )
       .slice(0, MAX_QR_CANDIDATES)
   }
 
   private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
+    // An inline SVG QR may carry the marker as well as an HTML element.
     const elements = [
       ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
-    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
+    ].filter(
+      (element) =>
+        element instanceof HTMLElement || element instanceof SVGSVGElement,
+    )
     const candidates: DecodedOtpauthCandidate[] = []
     const seen = new Set<string>()
     let index = 0
@@ -496,9 +651,9 @@ class PageQrCapture {
     const candidates: DecodedOtpauthCandidate[] = []
     const seen = new Set<string>()
     let index = 0
-    for (const element of this.collectQrMedia()) {
+    for (const media of this.collectQrMedia()) {
       index += 1
-      const capture = await this.bitmapFromElement(element)
+      const capture = await this.raster.opaqueBitmap(media)
       if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
       const { bitmap } = capture
       try {
