@@ -17,6 +17,12 @@
       "$lib/components/identities/ExtensionRequestPanel.svelte": [
         "./src/ExtensionRequestPanelDisabled.svelte"
       ],
+      "$lib/extension/connect-progress": [
+        "./src/extension-connect-progress-disabled.ts"
+      ],
+      "$lib/components/extension-connect-progress-steps": [
+        "./src/extension-connect-progress-steps-disabled.ts"
+      ],
       "$lib": ["../nook-web-shared/src/vault-app/lib"],
       "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
       "$vault-shared": ["../nook-web-shared/src/vault-app"],
@@ -42,6 +48,9 @@
     "../nook-web-shared/src/vault-app/lib/extension/connect.ts",
     "../nook-web-shared/src/vault-app/lib/components/ExtensionConnectConsent.svelte",
     "../nook-web-shared/src/vault-app/lib/components/identities/ExtensionRequestPanel.svelte",
+    "../nook-web-shared/src/vault-app/lib/extension/connect-progress.ts",
+    "../nook-web-shared/src/vault-app/lib/components/extension-connect-progress-steps.ts",
+    "../nook-web-shared/src/vault-app/lib/components/extension-connect-consent-progress.ts",
     "**/node_modules/**",
     "**/dist/**",
     "**/dist-prod/**",

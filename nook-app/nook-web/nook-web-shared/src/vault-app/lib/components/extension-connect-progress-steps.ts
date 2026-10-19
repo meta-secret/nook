@@ -1,16 +1,7 @@
 import {
-  ExtensionConnectFailureReason,
   ExtensionConnectStepKind,
   type ExtensionConnectStep,
 } from "$web-shared/extension/extension-connect-progress";
-import {
-  ExtensionConsentDeliveryOutcomeKind,
-  ExtensionConsentWorkflowFailureKind,
-  ExtensionConsentWorkflowKind,
-  type ExtensionConsentDeliveryOutcome,
-  type ExtensionConsentWorkflowFailure,
-  type ExtensionConsentWorkflowState,
-} from "./extension-connect-consent-workflow";
 import { ExtensionConnectIntentKind } from "../app/route-state";
 import { FirstRunStage, NewIdentityStage } from "../vault/state/ui.svelte";
 import type { VaultState } from "../vault.svelte";
@@ -209,65 +200,5 @@ export class ExtensionConnectPageSteps {
   /** A new identity is being created from the identities hub. */
   static newIdentity(): ExtensionConnectStep {
     return { kind: ExtensionConnectStepKind.Creating };
-  }
-
-  /** The consent workflow: approved only once the extension took the
-   * grant and event log. */
-  static consent(state: ExtensionConsentWorkflowState): ExtensionConnectStep {
-    switch (state.kind) {
-      case ExtensionConsentWorkflowKind.Resting:
-      case ExtensionConsentWorkflowKind.SubmittingAuthorization:
-      case ExtensionConsentWorkflowKind.PreparingGrant:
-      case ExtensionConsentWorkflowKind.DeliveringGrant:
-        return { kind: ExtensionConnectStepKind.Consent };
-      // Device refresh starts only after a delivered grant.
-      case ExtensionConsentWorkflowKind.RefreshingDevices:
-      case ExtensionConsentWorkflowKind.Completed:
-        return ExtensionConnectPageSteps.delivery(state.outcome);
-      case ExtensionConsentWorkflowKind.Failed:
-        return ExtensionConnectPageSteps.failure(state.failure);
-    }
-  }
-
-  private static delivery(
-    outcome: ExtensionConsentDeliveryOutcome,
-  ): ExtensionConnectStep {
-    switch (outcome.kind) {
-      case ExtensionConsentDeliveryOutcomeKind.Delivered:
-        return { kind: ExtensionConnectStepKind.Approved };
-      case ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable:
-      case ExtensionConsentDeliveryOutcomeKind.Rejected:
-        return {
-          kind: ExtensionConnectStepKind.Failed,
-          reason: ExtensionConnectFailureReason.Delivery,
-        };
-    }
-  }
-
-  private static failure(
-    failure: ExtensionConsentWorkflowFailure,
-  ): ExtensionConnectStep {
-    switch (failure.kind) {
-      case ExtensionConsentWorkflowFailureKind.Authorization:
-      case ExtensionConsentWorkflowFailureKind.ProviderTransition:
-        return {
-          kind: ExtensionConnectStepKind.Failed,
-          reason: ExtensionConnectFailureReason.Authorization,
-        };
-      case ExtensionConsentWorkflowFailureKind.GrantPreparation:
-      case ExtensionConsentWorkflowFailureKind.DeviceRefresh:
-      case ExtensionConsentWorkflowFailureKind.CompletionAdmission:
-        return {
-          kind: ExtensionConnectStepKind.Failed,
-          reason: ExtensionConnectFailureReason.Grant,
-        };
-      case ExtensionConsentWorkflowFailureKind.DeliveryAdmission:
-      case ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome:
-      case ExtensionConsentWorkflowFailureKind.BrowserHandoff:
-        return {
-          kind: ExtensionConnectStepKind.Failed,
-          reason: ExtensionConnectFailureReason.Delivery,
-        };
-    }
   }
 }

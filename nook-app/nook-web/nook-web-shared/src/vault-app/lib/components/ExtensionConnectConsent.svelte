@@ -23,7 +23,7 @@
     type ExtensionConsentWorkflowState,
   } from './extension-connect-consent-workflow'
   import { ExtensionConsentCloseOutcome } from './extension-connect-consent-outcome'
-  import { ExtensionConnectPageSteps } from './extension-connect-progress-steps'
+  import { ExtensionConnectConsentSteps } from './extension-connect-consent-progress'
   import { extensionConnectProgress } from '$lib/extension/connect-progress'
 
   type ExtensionConsentWorkflowSession = {
@@ -133,7 +133,7 @@
   // the extension took the grant and event log.
   $effect(() => {
     extensionConnectProgress.report(
-      ExtensionConnectPageSteps.consent(workflowState),
+      ExtensionConnectConsentSteps.consent(workflowState),
     )
   })
   $effect.pre(() => {

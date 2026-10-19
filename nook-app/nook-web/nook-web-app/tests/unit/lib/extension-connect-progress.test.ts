@@ -31,6 +31,7 @@ import {
   ExtensionConnectPageSteps,
   type ExtensionConnectPageView,
 } from '$lib/components/extension-connect-progress-steps'
+import { ExtensionConnectConsentSteps } from '$lib/components/extension-connect-consent-progress'
 import { ExtensionConnectIntentKind } from '$lib/app/route-state'
 import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
 import {
@@ -275,11 +276,11 @@ class ConsentSteps {
 
   approve(): Promise<void> {
     const initial: ExtensionConsentWorkflowState = this.workflow.initialState()
-    this.steps.push(ExtensionConnectPageSteps.consent(initial))
+    this.steps.push(ExtensionConnectConsentSteps.consent(initial))
     return this.workflow.approve({
       state: initial,
       publish: (next) => {
-        this.steps.push(ExtensionConnectPageSteps.consent(next))
+        this.steps.push(ExtensionConnectConsentSteps.consent(next))
       },
     })
   }

@@ -28,6 +28,8 @@
     "../nook-vault-sentinel/src/ExtensionConnectDisabled.svelte",
     "../nook-vault-sentinel/src/ExtensionRequestPanelDisabled.svelte",
     "../nook-vault-sentinel/src/extension-connect-disabled.ts",
+    "../nook-vault-sentinel/src/extension-connect-progress-disabled.ts",
+    "../nook-vault-sentinel/src/extension-connect-progress-steps-disabled.ts",
     "../nook-web-extension/scripts/{build,deployment-package}.ts",
     "../nook-web-extension/scripts/**/*.test.ts",
     "../nook-web-extension/e2e/**/*.spec.ts",

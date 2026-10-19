@@ -219,6 +219,13 @@ export class ExtensionConnectProgress {
   }
 }
 
+/** The page's global, which carries chrome.runtime only in Chromium; the
+ * intersection keeps it assignable where the chrome typings are absent. */
+type ExtensionConnectBrowserGlobal = typeof globalThis &
+  ExtensionConnectProgressHost;
+
+const browserGlobal: ExtensionConnectBrowserGlobal = globalThis;
+
 export const extensionConnectProgress = new ExtensionConnectProgress(
-  globalThis,
+  browserGlobal,
 );
