@@ -162,6 +162,6 @@ Likewise, decode a QR or read a setup key while only deciding eligibility.
 
 **Required:** offer the action for visible QR media beside “Scan this QR code
 with your authenticator app” or “Scan this QR code with Google Authenticator.”
-Offer it for a page without QR media that says “Enter this setup key in your
-authenticator app.” Decode the QR and read setup-key text only after the user
+Offer it for a page without QR media only when it is a dialog whose title or
+heading says “Enter this setup key in your authenticator app.” Decode the QR and read setup-key text only after the user
 clicks the action.
