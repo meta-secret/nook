@@ -1,6 +1,6 @@
 /**
- * Regenerates tests/fixtures/otpauth-qr-modules.ts: real QR module grids that
- * unit tests and the 2FA dialog demo rasterize, so ZXing decodes genuine QR
+ * Regenerates tests/fixtures/otpauth-qr-modules.ts: a real QR module grid that
+ * the 2FA dialog demo renders, so ZXing decodes genuine QR
  * codes instead of a page-provided marker.
  *
  * Run from nook-web-app: `bun scripts/generate-otpauth-qr-fixture.ts`.
@@ -13,8 +13,6 @@ import { prepareZXingModule, writeBarcode } from 'zxing-wasm/writer'
 /** A demo-only authenticator; the secret is the RFC 4648 "Hello!\xDE\xAD\xBE\xEF" sample. */
 const OTPAUTH_QR_TEXT =
   'otpauth://totp/Demo%20Service:demo.user%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Demo%20Service&algorithm=SHA1&digits=6&period=30'
-/** A QR that is not an authenticator setup; Rust must drop it. */
-const NON_OTPAUTH_QR_TEXT = 'https://example.test/download-the-app'
 
 /** ZXing writes 0 for a dark module and 255 for a light one. */
 const DARK_MODULE = 0
@@ -35,7 +33,6 @@ function moduleGlyph(module: number): string {
 
 const fixtures: readonly QrFixture[] = [
   { name: 'OTPAUTH_QR', text: OTPAUTH_QR_TEXT },
-  { name: 'NON_OTPAUTH_QR', text: NON_OTPAUTH_QR_TEXT },
 ]
 
 const writerWasm = await Bun.file(
