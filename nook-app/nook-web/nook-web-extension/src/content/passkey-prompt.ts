@@ -33,7 +33,14 @@ export type PasskeyPromptChoice =
   | { kind: PasskeyPromptChoiceKind.BrowserFallback }
   | { kind: PasskeyPromptChoiceKind.Dismissed }
 
-export type PasskeyPromptRequest = {
+/** What Nook can offer for a request. */
+export type PasskeyOffer = {
+  options: PasskeyOption[]
+  /** Set when Nook has nothing to offer: the card says why. */
+  unavailable?: WebsitePasskeyUnavailableReason
+}
+
+export type PasskeyPromptRequest = PasskeyOffer & {
   ceremony: WebsitePasskeyCeremony
   /** The domain the passkey belongs to. */
   site: string
@@ -41,13 +48,33 @@ export type PasskeyPromptRequest = {
   siteName: string
   /** The account the site is registering, as the site names it. */
   userName?: string
-  options: PasskeyOption[]
-  /** Set when Nook has nothing to offer: the card says why. */
-  unavailable?: WebsitePasskeyUnavailableReason
+}
+
+export enum PasskeyLookupKind {
+  Offer = 'offer',
+  /** The request is one Nook declines; the site gets `NotAllowedError`. */
+  Declined = 'declined',
+}
+
+/** Nook's answer when the card asks what it can offer. */
+export type PasskeyLookup =
+  | { kind: PasskeyLookupKind.Offer; offer: PasskeyOffer }
+  | { kind: PasskeyLookupKind.Declined }
+
+/** How a locked card gets Nook unlocked and asks again. */
+export type PasskeyPromptUnlock = {
+  /** Opens Nook where the person unlocks it; rejects when it cannot. */
+  open: () => Promise<void>
+  /** Asks Nook again once the person is back on the page. */
+  lookup: () => Promise<PasskeyLookup>
 }
 
 enum PasskeyPromptState {
   Choosing = 'choosing',
+  /** Nook is open elsewhere for the person to unlock it. */
+  Unlocking = 'unlocking',
+  /** Asking Nook again after the unlock. */
+  Checking = 'checking',
   Working = 'working',
   Saved = 'saved',
   Failed = 'failed',
@@ -75,8 +102,14 @@ type PasskeyPromptStatus = {
   text: string
 }
 
+export type PasskeyPromptOpenArgs = {
+  request: PasskeyPromptRequest
+  unlock: PasskeyPromptUnlock
+}
+
 type PasskeyPromptPanelArgs = {
   request: PasskeyPromptRequest
+  unlock: PasskeyPromptUnlock
   /** Closes the card once the ceremony no longer needs an answer. */
   onClose: () => void
 }
@@ -393,8 +426,24 @@ export class PasskeyPromptPanel {
   private readonly body = classed('body')('div')
   private readonly closeButton = classed('icon-button')('button')
   private state = PasskeyPromptState.Choosing
+  private offer: PasskeyOffer
+  /** Coming back to the page after unlocking Nook asks Nook again. */
+  private readonly onVisible = (): void => {
+    if (
+      document.visibilityState === 'visible' &&
+      this.state === PasskeyPromptState.Unlocking
+    ) {
+      void this.lookupAgain()
+    }
+  }
 
   constructor(private readonly args: PasskeyPromptPanelArgs) {
+    this.offer = {
+      options: args.request.options,
+      ...(args.request.unavailable
+        ? { unavailable: args.request.unavailable }
+        : {}),
+    }
     let resolveChoice: (choice: PasskeyPromptChoice) => void = () => {}
     this.choice = new Promise((resolve) => {
       resolveChoice = resolve
@@ -406,7 +455,13 @@ export class PasskeyPromptPanel {
     this.element.tabIndex = -1
     this.title.id = 'nook-passkey-title'
     this.element.append(this.toolbar(), this.title, this.body)
+    document.addEventListener('visibilitychange', this.onVisible)
     this.showChoices()
+  }
+
+  /** Stops listening to the page once the card is gone. */
+  dispose(): void {
+    document.removeEventListener('visibilitychange', this.onVisible)
   }
 
   get creating(): boolean {
@@ -417,6 +472,8 @@ export class PasskeyPromptPanel {
   dismiss(): void {
     switch (this.state) {
       case PasskeyPromptState.Choosing:
+      case PasskeyPromptState.Unlocking:
+      case PasskeyPromptState.Checking:
         this.resolveChoice(DISMISSED)
         return
       case PasskeyPromptState.Working:
@@ -514,10 +571,11 @@ export class PasskeyPromptPanel {
       substitution: request.siteName,
     }
     this.title.textContent = translateWith(title)
-    if (request.unavailable) {
+    const { unavailable } = this.offer
+    if (unavailable) {
       this.body.replaceChildren(
         this.siteRow(),
-        ...this.unavailableChoices(request.unavailable),
+        ...this.unavailableChoices(unavailable),
       )
       return
     }
@@ -532,8 +590,9 @@ export class PasskeyPromptPanel {
   }
 
   /**
-   * Nothing Nook can offer: say why, and let the person hand the request to
-   * the browser. Nook never does that on its own.
+   * Nothing Nook can offer: say why. A locked Nook offers to unlock it;
+   * otherwise the person may hand the request to the browser. Nook never
+   * does that on its own.
    */
   private unavailableChoices(
     reason: WebsitePasskeyUnavailableReason,
@@ -541,6 +600,21 @@ export class PasskeyPromptPanel {
     const notice: PasskeyPromptStatus = {
       tone: PasskeyPromptTone.Warning,
       text: translate(UNAVAILABLE_MESSAGES[reason]),
+    }
+    if (reason === WebsitePasskeyUnavailableReason.Locked) {
+      const unlock = classed('primary-button')('button')
+      unlock.type = 'button'
+      unlock.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeyUnlockAction)
+      unlock.addEventListener('click', () => {
+        unlock.disabled = true
+        void this.args.unlock.open().then(
+          () => this.showUnlocking(),
+          () => {
+            unlock.disabled = false
+          },
+        )
+      })
+      return [this.statusElement(notice), unlock]
     }
     const another = classed('primary-button')('button')
     another.type = 'button'
@@ -551,9 +625,53 @@ export class PasskeyPromptPanel {
     return [this.statusElement(notice), another]
   }
 
+  /** Nook is open elsewhere: say where, and ask again on return. */
+  private showUnlocking(): void {
+    this.state = PasskeyPromptState.Unlocking
+    const notice: PasskeyPromptStatus = {
+      tone: PasskeyPromptTone.Warning,
+      text: translate(BROWSER_MESSAGE_KEYS.PasskeyUnlockWaiting),
+    }
+    const resume = classed('primary-button')('button')
+    resume.type = 'button'
+    resume.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeyContinueAction)
+    resume.addEventListener('click', () => void this.lookupAgain())
+    const focusInside = this.element.contains(document.activeElement)
+    this.body.replaceChildren(
+      this.siteRow(),
+      this.statusElement(notice),
+      resume,
+    )
+    if (focusInside) resume.focus()
+  }
+
+  /** Asks Nook again what it can offer, then shows that. */
+  private async lookupAgain(): Promise<void> {
+    if (this.state !== PasskeyPromptState.Unlocking) return
+    this.state = PasskeyPromptState.Checking
+    const status: PasskeyPromptStatus = {
+      tone: PasskeyPromptTone.Working,
+      text: translate(BROWSER_MESSAGE_KEYS.PasskeyChecking),
+    }
+    this.showStatus(status)
+    const lookup = await this.args.unlock.lookup()
+    if (this.state !== PasskeyPromptState.Checking) return
+    switch (lookup.kind) {
+      case PasskeyLookupKind.Declined:
+        this.resolveChoice(DISMISSED)
+        return
+      case PasskeyLookupKind.Offer:
+        this.offer = lookup.offer
+        this.state = PasskeyPromptState.Choosing
+        this.showChoices()
+        this.focusFirst()
+    }
+  }
+
   /** Registration: who the site is saving, where it goes, one Save. */
   private saveChoices(): HTMLElement[] {
     const { request } = this.args
+    const { options } = this.offer
     const fields: HTMLElement[] = []
     if (request.userName) {
       const account = classed('field')('div')
@@ -568,12 +686,12 @@ export class PasskeyPromptPanel {
     const legend = classed('field-label')('legend')
     legend.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeySaveToLabel)
     const list = classed('choices')('div')
-    const radios = request.options.map((option) => {
+    const radios = options.map((option) => {
       const row = classed('vault-option')('label')
       const radio = document.createElement('input')
       radio.type = 'radio'
       radio.name = 'nook-passkey-vault'
-      radio.checked = option === request.options[0]
+      radio.checked = option === options[0]
       const name = classed('vault-name')('span')
       name.textContent = option.vaultName
       row.append(radio, name)
@@ -586,7 +704,7 @@ export class PasskeyPromptPanel {
     save.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeySaveAction)
     save.addEventListener('click', () => {
       const index = radios.findIndex((radio) => radio.checked)
-      const option = request.options[index < 0 ? 0 : index]
+      const option = options[index < 0 ? 0 : index]
       if (option) this.resolveChoice(selected(option))
     })
     return [...fields, vaults, save]
@@ -597,7 +715,7 @@ export class PasskeyPromptPanel {
     const label = classed('field-label')('p')
     label.textContent = translate(BROWSER_MESSAGE_KEYS.PasskeyChooseAccount)
     const list = classed('choices')('div')
-    for (const option of this.args.request.options) {
+    for (const option of this.offer.options) {
       const account = option.account
       const name = account
         ? account.userDisplayName || account.userName
@@ -665,9 +783,10 @@ export class PasskeyPrompt {
   private readonly pilot = document.getElementById(WIDGET_HOST_ID)
   private readonly closeTimers: ReturnType<typeof setTimeout>[] = []
 
-  private constructor(request: PasskeyPromptRequest) {
+  private constructor({ request, unlock }: PasskeyPromptOpenArgs) {
     const panelArgs: PasskeyPromptPanelArgs = {
       request,
+      unlock,
       onClose: () => this.close(),
     }
     this.panel = new PasskeyPromptPanel(panelArgs)
@@ -687,8 +806,8 @@ export class PasskeyPrompt {
     shadow.append(style, this.panel.element)
   }
 
-  static open(request: PasskeyPromptRequest): PasskeyPrompt {
-    const prompt = new PasskeyPrompt(request)
+  static open(args: PasskeyPromptOpenArgs): PasskeyPrompt {
+    const prompt = new PasskeyPrompt(args)
     prompt.pilot?.style.setProperty('visibility', 'hidden')
     document.documentElement.append(prompt.host)
     prompt.panel.focusFirst()
@@ -716,6 +835,7 @@ export class PasskeyPrompt {
 
   close(): void {
     for (const timer of this.closeTimers) clearTimeout(timer)
+    this.panel.dispose()
     this.host.remove()
     this.pilot?.style.removeProperty('visibility')
   }

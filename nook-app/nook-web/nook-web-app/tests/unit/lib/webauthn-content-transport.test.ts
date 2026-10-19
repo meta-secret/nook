@@ -87,9 +87,11 @@ describe('WebAuthn content transport', () => {
         expiresAt,
       },
     })
-    expect(
-      document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
-    ).toBeTruthy()
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
+      ).toBeTruthy(),
+    )
   })
 
   test('falls back without prompting when runtime delivery is rejected', async () => {

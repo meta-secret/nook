@@ -1,5 +1,9 @@
 import { Schema } from 'effect'
 import { authenticationSubmissionBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import {
+  OpenCompanionLauncherMessageType,
+  type OpenCompanionLauncherMessage,
+} from '../../../nook-web-shared/src/extension/companion-launcher-message'
 export {}
 
 authenticationSubmissionBridge.installIsolatedAuthenticationDirectSubmitBridge()
@@ -22,15 +26,21 @@ import {
   PageResponseAction,
   websitePasskeyOptionsDisposition,
   WebsitePasskeyOptionsDispositionKind,
+  WebsitePasskeyUnavailableReason,
 } from './webauthn-options-response'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
 import {
+  PasskeyLookupKind,
   PasskeyPrompt,
   PasskeyPromptChoiceKind,
+  type PasskeyLookup,
   type PasskeyOption,
+  type PasskeyPromptOpenArgs,
+  type PasskeyPromptRequest,
+  type PasskeyPromptUnlock,
 } from './passkey-prompt'
 
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
@@ -92,6 +102,17 @@ type WebsitePasskeyRuntimeMessage =
   | WebsitePasskeyOptionsMessage
   | WebsitePasskeyPerformMessage
   | WebsitePasskeyCancelMessage
+  | OpenCompanionLauncherMessage
+
+type OpenNookResponse = { ok: boolean }
+
+const CHECK_FAILED: PasskeyLookup = {
+  kind: PasskeyLookupKind.Offer,
+  offer: {
+    options: [],
+    unavailable: WebsitePasskeyUnavailableReason.CheckFailed,
+  },
+}
 
 function respond({
   requestId,
@@ -170,14 +191,14 @@ function removePrompt(requestId: string): void {
   prompts.delete(requestId)
 }
 
-async function handleRequest(request: PageRequest): Promise<void> {
-  const requestJson = request.requestJson
+/** Asks Nook what it can offer for this request. */
+async function lookupOffer(request: PageRequest): Promise<PasskeyLookup> {
   const nookTypedArgs0_4: WebsitePasskeyOptionsMessage = {
     type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
     payload: {
       requestId: request.requestId,
       ceremony: request.ceremony,
-      requestJson,
+      requestJson: request.requestJson,
       expiresAt: request.expiresAt,
     },
   } satisfies WebsitePasskeyOptionsMessage
@@ -198,19 +219,46 @@ async function handleRequest(request: PageRequest): Promise<void> {
     hasOptions: options.length > 0,
   }
   const disposition = websitePasskeyOptionsDisposition(dispositionArgs)
-  if (disposition.kind === WebsitePasskeyOptionsDispositionKind.Respond) {
-    const nookTypedArgs0_2: Parameters<typeof respond>[0] = {
+  switch (disposition.kind) {
+    case WebsitePasskeyOptionsDispositionKind.Respond:
+      return { kind: PasskeyLookupKind.Declined }
+    case WebsitePasskeyOptionsDispositionKind.Explain:
+      return {
+        kind: PasskeyLookupKind.Offer,
+        offer: { options, unavailable: disposition.reason },
+      }
+    case WebsitePasskeyOptionsDispositionKind.Continue:
+      return { kind: PasskeyLookupKind.Offer, offer: { options } }
+  }
+}
+
+/** Opens Nook in this window so the person can unlock it. */
+async function openNook(): Promise<void> {
+  const message: OpenCompanionLauncherMessage = {
+    type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  }
+  const response = await new WebAuthnRuntimeTransport<OpenNookResponse>(
+    message,
+  ).send()
+  if (response?.ok !== true) throw new Error('Nook could not be opened')
+}
+
+async function handleRequest(request: PageRequest): Promise<void> {
+  const requestJson = request.requestJson
+  const lookup = await lookupOffer(request)
+  if (lookup.kind === PasskeyLookupKind.Declined) {
+    const declined: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
-      action: disposition.action,
-      value: disposition.reason,
+      action: PageResponseAction.Error,
+      value: 'NotAllowedError',
     }
-    respond(nookTypedArgs0_2)
+    respond(declined)
     return
   }
   for (const settled of settledPrompts) settled.close()
   settledPrompts.clear()
   const site = request.rpId ? request.rpId : location.hostname
-  const promptRequest: Parameters<typeof PasskeyPrompt.open>[0] = {
+  const promptRequest: PasskeyPromptRequest = {
     ceremony: request.ceremony,
     site,
     siteName:
@@ -219,12 +267,14 @@ async function handleRequest(request: PageRequest): Promise<void> {
         ? request.relyingPartyName
         : site,
     ...(request.userName ? { userName: request.userName } : {}),
-    options,
-    ...(disposition.kind === WebsitePasskeyOptionsDispositionKind.Explain
-      ? { unavailable: disposition.reason }
-      : {}),
+    ...lookup.offer,
   }
-  const prompt = PasskeyPrompt.open(promptRequest)
+  const unlock: PasskeyPromptUnlock = {
+    open: openNook,
+    lookup: () => lookupOffer(request).catch(() => CHECK_FAILED),
+  }
+  const promptArgs: PasskeyPromptOpenArgs = { request: promptRequest, unlock }
+  const prompt = PasskeyPrompt.open(promptArgs)
   prompts.set(request.requestId, prompt)
   const choice = await prompt.choice
   if (choice.kind !== PasskeyPromptChoiceKind.Selected) {
