@@ -13,24 +13,28 @@ import {
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { Effect, Exit, Schema } from 'effect'
 import {
-  QrPixelCaptureKind,
+  QrPictureCaptureKind,
   QrMediaKind,
   QrMediaRaster,
   type QrMedia,
 } from './qr-media-raster'
 import {
   AuthenticatorEnrollmentCandidatesDecoder,
-  AuthenticatorEnrollmentPictureCodec,
   AuthenticatorEnrollmentSourceBound,
-  type AuthenticatorEnrollmentCandidate,
-  type AuthenticatorEnrollmentPicture,
 } from '../../../nook-web-shared/src/extension/authenticator-enrollment-candidates'
 import {
   ElementRendering,
   RenderedElementVisibility,
 } from './rendered-element-visibility'
-import { SetupKeyTextCandidates } from './setup-key-candidates'
-import type { NookAuthenticatorEnrollmentCandidates } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  SetupKeyTextCandidates,
+  type SetupKeySource,
+  type SetupKeySources,
+} from './setup-key-candidates'
+import type {
+  NookAuthenticatorEnrollmentCandidateSource,
+  NookAuthenticatorEnrollmentCandidates,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 enum SetupObservationPreparationKind {
   Unprepared = 'unprepared',
@@ -56,7 +60,7 @@ const MIN_QR_EDGE_PX = 80
 
 /** One Rust-accepted candidate; its label is the source and 1-based ordinal. */
 export type DecodedOtpauthCandidate = {
-  readonly source: AuthenticatorEnrollmentCandidate['source']
+  readonly source: NookAuthenticatorEnrollmentCandidateSource
   readonly ordinal: number
   otpauthUri: string
 }
@@ -90,9 +94,15 @@ type DialogInstructionRequest = {
   readonly media: Element
 }
 
-/** One dialog without QR media, read for its own prose. */
-type DialogProseRequest = {
+/** One dialog without QR media, read only for its title and headings. */
+type DialogHeadingRequest = {
   readonly dialog: HTMLElement
+}
+
+/** The dialog attributes whose referenced elements count as its copy. */
+type DialogReferenceRequest = {
+  readonly dialog: HTMLElement
+  readonly attributes: readonly string[]
 }
 
 /** One dialog element considered as instruction copy for that media. */
@@ -147,6 +157,13 @@ class PageQrCapture {
     'aria-describedby',
   ]
   static readonly PROSE_SELECTOR = 'h1,h2,h3,h4,h5,h6,p'
+  /** A manual-key dialog is read only for its title and these headings. */
+  static readonly HEADING_SELECTOR = 'h1,h2,h3,h4,h5,h6'
+  static readonly DIALOG_TITLE_ATTRIBUTES: readonly string[] = [
+    'aria-labelledby',
+  ]
+  /** Markup that may set a setup key inside a heading. */
+  static readonly KEY_MARKUP_SELECTOR = 'strong,b,code,kbd,samp,mark,input'
   static readonly DIALOG_TEXT_LEAF_SELECTOR = 'div,span'
   /** Setup scopes a manual-key view without QR media may describe itself in. */
   static readonly MAX_SETUP_SCOPES = 8
@@ -157,7 +174,6 @@ class PageQrCapture {
   private readonly raster: QrMediaRaster
   private readonly setupKeyTexts: SetupKeyTextCandidates
   private readonly visibility: RenderedElementVisibility
-  private readonly pictures = new AuthenticatorEnrollmentPictureCodec()
   constructor(private readonly browser: typeof globalThis) {
     this.raster = new QrMediaRaster(browser)
     this.setupKeyTexts = new SetupKeyTextCandidates(browser)
@@ -219,10 +235,10 @@ class PageQrCapture {
 
   /**
    * Pre-consent copy only: never QR payloads or setup keys. With visible QR
-   * media each one reports its nearby instructions. Without any, a manual-key
-   * view can still describe itself: each dialog or section scope reports its
-   * own headings, paragraphs, and dialog label or description (no div or span
-   * leaves), and Rust decides whether that copy asks for a setup key.
+   * media each one reports its nearby instructions. Without any, only an open
+   * dialog can describe a manual-key view, through its labelled title and its
+   * headings. Its description, paragraphs, and any heading holding emphasized,
+   * code-like, or input markup stay out, because a site may print the key there.
    */
   private authenticatorSetupMetadata(): AuthenticationAuthenticatorSetupBatch {
     const media = this.collectQrMedia()
@@ -238,7 +254,7 @@ class PageQrCapture {
         }
       case true:
         return {
-          visibleInstructionCopies: this.instructedManualKeyScopes().map(
+          visibleInstructionCopies: this.instructedManualKeyDialogs().map(
             (scope) => this.instructionCopy(scope.candidates),
           ),
           qrMedia: 'absent',
@@ -246,11 +262,12 @@ class PageQrCapture {
     }
   }
 
-  /** Dialog and section scopes in page order; a section inside a dialog belongs to the dialog. */
-  private manualKeyScopes(): SetupScope[] {
-    const document = this.browser.document
-    const dialogs = Array.from(
-      document.querySelectorAll(PageQrCapture.DIALOG_SCOPE_SELECTOR),
+  /** Outermost dialogs in page order, each read only for its title and headings. */
+  private manualKeyDialogs(): SetupScope[] {
+    return Array.from(
+      this.browser.document.querySelectorAll(
+        PageQrCapture.DIALOG_SCOPE_SELECTOR,
+      ),
     )
       .filter((element) => element instanceof HTMLElement)
       .filter(
@@ -262,37 +279,16 @@ class PageQrCapture {
           ),
       )
       .map((dialog): SetupScope => {
-        const request: DialogProseRequest = { dialog }
+        const request: DialogHeadingRequest = { dialog }
         return {
           element: dialog,
-          candidates: this.dialogProseCandidates(request),
+          candidates: this.dialogHeadingCandidates(request),
         }
       })
-    const sections = Array.from(
-      document.querySelectorAll(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR),
-    )
-      .filter((element) => element instanceof HTMLElement)
-      .filter(
-        (section) =>
-          !(
-            section.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR) instanceof
-            Element
-          ),
-      )
-      .map((section): SetupScope => ({
-        element: section,
-        candidates: this.scopeProseElements(section).map(
-          (element): InstructionCandidate => ({
-            kind: InstructionCandidateKind.Prose,
-            element,
-          }),
-        ),
-      }))
-    return [...dialogs, ...sections]
   }
 
-  private instructedManualKeyScopes(): SetupScope[] {
-    return this.manualKeyScopes()
+  private instructedManualKeyDialogs(): SetupScope[] {
+    return this.manualKeyDialogs()
       .filter(
         (scope) =>
           this.scopeCopy(scope.candidates) === SetupScopeCopy.Instructed,
@@ -309,24 +305,32 @@ class PageQrCapture {
     }
   }
 
-  /** The scopes whose text may show a setup key, after the trusted click. */
-  private setupKeyScopes(media: VisibleQrMedia): HTMLElement[] {
-    const scopes: HTMLElement[] = []
+  /**
+   * The single setup scope nearest the instructions or QR, after the trusted
+   * click: the first QR's dialog, section, or parent, or else the first
+   * instructed manual-key dialog, anchored at its first instruction.
+   */
+  private setupKeySources(media: VisibleQrMedia): SetupKeySources {
     switch (media.length === 0) {
-      case true:
-        scopes.push(
-          ...this.instructedManualKeyScopes().map((scope) => scope.element),
-        )
-        break
       case false:
-        scopes.push(...media.flatMap((item) => this.mediaScope(item.element)))
-        break
+        return media.slice(0, 1).flatMap((item) =>
+          this.mediaScope(item.element).map((scope): SetupKeySource => ({
+            scope,
+            anchor: item.element,
+          })),
+        )
+      case true:
+        return this.instructedManualKeyDialogs()
+          .slice(0, 1)
+          .flatMap((dialog) =>
+            this.capturedInstructionElements(dialog.candidates)
+              .slice(0, 1)
+              .map((anchor): SetupKeySource => ({
+                scope: dialog.element,
+                anchor,
+              })),
+          )
     }
-    const distinct = [...new Set(scopes)]
-    return distinct.filter(
-      (scope) =>
-        !distinct.some((other) => other !== scope && other.contains(scope)),
-    )
   }
 
   /** The dialog, section, or parent that frames one QR's instructions. */
@@ -470,7 +474,11 @@ class PageQrCapture {
     request: DialogInstructionRequest,
   ): InstructionCandidate[] {
     const { dialog, media } = request
-    const references = this.dialogReferenceCandidates(dialog)
+    const referenceRequest: DialogReferenceRequest = {
+      dialog,
+      attributes: PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES,
+    }
+    const references = this.dialogReferenceCandidates(referenceRequest)
     const contents = Array.from(
       dialog.querySelectorAll(
         `${PageQrCapture.PROSE_SELECTOR},${PageQrCapture.DIALOG_TEXT_LEAF_SELECTOR}`,
@@ -488,13 +496,13 @@ class PageQrCapture {
     return [...references, ...contents]
   }
 
-  /** The dialog's own label and description elements, which it contains. */
+  /** The elements the dialog names through these attributes, which it contains. */
   private dialogReferenceCandidates(
-    dialog: HTMLElement,
+    request: DialogReferenceRequest,
   ): InstructionCandidate[] {
-    const referencedIds = PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES.map(
-      (attribute) => dialog.getAttribute(attribute),
-    )
+    const { dialog, attributes } = request
+    const referencedIds = attributes
+      .map((attribute) => dialog.getAttribute(attribute))
       .filter((value) => typeof value === 'string')
       .join(' ')
       .split(/\s+/)
@@ -509,13 +517,21 @@ class PageQrCapture {
       }))
   }
 
-  /** A dialog without QR media: its label, description, headings, and paragraphs only. */
-  private dialogProseCandidates(
-    request: DialogProseRequest,
+  /**
+   * A dialog without QR media: its aria-labelledby title, then its own
+   * headings. A title or heading holding emphasized, code-like, or input
+   * markup is skipped, since a site may set the key there.
+   */
+  private dialogHeadingCandidates(
+    request: DialogHeadingRequest,
   ): InstructionCandidate[] {
     const { dialog } = request
-    const prose = Array.from(
-      dialog.querySelectorAll(PageQrCapture.PROSE_SELECTOR),
+    const titleRequest: DialogReferenceRequest = {
+      dialog,
+      attributes: PageQrCapture.DIALOG_TITLE_ATTRIBUTES,
+    }
+    const headings = Array.from(
+      dialog.querySelectorAll(PageQrCapture.HEADING_SELECTOR),
     )
       .filter((element) => element instanceof HTMLElement)
       .filter(
@@ -526,7 +542,18 @@ class PageQrCapture {
         kind: InstructionCandidateKind.Prose,
         element,
       }))
-    return [...this.dialogReferenceCandidates(dialog), ...prose]
+    return [
+      ...this.dialogReferenceCandidates(titleRequest),
+      ...headings,
+    ].filter(
+      (candidate) =>
+        !(
+          candidate.element.matches(PageQrCapture.KEY_MARKUP_SELECTOR) ||
+          candidate.element.querySelector(
+            PageQrCapture.KEY_MARKUP_SELECTOR,
+          ) instanceof Element
+        ),
+    )
   }
 
   /**
@@ -738,35 +765,35 @@ class PageQrCapture {
   }
 
   /** Rasterizes each visible QR once; unreadable media is skipped. */
-  private async capturedPictures(
-    media: VisibleQrMedia,
-  ): Promise<AuthenticatorEnrollmentPicture[]> {
-    const pictures: AuthenticatorEnrollmentPicture[] = []
+  private async capturedPictures(media: VisibleQrMedia): Promise<string[]> {
+    const pictureDataUrls: string[] = []
     for (const item of media) {
-      const capture = await this.raster.opaquePixels(item)
+      const capture = await this.raster.opaquePicture(item)
       switch (capture.kind) {
-        case QrPixelCaptureKind.Unavailable:
+        case QrPictureCaptureKind.Unavailable:
           continue
-        case QrPixelCaptureKind.Captured:
-          pictures.push(this.pictures.encode(capture.pixels))
+        case QrPictureCaptureKind.Captured:
+          pictureDataUrls.push(capture.pngDataUrl)
       }
     }
-    return pictures
+    return pictureDataUrls
   }
 
   /**
    * Runs only after the trusted **Add 2FA from this page** click. The content
    * script rasterizes the visible QR media and reads bounded setup-key text
-   * candidates from the same setup scopes; the offscreen document decodes the
+   * candidates from the nearest setup scope; the offscreen document decodes the
    * pictures and Rust returns only the otpauth candidates it accepts.
    */
   async resolveVisibleOtpauthCandidates(): Promise<DecodedOtpauthCandidatesResult> {
     const media = this.collectQrMedia()
-    const setupKeyTexts = this.setupKeyTexts.collect(this.setupKeyScopes(media))
+    const setupKeyTexts = this.setupKeyTexts.collect(
+      this.setupKeySources(media),
+    )
     const message: CompanionWasmRuntimeMessage = {
       type: CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates,
       payload: {
-        pictures: await this.capturedPictures(media),
+        pictureDataUrls: await this.capturedPictures(media),
         setupKeyTexts,
       },
       origin: this.browser.location.origin,

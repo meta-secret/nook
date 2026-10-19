@@ -4,20 +4,63 @@ import {
   RenderedElementVisibility,
 } from './rendered-element-visibility'
 
-/** The scopes whose visible text may show a setup key, in page order. */
-export type SetupKeyScopes = readonly HTMLElement[]
+/** The nearest setup scope and the instruction or QR element its texts are ordered from. */
+export type SetupKeySource = {
+  readonly scope: HTMLElement
+  readonly anchor: Element
+}
+
+/** At most one setup scope: the one nearest the setup instructions or QR. */
+export type SetupKeySources = readonly SetupKeySource[]
 
 enum SetupKeyTextFit {
   Fits = 'fits',
   TooLong = 'too-long',
 }
 
+/** Tree distance from one anchor element: edges up to a shared ancestor and back down. */
+class DomDistance {
+  private readonly anchorDepths = new Map<Node, number>()
+
+  constructor(anchor: Element) {
+    for (const [depth, node] of [...this.ancestry(anchor)].entries()) {
+      this.anchorDepths.set(node, depth)
+    }
+  }
+
+  to(element: Element): number {
+    for (const [steps, node] of [...this.ancestry(element)].entries()) {
+      switch (this.anchorDepths.has(node)) {
+        case true:
+          return steps + Number(this.anchorDepths.get(node))
+        case false:
+          break
+      }
+    }
+    // Disconnected trees share no ancestor; order them after every connected one.
+    return [...this.ancestry(element)].length + this.anchorDepths.size
+  }
+
+  /** The node and its ancestors, nearest first. */
+  private *ancestry(start: Node): Generator<Node> {
+    yield start
+    for (const parent of [start.parentNode].filter(
+      (node) => node instanceof Node,
+    )) {
+      yield* this.ancestry(parent)
+    }
+  }
+}
+
 /**
  * Gathers bounded visible text candidates that may hold an authenticator setup
- * key, only after the trusted **Add 2FA from this page** click. TypeScript
- * never judges whether a text is a key: Rust decides plausibility and
- * normalizes it. Buttons and links are never read, and text longer than the
- * transport bound is skipped rather than truncated into a different key.
+ * key, only after the trusted **Add 2FA from this page** click and only from
+ * the single nearest setup scope. Candidates are ordered nearest-first by DOM
+ * distance to the setup instructions or QR, so earlier prose cannot crowd the
+ * key out of the bound. TypeScript never judges whether a text is a key: Rust
+ * decides plausibility and normalizes it. Buttons and links are never read,
+ * and text longer than the transport bound is skipped rather than truncated
+ * into a different key.
  */
 export class SetupKeyTextCandidates {
   static readonly CONTAINER_SELECTOR =
@@ -33,9 +76,9 @@ export class SetupKeyTextCandidates {
     this.visibility = new RenderedElementVisibility(browser)
   }
 
-  collect(scopes: SetupKeyScopes): string[] {
+  collect(sources: SetupKeySources): string[] {
     const texts: string[] = []
-    for (const candidate of scopes.flatMap((scope) => this.elements(scope))) {
+    for (const candidate of sources.flatMap((source) => this.nearest(source))) {
       switch (
         texts.length < AuthenticatorEnrollmentSourceBound.MaxSetupKeyTexts
       ) {
@@ -62,25 +105,35 @@ export class SetupKeyTextCandidates {
     return texts
   }
 
+  /** The scope's candidates, nearest the anchor first, ties in page order. */
+  private nearest({ scope, anchor }: SetupKeySource): HTMLElement[] {
+    const distance = new DomDistance(anchor)
+    const byDistance: HTMLElement[][] = []
+    for (const element of this.elements(scope)) {
+      const steps = distance.to(element)
+      for (let index = byDistance.length; index <= steps; index += 1) {
+        byDistance.push([])
+      }
+      byDistance[steps]?.push(element)
+    }
+    return byDistance.flat()
+  }
+
   /**
-   * Key-shaped markup comes first and reads its whole text, so a key split
-   * across child spans stays one candidate; leaves read only their own text.
+   * Key-shaped markup reads its whole text, so a key split across child spans
+   * stays one candidate; leaves read only text they hold themselves.
    */
   private elements(scope: HTMLElement): HTMLElement[] {
-    const containers = Array.from(
-      scope.querySelectorAll(SetupKeyTextCandidates.CONTAINER_SELECTOR),
-    )
-    const leaves = Array.from(
-      scope.querySelectorAll(SetupKeyTextCandidates.TEXT_LEAF_SELECTOR),
-    ).filter(
-      (element) =>
-        !element.matches(SetupKeyTextCandidates.CONTAINER_SELECTOR) &&
-        Array.from(element.childNodes).some(
-          (node) => node instanceof Text && node.data.trim().length > 0,
-        ),
-    )
-    return [...containers, ...leaves]
+    const selector = `${SetupKeyTextCandidates.CONTAINER_SELECTOR},${SetupKeyTextCandidates.TEXT_LEAF_SELECTOR}`
+    return Array.from(scope.querySelectorAll(selector))
       .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (element) =>
+          element.matches(SetupKeyTextCandidates.CONTAINER_SELECTOR) ||
+          Array.from(element.childNodes).some(
+            (node) => node instanceof Text && node.data.trim().length > 0,
+          ),
+      )
       .filter(
         (element) =>
           !(

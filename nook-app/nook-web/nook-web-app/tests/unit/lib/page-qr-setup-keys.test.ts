@@ -11,14 +11,17 @@ afterEach(() => {
 class ManualKeyDialogFixture {
   static readonly SETUP_KEY = 'JBSW Y3DP EHPK 3PXP'
 
-  static markup(): string {
+  static markup(body = ''): string {
     return `
       <main aria-hidden="true"><h1>Account settings</h1><p>Manage your security</p></main>
-      <div role="dialog" aria-modal="true" aria-labelledby="key-title">
+      <div role="dialog" aria-modal="true" aria-labelledby="key-title" aria-describedby="key-description">
         <h2 id="key-title">Update authenticator app</h2>
-        <p>Enter this setup key in your authenticator app.</p>
+        <h3>Enter your setup key in your authenticator app</h3>
+        <div id="key-description">Your key is ${ManualKeyDialogFixture.SETUP_KEY}</div>
+        <p>Key: <strong>${ManualKeyDialogFixture.SETUP_KEY}</strong></p>
         <div>${ManualKeyDialogFixture.SETUP_KEY}</div>
         <span>Time-based</span>
+        ${body}
         <div><button type="button">Cancel</button><button type="button">Continue</button></div>
       </div>
     `
@@ -26,52 +29,76 @@ class ManualKeyDialogFixture {
 }
 
 describe('manual setup-key views without a QR', () => {
-  test('pre-consent copy reads only headings and paragraphs, so the key never enters it', async () => {
+  test('a heading-instructed dialog stays eligible while its key never enters pre-consent copy', async () => {
     const fixture = new DialogQrObservationFixture(
       ManualKeyDialogFixture.markup(),
     )
     // The integrated classifier treats setup-key instructions as Present
     // without media; scan-QR instructions still need a visible QR.
     expect(await fixture.observation()).toBe('present')
-    const payload = fixture.payloads.at(-1)
-    expect(payload?.qrMedia).toBe('absent')
+    expect(fixture.payloads.at(-1)?.qrMedia).toBe('absent')
     expect(fixture.instructionCopies).toEqual([
-      '\nUpdate authenticator app\nEnter this setup key in your authenticator app.',
+      '\nUpdate authenticator app\nEnter your setup key in your authenticator app',
     ])
-    expect(JSON.stringify(fixture.payloads)).not.toContain('JBSW')
-    expect(JSON.stringify(fixture.payloads)).not.toContain('Time-based')
+    const sent = JSON.stringify(fixture.payloads)
+    expect(sent).not.toContain('JBSW')
+    expect(sent).not.toContain('Your key is')
+    expect(sent).not.toContain('Time-based')
     expect(fixture.resolveRequests).toEqual([])
   })
 
-  test('the trusted decode extracts the key from the same dialog scope and sends no pictures', async () => {
+  test('headings holding emphasized or code-like markup are skipped', async () => {
+    for (const markup of ['strong', 'b', 'code', 'kbd', 'samp', 'mark']) {
+      const fixture = new DialogQrObservationFixture(`
+        <div role="dialog" aria-modal="true" aria-labelledby="t">
+          <h2 id="t">Enter your setup key: <${markup}>${ManualKeyDialogFixture.SETUP_KEY}</${markup}></h2>
+          <h3>Use your authenticator app</h3>
+        </div>
+      `)
+      await fixture.observation()
+      expect(JSON.stringify(fixture.payloads), markup).not.toContain('JBSW')
+      expect(fixture.instructionCopies, markup).toEqual([
+        '\nUse your authenticator app',
+      ])
+    }
+  })
+
+  test('sections, forms, and articles without a QR are not read for setup copy', async () => {
+    for (const scope of ['section', 'form', 'article']) {
+      const fixture = new DialogQrObservationFixture(
+        `<${scope}><h2>Enter your setup key in your authenticator app</h2><div>${ManualKeyDialogFixture.SETUP_KEY}</div></${scope}>`,
+      )
+      expect(await fixture.observation(), scope).toBe('absent')
+      expect(fixture.payloads.at(-1), scope).toEqual({
+        visibleInstructionCopies: [],
+        qrMedia: 'absent',
+      })
+    }
+  })
+
+  test('the trusted decode reads the nearest dialog, nearest the instructions first, and sends no pictures', async () => {
+    // Earlier prose deep in the dialog must not crowd the key out of the bound.
+    const filler = `<div><div><div>${Array.from(
+      { length: 80 },
+      (_, index) => `<p>Step ${index} of the setup guide.</p>`,
+    ).join('')}</div></div></div>`
     const fixture = new DialogQrObservationFixture(
-      ManualKeyDialogFixture.markup(),
+      ManualKeyDialogFixture.markup(filler),
     )
     await fixture.observation()
 
     await pageQrCapture.resolveVisibleOtpauthCandidates()
 
     const [request] = fixture.resolveRequests
-    expect(request?.payload.pictures).toEqual([])
-    expect(request?.payload.setupKeyTexts).toContain(
-      ManualKeyDialogFixture.SETUP_KEY,
-    )
-    expect(request?.payload.setupKeyTexts).not.toContain('Account settings')
-    expect(request?.payload.setupKeyTexts).not.toContain('Cancel')
+    expect(request?.payload.pictureDataUrls).toEqual([])
+    const texts = request?.payload.setupKeyTexts
+    expect(texts).toContain(ManualKeyDialogFixture.SETUP_KEY)
+    expect(texts?.length).toBe(64)
+    expect(texts).not.toContain('Account settings')
+    expect(texts).not.toContain('Cancel')
   })
 
-  test('a page without any setup scope copy sends no instruction copies', async () => {
-    const fixture = new DialogQrObservationFixture(
-      `<div>${ManualKeyDialogFixture.SETUP_KEY}</div><p>Enter this setup key in your authenticator app.</p>`,
-    )
-    expect(await fixture.observation()).toBe('absent')
-    expect(fixture.payloads.at(-1)).toEqual({
-      visibleInstructionCopies: [],
-      qrMedia: 'absent',
-    })
-  })
-
-  test('copy changes inside a manual-key dialog request a setup rescan', () => {
+  test('copy changes inside a manual-key dialog request a setup rescan; page prose does not', () => {
     new DialogQrObservationFixture(ManualKeyDialogFixture.markup())
     const observer = new MutationObserver(() => {})
     const observerOptions: MutationObserverInit = {
@@ -81,17 +108,26 @@ describe('manual setup-key views without a QR', () => {
     }
     observer.observe(document.body, observerOptions)
     const heading = document.querySelector('#key-title')
-    if (!heading) throw new Error('Expected manual-key heading')
+    const pageProse = document.querySelector('main p')
+    if (!heading || !pageProse) throw new Error('Expected manual-key fixture')
     heading.textContent = 'Set up authenticator app'
-    const records = observer.takeRecords()
-    expect(records.length).toBeGreaterThan(0)
+    const dialogRecords = observer.takeRecords()
+    expect(dialogRecords.length).toBeGreaterThan(0)
     expect(
-      records.some((record) =>
+      dialogRecords.some((record) =>
         pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
           record,
         ),
       ),
     ).toBe(true)
+    pageProse.textContent = 'Recent sign-in activity'
+    for (const record of observer.takeRecords()) {
+      expect(
+        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
+          record,
+        ),
+      ).toBe(false)
+    }
     observer.disconnect()
   })
 })

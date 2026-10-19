@@ -466,7 +466,10 @@ describe('authenticator setup dialogs', () => {
       }),
     })
     expect(await fixture.observation()).toBe('absent')
-    expect(fixture.instructionCopies).toEqual([])
+    // Without QR media the dialog reports only its labelled title; its
+    // scan-this-QR description stays out of the manual-key copy.
+    expect(fixture.payloads.at(-1)?.qrMedia).toBe('absent')
+    expect(fixture.instructionCopies).toEqual(['\nUpdate authenticator app'])
   })
 
   test('copy changes inside the dialog request a setup rescan; unrelated page text does not', () => {
@@ -557,19 +560,12 @@ describe('authenticator setup dialogs', () => {
           source: decodedSource,
         },
       ])
-      expect(raster.copiedSizes).toEqual(['220x220'])
+      expect(raster.copiedSizes).toEqual(['220x220 image/png'])
       const [request] = fixture.resolveRequests
       expect(request?.origin).toBe(location.origin)
-      const pictures = request?.payload.pictures
-      expect(pictures?.map(({ width, height }) => [width, height])).toEqual([
-        [220, 220],
+      expect(request?.payload.pictureDataUrls).toEqual([
+        QrRasterDecodeFixture.PNG_DATA_URL,
       ])
-      // The copied RGBA bytes travel as base64 of exactly 220 × 220 × 4 bytes.
-      const bytes = atob(
-        String(pictures?.map((picture) => picture.rgbaBase64).join('')),
-      )
-      expect(bytes.length).toBe(220 * 220 * 4)
-      expect(/^\xff+$/.test(bytes)).toBe(true)
     } finally {
       raster.restore()
     }
@@ -631,7 +627,7 @@ describe('authenticator setup dialogs', () => {
 
     const unusableReplies: ResolveCandidatesRuntimeResponse[] = [
       { ok: false },
-      { ok: true, result: { candidates: [{ source: 'qr', otpauthUri: 'x' }] } },
+      { ok: true, result: { unexpected: 'reply' } },
     ]
     for (const resolution of unusableReplies) {
       fixture.resolution = resolution
@@ -668,14 +664,25 @@ describe('authenticator setup dialogs', () => {
     }
 
     const texts = fixture.resolvedSetupKeyTexts
-    expect(texts.slice(0, 2)).toEqual([setupKey, 'KRSX G5CT MVRX EZLU'])
+    expect(texts).toContain(setupKey)
+    expect(texts).toContain('KRSX G5CT MVRX EZLU')
     expect(texts).toContain("Can't scan it? Enter this key instead:")
     expect(texts).not.toContain('Cancel')
     expect(texts).not.toContain('Enter code manually')
-    expect(texts.length).toBeLessThanOrEqual(16)
+    // The QR's siblings come before the dialog title nested one level deeper.
+    expect(texts.indexOf(setupKey)).toBeLessThan(
+      texts.indexOf('Update authenticator app'),
+    )
+    expect(texts.length).toBeLessThanOrEqual(64)
     for (const text of texts) {
       expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(256)
     }
+    // The page drops its copy of the texts once the request is sent.
+    expect(
+      fixture.resolveMessages.flatMap(
+        (message) => message.payload.setupKeyTexts,
+      ),
+    ).toEqual(texts.map(() => ''))
   })
 
   test('cancelling clears the URI a resolved candidate carried', async () => {

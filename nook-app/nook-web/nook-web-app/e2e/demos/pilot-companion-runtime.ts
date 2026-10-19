@@ -20,6 +20,7 @@ import {
   type WebsiteAuthenticatorEnrollPreviewMessage,
   type WebsiteAuthenticatorEnrollStageMessage,
 } from '../../../nook-web-extension/src/lib/enrollment-messages'
+import { WebsiteAuthenticatorResponseStatus } from '../../../nook-web-extension/src/lib/login-fill-messages'
 import { preview_otpauth_uri } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { vaultWasmStartup } from '../../../nook-web-extension/src/offscreen/vault-wasm-startup'
 
@@ -50,7 +51,7 @@ type DemoRuntimeCallback = (response: DemoRuntimeResponse) => void
 /** The service worker's preview reply, computed by the vault WASM like the offscreen document. */
 type DemoAuthenticatorPreviewResponse = {
   readonly ok: true
-  readonly status: 'ready'
+  readonly status: WebsiteAuthenticatorResponseStatus.Ready
   readonly vaultStoreId: string
   readonly vaultName: string
   readonly preview: {
@@ -141,7 +142,7 @@ class PilotCompanionDemoRuntime {
         try {
           callback({
             ok: true,
-            status: 'ready',
+            status: WebsiteAuthenticatorResponseStatus.Ready,
             vaultStoreId: 'demo-vault',
             vaultName: 'Demo vault',
             preview: {

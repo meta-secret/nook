@@ -49,6 +49,7 @@ const dialogStyles = `
     transform: translate(-50%, -50%);
   }
   .setup-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+  .setup-dialog h3 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
   .setup-dialog svg, .setup-dialog canvas { display: block; margin: 18px auto; }
   .setup-dialog .setup-key { margin: 18px 0; font: 600 18px ui-monospace, monospace; letter-spacing: 0.08em; text-align: center; }
   .setup-dialog footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
@@ -59,7 +60,7 @@ const dialogDescription =
 
 const manualKeyView = `
   <h2 id="mfa-title">Update authenticator app</h2>
-  <p>Enter this setup key in your authenticator app.</p>
+  <h3>Enter your setup key in your authenticator app</h3>
   <div class="setup-key" data-testid="demo-setup-key">${SETUP_KEY}</div>
   <footer>
     <button type="button">Cancel</button>
@@ -278,7 +279,15 @@ test('enrolls 2FA from a setup key shown after "Enter code manually"', async ({
   await expect(service).toHaveValue(pageHost)
   await expect(widget.getByRole('textbox', { name: 'Account' })).toHaveValue('')
   await expect(widget.getByText(/JBSW/)).toHaveCount(0)
+  const continueButton = widget.getByRole('button', {
+    name: 'Continue enrollment',
+  })
+  await expect(continueButton).toBeEnabled()
+  // Rust rejects an empty Service before the site step, so it cannot fail later.
+  await service.fill('')
+  await expect(continueButton).toBeDisabled()
   await service.fill('Demo Service')
+  await expect(continueButton).toBeEnabled()
   await widget
     .getByRole('textbox', { name: 'Account' })
     .fill('demo.user@example.test')

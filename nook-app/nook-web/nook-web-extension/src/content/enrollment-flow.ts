@@ -43,6 +43,10 @@ import {
   enrollmentBackupInteraction,
 } from './enrollment-backup-flow'
 import type { RevalidatedAuthenticationActRequest } from './autofill/workflow-revalidation'
+import {
+  ReviewedLabelValidation,
+  type ReviewedLabelGateRequest,
+} from './reviewed-label-validation'
 import { RevalidatedEnrollmentAction } from './autofill/backup-code-workflow-action'
 
 export type { EnrollmentPageHints } from './enrollment-flow-view'
@@ -502,11 +506,29 @@ class AuthenticatorEnrollmentInteraction {
             candidate,
             reviewed,
           }
-          void this.beginEnrollmentCeremony(nookTypedArgs0_28)
+          // Rust checks the frozen labels again before anything is staged.
+          void labels.seal().then((verdict) => {
+            switch (verdict) {
+              case 'valid':
+                void this.beginEnrollmentCeremony(nookTypedArgs0_28)
+                return
+              case 'invalid':
+                host.setBusy(false)
+                cancelButton.disabled = false
+                labels.reopen()
+                return
+            }
+          })
         },
       }
       const confirmButton =
         enrollmentFlowRenderer.createPrimaryButton(nookTypedArgs1_3)
+      const labelGate: ReviewedLabelGateRequest = {
+        browser: globalThis,
+        fields: reviewed,
+        confirmButton,
+      }
+      const labels = new ReviewedLabelValidation(labelGate)
 
       const nookTypedArgs1_4: Parameters<
         typeof enrollmentFlowRenderer.createTextButton
@@ -550,6 +572,7 @@ class AuthenticatorEnrollmentInteraction {
         buttons: [confirmButton, cancelButton],
       }
       enrollmentFlowRenderer.appendButtonRow(nookTypedArgs0_31)
+      labels.start()
     } finally {
       host.setBusy(false)
     }

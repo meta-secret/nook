@@ -35,6 +35,8 @@ export type ResolveCandidatesRuntimeResponse =
       readonly ok: true
       readonly result: NookAuthenticatorEnrollmentCandidates
     }
+  // A delivered reply in the wrong shape, which the page must reject.
+  | { readonly ok: true; readonly result: { readonly unexpected: string } }
   | { readonly ok: false }
 
 /** A portaled modal like the reported "Update authenticator app" dialog. */
@@ -61,6 +63,8 @@ export class DialogQrObservationFixture {
   readonly payloads: AuthenticationAuthenticatorSetupBatch[] = []
   /** Every candidate request the page sent; only the trusted decode sends one. */
   readonly resolveRequests: ResolveCandidatesRuntimeRequest[] = []
+  /** The same requests as sent, to observe what the page clears afterwards. */
+  readonly resolveMessages: ResolveCandidatesRuntimeRequest[] = []
   /** What the stubbed offscreen decoder answers, Rust's accepted candidates. */
   resolution: ResolveCandidatesRuntimeResponse = {
     ok: true,
@@ -70,7 +74,7 @@ export class DialogQrObservationFixture {
   constructor(markup: string) {
     document.body.innerHTML = markup
     for (const element of document.querySelectorAll(
-      'img,canvas,svg,h1,h2,p,div,span,code,input',
+      'img,canvas,svg,h1,h2,h3,h4,h5,h6,p,div,span,strong,b,mark,code,kbd,samp,input',
     )) {
       Object.defineProperty(element, 'getBoundingClientRect', {
         configurable: true,
@@ -98,6 +102,7 @@ export class DialogQrObservationFixture {
           switch (message.type) {
             case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
               this.resolveRequests.push(structuredClone(message))
+              this.resolveMessages.push(message)
               callback(this.resolution)
               return
             case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
@@ -148,10 +153,11 @@ type RasterOperation = {
   readonly source: string
 }
 
-/** Stands in for Chromium's image decode and 2D canvas pixel copy. */
+/** Stands in for Chromium's image decode, 2D canvas, and PNG encoding. */
 export class QrRasterDecodeFixture {
   readonly operations: RasterOperation[] = []
   readonly decodedSources: string[] = []
+  /** Each opaque canvas encoded for transport: its size and image type. */
   readonly copiedSizes: string[] = []
   private readonly originalDecode = Object.getOwnPropertyDescriptor(
     HTMLImageElement.prototype,
@@ -161,6 +167,12 @@ export class QrRasterDecodeFixture {
     HTMLCanvasElement.prototype,
     'getContext',
   )
+  private readonly originalToDataUrl = Object.getOwnPropertyDescriptor(
+    HTMLCanvasElement.prototype,
+    'toDataURL',
+  )
+  /** What the stubbed canvas encodes every opaque picture as. */
+  static readonly PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgo='
 
   install(): void {
     const { operations, decodedSources, copiedSizes } = this
@@ -190,17 +202,15 @@ export class QrRasterDecodeFixture {
               source: source.src,
             })
           },
-          // Host-fixed CanvasRenderingContext2D.getImageData(sx, sy, sw, sh).
-          getImageData(_x: number, _y: number, width: number, height: number) {
-            copiedSizes.push(`${width}x${height}`)
-            return {
-              data: new Uint8ClampedArray(width * height * 4).fill(255),
-              width,
-              height,
-            }
-          },
         }
         return context
+      },
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+      configurable: true,
+      value(this: HTMLCanvasElement, type: string): string {
+        copiedSizes.push(`${this.width}x${this.height} ${type}`)
+        return QrRasterDecodeFixture.PNG_DATA_URL
       },
     })
   }
@@ -223,6 +233,15 @@ export class QrRasterDecodeFixture {
       )
     } else {
       Reflect.deleteProperty(HTMLCanvasElement.prototype, 'getContext')
+    }
+    if (this.originalToDataUrl) {
+      Object.defineProperty(
+        HTMLCanvasElement.prototype,
+        'toDataURL',
+        this.originalToDataUrl,
+      )
+    } else {
+      Reflect.deleteProperty(HTMLCanvasElement.prototype, 'toDataURL')
     }
   }
 }

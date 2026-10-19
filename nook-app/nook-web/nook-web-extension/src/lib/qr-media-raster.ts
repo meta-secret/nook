@@ -13,28 +13,28 @@ export type QrMedia =
   | { readonly kind: QrMediaKind.Image; readonly element: HTMLImageElement }
   | { readonly kind: QrMediaKind.Vector; readonly element: SVGSVGElement }
 
-export enum QrPixelCaptureKind {
+export enum QrPictureCaptureKind {
   Captured = 'captured',
   Unavailable = 'unavailable',
 }
 
-/** Opaque RGBA pixels of one visible QR media element, at most 512 px per edge. */
-export type QrPixelCapture =
+/** One visible QR media element drawn opaque, at most 512 px per edge, as a PNG data URL. */
+export type QrPictureCapture =
   | {
-      readonly kind: QrPixelCaptureKind.Captured
-      readonly pixels: ImageData
+      readonly kind: QrPictureCaptureKind.Captured
+      readonly pngDataUrl: string
     }
-  | { readonly kind: QrPixelCaptureKind.Unavailable }
+  | { readonly kind: QrPictureCaptureKind.Unavailable }
 
 type QrRasterSize = {
   readonly width: number
   readonly height: number
 }
 
-/** Copies opaque pixels from a 2D context, or reports none when the canvas has no context. */
-type QrPixelCopy = {
-  readonly onNone: () => QrPixelCapture
-  readonly onSome: (context: CanvasRenderingContext2D) => QrPixelCapture
+/** Draws onto a 2D context, or reports none when the canvas has no context. */
+type QrPictureDrawing = {
+  readonly onNone: () => QrPictureCapture
+  readonly onSome: (context: CanvasRenderingContext2D) => QrPictureCapture
 }
 
 enum QrRasterSourceKind {
@@ -54,13 +54,13 @@ type QrRasterSource =
 
 /**
  * Draws one visible QR media element onto an opaque light canvas so the ZXing
- * reader sees dark modules on a light background, then copies its RGBA pixels.
+ * reader sees dark modules on a light background, then encodes it as a PNG.
  * Inline SVG is serialized at its rendered size and decoded as an image first.
  *
  * The copy is bounded: a picture whose longer edge exceeds 512 px is scaled
- * down, preserving its aspect ratio, so one capture is at most 512 × 512 × 4
- * bytes (1 MiB) before transport. A QR shown at a readable on-screen size keeps
- * every module at that bound.
+ * down, preserving its aspect ratio, so one capture holds at most 512 × 512
+ * pixels before transport. A QR shown at a readable on-screen size keeps every
+ * module at that bound.
  */
 export class QrMediaRaster {
   static readonly UNDERLAY_COLOR = '#ffffff'
@@ -69,20 +69,20 @@ export class QrMediaRaster {
   private readonly unavailableSource: QrRasterSource = {
     kind: QrRasterSourceKind.Unavailable,
   }
-  private readonly unavailableCapture: QrPixelCapture = {
-    kind: QrPixelCaptureKind.Unavailable,
+  private readonly unavailableCapture: QrPictureCapture = {
+    kind: QrPictureCaptureKind.Unavailable,
   }
 
   constructor(private readonly browser: typeof globalThis) {}
 
-  async opaquePixels(media: QrMedia): Promise<QrPixelCapture> {
+  async opaquePicture(media: QrMedia): Promise<QrPictureCapture> {
     try {
       const source = await this.rasterSource(media)
       switch (source.kind) {
         case QrRasterSourceKind.Unavailable:
           return this.unavailableCapture
         case QrRasterSourceKind.Ready:
-          return this.underlaidPixels(source)
+          return this.underlaidPicture(source)
       }
     } catch {
       // Cross-origin, CSP-blocked, or undecodable media is skipped without
@@ -166,26 +166,26 @@ export class QrMediaRaster {
     return bounded
   }
 
-  private underlaidPixels(source: ReadyQrRasterSource): QrPixelCapture {
+  private underlaidPicture(source: ReadyQrRasterSource): QrPictureCapture {
     const canvas = this.browser.document.createElement('canvas')
     const size = this.boundedSize(source)
     canvas.width = size.width
     canvas.height = size.height
-    const copy: QrPixelCopy = {
+    const drawing: QrPictureDrawing = {
       onNone: () => this.unavailableCapture,
       onSome: (context) => {
         context.fillStyle = QrMediaRaster.UNDERLAY_COLOR
         context.fillRect(0, 0, size.width, size.height)
         context.drawImage(source.image, 0, 0, size.width, size.height)
-        // A cross-origin image taints the canvas and getImageData throws; the
+        // A cross-origin image taints the canvas and toDataURL throws; the
         // caller's catch skips that media without widening host permissions.
-        const capture: QrPixelCapture = {
-          kind: QrPixelCaptureKind.Captured,
-          pixels: context.getImageData(0, 0, size.width, size.height),
+        const capture: QrPictureCapture = {
+          kind: QrPictureCaptureKind.Captured,
+          pngDataUrl: canvas.toDataURL('image/png'),
         }
         return capture
       },
     }
-    return Option.match(Option.fromNullishOr(canvas.getContext('2d')), copy)
+    return Option.match(Option.fromNullishOr(canvas.getContext('2d')), drawing)
   }
 }

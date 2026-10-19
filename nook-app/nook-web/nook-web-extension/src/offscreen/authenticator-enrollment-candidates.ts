@@ -14,9 +14,8 @@ import {
 } from '../../../nook-web-shared/src/vault-app/lib/qr/qr-code-reader'
 import { QrCodeReaderWasm } from '../../../nook-web-shared/src/vault-app/lib/qr/qr-code-reader-wasm'
 import {
-  AuthenticatorEnrollmentPictureCodec,
   AuthenticatorEnrollmentSourcesRequestDecoder,
-  type AuthenticatorEnrollmentPicture,
+  PNG_DATA_URL_PREFIX,
 } from '../../../nook-web-shared/src/extension/authenticator-enrollment-candidates'
 import type {
   CompanionWasmSessionMessage,
@@ -35,13 +34,12 @@ export type AuthenticatorEnrollmentCandidatesMessage = Extract<
   }
 >
 
-type QrPictureReader = Pick<QrCodeReader, 'readPixels'>
+type QrPictureReader = Pick<QrCodeReader, 'readImage'>
 
 /** What the resolver needs from the offscreen document; tests supply their own. */
 export type AuthenticatorEnrollmentCandidateResolution = {
   readonly reader: () => QrPictureReader
   readonly ensureWasm: () => ReturnType<typeof initNookWasm>
-  readonly resolveCandidates: typeof resolve_authenticator_enrollment_candidates
 }
 
 type CandidateResolutionResult = Result<
@@ -58,6 +56,13 @@ type CandidateResolutionOutcome = {
   ) => CandidateResolutionResult
 }
 
+type PictureTextsRequest = {
+  readonly reader: QrPictureReader
+  readonly pngDataUrl: string
+}
+
+const PNG_MEDIA_TYPE = 'image/png'
+
 /**
  * Decodes the pictures a trusted click captured with the bundled ZXing reader,
  * then lets Rust accept otpauth candidates from them and the setup-key texts.
@@ -68,7 +73,6 @@ type CandidateResolutionOutcome = {
  * media; a reader that cannot load fails the whole request.
  */
 export class AuthenticatorEnrollmentCandidateResolver {
-  private readonly pictures = new AuthenticatorEnrollmentPictureCodec()
   private readonly resultOutcome: CandidateResolutionOutcome = {
     onFailure: (failure) => err(failure),
     onSuccess: (candidates) => ok(candidates),
@@ -95,8 +99,8 @@ export class AuthenticatorEnrollmentCandidateResolver {
           )
           const reader = this.resolution.reader()
           const qrPayloads: string[] = []
-          for (const picture of request.payload.pictures) {
-            const pictureRequest: PictureTextsRequest = { reader, picture }
+          for (const pngDataUrl of request.payload.pictureDataUrls) {
+            const pictureRequest: PictureTextsRequest = { reader, pngDataUrl }
             const texts = yield* this.pictureTexts(pictureRequest)
             qrPayloads.push(...texts)
           }
@@ -112,7 +116,7 @@ export class AuthenticatorEnrollmentCandidateResolver {
               pageOrigin: request.origin,
             }
           return yield* Effect.try(() =>
-            this.resolution.resolveCandidates(candidateRequest),
+            resolve_authenticator_enrollment_candidates(candidateRequest),
           ).pipe(
             Effect.mapError(() =>
               this.failure(SessionOperationFailureKind.Failed),
@@ -131,30 +135,44 @@ export class AuthenticatorEnrollmentCandidateResolver {
 
   private pictureTexts({
     reader,
-    picture,
+    pngDataUrl,
   }: PictureTextsRequest): Effect.Effect<QrCodeTexts, SessionOperationFailure> {
-    return reader.readPixels(this.pictures.decode(picture)).pipe(
-      Effect.catch((failure: QrCodeReadFailure) => {
-        switch (failure.kind) {
-          case QrCodeReadFailureKind.PictureUnreadable: {
-            const unreadable: QrCodeTexts = []
-            return Effect.succeed(unreadable)
-          }
-          case QrCodeReadFailureKind.ReaderUnavailable:
-            return Effect.fail(this.failure(SessionOperationFailureKind.Failed))
-        }
-      }),
+    // The request decoder admitted only bounded PNG data URLs; malformed
+    // base64 rejects the request rather than skipping a picture.
+    const blobOptions: BlobPropertyBag = { type: PNG_MEDIA_TYPE }
+    const picture = Effect.try(() => {
+      const bytes = Uint8Array.from(
+        atob(pngDataUrl.slice(PNG_DATA_URL_PREFIX.length)),
+        (character) => character.charCodeAt(0),
+      )
+      return new Blob([bytes], blobOptions)
+    }).pipe(
+      Effect.mapError(() =>
+        this.failure(SessionOperationFailureKind.InvalidRequest),
+      ),
     )
+    const read = (image: Blob) =>
+      reader.readImage(image).pipe(Effect.catch(this.unreadablePictureSkip))
+    return picture.pipe(Effect.andThen(read))
+  }
+
+  /** A picture ZXing cannot read is skipped; a reader that cannot load fails. */
+  private readonly unreadablePictureSkip = (
+    failure: QrCodeReadFailure,
+  ): Effect.Effect<QrCodeTexts, SessionOperationFailure> => {
+    switch (failure.kind) {
+      case QrCodeReadFailureKind.PictureUnreadable: {
+        const unreadable: QrCodeTexts = []
+        return Effect.succeed(unreadable)
+      }
+      case QrCodeReadFailureKind.ReaderUnavailable:
+        return Effect.fail(this.failure(SessionOperationFailureKind.Failed))
+    }
   }
 
   private failure(kind: SessionOperationFailureKind): SessionOperationFailure {
     return new SessionOperationFailure(kind)
   }
-}
-
-type PictureTextsRequest = {
-  readonly reader: QrPictureReader
-  readonly picture: AuthenticatorEnrollmentPicture
 }
 
 enum OffscreenQrReaderKind {
@@ -192,7 +210,6 @@ const offscreenQrReader = new OffscreenQrReaderOwner()
 const offscreenResolution: AuthenticatorEnrollmentCandidateResolution = {
   reader: () => offscreenQrReader.reader(),
   ensureWasm: () => vaultWasmStartup.ensure(),
-  resolveCandidates: resolve_authenticator_enrollment_candidates,
 }
 
 export const authenticatorEnrollmentCandidateResolver =

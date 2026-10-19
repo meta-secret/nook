@@ -5,13 +5,6 @@ import type { QrCodeReaderWasm } from "./qr-code-reader-wasm";
 /** Texts of the valid QR symbols found in one picture, in reader order. */
 export type QrCodeTexts = readonly string[];
 
-/** One already-rasterized picture as row-major RGBA bytes. */
-export interface QrCodePixels {
-  readonly data: Uint8ClampedArray<ArrayBuffer>;
-  readonly width: number;
-  readonly height: number;
-}
-
 export enum QrCodeReadFailureKind {
   ReaderUnavailable = "reader-unavailable",
   PictureUnreadable = "picture-unreadable",
@@ -65,21 +58,6 @@ export class QrCodeReader {
   private readonly canvas = document.createElement("canvas");
 
   constructor(private readonly wasm: QrCodeReaderWasm) {}
-
-  /** Reads pixels another document already rasterized; nothing is drawn here. */
-  readPixels(
-    pixels: QrCodePixels,
-  ): Effect.Effect<QrCodeTexts, QrCodeReadFailure> {
-    // ImageData rejects a buffer whose length is not width × height × 4.
-    return Effect.try(
-      () => new ImageData(pixels.data, pixels.width, pixels.height),
-    ).pipe(
-      Effect.mapError(() =>
-        QrCodeReadFailure.of(QrCodeReadFailureKind.PictureUnreadable),
-      ),
-      Effect.andThen((image) => this.decode(image)),
-    );
-  }
 
   readImage(image: Blob): Effect.Effect<QrCodeTexts, QrCodeReadFailure> {
     const decoding: QrCodeReadAttempt<ImageBitmap> = {
