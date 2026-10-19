@@ -384,9 +384,16 @@ export class SidePanelViews {
     }
   }
 
-  /** All connections sits in the footer of the unlocked views once their
-   * vault list has answered. */
-  static footer(view: SidePanelView): SidePanelSessionControls {
+  /** All connections sits in the footer of This site once identities are
+   * connected: there is nothing to manage before. */
+  static footer(request: SidePanelFooterRequest): SidePanelSessionControls {
+    const { view, page } = request
+    switch (page) {
+      case SidePanelPageKind.Connections:
+        return SidePanelSessionControls.Hidden
+      case SidePanelPageKind.Site:
+        break
+    }
     switch (view.kind) {
       case SidePanelViewKind.Unlocked:
         break
@@ -397,12 +404,41 @@ export class SidePanelViews {
         return SidePanelSessionControls.Hidden
     }
     switch (view.vaults.kind) {
-      case SidePanelVaultsKind.Loading:
-        return SidePanelSessionControls.Hidden
       case SidePanelVaultsKind.Paired:
+        return SidePanelSessionControls.Shown
+      case SidePanelVaultsKind.Loading:
       case SidePanelVaultsKind.NoVault:
       case SidePanelVaultsKind.Failed:
-        return SidePanelSessionControls.Shown
+        return SidePanelSessionControls.Hidden
+    }
+  }
+
+  /** The page the panel shows: All connections only while there are
+   * connected identities to list; This site otherwise. */
+  static page(request: SidePanelFooterRequest): SidePanelPageKind {
+    const { view, page } = request
+    switch (page) {
+      case SidePanelPageKind.Site:
+        return SidePanelPageKind.Site
+      case SidePanelPageKind.Connections:
+        break
+    }
+    switch (view.kind) {
+      case SidePanelViewKind.Unlocked:
+        break
+      case SidePanelViewKind.Setup:
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.PasskeyLocked:
+      case SidePanelViewKind.Failure:
+        return SidePanelPageKind.Site
+    }
+    switch (view.vaults.kind) {
+      case SidePanelVaultsKind.Paired:
+        return SidePanelPageKind.Connections
+      case SidePanelVaultsKind.Loading:
+      case SidePanelVaultsKind.NoVault:
+      case SidePanelVaultsKind.Failed:
+        return SidePanelPageKind.Site
     }
   }
 
@@ -497,12 +533,29 @@ export type SidePanelAlert =
   | { readonly kind: SidePanelAlertKind.None }
   | { readonly kind: SidePanelAlertKind.Shown; readonly key: I18nKey }
 
-/** All connections: the Nook tab's companion home, where Use this identity
- * and Make default live. A failure is said at the top of the page. */
-export enum SidePanelHandOffKind {
-  Idle = 'idle',
-  Opening = 'opening',
+/** The unlocked panel's pages: This site, or All connections, where each
+ * connected identity lists its vaults with Make default and Use this
+ * identity. */
+export enum SidePanelPageKind {
+  Site = 'site',
+  Connections = 'connections',
 }
+
+type SidePanelFooterRequest = {
+  readonly view: SidePanelView
+  readonly page: SidePanelPageKind
+}
+
+/** A Make default or Use this identity in flight, or its failure. */
+export enum SidePanelManageKind {
+  Idle = 'idle',
+  Busy = 'busy',
+  Failed = 'failed',
+}
+
+export type SidePanelManage =
+  | { readonly kind: SidePanelManageKind.Idle | SidePanelManageKind.Busy }
+  | { readonly kind: SidePanelManageKind.Failed; readonly key: I18nKey }
 
 export enum SidePanelReadFreshness {
   Current = 'current',

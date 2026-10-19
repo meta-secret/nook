@@ -1,5 +1,4 @@
 import { Effect, Schema } from 'effect'
-import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   BeginExtensionPairingMessageType,
   OpenSimpleVaultMessageType,
@@ -28,9 +27,6 @@ export type SidePanelPairing = {
 type SidePanelServiceWorkerMessage =
   | { readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault }
   | { readonly type: typeof ExtensionSessionMessageType.Lock }
-  | {
-      readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-    }
   | {
       readonly type: BeginExtensionPairingMessageType.NookBeginExtensionPairing
       readonly payload: ExtensionSessionDeviceWire & {
@@ -260,14 +256,6 @@ export class SidePanelRuntime {
   openVault(): Effect.Effect<void, SidePanelRequestFailure> {
     const message: SidePanelServiceWorkerMessage = {
       type: OpenSimpleVaultMessageType.NookOpenSimpleVault,
-    }
-    return this.send(message)
-  }
-
-  /** Open or focus the Nook tab's companion home: All connections. */
-  openConnections(): Effect.Effect<void, SidePanelRequestFailure> {
-    const message: SidePanelServiceWorkerMessage = {
-      type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
     }
     return this.send(message)
   }

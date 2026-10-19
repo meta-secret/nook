@@ -556,6 +556,92 @@ test('a new identity sets up its own key in the panel and Cancel returns to the 
   expect(await panel.pairings()).toEqual([])
 })
 
+test('All connections lists identities in the panel and makes a vault the default', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({
+    ...unlockedScenario,
+    vaults: SidePanelStubVaults.TwoIdentities,
+  })
+  await page.getByTestId('side-panel-manage').click()
+  const connections = page.getByTestId('side-panel-all-connections')
+  await expect(connections).toBeVisible()
+  await expect(page.getByTestId('side-panel-site')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
+  const cards = connections.getByTestId('side-panel-identity-card')
+  await expect(cards).toHaveCount(2)
+  // The unlocked identity first; the other one is locked and can be used.
+  await expect(cards.nth(0)).toHaveAttribute('data-current', 'true')
+  await expect(
+    cards.nth(0).getByTestId('side-panel-identity-state'),
+  ).toHaveText('Unlocked')
+  await expect(cards.nth(0).getByTestId('side-panel-use-identity')).toHaveCount(
+    0,
+  )
+  await expect(
+    cards.nth(1).getByTestId('side-panel-identity-state'),
+  ).toHaveText('Locked')
+  await expect(
+    cards.nth(0).getByTestId('side-panel-default-vault'),
+  ).toBeVisible()
+
+  await cards.nth(1).getByTestId('side-panel-make-default').click()
+  await expect(
+    cards.nth(1).getByTestId('side-panel-default-vault'),
+  ).toBeVisible()
+  await expect(
+    cards.nth(0).getByTestId('side-panel-make-default'),
+  ).toBeVisible()
+  // The Nook tab's launcher is never opened.
+  expect(
+    await panel.sent(
+      OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+    ),
+  ).toBe(0)
+
+  await connections.getByTestId('side-panel-connections-back').click()
+  await expect(page.getByTestId('side-panel-site')).toBeVisible()
+  await expect(page.getByTestId('side-panel-manage')).toBeVisible()
+})
+
+test('a refused Make default says so and keeps the default', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({
+    ...unlockedScenario,
+    vaults: SidePanelStubVaults.TwoIdentities,
+  })
+  await panel.update({ makeDefault: SidePanelStubAnswer.Refuse })
+  await page.getByTestId('side-panel-manage').click()
+  await page.getByTestId('side-panel-make-default').click()
+  await expect(page.getByTestId('side-panel-manage-error')).toHaveText(
+    'Nook could not change the default vault. Try again.',
+  )
+  await expect(page.getByTestId('side-panel-default-vault')).toHaveCount(1)
+})
+
+test("Use this identity switches in the panel to that identity's own unlock", async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({
+    ...unlockedScenario,
+    vaults: SidePanelStubVaults.TwoIdentities,
+  })
+  await page.getByTestId('side-panel-manage').click()
+  await page.getByTestId('side-panel-use-identity').click()
+  expect(await panel.activatedIdentities()).toEqual([
+    'side-panel-stub-other-device',
+  ])
+  await expect(page.getByTestId('side-panel-state')).toHaveText('Locked')
+  await expect(
+    page.getByTestId('device-protection-pin-unlock-input'),
+  ).toBeVisible()
+  await expect(page.getByTestId('side-panel-all-connections')).toHaveCount(0)
+})
+
 test('a failed listing offers Try again', async ({ page }) => {
   const panel = new SidePanelStubPage(page)
   const failed: SidePanelSiteListing = {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Effect } from 'effect'
-import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   BeginExtensionPairingMessageType,
   OpenSimpleVaultMessageType,
@@ -311,7 +310,6 @@ describe('side panel browser runtime', () => {
     )
     expect(tabId).toBe(31)
     fixture.reply = FixtureReplyKind.Acknowledged
-    await Effect.runPromise(runtime.openConnections())
     await Effect.runPromise(runtime.lock())
 
     expect(fixture.sent).toEqual([
@@ -328,7 +326,6 @@ describe('side panel browser runtime', () => {
           windowId: 7,
         },
       },
-      { type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher },
       { type: ExtensionSessionMessageType.Lock },
     ])
     expect(fixture.runtimeListeners).toEqual([])
@@ -420,6 +417,8 @@ class SidePanelSources {
     ],
     createExtensionPin: [ExtensionSessionMessageType.CreatePin],
     unlockExtensionPin: [ExtensionSessionMessageType.UnlockPin],
+    // Use this identity: that identity then opens with its own unlock.
+    activateIdentity: [ExtensionSessionMessageType.ActivateIdentity],
     // Connecting an identity: Rust picks the key, or stages one to drop.
     beginIdentityConnection: [
       ExtensionSessionMessageType.BeginIdentityConnection,

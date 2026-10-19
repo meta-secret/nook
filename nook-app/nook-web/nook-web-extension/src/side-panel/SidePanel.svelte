@@ -40,6 +40,7 @@ closes it.
   } from '../popup/popup-app-state'
   import SidePanelGate from './SidePanelGate.svelte'
   import SidePanelHeader from './SidePanelHeader.svelte'
+  import SidePanelAllConnections from './SidePanelAllConnections.svelte'
   import SidePanelConnectCard from './SidePanelConnectCard.svelte'
   import SidePanelConnections from './SidePanelConnections.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
@@ -49,7 +50,8 @@ closes it.
     SidePanelCeremonyKind,
     SidePanelContinuity,
     SidePanelGateIcon,
-    SidePanelHandOffKind,
+    SidePanelManageKind,
+    SidePanelPageKind,
     SidePanelHeaderActionKind,
     SidePanelLockReasonKind,
     SidePanelReadFreshness,
@@ -59,6 +61,7 @@ closes it.
     SidePanelViewKind,
     SidePanelViews,
     type SidePanelAlert,
+    type SidePanelManage,
     type SidePanelView,
   } from './side-panel-state'
   import {
@@ -118,7 +121,9 @@ closes it.
     SidePanelHeaderActionKind.Idle,
   )
   let alert = $state<SidePanelAlert>({ kind: SidePanelAlertKind.None })
-  let handOff = $state<SidePanelHandOffKind>(SidePanelHandOffKind.Idle)
+  /** This site, or All connections; a new view starts on This site. */
+  let page = $state<SidePanelPageKind>(SidePanelPageKind.Site)
+  let manage = $state<SidePanelManage>({ kind: SidePanelManageKind.Idle })
   let connect = $state<SidePanelConnect>({ kind: SidePanelConnectKind.Idle })
   let panelWindow = $state<SidePanelWindow>({
     kind: SidePanelWindowKind.Resolving,
@@ -128,7 +133,12 @@ closes it.
 
   const chip = $derived(SidePanelViews.chip(view.kind))
   const lockControl = $derived(SidePanelViews.sessionControls(view.kind))
-  const footer = $derived(SidePanelViews.footer(view))
+  const pageRequest = $derived<Parameters<typeof SidePanelViews.page>[0]>({
+    view,
+    page,
+  })
+  const footer = $derived(SidePanelViews.footer(pageRequest))
+  const shownPage = $derived(SidePanelViews.page(pageRequest))
   const ceremony = $derived(SidePanelViews.ceremony(view))
   /** The connect card opened under This site, or leading the panel. */
   const cardShown = $derived.by(() => {
@@ -175,7 +185,7 @@ closes it.
 
   function clearMessages(): void {
     alert = { kind: SidePanelAlertKind.None }
-    handOff = SidePanelHandOffKind.Idle
+    manage = { kind: SidePanelManageKind.Idle }
   }
 
   /** Re-read the extension's state: it may have changed in the Nook tab,
@@ -276,6 +286,7 @@ closes it.
     const { status, reason } = arrival
     clearMessages()
     stopConnect()
+    page = SidePanelPageKind.Site
     switch (SidePanelViews.kind(status)) {
       case SidePanelViewKind.Unlocked:
         await enterUnlocked()
@@ -477,29 +488,96 @@ closes it.
     }
   }
 
-  /** All connections: the Nook tab's companion home, where Use this
-   * identity and Make default live. */
-  async function openConnections(): Promise<void> {
-    switch (handOff) {
-      case SidePanelHandOffKind.Opening:
+  /** All connections opens in the panel; Back returns to This site. */
+  function openConnections(): void {
+    manage = { kind: SidePanelManageKind.Idle }
+    page = SidePanelPageKind.Connections
+  }
+
+  function closeConnections(): void {
+    manage = { kind: SidePanelManageKind.Idle }
+    page = SidePanelPageKind.Site
+  }
+
+  function chooseDefault(vaultStoreId: string): void {
+    void makeDefault(vaultStoreId)
+  }
+
+  function chooseIdentity(deviceId: string): void {
+    void useIdentity(deviceId)
+  }
+
+  /** New logins are saved to the default vault. */
+  async function makeDefault(vaultStoreId: string): Promise<void> {
+    switch (manage.kind) {
+      case SidePanelManageKind.Busy:
         return
-      case SidePanelHandOffKind.Idle:
+      case SidePanelManageKind.Idle:
+      case SidePanelManageKind.Failed:
         break
     }
-    handOff = SidePanelHandOffKind.Opening
-    alert = { kind: SidePanelAlertKind.None }
-    const opened = await Effect.runPromise(
-      Effect.result(runtime.openConnections()),
-    )
-    handOff = SidePanelHandOffKind.Idle
-    switch (opened._tag) {
-      case 'Success':
-        return
-      case 'Failure':
-        alert = {
-          kind: SidePanelAlertKind.Shown,
-          key: I18N_KEYS.ExtensionActionOpenFailed,
+    manage = { kind: SidePanelManageKind.Busy }
+    const changed = await pairedVaultsClient.makeDefault(vaultStoreId)
+    switch (changed) {
+      case false:
+        manage = {
+          kind: SidePanelManageKind.Failed,
+          key: I18N_KEYS.ExtensionCompanionMakeDefaultFailed,
         }
+        return
+      case true:
+        manage = { kind: SidePanelManageKind.Idle }
+        await loadVaults()
+    }
+  }
+
+  /** Switch to another identity of this extension: this one locks and the
+   * panel shows that identity's own unlock. */
+  async function useIdentity(deviceId: string): Promise<void> {
+    switch (manage.kind) {
+      case SidePanelManageKind.Busy:
+        return
+      case SidePanelManageKind.Idle:
+      case SidePanelManageKind.Failed:
+        break
+    }
+    manage = { kind: SidePanelManageKind.Busy }
+    const activated = await Effect.runPromise(
+      Effect.result(
+        Effect.tryPromise(() =>
+          extensionWasmRuntime.activateIdentity(deviceId),
+        ),
+      ),
+    )
+    switch (activated._tag) {
+      case 'Failure':
+        manage = {
+          kind: SidePanelManageKind.Failed,
+          key: I18N_KEYS.ExtensionCompanionUseIdentityFailed,
+        }
+        return
+      case 'Success':
+        break
+    }
+    const read = statusReads.begin()
+    const status = await readStatus()
+    switch (read.freshness()) {
+      case SidePanelReadFreshness.Stale:
+        return
+      case SidePanelReadFreshness.Current:
+        break
+    }
+    switch (status._tag) {
+      case 'Failure':
+        failed(PopupInitializationPhase.DeviceProtectionStatus)
+        return
+      case 'Success': {
+        const arrival: SidePanelArrival = {
+          status: status.success,
+          reason: SidePanelLockReasonKind.None,
+        }
+        await enter(arrival)
+      }
     }
   }
 
@@ -860,6 +938,16 @@ closes it.
             {translatePlain(I18N_KEYS.CommonLoading)}
           </p>
         </div>
+      {:else if view.vaults.kind === SidePanelVaultsKind.Paired && shownPage === SidePanelPageKind.Connections}
+        <SidePanelAllConnections
+          {i18n}
+          groups={view.vaults.groups}
+          device={view.device}
+          {manage}
+          onmakedefault={chooseDefault}
+          onuseidentity={chooseIdentity}
+          onback={closeConnections}
+        />
       {:else if view.vaults.kind === SidePanelVaultsKind.Paired}
         <ThisSite
           {i18n}
@@ -932,10 +1020,8 @@ closes it.
       <button
         type="button"
         class="side-panel-text-button side-panel-footer-action"
-        aria-busy={handOff === SidePanelHandOffKind.Opening}
-        aria-disabled={handOff === SidePanelHandOffKind.Opening}
         data-testid="side-panel-manage"
-        onclick={() => void openConnections()}
+        onclick={openConnections}
       >
         <Settings2 size={14} aria-hidden="true" />
         {translatePlain(I18N_KEYS.ExtensionActionManage)}

@@ -411,6 +411,14 @@ test('unlocks a PIN in place, shows identity · vault sections, and locks again'
   await expect(page.getByTestId('side-panel-connections')).toBeVisible()
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
   await demoBeat(page)
+  // All connections opens in the panel: each identity's vaults, the
+  // default one marked; Back returns to This site.
+  await page.getByTestId('side-panel-manage').click()
+  await expect(page.getByTestId('side-panel-all-connections')).toBeVisible()
+  await expect(page.getByTestId('side-panel-default-vault')).toHaveCount(1)
+  await demoBeat(page)
+  await page.getByTestId('side-panel-connections-back').click()
+  await expect(page.getByTestId('side-panel-site-section')).toHaveCount(3)
   // Connecting another identity opens the one Nook tab; the card follows
   // that tab, where the identity is created, joined or chosen.
   await page.getByTestId('side-panel-connect').click()
@@ -461,7 +469,8 @@ test('leads with connecting an identity when none is connected', async ({
     'Connect an identity',
   )
   await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
-  await expect(page.getByTestId('side-panel-manage')).toBeVisible()
+  // Nothing to manage yet: All connections waits for an identity.
+  await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
   await demoBeat(page)
 })
 
