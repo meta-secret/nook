@@ -7,6 +7,7 @@
 
 use super::AuthenticatorSecret;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use std::fmt::{self, Write};
 use zeroize::Zeroizing;
 
 /// RFC 3986 unreserved characters stay literal; everything else is escaped, so
@@ -17,6 +18,15 @@ const OTPAUTH_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'_')
     .remove(b'~');
 
+/// Literal URI text: `otpauth://totp/:`, `?secret=`, `&issuer=`,
+/// `&algorithm=`, `&digits=`, and `&period=`.
+const URI_LITERAL_BYTES: usize = 59;
+/// Rendered algorithm, digit count, and period: at most `SHA512`, one digit,
+/// and a `u64` period.
+const URI_PARAMETER_BYTES: usize = 6 + 1 + 20;
+/// Percent-encoding expands one input byte to at most three output bytes.
+const PERCENT_ENCODED_BYTES_PER_BYTE: usize = 3;
+
 impl AuthenticatorSecret {
     /// Serialize the issuer, account, shared secret, and TOTP parameters as a
     /// canonical `otpauth://totp/` URI that [`Self::from_otpauth_uri`] admits.
@@ -26,9 +36,13 @@ impl AuthenticatorSecret {
     /// issuer prefix empty keeps the account exact even when the issuer itself
     /// contains `:`, because the parser splits the decoded label at its first
     /// colon. The website URL is not part of the URI; the save path supplies it.
-    #[must_use]
-    pub fn otpauth_uri(&self) -> Zeroizing<String> {
-        Zeroizing::new(format!(
+    ///
+    /// The URI is written into one zeroizing buffer sized for the worst-case
+    /// encoding, so no secret-bearing buffer is reallocated and freed unwiped.
+    pub fn otpauth_uri(&self) -> Result<Zeroizing<String>, fmt::Error> {
+        let mut uri = Zeroizing::new(String::with_capacity(self.otpauth_uri_capacity()));
+        write!(
+            uri,
             "otpauth://totp/:{account}?secret={secret}&issuer={issuer}&algorithm={algorithm}&digits={digits}&period={period}",
             account = utf8_percent_encode(&self.account, OTPAUTH_COMPONENT),
             secret = utf8_percent_encode(self.secret.as_str(), OTPAUTH_COMPONENT),
@@ -36,7 +50,13 @@ impl AuthenticatorSecret {
             algorithm = self.algorithm.as_str(),
             digits = self.digits,
             period = self.period,
-        ))
+        )?;
+        Ok(uri)
+    }
+
+    fn otpauth_uri_capacity(&self) -> usize {
+        let encoded_inputs = self.account.len() + self.secret.as_str().len() + self.issuer.len();
+        URI_LITERAL_BYTES + URI_PARAMETER_BYTES + PERCENT_ENCODED_BYTES_PER_BYTE * encoded_inputs
     }
 }
 
@@ -81,7 +101,7 @@ mod tests {
             },
         ] {
             let original = fixture.authenticator()?;
-            let uri = original.otpauth_uri();
+            let uri = original.otpauth_uri()?;
             let parsed = AuthenticatorSecret::from_otpauth_uri(&uri)?;
 
             assert_eq!(parsed.issuer, fixture.issuer);
@@ -95,13 +115,31 @@ mod tests {
     }
 
     #[test]
+    fn worst_case_encoding_fits_the_presized_buffer_without_reallocation() -> anyhow::Result<()> {
+        let issuer = "\u{1f511}&".repeat(32);
+        let account = "%\u{e9} ".repeat(64);
+        let original = LabelFixture {
+            issuer: &issuer,
+            account: &account,
+        }
+        .authenticator()?;
+        let capacity = original.otpauth_uri_capacity();
+        let uri = original.otpauth_uri()?;
+
+        assert!(uri.len() <= capacity, "{} > {capacity}", uri.len());
+        assert!(uri.capacity() >= capacity);
+        assert_eq!(AuthenticatorSecret::from_otpauth_uri(&uri)?.issuer, issuer);
+        Ok(())
+    }
+
+    #[test]
     fn serialized_uri_escapes_reserved_label_and_query_characters() -> anyhow::Result<()> {
         let uri = LabelFixture {
             issuer: "A&B",
             account: "c d+e",
         }
         .authenticator()?
-        .otpauth_uri();
+        .otpauth_uri()?;
 
         assert_eq!(
             uri.as_str(),
