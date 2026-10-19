@@ -200,8 +200,10 @@ pub use secret_view::{
     AuthenticatorSecretForm, CredentialKind, CreditCardSecretForm, FileAttachmentSecretForm,
     FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
     FocusedLoginFillProjection, LoginHostMatch, LoginHostMatchRequest, LoginSecretForm,
-    LoginWebsiteHost, SecretFormFields, SecretGroupKey, SecretListItem, SecretListItemData,
-    SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
+    LoginWebsiteHost, PasskeyBackupStatus, PasskeyDetails, PasskeyDiscoverability,
+    PasskeyKeyAlgorithm, PasskeyPublicKeyFingerprint, SecretFormFields, SecretGroupKey,
+    SecretListItem, SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm,
+    SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
 };
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,

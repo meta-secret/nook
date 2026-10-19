@@ -1,15 +1,20 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/svelte'
 import { tick, type ComponentProps } from 'svelte'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { Effect } from 'effect'
 import SecretVault from '$lib/components/SecretVault.svelte'
 import { NookSecretTypeFilter, secret_type_name } from '$app-wasm'
-import { SecretType } from '$lib/nook'
+import { SecretType, type PasskeyDetailsView } from '$lib/nook'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import type { SecretPageRefreshSnapshot } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 
 /** Supplies Rust-owned list projections without implementing search or filtering. */
 class PasskeyVaultDiscoveryFixture {
@@ -18,6 +23,17 @@ class PasskeyVaultDiscoveryFixture {
   readonly login = SecretComponentTestFixture.listItem(this.loginFields())
   readonly loadPage = vi.spyOn(this.vault, 'loadSecretPage')
   readonly decrypt = vi.spyOn(this.vault, 'decryptSecret')
+  readonly passkeyDetails = vi.spyOn(this.vault, 'passkeyDetails')
+  readonly details: PasskeyDetailsView = {
+    credentialId: 'Y3JlZGVudGlhbC1pZC1maXh0dXJl',
+    relyingPartyName: 'Example Login',
+    distinctUserName: 'alice@example.com',
+    algorithmLabelKey: I18N_KEYS.VaultFieldsPasskeyAlgorithmEs256,
+    publicKeyFingerprint: 'SHA256:9+DIAhGaEvPhUkquTXtzDLd10GrycDMuT91vONRZCiY',
+    signatureCount: 7,
+    discoverableLabelKey: I18N_KEYS.VaultFieldsPasskeyDiscoverableYes,
+    backupStatusLabelKey: I18N_KEYS.VaultFieldsPasskeyBackupBackedUp,
+  }
 
   private passkeyFields(): Parameters<
     typeof SecretComponentTestFixture.listItem
@@ -50,6 +66,7 @@ class PasskeyVaultDiscoveryFixture {
   constructor() {
     this.vault.secrets = [this.passkey, this.login]
     this.vault.secretTotal = 2
+    this.passkeyDetails.mockResolvedValue(ok(this.details))
     vi.spyOn(this.vault, 't').mockImplementation((request) => {
       switch (typeof request) {
         case 'string':
@@ -126,7 +143,20 @@ test('discovers a website passkey in the complete vault and expands safe account
   expect(view.getByText('login.example.com')).toBeTruthy()
   expect(passkeyGroup.textContent).toContain('Alice')
   await fireEvent.click(within(passkeyGroup).getByTestId('secret-row-toggle'))
+  await tick()
+  await tick()
+  expect(fixture.passkeyDetails).toHaveBeenCalledWith('secret_website_passkey')
   expect(passkeyGroup.textContent).toContain('alice@example.com')
+  expect(
+    within(passkeyGroup).getByTestId('passkey-credential-id').textContent,
+  ).toContain(fixture.details.credentialId)
+  expect(
+    within(passkeyGroup).getByTestId('passkey-public-key-fingerprint')
+      .textContent,
+  ).toContain(fixture.details.publicKeyFingerprint)
+  expect(
+    within(passkeyGroup).getByTestId('passkey-signature-count').textContent,
+  ).toContain('7')
   expect(
     passkeyGroup.querySelectorAll('[data-testid="reveal-secret-btn"]'),
   ).toHaveLength(0)
@@ -137,6 +167,24 @@ test('discovers a website passkey in the complete vault and expands safe account
     passkeyGroup.querySelectorAll('[data-testid="delete-secret-btn"]'),
   ).toHaveLength(1)
   expect(fixture.decrypt).not.toHaveBeenCalled()
+})
+
+test('shows an explicit error when passkey details cannot be read', async () => {
+  const fixture = new PasskeyVaultDiscoveryFixture()
+  fixture.passkeyDetails.mockResolvedValue(
+    err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+  )
+  const view = render(SecretVault, fixture.props())
+  const passkeyGroup = view.getByTestId('vault-group-passkey')
+  await fireEvent.click(within(passkeyGroup).getByTestId('secret-row-toggle'))
+  await tick()
+  await tick()
+  expect(
+    within(passkeyGroup).getByTestId('passkey-details-error').textContent,
+  ).toContain(I18N_KEYS.VaultFieldsPasskeyDetailsUnavailable)
+  expect(
+    passkeyGroup.querySelectorAll('[data-testid="passkey-credential-id"]'),
+  ).toHaveLength(0)
 })
 
 test('requests the Passkey filter and displays the returned passkey page', async () => {

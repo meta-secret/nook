@@ -62,6 +62,18 @@ export type AuthenticatorCodeView = {
   expiresAtUnixSeconds: number;
 };
 
+/** Public passkey facts for the detail panel; label fields are translation keys. */
+export type PasskeyDetailsView = {
+  readonly credentialId: string;
+  readonly relyingPartyName: string | undefined;
+  readonly distinctUserName: string | undefined;
+  readonly algorithmLabelKey: string;
+  readonly publicKeyFingerprint: string;
+  readonly signatureCount: number;
+  readonly discoverableLabelKey: string;
+  readonly backupStatusLabelKey: string;
+};
+
 export interface VaultStorageSynchronizationRequest {
   readonly manager: NookVaultManager;
   readonly mode: NookStorageConnectArgs["mode"];

@@ -2263,11 +2263,13 @@ pub const VAULT_COPY_AUTHENTICATOR_SECRET: &str = "vault.copy_authenticator_secr
 pub const VAULT_COPY_BACKUP_CODE: &str = "vault.copy_backup_code";
 pub const VAULT_COPY_CARD_NUMBER: &str = "vault.copy_card_number";
 pub const VAULT_COPY_CARDHOLDER_NAME: &str = "vault.copy_cardholder_name";
+pub const VAULT_COPY_CREDENTIAL_ID: &str = "vault.copy_credential_id";
 pub const VAULT_COPY_CURRENT_CODE: &str = "vault.copy_current_code";
 pub const VAULT_COPY_CVV: &str = "vault.copy_cvv";
 pub const VAULT_COPY_EXPIRATION: &str = "vault.copy_expiration";
 pub const VAULT_COPY_EXPIRATION_DATE: &str = "vault.copy_expiration_date";
 pub const VAULT_COPY_NOTE: &str = "vault.copy_note";
+pub const VAULT_COPY_PUBLIC_KEY_FINGERPRINT: &str = "vault.copy_public_key_fingerprint";
 pub const VAULT_COPY_SECRET: &str = "vault.copy_secret";
 pub const VAULT_COPY_USERNAME: &str = "vault.copy_username";
 pub const VAULT_COPY_WEBSITE_URL: &str = "vault.copy_website_url";
@@ -2310,7 +2312,26 @@ pub const VAULT_FIELDS_NO_WEBSITE: &str = "vault.fields.no_website";
 pub const VAULT_FIELDS_NO_WEBSITE_GROUP: &str = "vault.fields.no_website_group";
 pub const VAULT_FIELDS_NOTE: &str = "vault.fields.note";
 pub const VAULT_FIELDS_NOTES: &str = "vault.fields.notes";
+pub const VAULT_FIELDS_PASSKEY_ALGORITHM: &str = "vault.fields.passkey_algorithm";
+pub const VAULT_FIELDS_PASSKEY_ALGORITHM_ES256: &str = "vault.fields.passkey_algorithm_es256";
+pub const VAULT_FIELDS_PASSKEY_BACKUP: &str = "vault.fields.passkey_backup";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_BACKED_UP: &str = "vault.fields.passkey_backup_backed_up";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_NOT_BACKED_UP: &str =
+    "vault.fields.passkey_backup_not_backed_up";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_NOT_ELIGIBLE: &str =
+    "vault.fields.passkey_backup_not_eligible";
+pub const VAULT_FIELDS_PASSKEY_CREDENTIAL_ID: &str = "vault.fields.passkey_credential_id";
+pub const VAULT_FIELDS_PASSKEY_DETAILS_LOADING: &str = "vault.fields.passkey_details_loading";
+pub const VAULT_FIELDS_PASSKEY_DETAILS_UNAVAILABLE: &str =
+    "vault.fields.passkey_details_unavailable";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE: &str = "vault.fields.passkey_discoverable";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE_NO: &str = "vault.fields.passkey_discoverable_no";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE_YES: &str = "vault.fields.passkey_discoverable_yes";
 pub const VAULT_FIELDS_PASSKEY_MANAGED_HINT: &str = "vault.fields.passkey_managed_hint";
+pub const VAULT_FIELDS_PASSKEY_PUBLIC_KEY_FINGERPRINT: &str =
+    "vault.fields.passkey_public_key_fingerprint";
+pub const VAULT_FIELDS_PASSKEY_RELYING_PARTY_NAME: &str = "vault.fields.passkey_relying_party_name";
+pub const VAULT_FIELDS_PASSKEY_SIGNATURE_COUNT: &str = "vault.fields.passkey_signature_count";
 pub const VAULT_FIELDS_PASSWORD: &str = "vault.fields.password";
 pub const VAULT_FIELDS_RELYING_PARTY: &str = "vault.fields.relying_party";
 pub const VAULT_FIELDS_TITLE: &str = "vault.fields.title";

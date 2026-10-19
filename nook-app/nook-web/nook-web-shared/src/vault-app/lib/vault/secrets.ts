@@ -14,6 +14,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import type {
   AuthenticatorCodeView,
   NookImportResult,
+  PasskeyDetailsView,
   NookSecretRecord,
   SecretType,
 } from "$lib/nook";
@@ -136,6 +137,10 @@ interface SecretDecryption {
 }
 
 interface AuthenticatorCodeRequest {
+  readonly id: string;
+}
+
+export interface PasskeyDetailsRequest {
   readonly id: string;
 }
 
@@ -812,6 +817,39 @@ export class VaultSecretActions {
         expiresAtUnixSeconds: result.value.expiresAtUnixSeconds,
       };
       return storageOk(codeView);
+    } finally {
+      result.value.free();
+    }
+  }
+
+  async passkeyDetails({
+    id,
+  }: PasskeyDetailsRequest): Promise<
+    Result<PasskeyDetailsView, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const result = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(admittedManager.value.passkey_details_js(id));
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (result.isErr()) return storageErr(result.error);
+    try {
+      const details: PasskeyDetailsView = {
+        credentialId: result.value.credentialId,
+        relyingPartyName: result.value.relyingPartyName,
+        distinctUserName: result.value.distinctUserName,
+        algorithmLabelKey: result.value.algorithmLabelKey,
+        publicKeyFingerprint: result.value.publicKeyFingerprint,
+        signatureCount: result.value.signatureCount,
+        discoverableLabelKey: result.value.discoverableLabelKey,
+        backupStatusLabelKey: result.value.backupStatusLabelKey,
+      };
+      return storageOk(details);
     } finally {
       result.value.free();
     }
