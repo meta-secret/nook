@@ -1,6 +1,5 @@
 import { Effect, Schema } from 'effect'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import type { ExtensionConnectStart } from '../../../nook-web-shared/src/extension/extension-connect-start'
 import {
   BeginExtensionPairingMessageType,
   OpenSimpleVaultMessageType,
@@ -18,11 +17,11 @@ import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
  */
 
 /** The key that connects the next identity, named for the connect page,
- * and the choice that page continues. */
+ * and the panel's own window, where the Nook tab opens or is reused. */
 export type SidePanelPairing = {
   readonly device: ExtensionSessionDeviceWire
   readonly deviceLabel: string
-  readonly start: ExtensionConnectStart
+  readonly windowId: number
 }
 
 /** The panel's requests to the service worker: a closed set. */
@@ -36,7 +35,7 @@ type SidePanelServiceWorkerMessage =
       readonly type: BeginExtensionPairingMessageType.NookBeginExtensionPairing
       readonly payload: ExtensionSessionDeviceWire & {
         readonly deviceLabel: string
-        readonly start: ExtensionConnectStart
+        readonly windowId: number
       }
     }
 
@@ -51,6 +50,16 @@ export class SidePanelRequestFailure extends Schema.TaggedError<SidePanelRequest
 type SidePanelAcknowledgement = { readonly ok: true }
 type SidePanelAcknowledgementFields = {
   readonly ok: Schema.Codec<true>
+}
+type SidePanelTabFocusAttempt = {
+  readonly try: () => Promise<void>
+  readonly catch: () => SidePanelRequestFailure
+}
+
+/** The service worker opened or reused the Nook tab. */
+type SidePanelTabOpened = { readonly ok: true; readonly tabId: number }
+type SidePanelTabOpenedFields = SidePanelAcknowledgementFields & {
+  readonly tabId: Schema.Codec<number>
 }
 
 export enum SidePanelWindowKind {
@@ -263,10 +272,21 @@ export class SidePanelRuntime {
     return this.send(message)
   }
 
-  /** Open Nook's connect page for this key; the panel stays as it is. */
+  private static readonly TAB_OPENED_FIELDS: SidePanelTabOpenedFields = {
+    ok: Schema.Literal(true),
+    tabId: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  }
+
+  /** The service worker's reply to a begin-pairing request. */
+  private static readonly TAB_OPENED = Schema.Struct(
+    SidePanelRuntime.TAB_OPENED_FIELDS,
+  ) satisfies Schema.Codec<SidePanelTabOpened>
+
+  /** Open Nook's connect route in the one Nook tab of the panel's window,
+   * reused when one is open; answers that tab's id. The panel stays. */
   beginPairing(
     pairing: SidePanelPairing,
-  ): Effect.Effect<void, SidePanelRequestFailure> {
+  ): Effect.Effect<number, SidePanelRequestFailure> {
     const message: SidePanelServiceWorkerMessage = {
       type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
       payload: {
@@ -274,10 +294,28 @@ export class SidePanelRuntime {
         devicePublicKey: pairing.device.devicePublicKey,
         deviceSigningPublicKey: pairing.device.deviceSigningPublicKey,
         deviceLabel: pairing.deviceLabel,
-        start: pairing.start,
+        windowId: pairing.windowId,
       },
     }
-    return this.send(message)
+    return this.deliver(message).pipe(
+      Effect.flatMap((reply) =>
+        Schema.decodeUnknownEffect(SidePanelRuntime.TAB_OPENED)(reply),
+      ),
+      Effect.mapError(() => new SidePanelRequestFailure()),
+      Effect.map((opened) => opened.tabId),
+    )
+  }
+
+  /** Bring the Nook tab of the running connect to the front. */
+  focusTab(tabId: number): Effect.Effect<void, SidePanelRequestFailure> {
+    const active: chrome.tabs.UpdateProperties = { active: true }
+    const focus: SidePanelTabFocusAttempt = {
+      try: async () => {
+        await chrome.tabs.update(tabId, active)
+      },
+      catch: () => new SidePanelRequestFailure(),
+    }
+    return Effect.tryPromise(focus)
   }
 
   lock(): Effect.Effect<void, SidePanelRequestFailure> {
@@ -303,14 +341,18 @@ export class SidePanelRuntime {
   private send(
     message: SidePanelServiceWorkerMessage,
   ): Effect.Effect<void, SidePanelRequestFailure> {
-    const delivery = Effect.callback<
-      BrowserRuntimeMessageValue,
-      SidePanelRequestFailure
-    >((resume) => {
-      chrome.runtime.sendMessage(message, new SidePanelReply(resume).receive)
-    })
-    return delivery.pipe(
+    return this.deliver(message).pipe(
       Effect.flatMap((reply) => SidePanelRuntime.acknowledged(reply)),
+    )
+  }
+
+  private deliver(
+    message: SidePanelServiceWorkerMessage,
+  ): Effect.Effect<BrowserRuntimeMessageValue, SidePanelRequestFailure> {
+    return Effect.callback<BrowserRuntimeMessageValue, SidePanelRequestFailure>(
+      (resume) => {
+        chrome.runtime.sendMessage(message, new SidePanelReply(resume).receive)
+      },
     )
   }
 

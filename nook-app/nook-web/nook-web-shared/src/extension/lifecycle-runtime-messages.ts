@@ -1,10 +1,6 @@
 import { Effect, Schema } from "effect";
 import type { ExtensionEventLogRecord as RustExtensionEventLogRecord } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  ExtensionConnectStartSchema,
-  type ExtensionConnectStart,
-} from "./extension-connect-start";
-import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeFailureKind,
 } from "./runtime-message-decode-failure";
@@ -83,19 +79,22 @@ const beginExtensionPairingDeviceSigningPublicKeySchema = Schema.String.pipe(
 const beginExtensionPairingDeviceLabelSchema = Schema.String.pipe(
   Schema.check(Schema.isMinLength(1)),
 );
+const beginExtensionPairingWindowIdSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+);
 type BeginExtensionPairingPayloadFields = {
   readonly deviceId: typeof beginExtensionPairingDeviceIdSchema;
   readonly devicePublicKey: typeof beginExtensionPairingDevicePublicKeySchema;
   readonly deviceSigningPublicKey: typeof beginExtensionPairingDeviceSigningPublicKeySchema;
   readonly deviceLabel: typeof beginExtensionPairingDeviceLabelSchema;
-  readonly start: typeof ExtensionConnectStartSchema;
+  readonly windowId: typeof beginExtensionPairingWindowIdSchema;
 };
 const beginExtensionPairingPayloadFields: BeginExtensionPairingPayloadFields = {
   deviceId: beginExtensionPairingDeviceIdSchema,
   devicePublicKey: beginExtensionPairingDevicePublicKeySchema,
   deviceSigningPublicKey: beginExtensionPairingDeviceSigningPublicKeySchema,
   deviceLabel: beginExtensionPairingDeviceLabelSchema,
-  start: ExtensionConnectStartSchema,
+  windowId: beginExtensionPairingWindowIdSchema,
 };
 const beginExtensionPairingPayloadSchema = Schema.Struct(
   beginExtensionPairingPayloadFields,
@@ -114,8 +113,9 @@ export class BeginExtensionPairingMessage {
     devicePublicKey: string;
     deviceSigningPublicKey: string;
     deviceLabel: string;
-    /** What the side panel asked the connect page to continue with. */
-    start: ExtensionConnectStart;
+    /** The requesting extension page's own window. It only selects where
+     * the Nook tab opens or is reused and grants no authority. */
+    windowId: number;
   };
   static decode<WireMessage>(
     message: WireMessage,

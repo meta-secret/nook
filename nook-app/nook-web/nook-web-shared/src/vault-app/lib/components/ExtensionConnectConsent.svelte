@@ -23,6 +23,8 @@
     type ExtensionConsentWorkflowState,
   } from './extension-connect-consent-workflow'
   import { ExtensionConsentCloseOutcome } from './extension-connect-consent-outcome'
+  import { ExtensionConnectPageSteps } from './extension-connect-progress-steps'
+  import { extensionConnectProgress } from '$lib/extension/connect-progress'
 
   type ExtensionConsentWorkflowSession = {
     readonly workflow: ExtensionConnectConsentWorkflow
@@ -127,6 +129,13 @@
         ExtensionConsentDeliveryOutcomeKind.Delivered,
   )
 
+  // The side panel follows the consent; approved is reported only after
+  // the extension took the grant and event log.
+  $effect(() => {
+    extensionConnectProgress.report(
+      ExtensionConnectPageSteps.consent(workflowState),
+    )
+  })
   $effect.pre(() => {
     const activeSession = session
     return () => activeSession.dispose()

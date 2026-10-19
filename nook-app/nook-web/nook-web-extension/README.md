@@ -6,7 +6,11 @@ open across tab switches. The panel sets up and unlocks the extension device in
 place with a PIN or passkey, through the same ceremony as the authentication
 tab. It lists the current site's saved items in one section per connected
 identity and vault. Each login has an explicit Fill. The panel also offers Open
-vault and Lock. Connecting an identity and All connections open the extension-owned
+vault and Lock. Connecting an identity opens, or reuses, one Nook tab on the
+Simple Vault connect route in the panel's window. Creating a first vault,
+joining with an existing identity, and choosing the identity to connect all
+happen on that page, and the panel shows its current step until the identity is
+approved or the tab closes. All connections opens the extension-owned
 authentication component in a normal browser tab. A locked Pilot action opens
 or focuses the matching Pilot auth tab in the initiating normal window. If
 another auth intent is already open, it is left untouched and the requested

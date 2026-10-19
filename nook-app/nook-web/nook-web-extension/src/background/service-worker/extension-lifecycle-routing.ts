@@ -840,8 +840,12 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    // The tab id lets the requesting page follow that one Nook tab.
     void openExtensionPairing(beginExtensionPairing.value.payload)
-      .then(() => sendResponse(successResponse))
+      .then((tabId) => {
+        const opened: MessageResponse = { ok: true, tabId }
+        return sendResponse(opened)
+      })
       .catch(() => sendResponse(pairingLaunchFailureResponse))
     return true
   }

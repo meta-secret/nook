@@ -1,0 +1,264 @@
+import { err, ok } from 'neverthrow'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+
+const grantPort = vi.hoisted(() => ({
+  authorize: vi.fn(),
+  prepareAuthorizedGrant: vi.fn(),
+  deliver: vi.fn(),
+  admitCompletion: vi.fn(),
+  releaseAuthorization: vi.fn(),
+}))
+
+vi.mock('$lib/extension/vault-approval', () => ({
+  ExtensionVaultApproval: vi.fn(function GrantPortDouble() {
+    return grantPort
+  }),
+}))
+
+import {
+  ExtensionConnectFailureReason,
+  ExtensionConnectStepKind,
+  type ExtensionConnectStep,
+} from '$web-shared/extension/extension-connect-progress'
+import {
+  ExtensionConnectProgress,
+  type ExtensionConnectProgressHost,
+} from '$lib/extension/connect-progress'
+import {
+  ExtensionConnectAccessActivity,
+  ExtensionConnectBrowserVaults,
+  ExtensionConnectPageSteps,
+} from '$lib/components/extension-connect-progress-steps'
+import {
+  ExtensionConnectConsentWorkflow,
+  type ExtensionConsentWorkflowState,
+} from '$lib/components/extension-connect-consent-workflow'
+import {
+  ExtensionConnectScope,
+  ExtensionIdentityRequestSource,
+  type ExtensionConnectRequest,
+} from '$lib/extension/connect'
+import { ExtensionPairingDeliveryKind } from '$lib/extension/extension-pairing-delivery'
+import { NookVaultManager } from '$app-wasm'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+
+/** A page port to the extension, recording what the page posts. */
+class RecordingPort {
+  readonly posted: ExtensionConnectStep[] = []
+  readonly disconnectListeners: Array<() => void> = []
+  disconnects = 0
+
+  readonly postMessage = (step: ExtensionConnectStep): void => {
+    this.posted.push(step)
+  }
+  readonly disconnect = (): void => {
+    this.disconnects += 1
+  }
+  readonly onDisconnect = {
+    addListener: (listener: () => void) =>
+      this.disconnectListeners.push(listener),
+  }
+
+  /** No side panel listened, or it closed the port. */
+  dropByExtension(): void {
+    for (const listener of this.disconnectListeners) listener()
+  }
+}
+
+class RecordingHost {
+  readonly connectedTo: string[] = []
+  readonly port = new RecordingPort()
+
+  host(): ExtensionConnectProgressHost {
+    const runtime = {
+      connect: (extensionId: string) => {
+        this.connectedTo.push(extensionId)
+        return this.port
+      },
+    }
+    return { chrome: { runtime } }
+  }
+}
+
+const unlock: ExtensionConnectStep = { kind: ExtensionConnectStepKind.Unlock }
+const consent: ExtensionConnectStep = { kind: ExtensionConnectStepKind.Consent }
+const opened: ExtensionConnectStep = { kind: ExtensionConnectStepKind.Opened }
+const approved: ExtensionConnectStep = {
+  kind: ExtensionConnectStepKind.Approved,
+}
+
+describe('connect page progress port', () => {
+  test('opens one port to the named extension and reports where the page is', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    // A step known before the port opens follows the opened step.
+    progress.report(unlock)
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.report(unlock)
+    progress.report(consent)
+    expect(recording.connectedTo).toEqual(['extension-1'])
+    expect(recording.port.posted).toEqual([opened, unlock, consent])
+  })
+
+  test('a port nobody listens to ends quietly: no retry, and the page goes on', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    recording.port.dropByExtension()
+    progress.report(consent)
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.report(approved)
+    expect(recording.connectedTo).toEqual(['extension-1'])
+    expect(recording.port.posted).toEqual([opened])
+    expect(recording.port.disconnects).toBe(0)
+  })
+
+  test('leaving the connect route closes the port once', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.end()
+    progress.end()
+    progress.report(consent)
+    expect(recording.port.disconnects).toBe(1)
+    expect(recording.port.posted).toEqual([opened])
+  })
+
+  test('a browser without the extension runtime reports nothing and does not fail', () => {
+    const bare: ExtensionConnectProgressHost = {}
+    const progress = new ExtensionConnectProgress(bare)
+    expect(() => {
+      progress.begin({ extensionRuntimeId: 'extension-1' })
+      progress.report(consent)
+      progress.end()
+    }).not.toThrow()
+  })
+
+  test('a failure step is sent again only for a different reason', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    const delivery: ExtensionConnectStep = {
+      kind: ExtensionConnectStepKind.Failed,
+      reason: ExtensionConnectFailureReason.Delivery,
+    }
+    const grant: ExtensionConnectStep = {
+      kind: ExtensionConnectStepKind.Failed,
+      reason: ExtensionConnectFailureReason.Grant,
+    }
+    progress.report(delivery)
+    progress.report(delivery)
+    progress.report(grant)
+    expect(recording.port.posted).toEqual([opened, delivery, grant])
+  })
+})
+
+describe('connect page steps before a vault is open', () => {
+  test('a browser holding a vault unlocks it; one without creates or joins', () => {
+    const access = ExtensionConnectPageSteps.access
+    expect(
+      access({
+        vaults: ExtensionConnectBrowserVaults.Held,
+        activity: ExtensionConnectAccessActivity.Busy,
+      }),
+    ).toEqual(unlock)
+    expect(
+      access({
+        vaults: ExtensionConnectBrowserVaults.None,
+        activity: ExtensionConnectAccessActivity.Idle,
+      }),
+    ).toEqual({ kind: ExtensionConnectStepKind.Choosing })
+    expect(
+      access({
+        vaults: ExtensionConnectBrowserVaults.None,
+        activity: ExtensionConnectAccessActivity.Busy,
+      }),
+    ).toEqual({ kind: ExtensionConnectStepKind.Creating })
+  })
+})
+
+class ConsentSteps {
+  readonly steps: ExtensionConnectStep[] = []
+  readonly workflow: ExtensionConnectConsentWorkflow
+
+  constructor() {
+    const vault = VaultStateTestFixture.create()
+    vault.openManager(new NookVaultManager())
+    vault.isAuthenticated = true
+    const request: ExtensionConnectRequest = {
+      source: ExtensionIdentityRequestSource.ExtensionConnect,
+      deviceId: 'device-1',
+      devicePublicKey: 'device-key',
+      deviceSigningPublicKey: 'signing-key',
+      extensionRuntimeId: 'extension-1',
+      deviceLabel: 'Nook Extension',
+      nonce: 'nonce-1',
+      scopes: [ExtensionConnectScope.VaultAccess],
+    }
+    this.workflow = new ExtensionConnectConsentWorkflow({ vault, request })
+  }
+
+  approve(): Promise<void> {
+    const initial: ExtensionConsentWorkflowState = this.workflow.initialState()
+    this.steps.push(ExtensionConnectPageSteps.consent(initial))
+    return this.workflow.approve({
+      state: initial,
+      publish: (next) => {
+        this.steps.push(ExtensionConnectPageSteps.consent(next))
+      },
+    })
+  }
+}
+
+describe('connect page steps of the consent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    grantPort.authorize.mockResolvedValue(ok())
+    grantPort.prepareAuthorizedGrant.mockResolvedValue(ok({}))
+    grantPort.admitCompletion.mockReturnValue(ok())
+    grantPort.releaseAuthorization.mockImplementation(() => {})
+  })
+
+  test('approved is reported only after the extension took the grant', async () => {
+    let deliver: (delivered: unknown) => void = () => {}
+    grantPort.deliver.mockReturnValue(
+      new Promise((resolve) => {
+        deliver = resolve
+      }),
+    )
+    const consentSteps = new ConsentSteps()
+    const approving = consentSteps.approve()
+    await vi.waitFor(() => expect(grantPort.deliver).toHaveBeenCalled())
+    expect(consentSteps.steps).not.toContainEqual(approved)
+    expect(new Set(consentSteps.steps.map((step) => step.kind))).toEqual(
+      new Set([ExtensionConnectStepKind.Consent]),
+    )
+    deliver(ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }))
+    await approving
+    expect(consentSteps.steps.at(-1)).toEqual(approved)
+    consentSteps.workflow.dispose()
+  })
+
+  test('a grant the extension refused reports a delivery failure, never approved', async () => {
+    grantPort.deliver.mockResolvedValue(
+      ok({ kind: ExtensionPairingDeliveryKind.MessagingUnavailable }),
+    )
+    const consentSteps = new ConsentSteps()
+    await consentSteps.approve()
+    expect(consentSteps.steps).not.toContainEqual(approved)
+    expect(consentSteps.steps.at(-1)).toEqual({
+      kind: ExtensionConnectStepKind.Failed,
+      reason: ExtensionConnectFailureReason.Delivery,
+    })
+    consentSteps.workflow.dispose()
+  })
+
+  test('an authorization the vault refused reports an authorization failure', async () => {
+    grantPort.authorize.mockResolvedValue(err(new Error('refused')))
+    const consentSteps = new ConsentSteps()
+    await consentSteps.approve()
+    expect(consentSteps.steps).not.toContainEqual(approved)
+    consentSteps.workflow.dispose()
+  })
+})

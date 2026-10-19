@@ -771,7 +771,6 @@ pub const EXTENSION_AUTHENTICATOR_PICKER_STEP_LABEL: &str =
     "extension.authenticator_picker.step_label";
 pub const EXTENSION_AUTHENTICATOR_PICKER_TITLE: &str = "extension.authenticator_picker.title";
 pub const EXTENSION_COMPANION_CONNECT_ANOTHER: &str = "extension.companion.connect_another";
-pub const EXTENSION_COMPANION_CONNECT_CHOICE_BODY: &str = "extension.companion.connect_choice_body";
 pub const EXTENSION_COMPANION_CONNECT_IDENTITY_FAILED: &str =
     "extension.companion.connect_identity_failed";
 pub const EXTENSION_COMPANION_CONNECT_VAULT: &str = "extension.companion.connect_vault";
@@ -785,7 +784,6 @@ pub const EXTENSION_COMPANION_IDENTITY_SYNC_CHECKING: &str =
 pub const EXTENSION_COMPANION_IDENTITY_SYNC_FAILED: &str =
     "extension.companion.identity_sync_failed";
 pub const EXTENSION_COMPANION_ITEM_COUNT: &str = "extension.companion.item_count";
-pub const EXTENSION_COMPANION_JOIN_IDENTITY: &str = "extension.companion.join_identity";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT: &str = "extension.companion.make_default";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT_FAILED: &str = "extension.companion.make_default_failed";
 pub const EXTENSION_COMPANION_MANAGES_PASSKEYS: &str = "extension.companion.manages_passkeys";
@@ -814,6 +812,19 @@ pub const EXTENSION_CONNECT_RETURN_TO_NOOK: &str = "extension.connect.return_to_
 pub const EXTENSION_CONNECT_START_FAILED: &str = "extension.connect.start_failed";
 pub const EXTENSION_CONNECT_STARTING: &str = "extension.connect.starting";
 pub const EXTENSION_CONNECT_TITLE: &str = "extension.connect.title";
+pub const EXTENSION_CONNECT_TAB_APPROVED: &str = "extension.connect_tab.approved";
+pub const EXTENSION_CONNECT_TAB_BODY: &str = "extension.connect_tab.body";
+pub const EXTENSION_CONNECT_TAB_CHOOSING: &str = "extension.connect_tab.choosing";
+pub const EXTENSION_CONNECT_TAB_CONSENT: &str = "extension.connect_tab.consent";
+pub const EXTENSION_CONNECT_TAB_CREATING: &str = "extension.connect_tab.creating";
+pub const EXTENSION_CONNECT_TAB_FAILED_AUTHORIZATION: &str =
+    "extension.connect_tab.failed_authorization";
+pub const EXTENSION_CONNECT_TAB_FAILED_DELIVERY: &str = "extension.connect_tab.failed_delivery";
+pub const EXTENSION_CONNECT_TAB_FAILED_GRANT: &str = "extension.connect_tab.failed_grant";
+pub const EXTENSION_CONNECT_TAB_INTERRUPTED: &str = "extension.connect_tab.interrupted";
+pub const EXTENSION_CONNECT_TAB_OPENED: &str = "extension.connect_tab.opened";
+pub const EXTENSION_CONNECT_TAB_SHOW_TAB: &str = "extension.connect_tab.show_tab";
+pub const EXTENSION_CONNECT_TAB_UNLOCK: &str = "extension.connect_tab.unlock";
 pub const EXTENSION_CONSENT_APPROVAL_FAILED: &str = "extension.consent.approval_failed";
 pub const EXTENSION_CONSENT_APPROVE: &str = "extension.consent.approve";
 pub const EXTENSION_CONSENT_APPROVED: &str = "extension.consent.approved";

@@ -4,6 +4,7 @@ export enum RuntimeMessageDecodeFailureKind {
   OpenCompanionLauncher = "open-companion-launcher",
   OpenSimpleVault = "open-simple-vault",
   BeginExtensionPairing = "begin-extension-pairing",
+  ExtensionConnectStep = "extension-connect-step",
   ExtensionEventLogRecord = "extension-event-log-record",
   ExtensionLocalEventLogUpdated = "extension-local-event-log-updated",
   RuntimeMessageEnvelope = "runtime-message-envelope",

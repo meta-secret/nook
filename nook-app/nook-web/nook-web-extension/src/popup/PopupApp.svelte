@@ -13,10 +13,6 @@
   } from '../lib/i18n'
   import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
   import {
-    ExtensionConnectStarts,
-    type ExtensionConnectStart,
-  } from '../../../nook-web-shared/src/extension/extension-connect-start'
-  import {
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
     type NookIdentityConnectionStart,
@@ -189,21 +185,35 @@
       window.close()
     })
   }
-  function beginPairing(device: ExtensionSessionDeviceWire): void {
+  /** Opens the connect route in the one Nook tab of this tab's window; the
+   * tab id in the reply is not needed here, as this tab then closes. */
+  async function beginPairing(
+    device: ExtensionSessionDeviceWire,
+  ): Promise<void> {
     busy = true
     error = ''
+    let windowId: number
+    try {
+      const current = await chrome.windows.getCurrent()
+      if (typeof current.id !== 'number') throw new Error('no window id')
+      windowId = current.id
+    } catch {
+      busy = false
+      error = translatePlain(I18N_KEYS.ExtensionConnectStartFailed)
+      return
+    }
     const message: {
       type: string
       payload: ExtensionSessionDeviceWire & {
         deviceLabel: string
-        start: ExtensionConnectStart
+        windowId: number
       }
     } = {
       type: 'nook:begin-extension-pairing',
       payload: {
         ...device,
         deviceLabel: translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
-        start: ExtensionConnectStarts.unspecified(),
+        windowId,
       },
     }
     chrome.runtime.sendMessage(message, (response: unknown) => {
@@ -262,7 +272,7 @@
       return
     }
     if (start === 'current-key') {
-      beginPairing(device)
+      void beginPairing(device)
       return
     }
     busy = false
@@ -322,7 +332,7 @@
     switch (purpose.kind) {
       case DeviceProtectionPurposeKind.IdentityKey:
         purpose = { kind: DeviceProtectionPurposeKind.ExtensionKey }
-        beginPairing(device)
+        void beginPairing(device)
         return
       case DeviceProtectionPurposeKind.ExtensionKey:
         break

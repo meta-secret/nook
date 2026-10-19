@@ -1,8 +1,8 @@
 <!--
 Under This site's identity:vault sections: what the identity check after an
 unlock found, and Connect another identity as the card's action row. It
-opens the connect card in place; the sections already name every connected
-identity and vault.
+starts the connect at once and shows the connect card in place while it
+runs; the sections already name every connected identity and vault.
 -->
 <script lang="ts">
   import { Plus } from '@lucide/svelte'
@@ -17,17 +17,16 @@ identity and vault.
   import {
     SidePanelConnectCardPlacement,
     type SidePanelConnect,
-  } from './side-panel-state'
+  } from './side-panel-connect-state'
 
   type SidePanelConnectionsProps = {
     readonly i18n: ExtensionI18n
     readonly identitySync: IdentitySync
     readonly connect: SidePanelConnect
     /** The connect card is open under the sections. */
-    readonly choosing: boolean
-    readonly onopen: () => void
-    readonly oncreate: (typedName: string) => void
-    readonly onjoin: () => void
+    readonly cardShown: boolean
+    readonly onconnect: () => void
+    readonly onfocustab: () => void
     readonly onclose: () => void
   }
 
@@ -35,10 +34,9 @@ identity and vault.
     i18n,
     identitySync,
     connect,
-    choosing,
-    onopen,
-    oncreate,
-    onjoin,
+    cardShown,
+    onconnect,
+    onfocustab,
     onclose,
   }: SidePanelConnectionsProps = $props()
 
@@ -51,20 +49,24 @@ identity and vault.
   class="side-panel-section side-panel-connections"
   data-testid="side-panel-connections"
 >
-  {#if choosing}
+  {#if cardShown}
     <SidePanelConnectCard
       {i18n}
       placement={SidePanelConnectCardPlacement.Another}
       {connect}
       {identitySync}
-      {oncreate}
-      {onjoin}
+      {onconnect}
+      {onfocustab}
       {onclose}
     />
   {:else}
     <SidePanelIdentitySync {i18n} {identitySync} />
     <div class="side-panel-action-bar side-panel-action-row">
-      <button type="button" data-testid="side-panel-connect" onclick={onopen}>
+      <button
+        type="button"
+        data-testid="side-panel-connect"
+        onclick={onconnect}
+      >
         <Plus size={14} aria-hidden="true" />
         {translatePlain(I18N_KEYS.ExtensionActionConnectAnother)}
       </button>

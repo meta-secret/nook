@@ -1,12 +1,13 @@
 <!--
-Connecting an identity, as a companion keytag card: the person names the
-first vault of a new identity, or says they already use Nook. Either way
-Nook's connect page opens on that same step, so it never shows its
-first-vault screen unannounced. The card leads the panel while no identity
-is connected and opens under This site from Connect another identity.
+Connecting an identity, as a companion keytag card. One action opens (or
+reuses) the Nook tab on the connect route; creating, joining and choosing
+the identity happen there. While that tab is open the card follows the step
+the page reports and offers to bring the tab to the front. The card leads
+the panel while no identity is connected and opens under This site from
+Connect another identity.
 -->
 <script lang="ts">
-  import { ArrowRight, LoaderCircle, Plus, X } from '@lucide/svelte'
+  import { ArrowUpRight, LoaderCircle, Plus, X } from '@lucide/svelte'
   import {
     I18N_KEYS,
     type I18nKey,
@@ -17,16 +18,17 @@ is connected and opens under This site from Connect another identity.
   import {
     SidePanelConnectCardPlacement,
     SidePanelConnectKind,
+    SidePanelConnects,
     type SidePanelConnect,
-  } from './side-panel-state'
+  } from './side-panel-connect-state'
 
   type SidePanelConnectCardProps = {
     readonly i18n: ExtensionI18n
     readonly placement: SidePanelConnectCardPlacement
     readonly connect: SidePanelConnect
     readonly identitySync: IdentitySync
-    readonly oncreate: (typedName: string) => void
-    readonly onjoin: () => void
+    readonly onconnect: () => void
+    readonly onfocustab: () => void
     readonly onclose: () => void
   }
 
@@ -35,8 +37,8 @@ is connected and opens under This site from Connect another identity.
     placement,
     connect,
     identitySync,
-    oncreate,
-    onjoin,
+    onconnect,
+    onfocustab,
     onclose,
   }: SidePanelConnectCardProps = $props()
 
@@ -44,7 +46,6 @@ is connected and opens under This site from Connect another identity.
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
 
-  let name = $state('')
   const starting = $derived(connect.kind === SidePanelConnectKind.Starting)
 
   function title(): I18nKey {
@@ -56,10 +57,9 @@ is connected and opens under This site from Connect another identity.
     }
   }
 
-  function create(event: SubmitEvent): void {
-    event.preventDefault()
+  function start(): void {
     if (starting) return
-    oncreate(name)
+    onconnect()
   }
 </script>
 
@@ -69,13 +69,14 @@ is connected and opens under This site from Connect another identity.
   aria-busy={starting}
   data-testid="side-panel-connect-card"
   data-placement={placement}
+  data-connect={connect.kind}
 >
   <div class="side-panel-keytag-body">
     <div class="side-panel-keytag-heading">
       <h2 id="side-panel-connect-title" class="side-panel-label">
         {translatePlain(title())}
       </h2>
-      {#if placement === SidePanelConnectCardPlacement.Another}
+      {#if placement === SidePanelConnectCardPlacement.Another && !starting}
         <button
           type="button"
           class="side-panel-icon-button side-panel-keytag-close"
@@ -85,7 +86,6 @@ is connected and opens under This site from Connect another identity.
           title={translatePlain(
             I18N_KEYS.ExtensionDeviceSetupIdentityKeyCancel,
           )}
-          aria-disabled={starting}
           data-testid="side-panel-connect-close"
           onclick={onclose}
         >
@@ -93,62 +93,54 @@ is connected and opens under This site from Connect another identity.
         </button>
       {/if}
     </div>
-    <p class="side-panel-keytag-copy">
-      {translatePlain(I18N_KEYS.ExtensionCompanionConnectChoiceBody)}
-    </p>
-    <form
-      id="side-panel-first-vault"
-      class="side-panel-field"
-      onsubmit={create}
-    >
-      <label for="side-panel-vault-name">
-        {translatePlain(I18N_KEYS.FirstRunNameLabel)}
-      </label>
-      <input
-        id="side-panel-vault-name"
-        type="text"
-        maxlength="64"
-        autocomplete="off"
-        placeholder={translatePlain(I18N_KEYS.FirstRunNamePlaceholder)}
-        data-testid="side-panel-vault-name"
-        bind:value={name}
-        readonly={starting}
-      />
-    </form>
-    <SidePanelIdentitySync {i18n} {identitySync} />
-    {#if connect.kind === SidePanelConnectKind.Continued}
-      <p class="side-panel-note" role="status" data-testid="side-panel-handoff">
-        {translatePlain(I18N_KEYS.ExtensionActionContinueInTab)}
+    {#if connect.kind === SidePanelConnectKind.InTab}
+      <p
+        class="side-panel-note"
+        role="status"
+        aria-live="polite"
+        data-testid="side-panel-connect-step"
+        data-step={connect.follow.kind}
+      >
+        {translatePlain(SidePanelConnects.followLine(connect.follow))}
       </p>
-    {:else if connect.kind === SidePanelConnectKind.Failed}
+    {:else}
+      <p class="side-panel-keytag-copy">
+        {translatePlain(I18N_KEYS.ExtensionConnectTabBody)}
+      </p>
+    {/if}
+    <SidePanelIdentitySync {i18n} {identitySync} />
+    {#if connect.kind === SidePanelConnectKind.Failed}
       <p class="error-message" role="alert" data-testid="side-panel-error">
-        {translatePlain(I18N_KEYS.ExtensionActionOpenFailed)}
+        {translatePlain(SidePanelConnects.failureAlert(connect.failure))}
       </p>
     {/if}
   </div>
   <div class="side-panel-action-bar">
-    <button
-      type="submit"
-      form="side-panel-first-vault"
-      class="is-primary"
-      aria-disabled={starting}
-      data-testid="side-panel-create-vault"
-    >
-      {#if starting}
-        <LoaderCircle size={14} class="side-panel-spin" aria-hidden="true" />
-      {:else}
-        <Plus size={14} aria-hidden="true" />
-      {/if}
-      {translatePlain(I18N_KEYS.FirstRunCreate)}
-    </button>
-    <button
-      type="button"
-      aria-disabled={starting}
-      data-testid="side-panel-join-identity"
-      onclick={onjoin}
-    >
-      {translatePlain(I18N_KEYS.ExtensionCompanionJoinIdentity)}
-      <ArrowRight size={14} aria-hidden="true" />
-    </button>
+    {#if connect.kind === SidePanelConnectKind.InTab}
+      <button
+        type="button"
+        class="is-primary"
+        data-testid="side-panel-connect-focus-tab"
+        onclick={onfocustab}
+      >
+        {translatePlain(I18N_KEYS.ExtensionConnectTabShowTab)}
+        <ArrowUpRight size={14} aria-hidden="true" />
+      </button>
+    {:else}
+      <button
+        type="button"
+        class="is-primary"
+        aria-disabled={starting}
+        data-testid="side-panel-connect-start"
+        onclick={start}
+      >
+        {#if starting}
+          <LoaderCircle size={14} class="side-panel-spin" aria-hidden="true" />
+        {:else}
+          <Plus size={14} aria-hidden="true" />
+        {/if}
+        {translatePlain(I18N_KEYS.ExtensionActionConnectIdentity)}
+      </button>
+    {/if}
   </div>
 </section>

@@ -20,7 +20,13 @@
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
   import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
-  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { extensionConnectProgress } from '$lib/extension/connect-progress'
+  import {
+    ExtensionConnectAccessActivity,
+    ExtensionConnectBrowserVaults,
+    ExtensionConnectPageSteps,
+  } from '$lib/components/extension-connect-progress-steps'
 
   type AccessGateProps = ComponentProps<typeof VaultAccessGate>
   type AuthenticatedWorkspaceProps = ComponentProps<
@@ -62,6 +68,55 @@
     onToggleColorMode: () => void
     onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
+
+  /** The connect route of a valid request opens the port to the extension
+   * once; leaving the route closes it. */
+  $effect(() => {
+    switch (extensionConnectRequestState.kind) {
+      case ExtensionConnectIntentKind.Requested: {
+        if (!extensionConnectRoute) return
+        const progressBegin: Parameters<
+          typeof extensionConnectProgress.begin
+        >[0] = {
+          extensionRuntimeId:
+            extensionConnectRequestState.request.extensionRuntimeId,
+        }
+        extensionConnectProgress.begin(progressBegin)
+        return
+      }
+      case ExtensionConnectIntentKind.Absent:
+        extensionConnectProgress.end()
+    }
+  })
+
+  /** Before a vault is open, the access gate's step: unlock the identity
+   * to connect, or create or join (the consent reports its own). */
+  $effect(() => {
+    if (
+      !extensionConnectRoute ||
+      extensionConnectRequestState.kind !== ExtensionConnectIntentKind.Requested
+    )
+      return
+    if (vault.newIdentity !== NewIdentityStage.Off) {
+      extensionConnectProgress.report(ExtensionConnectPageSteps.newIdentity())
+      return
+    }
+    if (vault.isAuthenticated && !preserveAccessGate) return
+    const access: Parameters<typeof ExtensionConnectPageSteps.access>[0] = {
+      vaults:
+        vault.localVaultPresent || vault.localVaults.length > 0
+          ? ExtensionConnectBrowserVaults.Held
+          : ExtensionConnectBrowserVaults.None,
+      activity:
+        vault.isVerifying ||
+        vault.isInitializing ||
+        preserveAccessGate ||
+        vault.firstRun !== FirstRunStage.Off
+          ? ExtensionConnectAccessActivity.Busy
+          : ExtensionConnectAccessActivity.Idle,
+    }
+    extensionConnectProgress.report(ExtensionConnectPageSteps.access(access))
+  })
 </script>
 
 {#if appLogsPage}
