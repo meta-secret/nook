@@ -38,6 +38,7 @@ import {
   PasskeyPromptChoiceKind,
   type PasskeyLookup,
   type PasskeyOption,
+  type PasskeyPromptOpenArgs,
   type PasskeyPromptRequest,
   type PasskeyPromptUnlock,
 } from './passkey-prompt'
@@ -272,7 +273,8 @@ async function handleRequest(request: PageRequest): Promise<void> {
     open: openNook,
     lookup: () => lookupOffer(request).catch(() => CHECK_FAILED),
   }
-  const prompt = PasskeyPrompt.open({ request: promptRequest, unlock })
+  const promptArgs: PasskeyPromptOpenArgs = { request: promptRequest, unlock }
+  const prompt = PasskeyPrompt.open(promptArgs)
   prompts.set(request.requestId, prompt)
   const choice = await prompt.choice
   if (choice.kind !== PasskeyPromptChoiceKind.Selected) {
