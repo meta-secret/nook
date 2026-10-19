@@ -1,9 +1,11 @@
 import { Schema } from 'effect'
 import { authenticationSubmissionBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 import {
-  OpenCompanionLauncherMessageType,
-  type OpenCompanionLauncherMessage,
-} from '../../../nook-web-shared/src/extension/companion-launcher-message'
+  SiteSidePanelOpenKind,
+  SiteSidePanelOpenMessageType,
+  type SiteSidePanelOpenMessage,
+  type SiteSidePanelOpenResponse,
+} from '../lib/site-side-panel-messages'
 export {}
 
 authenticationSubmissionBridge.installIsolatedAuthenticationDirectSubmitBridge()
@@ -102,9 +104,7 @@ type WebsitePasskeyRuntimeMessage =
   | WebsitePasskeyOptionsMessage
   | WebsitePasskeyPerformMessage
   | WebsitePasskeyCancelMessage
-  | OpenCompanionLauncherMessage
-
-type OpenNookResponse = { ok: boolean }
+  | SiteSidePanelOpenMessage
 
 const CHECK_FAILED: PasskeyLookup = {
   kind: PasskeyLookupKind.Offer,
@@ -232,15 +232,17 @@ async function lookupOffer(request: PageRequest): Promise<PasskeyLookup> {
   }
 }
 
-/** Opens Nook in this window so the person can unlock it. */
+/** Opens the Nook side panel beside this site so the person can unlock Nook. Runs from the Unlock Nook click, which Chrome requires. */
 async function openNook(): Promise<void> {
-  const message: OpenCompanionLauncherMessage = {
-    type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  const message: SiteSidePanelOpenMessage = {
+    type: SiteSidePanelOpenMessageType.NookSiteSidePanelOpen,
   }
-  const response = await new WebAuthnRuntimeTransport<OpenNookResponse>(
-    message,
-  ).send()
-  if (response?.ok !== true) throw new Error('Nook could not be opened')
+  const response =
+    await new WebAuthnRuntimeTransport<SiteSidePanelOpenResponse>(
+      message,
+    ).send()
+  if (response?.kind !== SiteSidePanelOpenKind.Opened)
+    throw new Error('Nook could not be opened')
 }
 
 async function handleRequest(request: PageRequest): Promise<void> {

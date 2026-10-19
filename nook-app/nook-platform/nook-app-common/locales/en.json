@@ -1937,7 +1937,7 @@
       "no_match": "None of your Nook passkeys is one this site asked for. A passkey you just saved may still be waiting for the site's approval.",
       "locked": "Nook is locked. Unlock Nook to continue.",
       "unlock_action": "Unlock Nook",
-      "unlock_waiting": "Unlock Nook in the tab that opened, then come back to this page.",
+      "unlock_waiting": "Unlock Nook in the side panel, then select Continue.",
       "continue_action": "Continue",
       "checking": "Checking Nook…",
       "no_vault": "No connected Nook vault keeps passkeys yet.",

@@ -74,11 +74,11 @@ function installPasskeyCardChromeStub({
       message: { type?: string; payload?: { ceremony?: string } },
       callback?: (response: unknown) => void,
     ) => {
-      if (message.type === 'nook:open-companion-launcher') {
-        // Opening Nook stands in for the person unlocking it there.
+      if (message.type === 'nook:site-side-panel-open') {
+        // Opening the side panel stands in for the person unlocking Nook there.
         launcherOpens.push(message.type)
         locked = false
-        queueMicrotask(() => callback?.({ ok: true }))
+        queueMicrotask(() => callback?.({ kind: 'opened' }))
       } else if (message.type === 'nook:website-passkey-options' && locked) {
         queueMicrotask(() =>
           callback?.({ ok: true, status: 'locked', options: [] }),
@@ -247,13 +247,13 @@ test('unlock a locked Nook from the passkey card, then save', async ({
   ).toHaveCount(0)
   await demoBeat(page)
 
-  // Unlock Nook opens Nook; the card waits for the person to come back.
+  // Unlock Nook opens the side panel; the card waits for Continue.
   await card.getByRole('button', { name: 'Unlock Nook' }).click()
-  await expect.poll(launcherOpens).toEqual(['nook:open-companion-launcher'])
+  await expect.poll(launcherOpens).toEqual(['nook:site-side-panel-open'])
   await expect(card.getByRole('button', { name: 'Continue' })).toBeVisible()
   await demoBeat(page)
 
-  // Back on the page, Continue asks Nook again and the same request saves.
+  // After unlocking, Continue asks Nook again and the same request saves.
   await card.getByRole('button', { name: 'Continue' }).click()
   await expect(card.getByRole('button', { name: 'Save passkey' })).toBeVisible()
   await expect(card).toContainText('alice@example.com')
