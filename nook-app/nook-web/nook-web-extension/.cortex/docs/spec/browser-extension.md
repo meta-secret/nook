@@ -346,11 +346,14 @@ private identity.
   - **Unlocked with no paired vault:** the connect card leads with one action,
     Connect an identity.
   - **Next identity's key:** when Rust stages a new identity, its passkey or
-    PIN setup runs in place with Cancel. Cancel ends the connect: the connect
-    card returns while no identity is connected, otherwise Connect another
-    identity does. Status re-reads leave that ceremony in place until it ends.
-    While it runs, the panel shows only the ceremony, so All connections and
-    its Use this identity are out of reach.
+    PIN setup runs in place with Cancel. The ceremony replaces the page
+    content; the footer keeps its own rule. Status re-reads leave that
+    ceremony in place until it ends.
+    - Cancel ends the connect. The panel then shows its current page.
+    - While no identity is connected, that page is the connect card.
+    - With paired vaults, it is This site with Connect another identity. It
+      is All connections when the footer opened that page during the
+      ceremony.
   - **Connecting in the Nook tab:** the service worker opened or reused the
     [connect tab](#connect-tab), and the card follows its
     [steps](#connect-steps).
@@ -371,8 +374,7 @@ private identity.
     - Use this identity on All connections ends the connect too. It locks
       this identity, and the status change that moves the panel to another
       view stops a running connect: the panel closes the page's port, and the
-      connect state resets. A lock, unlock, or lease expiry elsewhere does the
-      same.
+      connect state resets. A lock or lease expiry elsewhere does the same.
       - The Nook tab stays open, and its page flow is unaffected. A grant that
         page delivers later shows on the panel's next vault read.
   - **Failure:** a device-status error or an initialization failure shows a
