@@ -28,6 +28,8 @@ import { extensionDir } from './extension-smoke-runtime'
  */
 export enum SidePanelStubVaults {
   Paired = 'paired',
+  /** Paired, plus the vault the connect page just created. */
+  PairedWithNew = 'paired-with-new',
   None = 'none',
   Unavailable = 'unavailable',
 }
@@ -118,6 +120,7 @@ const sidePanelStubProtocol = {
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   paired: SidePanelStubVaults.Paired,
+  pairedWithNew: SidePanelStubVaults.PairedWithNew,
   none: SidePanelStubVaults.None,
   unavailable: SidePanelStubVaults.Unavailable,
   accept: SidePanelStubAnswer.Accept,
@@ -180,6 +183,19 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     switch (state.vaults) {
       case protocol.paired:
         return { ok: true, vaults: pairedVaults }
+      case protocol.pairedWithNew:
+        return {
+          ok: true,
+          vaults: [
+            ...pairedVaults,
+            {
+              ...pairedVaults[0],
+              vaultStoreId: 'store-work',
+              vaultName: 'Work',
+              isDefault: false,
+            },
+          ],
+        }
       case protocol.none:
         return { ok: true, vaults: [] }
       case protocol.unavailable:

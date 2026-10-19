@@ -427,6 +427,34 @@ test('Connect another identity opens the connect card under the sections and pai
   await expect(connections.getByTestId('side-panel-connect')).toBeVisible()
 })
 
+test('a vault created on the connect page shows in the panel, and the hand-off line clears', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  // The Nook tab is a page Nook does not fill.
+  const nookTab: SidePanelSiteListing = {
+    kind: SidePanelSiteListingKind.PageUnavailable,
+  }
+  await panel.open({ ...unlockedScenario, listing: nookTab })
+  const connected = page.getByTestId('side-panel-connected-identity')
+  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  await page.getByTestId('side-panel-connect').click()
+  await page.getByTestId('side-panel-vault-name').fill('Work')
+  await page.getByTestId('side-panel-create-vault').click()
+  await expect(page.getByTestId('side-panel-handoff')).toHaveText(
+    'Continue in the Nook tab.',
+  )
+  // The person finishes on the connect page and comes back to the panel.
+  await panel.update({ vaults: SidePanelStubVaults.PairedWithNew })
+  await panel.focus()
+  await expect(connected).toHaveText([
+    'Alice Martin · Personal',
+    'Alice Martin · Work',
+  ])
+  await expect(page.getByTestId('side-panel-handoff')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-connect')).toBeVisible()
+})
+
 test('with no identity the connect card leads, and I already use Nook opens joining', async ({
   page,
 }) => {

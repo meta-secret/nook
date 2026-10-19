@@ -326,9 +326,16 @@ closes it.
         break
     }
     switch (view.kind) {
-      case SidePanelViewKind.Unlocked:
-        view = { ...view, vaults: SidePanelViews.vaults(load) }
+      case SidePanelViewKind.Unlocked: {
+        const vaults = SidePanelViews.vaults(load)
+        view = { ...view, vaults }
+        const arrived: Parameters<typeof SidePanelConnects.vaultsArrived>[0] = {
+          connect,
+          vaults,
+        }
+        connect = SidePanelConnects.vaultsArrived(arrived)
         return
+      }
       case SidePanelViewKind.Setup:
       case SidePanelViewKind.PinLocked:
       case SidePanelViewKind.PasskeyLocked:
@@ -608,9 +615,14 @@ closes it.
       Effect.result(runtime.beginPairing(pairing)),
     )
     switch (opened._tag) {
-      case 'Success':
-        connect = { kind: SidePanelConnectKind.Continued }
+      case 'Success': {
+        const continued: Parameters<typeof SidePanelConnects.continued>[0] = {
+          vaults: SidePanelViews.unlockedVaults(view),
+          deviceId: request.device.deviceId,
+        }
+        connect = SidePanelConnects.continued(continued)
         return
+      }
       case 'Failure':
         connect = { kind: SidePanelConnectKind.Failed }
     }

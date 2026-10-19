@@ -452,7 +452,11 @@ describe('side panel connecting an identity', () => {
     expect(
       SidePanelConnects.choiceShown({
         vaults: SidePanelVaultsKind.Paired,
-        connect: { kind: SidePanelConnectKind.Continued },
+        connect: {
+          kind: SidePanelConnectKind.Continued,
+          deviceId: 'device-new',
+          held: 0,
+        },
       }),
     ).toBe(true)
   })
@@ -467,11 +471,71 @@ describe('side panel connecting an identity', () => {
       SidePanelConnectKind.Idle,
       SidePanelConnectKind.Choosing,
       SidePanelConnectKind.Starting,
-      SidePanelConnectKind.Continued,
       SidePanelConnectKind.Failed,
     ] as const) {
       expect(SidePanelConnects.holdsPanel({ kind })).toBe(false)
     }
+  })
+
+  test('the hand-off line clears once the paired key holds a new vault', () => {
+    const vault = (
+      vaultStoreId: string,
+      deviceId: string,
+    ): PairedVaultSummary => ({
+      vaultStoreId,
+      vaultName: vaultStoreId,
+      identityLabel: deviceId,
+      deviceId,
+      isDefault: false,
+      fillsPasswords: true,
+      managesPasskeys: false,
+    })
+    const paired = (vaults: PairedVaultSummary[]) =>
+      SidePanelViews.vaults({ kind: PairedVaultsLoadKind.Ready, vaults })
+    const before = paired([vault('store-old', 'device-old')])
+    // The new identity's key holds nothing yet when the page opens.
+    const continued = SidePanelConnects.continued({
+      vaults: before,
+      deviceId: 'device-new',
+    })
+    expect(continued).toEqual({
+      kind: SidePanelConnectKind.Continued,
+      deviceId: 'device-new',
+      held: 0,
+    })
+    // Another identity's vaults, or none yet, keep the line.
+    expect(
+      SidePanelConnects.vaultsArrived({ connect: continued, vaults: before }),
+    ).toBe(continued)
+    expect(
+      SidePanelConnects.vaultsArrived({
+        connect: continued,
+        vaults: { kind: SidePanelVaultsKind.Loading },
+      }),
+    ).toBe(continued)
+    // The vault the person just created arrived: the identity shows instead.
+    expect(
+      SidePanelConnects.vaultsArrived({
+        connect: continued,
+        vaults: paired([
+          vault('store-old', 'device-old'),
+          vault('store-new', 'device-new'),
+        ]),
+      }),
+    ).toEqual({ kind: SidePanelConnectKind.Idle })
+    // A key that already held vaults counts from what it held.
+    const joined = SidePanelConnects.continued({
+      vaults: before,
+      deviceId: 'device-old',
+    })
+    expect(
+      SidePanelConnects.vaultsArrived({ connect: joined, vaults: before }),
+    ).toBe(joined)
+    // Any other connect step is left alone.
+    const choosing = { kind: SidePanelConnectKind.Choosing } as const
+    expect(
+      SidePanelConnects.vaultsArrived({ connect: choosing, vaults: before }),
+    ).toBe(choosing)
   })
 })
 

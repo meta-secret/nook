@@ -676,6 +676,11 @@ html:has(.side-panel-body) {
   text-transform: uppercase;
 }
 
+/* A page Nook does not fill lists the connected identities as headers. */
+.side-panel-site-group.is-connected {
+  padding-bottom: 12px;
+}
+
 .side-panel-site-group-name {
   flex: 1;
   min-width: 0;

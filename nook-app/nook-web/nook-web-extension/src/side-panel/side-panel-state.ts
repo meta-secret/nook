@@ -411,6 +411,19 @@ export class SidePanelViews {
     }
   }
 
+  /** The vault list an unlocked view shows; other views hold none yet. */
+  static unlockedVaults(view: SidePanelView): SidePanelVaults {
+    switch (view.kind) {
+      case SidePanelViewKind.Unlocked:
+        return view.vaults
+      case SidePanelViewKind.Setup:
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.PasskeyLocked:
+      case SidePanelViewKind.Failure:
+        return { kind: SidePanelVaultsKind.Loading }
+    }
+  }
+
   /** The paired-vault list, as the unlocked views read it. */
   static vaults(load: PairedVaultsLoad): SidePanelVaults {
     switch (load.kind) {
@@ -518,8 +531,14 @@ export type SidePanelConnect =
         | SidePanelConnectKind.Idle
         | SidePanelConnectKind.Choosing
         | SidePanelConnectKind.Starting
-        | SidePanelConnectKind.Continued
         | SidePanelConnectKind.Failed
+    }
+  | {
+      readonly kind: SidePanelConnectKind.Continued
+      /** The key the connect page pairs vaults to. */
+      readonly deviceId: string
+      /** That key's paired vaults when the page opened. */
+      readonly held: number
     }
   | {
       readonly kind: SidePanelConnectKind.IdentityKey
@@ -534,6 +553,16 @@ type SidePanelCreateStartRequest = {
   readonly typed: string
   /** The connect page's suggested name, used for an empty field. */
   readonly suggested: string
+}
+
+type SidePanelContinuedRequest = {
+  readonly vaults: SidePanelVaults
+  readonly deviceId: string
+}
+
+type SidePanelVaultsArrivedRequest = {
+  readonly connect: SidePanelConnect
+  readonly vaults: SidePanelVaults
 }
 
 type SidePanelChoiceRequest = {
@@ -591,6 +620,57 @@ export class SidePanelConnects {
 
   static join(): ExtensionConnectStart {
     return { kind: ExtensionConnectStartKind.Join }
+  }
+
+  /** Nook's connect page opened for this key. */
+  static continued(request: SidePanelContinuedRequest): SidePanelConnect {
+    return {
+      kind: SidePanelConnectKind.Continued,
+      deviceId: request.deviceId,
+      held: SidePanelConnects.heldBy(request),
+    }
+  }
+
+  /** Once the key holds more vaults than when the page opened, the
+   * identity connected: the hand-off line gives way to it. */
+  static vaultsArrived(
+    request: SidePanelVaultsArrivedRequest,
+  ): SidePanelConnect {
+    const { connect, vaults } = request
+    switch (connect.kind) {
+      case SidePanelConnectKind.Continued:
+        break
+      case SidePanelConnectKind.Idle:
+      case SidePanelConnectKind.Choosing:
+      case SidePanelConnectKind.Starting:
+      case SidePanelConnectKind.IdentityKey:
+      case SidePanelConnectKind.Failed:
+        return connect
+    }
+    const held: SidePanelContinuedRequest = {
+      vaults,
+      deviceId: connect.deviceId,
+    }
+    switch (SidePanelConnects.heldBy(held) > connect.held) {
+      case true:
+        return { kind: SidePanelConnectKind.Idle }
+      case false:
+        return connect
+    }
+  }
+
+  private static heldBy(request: SidePanelContinuedRequest): number {
+    const { vaults, deviceId } = request
+    switch (vaults.kind) {
+      case SidePanelVaultsKind.Paired:
+        return vaults.groups
+          .filter((group) => group.deviceId === deviceId)
+          .flatMap((group) => group.vaults).length
+      case SidePanelVaultsKind.Loading:
+      case SidePanelVaultsKind.NoVault:
+      case SidePanelVaultsKind.Failed:
+        return 0
+    }
   }
 
   /** Whether the choice shows: always while no identity is connected,

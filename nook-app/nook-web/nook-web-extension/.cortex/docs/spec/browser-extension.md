@@ -238,6 +238,10 @@ private identity.
     Several rows each get a secondary action.
   - A tab without a website shows "No website in this tab". A Nook vault app
     shows "Nook can't fill on this page". Neither shows a Fill button.
+  - Those pages, and a page no connected vault fills, still list each
+    connected identity and vault as an "identity · vault" header, so an
+    identity connected a moment ago shows at once. Once the vault created on
+    the connect page arrives, the hand-off line gives way to it.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
 - The Pilot lock entry and the side panel's All connections use the same
