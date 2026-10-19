@@ -256,6 +256,52 @@ pub mod tests {
         Ok(())
     }
 
+    /// Content scripts prefix each visible heading and paragraph with `\n`.
+    pub const UPDATE_AUTHENTICATOR_DIALOG_COPY: &str = "\nUpdate authenticator app\nScan this QR code to set up your account using your preferred authenticator app. Popular choices include Google Authenticator, Microsoft Authenticator, and Authy.";
+
+    #[test]
+    fn update_authenticator_dialog_instructions_admit_inline_qr()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        assert_eq!(
+            SetupPage {
+                copy: UPDATE_AUTHENTICATOR_DIALOG_COPY,
+                media: AuthenticationQrMediaObservation::Present
+            }
+            .classify()?,
+            AuthenticationAuthenticatorSetupObservation::Present
+        );
+        assert_eq!(
+            SetupPage {
+                copy: UPDATE_AUTHENTICATOR_DIALOG_COPY,
+                media: AuthenticationQrMediaObservation::Absent
+            }
+            .classify()?,
+            AuthenticationAuthenticatorSetupObservation::Absent
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dialog_sign_in_download_and_payment_qr_copy_is_not_setup()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "\nSign in with your authenticator app\nScan this QR code using your preferred authenticator app",
+            "\nGet the authenticator app\nScan this QR code to download the authenticator app",
+            "\nPay with your authenticator app\nScan this QR code using your authenticator app to pay",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Present
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Absent,
+                "{copy}"
+            );
+        }
+        Ok(())
+    }
+
     #[test]
     fn setup_copy_preserves_empty_prose_and_rejects_oversized_observations() -> anyhow::Result<()> {
         let empty = AuthenticationAuthenticatorSetupCopy::try_from(String::new())?;

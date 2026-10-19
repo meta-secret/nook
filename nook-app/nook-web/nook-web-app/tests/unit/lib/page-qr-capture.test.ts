@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
-import { classify_authentication_authenticator_setup_batch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import {
+  classify_authentication_authenticator_setup_batch,
+  type AuthenticationAuthenticatorSetupBatch,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   CompanionWasmRuntimeMessage,
   CompanionWasmAuthenticatorSetupResponse,
@@ -120,6 +123,184 @@ class DeferredSetupObservationFixture {
           ),
       },
     })
+  }
+}
+
+/** A portaled modal like the reported "Update authenticator app" dialog. */
+class DialogQrObservationFixture {
+  static readonly QR_SVG =
+    '<svg viewBox="0 0 29 29" role="img"><path fill="#000000" d="M0 0h7v7H0zM22 0h7v7h-7zM0 22h7v7H0z"/></svg>'
+
+  static authenticatorDialog(media: string): string {
+    return `
+      <main aria-hidden="true"><h1>Account settings</h1><p>Manage your security</p></main>
+      <div role="dialog" aria-modal="true" aria-labelledby="mfa-title" aria-describedby="mfa-description">
+        <div>
+          <div id="mfa-title">Update authenticator app</div>
+          <button aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12"/></svg></button>
+        </div>
+        <div id="mfa-description">Scan this QR code to set up your account using your preferred authenticator app. Popular choices include <a href="https://support.google.com/accounts/answer/1066447">Google Authenticator</a>, <a href="https://www.microsoft.com/security/mobile-authenticator-app">Microsoft Authenticator</a>, and <a href="https://authy.com">Authy</a>.</div>
+        ${media}
+        <a href="#manual-setup">Enter code manually</a>
+        <div><button type="button">Cancel</button><button type="button">Continue</button></div>
+      </div>
+    `
+  }
+
+  readonly payloads: AuthenticationAuthenticatorSetupBatch[] = []
+
+  constructor(markup: string) {
+    document.body.innerHTML = markup
+    for (const element of document.querySelectorAll(
+      'img,canvas,svg,h1,h2,p,div,span',
+    )) {
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({
+          width: 220,
+          height: 220,
+          top: 0,
+          left: 0,
+          bottom: 220,
+          right: 220,
+        }),
+      })
+    }
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (
+          message: SetupMetadataRuntimeRequest,
+          callback: (response: SetupMetadataRuntimeResponse) => void,
+        ): void => {
+          this.payloads.push(message.payload)
+          callback({
+            ok: true,
+            result: {
+              authenticatorSetupObservation:
+                classify_authentication_authenticator_setup_batch(
+                  message.payload,
+                ),
+            },
+          })
+        },
+      },
+    })
+  }
+
+  async observation() {
+    const snapshot =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    return snapshot.observation
+  }
+
+  get instructionCopies(): readonly string[] {
+    const payload = this.payloads.at(-1)
+    if (!payload) throw new Error('Setup metadata was not sent.')
+    return payload.visibleInstructionCopies
+  }
+}
+
+enum RasterOperationKind {
+  FillRect = 'fillRect',
+  DrawImage = 'drawImage',
+}
+
+type RasterOperation = {
+  readonly operation: RasterOperationKind
+  readonly fillStyle: string
+  readonly source: string
+}
+
+/** Stands in for Chromium's image decode, 2D canvas, and BarcodeDetector. */
+class QrRasterDecodeFixture {
+  readonly operations: RasterOperation[] = []
+  readonly decodedSources: string[] = []
+  readonly bitmapSources: string[] = []
+  readonly detectedSources: string[] = []
+  readonly closedBitmaps: string[] = []
+  private readonly originalDecode = Object.getOwnPropertyDescriptor(
+    HTMLImageElement.prototype,
+    'decode',
+  )
+  private readonly originalGetContext = Object.getOwnPropertyDescriptor(
+    HTMLCanvasElement.prototype,
+    'getContext',
+  )
+
+  constructor(private readonly decodedValue: string) {}
+
+  install(): void {
+    const { operations, decodedSources, bitmapSources, detectedSources } = this
+    const { closedBitmaps, decodedValue } = this
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value(this: HTMLImageElement): Promise<void> {
+        decodedSources.push(this.src)
+        return Promise.resolve()
+      },
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value() {
+        const context = {
+          fillStyle: '',
+          fillRect() {
+            operations.push({
+              operation: RasterOperationKind.FillRect,
+              fillStyle: context.fillStyle,
+              source: '',
+            })
+          },
+          drawImage(source: HTMLImageElement) {
+            operations.push({
+              operation: RasterOperationKind.DrawImage,
+              fillStyle: context.fillStyle,
+              source: source.src,
+            })
+          },
+        }
+        return context
+      },
+    })
+    vi.stubGlobal('createImageBitmap', (source: HTMLCanvasElement) => {
+      bitmapSources.push(source.tagName.toLowerCase())
+      return Promise.resolve({
+        label: 'opaque-canvas',
+        close: () => closedBitmaps.push('opaque-canvas'),
+      })
+    })
+    vi.stubGlobal(
+      'BarcodeDetector',
+      class {
+        detect(source: { readonly label: string }) {
+          detectedSources.push(source.label)
+          return Promise.resolve([
+            { rawValue: decodedValue, format: 'qr_code' },
+          ])
+        }
+      },
+    )
+  }
+
+  restore(): void {
+    if (this.originalDecode) {
+      Object.defineProperty(
+        HTMLImageElement.prototype,
+        'decode',
+        this.originalDecode,
+      )
+    } else {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+    if (this.originalGetContext) {
+      Object.defineProperty(
+        HTMLCanvasElement.prototype,
+        'getContext',
+        this.originalGetContext,
+      )
+    } else {
+      Reflect.deleteProperty(HTMLCanvasElement.prototype, 'getContext')
+    }
   }
 }
 
@@ -359,5 +540,284 @@ describe('page QR otpauth capture', () => {
       status: 'unsupported',
       candidates: [],
     })
+  })
+})
+
+describe('authenticator setup dialogs', () => {
+  test('an inline SVG QR in a portaled setup dialog offers enrollment from its title and body', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        DialogQrObservationFixture.QR_SVG,
+      ),
+    )
+    expect(await fixture.observation()).toBe('present')
+    expect(fixture.instructionCopies).toHaveLength(1)
+    const [copy] = fixture.instructionCopies
+    expect(copy).toMatch(
+      /^\nUpdate authenticator app\nScan this QR code to set up your account using your preferred authenticator app\. Popular choices include Google Authenticator, Microsoft Authenticator, and Authy\./,
+    )
+    expect(copy).not.toMatch(/Cancel|Continue|Account settings|Manage/)
+    expect(new TextEncoder().encode(copy).length).toBeLessThanOrEqual(512)
+  })
+
+  test('a canvas QR inside a dialog form still reads the dialog header and span copy', async () => {
+    const fixture = new DialogQrObservationFixture(`
+      <div role="dialog" aria-modal="true" aria-labelledby="setup-title">
+        <header><h2 id="setup-title">Set up two-factor authentication</h2></header>
+        <form>
+          <span>Scan this QR code with your authenticator app.</span>
+          <canvas width="220" height="220"></canvas>
+          <button type="submit">Continue</button>
+        </form>
+      </div>
+    `)
+    expect(await fixture.observation()).toBe('present')
+    expect(fixture.instructionCopies).toEqual([
+      '\nSet up two-factor authentication\nScan this QR code with your authenticator app.',
+    ])
+  })
+
+  test('dialog copy keeps setup keys, controls, and hidden text out of the observation', async () => {
+    const fixture = new DialogQrObservationFixture(`
+      <div role="dialog" aria-labelledby="key-title">
+        <h2 id="key-title">Update authenticator app</h2>
+        <div>Scan this QR code with your authenticator app.</div>
+        ${DialogQrObservationFixture.QR_SVG}
+        <div>Setup key: <code>JBSWY3DPEHPK3PXP</code></div>
+        <span data-setup-key>KRSXG5CTMVRXEZLU</span>
+        <span hidden>Hidden helper copy</span>
+      </div>
+    `)
+    expect(await fixture.observation()).toBe('present')
+    expect(fixture.instructionCopies).toEqual([
+      '\nUpdate authenticator app\nScan this QR code with your authenticator app.',
+    ])
+  })
+
+  test('plain-text setup keys shown after the dialog QR stay out of the instruction copy', async () => {
+    const setupKey = 'JBSW Y3DP EHPK 3PXP KRSX G5CT MVRX EZLU'
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(`
+        ${DialogQrObservationFixture.QR_SVG}
+        <div>Can't scan it? Enter this key instead:</div>
+        <div>${setupKey}</div>
+        <div>Key: <strong>${setupKey}</strong></div>
+        <span>${setupKey}</span>
+      `),
+    )
+    expect(await fixture.observation()).toBe('present')
+    const payload = fixture.payloads.at(-1)
+    expect(payload?.qrMedia).toBe('present')
+    expect(fixture.instructionCopies).toHaveLength(1)
+    const [copy] = fixture.instructionCopies
+    expect(copy).toMatch(
+      /^\nUpdate authenticator app\nScan this QR code to set up your account using your preferred authenticator app\./,
+    )
+    expect(copy).not.toContain('JBSW')
+    expect(copy).not.toContain('KRSX')
+    expect(copy).not.toContain("Can't scan it")
+  })
+
+  test('small icons skip computed style during setup media collection', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        '<svg id="copy-icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      ),
+    )
+    const icon = document.querySelector('#copy-icon')
+    if (!icon) throw new Error('Expected icon fixture')
+    Object.defineProperty(icon, 'getBoundingClientRect', {
+      value: () => ({
+        width: 24,
+        height: 24,
+        top: 0,
+        left: 0,
+        bottom: 24,
+        right: 24,
+      }),
+    })
+    const computedStyle = vi.spyOn(window, 'getComputedStyle')
+    expect(await fixture.observation()).toBe('absent')
+    expect(
+      computedStyle.mock.calls.filter(([element]) => element === icon),
+    ).toEqual([])
+    computedStyle.mockRestore()
+  })
+
+  test('a marked inline SVG QR decodes without BarcodeDetector', async () => {
+    const uri =
+      'otpauth://totp/Example:carol@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
+    new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        `<svg viewBox="0 0 29 29" data-nook-otpauth-uri="${uri}"><path d="M0 0h7v7H0z"/></svg>`,
+      ),
+    )
+    await expect(
+      pageQrCapture.decodeVisibleOtpauthCandidates(),
+    ).resolves.toEqual({
+      status: 'ready',
+      candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+    })
+  })
+
+  test('sign-in, app-download, and payment QR dialogs do not suggest enrollment', async () => {
+    for (const [title, body] of [
+      [
+        'Sign in with your phone',
+        'Scan this QR code with the Nook Authenticator app to sign in.',
+      ],
+      ['Get the app', 'Scan this QR code to download our authenticator app.'],
+      ['Checkout', 'Scan this QR code with your authenticator app to pay.'],
+    ]) {
+      const fixture = new DialogQrObservationFixture(`
+        <div role="dialog" aria-modal="true" aria-labelledby="t" aria-describedby="d">
+          <div id="t">${title}</div>
+          <div id="d">${body}</div>
+          ${DialogQrObservationFixture.QR_SVG}
+        </div>
+      `)
+      expect(await fixture.observation()).toBe('absent')
+    }
+  })
+
+  test('decorative and small icon SVGs inside a setup dialog are not QR candidates', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        '<svg id="copy-icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      ),
+    )
+    const icon = document.querySelector('#copy-icon')
+    if (!icon) throw new Error('Expected icon fixture')
+    Object.defineProperty(icon, 'getBoundingClientRect', {
+      value: () => ({
+        width: 24,
+        height: 24,
+        top: 0,
+        left: 0,
+        bottom: 24,
+        right: 24,
+      }),
+    })
+    expect(await fixture.observation()).toBe('absent')
+    expect(fixture.instructionCopies).toEqual([])
+  })
+
+  test('copy changes inside the dialog request a setup rescan; unrelated page text does not', () => {
+    new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        DialogQrObservationFixture.QR_SVG,
+      ),
+    )
+    const observer = new MutationObserver(() => {})
+    const observerOptions: MutationObserverInit = {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    }
+    observer.observe(document.body, observerOptions)
+    const title = document.querySelector('#mfa-title')
+    const description = document.querySelector('#mfa-description')
+    const unrelated = document.querySelector('main p')
+    if (!title || !description || !unrelated)
+      throw new Error('Expected dialog mutation fixture')
+    title.textContent = 'Set up authenticator app'
+    const descriptionText = description.firstChild
+    if (!(descriptionText instanceof Text))
+      throw new Error('Expected description text')
+    descriptionText.data = 'Scan this QR code with your authenticator app. '
+    const dialogRecords = observer.takeRecords()
+    expect(dialogRecords.length).toBeGreaterThan(0)
+    for (const record of dialogRecords) {
+      expect(
+        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
+          record,
+        ),
+      ).toBe(true)
+    }
+    unrelated.textContent = 'Recent sign-in activity'
+    const unrelatedRecords = observer.takeRecords()
+    expect(unrelatedRecords.length).toBeGreaterThan(0)
+    for (const record of unrelatedRecords) {
+      expect(
+        pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(
+          record,
+        ),
+      ).toBe(false)
+    }
+    observer.disconnect()
+  })
+
+  test('the trusted decode rasterizes an inline SVG QR onto an opaque canvas for BarcodeDetector', async () => {
+    const uri =
+      'otpauth://totp/Example:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
+    new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        DialogQrObservationFixture.QR_SVG,
+      ),
+    )
+    const raster = new QrRasterDecodeFixture(uri)
+    raster.install()
+    try {
+      await expect(
+        pageQrCapture.decodeVisibleOtpauthCandidates(),
+      ).resolves.toEqual({
+        status: 'ready',
+        candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+      })
+      expect(raster.decodedSources).toHaveLength(1)
+      const [decodedSource] = raster.decodedSources
+      if (!decodedSource) throw new Error('Expected a decoded SVG image')
+      const prefix = 'data:image/svg+xml;charset=utf-8,'
+      expect(decodedSource.startsWith(prefix)).toBe(true)
+      const markup = decodeURIComponent(decodedSource.slice(prefix.length))
+      expect(markup).toMatch(/^<svg/)
+      expect(markup).toContain('width="220"')
+      expect(markup).toContain('height="220"')
+      expect(markup).toContain('M0 0h7v7H0z')
+      expect(raster.operations).toEqual([
+        {
+          operation: RasterOperationKind.FillRect,
+          fillStyle: '#ffffff',
+          source: '',
+        },
+        {
+          operation: RasterOperationKind.DrawImage,
+          fillStyle: '#ffffff',
+          source: decodedSource,
+        },
+      ])
+      expect(raster.bitmapSources).toEqual(['canvas'])
+      expect(raster.detectedSources).toEqual(['opaque-canvas'])
+      expect(raster.closedBitmaps).toEqual(['opaque-canvas'])
+    } finally {
+      raster.restore()
+    }
+  })
+
+  test('the trusted decode underlays canvas QR media before BarcodeDetector', async () => {
+    const uri = 'otpauth://totp/Example:bob@example.com?secret=JBSWY3DPEHPK3PXP'
+    new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        '<canvas width="220" height="220"></canvas>',
+      ),
+    )
+    const raster = new QrRasterDecodeFixture(uri)
+    raster.install()
+    try {
+      await expect(
+        pageQrCapture.decodeVisibleOtpauthCandidates(),
+      ).resolves.toEqual({
+        status: 'ready',
+        candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+      })
+      expect(raster.decodedSources).toEqual([])
+      expect(raster.operations.map((step) => step.operation)).toEqual([
+        RasterOperationKind.FillRect,
+        RasterOperationKind.DrawImage,
+      ])
+      expect(raster.detectedSources).toEqual(['opaque-canvas'])
+    } finally {
+      raster.restore()
+    }
   })
 })
