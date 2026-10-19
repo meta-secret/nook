@@ -361,6 +361,34 @@ test('discover a website passkey in the reopened local paired vault', async ({
     }
     await new PasskeyVaultDiscovery(reopenedVault).assert(state)
     await demoBeat(reopenedVault)
+
+    // The opened passkey shows its public credential facts and the vault
+    // event-log history: never the private key, never an error state.
+    const passkeyGroup = reopenedVault.getByTestId('vault-group-passkey')
+    await expect(
+      passkeyGroup.getByTestId('passkey-credential-id'),
+    ).toContainText(credentialId, visibility)
+    await expect(
+      passkeyGroup.getByTestId('passkey-public-key-fingerprint'),
+    ).toContainText(/SHA256:[A-Za-z0-9+/]{43}/)
+    await expect(passkeyGroup.getByTestId('passkey-algorithm')).toContainText(
+      'ES256 (ECDSA P-256)',
+    )
+    await expect(
+      passkeyGroup.getByTestId('passkey-signature-count'),
+    ).toContainText('0')
+    await expect(passkeyGroup.getByTestId('history-origin')).toContainText(
+      'Created',
+      visibility,
+    )
+    await expect(
+      passkeyGroup.getByTestId('history-origin-device'),
+    ).toBeVisible()
+    await expect(passkeyGroup.getByTestId('passkey-details-error')).toHaveCount(
+      0,
+    )
+    await expect(passkeyGroup.getByTestId('history-error')).toHaveCount(0)
+    await demoBeat(reopenedVault)
   } finally {
     await context.close()
     await loginServer.close()
