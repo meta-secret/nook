@@ -134,10 +134,41 @@ for (const locked of [false, true]) {
       await page.goto(fixture.destination())
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      if (locked)
+      if (locked) {
         await expect(
           widget.getByTestId('nook-auth-gate-vault-status'),
         ).toHaveAttribute('data-state', 'vault-locked')
+        const openSidePanels = () =>
+          worker.evaluate(
+            async () =>
+              (
+                await chrome.runtime.getContexts({
+                  contextTypes: [chrome.runtime.ContextType.SIDE_PANEL],
+                })
+              ).length,
+          )
+        const pagesBeforeUnlock = context.pages().length
+        // A locked Nook unlocks in the side panel: no login lookup, no tab.
+        await widget.getByRole('button', { name: 'Unlock' }).click()
+        await expect.poll(openSidePanels).toBe(1)
+        expect(context.pages()).toHaveLength(pagesBeforeUnlock)
+        expect(
+          await worker.evaluate(() => {
+            const count: unknown = Reflect.get(
+              globalThis,
+              'nookTestLoginLookupCount',
+            )
+            return count
+          }),
+        ).toBe(0)
+        await expect(page.locator('#usernameEntry')).toHaveValue('')
+        expect(submitted).toBe(false)
+        await page.screenshot({
+          path: testInfo.outputPath('continue-site.png'),
+          caret: 'initial',
+        })
+        return
+      }
       const popupPromise = context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Sign in' }).click()
       const popup = await popupPromise
@@ -155,10 +186,6 @@ for (const locked of [false, true]) {
       )
       await expect(page.locator('#usernameEntry')).toHaveValue('')
       expect(submitted).toBe(false)
-      if (locked)
-        await expect(
-          popup.getByTestId('device-protection-pin-unlock-btn'),
-        ).toBeVisible()
       await page.screenshot({
         path: testInfo.outputPath('continue-site.png'),
         caret: 'initial',

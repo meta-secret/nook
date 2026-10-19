@@ -131,8 +131,9 @@ share that corner.
 - **Assertion:** one row per matching account with its vault. Choosing a row is
   the consent.
 - **Locked:** the card says Nook is locked and offers **Unlock Nook**, which
-  opens Nook in a tab of the same window. The card then waits with
-  **Continue**; returning to the page or pressing Continue asks Nook again and
+  opens the Nook side panel beside the site from that click (Chrome requires
+  the gesture). The card then waits with **Continue**; pressing Continue (or
+  returning to a hidden page) asks Nook again and
   shows the save or sign-in choices once Nook is unlocked. It never offers the
   browser's own passkey while Nook is merely locked, and lists no account.
 - **Nothing to offer:** when no vault passkey is one the site asked for, no

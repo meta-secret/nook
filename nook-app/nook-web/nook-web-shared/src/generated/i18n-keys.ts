@@ -931,6 +931,7 @@ export const I18N_KEYS = {
   ExtensionWidgetTakeOver: 'extension.widget.take_over',
   ExtensionWidgetTotpDescription: 'extension.widget.totp_description',
   ExtensionWidgetTotpTitle: 'extension.widget.totp_title',
+  ExtensionWidgetUnlock: 'extension.widget.unlock',
   ExtensionWidgetUnlockThenContinue: 'extension.widget.unlock_then_continue',
   ExtensionWidgetUpdateLogin: 'extension.widget.update_login',
   ExtensionWidgetUpdateLoginDescription: 'extension.widget.update_login_description',

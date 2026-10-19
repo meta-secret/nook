@@ -20,6 +20,24 @@ use crate::page_field_classification::form_identity::{
 };
 
 impl AuthenticationAdvanceControlObservation {
+    /// Whether an inert in-form sign-in button of a password login supplies planning
+    /// evidence only. Sites such as Stripe enable that button once the fields are typed.
+    #[must_use]
+    pub(crate) fn is_inert_password_login_planning_advance(&self) -> bool {
+        if !matches!(self.actionability, PageControlActionability::Inert)
+            || !matches!(self.ownership, PageControlOwnership::OwnedForm)
+            || !matches!(self.semantics, PageControlSemantics::Activation)
+            || !self.password_field_count.is_single()
+            || self.new_password_field_count.is_nonzero()
+            || self.one_time_code_field_count.is_nonzero()
+        {
+            return false;
+        }
+        let mut actionable = self.clone();
+        actionable.actionability = PageControlActionability::Actionable;
+        actionable.authentication_advance_control_is_safe()
+    }
+
     /// Whether an inert control supplies narrow page-planning evidence only.
     #[must_use]
     pub(crate) fn is_inert_webauthn_email_planning_advance(&self) -> bool {
@@ -167,15 +185,15 @@ impl CheckedAuthenticationControl<'_> {
         let observation = self.observation;
         let owned_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
-        let locally_scoped_explicit_activation =
-            matches!(observation.ownership, PageControlOwnership::LocallyScoped)
-                && matches!(observation.semantics, PageControlSemantics::Activation)
-                && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
-                && AuthenticationRouteIdentity::new(&self.destination.path_identity)
-                    .has_safe_login_identity();
+        // An in-form `type="button"` labelled "Sign in" counts like a locally scoped one (Stripe).
+        let scoped_explicit_activation = authentication_scope_owns_control
+            && matches!(observation.semantics, PageControlSemantics::Activation)
+            && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
+            && AuthenticationRouteIdentity::new(&self.destination.path_identity)
+                .has_safe_login_identity();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_login()
             || self.has_tesla_scripted_password_submit()
-            || locally_scoped_explicit_activation
+            || scoped_explicit_activation
             || (owned_semantic_submit
                 && (AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
                     || AuthenticationAdvanceControlObservation::looks_like_supported_localized_login_control_label(&observation.label)

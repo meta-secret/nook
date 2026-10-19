@@ -9,7 +9,6 @@ import {
   type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
-import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { type WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
 import { SessionOperationFailureKind } from '../../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
@@ -24,10 +23,7 @@ import {
   accountPickerSessions,
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
-import {
-  ExtensionSessionLifecycle,
-  extensionSessionLifecycle,
-} from './session-lifecycle'
+import { extensionSessionLifecycle } from './session-lifecycle'
 import {
   decodeLoginOperationResponse,
   decodeLoginSaveActionResponse,
@@ -142,13 +138,6 @@ export async function websiteLoginSaveOffer({
       'error' in response &&
       response.error === SessionOperationFailureKind.Locked
     ) {
-      const launcherRequest: Parameters<
-        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
-      >[0] = {
-        intent: OpenCompanionLauncherIntent.PilotAuth,
-        source: ExtensionSessionLifecycle.sourceFromSender(sender),
-      }
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { kind: 'locked' }
     }
     if (
@@ -395,13 +384,6 @@ export async function websiteLoginSaveCommit({
     typeof status !== 'object' ||
     !extensionSessionLifecycle.isUnlockedSessionStatus(status)
   ) {
-    const launcherRequest: Parameters<
-      typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
-    >[0] = {
-      intent: OpenCompanionLauncherIntent.PilotAuth,
-      source: ExtensionSessionLifecycle.sourceFromSender(sender),
-    }
-    extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
     return {
       kind: 'rejected',
       reason: 'login-save-locked',

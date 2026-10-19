@@ -30,6 +30,7 @@ import type {
   ExtensionSessionRequest,
 } from './session-request-adapter'
 import { ExtensionSessionLifecycleMessageType } from '../lib/extension-session-lifecycle-message-type'
+import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 import {
   handleSessionMessage,
   type DeviceResult,
@@ -83,6 +84,10 @@ type SessionExpirySchedule =
 
 type ExtensionSessionExpiryMessage = {
   type: ExtensionSessionLifecycleMessageType.Expired
+}
+
+type AuthenticationSurfacesRefreshMessage = {
+  type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
 type SessionExpiryLeaseConfiguration = ConstructorParameters<
@@ -240,6 +245,11 @@ async function activateSession(): Promise<DeviceResult> {
     }
     void chrome.runtime.sendMessage(expiryMessage)
   })
+  // Pilot widgets on open sites re-check Nook, so an Unlock button becomes Sign in.
+  const refreshMessage: AuthenticationSurfacesRefreshMessage = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  void chrome.runtime.sendMessage(refreshMessage)
   return deviceResult(activeManager)
 }
 

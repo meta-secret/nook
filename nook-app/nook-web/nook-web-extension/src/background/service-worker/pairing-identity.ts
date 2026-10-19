@@ -61,7 +61,6 @@ import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
-  ExtensionSessionLifecycle,
 } from './session-lifecycle'
 import type { CompanionLauncherSource } from './session-lifecycle'
 import { identityHandoffSessionRequest } from './session-request-projections'
@@ -220,7 +219,7 @@ type WebsiteGrantAccess =
     }
 
 type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
-  openLockedCompanion: boolean
+  interactive: boolean
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
@@ -845,7 +844,7 @@ class ExtensionPairingIdentity {
       origin,
       sender,
       forbiddenReason,
-      openLockedCompanion: true,
+      interactive: true,
     }
     return this.websiteGrants(request)
   }
@@ -859,7 +858,7 @@ class ExtensionPairingIdentity {
       origin,
       sender,
       forbiddenReason,
-      openLockedCompanion: false,
+      interactive: false,
     }
     return this.websiteGrants(request)
   }
@@ -868,7 +867,7 @@ class ExtensionPairingIdentity {
     origin,
     sender,
     forbiddenReason,
-    openLockedCompanion,
+    interactive,
   }: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
     const nookTypedArgs0_8: Parameters<
       typeof this.isAuthorizedWebsiteSender
@@ -890,7 +889,7 @@ class ExtensionPairingIdentity {
     }
 
     const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-    const queue = openLockedCompanion
+    const queue = interactive
       ? extensionSessionInteractiveDeadline(queueExpiresAt)
       : extensionSessionProbeDeadline(queueExpiresAt)
     const nookTypedArgs0_9: Parameters<typeof this.sendSessionMessage>[0] = {
@@ -903,17 +902,9 @@ class ExtensionPairingIdentity {
     const status = statusDelivery.value
     await companionWasmReady
     const sessionStatus = this.websiteSessionStatusTransport(status)
-    if (openLockedCompanion) {
+    if (interactive) {
+      // The site page opens the Nook side panel to unlock; Sign in is its gesture.
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
-        const launcherRequest: Parameters<
-          typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
-        >[0] = {
-          intent: OpenCompanionLauncherIntent.PilotAuth,
-          source: ExtensionSessionLifecycle.sourceFromSender(sender),
-        }
-        extensionSessionLifecycle.openCompanionLauncherBestEffort(
-          launcherRequest,
-        )
         return {
           response: {
             ok: true,

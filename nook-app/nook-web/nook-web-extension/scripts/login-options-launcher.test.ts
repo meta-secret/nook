@@ -273,8 +273,6 @@ describe('websiteLoginOptions', () => {
     })
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
-    const { ExtensionSessionLifecycle } =
-      await import('../src/background/service-worker/session-lifecycle')
     const sender = websiteSender()
     const openedLaunchers: CompanionLauncherOpenRequest[] = []
     const openCompanionLauncherBestEffort = mock(
@@ -286,19 +284,14 @@ describe('websiteLoginOptions', () => {
       | WebsiteAuthenticatorResponseStatus.Locked
       | WebsiteAuthenticatorResponseStatus.Unavailable =
       WebsiteAuthenticatorResponseStatus.Locked
-    const availableWebsiteGrants = mock(() => {
-      const launcherRequest: CompanionLauncherOpenRequest = {
-        intent: OpenCompanionLauncherIntent.PilotAuth,
-        source: ExtensionSessionLifecycle.sourceFromSender(sender),
-      }
-      openCompanionLauncherBestEffort(launcherRequest)
-      return Promise.resolve({
+    const availableWebsiteGrants = mock(() =>
+      Promise.resolve({
         response: {
           ok: true as const,
           status: grantSuccessStatus,
         },
-      })
-    })
+      }),
+    )
     const loginAccountsForOrigin = mock(() => Promise.resolve([]))
     const loginAccountAvailabilityForOrigin = mock(() =>
       Promise.resolve({ ok: true as const, accounts: [] }),
@@ -330,12 +323,8 @@ describe('websiteLoginOptions', () => {
       ok: true,
       status: WebsiteAuthenticatorResponseStatus.Locked,
     })
-    expect(openedLaunchers).toEqual([
-      {
-        intent: OpenCompanionLauncherIntent.PilotAuth,
-        source: ExtensionSessionLifecycle.sourceFromSender(sender),
-      },
-    ])
+    // A locked vault opens no Nook tab; the page opens the side panel from its click.
+    expect(openedLaunchers).toEqual([])
     expect(loginAccountsForOrigin).not.toHaveBeenCalled()
     expect(loginAccountAvailabilityForOrigin).not.toHaveBeenCalled()
   })

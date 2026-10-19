@@ -645,13 +645,6 @@ class AccountPickerSessions {
     if (delivery.isErr()) return { response: delivery.error.response }
     const status = delivery.value
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(status)) {
-      const launcherRequest: Parameters<
-        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
-      >[0] = {
-        intent: OpenCompanionLauncherIntent.PilotAuth,
-        source: ExtensionSessionLifecycle.sourceFromSender(sender),
-      }
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { response: { ok: false, reason: reasons.locked } }
     }
     return { grant }

@@ -138,6 +138,7 @@ export const BROWSER_MESSAGE_KEYS = {
   WidgetSignupDescription: 'widgetSignupDescription',
   WidgetSignupTitle: 'widgetSignupTitle',
   WidgetTakeOver: 'widgetTakeOver',
+  WidgetUnlock: 'widgetUnlock',
   WidgetUnlockThenContinue: 'widgetUnlockThenContinue',
   WidgetUpdateLogin: 'widgetUpdateLogin',
   WidgetUpdateLoginDescription: 'widgetUpdateLoginDescription',

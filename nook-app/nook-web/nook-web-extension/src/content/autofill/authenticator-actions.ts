@@ -53,6 +53,7 @@ import {
   authenticationActivityProgress,
   authentication_workflow_activity_progress,
 } from './authentication-activity-progress'
+import { SiteSidePanel } from './site-side-panel'
 
 type FillAuthenticatorCodeArgs = {
   account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'> & {
@@ -344,6 +345,7 @@ class AuthenticatorInteraction {
       }
       const { response } = delivery
       if (response.kind === AuthenticatorPickerOpenResponseKind.Locked) {
+        SiteSidePanel.open()
         const nookTypedArgs0_12: Parameters<
           typeof workflowUi.setFlightProgress
         >[0] = {

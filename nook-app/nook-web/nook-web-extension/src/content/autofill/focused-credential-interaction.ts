@@ -25,6 +25,7 @@ import {
   FocusedCredentialTargetRetention,
 } from './focused-credential-target'
 import { FocusedCredentialWidget } from './focused-credential-widget'
+import { SiteSidePanel } from './site-side-panel'
 import {
   InlineLoginPicker,
   type InlineLoginPickerSurface,
@@ -466,6 +467,20 @@ export class FocusedCredentialInteraction {
     }
     this.dependencies.transport.sendRuntimeMessageWithoutResponse(request)
   }
+  /** Nook is locked: the side panel unlocks it, and the widget waits for the next click. */
+  private awaitUnlock(surface: VisibleFocusedSurface): void {
+    this.picker = { kind: FocusedPickerKind.Closed }
+    SiteSidePanel.open()
+    const { description, continueButton } = surface.widget.shell
+    description.textContent = this.dependencies.ui.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue,
+    )
+    const unlockLabel = this.dependencies.ui.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetUnlock,
+    )
+    continueButton.textContent = unlockLabel
+    continueButton.setAttribute('aria-label', unlockLabel)
+  }
   cancelPicker(): void {
     this.clear()
     widgetState.setRenderedCleanup(() => {})
@@ -522,6 +537,10 @@ export class FocusedCredentialInteraction {
           break
       }
       const response = request.response.response
+      if (response.kind === LoginPickerOpenResponseKind.Locked) {
+        this.awaitUnlock(request.surface)
+        return
+      }
       switch (
         response.kind === LoginPickerOpenResponseKind.Ready &&
         'requestId' in response &&
