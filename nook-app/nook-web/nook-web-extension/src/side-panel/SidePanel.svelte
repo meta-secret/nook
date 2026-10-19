@@ -499,6 +499,14 @@ closes it.
     page = SidePanelPageKind.Site
   }
 
+  function chooseDefault(vaultStoreId: string): void {
+    void makeDefault(vaultStoreId)
+  }
+
+  function chooseIdentity(deviceId: string): void {
+    void useIdentity(deviceId)
+  }
+
   /** New logins are saved to the default vault. */
   async function makeDefault(vaultStoreId: string): Promise<void> {
     switch (manage.kind) {
@@ -888,8 +896,8 @@ closes it.
           groups={view.vaults.groups}
           device={view.device}
           {manage}
-          onmakedefault={(vaultStoreId) => void makeDefault(vaultStoreId)}
-          onuseidentity={(deviceId) => void useIdentity(deviceId)}
+          onmakedefault={chooseDefault}
+          onuseidentity={chooseIdentity}
           onback={closeConnections}
         />
       {:else if view.vaults.kind === SidePanelVaultsKind.Paired}
