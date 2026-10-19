@@ -518,7 +518,10 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
-  await expect(vaultStatus).toHaveAttribute('data-state', 'credential-available')
+  await expect(vaultStatus).toHaveAttribute(
+    'data-state',
+    'credential-available',
+  )
   await expect(vaultStatus).toHaveText('Matching saved logins: 2')
   await expect(widget.locator('p.description')).toHaveText(
     'Multiple saved logins match this site. Sign in shows the choices here. Nook fills and submits only after you choose one.',
