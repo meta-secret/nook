@@ -203,7 +203,12 @@ existing `externally_connectable` channel. Leaving the route closes the port.
   the identity to connect.
 - **`choosing`:** the browser holds no vault. The person creates a first vault
   or joins.
-- **`creating`:** the page sets up the chosen vault or a new identity.
+- **`creating`:** an actual creation is under way. That is a first-vault setup
+  in its Protect or Backup stage, a creation waiting for this device, or the
+  new-identity flow.
+  - Starting the app is not creating. While the app initializes with no
+    creation under way, the page reports nothing after `opened`.
+  - A join in progress stays on `choosing`.
 - **`consent`:** the page shows the extension consent, through authorization,
   grant preparation, and delivery.
 - **`approved`:** the extension accepted the grant and event log.
@@ -220,8 +225,8 @@ The protocol rules:
 - The page sends `approved` only after the grant and event-log
   `onMessageExternal` delivery returned success. The panel's re-read therefore
   sees the imported identity.
-- The page sends every step it reports, without suppressing repeats. The panel
-  shows the latest one.
+- The page skips a step equal to the one it just sent: the same kind, and for
+  `failed` the same reason. The panel shows the latest step.
 - The page opens one port per page. It never reconnects, retries, or polls
   after a disconnect.
 - With no panel listening, the port closes. The page's own create, join, and
