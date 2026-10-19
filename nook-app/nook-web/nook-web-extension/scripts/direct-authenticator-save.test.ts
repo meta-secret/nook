@@ -14,7 +14,30 @@ import {
   type CompanionWasmAuthenticatorSetupResponse,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { classify_authentication_authenticator_setup_batch } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { pageQrCapture } from '../src/lib/page-qr-capture'
+import {
+  pageQrCapture,
+  type DecodedOtpauthCandidate,
+} from '../src/lib/page-qr-capture'
+import type { ReviewedLabelFields } from '../src/content/enrollment-flow-view'
+
+type ReviewedLabelValues = {
+  readonly issuer: string
+  readonly account: string
+}
+
+/** The editable service and account inputs the preview renders. */
+function reviewedLabels({
+  issuer,
+  account,
+}: ReviewedLabelValues): ReviewedLabelFields {
+  const fields: ReviewedLabelFields = {
+    issuer: document.createElement('input'),
+    account: document.createElement('input'),
+  }
+  fields.issuer.value = issuer
+  fields.account.value = account
+  return fields
+}
 
 class AuthenticatorEnrollmentDocumentFixture {
   install(): void {
@@ -137,7 +160,12 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
   const { code, host, order, outcome } = await enrollmentHost(0)
   const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
-  const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
+  const candidate: DecodedOtpauthCandidate = {
+    source: 'qr',
+    ordinal: 1,
+    otpauthUri: uri.value,
+  }
+  const reviewed = reviewedLabels({ issuer: 'Nook Cloud', account: 'test' })
 
   const enrollment = authenticatorEnrollmentInteraction.beginEnrollmentCeremony(
     {
@@ -146,6 +174,7 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
       vaultStoreId: 'vault-1',
       otpauthUri: uri,
       candidate,
+      reviewed,
     },
   )
   expect(authenticatorEnrollmentInteraction.enrollmentScanBlocked()).toBe(true)
@@ -160,6 +189,8 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
       origin: 'https://example.test',
       vaultStoreId: 'vault-1',
       otpauthUri: 'otpauth://totp/Nook:test?secret=secret',
+      reviewedIssuer: 'Nook Cloud',
+      reviewedAccount: 'test',
     },
   })
   expect(
@@ -173,7 +204,8 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
     },
   })
   expect(uri.value).toBe('')
-  expect(candidate).toEqual({ sourceLabel: '', otpauthUri: '' })
+  expect(candidate).toEqual({ source: 'qr', ordinal: 1, otpauthUri: '' })
+  expect([reviewed.issuer.value, reviewed.account.value]).toEqual(['', ''])
   expect(code).not.toHaveBeenCalled()
   expect(outcome).not.toHaveBeenCalled()
   expect(host.description.textContent).toBe(
@@ -193,7 +225,12 @@ test('immediate authenticator save reports confirmation failure truthfully', asy
   const { code, host, order, outcome } = await enrollmentHost(1)
   const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
-  const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
+  const candidate: DecodedOtpauthCandidate = {
+    source: 'setup-key',
+    ordinal: 1,
+    otpauthUri: uri.value,
+  }
+  const reviewed = reviewedLabels({ issuer: 'example.test', account: '' })
 
   await authenticatorEnrollmentInteraction.beginEnrollmentCeremony({
     host,
@@ -201,11 +238,12 @@ test('immediate authenticator save reports confirmation failure truthfully', asy
     vaultStoreId: 'vault-1',
     otpauthUri: uri,
     candidate,
+    reviewed,
   })
 
   expect(order).toEqual(['stage', 'confirm'])
   expect(uri.value).toBe('')
-  expect(candidate).toEqual({ sourceLabel: '', otpauthUri: '' })
+  expect(candidate).toEqual({ source: 'setup-key', ordinal: 1, otpauthUri: '' })
   expect(code).not.toHaveBeenCalled()
   expect(outcome).not.toHaveBeenCalled()
   expect(host.description.textContent).toBe(

@@ -14,6 +14,10 @@ const companionWasmPath = join(
   process.cwd(),
   '../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
 )
+const zxingReaderWasmPath = join(
+  process.cwd(),
+  'node_modules/zxing-wasm/dist/reader/zxing_reader.wasm',
+)
 Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
 const wasmFetch = new Proxy(globalThis.fetch, {
@@ -30,6 +34,11 @@ const wasmFetch = new Proxy(globalThis.fetch, {
     }
     if (url.includes('nook_companion_wasm_bg.wasm')) {
       return new Response(readFileSync(companionWasmPath), {
+        headers: { 'Content-Type': 'application/wasm' },
+      })
+    }
+    if (url.endsWith('zxing_reader.wasm')) {
+      return new Response(readFileSync(zxingReaderWasmPath), {
         headers: { 'Content-Type': 'application/wasm' },
       })
     }

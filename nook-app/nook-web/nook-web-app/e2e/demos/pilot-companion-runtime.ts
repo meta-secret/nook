@@ -14,17 +14,54 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type { AuthenticationWorkflowRoutingResponse } from '../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
 import { AuthenticationWorkflowSnapshotMessageType } from '../../../nook-web-extension/src/lib/auth-workflow-messages'
+import {
+  WebsiteAuthenticatorEnrollPreviewMessageType,
+  WebsiteAuthenticatorEnrollStageMessageType,
+  type WebsiteAuthenticatorEnrollPreviewMessage,
+  type WebsiteAuthenticatorEnrollStageMessage,
+} from '../../../nook-web-extension/src/lib/enrollment-messages'
+import { preview_otpauth_uri } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { vaultWasmStartup } from '../../../nook-web-extension/src/offscreen/vault-wasm-startup'
+
+declare global {
+  interface Window {
+    /** The service and account the last staged demo enrollment carried. */
+    __nookDemoReviewedLabels?: {
+      readonly issuer: string
+      readonly account: string
+    }
+  }
+}
 
 type DemoRuntimeMessage =
   | CompanionWasmSessionMessage
+  | WebsiteAuthenticatorEnrollPreviewMessage
+  | WebsiteAuthenticatorEnrollStageMessage
   | {
       readonly type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
     }
 type DemoRuntimeResponse =
   | AuthenticationWorkflowRoutingResponse
+  | DemoAuthenticatorPreviewResponse
   | { readonly ok: true; readonly result: CompanionWasmSessionResponse }
   | { readonly ok: false }
 type DemoRuntimeCallback = (response: DemoRuntimeResponse) => void
+
+/** The service worker's preview reply, computed by the vault WASM like the offscreen document. */
+type DemoAuthenticatorPreviewResponse = {
+  readonly ok: true
+  readonly status: 'ready'
+  readonly vaultStoreId: string
+  readonly vaultName: string
+  readonly preview: {
+    readonly issuer: string
+    readonly account: string
+    readonly websiteUrl: string
+    readonly algorithm: string
+    readonly digits: number
+    readonly period: number
+  }
+}
 
 /** UI demos use the owning Rust adapter; production E2E loads the real extension. */
 class PilotCompanionDemoRuntime {
@@ -62,6 +99,25 @@ class PilotCompanionDemoRuntime {
       )
       return
     }
+    if (
+      message.type ===
+      WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview
+    ) {
+      window.__nookDemoRuntimeMessageTypes?.push(message.type)
+      this.preview(message, callback)
+      return
+    }
+    if (
+      message.type ===
+      WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage
+    ) {
+      window.__nookDemoReviewedLabels = {
+        issuer: message.payload.reviewedIssuer,
+        account: message.payload.reviewedAccount,
+      }
+      this.sendMessage(message, callback)
+      return
+    }
     switch (isCompanionWasmSessionMessageType(message.type)) {
       case false:
         this.sendMessage(message, callback)
@@ -71,6 +127,37 @@ class PilotCompanionDemoRuntime {
         this.deliver(message, callback)
         return
     }
+  }
+
+  /** Answers a preview with Rust's view of the decoded URI, never a canned label. */
+  private preview(
+    message: WebsiteAuthenticatorEnrollPreviewMessage,
+    callback: DemoRuntimeCallback,
+  ): void {
+    Effect.runFork(
+      Effect.promise(async () => {
+        await vaultWasmStartup.ensure()
+        const preview = preview_otpauth_uri(message.payload.otpauthUri)
+        try {
+          callback({
+            ok: true,
+            status: 'ready',
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+            preview: {
+              issuer: preview.issuer,
+              account: preview.account,
+              websiteUrl: preview.websiteUrl,
+              algorithm: preview.algorithm,
+              digits: preview.digits,
+              period: preview.period,
+            },
+          })
+        } finally {
+          preview.free()
+        }
+      }),
+    )
   }
 
   private projectWorkflowResponse(

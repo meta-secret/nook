@@ -1,5 +1,6 @@
 import { classify_companion_login_save_outcome } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { FocusedFieldRecognitionOperation } from './session-focused-field-recognition'
+import { authenticatorEnrollmentCandidateResolver } from './authenticator-enrollment-candidates'
 import { GoogleLoginContinuationMessageType } from '../../../nook-web-shared/src/extension/google-login-continuation-messages'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
 import { err, ok, type Result } from 'neverthrow'
@@ -449,6 +450,8 @@ export async function handleCompanionWasmMessage(
         )
       case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
         return ok(project_authentication_navigation_path(message.payload))
+      case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
+        return authenticatorEnrollmentCandidateResolver.resolve(message)
     }
   } catch {
     return invalidRequest()

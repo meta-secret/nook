@@ -12,6 +12,7 @@ import {
 import {
   type AuthenticationAuthenticatorSetupSnapshot,
   type DecodedOtpauthCandidate,
+  DecodeVisibleOtpauthCandidatesResultStatus,
   pageQrCapture,
 } from '../lib/page-qr-capture'
 import { AuthenticationGesture } from '../lib/auth-widget-policy'
@@ -35,6 +36,7 @@ import {
   type EnrollmentFlowViewHost,
   type EnrollmentPageHints,
   enrollmentFlowRenderer,
+  type ReviewedLabelFields,
 } from './enrollment-flow-view'
 import {
   type BackupEnrollmentHost,
@@ -106,6 +108,7 @@ type BeginEnrollmentCeremonyArgs = {
   vaultStoreId: string
   otpauthUri: { value: string }
   candidate: DecodedOtpauthCandidate
+  reviewed: ReviewedLabelFields
 }
 
 type ClearOtpauthUriArgs = { value: string }
@@ -115,6 +118,11 @@ type ShowQrPreviewArgs = {
   section: HTMLElement
   otpauthUri: { value: string }
   candidate: DecodedOtpauthCandidate
+}
+
+type CandidateLabelRequest = {
+  readonly host: EnrollmentFlowHost
+  readonly candidate: DecodedOtpauthCandidate
 }
 
 type ShowQrCandidatePickerArgs = {
@@ -268,6 +276,7 @@ class AuthenticatorEnrollmentInteraction {
     vaultStoreId,
     otpauthUri,
     candidate,
+    reviewed,
   }: BeginEnrollmentCeremonyArgs): Promise<void> {
     this.holdEnrollmentWidgetAfterSave = false
     this.enrollmentSavePending = true
@@ -286,6 +295,8 @@ class AuthenticatorEnrollmentInteraction {
         origin: location.origin,
         vaultStoreId,
         otpauthUri: otpauthUri.value,
+        reviewedIssuer: reviewed.issuer.value,
+        reviewedAccount: reviewed.account.value,
       },
     }
     const stageDelivery = await host
@@ -293,6 +304,7 @@ class AuthenticatorEnrollmentInteraction {
       .finally(() => {
         this.clearOtpauthUri(otpauthUri)
         this.clearCandidate(candidate)
+        this.clearReviewedLabels(reviewed)
       })
     if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       const nookTypedArgs0_10: Parameters<
@@ -352,6 +364,11 @@ class AuthenticatorEnrollmentInteraction {
 
   private clearCandidate(candidate: DecodedOtpauthCandidate): void {
     pageQrCapture.clearOtpauthCandidate(candidate)
+  }
+
+  private clearReviewedLabels(reviewed: ReviewedLabelFields): void {
+    reviewed.issuer.value = ''
+    reviewed.account.value = ''
   }
 
   private unavailableMessage(host: EnrollmentFlowHost): string {
@@ -462,7 +479,8 @@ class AuthenticatorEnrollmentInteraction {
         host,
         preview,
       }
-      enrollmentFlowRenderer.renderPreviewDetails(nookTypedArgs0_27)
+      const reviewed =
+        enrollmentFlowRenderer.renderPreviewDetails(nookTypedArgs0_27)
 
       const nookTypedArgs1_3: Parameters<
         typeof enrollmentFlowRenderer.createPrimaryButton
@@ -482,6 +500,7 @@ class AuthenticatorEnrollmentInteraction {
             vaultStoreId,
             otpauthUri,
             candidate,
+            reviewed,
           }
           void this.beginEnrollmentCeremony(nookTypedArgs0_28)
         },
@@ -498,6 +517,7 @@ class AuthenticatorEnrollmentInteraction {
           if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
           this.clearOtpauthUri(otpauthUri)
           this.clearCandidate(candidate)
+          this.clearReviewedLabels(reviewed)
           if (
             !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
               host.authenticatorSetupSnapshot,
@@ -535,6 +555,26 @@ class AuthenticatorEnrollmentInteraction {
     }
   }
 
+  /** A non-secret picker label: the candidate's source and its ordinal within it. */
+  private candidateLabel({ host, candidate }: CandidateLabelRequest): string {
+    const substitution: TranslatedMessageWithSubstitutionArgs = {
+      key: this.candidateLabelKey(candidate),
+      substitution: String(candidate.ordinal),
+    }
+    return host.translatedMessageWithSubstitution(substitution)
+  }
+
+  private candidateLabelKey(
+    candidate: DecodedOtpauthCandidate,
+  ): BrowserMessageKey {
+    switch (candidate.source) {
+      case 'qr':
+        return BROWSER_MESSAGE_KEYS.WidgetEnrollCandidateQr
+      case 'setup-key':
+        return BROWSER_MESSAGE_KEYS.WidgetEnrollCandidateSetupKey
+    }
+  }
+
   private showQrCandidatePicker({
     host,
     section,
@@ -554,11 +594,17 @@ class AuthenticatorEnrollmentInteraction {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'secondary-button account-button'
-      button.textContent = candidate.sourceLabel
-      button.setAttribute('aria-label', candidate.sourceLabel)
+      const labelRequest: CandidateLabelRequest = { host, candidate }
+      const label = this.candidateLabel(labelRequest)
+      button.textContent = label
+      button.setAttribute('aria-label', label)
       button.addEventListener('click', (event) => {
         if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
         const uri = { value: candidate.otpauthUri }
+        // Only the chosen candidate stays in memory for its preview.
+        candidates
+          .filter((other) => other !== candidate)
+          .forEach((other) => this.clearCandidate(other))
         const nookTypedArgs0_33: Parameters<typeof this.showQrPreview>[0] = {
           host,
           section,
@@ -635,19 +681,17 @@ class AuthenticatorEnrollmentInteraction {
     section.replaceChildren()
 
     try {
-      const result = await pageQrCapture.decodeVisibleOtpauthCandidates()
+      const result = await pageQrCapture.resolveVisibleOtpauthCandidates()
       if (!approval.revalidateCurrentWorkflow() || !host.panel.isConnected) {
         result.candidates.forEach((candidate) => this.clearCandidate(candidate))
         return
       }
-      if (result.status === 'unsupported') {
+      if (result.status === DecodeVisibleOtpauthCandidatesResultStatus.Failed) {
         const nookTypedArgs0_37: Parameters<
           typeof enrollmentFlowRenderer.setHostDescription
         >[0] = {
           host,
-          text: host.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetEnrollUnsupported,
-          ),
+          text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
         }
         enrollmentFlowRenderer.setHostDescription(nookTypedArgs0_37)
         const nookTypedArgs0_38: Parameters<
@@ -659,7 +703,7 @@ class AuthenticatorEnrollmentInteraction {
         this.renderEnrollmentActions(nookTypedArgs0_38)
         return
       }
-      if (result.status === 'empty') {
+      if (result.status === DecodeVisibleOtpauthCandidatesResultStatus.Empty) {
         const nookTypedArgs0_39: Parameters<
           typeof enrollmentFlowRenderer.setHostDescription
         >[0] = {
@@ -676,7 +720,9 @@ class AuthenticatorEnrollmentInteraction {
         this.renderEnrollmentActions(nookTypedArgs0_40)
         return
       }
-      if (result.status === 'ambiguous') {
+      if (
+        result.status === DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
+      ) {
         const nookTypedArgs0_41: Parameters<
           typeof this.showQrCandidatePicker
         >[0] = {

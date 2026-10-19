@@ -133,7 +133,9 @@ export async function handleAuthenticatorEnrollmentMessage({
         const grant = dependencies.extensionVaultGrant(payload)
         if (
           typeof payload.otpauthUri !== 'string' ||
-          typeof payload.origin !== 'string'
+          typeof payload.origin !== 'string' ||
+          typeof payload.reviewedIssuer !== 'string' ||
+          typeof payload.reviewedAccount !== 'string'
         ) {
           return err(
             new SessionOperationFailure(
@@ -148,9 +150,12 @@ export async function handleAuthenticatorEnrollmentMessage({
         }
         const admission0 = await openPasskeyVault(openArgs)
         if (admission0.isErr()) return err(admission0.error)
+        // Rust trims and validates the reviewed labels before it persists them.
         const secretId = await activeManager.add_authenticator_from_otpauth_js(
           payload.otpauthUri,
           payload.origin,
+          payload.reviewedIssuer,
+          payload.reviewedAccount,
         )
         const flushArgs: Parameters<typeof flushPasskeyEventToProviders>[0] = {
           activeManager,

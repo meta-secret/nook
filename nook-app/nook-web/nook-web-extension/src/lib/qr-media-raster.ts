@@ -1,3 +1,6 @@
+import { Option } from 'effect'
+import { AuthenticatorEnrollmentSourceBound } from '../../../nook-web-shared/src/extension/authenticator-enrollment-candidates'
+
 export enum QrMediaKind {
   Canvas = 'canvas',
   Image = 'image',
@@ -10,17 +13,29 @@ export type QrMedia =
   | { readonly kind: QrMediaKind.Image; readonly element: HTMLImageElement }
   | { readonly kind: QrMediaKind.Vector; readonly element: SVGSVGElement }
 
-export enum QrBitmapCaptureKind {
+export enum QrPixelCaptureKind {
   Captured = 'captured',
   Unavailable = 'unavailable',
 }
 
-export type QrBitmapCapture =
+/** Opaque RGBA pixels of one visible QR media element, at most 512 px per edge. */
+export type QrPixelCapture =
   | {
-      readonly kind: QrBitmapCaptureKind.Captured
-      readonly bitmap: ImageBitmap
+      readonly kind: QrPixelCaptureKind.Captured
+      readonly pixels: ImageData
     }
-  | { readonly kind: QrBitmapCaptureKind.Unavailable }
+  | { readonly kind: QrPixelCaptureKind.Unavailable }
+
+type QrRasterSize = {
+  readonly width: number
+  readonly height: number
+}
+
+/** Copies opaque pixels from a 2D context, or reports none when the canvas has no context. */
+type QrPixelCopy = {
+  readonly onNone: () => QrPixelCapture
+  readonly onSome: (context: CanvasRenderingContext2D) => QrPixelCapture
+}
 
 enum QrRasterSourceKind {
   Ready = 'ready',
@@ -38,10 +53,14 @@ type QrRasterSource =
   ReadyQrRasterSource | { readonly kind: QrRasterSourceKind.Unavailable }
 
 /**
- * Draws one visible QR media element onto an opaque light canvas so the single
- * BarcodeDetector path sees dark modules on a light background. Inline SVG is
- * serialized at its rendered size and decoded as an image first, because
- * Chromium's createImageBitmap does not decode SVG blobs.
+ * Draws one visible QR media element onto an opaque light canvas so the ZXing
+ * reader sees dark modules on a light background, then copies its RGBA pixels.
+ * Inline SVG is serialized at its rendered size and decoded as an image first.
+ *
+ * The copy is bounded: a picture whose longer edge exceeds 512 px is scaled
+ * down, preserving its aspect ratio, so one capture is at most 512 × 512 × 4
+ * bytes (1 MiB) before transport. A QR shown at a readable on-screen size keeps
+ * every module at that bound.
  */
 export class QrMediaRaster {
   static readonly UNDERLAY_COLOR = '#ffffff'
@@ -50,20 +69,20 @@ export class QrMediaRaster {
   private readonly unavailableSource: QrRasterSource = {
     kind: QrRasterSourceKind.Unavailable,
   }
-  private readonly unavailableCapture: QrBitmapCapture = {
-    kind: QrBitmapCaptureKind.Unavailable,
+  private readonly unavailableCapture: QrPixelCapture = {
+    kind: QrPixelCaptureKind.Unavailable,
   }
 
   constructor(private readonly browser: typeof globalThis) {}
 
-  async opaqueBitmap(media: QrMedia): Promise<QrBitmapCapture> {
+  async opaquePixels(media: QrMedia): Promise<QrPixelCapture> {
     try {
       const source = await this.rasterSource(media)
       switch (source.kind) {
         case QrRasterSourceKind.Unavailable:
           return this.unavailableCapture
         case QrRasterSourceKind.Ready:
-          return await this.underlaidBitmap(source)
+          return this.underlaidPixels(source)
       }
     } catch {
       // Cross-origin, CSP-blocked, or undecodable media is skipped without
@@ -133,21 +152,40 @@ export class QrMediaRaster {
     return source
   }
 
-  private async underlaidBitmap(
-    source: ReadyQrRasterSource,
-  ): Promise<QrBitmapCapture> {
-    const canvas = this.browser.document.createElement('canvas')
-    canvas.width = source.width
-    canvas.height = source.height
-    const context = canvas.getContext('2d')
-    if (!context) return this.unavailableCapture
-    context.fillStyle = QrMediaRaster.UNDERLAY_COLOR
-    context.fillRect(0, 0, source.width, source.height)
-    context.drawImage(source.image, 0, 0, source.width, source.height)
-    const capture: QrBitmapCapture = {
-      kind: QrBitmapCaptureKind.Captured,
-      bitmap: await this.browser.createImageBitmap(canvas),
+  /** Scales an oversized picture down to the 512 px edge bound, keeping its aspect ratio. */
+  boundedSize(source: QrRasterSize): QrRasterSize {
+    const scale = Math.min(
+      1,
+      AuthenticatorEnrollmentSourceBound.MaxPictureEdgePx /
+        Math.max(source.width, source.height),
+    )
+    const bounded: QrRasterSize = {
+      width: Math.max(1, Math.round(source.width * scale)),
+      height: Math.max(1, Math.round(source.height * scale)),
     }
-    return capture
+    return bounded
+  }
+
+  private underlaidPixels(source: ReadyQrRasterSource): QrPixelCapture {
+    const canvas = this.browser.document.createElement('canvas')
+    const size = this.boundedSize(source)
+    canvas.width = size.width
+    canvas.height = size.height
+    const copy: QrPixelCopy = {
+      onNone: () => this.unavailableCapture,
+      onSome: (context) => {
+        context.fillStyle = QrMediaRaster.UNDERLAY_COLOR
+        context.fillRect(0, 0, size.width, size.height)
+        context.drawImage(source.image, 0, 0, size.width, size.height)
+        // A cross-origin image taints the canvas and getImageData throws; the
+        // caller's catch skips that media without widening host permissions.
+        const capture: QrPixelCapture = {
+          kind: QrPixelCaptureKind.Captured,
+          pixels: context.getImageData(0, 0, size.width, size.height),
+        }
+        return capture
+      },
+    }
+    return Option.match(Option.fromNullishOr(canvas.getContext('2d')), copy)
   }
 }

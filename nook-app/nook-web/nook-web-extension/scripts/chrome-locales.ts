@@ -125,9 +125,10 @@ type NookLocaleCatalogShape = {
       add_from_page: string
       save_backup_codes: string
       enroll_working: string
-      enroll_unsupported: string
       enroll_no_qr: string
       enroll_ambiguous: string
+      enroll_candidate_qr: string
+      enroll_candidate_setup_key: string
       enroll_preview: string
       enroll_confirm: string
       enroll_cancel: string
@@ -788,17 +789,23 @@ export async function buildChromeLocales({
         widgetEnrollWorking: {
           message: catalog.extension.widget.message('enroll_working', locale),
         },
-        widgetEnrollUnsupported: {
-          message: catalog.extension.widget.message(
-            'enroll_unsupported',
-            locale,
-          ),
-        },
         widgetEnrollNoQr: {
           message: catalog.extension.widget.message('enroll_no_qr', locale),
         },
         widgetEnrollAmbiguous: {
           message: catalog.extension.widget.message('enroll_ambiguous', locale),
+        },
+        widgetEnrollCandidateQr: {
+          message: catalog.extension.widget.message(
+            'enroll_candidate_qr',
+            locale,
+          ),
+        },
+        widgetEnrollCandidateSetupKey: {
+          message: catalog.extension.widget.message(
+            'enroll_candidate_setup_key',
+            locale,
+          ),
         },
         widgetEnrollPreview: {
           message: catalog.extension.widget.message('enroll_preview', locale),

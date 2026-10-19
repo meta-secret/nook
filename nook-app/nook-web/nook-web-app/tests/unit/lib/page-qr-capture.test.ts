@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 import {
-  classify_authentication_authenticator_setup_batch,
-  type AuthenticationAuthenticatorSetupBatch,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+  DecodeVisibleOtpauthCandidatesResultStatus,
+  pageQrCapture,
+} from '../../../../nook-web-extension/src/lib/page-qr-capture'
+import { classify_authentication_authenticator_setup_batch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   CompanionWasmRuntimeMessage,
   CompanionWasmAuthenticatorSetupResponse,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { QrMediaRaster } from '../../../../nook-web-extension/src/lib/qr-media-raster'
+import {
+  DialogQrObservationFixture,
+  QrRasterDecodeFixture,
+  RasterOperationKind,
+  type ResolveCandidatesRuntimeResponse,
+} from './page-qr-capture-fixtures'
 
 const rejectedSetupMetadataResults = [
   'absent',
@@ -90,7 +97,6 @@ type SetupMetadataRuntimeRequest = Extract<
     type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
   }
 >
-
 class DeferredSetupObservationFixture {
   private readonly requests: Array<{
     readonly message: SetupMetadataRuntimeRequest
@@ -123,184 +129,6 @@ class DeferredSetupObservationFixture {
           ),
       },
     })
-  }
-}
-
-/** A portaled modal like the reported "Update authenticator app" dialog. */
-class DialogQrObservationFixture {
-  static readonly QR_SVG =
-    '<svg viewBox="0 0 29 29" role="img"><path fill="#000000" d="M0 0h7v7H0zM22 0h7v7h-7zM0 22h7v7H0z"/></svg>'
-
-  static authenticatorDialog(media: string): string {
-    return `
-      <main aria-hidden="true"><h1>Account settings</h1><p>Manage your security</p></main>
-      <div role="dialog" aria-modal="true" aria-labelledby="mfa-title" aria-describedby="mfa-description">
-        <div>
-          <div id="mfa-title">Update authenticator app</div>
-          <button aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12"/></svg></button>
-        </div>
-        <div id="mfa-description">Scan this QR code to set up your account using your preferred authenticator app. Popular choices include <a href="https://support.google.com/accounts/answer/1066447">Google Authenticator</a>, <a href="https://www.microsoft.com/security/mobile-authenticator-app">Microsoft Authenticator</a>, and <a href="https://authy.com">Authy</a>.</div>
-        ${media}
-        <a href="#manual-setup">Enter code manually</a>
-        <div><button type="button">Cancel</button><button type="button">Continue</button></div>
-      </div>
-    `
-  }
-
-  readonly payloads: AuthenticationAuthenticatorSetupBatch[] = []
-
-  constructor(markup: string) {
-    document.body.innerHTML = markup
-    for (const element of document.querySelectorAll(
-      'img,canvas,svg,h1,h2,p,div,span',
-    )) {
-      Object.defineProperty(element, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => ({
-          width: 220,
-          height: 220,
-          top: 0,
-          left: 0,
-          bottom: 220,
-          right: 220,
-        }),
-      })
-    }
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: (
-          message: SetupMetadataRuntimeRequest,
-          callback: (response: SetupMetadataRuntimeResponse) => void,
-        ): void => {
-          this.payloads.push(message.payload)
-          callback({
-            ok: true,
-            result: {
-              authenticatorSetupObservation:
-                classify_authentication_authenticator_setup_batch(
-                  message.payload,
-                ),
-            },
-          })
-        },
-      },
-    })
-  }
-
-  async observation() {
-    const snapshot =
-      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
-    return snapshot.observation
-  }
-
-  get instructionCopies(): readonly string[] {
-    const payload = this.payloads.at(-1)
-    if (!payload) throw new Error('Setup metadata was not sent.')
-    return payload.visibleInstructionCopies
-  }
-}
-
-enum RasterOperationKind {
-  FillRect = 'fillRect',
-  DrawImage = 'drawImage',
-}
-
-type RasterOperation = {
-  readonly operation: RasterOperationKind
-  readonly fillStyle: string
-  readonly source: string
-}
-
-/** Stands in for Chromium's image decode, 2D canvas, and BarcodeDetector. */
-class QrRasterDecodeFixture {
-  readonly operations: RasterOperation[] = []
-  readonly decodedSources: string[] = []
-  readonly bitmapSources: string[] = []
-  readonly detectedSources: string[] = []
-  readonly closedBitmaps: string[] = []
-  private readonly originalDecode = Object.getOwnPropertyDescriptor(
-    HTMLImageElement.prototype,
-    'decode',
-  )
-  private readonly originalGetContext = Object.getOwnPropertyDescriptor(
-    HTMLCanvasElement.prototype,
-    'getContext',
-  )
-
-  constructor(private readonly decodedValue: string) {}
-
-  install(): void {
-    const { operations, decodedSources, bitmapSources, detectedSources } = this
-    const { closedBitmaps, decodedValue } = this
-    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
-      configurable: true,
-      value(this: HTMLImageElement): Promise<void> {
-        decodedSources.push(this.src)
-        return Promise.resolve()
-      },
-    })
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-      configurable: true,
-      value() {
-        const context = {
-          fillStyle: '',
-          fillRect() {
-            operations.push({
-              operation: RasterOperationKind.FillRect,
-              fillStyle: context.fillStyle,
-              source: '',
-            })
-          },
-          drawImage(source: HTMLImageElement) {
-            operations.push({
-              operation: RasterOperationKind.DrawImage,
-              fillStyle: context.fillStyle,
-              source: source.src,
-            })
-          },
-        }
-        return context
-      },
-    })
-    vi.stubGlobal('createImageBitmap', (source: HTMLCanvasElement) => {
-      bitmapSources.push(source.tagName.toLowerCase())
-      return Promise.resolve({
-        label: 'opaque-canvas',
-        close: () => closedBitmaps.push('opaque-canvas'),
-      })
-    })
-    vi.stubGlobal(
-      'BarcodeDetector',
-      class {
-        detect(source: { readonly label: string }) {
-          detectedSources.push(source.label)
-          return Promise.resolve([
-            { rawValue: decodedValue, format: 'qr_code' },
-          ])
-        }
-      },
-    )
-  }
-
-  restore(): void {
-    if (this.originalDecode) {
-      Object.defineProperty(
-        HTMLImageElement.prototype,
-        'decode',
-        this.originalDecode,
-      )
-    } else {
-      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
-    }
-    if (this.originalGetContext) {
-      Object.defineProperty(
-        HTMLCanvasElement.prototype,
-        'getContext',
-        this.originalGetContext,
-      )
-    } else {
-      Reflect.deleteProperty(HTMLCanvasElement.prototype, 'getContext')
-    }
   }
 }
 
@@ -370,7 +198,7 @@ describe('page QR otpauth capture', () => {
       '<section><div role="group"><p>Scan this QR code with your authenticator app</p></div><img/></section>',
       '<section><p>Scan this QR code with your authenticator app <code>JBSWY3DPEHPK3PXP</code></p><img/></section>',
       '<section><p data-nook-backup-codes>Scan this QR code with your authenticator app</p><img/></section>',
-      '<section><input value="Scan this QR code with your authenticator app"/><img data-nook-otpauth-uri="otpauth://totp/Example?secret=JBSWY3DPEHPK3PXP"/></section>',
+      '<section><input value="Scan this QR code with your authenticator app"/><img/></section>',
       '<section><p>Scan this QR code to download our app</p><img alt="Authenticator QR code"/></section>',
     ]) {
       const fixture = new PageQrObservationFixture(markup)
@@ -477,68 +305,23 @@ describe('page QR otpauth capture', () => {
     }
   })
 
-  test('prefers visible data-nook-otpauth-uri without BarcodeDetector', async () => {
-    const uri =
-      'otpauth://totp/Nook:alice-2fa@nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Nook'
-    document.body.innerHTML = `
-      <img
-        data-nook-otpauth-uri="${uri}"
-        width="220"
-        height="220"
-        alt="Authenticator QR code"
-        style="width: 220px; height: 220px"
-      />
-    `
-    const image = document.querySelector('img')
-    if (image) {
-      Object.defineProperty(image, 'getBoundingClientRect', {
-        value: () => ({
-          width: 220,
-          height: 220,
-          top: 0,
-          left: 0,
-          bottom: 220,
-          right: 220,
-        }),
-      })
-    }
-
-    await expect(
-      pageQrCapture.decodeVisibleOtpauthCandidates(),
-    ).resolves.toEqual({
-      status: 'ready',
-      candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+  test('rasterized QR media is bounded to a 512 px edge, keeping its aspect ratio', () => {
+    const raster = new QrMediaRaster(globalThis)
+    expect(raster.boundedSize({ width: 1024, height: 512 })).toEqual({
+      width: 512,
+      height: 256,
     })
-  })
-
-  test('reports unsupported when no marked URI and BarcodeDetector is missing', async () => {
-    document.body.innerHTML = `
-      <img
-        width="220"
-        height="220"
-        alt="Authenticator QR code"
-        style="width: 220px; height: 220px"
-      />
-    `
-    const image = document.querySelector('img')
-    if (image) {
-      Object.defineProperty(image, 'getBoundingClientRect', {
-        value: () => ({
-          width: 220,
-          height: 220,
-          top: 0,
-          left: 0,
-          bottom: 220,
-          right: 220,
-        }),
-      })
-    }
-
-    await expect(
-      pageQrCapture.decodeVisibleOtpauthCandidates(),
-    ).resolves.toEqual({
-      status: 'unsupported',
-      candidates: [],
+    expect(raster.boundedSize({ width: 300, height: 2000 })).toEqual({
+      width: 77,
+      height: 512,
+    })
+    expect(raster.boundedSize({ width: 220, height: 220 })).toEqual({
+      width: 220,
+      height: 220,
+    })
+    expect(raster.boundedSize({ width: 0, height: 0 })).toEqual({
+      width: 1,
+      height: 1,
     })
   })
 })
@@ -644,22 +427,6 @@ describe('authenticator setup dialogs', () => {
     computedStyle.mockRestore()
   })
 
-  test('a marked inline SVG QR decodes without BarcodeDetector', async () => {
-    const uri =
-      'otpauth://totp/Example:carol@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
-    new DialogQrObservationFixture(
-      DialogQrObservationFixture.authenticatorDialog(
-        `<svg viewBox="0 0 29 29" data-nook-otpauth-uri="${uri}"><path d="M0 0h7v7H0z"/></svg>`,
-      ),
-    )
-    await expect(
-      pageQrCapture.decodeVisibleOtpauthCandidates(),
-    ).resolves.toEqual({
-      status: 'ready',
-      candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
-    })
-  })
-
   test('sign-in, app-download, and payment QR dialogs do not suggest enrollment', async () => {
     for (const [title, body] of [
       [
@@ -747,22 +514,26 @@ describe('authenticator setup dialogs', () => {
     observer.disconnect()
   })
 
-  test('the trusted decode rasterizes an inline SVG QR onto an opaque canvas for BarcodeDetector', async () => {
+  test('the trusted decode sends an inline SVG QR as opaque bounded pixels and keeps only Rust candidates', async () => {
     const uri =
       'otpauth://totp/Example:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
-    new DialogQrObservationFixture(
+    const fixture = new DialogQrObservationFixture(
       DialogQrObservationFixture.authenticatorDialog(
         DialogQrObservationFixture.QR_SVG,
       ),
     )
-    const raster = new QrRasterDecodeFixture(uri)
+    fixture.resolution = {
+      ok: true,
+      result: { candidates: [{ source: 'qr', otpauthUri: uri }] },
+    }
+    const raster = new QrRasterDecodeFixture()
     raster.install()
     try {
       await expect(
-        pageQrCapture.decodeVisibleOtpauthCandidates(),
+        pageQrCapture.resolveVisibleOtpauthCandidates(),
       ).resolves.toEqual({
-        status: 'ready',
-        candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
+        candidates: [{ source: 'qr', ordinal: 1, otpauthUri: uri }],
       })
       expect(raster.decodedSources).toHaveLength(1)
       const [decodedSource] = raster.decodedSources
@@ -786,38 +557,142 @@ describe('authenticator setup dialogs', () => {
           source: decodedSource,
         },
       ])
-      expect(raster.bitmapSources).toEqual(['canvas'])
-      expect(raster.detectedSources).toEqual(['opaque-canvas'])
-      expect(raster.closedBitmaps).toEqual(['opaque-canvas'])
+      expect(raster.copiedSizes).toEqual(['220x220'])
+      const [request] = fixture.resolveRequests
+      expect(request?.origin).toBe(location.origin)
+      const pictures = request?.payload.pictures
+      expect(pictures?.map(({ width, height }) => [width, height])).toEqual([
+        [220, 220],
+      ])
+      // The copied RGBA bytes travel as base64 of exactly 220 × 220 × 4 bytes.
+      const bytes = atob(
+        String(pictures?.map((picture) => picture.rgbaBase64).join('')),
+      )
+      expect(bytes.length).toBe(220 * 220 * 4)
+      expect(/^\xff+$/.test(bytes)).toBe(true)
     } finally {
       raster.restore()
     }
   })
 
-  test('the trusted decode underlays canvas QR media before BarcodeDetector', async () => {
-    const uri = 'otpauth://totp/Example:bob@example.com?secret=JBSWY3DPEHPK3PXP'
-    new DialogQrObservationFixture(
+  test('the trusted decode underlays canvas QR media before the pixel copy', async () => {
+    const fixture = new DialogQrObservationFixture(
       DialogQrObservationFixture.authenticatorDialog(
         '<canvas width="220" height="220"></canvas>',
       ),
     )
-    const raster = new QrRasterDecodeFixture(uri)
+    const raster = new QrRasterDecodeFixture()
     raster.install()
     try {
       await expect(
-        pageQrCapture.decodeVisibleOtpauthCandidates(),
+        pageQrCapture.resolveVisibleOtpauthCandidates(),
       ).resolves.toEqual({
-        status: 'ready',
-        candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
+        candidates: [],
       })
       expect(raster.decodedSources).toEqual([])
       expect(raster.operations.map((step) => step.operation)).toEqual([
         RasterOperationKind.FillRect,
         RasterOperationKind.DrawImage,
       ])
-      expect(raster.detectedSources).toEqual(['opaque-canvas'])
+      expect(fixture.resolveRequests).toHaveLength(1)
     } finally {
       raster.restore()
     }
+  })
+
+  test('labels several Rust candidates by source and ordinal, and fails closed without a decoder reply', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(''),
+    )
+    const first = 'otpauth://totp/A:a?secret=JBSWY3DPEHPK3PXP&issuer=A'
+    const second = 'otpauth://totp/B:b?secret=KRSXG5CTMVRXEZLU&issuer=B'
+    const key = 'otpauth://totp/:?secret=MFRGGZDFMZTWQ2LK&issuer=example.test'
+    fixture.resolution = {
+      ok: true,
+      result: {
+        candidates: [
+          { source: 'qr', otpauthUri: first },
+          { source: 'setup-key', otpauthUri: key },
+          { source: 'qr', otpauthUri: second },
+        ],
+      },
+    }
+    await expect(
+      pageQrCapture.resolveVisibleOtpauthCandidates(),
+    ).resolves.toEqual({
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+      candidates: [
+        { source: 'qr', ordinal: 1, otpauthUri: first },
+        { source: 'setup-key', ordinal: 1, otpauthUri: key },
+        { source: 'qr', ordinal: 2, otpauthUri: second },
+      ],
+    })
+
+    const unusableReplies: ResolveCandidatesRuntimeResponse[] = [
+      { ok: false },
+      { ok: true, result: { candidates: [{ source: 'qr', otpauthUri: 'x' }] } },
+    ]
+    for (const resolution of unusableReplies) {
+      fixture.resolution = resolution
+      await expect(
+        pageQrCapture.resolveVisibleOtpauthCandidates(),
+      ).resolves.toEqual({
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Failed,
+        candidates: [],
+      })
+    }
+  })
+
+  test('a setup key shown with the dialog QR is read only by the trusted decode, never by eligibility', async () => {
+    const setupKey = 'JBSW Y3DP EHPK 3PXP'
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(`
+        ${DialogQrObservationFixture.QR_SVG}
+        <div>Can't scan it? Enter this key instead:</div>
+        <code>${setupKey}</code>
+        <input readonly value="KRSX G5CT MVRX EZLU" />
+      `),
+    )
+    expect(await fixture.observation()).toBe('present')
+    expect(JSON.stringify(fixture.payloads)).not.toContain('JBSW')
+    expect(JSON.stringify(fixture.payloads)).not.toContain('KRSX')
+    expect(fixture.resolveRequests).toEqual([])
+
+    const raster = new QrRasterDecodeFixture()
+    raster.install()
+    try {
+      await pageQrCapture.resolveVisibleOtpauthCandidates()
+    } finally {
+      raster.restore()
+    }
+
+    const texts = fixture.resolvedSetupKeyTexts
+    expect(texts.slice(0, 2)).toEqual([setupKey, 'KRSX G5CT MVRX EZLU'])
+    expect(texts).toContain("Can't scan it? Enter this key instead:")
+    expect(texts).not.toContain('Cancel')
+    expect(texts).not.toContain('Enter code manually')
+    expect(texts.length).toBeLessThanOrEqual(16)
+    for (const text of texts) {
+      expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(256)
+    }
+  })
+
+  test('cancelling clears the URI a resolved candidate carried', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(''),
+    )
+    const uri = 'otpauth://totp/:?secret=JBSWY3DPEHPK3PXP&issuer=example.test'
+    fixture.resolution = {
+      ok: true,
+      result: { candidates: [{ source: 'setup-key', otpauthUri: uri }] },
+    }
+    const { candidates } = await pageQrCapture.resolveVisibleOtpauthCandidates()
+    for (const candidate of candidates) {
+      pageQrCapture.clearOtpauthCandidate(candidate)
+    }
+    expect(candidates).toEqual([
+      { source: 'setup-key', ordinal: 1, otpauthUri: '' },
+    ])
   })
 })

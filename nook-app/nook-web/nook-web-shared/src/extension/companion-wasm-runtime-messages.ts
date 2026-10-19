@@ -52,6 +52,8 @@ import type {
   PageSecondFactorRoute,
   SitePageNeed,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { NookAuthenticatorEnrollmentCandidates } from "../vault-app/lib/nook-wasm/nook_wasm";
+import type { AuthenticatorEnrollmentSources } from "./authenticator-enrollment-candidates";
 
 export enum CompanionWasmSessionMessageType {
   ClassifyLoginSaveOutcome = "nook:extension-session-classify-login-save-outcome",
@@ -82,6 +84,7 @@ export enum CompanionWasmSessionMessageType {
   EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
   RevalidateApprovedAuthenticationWorkflow = "nook:extension-session-revalidate-approved-authentication-workflow",
   SitePageNeed = "nook:extension-session-site-page-need",
+  ResolveAuthenticatorEnrollmentCandidates = "nook:extension-session-resolve-authenticator-enrollment-candidates",
 }
 
 export enum CompanionWasmLabelKind {
@@ -300,6 +303,10 @@ export type CompanionWasmSessionMessage =
       readonly payload: { readonly workflowMatch: AuthenticationWorkflowMatch };
     }
   | {
+      readonly type: CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates;
+      readonly payload: AuthenticatorEnrollmentSources;
+    }
+  | {
       readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
       readonly payload: { readonly response: unknown };
     }
@@ -377,6 +384,7 @@ export type CompanionWasmFocusedRecognitionResponse =
 
 export type CompanionWasmSessionResponse =
   | GoogleLoginSessionResponse
+  | NookAuthenticatorEnrollmentCandidates
   | LoginSaveOutcomeDecision
   | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse

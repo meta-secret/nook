@@ -205,6 +205,7 @@ export class GoogleLoginSessionContinuations {
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
       case CompanionWasmSessionMessageType.SitePageNeed:
+      case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
         return handleCompanionWasmMessage(message)
     }
   }

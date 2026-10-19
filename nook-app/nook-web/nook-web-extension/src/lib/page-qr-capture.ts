@@ -11,13 +11,26 @@ import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
-import { Effect, Schema } from 'effect'
+import { Effect, Exit, Schema } from 'effect'
 import {
-  QrBitmapCaptureKind,
+  QrPixelCaptureKind,
   QrMediaKind,
   QrMediaRaster,
   type QrMedia,
 } from './qr-media-raster'
+import {
+  AuthenticatorEnrollmentCandidatesDecoder,
+  AuthenticatorEnrollmentPictureCodec,
+  AuthenticatorEnrollmentSourceBound,
+  type AuthenticatorEnrollmentCandidate,
+  type AuthenticatorEnrollmentPicture,
+} from '../../../nook-web-shared/src/extension/authenticator-enrollment-candidates'
+import {
+  ElementRendering,
+  RenderedElementVisibility,
+} from './rendered-element-visibility'
+import { SetupKeyTextCandidates } from './setup-key-candidates'
+import type { NookAuthenticatorEnrollmentCandidates } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 enum SetupObservationPreparationKind {
   Unprepared = 'unprepared',
@@ -37,46 +50,16 @@ type SetupObservationPreparation =
       readonly observation: AuthenticationAuthenticatorSetupObservation
     }
 
-const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
-
-const MAX_QR_CANDIDATES = 8
+const MAX_QR_CANDIDATES = AuthenticatorEnrollmentSourceBound.MaxPictures
 
 const MIN_QR_EDGE_PX = 80
 
+/** One Rust-accepted candidate; its label is the source and 1-based ordinal. */
 export type DecodedOtpauthCandidate = {
-  sourceLabel: string
+  readonly source: AuthenticatorEnrollmentCandidate['source']
+  readonly ordinal: number
   otpauthUri: string
 }
-
-type BarcodeDetectorLike = {
-  detect: (
-    source: ImageBitmapSource,
-  ) => Promise<Array<{ rawValue?: string; format?: string }>>
-}
-
-type BarcodeDetectorOptions = {
-  formats: string[]
-}
-
-type BarcodeDetectorConstructor = new (
-  options: BarcodeDetectorOptions,
-) => BarcodeDetectorLike
-
-type BarcodeDetectorGlobal = typeof globalThis & {
-  BarcodeDetector?: BarcodeDetectorConstructor
-}
-
-enum BarcodeDetectorAvailabilityKind {
-  Unsupported = 'unsupported',
-  Available = 'available',
-}
-
-type BarcodeDetectorAvailability =
-  | { kind: BarcodeDetectorAvailabilityKind.Unsupported }
-  | {
-      kind: BarcodeDetectorAvailabilityKind.Available
-      Detector: BarcodeDetectorConstructor
-    }
 
 enum InstructionElementCapture {
   Excluded = 'excluded',
@@ -95,10 +78,21 @@ type InstructionCandidate = {
   readonly element: HTMLElement
 }
 
+/** Instruction candidates in the order their copy reads them. */
+type InstructionCandidates = InstructionCandidate[]
+
+/** The visible QR media collected for one observation or trusted decode. */
+type VisibleQrMedia = QrMedia[]
+
 /** One dialog's instruction lookup for the QR media it contains. */
 type DialogInstructionRequest = {
   readonly dialog: HTMLElement
   readonly media: Element
+}
+
+/** One dialog without QR media, read for its own prose. */
+type DialogProseRequest = {
+  readonly dialog: HTMLElement
 }
 
 /** One dialog element considered as instruction copy for that media. */
@@ -109,12 +103,37 @@ type DialogContentRequest = {
 
 export enum DecodeVisibleOtpauthCandidatesResultStatus {
   Ready = 'ready',
-  Unsupported = 'unsupported',
   Empty = 'empty',
   Ambiguous = 'ambiguous',
+  /** The offscreen decoder or its reply was unavailable. */
+  Failed = 'failed',
 }
 
 type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
+
+export type DecodedOtpauthCandidatesResult = {
+  readonly status: DecodeVisibleOtpauthCandidatesResultStatus
+  readonly candidates: DecodedOtpauthCandidates
+}
+
+/** How the content script reads the offscreen reply: Rust's candidates or a failure. */
+type CandidatesDecodeOutcome = {
+  readonly onFailure: () => DecodedOtpauthCandidatesResult
+  readonly onSuccess: (
+    accepted: NookAuthenticatorEnrollmentCandidates,
+  ) => DecodedOtpauthCandidatesResult
+}
+
+/** A setup scope and the instruction candidates its pre-consent copy reads. */
+type SetupScope = {
+  readonly element: HTMLElement
+  readonly candidates: InstructionCandidate[]
+}
+
+enum SetupScopeCopy {
+  Instructed = 'instructed',
+  Silent = 'silent',
+}
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PageQrCapture {
@@ -129,20 +148,20 @@ class PageQrCapture {
   ]
   static readonly PROSE_SELECTOR = 'h1,h2,h3,h4,h5,h6,p'
   static readonly DIALOG_TEXT_LEAF_SELECTOR = 'div,span'
+  /** Setup scopes a manual-key view without QR media may describe itself in. */
+  static readonly MAX_SETUP_SCOPES = 8
 
   private setupObservation: SetupObservationPreparation = {
     kind: SetupObservationPreparationKind.Unprepared,
   }
   private readonly raster: QrMediaRaster
-  constructor(private readonly browser: BarcodeDetectorGlobal) {
+  private readonly setupKeyTexts: SetupKeyTextCandidates
+  private readonly visibility: RenderedElementVisibility
+  private readonly pictures = new AuthenticatorEnrollmentPictureCodec()
+  constructor(private readonly browser: typeof globalThis) {
     this.raster = new QrMediaRaster(browser)
-  }
-
-  private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
-    const candidate = this.browser.BarcodeDetector
-    return typeof candidate === 'function'
-      ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
-      : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
+    this.setupKeyTexts = new SetupKeyTextCandidates(browser)
+    this.visibility = new RenderedElementVisibility(browser)
   }
 
   private isVisibleElement(element: Element): boolean {
@@ -198,16 +217,126 @@ class PageQrCapture {
     return ratio > 0.75 && ratio < 1.35
   }
 
+  /**
+   * Pre-consent copy only: never QR payloads or setup keys. With visible QR
+   * media each one reports its nearby instructions. Without any, a manual-key
+   * view can still describe itself: each dialog or section scope reports its
+   * own headings, paragraphs, and dialog label or description (no div or span
+   * leaves), and Rust decides whether that copy asks for a setup key.
+   */
   private authenticatorSetupMetadata(): AuthenticationAuthenticatorSetupBatch {
-    const visibleInstructionCopies = this.collectQrMedia().map((media) =>
-      this.nearbyInstructionCopy(media.element),
-    )
-    switch (visibleInstructionCopies.length === 0) {
-      case true:
-        return { visibleInstructionCopies, qrMedia: 'absent' }
+    const media = this.collectQrMedia()
+    switch (media.length === 0) {
       case false:
-        return { visibleInstructionCopies, qrMedia: 'present' }
+        return {
+          visibleInstructionCopies: media.map((item) =>
+            this.instructionCopy(
+              this.nearbyInstructionCandidates(item.element),
+            ),
+          ),
+          qrMedia: 'present',
+        }
+      case true:
+        return {
+          visibleInstructionCopies: this.instructedManualKeyScopes().map(
+            (scope) => this.instructionCopy(scope.candidates),
+          ),
+          qrMedia: 'absent',
+        }
     }
+  }
+
+  /** Dialog and section scopes in page order; a section inside a dialog belongs to the dialog. */
+  private manualKeyScopes(): SetupScope[] {
+    const document = this.browser.document
+    const dialogs = Array.from(
+      document.querySelectorAll(PageQrCapture.DIALOG_SCOPE_SELECTOR),
+    )
+      .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (dialog) =>
+          !(
+            dialog.parentElement?.closest(
+              PageQrCapture.DIALOG_SCOPE_SELECTOR,
+            ) instanceof Element
+          ),
+      )
+      .map((dialog): SetupScope => {
+        const request: DialogProseRequest = { dialog }
+        return {
+          element: dialog,
+          candidates: this.dialogProseCandidates(request),
+        }
+      })
+    const sections = Array.from(
+      document.querySelectorAll(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR),
+    )
+      .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (section) =>
+          !(
+            section.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR) instanceof
+            Element
+          ),
+      )
+      .map((section): SetupScope => ({
+        element: section,
+        candidates: this.scopeProseElements(section).map(
+          (element): InstructionCandidate => ({
+            kind: InstructionCandidateKind.Prose,
+            element,
+          }),
+        ),
+      }))
+    return [...dialogs, ...sections]
+  }
+
+  private instructedManualKeyScopes(): SetupScope[] {
+    return this.manualKeyScopes()
+      .filter(
+        (scope) =>
+          this.scopeCopy(scope.candidates) === SetupScopeCopy.Instructed,
+      )
+      .slice(0, PageQrCapture.MAX_SETUP_SCOPES)
+  }
+
+  private scopeCopy(candidates: InstructionCandidates): SetupScopeCopy {
+    switch (this.instructionCopy(candidates).trim().length > 0) {
+      case true:
+        return SetupScopeCopy.Instructed
+      case false:
+        return SetupScopeCopy.Silent
+    }
+  }
+
+  /** The scopes whose text may show a setup key, after the trusted click. */
+  private setupKeyScopes(media: VisibleQrMedia): HTMLElement[] {
+    const scopes: HTMLElement[] = []
+    switch (media.length === 0) {
+      case true:
+        scopes.push(
+          ...this.instructedManualKeyScopes().map((scope) => scope.element),
+        )
+        break
+      case false:
+        scopes.push(...media.flatMap((item) => this.mediaScope(item.element)))
+        break
+    }
+    const distinct = [...new Set(scopes)]
+    return distinct.filter(
+      (scope) =>
+        !distinct.some((other) => other !== scope && other.contains(scope)),
+    )
+  }
+
+  /** The dialog, section, or parent that frames one QR's instructions. */
+  private mediaScope(media: Element): HTMLElement[] {
+    const scopes = [
+      media.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR),
+      media.closest(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR),
+      media.parentElement,
+    ].filter((element) => element instanceof HTMLElement)
+    return scopes.slice(0, 1)
   }
 
   prepareAuthenticationAuthenticatorSetupObservation(): Promise<AuthenticationAuthenticatorSetupSnapshot> {
@@ -284,18 +413,20 @@ class PageQrCapture {
     }
   }
 
-  private nearbyInstructionCopy(media: Element): string {
+  private instructionCopy(candidates: InstructionCandidates): string {
     let copy = ''
-    for (const instruction of this.capturedInstructionElements(media)) {
+    for (const instruction of this.capturedInstructionElements(candidates)) {
       copy = this.boundedInstructionCopy(`${copy}\n${instruction.innerText}`)
     }
     return copy
   }
 
   /** Visible candidates in order, without text that another one already holds. */
-  private capturedInstructionElements(media: Element): HTMLElement[] {
+  private capturedInstructionElements(
+    candidates: InstructionCandidates,
+  ): HTMLElement[] {
     const captured: HTMLElement[] = []
-    for (const candidate of this.nearbyInstructionCandidates(media)) {
+    for (const candidate of candidates) {
       switch (this.instructionCandidateCapture(candidate)) {
         case InstructionElementCapture.Excluded:
           continue
@@ -339,21 +470,7 @@ class PageQrCapture {
     request: DialogInstructionRequest,
   ): InstructionCandidate[] {
     const { dialog, media } = request
-    const referencedIds = PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES.map(
-      (attribute) => dialog.getAttribute(attribute),
-    )
-      .filter((value) => typeof value === 'string')
-      .join(' ')
-      .split(/\s+/)
-      .filter((id) => id.length > 0)
-    const references = referencedIds
-      .map((id) => this.browser.document.getElementById(id))
-      .filter((element) => element instanceof HTMLElement)
-      .filter((element) => dialog.contains(element))
-      .map((element): InstructionCandidate => ({
-        kind: InstructionCandidateKind.Prose,
-        element,
-      }))
+    const references = this.dialogReferenceCandidates(dialog)
     const contents = Array.from(
       dialog.querySelectorAll(
         `${PageQrCapture.PROSE_SELECTOR},${PageQrCapture.DIALOG_TEXT_LEAF_SELECTOR}`,
@@ -369,6 +486,47 @@ class PageQrCapture {
         return this.dialogContentCandidates(content)
       })
     return [...references, ...contents]
+  }
+
+  /** The dialog's own label and description elements, which it contains. */
+  private dialogReferenceCandidates(
+    dialog: HTMLElement,
+  ): InstructionCandidate[] {
+    const referencedIds = PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES.map(
+      (attribute) => dialog.getAttribute(attribute),
+    )
+      .filter((value) => typeof value === 'string')
+      .join(' ')
+      .split(/\s+/)
+      .filter((id) => id.length > 0)
+    return referencedIds
+      .map((id) => this.browser.document.getElementById(id))
+      .filter((element) => element instanceof HTMLElement)
+      .filter((element) => dialog.contains(element))
+      .map((element): InstructionCandidate => ({
+        kind: InstructionCandidateKind.Prose,
+        element,
+      }))
+  }
+
+  /** A dialog without QR media: its label, description, headings, and paragraphs only. */
+  private dialogProseCandidates(
+    request: DialogProseRequest,
+  ): InstructionCandidate[] {
+    const { dialog } = request
+    const prose = Array.from(
+      dialog.querySelectorAll(PageQrCapture.PROSE_SELECTOR),
+    )
+      .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (element) =>
+          element.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR) === dialog,
+      )
+      .map((element): InstructionCandidate => ({
+        kind: InstructionCandidateKind.Prose,
+        element,
+      }))
+    return [...this.dialogReferenceCandidates(dialog), ...prose]
   }
 
   /**
@@ -403,14 +561,20 @@ class PageQrCapture {
     const scopes = [media.closest(scopeSelector)].filter(
       (element) => element instanceof HTMLElement,
     )
-    for (const scope of scopes) {
-      return Array.from(scope.querySelectorAll(PageQrCapture.PROSE_SELECTOR))
-        .filter((element) => element instanceof HTMLElement)
-        .filter((element) => element.closest(scopeSelector) === scope)
-    }
+    for (const scope of scopes) return this.scopeProseElements(scope)
     return [media.previousElementSibling, media.nextElementSibling]
       .filter((element) => element instanceof HTMLElement)
       .filter((element) => element.matches(PageQrCapture.PROSE_SELECTOR))
+  }
+
+  /** Headings and paragraphs that belong to this section scope, not a nested one. */
+  private scopeProseElements(scope: HTMLElement): HTMLElement[] {
+    return Array.from(scope.querySelectorAll(PageQrCapture.PROSE_SELECTOR))
+      .filter((element) => element instanceof HTMLElement)
+      .filter(
+        (element) =>
+          element.closest(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR) === scope,
+      )
   }
 
   authenticationAuthenticatorSetupMutationRequiresScan(
@@ -419,8 +583,8 @@ class PageQrCapture {
     if (record.type !== 'childList' && record.type !== 'characterData')
       return false
     // Only candidates holding the mutated node need the visibility check.
-    return this.collectQrMedia().some((media) =>
-      this.nearbyInstructionCandidates(media.element)
+    return this.setupInstructionCandidateGroups().some((candidates) =>
+      candidates
         .filter((candidate) => candidate.element.contains(record.target))
         .some(
           (candidate) =>
@@ -428,6 +592,19 @@ class PageQrCapture {
             InstructionElementCapture.Visible,
         ),
     )
+  }
+
+  /** Each QR's instruction candidates, or each manual-key scope's without QR media. */
+  private setupInstructionCandidateGroups(): InstructionCandidate[][] {
+    const media = this.collectQrMedia()
+    switch (media.length === 0) {
+      case false:
+        return media.map((item) =>
+          this.nearbyInstructionCandidates(item.element),
+        )
+      case true:
+        return this.manualKeyScopes().map((scope) => scope.candidates)
+    }
   }
 
   private instructionCandidateCapture(
@@ -470,7 +647,7 @@ class PageQrCapture {
         break
     }
     const forbidden =
-      'input,textarea,select,button,code,pre,kbd,samp,[hidden],[aria-hidden="true"],[data-nook-otpauth-uri],[data-nook-backup-codes],[data-nook-backup-code],[data-secret],[data-setup-key]'
+      'input,textarea,select,button,code,pre,kbd,samp,[hidden],[aria-hidden="true"],[data-nook-backup-codes],[data-nook-backup-code],[data-secret],[data-setup-key]'
     switch (
       element.matches(forbidden) ||
       element.querySelector(forbidden) instanceof Element ||
@@ -481,49 +658,12 @@ class PageQrCapture {
       case false:
         break
     }
-    const rect = element.getBoundingClientRect()
-    switch (
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.bottom > 0 &&
-      rect.right > 0 &&
-      rect.top < this.browser.window.innerHeight &&
-      rect.left < this.browser.window.innerWidth
-    ) {
-      case false:
+    switch (this.visibility.rendering(element)) {
+      case ElementRendering.Hidden:
         return InstructionElementCapture.Excluded
-      case true:
-        break
+      case ElementRendering.Rendered:
+        return InstructionElementCapture.Visible
     }
-    for (
-      let ancestor: HTMLElement | Element = element;
-      ancestor instanceof HTMLElement;
-    ) {
-      const style = this.browser.window.getComputedStyle(ancestor)
-      switch (
-        ancestor.hasAttribute('hidden') ||
-        ancestor.getAttribute('aria-hidden') === 'true' ||
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        style.opacity === '0'
-      ) {
-        case true:
-          return InstructionElementCapture.Excluded
-        case false:
-          break
-      }
-      const parents: HTMLElement[] = [ancestor.parentElement].filter(
-        (element) => element instanceof HTMLElement,
-      )
-      for (const parent of parents) ancestor = parent
-      switch (parents.length) {
-        case 0:
-          return InstructionElementCapture.Visible
-        default:
-          break
-      }
-    }
-    return InstructionElementCapture.Excluded
   }
 
   private boundedInstructionCopy(text: string): string {
@@ -568,120 +708,105 @@ class PageQrCapture {
       .slice(0, MAX_QR_CANDIDATES)
   }
 
-  private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
-    // An inline SVG QR may carry the marker as well as an HTML element.
-    const elements = [
-      ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
-    ].filter(
-      (element) =>
-        element instanceof HTMLElement || element instanceof SVGSVGElement,
-    )
-    const candidates: DecodedOtpauthCandidate[] = []
-    const seen = new Set<string>()
-    let index = 0
-    for (const element of elements) {
-      if (!this.isVisibleElement(element)) continue
-      const value = ((v) => (v ? v : ''))(
-        element.getAttribute('data-nook-otpauth-uri')?.trim(),
-      )
-      if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
-      index += 1
-      seen.add(value)
-      const candidate: DecodedOtpauthCandidate = {
-        sourceLabel: `QR ${index}`,
-        otpauthUri: value,
-      }
-      candidates.push(candidate)
-    }
-    return candidates
-  }
-
-  private finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidates): {
-    status:
-      | DecodeVisibleOtpauthCandidatesResultStatus.Ready
-      | DecodeVisibleOtpauthCandidatesResultStatus.Empty
-      | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
-    candidates: DecodedOtpauthCandidate[]
-  } {
-    if (candidates.length === 0) {
-      return {
-        status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
-        candidates: [],
-      }
-    }
-    if (candidates.length > 1) {
-      return {
-        status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
-        candidates,
-      }
-    }
-    return {
-      status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
-      candidates,
-    }
-  }
-
-  async decodeVisibleOtpauthCandidates(): Promise<{
-    status:
-      | DecodeVisibleOtpauthCandidatesResultStatus.Ready
-      | DecodeVisibleOtpauthCandidatesResultStatus.Unsupported
-      | DecodeVisibleOtpauthCandidatesResultStatus.Empty
-      | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
-    candidates: DecodedOtpauthCandidate[]
-  }> {
-    // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
-    // sites) so enrollment works without BarcodeDetector.
-    const marked = this.collectMarkedOtpauthCandidates()
-    if (marked.length > 0) {
-      return this.finalizeOtpauthCandidates(marked)
-    }
-
-    const detectorAvailability = this.barcodeDetectorConstructor()
-    if (
-      detectorAvailability.kind === BarcodeDetectorAvailabilityKind.Unsupported
-    ) {
-      return {
-        status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
-        candidates: [],
-      }
-    }
-    const { Detector } = detectorAvailability
-    const detectorOptions: BarcodeDetectorOptions = { formats: ['qr_code'] }
-    const detector = new Detector(detectorOptions)
-    const candidates: DecodedOtpauthCandidate[] = []
-    const seen = new Set<string>()
-    let index = 0
-    for (const media of this.collectQrMedia()) {
-      index += 1
-      const capture = await this.raster.opaqueBitmap(media)
-      if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
-      const { bitmap } = capture
-      try {
-        const codes = await detector.detect(bitmap)
-        for (const code of codes) {
-          const value = ((v) => (v ? v : ''))(code.rawValue?.trim())
-          if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value))
-            continue
-          seen.add(value)
-          const candidate: DecodedOtpauthCandidate = {
-            sourceLabel: `QR ${index}`,
-            otpauthUri: value,
-          }
-          candidates.push(candidate)
+  private finalizeOtpauthCandidates(
+    candidates: DecodedOtpauthCandidates,
+  ): DecodedOtpauthCandidatesResult {
+    switch (candidates.length) {
+      case 0:
+        return {
+          status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
+          candidates,
         }
-      } catch {
-        // Cross-origin or undecodable media is skipped without weakening
-        // host permissions.
-      } finally {
-        bitmap.close()
+      case 1:
+        return {
+          status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
+          candidates,
+        }
+      default:
+        return {
+          status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+          candidates,
+        }
+    }
+  }
+
+  private failedCandidates(): DecodedOtpauthCandidatesResult {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Failed,
+      candidates: [],
+    }
+  }
+
+  /** Rasterizes each visible QR once; unreadable media is skipped. */
+  private async capturedPictures(
+    media: VisibleQrMedia,
+  ): Promise<AuthenticatorEnrollmentPicture[]> {
+    const pictures: AuthenticatorEnrollmentPicture[] = []
+    for (const item of media) {
+      const capture = await this.raster.opaquePixels(item)
+      switch (capture.kind) {
+        case QrPixelCaptureKind.Unavailable:
+          continue
+        case QrPixelCaptureKind.Captured:
+          pictures.push(this.pictures.encode(capture.pixels))
       }
     }
-    return this.finalizeOtpauthCandidates(candidates)
+    return pictures
+  }
+
+  /**
+   * Runs only after the trusted **Add 2FA from this page** click. The content
+   * script rasterizes the visible QR media and reads bounded setup-key text
+   * candidates from the same setup scopes; the offscreen document decodes the
+   * pictures and Rust returns only the otpauth candidates it accepts.
+   */
+  async resolveVisibleOtpauthCandidates(): Promise<DecodedOtpauthCandidatesResult> {
+    const media = this.collectQrMedia()
+    const setupKeyTexts = this.setupKeyTexts.collect(this.setupKeyScopes(media))
+    const message: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates,
+      payload: {
+        pictures: await this.capturedPictures(media),
+        setupKeyTexts,
+      },
+      origin: this.browser.location.origin,
+    }
+    const delivery = await sendCompanionWasmRuntimeMessage(
+      this.browser,
+      message,
+    ).finally(() => setupKeyTexts.fill(''))
+    switch (delivery.kind) {
+      case CompanionWasmRuntimeDeliveryKind.Unavailable:
+        return this.failedCandidates()
+      case CompanionWasmRuntimeDeliveryKind.Delivered:
+        break
+    }
+    const outcome: CandidatesDecodeOutcome = {
+      onFailure: () => this.failedCandidates(),
+      onSuccess: ({ candidates: accepted }) =>
+        this.finalizeOtpauthCandidates(
+          [...accepted.entries()].map(
+            ([index, candidate]): DecodedOtpauthCandidate => ({
+              ...candidate,
+              ordinal:
+                accepted
+                  .slice(0, index)
+                  .filter((earlier) => earlier.source === candidate.source)
+                  .length + 1,
+            }),
+          ),
+        ),
+    }
+    return Exit.match(
+      Schema.decodeUnknownExit(AuthenticatorEnrollmentCandidatesDecoder)(
+        delivery.response,
+      ),
+      outcome,
+    )
   }
 
   clearOtpauthCandidate(candidate: DecodedOtpauthCandidate): void {
     candidate.otpauthUri = ''
-    candidate.sourceLabel = ''
   }
 }
 
