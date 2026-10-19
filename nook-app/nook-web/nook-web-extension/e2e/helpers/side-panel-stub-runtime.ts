@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { expect, type Page, type Route } from '@playwright/test'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import type { ExtensionConnectStart } from '../../../nook-web-shared/src/extension/extension-connect-start'
+import type { ExtensionConnectStep } from '../../../nook-web-shared/src/extension/extension-connect-progress'
 import {
   BeginExtensionPairingMessageType,
   OpenSimpleVaultMessageType,
@@ -17,7 +17,7 @@ import {
   type SidePanelLoginFillKind,
   type SidePanelSiteListing,
 } from '../../src/lib/side-panel-site'
-import { extensionDir } from './extension-smoke-runtime'
+import { extensionDir, simpleVaultBaseUrl } from './extension-smoke-runtime'
 
 /**
  * Runs the built side panel page on a stubbed browser runtime, the way the
@@ -72,8 +72,14 @@ export enum SidePanelStubConnectKey {
 export type SidePanelStubState = {
   status: DeviceProtectionStatus
   connectKey: SidePanelStubConnectKey
-  /** The connect choice of each pairing the panel asked to open. */
-  pairings: ExtensionConnectStart[]
+  /** The window each pairing the panel asked to open named. */
+  pairings: number[]
+  /** Tabs the panel brought to the front. */
+  focusedTabs: number[]
+  connects: Array<(port: SidePanelStubPagePort) => void>
+  removals: Array<(tabId: number) => void>
+  /** Ports pages opened to the panel, newest last. */
+  pagePorts: SidePanelStubPagePort[]
   /** The vault new logins are saved to. */
   defaultStore: string
   makeDefault: SidePanelStubAnswer
@@ -91,6 +97,30 @@ export type SidePanelStubState = {
   sent: string[]
   activated: SidePanelStubActivatedListener[]
   updated: SidePanelStubUpdatedListener[]
+}
+
+/** A connect page's port, as the panel receives it. */
+export type SidePanelStubPagePort = {
+  readonly name: string
+  readonly sender: chrome.runtime.MessageSender
+  disconnected: boolean
+  readonly messages: Array<(message: unknown) => void>
+  readonly disconnects: Array<() => void>
+  readonly postMessage: () => void
+  readonly disconnect: () => void
+  readonly onMessage: {
+    readonly addListener: (listener: (message: unknown) => void) => void
+  }
+  readonly onDisconnect: {
+    readonly addListener: (listener: () => void) => void
+  }
+}
+
+/** Where a stub connect page connects from. */
+export type SidePanelStubPageOrigin = {
+  readonly url: string
+  readonly windowId: number
+  readonly tabId: number
 }
 
 export type SidePanelStubScenario = {
@@ -126,6 +156,7 @@ const sidePanelStubProtocol = {
   codeFilled: SidePanelCodeFillKind.Filled,
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
+  connectTab: 42,
   paired: SidePanelStubVaults.Paired,
   pairedWithNew: SidePanelStubVaults.PairedWithNew,
   twoIdentities: SidePanelStubVaults.TwoIdentities,
@@ -167,6 +198,10 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     status: scenario.status,
     connectKey: protocol.currentKey,
     pairings: [],
+    focusedTabs: [],
+    connects: [],
+    removals: [],
+    pagePorts: [],
     defaultStore: 'store-personal',
     makeDefault: protocol.accept,
     activatedIdentities: [],
@@ -275,8 +310,9 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
       case protocol.beginIdentityConnection:
         return { ok: true, start: state.connectKey }
       case protocol.cancelIdentityConnection:
-      case protocol.beginPairing:
         return { ok: true }
+      case protocol.beginPairing:
+        return { ok: true, tabId: protocol.connectTab }
       case protocol.selectDefault:
         return acknowledged(state.makeDefault)
       case protocol.listLogins:
@@ -314,6 +350,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     i18n: { getUILanguage: () => 'en' },
     runtime: {
       id: 'side-panel-stub',
+      onConnectExternal: listeners(state.connects),
       getURL: (resource: string) =>
         `${globalThis.location.origin}/__side-panel-stub/${resource}`,
       sendMessage: (
@@ -321,7 +358,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
           readonly type: string
           readonly vaultStoreId?: string
           readonly payload?: {
-            readonly start?: ExtensionConnectStart
+            readonly windowId?: number
             readonly appId?: string
           }
         },
@@ -330,8 +367,8 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         state.sent.push(message.type)
         switch (message.type) {
           case protocol.beginPairing: {
-            const start = message.payload?.start
-            if (start) state.pairings.push(start)
+            const windowId = message.payload?.windowId
+            if (typeof windowId === 'number') state.pairings.push(windowId)
             queueMicrotask(() => callback(answer(message.type)))
             return
           }
@@ -364,6 +401,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     tabs: {
       onActivated: listeners(state.activated),
       onUpdated: listeners(state.updated),
+      onRemoved: listeners(state.removals),
+      update: (tabId: number) => {
+        state.focusedTabs.push(tabId)
+        return Promise.resolve({ id: tabId })
+      },
     },
     windows: {
       getCurrent: () =>
@@ -379,6 +421,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
   Object.defineProperty(globalThis, 'chrome', descriptor)
 }
 
+export type SidePanelStubPageMessage = {
+  readonly port: number
+  readonly message: ExtensionConnectStep | { readonly kind: string }
+}
+
 /** The document visibility states the stub page can be put in. */
 export enum SidePanelStubVisibility {
   Visible = 'visible',
@@ -392,6 +439,12 @@ export class SidePanelStubPage {
   /** The stub's window is 1; the panel follows its active tab, 2. */
   private static readonly WINDOW_ID = 1
   private static readonly TAB_ID = 2
+  /** The Nook tab the stub service worker opens or reuses. */
+  static readonly CONNECT_TAB_ID = sidePanelStubProtocol.connectTab
+  static readonly CONNECT_URL = new URL(
+    'extension-connect?nonce=stub',
+    simpleVaultBaseUrl,
+  ).toString()
 
   constructor(private readonly page: Page) {}
 
@@ -438,8 +491,95 @@ export class SidePanelStubPage {
     )
   }
 
-  async pairings(): Promise<ExtensionConnectStart[]> {
+  /** The window each begin-pairing request named. */
+  async pairings(): Promise<number[]> {
     return this.page.evaluate(() => window.__nookSidePanelStub.pairings)
+  }
+
+  async focusedTabs(): Promise<number[]> {
+    return this.page.evaluate(() => window.__nookSidePanelStub.focusedTabs)
+  }
+
+  /** A page connects to the extension, by default the Nook connect tab of
+   * the panel's window; answers the index of its port. */
+  async connectPage(
+    origin: Partial<SidePanelStubPageOrigin> = {},
+  ): Promise<number> {
+    const from: SidePanelStubPageOrigin = {
+      url: SidePanelStubPage.CONNECT_URL,
+      windowId: SidePanelStubPage.WINDOW_ID,
+      tabId: SidePanelStubPage.CONNECT_TAB_ID,
+      ...origin,
+    }
+    return this.page.evaluate((pageOrigin) => {
+      const state = window.__nookSidePanelStub
+      const port: SidePanelStubPagePort = {
+        name: '',
+        sender: {
+          url: pageOrigin.url,
+          origin: new URL(pageOrigin.url).origin,
+          frameId: 0,
+          tab: {
+            id: pageOrigin.tabId,
+            windowId: pageOrigin.windowId,
+            index: 0,
+            pinned: false,
+            highlighted: false,
+            active: true,
+            incognito: false,
+            selected: true,
+            discarded: false,
+            autoDiscardable: true,
+            frozen: false,
+            lastAccessed: 0,
+            groupId: -1,
+          },
+        },
+        disconnected: false,
+        messages: [],
+        disconnects: [],
+        postMessage: () => {},
+        disconnect: () => {
+          port.disconnected = true
+        },
+        onMessage: { addListener: (listener) => port.messages.push(listener) },
+        onDisconnect: {
+          addListener: (listener) => port.disconnects.push(listener),
+        },
+      }
+      state.pagePorts.push(port)
+      for (const listener of [...state.connects]) listener(port)
+      return state.pagePorts.length - 1
+    }, from)
+  }
+
+  /** The connect page at that port reports a step, or any message. */
+  async pageSends(request: SidePanelStubPageMessage): Promise<void> {
+    await this.page.evaluate((next) => {
+      const ports = window.__nookSidePanelStub.pagePorts.slice(
+        next.port,
+        next.port + 1,
+      )
+      for (const port of ports)
+        for (const listener of port.messages) listener(next.message)
+    }, request)
+  }
+
+  /** The connect page at that port closed, reloaded or navigated away. */
+  async pageCloses(port: number): Promise<void> {
+    await this.page.evaluate((index) => {
+      const ports = window.__nookSidePanelStub.pagePorts.slice(index, index + 1)
+      for (const closing of ports)
+        for (const listener of closing.disconnects) listener()
+    }, port)
+  }
+
+  async pageDisconnected(port: number): Promise<boolean> {
+    return this.page.evaluate(
+      (index) =>
+        window.__nookSidePanelStub.pagePorts[index]?.disconnected === true,
+      port,
+    )
   }
 
   async sent(type: string): Promise<number> {

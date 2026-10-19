@@ -124,26 +124,26 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toBeVisible()
 
     const openedConnectPage = context.waitForEvent('page', { timeout: 30_000 })
-    expect(
-      await popupPage.evaluate(
-        () =>
-          new Promise<unknown>((resolve) => {
-            chrome.runtime.sendMessage(
-              {
-                type: 'nook:begin-extension-pairing',
-                payload: {
-                  deviceId: 'device-popup-e2e',
-                  devicePublicKey: 'age1popup',
-                  deviceSigningPublicKey: 'popup-signing-key',
-                  deviceLabel: 'Nook Extension - Chromium test profile',
-                  start: { kind: 'create', vaultName: 'Home' },
-                },
-              },
-              resolve,
-            )
-          }),
-      ),
-    ).toEqual({ ok: true })
+    // The requesting page names its own window; the reply names the tab.
+    const pairingReply = await popupPage.evaluate(async () => {
+      const current = await chrome.windows.getCurrent()
+      return new Promise<unknown>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: 'nook:begin-extension-pairing',
+            payload: {
+              deviceId: 'device-popup-e2e',
+              devicePublicKey: 'age1popup',
+              deviceSigningPublicKey: 'popup-signing-key',
+              deviceLabel: 'Nook Extension - Chromium test profile',
+              windowId: current.id,
+            },
+          },
+          resolve,
+        )
+      })
+    })
+    expect(pairingReply).toEqual({ ok: true, tabId: expect.any(Number) })
     const simplePage = await openedConnectPage
     await expect(simplePage).toHaveURL((url) => {
       const expected = new URL(
@@ -160,8 +160,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         url.searchParams.has('nonce') &&
         url.searchParams.get('scopes') ===
           'vault-access,password-filling,passkey-management,sync-provider-credentials' &&
-        // The side panel's connect choice rides in the fragment only.
-        url.hash === '#start=create&vault_name=Home' &&
+        // No start choice rides along: the page owns create and join.
+        url.hash === '' &&
         !url.searchParams.has('vault_name')
       )
     })

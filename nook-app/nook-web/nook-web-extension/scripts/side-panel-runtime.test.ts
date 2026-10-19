@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Effect } from 'effect'
-import { ExtensionConnectStartKind } from '../../nook-web-shared/src/extension/extension-connect-start'
 import {
   BeginExtensionPairingMessageType,
   OpenSimpleVaultMessageType,
@@ -42,6 +41,8 @@ type TabPlacement = {
 
 enum FixtureReplyKind {
   Acknowledged = 'acknowledged',
+  /** The service worker opened or reused the Nook tab. */
+  TabOpened = 'tab-opened',
   Refused = 'refused',
   /** No listener answered: Chrome sets lastError. */
   Unanswered = 'unanswered',
@@ -87,8 +88,19 @@ class SidePanelBrowserFixture {
     },
   }
 
+  readonly focusedTabs: number[] = []
+
   private readonly tabs = {
     sendMessage: () => this.tabMessages.push('sendMessage'),
+    update: (tabId: number, update: chrome.tabs.UpdateProperties) => {
+      switch (update.active === true) {
+        case true:
+          this.focusedTabs.push(tabId)
+          return Promise.resolve(browserTab('https://simple.nokey.sh/', tabId))
+        case false:
+          return Promise.reject(new Error('unexpected tab update'))
+      }
+    },
     onActivated: {
       addListener: (listener: ActivatedListener) =>
         this.activated.push(listener),
@@ -144,6 +156,9 @@ class SidePanelBrowserFixture {
     switch (this.reply) {
       case FixtureReplyKind.Acknowledged:
         callback({ ok: true })
+        return
+      case FixtureReplyKind.TabOpened:
+        callback({ ok: true, tabId: 31 })
         return
       case FixtureReplyKind.Refused:
         callback({ ok: false, reason: 'forbidden-sender' })
@@ -281,7 +296,8 @@ describe('side panel browser runtime', () => {
   test('sends only its own requests to the service worker', async () => {
     const runtime = new SidePanelRuntime()
     await Effect.runPromise(runtime.openVault())
-    await Effect.runPromise(
+    fixture.reply = FixtureReplyKind.TabOpened
+    const tabId = await Effect.runPromise(
       runtime.beginPairing({
         device: {
           deviceId: 'device-1',
@@ -289,9 +305,11 @@ describe('side panel browser runtime', () => {
           deviceSigningPublicKey: 'signing-1',
         },
         deviceLabel: 'Nook Extension',
-        start: { kind: ExtensionConnectStartKind.Create, vaultName: 'Home' },
+        windowId: 7,
       }),
     )
+    expect(tabId).toBe(31)
+    fixture.reply = FixtureReplyKind.Acknowledged
     await Effect.runPromise(runtime.lock())
 
     expect(fixture.sent).toEqual([
@@ -304,13 +322,39 @@ describe('side panel browser runtime', () => {
           devicePublicKey: 'public-1',
           deviceSigningPublicKey: 'signing-1',
           deviceLabel: 'Nook Extension',
-          start: { kind: ExtensionConnectStartKind.Create, vaultName: 'Home' },
+          // The panel names only its own window; no choice rides along.
+          windowId: 7,
         },
       },
       { type: ExtensionSessionMessageType.Lock },
     ])
     expect(fixture.runtimeListeners).toEqual([])
     expect(fixture.tabMessages).toEqual([])
+  })
+
+  test('begin-pairing fails visibly without the Nook tab id', async () => {
+    const runtime = new SidePanelRuntime()
+    const pairing = {
+      device: {
+        deviceId: 'device-1',
+        devicePublicKey: 'public-1',
+        deviceSigningPublicKey: 'signing-1',
+      },
+      deviceLabel: 'Nook Extension',
+      windowId: 7,
+    }
+    // An acknowledgement without a tab id leaves nothing to follow.
+    const missing = await Effect.runPromise(
+      Effect.result(runtime.beginPairing(pairing)),
+    )
+    expect(missing._tag).toBe('Failure')
+  })
+
+  test('brings the Nook tab to the front', async () => {
+    const runtime = new SidePanelRuntime()
+    await Effect.runPromise(runtime.focusTab(31))
+    expect(fixture.focusedTabs).toEqual([31])
+    expect(fixture.sent).toEqual([])
   })
 
   test('a refused or unanswered request fails visibly', async () => {
@@ -424,7 +468,9 @@ describe('side panel sources', () => {
     const loaded = await sources.loadedSources()
     expect(loaded.length).toBeGreaterThan(8)
     for (const source of loaded) {
-      expect(source).not.toMatch(/\bonMessage\b/)
+      // Runtime broadcasts stay unheard; the only messages the panel takes
+      // arrive on the connect page's admitted port.
+      expect(source).not.toMatch(/\bruntime\.onMessage\b/)
       expect(source).not.toContain('tabs.sendMessage')
       expect(source).not.toContain('chrome.scripting')
       expect(source).not.toContain('chrome.storage')

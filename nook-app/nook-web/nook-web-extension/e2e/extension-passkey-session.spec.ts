@@ -296,15 +296,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
 
-    const [reconnectPage] = await Promise.all([
-      waitForNewPage(context, 'reopened Simple Vault connection page'),
-      pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(reconnectPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
+    // The launcher opened in the Nook tab's window, so connecting reuses
+    // that one Nook tab on the connect route instead of opening another.
+    const pagesBeforeReconnect = context.pages().length
+    await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
+    await expect(simplePage).toHaveURL(
+      (url) =>
+        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+        url.pathname.endsWith('/extension-connect'),
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    await reconnectPage.close()
+    expect(context.pages()).toHaveLength(pagesBeforeReconnect)
     await pairingLauncher.close()
+    // Back to the vault: the paired, unlocked extension unlocks it again.
+    await simplePage.goto(simpleVaultBaseUrl)
 
     let websitePasskeyState: WebsitePasskeyState = {
       kind: WebsitePasskeyStateKind.NotCreated,

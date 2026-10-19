@@ -1709,6 +1709,21 @@
       "invalid_description": "Open this page from the installed Nook extension. A valid request must identify the extension or include its protected device request.",
       "return_to_nook": "Return to Nook"
     },
+    "connect_tab": {
+      "body": "Nook opens in a tab. There you create your first vault, join with an identity you already use, or choose which identity to connect.",
+      "opened": "Nook opened in a tab. Continue there.",
+      "unlock": "Unlock Nook in the tab and choose the identity to connect.",
+      "choosing": "In the Nook tab, create your first vault or join with an identity you already use.",
+      "creating": "Nook is setting up your vault in the tab…",
+      "consent": "Approve this browser in the Nook tab.",
+      "approved": "Connected. Loading your identities…",
+      "failed_authorization": "Nook did not approve this browser. Try again in the Nook tab.",
+      "failed_grant": "Nook could not prepare this browser's access. Try again in the Nook tab.",
+      "failed_delivery": "This browser did not take the approval. Try again in the Nook tab.",
+      "interrupted": "Nook lost track of the Nook tab. Connect again.",
+      "sender_check_failed": "Nook could not check the Nook tab, so it stopped connecting. Connect again.",
+      "show_tab": "Show Nook tab"
+    },
     "action": {
       "state_unlocked": "Unlocked",
       "state_locked": "Locked",
@@ -1773,8 +1788,6 @@
       "connect_another": "Connect another identity",
       "no_vaults_title": "No identity connected yet",
       "no_vaults_body": "Connect Nook: it opens, you unlock one of your vaults there, and this browser joins that identity with all of its vaults.",
-      "connect_choice_body": "Name the first vault of a new identity, or connect the identity you already use in Nook.",
-      "join_identity": "I already use Nook",
       "connect_vault": "Connect an identity",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",

@@ -288,8 +288,10 @@ function installSidePanelDemoRuntime(
         return { ok: true, paired: 0, awaitingGrant: 0 }
       case protocol.openVault:
       case protocol.openLauncher:
-      case protocol.beginPairing:
         return { ok: true }
+      case protocol.beginPairing:
+        // The Nook tab the service worker opened or reused.
+        return { ok: true, tabId: 42 }
       case protocol.beginIdentityConnection:
         return { ok: true, start: 'current-key' }
       default:
@@ -305,6 +307,7 @@ function installSidePanelDemoRuntime(
     runtime: {
       getURL: (resource: string) =>
         `${globalThis.location.origin}/__extension-side-panel/${resource}`,
+      onConnectExternal: listeners,
       sendMessage: (
         message: { readonly type: string },
         callback: (response: unknown) => void,
@@ -312,7 +315,12 @@ function installSidePanelDemoRuntime(
         callback(answer(message.type))
       },
     },
-    tabs: { onActivated: listeners, onUpdated: listeners },
+    tabs: {
+      onActivated: listeners,
+      onUpdated: listeners,
+      onRemoved: listeners,
+      update: (tabId: number) => Promise.resolve({ id: tabId }),
+    },
     windows: {
       getCurrent: () =>
         Promise.resolve({
@@ -411,15 +419,15 @@ test('unlocks a PIN in place, shows identity · vault sections, and locks again'
   await demoBeat(page)
   await page.getByTestId('side-panel-connections-back').click()
   await expect(page.getByTestId('side-panel-site-section')).toHaveCount(3)
-  // Connecting another identity asks in the panel first: a new identity's
-  // first vault, or one already in use. Nook's connect page continues it.
+  // Connecting another identity opens the one Nook tab; the card follows
+  // that tab, where the identity is created, joined or chosen.
   await page.getByTestId('side-panel-connect').click()
   await expect(page.getByTestId('side-panel-connect-card')).toBeVisible()
-  await demoBeat(page)
-  await page.getByTestId('side-panel-vault-name').fill('Work')
-  await page.getByTestId('side-panel-create-vault').click()
-  await expect(page.getByTestId('side-panel-handoff')).toHaveText(
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
+  )
+  await expect(page.getByTestId('side-panel-connect-focus-tab')).toHaveText(
+    'Show Nook tab',
   )
   await demoBeat(page)
   await page.getByTestId('side-panel-lock').click()
@@ -457,12 +465,10 @@ test('leads with connecting an identity when none is connected', async ({
   await expect(
     page.getByTestId('side-panel-connect-card').getByRole('heading'),
   ).toHaveText('No identity connected yet')
-  await expect(page.getByTestId('side-panel-create-vault')).toHaveText(
-    'Create vault',
+  await expect(page.getByTestId('side-panel-connect-start')).toHaveText(
+    'Connect an identity',
   )
-  await expect(page.getByTestId('side-panel-join-identity')).toHaveText(
-    'I already use Nook',
-  )
+  await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
   // Nothing to manage yet: All connections waits for an identity.
   await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
   await demoBeat(page)

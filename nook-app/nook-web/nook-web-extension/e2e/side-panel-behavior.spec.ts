@@ -14,7 +14,7 @@ import {
 } from '../src/lib/side-panel-site'
 import { PairedVaultsMessageType } from '../src/lib/paired-vaults'
 import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { ExtensionConnectStartKind } from '../../nook-web-shared/src/extension/extension-connect-start'
+import { ExtensionConnectStepKind } from '../../nook-web-shared/src/extension/extension-connect-progress'
 import {
   SidePanelStubAnswer,
   SidePanelStubConnectKey,
@@ -391,7 +391,7 @@ test("a page that needs only 2FA codes shows Rust's typed empty state above the 
   await expect(page.getByTestId('side-panel-item')).toHaveCount(0)
 })
 
-test('Connect another identity opens the connect card under the sections and pairs with the named vault', async ({
+test('Connect another identity opens the one Nook tab and the card follows its steps', async ({
   page,
 }) => {
   const panel = await openUnlocked(page)
@@ -408,26 +408,40 @@ test('Connect another identity opens the connect card under the sections and pai
   await connect.click()
   const card = connections.getByTestId('side-panel-connect-card')
   await expect(card.getByRole('heading')).toHaveText('Connect another identity')
-  await card.getByTestId('side-panel-vault-name').fill('Work')
-  await card.getByTestId('side-panel-create-vault').click()
-  await expect(card.getByTestId('side-panel-handoff')).toHaveText(
-    'Continue in the Nook tab.',
-  )
-  // Nook's connect page opens on the named vault; the launcher never does.
-  expect(await panel.pairings()).toEqual([
-    { kind: ExtensionConnectStartKind.Create, vaultName: 'Work' },
-  ])
+  // The panel has no vault-name field and no join button of its own.
+  await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-join-identity')).toHaveCount(0)
+  const line = card.getByTestId('side-panel-connect-step')
+  await expect(line).toHaveText('Continue in the Nook tab.')
+  // One begin-pairing for the panel's own window; the launcher never opens.
+  expect(await panel.pairings()).toEqual([1])
   expect(
     await panel.sent(
       OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
     ),
   ).toBe(0)
-  // Closing the card brings Connect another identity back.
+  const port = await panel.connectPage()
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Opened },
+  })
+  await expect(line).toHaveText('Nook opened in a tab. Continue there.')
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Consent },
+  })
+  await expect(line).toHaveText('Approve this browser in the Nook tab.')
+  await card.getByTestId('side-panel-connect-focus-tab').click()
+  await expect
+    .poll(() => panel.focusedTabs())
+    .toEqual([SidePanelStubPage.CONNECT_TAB_ID])
+  // Closing the card stops following the tab and brings the row back.
   await card.getByTestId('side-panel-connect-close').click()
   await expect(connections.getByTestId('side-panel-connect')).toBeVisible()
+  expect(await panel.pageDisconnected(port)).toBe(true)
 })
 
-test('a vault created on the connect page shows in the panel, and the hand-off line clears', async ({
+test('approval on the connect page shows the new identity in the panel at once', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
@@ -439,23 +453,34 @@ test('a vault created on the connect page shows in the panel, and the hand-off l
   const connected = page.getByTestId('side-panel-connected-identity')
   await expect(connected).toHaveText(['Alice Martin · Personal'])
   await page.getByTestId('side-panel-connect').click()
-  await page.getByTestId('side-panel-vault-name').fill('Work')
-  await page.getByTestId('side-panel-create-vault').click()
-  await expect(page.getByTestId('side-panel-handoff')).toHaveText(
+  // The panel listens once the Nook tab is open.
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
-  // The person finishes on the connect page and comes back to the panel.
+  const port = await panel.connectPage()
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Consent },
+  })
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
+    'Approve this browser in the Nook tab.',
+  )
+  // The page reports approved only once the extension took the grant.
   await panel.update({ vaults: SidePanelStubVaults.PairedWithNew })
-  await panel.focus()
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Approved },
+  })
   await expect(connected).toHaveText([
     'Alice Martin · Personal',
     'Alice Martin · Work',
   ])
-  await expect(page.getByTestId('side-panel-handoff')).toHaveCount(0)
+  await expect(page.getByTestId('side-panel-connect-card')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-connect')).toBeVisible()
+  expect(await panel.pageDisconnected(port)).toBe(true)
 })
 
-test('with no identity the connect card leads, and I already use Nook opens joining', async ({
+test('with no identity the card leads with one Connect, and closing the Nook tab brings it back', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
@@ -465,26 +490,61 @@ test('with no identity the connect card leads, and I already use Nook opens join
     'No identity connected yet',
   )
   await expect(card.getByTestId('side-panel-connect-close')).toHaveCount(0)
-  await expect(card.getByTestId('side-panel-vault-name')).toHaveAttribute(
-    'placeholder',
-    'Personal',
-  )
-  await card.getByTestId('side-panel-join-identity').click()
-  await expect(card.getByTestId('side-panel-handoff')).toHaveText(
+  await expect(card.getByTestId('side-panel-vault-name')).toHaveCount(0)
+  await expect(card.getByTestId('side-panel-join-identity')).toHaveCount(0)
+  const start = card.getByTestId('side-panel-connect-start')
+  await expect(start).toHaveText('Connect an identity')
+  await start.click()
+  // The panel listens once the Nook tab is open.
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
-  expect(await panel.pairings()).toEqual([
-    { kind: ExtensionConnectStartKind.Join },
-  ])
+  const port = await panel.connectPage()
+  await panel.pageSends({
+    port,
+    message: { kind: ExtensionConnectStepKind.Choosing },
+  })
+  await expect(card.getByTestId('side-panel-connect-step')).toHaveText(
+    'In the Nook tab, create your first vault or join with an identity you already use.',
+  )
+  await panel.pageCloses(port)
+  await expect(card.getByTestId('side-panel-connect-start')).toBeVisible()
+  await expect(card.getByTestId('side-panel-connect-step')).toHaveCount(0)
+  expect(await panel.pairings()).toEqual([1])
 })
 
-test('a new identity sets up its own key in the panel and Cancel returns to the choice', async ({
+test('ports from another window or origin are refused, and an undecodable step ends the connect visibly', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
+  await page.getByTestId('side-panel-connect-start').click()
+  // The panel listens once the Nook tab is open.
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
+    'Continue in the Nook tab.',
+  )
+  const foreign = await panel.connectPage({ windowId: 2 })
+  const untrusted = await panel.connectPage({
+    url: 'https://simple.nokey.sh.example.com/extension-connect',
+  })
+  await expect.poll(() => panel.pageDisconnected(foreign)).toBe(true)
+  await expect.poll(() => panel.pageDisconnected(untrusted)).toBe(true)
+  const port = await panel.connectPage()
+  await panel.pageSends({ port, message: { kind: 'teleported' } })
+  await expect(page.getByTestId('side-panel-error')).toHaveText(
+    'Nook lost track of the Nook tab. Connect again.',
+  )
+  expect(await panel.pageDisconnected(port)).toBe(true)
+  await expect(page.getByTestId('side-panel-connect-start')).toBeVisible()
+})
+
+test('a new identity sets up its own key in the panel and Cancel returns to the card', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
   await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
   await panel.update({ connectKey: SidePanelStubConnectKey.NewStaged })
-  await page.getByTestId('side-panel-create-vault').click()
+  await page.getByTestId('side-panel-connect-start').click()
   const ceremony = page.getByTestId('side-panel-identity-key')
   await expect(ceremony).toBeVisible()
   await expect(page.getByTestId('device-setup-chain')).toBeVisible()

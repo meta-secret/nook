@@ -21,6 +21,12 @@
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
   import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
   import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { extensionConnectProgress } from '$lib/extension/connect-progress'
+  import {
+    ExtensionConnectPageReportKind,
+    ExtensionConnectPageSteps,
+    type ExtensionConnectPageView,
+  } from '$lib/components/extension-connect-progress-steps'
 
   type AccessGateProps = ComponentProps<typeof VaultAccessGate>
   type AuthenticatedWorkspaceProps = ComponentProps<
@@ -62,6 +68,50 @@
     onToggleColorMode: () => void
     onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
+
+  /** The connect route of a valid request opens the port to the extension
+   * once; leaving the route closes it. */
+  $effect(() => {
+    switch (extensionConnectRequestState.kind) {
+      case ExtensionConnectIntentKind.Requested: {
+        switch (extensionConnectRoute) {
+          case false:
+            return
+          case true:
+            break
+        }
+        const progressBegin: Parameters<
+          typeof extensionConnectProgress.begin
+        >[0] = {
+          extensionRuntimeId:
+            extensionConnectRequestState.request.extensionRuntimeId,
+        }
+        extensionConnectProgress.begin(progressBegin)
+        return
+      }
+      case ExtensionConnectIntentKind.Absent:
+        extensionConnectProgress.end()
+    }
+  })
+
+  /** Before a vault is open, the access gate's step: unlock the identity
+   * to connect, or create or join (the consent reports its own). */
+  $effect(() => {
+    const view: ExtensionConnectPageView = {
+      connectRoute: extensionConnectRoute,
+      intent: extensionConnectRequestState.kind,
+      preserveAccessGate,
+      localVaultCount: vault.localVaults.length,
+      vault,
+    }
+    const report = ExtensionConnectPageSteps.page(view)
+    switch (report.kind) {
+      case ExtensionConnectPageReportKind.Silent:
+        return
+      case ExtensionConnectPageReportKind.Report:
+        extensionConnectProgress.report(report.step)
+    }
+  })
 </script>
 
 {#if appLogsPage}

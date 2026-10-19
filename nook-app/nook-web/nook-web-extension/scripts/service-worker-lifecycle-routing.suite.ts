@@ -8,6 +8,7 @@ import {
 import { describe, expect, mock, test } from 'bun:test'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { BeginExtensionPairingMessageType } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { LocalEventLogUpdateFailure } from '../src/background/service-worker/pairing-import'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import {
@@ -16,6 +17,7 @@ import {
   ensureExtensionSessionDocument,
   flushResponses,
   lifecycleDependencies,
+  openExtensionPairing,
   pendingCleanup,
   rejectedCleanup,
   refreshAuthenticationSurfaces,
@@ -112,6 +114,50 @@ describe('service worker routing', () => {
       ok: false,
       reason: ExtensionSessionTransportFailureKind.Closed,
     })
+  })
+
+  test('begin-pairing answers the Nook tab id to an extension page and refuses others', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const payload = {
+      deviceId: 'device-1',
+      devicePublicKey: 'public-1',
+      deviceSigningPublicKey: 'signing-1',
+      deviceLabel: 'Nook Extension',
+      windowId: 7,
+    }
+    const message = {
+      type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+      payload,
+    }
+    const opened = mock(() => {})
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: lifecycleDependencies,
+        message,
+        sender: { id: 'nook-extension' },
+        sendResponse: opened,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    expect(openExtensionPairing).toHaveBeenCalledWith(payload)
+    expect(opened).toHaveBeenCalledWith({ ok: true, tabId: 31 })
+
+    openExtensionPairing.mockClear()
+    const refused = mock(() => {})
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: lifecycleDependencies,
+        message,
+        sender: { id: 'foreign-extension' },
+        sendResponse: refused,
+      }),
+    ).toBe(false)
+    expect(refused).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'forbidden-sender',
+    })
+    expect(openExtensionPairing).not.toHaveBeenCalled()
   })
 
   test('refreshes mounted authentication surfaces from an authorized sender', async () => {
