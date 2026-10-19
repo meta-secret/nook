@@ -30,6 +30,8 @@ export enum SidePanelStubVaults {
   Paired = 'paired',
   /** Paired, plus the vault the connect page just created. */
   PairedWithNew = 'paired-with-new',
+  /** Paired, plus a second identity of this extension with its own key. */
+  TwoIdentities = 'two-identities',
   None = 'none',
   Unavailable = 'unavailable',
 }
@@ -72,6 +74,11 @@ export type SidePanelStubState = {
   connectKey: SidePanelStubConnectKey
   /** The connect choice of each pairing the panel asked to open. */
   pairings: ExtensionConnectStart[]
+  /** The vault new logins are saved to. */
+  defaultStore: string
+  makeDefault: SidePanelStubAnswer
+  /** The app keys the panel asked to switch to. */
+  activatedIdentities: string[]
   vaults: SidePanelStubVaults
   listing: SidePanelSiteListing
   fill: SidePanelStubFillAnswer
@@ -121,6 +128,9 @@ const sidePanelStubProtocol = {
   pinLocked: DeviceProtectionStatus.Pin,
   paired: SidePanelStubVaults.Paired,
   pairedWithNew: SidePanelStubVaults.PairedWithNew,
+  twoIdentities: SidePanelStubVaults.TwoIdentities,
+  selectDefault: PairedVaultsMessageType.SelectDefault,
+  activateIdentity: ExtensionSessionMessageType.ActivateIdentity,
   none: SidePanelStubVaults.None,
   unavailable: SidePanelStubVaults.Unavailable,
   accept: SidePanelStubAnswer.Accept,
@@ -157,6 +167,9 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     status: scenario.status,
     connectKey: protocol.currentKey,
     pairings: [],
+    defaultStore: 'store-personal',
+    makeDefault: protocol.accept,
+    activatedIdentities: [],
     vaults: scenario.vaults,
     listing: scenario.listing,
     fill: scenario.fill,
@@ -179,10 +192,31 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         return { ok: false, reason: 'side-panel-stub-refused' }
     }
   }
+  const otherIdentityVault = {
+    vaultStoreId: 'store-office',
+    vaultName: 'Office',
+    identityLabel: 'Alice at Work',
+    deviceId: 'side-panel-stub-other-device',
+    isDefault: false,
+    fillsPasswords: true,
+    managesPasskeys: true,
+  }
+  const withDefault = <Vault extends { readonly vaultStoreId: string }>(
+    vaults: Vault[],
+  ) =>
+    vaults.map((vault) => ({
+      ...vault,
+      isDefault: vault.vaultStoreId === state.defaultStore,
+    }))
   const vaultList = () => {
     switch (state.vaults) {
       case protocol.paired:
-        return { ok: true, vaults: pairedVaults }
+        return { ok: true, vaults: withDefault(pairedVaults) }
+      case protocol.twoIdentities:
+        return {
+          ok: true,
+          vaults: withDefault([...pairedVaults, otherIdentityVault]),
+        }
       case protocol.pairedWithNew:
         return {
           ok: true,
@@ -243,6 +277,8 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
       case protocol.cancelIdentityConnection:
       case protocol.beginPairing:
         return { ok: true }
+      case protocol.selectDefault:
+        return acknowledged(state.makeDefault)
       case protocol.listLogins:
         return state.listing
       default:
@@ -283,7 +319,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
       sendMessage: (
         message: {
           readonly type: string
-          readonly payload?: { readonly start?: ExtensionConnectStart }
+          readonly vaultStoreId?: string
+          readonly payload?: {
+            readonly start?: ExtensionConnectStart
+            readonly appId?: string
+          }
         },
         callback: (reply: unknown) => void,
       ) => {
@@ -293,6 +333,21 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
             const start = message.payload?.start
             if (start) state.pairings.push(start)
             queueMicrotask(() => callback(answer(message.type)))
+            return
+          }
+          case protocol.selectDefault: {
+            const reply = answer(message.type)
+            if (message.vaultStoreId && state.makeDefault === protocol.accept)
+              state.defaultStore = message.vaultStoreId
+            queueMicrotask(() => callback(reply))
+            return
+          }
+          case protocol.activateIdentity: {
+            // The other identity opens with its own PIN.
+            if (message.payload?.appId)
+              state.activatedIdentities.push(message.payload.appId)
+            state.status = protocol.pinLocked
+            queueMicrotask(() => callback({ ok: true }))
             return
           }
           case protocol.fillLogin:
@@ -375,6 +430,12 @@ export class SidePanelStubPage {
       const held = window.__nookSidePanelStub.heldFills.splice(0)
       for (const release of held) release()
     })
+  }
+
+  async activatedIdentities(): Promise<string[]> {
+    return this.page.evaluate(
+      () => window.__nookSidePanelStub.activatedIdentities,
+    )
   }
 
   async pairings(): Promise<ExtensionConnectStart[]> {
