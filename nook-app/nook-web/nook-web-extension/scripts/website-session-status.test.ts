@@ -3,7 +3,6 @@ import { ok } from 'neverthrow'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
-import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import type { ExtensionSessionResponse } from '../src/offscreen/session'
 
@@ -88,14 +87,14 @@ describe('passive website session status transport', () => {
     ).toBe(ExtensionSessionStatusAvailability.Unlocked)
   })
 
-  test('opens PilotAuth when available website grants find a locked session', async () => {
+  test('answers Locked without opening a Nook tab when available website grants find a locked session', async () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
       chrome: { runtime: { id: 'nook-extension' } },
     })
     const { ExtensionSessionStatusAvailability, extensionPairingIdentity } =
       await import('../src/background/service-worker/pairing-identity')
-    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
     const grants = spyOn(
       extensionPairingIdentity,
@@ -131,11 +130,8 @@ describe('passive website session status transport', () => {
       })
       expect(status).toHaveBeenCalledTimes(1)
       expect(sessionAvailability).toHaveBeenCalledWith(sessionResponse)
-      expect(openLauncher).toHaveBeenCalledTimes(1)
-      expect(openLauncher).toHaveBeenCalledWith({
-        intent: OpenCompanionLauncherIntent.PilotAuth,
-        source: ExtensionSessionLifecycle.sourceFromSender(sender),
-      })
+      // The site page opens the side panel from its click; the worker opens nothing.
+      expect(openLauncher).not.toHaveBeenCalled()
     } finally {
       openLauncher.mockRestore()
       sessionAvailability.mockRestore()

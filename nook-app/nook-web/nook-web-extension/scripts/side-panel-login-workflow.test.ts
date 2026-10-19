@@ -225,6 +225,10 @@ class ContentPageHarness {
 
 const loginForm =
   '<form method="post" action="/session"><label for="u">Email</label><input id="u" type="email" name="email" autocomplete="username"><label for="p">Password</label><input id="p" type="password" name="password" autocomplete="current-password"><button type="submit">Sign in</button></form>'
+// Stripe: no form action and an in-form type="button" Sign in that stays
+// aria-disabled until the email and password are typed.
+const buttonSignInForm =
+  '<form novalidate><label for="email">Email</label><input id="email" type="email" name="email" autocomplete="username email" required><label for="old-password">Password</label><input id="old-password" type="password" name="password" autocomplete="current-password"><a href="/reset">Forgot your password?</a><label for="remember">Remember me on this device</label><input id="remember" type="checkbox" checked><button type="button" aria-disabled="true">Sign in</button><a id="toggle_passkey_mode" role="button">Passkey</a><a id="toggle_sso_mode" role="button">SSO</a></form>'
 const googleIdentifier =
   '<main><h1>Sign in</h1><p>Use your Google Account</p><label for="identifierId">Email or phone</label><input id="identifierId" name="identifier" autocomplete="username webauthn" aria-label="Email or phone"><input name="hiddenPassword" type="password" tabindex="-1" aria-hidden="true" hidden><button type="button">Create account</button><button id="identifierNext" type="button">Next</button></main>'
 const emailFirst =
@@ -300,6 +304,18 @@ describe('side-panel Login workflow discovery (real Rust classification)', () =>
     expect(scope.kind).toBe(PasswordFormScopeKind.Owned)
     if (scope.kind !== PasswordFormScopeKind.Owned) return
     expect(scope.owner.getAttribute('action')).toBe('/session')
+  })
+
+  test('a login form whose Sign in is a disabled in-form button is fillable', async () => {
+    for (const markup of [
+      buttonSignInForm,
+      buttonSignInForm.replace(' aria-disabled="true"', ''),
+    ]) {
+      const page = new ContentPageHarness(markup)
+      expect((await page.discover()).kind).toBe(
+        SidePanelLoginWorkflowKind.Found,
+      )
+    }
   })
 
   test('username-only login steps are fillable', async () => {

@@ -94,6 +94,7 @@ type NookLocaleCatalogShape = {
       continue: string
       working: string
       unlock_then_continue: string
+      unlock: string
       no_match: string
       choose_account: string
       saved_login: string
@@ -672,6 +673,9 @@ export async function buildChromeLocales({
             'unlock_then_continue',
             locale,
           ),
+        },
+        widgetUnlock: {
+          message: catalog.extension.widget.message('unlock', locale),
         },
         widgetNoMatch: {
           message: catalog.extension.widget.message('no_match', locale),

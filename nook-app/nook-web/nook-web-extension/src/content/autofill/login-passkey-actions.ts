@@ -55,6 +55,7 @@ import type {
   OpenLoginPickerArgs,
   ProposePasskeyWithNookArgs,
 } from './login-passkey-action-types'
+import { SiteSidePanel } from './site-side-panel'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -142,6 +143,7 @@ class LoginPasskeyInteraction {
     }
     const { response } = delivery
     if (response.kind === LoginPickerOpenResponseKind.Locked) {
+      SiteSidePanel.open()
       const flightProgressRequest6: Parameters<
         typeof workflowUi.setFlightProgress
       >[0] = {
@@ -784,6 +786,7 @@ class LoginPasskeyInteraction {
       const { response } = delivery
 
       if (response.kind === WebsiteLoginOptionsKind.Locked) {
+        SiteSidePanel.open()
         const flightProgressRequest13: Parameters<
           typeof workflowUi.setFlightProgress
         >[0] = {

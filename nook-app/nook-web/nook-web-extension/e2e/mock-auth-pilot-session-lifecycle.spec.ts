@@ -27,7 +27,7 @@ test.describe('PIN Pilot session lifecycle', () => {
     )
   })
 
-  test('returns to the site after Pilot unlock and waits for a fresh Continue click', async ({
+  test('a locked Sign in becomes Unlock, opens the Nook side panel, and signs in once unlocked', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -64,45 +64,43 @@ test.describe('PIN Pilot session lifecycle', () => {
       ).toHaveAttribute('aria-live', 'polite')
       await expect(
         widget.getByText(
-          'Unlock Nook in the Nook tab, return to the site, then select Sign in again.',
+          'Nook is locked. Unlock it in the Nook side panel, then fill your login there.',
         ),
       ).toBeVisible()
+      await expect(widget.getByRole('button', { name: 'Sign in' })).toHaveCount(
+        0,
+      )
 
-      const originalAuthTab = await paired.context.newPage()
-      await originalAuthTab.goto(
-        `chrome-extension://${paired.extensionId}/popup/index.html`,
-      )
-      await expect(
-        originalAuthTab.getByTestId('device-protection-pin-unlock-btn'),
-      ).toBeVisible()
-      await expect(originalAuthTab).toHaveURL(
-        `chrome-extension://${paired.extensionId}/popup/index.html`,
-      )
-      const pilotAuthTabPromise = paired.context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Sign in' }).click()
-      const authTab = await pilotAuthTabPromise
-      await expect(authTab).toHaveURL(
-        `chrome-extension://${paired.extensionId}/popup/index.html?intent=pilot-auth`,
-      )
-      await expect(originalAuthTab).toHaveURL(
-        `chrome-extension://${paired.extensionId}/popup/index.html`,
-      )
-      await expect(authTab.getByTestId('extension-device-setup')).toBeVisible()
-      await expect(
-        authTab.getByTestId('device-protection-pin-unlock-btn'),
-      ).toBeVisible()
+      const [worker] = paired.context.serviceWorkers()
+      if (!worker) throw new Error('The extension service worker is missing.')
+      const openSidePanels = () =>
+        worker.evaluate(
+          async () =>
+            (
+              await chrome.runtime.getContexts({
+                contextTypes: [chrome.runtime.ContextType.SIDE_PANEL],
+              })
+            ).length,
+        )
+      expect(await openSidePanels()).toBe(0)
+      const pagesBeforeUnlock = paired.context.pages().length
+      await widget.getByRole('button', { name: 'Unlock' }).click()
+      // Chrome admits the page click as the gesture that opens the side panel.
+      await expect.poll(openSidePanels).toBe(1)
+      expect(paired.context.pages()).toHaveLength(pagesBeforeUnlock)
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
       await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
       await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
 
-      await ensurePinProtectedPopup(authTab)
-      await expect(authTab.getByTestId('extension-toolbar-menu')).toBeVisible()
+      const unlockPage = await paired.context.newPage()
+      await unlockPage.goto(
+        `chrome-extension://${paired.extensionId}/popup/index.html`,
+      )
+      await ensurePinProtectedPopup(unlockPage)
       await expect(
-        authTab.getByText('Return to the site and select Sign in to retry.'),
+        unlockPage.getByTestId('extension-toolbar-menu'),
       ).toBeVisible()
-      await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
-      await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
-      await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
+      await unlockPage.close()
 
       await widget.getByRole('button', { name: 'Sign in' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

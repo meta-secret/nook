@@ -713,8 +713,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         selectedFacts: { state: 'notApplicable' },
       }
     }
+    // Two saved logins match; website-login-options answers the first
+    // Sign in as locked, as when Nook locks between the scan and the click.
     const loginMatches = loginPilotFlow
-      ? { kind: 'locked' as const }
+      ? { kind: 'ready' as const, count: 2 }
       : savePilotFlow
         ? { kind: 'ready' as const, count: 1 }
         : { kind: 'unavailable' as const }

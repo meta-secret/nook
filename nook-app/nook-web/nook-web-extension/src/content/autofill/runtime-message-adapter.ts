@@ -53,6 +53,7 @@ import type {
 } from '../../lib/login-save-messages'
 
 import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
+import type { SiteSidePanelOpenMessage } from '../../lib/site-side-panel-messages'
 
 import {
   type AuthenticationWorkflowRoutingResponse,
@@ -144,6 +145,7 @@ export type ExtensionRuntimeRequest =
   | WebsiteLoginSaveOfferMessage
   | WebsiteLoginSavePendingMessage
   | CompanionWasmSessionMessage
+  | SiteSidePanelOpenMessage
 
 export type {
   AuthenticationWorkflowSnapshotResponse,

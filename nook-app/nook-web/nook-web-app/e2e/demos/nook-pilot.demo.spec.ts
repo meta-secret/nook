@@ -518,10 +518,10 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
-  await expect(vaultStatus).toHaveAttribute('data-state', 'vault-locked')
-  await expect(vaultStatus).toHaveText('locked')
+  await expect(vaultStatus).toHaveAttribute('data-state', 'credential-available')
+  await expect(vaultStatus).toHaveText('Matching saved logins: 2')
   await expect(widget.locator('p.description')).toHaveText(
-    'Unlock Nook in the Nook tab, return to the site, then select Sign in again.',
+    'Multiple saved logins match this site. Sign in shows the choices here. Nook fills and submits only after you choose one.',
   )
   await expect
     .poll(() =>
@@ -553,13 +553,22 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   try {
     await widget.getByRole('button', { name: 'Sign in' }).click()
     await expect(widget.locator('p.description')).toHaveText(
-      'Unlock Nook in the Nook tab, return to the site, then select Sign in again.',
+      'Nook is locked. Unlock it in the Nook side panel, then fill your login there.',
     )
     expect(
       await page.evaluate(
         () =>
           window.__nookDemoRuntimeMessageTypes?.filter(
             (type) => type === 'nook:website-login-options',
+          ).length,
+      ),
+    ).toBe(1)
+    // The locked answer opens the Nook side panel beside the site, not a tab.
+    expect(
+      await page.evaluate(
+        () =>
+          window.__nookDemoRuntimeMessageTypes?.filter(
+            (type) => type === 'nook:site-side-panel-open',
           ).length,
       ),
     ).toBe(1)
@@ -856,7 +865,7 @@ test('revalidate contextual email-first facts through Nook Pilot', async ({
   await widget.getByRole('button', { name: 'Sign in' }).click()
   await expect(
     widget.getByText(
-      'Unlock Nook in the Nook tab, return to the site, then select Sign in again.',
+      'Nook is locked. Unlock it in the Nook side panel, then fill your login there.',
     ),
   ).toBeVisible()
   await widget.getByRole('button', { name: 'Sign in' }).click()

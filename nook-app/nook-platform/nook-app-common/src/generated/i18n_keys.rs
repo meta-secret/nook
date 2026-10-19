@@ -1142,6 +1142,7 @@ pub const EXTENSION_WIDGET_SUBMITTED: &str = "extension.widget.submitted";
 pub const EXTENSION_WIDGET_TAKE_OVER: &str = "extension.widget.take_over";
 pub const EXTENSION_WIDGET_TOTP_DESCRIPTION: &str = "extension.widget.totp_description";
 pub const EXTENSION_WIDGET_TOTP_TITLE: &str = "extension.widget.totp_title";
+pub const EXTENSION_WIDGET_UNLOCK: &str = "extension.widget.unlock";
 pub const EXTENSION_WIDGET_UNLOCK_THEN_CONTINUE: &str = "extension.widget.unlock_then_continue";
 pub const EXTENSION_WIDGET_UPDATE_LOGIN: &str = "extension.widget.update_login";
 pub const EXTENSION_WIDGET_UPDATE_LOGIN_DESCRIPTION: &str =
