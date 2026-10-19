@@ -146,6 +146,8 @@ type StagedAuthenticatorEnrollment = {
   origin: string
   vaultStoreId: string
   otpauthUri: string
+  reviewedIssuer: string
+  reviewedAccount: string
   expiresAt: number
 }
 
@@ -153,7 +155,13 @@ const STAGED_ENROLLMENT_TTL_MS = 5 * 60 * 1000
 
 type WebsiteAuthenticatorEnrollStageArgs = {
   message: {
-    payload: { origin: string; vaultStoreId: string; otpauthUri: string }
+    payload: {
+      origin: string
+      vaultStoreId: string
+      otpauthUri: string
+      reviewedIssuer: string
+      reviewedAccount: string
+    }
   }
   sender: chrome.runtime.MessageSender
 }
@@ -706,6 +714,8 @@ class AuthenticatorEnrollmentOperations {
       origin: message.payload.origin,
       vaultStoreId: message.payload.vaultStoreId,
       otpauthUri: message.payload.otpauthUri,
+      reviewedIssuer: message.payload.reviewedIssuer,
+      reviewedAccount: message.payload.reviewedAccount,
       expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
     }
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
@@ -827,6 +837,8 @@ class AuthenticatorEnrollmentOperations {
       >[0] = {
         grant: access.grant,
         otpauthUri: staged.otpauthUri,
+        reviewedIssuer: staged.reviewedIssuer,
+        reviewedAccount: staged.reviewedAccount,
         origin: message.payload.origin,
       }
       const sessionResponse =

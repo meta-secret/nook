@@ -72,10 +72,15 @@ pub use apple_passwords_import::{
     ApplePasswordsImportPlan,
 };
 pub use authenticator::{
-    AuthenticatorSecret, BackupCodeApplication, BackupCodeAttachMode, BackupCodeInput,
-    BackupCodePersistenceVerification, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,
-    MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits,
-    TotpPeriod, TotpRemainingSeconds, TotpSecret, TotpUnixSeconds,
+    AuthenticatorEnrollmentError, AuthenticatorEnrollmentSave, AuthenticatorSecret,
+    BackupCodeApplication, BackupCodeAttachMode, BackupCodeInput,
+    BackupCodePersistenceVerification, EnrollmentOtpauthUri, EnrollmentQrPayload,
+    MAX_AUTHENTICATOR_BACKUP_CODE_LEN, MAX_AUTHENTICATOR_BACKUP_CODES,
+    NookAuthenticatorEnrollmentCandidate, NookAuthenticatorEnrollmentCandidateRequest,
+    NookAuthenticatorEnrollmentCandidateSource, NookAuthenticatorEnrollmentCandidates,
+    NookReviewedAuthenticatorLabels, NookReviewedAuthenticatorLabelsVerdict, OtpauthPreview,
+    SetupKeyTextClassification, TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod,
+    TotpRemainingSeconds, TotpSecret, TotpUnixSeconds, VisibleSetupKeyText,
 };
 pub use authenticator_issuer_hosts::{
     AuthenticatorHostResolution, AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError,

@@ -80,7 +80,7 @@ configured), you lose the vault. Approve at least two devices.
 | BIP39 seed phrase | Account name, seed phrase                                                                                                                                      |
 | Secure note       | Title, note (Markdown)                                                                                                                                         |
 | Passkey           | Website/RP and account metadata; encrypted ES256 credential                                                                                                    |
-| Authenticator     | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
+| Authenticator     | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented setup-page QR or visible setup key and attach reviewed backup codes |
 
 Items are searchable through a browser-local encrypted catalog of list fields.
 The catalog is decrypted into WASM memory only while the vault is unlocked.
@@ -104,8 +104,8 @@ Vault; Sentinel never participates. Passkey generation, RP validation, signing,
 and counter updates stay in Rust/WASM. On recognized one-time-code fields, the
 user searches and chooses from all saved authenticator items in an
 extension-owned 2FA picker, and the extension fills a freshly derived code.
-Issuer and account labels never enter the website DOM. Settings-page QR
-enrollment and backup-code capture require the same explicit Pilot consent and
+Issuer and account labels never enter the website DOM. Setup-page QR and
+setup-key enrollment and backup-code capture require the same explicit Pilot consent and
 confirmation before anything is saved.
 
 The extension keeps its own encrypted vault projection, pairing grants, and

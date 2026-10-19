@@ -301,6 +301,12 @@ await Promise.all([
     join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
     'background/nook_wasm_bg.wasm',
   ),
+  // The offscreen document decodes captured QR pictures with this reader; it
+  // is an extension page, so the package CSP's 'wasm-unsafe-eval' covers it.
+  copyStaticFile(
+    Bun.resolveSync('zxing-wasm/reader/zxing_reader.wasm', projectRoot),
+    'offscreen/zxing_reader.wasm',
+  ),
   copyStaticFile(
     join(
       sharedRoot,

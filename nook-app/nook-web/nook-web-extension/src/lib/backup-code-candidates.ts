@@ -32,7 +32,7 @@ enum RecoveryCopyCollectionScope {
 type RecoveryCopyCollectionRequest = { scope: RecoveryCopyCollectionScope }
 
 const recoverySecretElementSelector =
-  'p, code, pre, kbd, samp, li, [role="listitem"], input, textarea, select, button, [role="textbox"], [contenteditable], [hidden], [aria-hidden="true"], [data-nook-otpauth-uri], [data-nook-backup-codes], [data-nook-backup-code], [data-secret], [data-setup-key]'
+  'p, code, pre, kbd, samp, li, [role="listitem"], input, textarea, select, button, [role="textbox"], [contenteditable], [hidden], [aria-hidden="true"], [data-nook-backup-codes], [data-nook-backup-code], [data-secret], [data-setup-key]'
 
 export type DocumentBackupCodeCandidates = string[]
 

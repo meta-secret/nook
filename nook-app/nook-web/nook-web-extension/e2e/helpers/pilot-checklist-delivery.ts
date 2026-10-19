@@ -165,6 +165,8 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.companion.EvaluateAuthenticationPolicies:
         case install.companion.RevalidateApprovedAuthenticationWorkflow:
         case install.companion.SitePageNeed:
+        case install.companion.ResolveAuthenticatorEnrollmentCandidates:
+        case install.companion.ValidateReviewedAuthenticatorLabels:
         case install.session.ClassifyGrantAuthority:
         case install.session.ExportVaultEventLog:
         case install.session.Reset:

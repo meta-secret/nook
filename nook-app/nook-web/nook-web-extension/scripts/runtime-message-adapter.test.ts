@@ -246,6 +246,8 @@ const authenticatorStageMessage: Parameters<
     origin: 'https://example.test',
     vaultStoreId: 'vault',
     otpauthUri: 'otpauth://totp/Nook:test',
+    reviewedIssuer: 'Nook',
+    reviewedAccount: '',
   },
 }
 const authenticatorConfirmMessage: Parameters<

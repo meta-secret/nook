@@ -60,6 +60,23 @@ type CreateTextButtonArgs = {
   onClick: (event: MouseEvent) => void
 }
 
+/** The editable labels a reviewed enrollment saves; Rust validates them. */
+export type ReviewedLabelFields = {
+  readonly issuer: HTMLInputElement
+  readonly account: HTMLInputElement
+}
+
+type PreviewLabelFieldRequest = {
+  readonly host: EnrollmentFlowViewHost
+  readonly labelKey: BrowserMessageKey
+  readonly value: string
+}
+
+type PreviewLabelField = {
+  readonly row: HTMLLabelElement
+  readonly input: HTMLInputElement
+}
+
 type RenderPreviewDetailsArgs = {
   container: HTMLElement
   host: EnrollmentFlowViewHost
@@ -172,16 +189,32 @@ class EnrollmentFlowRenderer {
     return this.createButton(nookTypedArgs0_2)
   }
 
+  /**
+   * Service and account are editable and prefilled from Rust's preview; the
+   * reviewed values travel with the stage request and Rust validates them at
+   * save. The remaining protocol details stay read-only.
+   */
   renderPreviewDetails({
     container,
     host,
     preview,
-  }: RenderPreviewDetailsArgs): void {
+  }: RenderPreviewDetailsArgs): ReviewedLabelFields {
     const details = this.browser.document.createElement('div')
     details.className = 'account-list'
+    const issuerField: PreviewLabelFieldRequest = {
+      host,
+      labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollIssuer,
+      value: preview.issuer,
+    }
+    const accountField: PreviewLabelFieldRequest = {
+      host,
+      labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollAccount,
+      value: preview.account,
+    }
+    const issuer = this.labelField(issuerField)
+    const account = this.labelField(accountField)
+    details.append(issuer.row, account.row)
     const rows: Array<[BrowserMessageKey, string]> = [
-      [BROWSER_MESSAGE_KEYS.WidgetEnrollIssuer, preview.issuer],
-      [BROWSER_MESSAGE_KEYS.WidgetEnrollAccount, preview.account],
       [BROWSER_MESSAGE_KEYS.WidgetEnrollOrigin, this.browser.location.origin],
       [BROWSER_MESSAGE_KEYS.WidgetEnrollAlgorithm, preview.algorithm],
       [BROWSER_MESSAGE_KEYS.WidgetEnrollDigits, String(preview.digits)],
@@ -194,6 +227,30 @@ class EnrollmentFlowRenderer {
       details.append(line)
     }
     container.append(details)
+    const fields: ReviewedLabelFields = {
+      issuer: issuer.input,
+      account: account.input,
+    }
+    return fields
+  }
+
+  private labelField({
+    host,
+    labelKey,
+    value,
+  }: PreviewLabelFieldRequest): PreviewLabelField {
+    const row = this.browser.document.createElement('label')
+    row.className = 'description'
+    row.textContent = host.translatedMessage(labelKey)
+    const input = this.browser.document.createElement('input')
+    input.type = 'text'
+    input.className = 'description'
+    input.value = value
+    input.autocomplete = 'off'
+    input.spellcheck = false
+    row.append(input)
+    const field: PreviewLabelField = { row, input }
+    return field
   }
 }
 

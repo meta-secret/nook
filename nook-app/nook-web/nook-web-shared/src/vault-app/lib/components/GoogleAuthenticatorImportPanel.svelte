@@ -14,6 +14,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import { QrCodeReader, type QrCodeTexts } from '$lib/qr/qr-code-reader'
+  import { vaultQrCodeReaderWasm } from '$lib/qr/vault-qr-code-reader-wasm'
   import { QrCameraScan, type QrCameraScanTarget } from '$lib/qr/qr-camera-scan'
   import {
     AuthenticatorImportOutcomeKind,
@@ -42,7 +43,7 @@
     embedded?: boolean
   } = $props()
 
-  const reader = new QrCodeReader()
+  const reader = new QrCodeReader(vaultQrCodeReaderWasm)
   let videoElement: HTMLVideoElement
   let camera = $state.raw<CameraScan>({ kind: CameraScanKind.Off })
   let migrationUris = $state<string[]>([])

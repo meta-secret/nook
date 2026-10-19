@@ -1085,6 +1085,9 @@ pub const EXTENSION_WIDGET_ENROLL_ACCOUNT: &str = "extension.widget.enroll_accou
 pub const EXTENSION_WIDGET_ENROLL_ALGORITHM: &str = "extension.widget.enroll_algorithm";
 pub const EXTENSION_WIDGET_ENROLL_AMBIGUOUS: &str = "extension.widget.enroll_ambiguous";
 pub const EXTENSION_WIDGET_ENROLL_CANCEL: &str = "extension.widget.enroll_cancel";
+pub const EXTENSION_WIDGET_ENROLL_CANDIDATE_QR: &str = "extension.widget.enroll_candidate_qr";
+pub const EXTENSION_WIDGET_ENROLL_CANDIDATE_SETUP_KEY: &str =
+    "extension.widget.enroll_candidate_setup_key";
 pub const EXTENSION_WIDGET_ENROLL_CONFIRM: &str = "extension.widget.enroll_confirm";
 pub const EXTENSION_WIDGET_ENROLL_DESCRIPTION: &str = "extension.widget.enroll_description";
 pub const EXTENSION_WIDGET_ENROLL_DIGITS: &str = "extension.widget.enroll_digits";
@@ -1098,7 +1101,6 @@ pub const EXTENSION_WIDGET_ENROLL_SAVED: &str = "extension.widget.enroll_saved";
 pub const EXTENSION_WIDGET_ENROLL_STAGING: &str = "extension.widget.enroll_staging";
 pub const EXTENSION_WIDGET_ENROLL_TITLE: &str = "extension.widget.enroll_title";
 pub const EXTENSION_WIDGET_ENROLL_UNLOCK: &str = "extension.widget.enroll_unlock";
-pub const EXTENSION_WIDGET_ENROLL_UNSUPPORTED: &str = "extension.widget.enroll_unsupported";
 pub const EXTENSION_WIDGET_ENROLL_VERIFY_FILLED: &str = "extension.widget.enroll_verify_filled";
 pub const EXTENSION_WIDGET_ENROLL_VERIFY_PENDING: &str = "extension.widget.enroll_verify_pending";
 pub const EXTENSION_WIDGET_ENROLL_WORKING: &str = "extension.widget.enroll_working";
