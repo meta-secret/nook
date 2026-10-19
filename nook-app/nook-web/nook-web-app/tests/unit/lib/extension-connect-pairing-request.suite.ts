@@ -20,6 +20,7 @@ describe('extension-owned pairing start', () => {
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Nook Extension',
               windowId: 7,
+              connectId: 'connect-1',
             },
           }),
         ),
@@ -36,12 +37,13 @@ describe('extension-owned pairing start', () => {
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Nook Extension',
               windowId: 7,
+              connectId: 'connect-1',
             },
           }),
         ),
       )._tag,
     ).toBe('Failure')
-    // The requesting page's window is part of the request.
+    // The requesting page's window and connect id are part of the request.
     expect(
       Effect.runSync(
         Effect.result(

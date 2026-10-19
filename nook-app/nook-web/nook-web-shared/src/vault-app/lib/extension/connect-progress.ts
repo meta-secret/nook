@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import {
+  ExtensionConnectFollowKind,
   ExtensionConnectStepKind,
   type ExtensionConnectFailureReason,
+  type ExtensionConnectFollow,
   type ExtensionConnectStep,
 } from "$web-shared/extension/extension-connect-progress";
 
@@ -9,6 +11,8 @@ import {
  * The connect page's long-lived runtime port to the extension that opened
  * it, over the existing externally_connectable channel. The page tells the
  * extension's side panel which step it is on; steps are UI progress only.
+ * The port carries the connect id the side panel named, so that panel can
+ * tell it from other pages' ports; a connect URL without one opens no port.
  *
  * The port opens once per page and is never reopened: when no side panel
  * listens, or the panel rejects or closes the port, it simply ends and the
@@ -26,8 +30,14 @@ type ExtensionConnectPagePort = {
   readonly onDisconnect: ExtensionConnectPortDisconnectEvent;
 };
 
+/** Chrome's connect options: the port's name. */
+type ExtensionConnectPortInfo = { readonly name: string };
+
 type ExtensionConnectRuntime = {
-  readonly connect?: (extensionId: string) => ExtensionConnectPagePort;
+  readonly connect?: (
+    extensionId: string,
+    connectInfo: ExtensionConnectPortInfo,
+  ) => ExtensionConnectPagePort;
 };
 
 /** The browser global; only Chromium exposes chrome.runtime to the page. */
@@ -94,6 +104,8 @@ type ExtensionConnectCurrent =
 export type ExtensionConnectProgressBegin = {
   /** The extension runtime id the connect URL named. */
   readonly extensionRuntimeId: string;
+  /** Whether a side panel follows this page, by its connect id. */
+  readonly follow: ExtensionConnectFollow;
 };
 
 /** Owns this page's port to the extension and the step it reports. */
@@ -116,6 +128,14 @@ export class ExtensionConnectProgress {
       case ExtensionConnectProgressLinkKind.Idle:
         break;
     }
+    const { follow } = request;
+    switch (follow.kind) {
+      case ExtensionConnectFollowKind.Unnamed:
+        this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
+        return;
+      case ExtensionConnectFollowKind.Named:
+        break;
+    }
     const runtime = this.host.chrome?.runtime;
     switch (typeof runtime?.connect) {
       case "function":
@@ -132,9 +152,12 @@ export class ExtensionConnectProgress {
         return;
     }
     // Called as a runtime method, as Chrome expects.
+    const portInfo: ExtensionConnectPortInfo = { name: follow.connectId };
     const opened = Effect.runSync(
       Effect.result(
-        Effect.try(() => runtime?.connect?.(request.extensionRuntimeId)),
+        Effect.try(() =>
+          runtime?.connect?.(request.extensionRuntimeId, portInfo),
+        ),
       ),
     );
     switch (opened._tag) {

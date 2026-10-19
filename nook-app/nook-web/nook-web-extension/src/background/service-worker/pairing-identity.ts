@@ -284,6 +284,9 @@ class ExtensionPairingIdentity {
     url.searchParams.set('extension_id', chrome.runtime.id)
     url.searchParams.set('device_label', device.deviceLabel)
     url.searchParams.set('nonce', nonce)
+    // Separate from the single-use handoff nonce: it only names the page's
+    // progress port for the side panel that started this connect.
+    url.searchParams.set('connect_id', device.connectId)
     url.searchParams.set(
       'scopes',
       [

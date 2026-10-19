@@ -16,11 +16,13 @@ import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
  */
 
 /** The key that connects the next identity, named for the connect page,
- * and the panel's own window, where the Nook tab opens or is reused. */
+ * the panel's own window, where the Nook tab opens or is reused, and the
+ * connect's id, the name of the page's port to the panel. */
 export type SidePanelPairing = {
   readonly device: ExtensionSessionDeviceWire
   readonly deviceLabel: string
   readonly windowId: number
+  readonly connectId: string
 }
 
 /** The panel's requests to the service worker: a closed set. */
@@ -32,6 +34,7 @@ type SidePanelServiceWorkerMessage =
       readonly payload: ExtensionSessionDeviceWire & {
         readonly deviceLabel: string
         readonly windowId: number
+        readonly connectId: string
       }
     }
 
@@ -283,6 +286,7 @@ export class SidePanelRuntime {
         deviceSigningPublicKey: pairing.device.deviceSigningPublicKey,
         deviceLabel: pairing.deviceLabel,
         windowId: pairing.windowId,
+        connectId: pairing.connectId,
       },
     }
     return this.deliver(message).pipe(

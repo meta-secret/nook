@@ -122,8 +122,9 @@ test.describe('vault connect flow', () => {
     page,
   }) => {
     // The extension opens its connect route with no start choice; the page
-    // opens one runtime port to the extension id in the URL and reports
-    // where it is. This browser has no vault, so it offers create or join.
+    // opens one runtime port to the extension id in the URL, named with the
+    // side panel's connect id, and reports where it is. This browser has no
+    // vault, so it offers create or join.
     await page.addInitScript(() => {
       const steps: unknown[] = []
       const connected: string[] = []
@@ -137,8 +138,8 @@ test.describe('vault connect flow', () => {
         __nookConnectedTo: connected,
         chrome: {
           runtime: {
-            connect: (extensionId: string) => {
-              connected.push(extensionId)
+            connect: (extensionId: string, info: { readonly name: string }) => {
+              connected.push(`${extensionId}/${info.name}`)
               return port
             },
           },
@@ -152,6 +153,7 @@ test.describe('vault connect flow', () => {
       extension_id: 'side-panel-extension',
       device_label: 'Nook Extension',
       nonce: 'side-panel-nonce',
+      connect_id: 'side-panel-connect',
       scopes: 'vault-access,password-filling',
     })
     await page.goto(`/extension-connect?${connect}`)
@@ -172,7 +174,7 @@ test.describe('vault connect flow', () => {
       await page.evaluate((): unknown =>
         Reflect.get(window, '__nookConnectedTo'),
       ),
-    ).toEqual(['side-panel-extension'])
+    ).toEqual(['side-panel-extension/side-panel-connect'])
   })
 
   test('does not create a new vault when open existing finds an empty provider', async ({

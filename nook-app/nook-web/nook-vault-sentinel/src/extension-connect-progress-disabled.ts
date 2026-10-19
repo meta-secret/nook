@@ -1,8 +1,12 @@
 import { I18N_KEYS } from "../../nook-web-shared/src/generated/i18n-keys";
-import type { ExtensionConnectStep } from "$web-shared/extension/extension-connect-progress";
+import type {
+  ExtensionConnectFollow,
+  ExtensionConnectStep,
+} from "$web-shared/extension/extension-connect-progress";
 
 export type ExtensionConnectProgressBegin = {
   readonly extensionRuntimeId: string;
+  readonly follow: ExtensionConnectFollow;
 };
 
 /**

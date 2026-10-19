@@ -74,6 +74,8 @@ export type SidePanelStubState = {
   connectKey: SidePanelStubConnectKey
   /** The window each pairing the panel asked to open named. */
   pairings: number[]
+  /** The connect id each pairing the panel asked to open named. */
+  connectIds: string[]
   /** Tabs the panel brought to the front. */
   focusedTabs: number[]
   connects: Array<(port: SidePanelStubPagePort) => void>
@@ -116,8 +118,17 @@ export type SidePanelStubPagePort = {
   }
 }
 
+/** Which connect a stub page's port is named for. */
+export enum SidePanelStubPortName {
+  /** The connect the panel began last. */
+  PanelConnect = 'panel-connect',
+  /** A connect this panel did not begin. */
+  OtherConnect = 'other-connect',
+}
+
 /** Where a stub connect page connects from. */
 export type SidePanelStubPageOrigin = {
+  readonly name: SidePanelStubPortName
   readonly url: string
   readonly windowId: number
   readonly tabId: number
@@ -198,6 +209,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     status: scenario.status,
     connectKey: protocol.currentKey,
     pairings: [],
+    connectIds: [],
     focusedTabs: [],
     connects: [],
     removals: [],
@@ -359,6 +371,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
           readonly vaultStoreId?: string
           readonly payload?: {
             readonly windowId?: number
+            readonly connectId?: string
             readonly appId?: string
           }
         },
@@ -369,6 +382,8 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
           case protocol.beginPairing: {
             const windowId = message.payload?.windowId
             if (typeof windowId === 'number') state.pairings.push(windowId)
+            const connectId = message.payload?.connectId
+            if (typeof connectId === 'string') state.connectIds.push(connectId)
             queueMicrotask(() => callback(answer(message.type)))
             return
           }
@@ -506,6 +521,7 @@ export class SidePanelStubPage {
     origin: Partial<SidePanelStubPageOrigin> = {},
   ): Promise<number> {
     const from: SidePanelStubPageOrigin = {
+      name: SidePanelStubPortName.PanelConnect,
       url: SidePanelStubPage.CONNECT_URL,
       windowId: SidePanelStubPage.WINDOW_ID,
       tabId: SidePanelStubPage.CONNECT_TAB_ID,
@@ -513,8 +529,13 @@ export class SidePanelStubPage {
     }
     return this.page.evaluate((pageOrigin) => {
       const state = window.__nookSidePanelStub
+      // The enum does not reach the page, so its value is compared.
+      const latest = state.connectIds.at(-1)
+      if (typeof latest !== 'string')
+        throw new Error('the panel began no connect')
       const port: SidePanelStubPagePort = {
-        name: '',
+        name:
+          pageOrigin.name === 'panel-connect' ? latest : 'another-connect-id',
         sender: {
           url: pageOrigin.url,
           origin: new URL(pageOrigin.url).origin,

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-connect-progress'
 import type { PairedExtensionIdentityDiscovery } from '../../../../nook-web-shared/src/vault-app/lib/extension/connect'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '../../../../nook-web-shared/src/extension/paired-vault-identity-status'
 import { ExtensionIdentityRequestSource } from '../../../../nook-web-shared/src/extension/extension-connect-types'
@@ -18,6 +19,7 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
       request: {
         source: ExtensionIdentityRequestSource.ExtensionConnect,
+        follow: { kind: ExtensionConnectFollowKind.Unnamed },
         deviceId: 'device-id',
         devicePublicKey: 'public-key',
         deviceSigningPublicKey: 'signing-public-key',

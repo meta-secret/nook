@@ -138,6 +138,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
               deviceSigningPublicKey: 'popup-signing-key',
               deviceLabel: 'Nook Extension - Chromium test profile',
               windowId: current.id,
+              connectId: 'connect-popup-e2e',
             },
           },
           resolve,
@@ -159,6 +160,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         url.searchParams.get('device_signing_public_key') ===
           'popup-signing-key' &&
         url.searchParams.has('nonce') &&
+        url.searchParams.get('connect_id') === 'connect-popup-e2e' &&
         url.searchParams.get('scopes') ===
           'vault-access,password-filling,passkey-management,sync-provider-credentials' &&
         // No start choice rides along: the page owns create and join.

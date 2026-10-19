@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
+import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-connect-progress'
 import { Effect } from 'effect'
 import {
   ExtensionConnectIntentKind,
@@ -33,7 +34,7 @@ describe('extension connect route parsing', () => {
     const request =
       extensionConnectionBrowser.extensionConnectRequestFromLocation(
         locationFromUrl(
-          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&nonce=n-1&scopes=vault-access,password-filling,sync-provider-credentials',
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&nonce=n-1&scopes=vault-access,password-filling,sync-provider-credentials&connect_id=connect-1',
         ),
       )
 
@@ -41,6 +42,10 @@ describe('extension connect route parsing', () => {
       kind: ExtensionConnectRequestStateKind.Requested,
       request: {
         source: ExtensionIdentityRequestSource.ExtensionConnect,
+        follow: {
+          kind: ExtensionConnectFollowKind.Named,
+          connectId: 'connect-1',
+        },
         deviceId: 'device-1',
         devicePublicKey: 'enc-pk',
         deviceSigningPublicKey: 'sign-pk',
@@ -54,6 +59,24 @@ describe('extension connect route parsing', () => {
         ],
       },
     })
+  })
+
+  test('a request without a connect id still connects, followed by no panel', () => {
+    const request =
+      extensionConnectionBrowser.extensionConnectRequestFromLocation(
+        locationFromUrl(
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&nonce=n-1&scopes=vault-access',
+        ),
+      )
+    switch (request.kind) {
+      case ExtensionConnectRequestStateKind.Requested:
+        expect(request.request).toMatchObject({
+          follow: { kind: ExtensionConnectFollowKind.Unnamed },
+        })
+        return
+      case ExtensionConnectRequestStateKind.Absent:
+        throw new Error('the connect request did not parse')
+    }
   })
 
   test('rejects requests that cannot deliver the grant to an extension', () => {

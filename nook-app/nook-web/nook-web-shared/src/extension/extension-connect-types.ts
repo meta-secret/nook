@@ -1,5 +1,6 @@
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 import type { CompanionAdmittedIdentityDiscovery } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { ExtensionConnectFollow } from "./extension-connect-progress";
 
 export enum ExtensionIdentityRequestSource {
   ExtensionConnect = "extension-connect",
@@ -9,6 +10,8 @@ export enum ExtensionIdentityRequestSource {
 export type ExtensionConnectRequestFor<Scope extends string> =
   | (ExtensionIdentityRequestBase<Scope> & {
       source: ExtensionIdentityRequestSource.ExtensionConnect;
+      /** Whether a side panel follows this connect page. */
+      follow: ExtensionConnectFollow;
     })
   | (ExtensionIdentityRequestBase<Scope> & {
       source: ExtensionIdentityRequestSource.PairedVault;
