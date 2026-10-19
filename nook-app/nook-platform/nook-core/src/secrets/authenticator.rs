@@ -18,11 +18,14 @@ use sha2::{Sha256, Sha512};
 use zeroize::Zeroize;
 
 mod backup_codes;
+mod enrollment;
 mod setup_key;
 mod uri;
+mod uri_encoding;
 use uri::{FormProtocolInput, OtpauthInput, ProtocolParameters};
 
 pub use backup_codes::*;
+pub use enrollment::*;
 pub use nook_authenticator_domain::{BackupCodeAttachMode, TotpAlgorithm, TotpDigits, TotpPeriod};
 
 /// Non-secret metadata from a validated `otpauth://totp/...` URI.
@@ -85,11 +88,17 @@ pub struct AuthenticatorSecret {
 
 impl AuthenticatorSecret {
     pub fn validate(&self) -> Result<(), ValidationError> {
-        if self.issuer.trim().is_empty() {
-            return Err(ValidationError::AuthenticatorIssuerRequired);
-        }
+        Self::require_issuer(&self.issuer)?;
         TotpSecret::parse(self.secret.as_str())?;
         Ok(())
+    }
+
+    /// Every authenticator needs a service name; blank text does not count.
+    pub(crate) fn require_issuer(issuer: &str) -> Result<(), ValidationError> {
+        match issuer.trim() {
+            "" => Err(ValidationError::AuthenticatorIssuerRequired),
+            _ => Ok(()),
+        }
     }
 
     pub fn normalize(mut self) -> Result<Self, ValidationError> {

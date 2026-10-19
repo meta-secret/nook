@@ -89,16 +89,10 @@ impl AuthenticationAuthenticatorSetupBatch {
 
     #[must_use]
     pub fn classify(&self) -> AuthenticationAuthenticatorSetupObservation {
-        match self.qr_media {
-            AuthenticationQrMediaObservation::Absent => {
-                return AuthenticationAuthenticatorSetupObservation::Absent;
-            }
-            AuthenticationQrMediaObservation::Present => {}
-        }
         for copy in &self.visible_instruction_copies {
             let evidence = AuthenticationAuthenticatorSetupEvidence {
                 visible_context_copy: copy.clone(),
-                qr_media: AuthenticationQrMediaObservation::Present,
+                qr_media: self.qr_media,
             };
             match AuthenticationAuthenticatorSetupObservation::classify_authentication_authenticator_setup_observation(&evidence) {
                 AuthenticationAuthenticatorSetupObservation::Absent => {},
@@ -180,6 +174,45 @@ pub mod tests {
             .classify(),
             AuthenticationAuthenticatorSetupObservation::Absent
         );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_batch_admits_manual_key_only_views_without_media() -> anyhow::Result<()> {
+        for copies in [
+            vec!["Enter this setup key in your authenticator app"],
+            vec![
+                "Scan this QR code with your authenticator app",
+                "Can't scan? Enter the setup key manually in Google Authenticator",
+            ],
+        ] {
+            let copies = copies.into_iter().map(str::to_owned).collect();
+            assert_eq!(
+                SetupScan {
+                    visible_instruction_copies: copies,
+                    qr_media: "absent"
+                }
+                .batch()?
+                .classify(),
+                AuthenticationAuthenticatorSetupObservation::Present
+            );
+        }
+        for copies in [
+            vec!["Protect your account with an authenticator app. Learn more"],
+            vec!["Sign in with your authenticator app"],
+            vec!["Scan this QR code with your authenticator app"],
+        ] {
+            let copies = copies.into_iter().map(str::to_owned).collect();
+            assert_eq!(
+                SetupScan {
+                    visible_instruction_copies: copies,
+                    qr_media: "absent"
+                }
+                .batch()?
+                .classify(),
+                AuthenticationAuthenticatorSetupObservation::Absent
+            );
+        }
         Ok(())
     }
 

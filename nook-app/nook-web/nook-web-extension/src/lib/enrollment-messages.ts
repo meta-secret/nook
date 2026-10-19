@@ -35,6 +35,9 @@ export class WebsiteAuthenticatorEnrollStageMessage {
     origin: string
     vaultStoreId: string
     otpauthUri: string
+    /** Service and account the user reviewed; Rust validates them at save. */
+    reviewedIssuer: string
+    reviewedAccount: string
   }
   static decode(message: unknown) {
     return Schema.decodeUnknownEffect(
@@ -201,6 +204,8 @@ const websiteAuthenticatorEnrollPreviewMessageSchema = Schema.Struct(
 type WebsiteAuthenticatorEnrollStageMessagePayloadSchemaFields = {
   vaultStoreId: typeof Schema.String
   otpauthUri: typeof Schema.String
+  reviewedIssuer: typeof Schema.String
+  reviewedAccount: typeof Schema.String
   origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollStageMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollStageMessagePayloadSchemaFields =
@@ -208,6 +213,8 @@ const websiteAuthenticatorEnrollStageMessagePayloadSchemaFields: WebsiteAuthenti
     ...enrollmentOriginSchema.fields,
     vaultStoreId: enrollmentNonEmptyStringSchema,
     otpauthUri: otpauthTotpUriSchema,
+    reviewedIssuer: Schema.String,
+    reviewedAccount: Schema.String,
   }
 
 type WebsiteAuthenticatorEnrollStageMessageSchemaFields = {
@@ -215,6 +222,8 @@ type WebsiteAuthenticatorEnrollStageMessageSchemaFields = {
   payload: Schema.Struct<{
     vaultStoreId: typeof Schema.String
     otpauthUri: typeof Schema.String
+    reviewedIssuer: typeof Schema.String
+    reviewedAccount: typeof Schema.String
     origin: typeof Schema.String
   }>
 }

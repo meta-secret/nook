@@ -333,6 +333,8 @@ pub struct OtpauthGrantPayload {
     device_signing_public_key: String,
     otpauth_uri: SessionSecretText,
     origin: String,
+    reviewed_issuer: String,
+    reviewed_account: String,
     queue: QueueDisposition,
 }
 
@@ -856,7 +858,7 @@ mod tests {
             ),
             (
                 "OTP confirm",
-                r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","reviewedIssuer":"Example","reviewedAccount":"","queue":{"kind":"message-default"}}}"#,
                 r#""otpauthUri":"otpauth://totp/example","#,
             ),
             (

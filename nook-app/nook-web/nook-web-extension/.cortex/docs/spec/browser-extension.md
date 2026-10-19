@@ -80,17 +80,24 @@ It shows issuer/account labels only inside the extension document.
 It returns the selected opaque item identity to the origin-bound content script.
 An empty result stays in the picker.
 Vault metadata is not exposed to the website DOM.
-Page QR and backup code enrollment uses explicit Pilot actions
+Page QR, setup-key, and backup code enrollment uses explicit Pilot actions
 (**Add 2FA from this page** / **Save backup codes**).
 It uses local decode/extract, WASM validation, and confirmation before any vault
 write.
 It is never silent page scraping or background scanning.
 **Add 2FA from this page** follows the
 [authenticator enrollment eligibility contract](../../../../../nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md#browser-enrollment-capture).
-The content script supplies visible media and nearby visible setup instructions
+The content script supplies visible QR media with nearby setup instructions,
+or, without QR media, setup-key instructions in a dialog title or heading,
 to the `nook-companion-core` classifier through `nook-companion-wasm`.
 Square media or QR labels alone do not enable the action.
-QR decoding begins only after the trusted action click.
+QR decoding and setup-key text reading begin only after the trusted action click.
+The extension-origin offscreen document decodes QR pictures with the bundled
+ZXing reader from PNG data URLs.
+Setup-key text comes from the single nearest setup scope.
+Rust/WASM resolves the QR and setup-key candidates.
+The preview validates the editable Service and Account through Rust/WASM and
+keeps Continue disabled until both are valid.
 
 "No vault UI in the extension" means no second vault-management UI. The side
 panel and the shared authentication tab contain the standard device-protection
@@ -706,8 +713,8 @@ Generated values fill only `new-password` fields.
 They stay in page memory until an evidence-gated Save / Update.
 CAPTCHA, terms acceptance, and email-verification style checkpoints force Take
 over.
-Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
-consent.
+Pilot-guided 2FA enrollment stages an otpauth setup (from a QR or a visible
+setup key) in extension memory after consent.
 It fills the verification code via Rust/WASM.
 It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows.

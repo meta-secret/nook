@@ -88,6 +88,8 @@ type ConfirmAuthenticatorEnrollmentArgs = {
   grant: StoredExtensionPairingGrant
   otpauthUri: string
   origin: string
+  reviewedIssuer: string
+  reviewedAccount: string
 }
 
 type AuthenticatorBackupCodesSessionAttachmentRequest = {
@@ -225,6 +227,8 @@ export class ExtensionAuthenticatorSession {
     grant,
     otpauthUri,
     origin,
+    reviewedIssuer,
+    reviewedAccount,
   }: ConfirmAuthenticatorEnrollmentArgs): Promise<
     Result<AuthenticatorSecretSessionResponse, AuthenticatorSessionError>
   > {
@@ -243,6 +247,8 @@ export class ExtensionAuthenticatorSession {
         ...extensionSessionGrantIdentity(grant),
         otpauthUri,
         origin,
+        reviewedIssuer,
+        reviewedAccount,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
