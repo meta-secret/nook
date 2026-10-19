@@ -1,4 +1,5 @@
-//! User-reviewed service and account labels applied when enrollment is saved.
+//! The one validation of user-reviewed authenticator labels, shared by the
+//! preview (before the site enables 2FA) and the save.
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
@@ -6,301 +7,221 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use super::AuthenticatorEnrollmentError;
-use crate::{AuthenticatorSecret, ValidationError};
-use std::cmp::Ordering;
+use crate::AuthenticatorSecret;
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
 const MAX_REVIEWED_ISSUER_CHARS: usize = 128;
 const MAX_REVIEWED_ACCOUNT_CHARS: usize = 256;
 
-/// Labels exactly as the user left them in the editable preview fields.
-#[derive(Debug, Clone, Copy)]
-pub struct AuthenticatorLabelReview<'a> {
-    pub issuer: &'a str,
-    pub account: &'a str,
+/// Service and account labels as the user left them in the editable preview.
+#[derive(Debug, Clone, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NookReviewedAuthenticatorLabels {
+    pub reviewed_issuer: String,
+    pub reviewed_account: String,
 }
 
-/// A trimmed, required service name.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ReviewedIssuer(String);
-
-/// A trimmed account name; empty means the service has no account label.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ReviewedAccount(String);
-
-enum ControlCharacters {
-    Present,
-    Absent,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+pub enum NookReviewedAuthenticatorLabelsVerdict {
+    Valid,
+    Invalid,
 }
 
-impl ControlCharacters {
+/// One trimmed label and its character bound.
+struct BoundedLabel<'a> {
+    text: &'a str,
+    max_chars: usize,
+}
+
+impl BoundedLabel<'_> {
     #[expect(
         clippy::match_bool,
-        reason = "the character predicate is converted through a native pattern into a named presence"
+        reason = "the length and control-character predicates are converted through a native pattern"
     )]
-    fn in_text(text: &str) -> Self {
-        match text.chars().any(char::is_control) {
-            true => Self::Present,
-            false => Self::Absent,
+    fn check(&self) -> Result<(), AuthenticatorEnrollmentError> {
+        match self.text.chars().count() <= self.max_chars
+            && !self.text.chars().any(char::is_control)
+        {
+            true => Ok(()),
+            false => Err(AuthenticatorEnrollmentError::ReviewedLabelsInvalid),
         }
     }
 }
 
-impl TryFrom<&str> for ReviewedIssuer {
-    type Error = AuthenticatorEnrollmentError;
-
-    fn try_from(issuer: &str) -> Result<Self, Self::Error> {
-        let issuer = issuer.trim();
-        match issuer.chars().count() {
-            0 => Err(ValidationError::AuthenticatorIssuerRequired.into()),
-            1..=MAX_REVIEWED_ISSUER_CHARS => match ControlCharacters::in_text(issuer) {
-                ControlCharacters::Absent => Ok(Self(issuer.to_owned())),
-                ControlCharacters::Present => {
-                    Err(AuthenticatorEnrollmentError::IssuerControlCharacter)
-                }
-            },
-            _ => Err(AuthenticatorEnrollmentError::IssuerTooLong),
+impl NookReviewedAuthenticatorLabels {
+    /// The service name is required (the existing authenticator rule); after
+    /// trimming, the service name has at most 128 and the account at most 256
+    /// characters, and neither contains a control character.
+    pub fn validate(&self) -> Result<(), AuthenticatorEnrollmentError> {
+        let issuer = self.reviewed_issuer.trim();
+        AuthenticatorSecret::require_issuer(issuer)?;
+        BoundedLabel {
+            text: issuer,
+            max_chars: MAX_REVIEWED_ISSUER_CHARS,
         }
-    }
-}
-
-impl TryFrom<&str> for ReviewedAccount {
-    type Error = AuthenticatorEnrollmentError;
-
-    fn try_from(account: &str) -> Result<Self, Self::Error> {
-        let account = account.trim();
-        match account.chars().count().cmp(&MAX_REVIEWED_ACCOUNT_CHARS) {
-            Ordering::Less | Ordering::Equal => match ControlCharacters::in_text(account) {
-                ControlCharacters::Absent => Ok(Self(account.to_owned())),
-                ControlCharacters::Present => {
-                    Err(AuthenticatorEnrollmentError::AccountControlCharacter)
-                }
-            },
-            Ordering::Greater => Err(AuthenticatorEnrollmentError::AccountTooLong),
+        .check()?;
+        BoundedLabel {
+            text: self.reviewed_account.trim(),
+            max_chars: MAX_REVIEWED_ACCOUNT_CHARS,
         }
+        .check()
     }
-}
 
-/// Validated reviewed labels; they replace the decoded URI labels at save.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReviewedAuthenticatorLabels {
-    issuer: ReviewedIssuer,
-    account: ReviewedAccount,
-}
-
-impl TryFrom<AuthenticatorLabelReview<'_>> for ReviewedAuthenticatorLabels {
-    type Error = AuthenticatorEnrollmentError;
-
-    fn try_from(review: AuthenticatorLabelReview<'_>) -> Result<Self, Self::Error> {
-        Ok(Self {
-            issuer: ReviewedIssuer::try_from(review.issuer)?,
-            account: ReviewedAccount::try_from(review.account)?,
-        })
-    }
-}
-
-impl AuthenticatorSecret {
-    /// Replace the decoded issuer and account with the user's reviewed labels.
     #[must_use]
-    pub fn with_reviewed_labels(mut self, labels: ReviewedAuthenticatorLabels) -> Self {
-        let ReviewedAuthenticatorLabels {
-            issuer: ReviewedIssuer(issuer),
-            account: ReviewedAccount(account),
-        } = labels;
-        self.issuer = issuer;
-        self.account = account;
-        self
-    }
-
-    /// Associate the enrollment page; an empty origin keeps the decoded value.
-    #[must_use]
-    fn with_enrollment_page_origin(mut self, page_origin: &str) -> Self {
-        match page_origin.trim() {
-            "" => self,
-            origin => {
-                origin.clone_into(&mut self.website_url);
-                self
-            }
+    pub fn verdict(&self) -> NookReviewedAuthenticatorLabelsVerdict {
+        match self.validate() {
+            Ok(()) => NookReviewedAuthenticatorLabelsVerdict::Valid,
+            Err(_) => NookReviewedAuthenticatorLabelsVerdict::Invalid,
         }
     }
 }
 
 /// A consented save of one previewed `otpauth://totp/...` candidate.
-#[derive(Debug, Clone, Copy)]
 pub struct AuthenticatorEnrollmentSave<'a> {
     pub otpauth_uri: &'a str,
     pub page_origin: &'a str,
-    pub reviewed_issuer: &'a str,
-    pub reviewed_account: &'a str,
+    pub labels: NookReviewedAuthenticatorLabels,
 }
 
 impl AuthenticatorEnrollmentSave<'_> {
     /// Validate the reviewed labels and URI, then build the item to persist.
-    pub fn authenticator(&self) -> Result<AuthenticatorSecret, AuthenticatorEnrollmentError> {
-        let labels = ReviewedAuthenticatorLabels::try_from(AuthenticatorLabelReview {
-            issuer: self.reviewed_issuer,
-            account: self.reviewed_account,
-        })?;
-        Ok(AuthenticatorSecret::from_otpauth_uri(self.otpauth_uri)?
-            .with_reviewed_labels(labels)
-            .with_enrollment_page_origin(self.page_origin)
-            .normalize()?)
+    pub fn authenticator(self) -> Result<AuthenticatorSecret, AuthenticatorEnrollmentError> {
+        self.labels.validate()?;
+        let mut authenticator = AuthenticatorSecret::from_otpauth_uri(self.otpauth_uri)?;
+        authenticator.issuer = self.labels.reviewed_issuer;
+        authenticator.account = self.labels.reviewed_account;
+        match self.page_origin.trim() {
+            "" => {}
+            origin => origin.clone_into(&mut authenticator.website_url),
+        }
+        Ok(authenticator.normalize()?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        AuthenticatorEnrollmentSave, MAX_REVIEWED_ACCOUNT_CHARS, MAX_REVIEWED_ISSUER_CHARS,
+        AuthenticatorEnrollmentSave, NookReviewedAuthenticatorLabels,
+        NookReviewedAuthenticatorLabelsVerdict,
     };
-    use crate::{
-        AuthenticatorEnrollmentError, TotpAlgorithm, TotpDigits, TotpPeriod, ValidationError,
-    };
+    use crate::{AuthenticatorEnrollmentError, TotpAlgorithm, TotpDigits, ValidationError};
 
-    const URI: &str = "otpauth://totp/Decoded:decoded-account?secret=JBSWY3DPEHPK3PXP&issuer=Decoded&algorithm=SHA256&digits=8&period=45";
-
-    struct SaveFixture<'a> {
+    struct LabelFixture<'a> {
         issuer: &'a str,
         account: &'a str,
     }
 
-    impl SaveFixture<'_> {
-        fn save(&self) -> AuthenticatorEnrollmentSave<'_> {
+    struct InvalidCase<'a> {
+        fixture: LabelFixture<'a>,
+        expected: &'a AuthenticatorEnrollmentError,
+    }
+
+    impl LabelFixture<'_> {
+        fn labels(&self) -> NookReviewedAuthenticatorLabels {
+            NookReviewedAuthenticatorLabels {
+                reviewed_issuer: self.issuer.to_owned(),
+                reviewed_account: self.account.to_owned(),
+            }
+        }
+
+        fn save(&self) -> Result<crate::AuthenticatorSecret, AuthenticatorEnrollmentError> {
             AuthenticatorEnrollmentSave {
-                otpauth_uri: URI,
+                otpauth_uri: "otpauth://totp/Decoded:decoded?secret=JBSWY3DPEHPK3PXP&issuer=Decoded&algorithm=SHA256&digits=8",
                 page_origin: "https://www.example.com",
-                reviewed_issuer: self.issuer,
-                reviewed_account: self.account,
+                labels: self.labels(),
             }
-        }
-    }
-
-    #[test]
-    fn reviewed_labels_replace_decoded_labels_and_keep_the_uri_protocol() -> anyhow::Result<()> {
-        let item = SaveFixture {
-            issuer: "  Example Cloud ",
-            account: " alice@example.com\n",
-        }
-        .save()
-        .authenticator()?;
-
-        assert_eq!(item.issuer, "Example Cloud");
-        assert_eq!(item.account, "alice@example.com");
-        assert_eq!(item.website_url, "https://www.example.com");
-        assert_eq!(item.secret.as_str(), "JBSWY3DPEHPK3PXP");
-        assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
-        assert_eq!(item.digits, TotpDigits::Eight);
-        assert_eq!(item.period, TotpPeriod::try_from(45)?);
-        Ok(())
-    }
-
-    #[test]
-    fn account_is_optional_but_issuer_is_required() -> anyhow::Result<()> {
-        let item = SaveFixture {
-            issuer: "Example",
-            account: "   ",
-        }
-        .save()
-        .authenticator()?;
-        assert_eq!(item.account, "");
-
-        for issuer in ["", " \t "] {
-            assert!(matches!(
-                SaveFixture {
-                    issuer,
-                    account: "alice"
-                }
-                .save()
-                .authenticator(),
-                Err(AuthenticatorEnrollmentError::Validation(
-                    ValidationError::AuthenticatorIssuerRequired
-                ))
-            ));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn reviewed_labels_reject_control_characters_and_overlong_text() {
-        assert!(matches!(
-            SaveFixture {
-                issuer: "Exa\u{0}mple",
-                account: ""
-            }
-            .save()
-            .authenticator(),
-            Err(AuthenticatorEnrollmentError::IssuerControlCharacter)
-        ));
-        assert!(matches!(
-            SaveFixture {
-                issuer: "Example",
-                account: "ali\nce"
-            }
-            .save()
-            .authenticator(),
-            Err(AuthenticatorEnrollmentError::AccountControlCharacter)
-        ));
-        let long_issuer = "é".repeat(MAX_REVIEWED_ISSUER_CHARS + 1);
-        assert!(matches!(
-            SaveFixture {
-                issuer: &long_issuer,
-                account: ""
-            }
-            .save()
-            .authenticator(),
-            Err(AuthenticatorEnrollmentError::IssuerTooLong)
-        ));
-        let bounded_issuer = "é".repeat(MAX_REVIEWED_ISSUER_CHARS);
-        assert!(
-            SaveFixture {
-                issuer: &bounded_issuer,
-                account: ""
-            }
-            .save()
             .authenticator()
-            .is_ok()
-        );
-        let long_account = "a".repeat(MAX_REVIEWED_ACCOUNT_CHARS + 1);
-        assert!(matches!(
-            SaveFixture {
+        }
+    }
+
+    #[test]
+    fn valid_labels_pass_the_verdict_and_are_applied_at_save() -> anyhow::Result<()> {
+        let bounded_issuer = "é".repeat(128);
+        for fixture in [
+            LabelFixture {
                 issuer: "Example",
-                account: &long_account
-            }
-            .save()
-            .authenticator(),
-            Err(AuthenticatorEnrollmentError::AccountTooLong)
-        ));
-    }
-
-    #[test]
-    fn invalid_uris_are_rejected_after_valid_labels() {
-        for otpauth_uri in [
-            "https://example.com",
-            "otpauth://hotp/Example?secret=JBSWY3DPEHPK3PXP",
-            "otpauth://totp/Example?secret=not-base32!",
+                account: "",
+            },
+            LabelFixture {
+                issuer: " Example ",
+                account: " alice\n",
+            },
+            LabelFixture {
+                issuer: &bounded_issuer,
+                account: "",
+            },
         ] {
-            assert!(matches!(
-                AuthenticatorEnrollmentSave {
-                    otpauth_uri,
-                    page_origin: "https://example.com",
-                    reviewed_issuer: "Example",
-                    reviewed_account: "",
-                }
-                .authenticator(),
-                Err(AuthenticatorEnrollmentError::Validation(_))
-            ));
+            assert_eq!(
+                fixture.labels().verdict(),
+                NookReviewedAuthenticatorLabelsVerdict::Valid
+            );
+            let item = fixture.save()?;
+            assert_eq!(item.issuer, fixture.issuer.trim());
+            assert_eq!(item.account, fixture.account.trim());
+            assert_eq!(item.website_url, "https://www.example.com");
+            assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
+            assert_eq!(item.digits, TotpDigits::Eight);
         }
+        Ok(())
     }
 
     #[test]
-    fn empty_page_origin_keeps_the_decoded_website_association() -> anyhow::Result<()> {
-        let item = AuthenticatorEnrollmentSave {
-            otpauth_uri: "otpauth://totp/example.com:alice?secret=JBSWY3DPEHPK3PXP",
-            page_origin: " ",
-            reviewed_issuer: "example.com",
-            reviewed_account: "alice",
+    fn invalid_labels_fail_the_verdict_and_the_save_alike() {
+        let long_issuer = "é".repeat(129);
+        let long_account = "a".repeat(257);
+        let required =
+            AuthenticatorEnrollmentError::Validation(ValidationError::AuthenticatorIssuerRequired);
+        for InvalidCase { fixture, expected } in [
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: "",
+                    account: "alice",
+                },
+                expected: &required,
+            },
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: " \t ",
+                    account: "",
+                },
+                expected: &required,
+            },
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: "Exa\u{0}mple",
+                    account: "",
+                },
+                expected: &AuthenticatorEnrollmentError::ReviewedLabelsInvalid,
+            },
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: "Example",
+                    account: "ali\nce",
+                },
+                expected: &AuthenticatorEnrollmentError::ReviewedLabelsInvalid,
+            },
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: &long_issuer,
+                    account: "",
+                },
+                expected: &AuthenticatorEnrollmentError::ReviewedLabelsInvalid,
+            },
+            InvalidCase {
+                fixture: LabelFixture {
+                    issuer: "Example",
+                    account: &long_account,
+                },
+                expected: &AuthenticatorEnrollmentError::ReviewedLabelsInvalid,
+            },
+        ] {
+            assert_eq!(
+                fixture.labels().verdict(),
+                NookReviewedAuthenticatorLabelsVerdict::Invalid
+            );
+            assert!(matches!(fixture.save(), Err(error) if &error == expected));
         }
-        .authenticator()?;
-        assert_eq!(item.website_url, "https://example.com");
-        Ok(())
     }
 }

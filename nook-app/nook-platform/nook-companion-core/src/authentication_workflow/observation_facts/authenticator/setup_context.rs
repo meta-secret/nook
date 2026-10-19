@@ -154,8 +154,8 @@ impl AuthenticationAuthenticatorSetupCopy {
     fn recognize_enrollment_instruction(
         text: &crate::AuthenticationControlText<'_>,
     ) -> EnrollmentInstruction {
-        match text.contains_word_phrase("enter")
-            && text.contains_any_word(&["setup key", "secret key", "manual key"])
+        match text.contains_any_word(&["enter", "set up"])
+            && text.contains_any_word(&["setup key", "secret key", "manual key", "key manually"])
         {
             true => EnrollmentInstruction::EnterSetupKey,
             false => match text.contains_word_phrase("scan")
@@ -288,6 +288,45 @@ pub mod tests {
                     "{copy}"
                 );
             }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn setup_key_dialog_headings_admit_views_without_media()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "\nAuthenticator app\nEnter your setup key",
+            "\nAuthenticator app\nSet up with a setup key",
+            "\nEnter this key manually in your authenticator app",
+            "\nCan't scan the QR code? Enter the secret key in your authenticator app",
+            "\nSet up authenticator app\nEnter setup key manually",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Absent
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Present,
+                "{copy}"
+            );
+        }
+        for copy in [
+            "\nEnter your setup key",
+            "\nSet up with a setup key",
+            "\nSecure your account with an authenticator app\nLearn more",
+            "\nSign in with your authenticator app\nEnter this key manually",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Absent
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Absent,
+                "{copy}"
+            );
         }
         Ok(())
     }

@@ -2,9 +2,6 @@
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
-use super::authenticator_labels::{
-    ReviewedAuthenticatorAccountText, ReviewedAuthenticatorIssuerText,
-};
 use super::identity_membership::{
     ActivateIdentityPayload, BeginIdentityConnectionPayload, ConnectIdentityVaultPayload,
     JoinIdentityPayload, RefreshIdentityVaultsPayload,
@@ -336,8 +333,8 @@ pub struct OtpauthGrantPayload {
     device_signing_public_key: String,
     otpauth_uri: SessionSecretText,
     origin: String,
-    reviewed_issuer: ReviewedAuthenticatorIssuerText,
-    reviewed_account: ReviewedAuthenticatorAccountText,
+    reviewed_issuer: String,
+    reviewed_account: String,
     queue: QueueDisposition,
 }
 
@@ -890,51 +887,6 @@ mod tests {
                 "{family} request should require its domain fields"
             );
         }
-    }
-
-    #[test]
-    fn authenticator_enroll_confirm_requires_bounded_reviewed_labels() -> anyhow::Result<()> {
-        let valid = r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","reviewedIssuer":"Example Cloud","reviewedAccount":"alice@example.com","queue":{"kind":"message-default"}}}"#;
-        assert_eq!(
-            ExtensionSessionRequestValidation::validate_extension_session_request_json(valid),
-            ExtensionSessionRequestValidation::Accepted
-        );
-        let decoded: ExtensionSessionRequestWire = serde_json::from_str(valid)?;
-        let ExtensionSessionRequest::AuthenticatorEnrollConfirm(payload) = decoded.decoded() else {
-            anyhow::bail!("decoded request must preserve the confirm variant");
-        };
-        assert_eq!(payload.reviewed_issuer.as_str(), "Example Cloud");
-        assert_eq!(payload.reviewed_account.as_str(), "alice@example.com");
-        let empty_account = valid.replace(r#""alice@example.com""#, r#""""#);
-        assert_eq!(
-            ExtensionSessionRequestValidation::validate_extension_session_request_json(
-                &empty_account
-            ),
-            ExtensionSessionRequestValidation::Accepted
-        );
-        for missing in [
-            r#""reviewedIssuer":"Example Cloud","#,
-            r#""reviewedAccount":"alice@example.com","#,
-        ] {
-            assert_eq!(
-                ExtensionSessionRequestValidation::validate_extension_session_request_json(
-                    &valid.replace(missing, "")
-                ),
-                ExtensionSessionRequestValidation::Rejected,
-                "{missing}"
-            );
-        }
-        let oversize_issuer = valid.replace("Example Cloud", &"x".repeat(513));
-        let oversize_account = valid.replace("alice@example.com", &"x".repeat(1025));
-        for oversize in [oversize_issuer, oversize_account] {
-            assert_eq!(
-                ExtensionSessionRequestValidation::validate_extension_session_request_json(
-                    &oversize
-                ),
-                ExtensionSessionRequestValidation::Rejected
-            );
-        }
-        Ok(())
     }
 
     #[test]

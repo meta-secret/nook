@@ -343,6 +343,23 @@ pub fn resolve_authenticator_enrollment_candidates(
         .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
+/// Check the reviewed service and account labels with the same rule the save
+/// applies, so the preview can block staging before the site enables 2FA.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn validate_reviewed_authenticator_labels(
+    labels: &tsify::Ts<nook_core::NookReviewedAuthenticatorLabels>,
+) -> Result<tsify::Ts<nook_core::NookReviewedAuthenticatorLabelsVerdict>, wasm_bindgen::JsError> {
+    let labels = labels
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    tsify::Tsify::into_ts(&labels.verdict())
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+}
+
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn current_code_from_otpauth_uri(
     uri: &str,

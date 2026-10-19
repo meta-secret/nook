@@ -11,7 +11,6 @@
 use crate::ValidationError;
 
 mod candidates;
-mod page_origin;
 mod reviewed_labels;
 mod setup_key_text;
 
@@ -20,9 +19,9 @@ pub use candidates::{
     NookAuthenticatorEnrollmentCandidateRequest, NookAuthenticatorEnrollmentCandidateSource,
     NookAuthenticatorEnrollmentCandidates,
 };
-pub use page_origin::EnrollmentPageOrigin;
 pub use reviewed_labels::{
-    AuthenticatorEnrollmentSave, AuthenticatorLabelReview, ReviewedAuthenticatorLabels,
+    AuthenticatorEnrollmentSave, NookReviewedAuthenticatorLabels,
+    NookReviewedAuthenticatorLabelsVerdict,
 };
 pub use setup_key_text::{SetupKeyTextClassification, VisibleSetupKeyText};
 
@@ -37,18 +36,12 @@ pub enum AuthenticatorEnrollmentError {
     SetupKeyTextCountExceeded,
     #[error("a setup-key text exceeds the enrollment size limit")]
     SetupKeyTextTooLong,
-    #[error("the enrollment page origin is not an http(s) origin")]
+    #[error("the enrollment page origin has no website host")]
     PageOriginInvalid,
     #[error("the setup-key otpauth URI could not be written")]
     OtpauthUriSerialization,
-    #[error("the reviewed service name is too long")]
-    IssuerTooLong,
-    #[error("the reviewed service name contains control characters")]
-    IssuerControlCharacter,
-    #[error("the reviewed account name is too long")]
-    AccountTooLong,
-    #[error("the reviewed account name contains control characters")]
-    AccountControlCharacter,
+    #[error("the reviewed service or account name is too long or contains control characters")]
+    ReviewedLabelsInvalid,
     #[error(transparent)]
     Validation(#[from] ValidationError),
 }

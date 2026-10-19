@@ -4,8 +4,8 @@ use super::NookVaultManager;
 use super::secrets::{SecretProjectionVerification, SecretReplacementInput};
 use crate::NookError;
 use nook_core::{
-    AuthenticatorEnrollmentSave, BackupCodeAttachMode, SecretId, SecretType, SecretValue,
-    ValidationError,
+    AuthenticatorEnrollmentSave, BackupCodeAttachMode, NookReviewedAuthenticatorLabels, SecretId,
+    SecretType, SecretValue, ValidationError,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
@@ -234,8 +234,10 @@ impl NookVaultManager {
         let authenticator = AuthenticatorEnrollmentSave {
             otpauth_uri: uri,
             page_origin,
-            reviewed_issuer,
-            reviewed_account,
+            labels: NookReviewedAuthenticatorLabels {
+                reviewed_issuer: reviewed_issuer.to_owned(),
+                reviewed_account: reviewed_account.to_owned(),
+            },
         }
         .authenticator()
         .map_err(NookError::from)?;

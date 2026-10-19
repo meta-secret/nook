@@ -7,10 +7,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use super::{
-    AuthenticatorEnrollmentError, EnrollmentPageOrigin, SetupKeyTextClassification,
-    VisibleSetupKeyText,
-};
+use super::{AuthenticatorEnrollmentError, SetupKeyTextClassification, VisibleSetupKeyText};
 use crate::secrets::secret_view::WebsiteHost;
 use crate::{AuthenticatorSecret, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
 use serde::{Deserialize, Serialize};
@@ -23,7 +20,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 const MAX_QR_PAYLOADS: usize = 32;
 const MAX_QR_PAYLOAD_BYTES: usize = 2048;
-const MAX_SETUP_KEY_TEXTS: usize = 16;
+const MAX_SETUP_KEY_TEXTS: usize = 64;
 
 /// One decoded QR payload, bounded before any parsing.
 #[derive(Deserialize)]
@@ -99,8 +96,7 @@ pub struct NookAuthenticatorEnrollmentCandidateRequest {
     pub qr_payloads: Vec<EnrollmentQrPayload>,
     #[tsify(type = "string[]")]
     pub setup_key_texts: Vec<VisibleSetupKeyText>,
-    #[tsify(type = "string")]
-    pub page_origin: EnrollmentPageOrigin,
+    pub page_origin: String,
 }
 
 #[derive(Serialize, Tsify)]
@@ -136,7 +132,8 @@ impl NookAuthenticatorEnrollmentCandidateRequest {
                 return Err(AuthenticatorEnrollmentError::SetupKeyTextCountExceeded);
             }
         }
-        let issuer = self.page_origin.default_issuer()?;
+        let issuer = WebsiteHost::normalize(&self.page_origin)
+            .map_err(|_| AuthenticatorEnrollmentError::PageOriginInvalid)?;
         let collection = self.qr_payloads.iter().fold(
             CandidateCollection::default(),
             CandidateCollection::with_qr_payload,
@@ -278,8 +275,8 @@ mod tests {
         NookAuthenticatorEnrollmentCandidates,
     };
     use crate::{
-        AuthenticatorEnrollmentError, AuthenticatorSecret, EnrollmentPageOrigin, TotpAlgorithm,
-        TotpDigits, TotpPeriod, VisibleSetupKeyText,
+        AuthenticatorEnrollmentError, AuthenticatorSecret, TotpAlgorithm, TotpDigits, TotpPeriod,
+        VisibleSetupKeyText,
     };
 
     const QR_EXAMPLE: &str =
@@ -314,7 +311,7 @@ mod tests {
                     .iter()
                     .map(|text| VisibleSetupKeyText::try_from((*text).to_owned()))
                     .collect::<Result<_, _>>()?,
-                page_origin: EnrollmentPageOrigin::try_from(self.page_origin.to_owned())?,
+                page_origin: self.page_origin.to_owned(),
             })
         }
 
@@ -508,6 +505,16 @@ mod tests {
             .resolve(),
             Err(AuthenticatorEnrollmentError::QrPayloadCountExceeded)
         ));
+        let max_keys = vec!["JBSW Y3DP EHPK 3PXP"; MAX_SETUP_KEY_TEXTS];
+        assert!(matches!(
+            RequestFixture {
+                qr_payloads: &[],
+                setup_key_texts: &max_keys,
+                page_origin: "https://example.com",
+            }
+            .resolve(),
+            Ok(resolved) if resolved.candidates.len() == 1
+        ));
         let too_many_keys = vec!["JBSW Y3DP EHPK 3PXP"; MAX_SETUP_KEY_TEXTS + 1];
         assert!(matches!(
             RequestFixture {
@@ -542,7 +549,7 @@ mod tests {
             RequestFixture {
                 qr_payloads: &[QR_EXAMPLE],
                 setup_key_texts: &[],
-                page_origin: "https://example.com/setup",
+                page_origin: " ",
             }
             .resolve(),
             Err(AuthenticatorEnrollmentError::PageOriginInvalid)
