@@ -12,15 +12,16 @@ export enum ExtensionConnectBrowserVaults {
   None = "none",
 }
 
-/** Whether the access gate is busy setting up or opening a vault. */
-export enum ExtensionConnectAccessActivity {
-  Idle = "idle",
-  Busy = "busy",
+/** Whether the person started creating a vault on this page. Loading the
+ * app or checking a vault is not creating one. */
+export enum ExtensionConnectVaultCreation {
+  None = "none",
+  Underway = "underway",
 }
 
 export type ExtensionConnectAccessRequest = {
   readonly vaults: ExtensionConnectBrowserVaults;
-  readonly activity: ExtensionConnectAccessActivity;
+  readonly creation: ExtensionConnectVaultCreation;
 };
 
 /** The vault state the connect page's step is read from. */
@@ -29,7 +30,6 @@ export type ExtensionConnectPageVault = Pick<
   | "newIdentity"
   | "isAuthenticated"
   | "localVaultPresent"
-  | "isVerifying"
   | "isInitializing"
   | "firstRun"
 >;
@@ -106,9 +106,22 @@ export class ExtensionConnectPageSteps {
       case ExtensionConnectPageSurface.AccessGate:
         break;
     }
+    const creation = ExtensionConnectPageSteps.creation(view);
+    switch (creation) {
+      case ExtensionConnectVaultCreation.Underway:
+        break;
+      case ExtensionConnectVaultCreation.None:
+        // While the app starts nothing is known yet: the page stays opened.
+        switch (view.vault.isInitializing) {
+          case true:
+            return ExtensionConnectPageSteps.SILENT;
+          case false:
+            break;
+        }
+    }
     const access: ExtensionConnectAccessRequest = {
       vaults: ExtensionConnectPageSteps.vaults(view),
-      activity: ExtensionConnectPageSteps.activity(view),
+      creation,
     };
     return ExtensionConnectPageSteps.reported(
       ExtensionConnectPageSteps.access(access),
@@ -155,45 +168,40 @@ export class ExtensionConnectPageSteps {
     }
   }
 
-  /** Busy while verifying, initializing, waiting for this device, or in
-   * first-vault setup. */
-  private static activity(
+  /** Creating a vault: its first-run setup runs, or the creation waits
+   * for this device's key. */
+  private static creation(
     view: ExtensionConnectPageView,
-  ): ExtensionConnectAccessActivity {
-    const { vault } = view;
-    const busy = [
-      vault.isVerifying,
-      vault.isInitializing,
-      view.preserveAccessGate,
-    ].includes(true);
-    switch (busy) {
+  ): ExtensionConnectVaultCreation {
+    switch (view.preserveAccessGate) {
       case true:
-        return ExtensionConnectAccessActivity.Busy;
+        return ExtensionConnectVaultCreation.Underway;
       case false:
         break;
     }
-    switch (vault.firstRun) {
+    switch (view.vault.firstRun) {
       case FirstRunStage.Off:
-        return ExtensionConnectAccessActivity.Idle;
+        return ExtensionConnectVaultCreation.None;
       case FirstRunStage.Protect:
       case FirstRunStage.Backup:
-        return ExtensionConnectAccessActivity.Busy;
+        return ExtensionConnectVaultCreation.Underway;
     }
   }
 
-  /** Before a vault is open: unlock the identity, or create or join. */
+  /** Before a vault is open: creating one, unlocking the identity, or
+   * choosing to create or join. */
   static access(request: ExtensionConnectAccessRequest): ExtensionConnectStep {
+    switch (request.creation) {
+      case ExtensionConnectVaultCreation.Underway:
+        return { kind: ExtensionConnectStepKind.Creating };
+      case ExtensionConnectVaultCreation.None:
+        break;
+    }
     switch (request.vaults) {
       case ExtensionConnectBrowserVaults.Held:
         return { kind: ExtensionConnectStepKind.Unlock };
       case ExtensionConnectBrowserVaults.None:
-        break;
-    }
-    switch (request.activity) {
-      case ExtensionConnectAccessActivity.Idle:
         return { kind: ExtensionConnectStepKind.Choosing };
-      case ExtensionConnectAccessActivity.Busy:
-        return { kind: ExtensionConnectStepKind.Creating };
     }
   }
 

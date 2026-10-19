@@ -10,6 +10,7 @@ import {
   launchExtensionContext,
   e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
+  openPairingAuthTabInOwnWindow,
   pairingGrantStorageKey,
   readExtensionPersistenceSnapshot,
   readExtensionStorage,
@@ -585,10 +586,12 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       typeof unlockExtensionThroughCompanion
     >[0] = { context, extensionId }
     await unlockExtensionThroughCompanion(companionUnlock)
-    const pairingPopupPage = await context.newPage()
-    await pairingPopupPage.goto(
-      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
-    )
+    // The auth tab opens in a window of its own: Connect then opens a new
+    // connect tab there, and the unlocked Nook tab used below stays as it is.
+    const pairingPopupPage = await openPairingAuthTabInOwnWindow({
+      context,
+      extensionId,
+    })
     await expect(
       pairingPopupPage.getByTestId('connect-simple-vault-btn'),
     ).toHaveText('Connect another identity')
@@ -656,10 +659,10 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       ),
     ).toHaveLength(1)
 
-    const replacementPopupPage = await context.newPage()
-    await replacementPopupPage.goto(
-      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
-    )
+    const replacementPopupPage = await openPairingAuthTabInOwnWindow({
+      context,
+      extensionId,
+    })
     await expect(
       replacementPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()

@@ -25,10 +25,10 @@ import {
   type ExtensionConnectProgressHost,
 } from '$lib/extension/connect-progress'
 import {
-  ExtensionConnectAccessActivity,
   ExtensionConnectBrowserVaults,
   ExtensionConnectPageReportKind,
   ExtensionConnectPageSteps,
+  ExtensionConnectVaultCreation,
   type ExtensionConnectPageView,
 } from '$lib/components/extension-connect-progress-steps'
 import { ExtensionConnectConsentSteps } from '$lib/components/extension-connect-consent-progress'
@@ -103,8 +103,8 @@ describe('connect page progress port', () => {
     progress.report(unlock)
     progress.report(consent)
     expect(recording.connectedTo).toEqual(['extension-1'])
-    // Repeats are sent as they come; the panel shows the latest step.
-    expect(recording.port.posted).toEqual([opened, unlock, unlock, consent])
+    // The step just sent is not sent again.
+    expect(recording.port.posted).toEqual([opened, unlock, consent])
   })
 
   test('a port nobody listens to ends quietly: no retry, and the page goes on', () => {
@@ -148,19 +148,19 @@ describe('connect page steps before a vault is open', () => {
     expect(
       access({
         vaults: ExtensionConnectBrowserVaults.Held,
-        activity: ExtensionConnectAccessActivity.Busy,
+        creation: ExtensionConnectVaultCreation.None,
       }),
     ).toEqual(unlock)
     expect(
       access({
         vaults: ExtensionConnectBrowserVaults.None,
-        activity: ExtensionConnectAccessActivity.Idle,
+        creation: ExtensionConnectVaultCreation.None,
       }),
     ).toEqual({ kind: ExtensionConnectStepKind.Choosing })
     expect(
       access({
         vaults: ExtensionConnectBrowserVaults.None,
-        activity: ExtensionConnectAccessActivity.Busy,
+        creation: ExtensionConnectVaultCreation.Underway,
       }),
     ).toEqual({ kind: ExtensionConnectStepKind.Creating })
   })
@@ -176,7 +176,6 @@ describe('connect page steps read from the shell', () => {
       newIdentity: NewIdentityStage.Off,
       isAuthenticated: false,
       localVaultPresent: true,
-      isVerifying: false,
       isInitializing: false,
       firstRun: FirstRunStage.Off,
     },
@@ -209,7 +208,7 @@ describe('connect page steps read from the shell', () => {
     ).toEqual(silent)
   })
 
-  test('a held vault unlocks; a fresh browser chooses, then creates while busy', () => {
+  test('a held vault unlocks; a fresh browser chooses, and creates only once a vault is being created', () => {
     expect(ExtensionConnectPageSteps.page(lockedHolder)).toEqual(report(unlock))
     expect(
       ExtensionConnectPageSteps.page({ ...freshBrowser, localVaultCount: 1 }),
@@ -217,19 +216,21 @@ describe('connect page steps read from the shell', () => {
     expect(ExtensionConnectPageSteps.page(freshBrowser)).toEqual(
       report(choosing),
     )
-    const busy: ExtensionConnectPageView[] = [
-      { ...freshBrowser, vault: { ...freshBrowser.vault, isVerifying: true } },
-      {
+    // The app still starting is not creating anything: no step yet.
+    expect(
+      ExtensionConnectPageSteps.page({
         ...freshBrowser,
         vault: { ...freshBrowser.vault, isInitializing: true },
-      },
+      }),
+    ).toEqual(silent)
+    const creatingViews: ExtensionConnectPageView[] = [
       {
         ...freshBrowser,
         vault: { ...freshBrowser.vault, firstRun: FirstRunStage.Protect },
       },
       { ...freshBrowser, preserveAccessGate: true },
     ]
-    for (const view of busy) {
+    for (const view of creatingViews) {
       expect(ExtensionConnectPageSteps.page(view)).toEqual(report(creating))
     }
   })
@@ -246,10 +247,40 @@ describe('connect page steps read from the shell', () => {
       vault: { ...lockedHolder.vault, isAuthenticated: true },
     }
     expect(ExtensionConnectPageSteps.page(open)).toEqual(silent)
-    // A vault waiting for this device keeps the access gate up.
+    // A vault waiting for this device keeps the access gate up: creating.
     expect(
       ExtensionConnectPageSteps.page({ ...open, preserveAccessGate: true }),
-    ).toEqual(report(unlock))
+    ).toEqual(report(creating))
+  })
+
+  test('a first run reports opened then choosing while the app starts and checks the browser', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    progress.begin({ extensionRuntimeId: 'extension-1' })
+    // The shell re-reads the page on every state change of the first run:
+    // initializing, then settled with no vault, then unrelated changes.
+    const firstRun: ExtensionConnectPageView[] = [
+      {
+        ...freshBrowser,
+        vault: { ...freshBrowser.vault, isInitializing: true },
+      },
+      {
+        ...freshBrowser,
+        vault: { ...freshBrowser.vault, isInitializing: true },
+      },
+      freshBrowser,
+      freshBrowser,
+    ]
+    for (const view of firstRun) {
+      const shown = ExtensionConnectPageSteps.page(view)
+      switch (shown.kind) {
+        case ExtensionConnectPageReportKind.Silent:
+          break
+        case ExtensionConnectPageReportKind.Report:
+          progress.report(shown.step)
+      }
+    }
+    expect(recording.port.posted).toEqual([opened, choosing])
   })
 })
 
