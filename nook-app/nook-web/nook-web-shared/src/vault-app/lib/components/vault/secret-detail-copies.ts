@@ -16,6 +16,8 @@ export enum CopyField {
   Expiration = "expiration",
   Cvv = "cvv",
   CurrentCode = "current-code",
+  CredentialId = "credential-id",
+  PublicKeyFingerprint = "public-key-fingerprint",
 }
 
 const COPY_LABEL_KEYS: Readonly<Record<CopyField, string>> = {
@@ -28,6 +30,8 @@ const COPY_LABEL_KEYS: Readonly<Record<CopyField, string>> = {
   [CopyField.Expiration]: I18N_KEYS.VaultCopyExpiration,
   [CopyField.Cvv]: I18N_KEYS.VaultCopyCvv,
   [CopyField.CurrentCode]: I18N_KEYS.VaultCopyCurrentCode,
+  [CopyField.CredentialId]: I18N_KEYS.VaultCopyCredentialId,
+  [CopyField.PublicKeyFingerprint]: I18N_KEYS.VaultCopyPublicKeyFingerprint,
 };
 
 export type SecretFieldCopy = {

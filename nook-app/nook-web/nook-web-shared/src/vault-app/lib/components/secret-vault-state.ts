@@ -1,4 +1,9 @@
-import type { AuthenticatorCodeView, NookSecretRecord } from "$lib/nook";
+import type {
+  AuthenticatorCodeView,
+  NookSecretRecord,
+  PasskeyDetailsView,
+  SecretHistoryView,
+} from "$lib/nook";
 
 export enum SecretPageInteractionKind {
   Ready = "ready",
@@ -27,6 +32,42 @@ export type AuthenticatorCodePresentation =
       kind: AuthenticatorCodePresentationKind.Visible;
       code: AuthenticatorCodeView;
     };
+
+export enum PasskeyDetailsPresentationKind {
+  Hidden = "hidden",
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
+
+/** Public passkey details for the selected item, fetched on selection. */
+export type PasskeyDetailsPresentation =
+  | { kind: PasskeyDetailsPresentationKind.Hidden }
+  | { kind: PasskeyDetailsPresentationKind.Loading; id: string }
+  | {
+      kind: PasskeyDetailsPresentationKind.Loaded;
+      id: string;
+      details: PasskeyDetailsView;
+    }
+  | { kind: PasskeyDetailsPresentationKind.Failed; id: string };
+
+export enum SecretHistoryPresentationKind {
+  Hidden = "hidden",
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
+
+/** Event-log history (created, modified, device) for the selected item. */
+export type SecretHistoryPresentation =
+  | { kind: SecretHistoryPresentationKind.Hidden }
+  | { kind: SecretHistoryPresentationKind.Loading; id: string }
+  | {
+      kind: SecretHistoryPresentationKind.Loaded;
+      id: string;
+      history: SecretHistoryView;
+    }
+  | { kind: SecretHistoryPresentationKind.Failed; id: string };
 
 export enum ClipboardNoticeKind {
   Hidden = "hidden",

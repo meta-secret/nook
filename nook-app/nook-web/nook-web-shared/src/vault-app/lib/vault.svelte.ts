@@ -800,6 +800,16 @@ export class VaultState extends VaultRuntimeState {
     return this.secretsActions.currentAuthenticatorCode({ id });
   }
 
+  async passkeyDetails(id: string) {
+    const request: secretsActions.PasskeyDetailsRequest = { id };
+    return this.secretsActions.passkeyDetails(request);
+  }
+
+  async secretHistory(id: string) {
+    const request: secretsActions.SecretHistoryRequest = { id };
+    return this.secretsActions.secretHistory(request);
+  }
+
   async refreshDeviceState() {
     return this.multiDeviceActions.refreshDeviceState();
   }

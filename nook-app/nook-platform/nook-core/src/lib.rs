@@ -56,6 +56,10 @@ pub(crate) use sync::{
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
+pub use vault::secret_history::{
+    SecretHistory, SecretHistoryDevice, SecretHistoryError, SecretHistoryLocalSigner,
+    SecretHistoryOrigin, SecretHistoryRequest, SecretRevision,
+};
 pub(crate) use vault::{
     database, device_access, identity_health, vault_access_diagnostics, vault_architecture,
     vault_client_policy, vault_connect, vault_event_session, vault_format, vault_ids,
@@ -200,8 +204,10 @@ pub use secret_view::{
     AuthenticatorSecretForm, CredentialKind, CreditCardSecretForm, FileAttachmentSecretForm,
     FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
     FocusedLoginFillProjection, LoginHostMatch, LoginHostMatchRequest, LoginSecretForm,
-    LoginWebsiteHost, SecretFormFields, SecretGroupKey, SecretListItem, SecretListItemData,
-    SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
+    LoginWebsiteHost, PasskeyBackupStatus, PasskeyDetails, PasskeyDiscoverability,
+    PasskeyKeyAlgorithm, PasskeyPublicKeyFingerprint, SecretFormFields, SecretGroupKey,
+    SecretListItem, SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm,
+    SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
 };
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
