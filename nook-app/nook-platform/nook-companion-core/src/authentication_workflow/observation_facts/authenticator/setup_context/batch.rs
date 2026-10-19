@@ -184,6 +184,33 @@ pub mod tests {
     }
 
     #[test]
+    fn setup_batch_admits_update_authenticator_dialog_beside_inline_qr() -> anyhow::Result<()> {
+        let dialog = super::super::tests::UPDATE_AUTHENTICATOR_DIALOG_COPY;
+        for (qr_media, expected) in [
+            (
+                "present",
+                AuthenticationAuthenticatorSetupObservation::Present,
+            ),
+            (
+                "absent",
+                AuthenticationAuthenticatorSetupObservation::Absent,
+            ),
+        ] {
+            assert_eq!(
+                SetupScan {
+                    visible_instruction_copies: vec![dialog.to_owned()],
+                    qr_media
+                }
+                .batch()?
+                .classify(),
+                expected,
+                "{qr_media}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn setup_batch_rejects_whole_projection_outside_candidate_or_utf8_bounds() -> anyhow::Result<()>
     {
         let exact = SetupScan {
