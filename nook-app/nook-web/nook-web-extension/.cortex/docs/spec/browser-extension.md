@@ -128,6 +128,7 @@ administer vault items.
 
    There is no website-first enable screen, floating companion window, or
    toolbar popup.
+
 4. The user creates, imports, or unlocks the full Simple vault on the website.
    When creating a vault from this route, the unlocked extension sends its age
    identity and matching event-signing seed in a one-time, nonce-bound age
