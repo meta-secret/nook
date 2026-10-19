@@ -62,7 +62,7 @@ application capability checks enforce the vault-type boundary.
     square action bar.
 - **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
-    tab for the locked Pilot action and All connections.
+    tab for the locked Pilot action.
     It creates or unlocks the extension device with the device-protection
     component it shares with the side panel. It shows localized return guidance
     for Pilot and starts pairing.
@@ -208,8 +208,15 @@ private identity.
   - **Unlocked with a paired vault:** This site leads, with one section for
     each connected identity and vault. The identity sync status and Connect
     another identity follow those sections; Connect another identity opens
-    the connect card in place. The panel has no separate list of identities.
+    the connect card in place. This site has no separate list of identities.
     The footer offers All connections.
+  - **All connections:** a page of the panel, with Back to This site. Each
+    connected identity is a keytag card listing its vaults: what each vault
+    does, the default one marked, and Make default on the others. The
+    unlocked identity is tagged Unlocked; another identity is tagged Locked
+    and offers Use this identity, which locks this one and shows that
+    identity's own unlock in place. The footer leaves while it shows, and a
+    lock or a vault list that is no longer paired returns to This site.
   - **Unlocked with no paired vault:** the connect card leads: a vault-name
     field, Create vault, and I already use Nook.
   - **Next identity's key:** when Rust stages a new identity, its passkey or
@@ -218,9 +225,8 @@ private identity.
   - **Failure:** a device-status error or an initialization failure shows a
     failure view, never the setup ceremony. A paired-vault load failure shows
     its own failure view rather than the no-vault state.
-- All connections opens the authentication tab through its launcher intent.
-  Use this identity and Make default remain in that tab. Connecting an
-  identity never opens it.
+- Neither connecting an identity nor All connections opens the
+  authentication tab.
 - The panel follows device state that changes elsewhere, such as an unlock in
   the authentication tab or by Pilot, or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
@@ -251,8 +257,8 @@ private identity.
     the connect page arrives, the hand-off line gives way to it.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
-- The Pilot lock entry and the side panel's All connections use the same
-  extension-owned authentication tab per initiating normal window. The service
+- The Pilot lock entry uses the extension-owned authentication tab per
+  initiating normal window. The service
   worker focuses an existing tab only when its intent matches the requested
   action. It leaves a different-intent auth tab untouched and opens the
   requested intent in another tab in the source window. It does not focus an
@@ -293,8 +299,9 @@ private identity.
   menu.
 - The companion tab can start pairing another vault while a grant already
   exists.
-- Never put vault browsing or management in the launcher or the side
-  panel.
+- Never put vault item browsing or editing in the launcher or the side
+  panel. Connection settings (the default vault, which identity is
+  unlocked) are not vault management and may appear in both.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.
 - Authentication-tab controls use the same neutral primary tokens as nook-web dark
@@ -1183,10 +1190,10 @@ phone or computer is.
   key that already belongs to another identity, and an identity another local
   key already holds, instead of merging identities.
 - **Switching:** One identity is unlocked at a time. Grants keep their key's app
-  id, so the authentication tab groups vaults by key and offers Use this
-  identity for the others, which selects that identity and locks the current
-  one. The side panel shows no identity groups. Its This site sections name
-  each identity and vault and offer no per-identity actions.
+  id, so the authentication tab and the side panel's All connections group
+  vaults by key and offer Use this identity for the others, which selects
+  that identity and locks the current one. The side panel's This site
+  sections name each identity and vault and offer no per-identity actions.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.

@@ -17,6 +17,7 @@ import {
   type SidePanelView,
 } from './side-panel-state'
 import '../popup/popup.css'
+import './side-panel-cards.css'
 import './side-panel.css'
 
 type SidePanelMount = {
