@@ -200,8 +200,13 @@ class DialogQrObservationFixture {
   }
 }
 
+enum RasterOperationKind {
+  FillRect = 'fillRect',
+  DrawImage = 'drawImage',
+}
+
 type RasterOperation = {
-  readonly operation: 'fillRect' | 'drawImage'
+  readonly operation: RasterOperationKind
   readonly fillStyle: string
   readonly source: string
 }
@@ -241,14 +246,14 @@ class QrRasterDecodeFixture {
           fillStyle: '',
           fillRect() {
             operations.push({
-              operation: 'fillRect',
+              operation: RasterOperationKind.FillRect,
               fillStyle: context.fillStyle,
               source: '',
             })
           },
           drawImage(source: HTMLImageElement) {
             operations.push({
-              operation: 'drawImage',
+              operation: RasterOperationKind.DrawImage,
               fillStyle: context.fillStyle,
               source: source.src,
             })
@@ -770,8 +775,16 @@ describe('authenticator setup dialogs', () => {
       expect(markup).toContain('height="220"')
       expect(markup).toContain('M0 0h7v7H0z')
       expect(raster.operations).toEqual([
-        { operation: 'fillRect', fillStyle: '#ffffff', source: '' },
-        { operation: 'drawImage', fillStyle: '#ffffff', source: decodedSource },
+        {
+          operation: RasterOperationKind.FillRect,
+          fillStyle: '#ffffff',
+          source: '',
+        },
+        {
+          operation: RasterOperationKind.DrawImage,
+          fillStyle: '#ffffff',
+          source: decodedSource,
+        },
       ])
       expect(raster.bitmapSources).toEqual(['canvas'])
       expect(raster.detectedSources).toEqual(['opaque-canvas'])
@@ -799,8 +812,8 @@ describe('authenticator setup dialogs', () => {
       })
       expect(raster.decodedSources).toEqual([])
       expect(raster.operations.map((step) => step.operation)).toEqual([
-        'fillRect',
-        'drawImage',
+        RasterOperationKind.FillRect,
+        RasterOperationKind.DrawImage,
       ])
       expect(raster.detectedSources).toEqual(['opaque-canvas'])
     } finally {
