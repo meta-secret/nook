@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import {
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionRuntimeRequestType } from '../../../nook-web-extension/src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../../../nook-web-extension/src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../../nook-web-extension/src/lib/paired-vaults'
@@ -62,6 +65,8 @@ const sidePanelDemoProtocol = {
   refreshIdentity: PairedVaultsMessageType.RefreshIdentity,
   openVault: OpenSimpleVaultMessageType.NookOpenSimpleVault,
   openLauncher: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  beginIdentityConnection: ExtensionSessionMessageType.BeginIdentityConnection,
+  beginPairing: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   pairedVaultList: SidePanelDemoVaults.Paired,
@@ -283,7 +288,10 @@ function installSidePanelDemoRuntime(
         return { ok: true, paired: 0, awaitingGrant: 0 }
       case protocol.openVault:
       case protocol.openLauncher:
+      case protocol.beginPairing:
         return { ok: true }
+      case protocol.beginIdentityConnection:
+        return { ok: true, start: 'current-key' }
       default:
         return { ok: false, reason: 'demo-unhandled' }
     }
@@ -395,8 +403,13 @@ test('unlocks a PIN in place, shows identity · vault sections, and locks again'
   await expect(page.getByTestId('side-panel-connections')).toBeVisible()
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
   await demoBeat(page)
-  // Connecting another identity continues in the Nook tab; the panel stays.
+  // Connecting another identity asks in the panel first: a new identity's
+  // first vault, or one already in use. Nook's connect page continues it.
   await page.getByTestId('side-panel-connect').click()
+  await expect(page.getByTestId('side-panel-connect-card')).toBeVisible()
+  await demoBeat(page)
+  await page.getByTestId('side-panel-vault-name').fill('Work')
+  await page.getByTestId('side-panel-create-vault').click()
   await expect(page.getByTestId('side-panel-handoff')).toHaveText(
     'Continue in the Nook tab.',
   )
@@ -433,8 +446,14 @@ test('leads with connecting an identity when none is connected', async ({
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Unlocked')
-  await expect(page.getByTestId('side-panel-connect')).toHaveText(
-    'Connect an identity',
+  await expect(
+    page.getByTestId('side-panel-connect-card').getByRole('heading'),
+  ).toHaveText('No identity connected yet')
+  await expect(page.getByTestId('side-panel-create-vault')).toHaveText(
+    'Create vault',
+  )
+  await expect(page.getByTestId('side-panel-join-identity')).toHaveText(
+    'I already use Nook',
   )
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
   await demoBeat(page)

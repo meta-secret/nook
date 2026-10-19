@@ -1,7 +1,11 @@
 import path from 'node:path'
 import { expect, type Page, type Route } from '@playwright/test'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import type { ExtensionConnectStart } from '../../../nook-web-shared/src/extension/extension-connect-start'
+import {
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionRuntimeRequestType } from '../../src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../../src/lib/extension-session-message-type'
@@ -24,6 +28,8 @@ import { extensionDir } from './extension-smoke-runtime'
  */
 export enum SidePanelStubVaults {
   Paired = 'paired',
+  /** Paired, plus the vault the connect page just created. */
+  PairedWithNew = 'paired-with-new',
   None = 'none',
   Unavailable = 'unavailable',
 }
@@ -55,8 +61,17 @@ type SidePanelStubTabUpdate = {
   readonly tab: chrome.tabs.Tab
 }
 
+/** Which key Rust picks to connect the next identity. */
+export enum SidePanelStubConnectKey {
+  Current = 'current-key',
+  NewStaged = 'new-key-staged',
+}
+
 export type SidePanelStubState = {
   status: DeviceProtectionStatus
+  connectKey: SidePanelStubConnectKey
+  /** The connect choice of each pairing the panel asked to open. */
+  pairings: ExtensionConnectStart[]
   vaults: SidePanelStubVaults
   listing: SidePanelSiteListing
   fill: SidePanelStubFillAnswer
@@ -93,6 +108,11 @@ const sidePanelStubProtocol = {
   refreshIdentity: PairedVaultsMessageType.RefreshIdentity,
   openVault: OpenSimpleVaultMessageType.NookOpenSimpleVault,
   openLauncher: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  beginIdentityConnection: ExtensionSessionMessageType.BeginIdentityConnection,
+  cancelIdentityConnection:
+    ExtensionSessionMessageType.CancelIdentityConnection,
+  beginPairing: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+  currentKey: SidePanelStubConnectKey.Current,
   listLogins: SidePanelSiteMessageType.ListLogins,
   fillLogin: SidePanelSiteMessageType.FillLogin,
   fillCode: SidePanelSiteMessageType.FillCode,
@@ -100,6 +120,7 @@ const sidePanelStubProtocol = {
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   paired: SidePanelStubVaults.Paired,
+  pairedWithNew: SidePanelStubVaults.PairedWithNew,
   none: SidePanelStubVaults.None,
   unavailable: SidePanelStubVaults.Unavailable,
   accept: SidePanelStubAnswer.Accept,
@@ -134,6 +155,8 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
   ]
   const state: SidePanelStubState = {
     status: scenario.status,
+    connectKey: protocol.currentKey,
+    pairings: [],
     vaults: scenario.vaults,
     listing: scenario.listing,
     fill: scenario.fill,
@@ -160,6 +183,19 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     switch (state.vaults) {
       case protocol.paired:
         return { ok: true, vaults: pairedVaults }
+      case protocol.pairedWithNew:
+        return {
+          ok: true,
+          vaults: [
+            ...pairedVaults,
+            {
+              ...pairedVaults[0],
+              vaultStoreId: 'store-work',
+              vaultName: 'Work',
+              isDefault: false,
+            },
+          ],
+        }
       case protocol.none:
         return { ok: true, vaults: [] }
       case protocol.unavailable:
@@ -202,6 +238,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         return acknowledged(state.openVault)
       case protocol.openLauncher:
         return { ok: true }
+      case protocol.beginIdentityConnection:
+        return { ok: true, start: state.connectKey }
+      case protocol.cancelIdentityConnection:
+      case protocol.beginPairing:
+        return { ok: true }
       case protocol.listLogins:
         return state.listing
       default:
@@ -240,11 +281,20 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
       getURL: (resource: string) =>
         `${globalThis.location.origin}/__side-panel-stub/${resource}`,
       sendMessage: (
-        message: { readonly type: string },
+        message: {
+          readonly type: string
+          readonly payload?: { readonly start?: ExtensionConnectStart }
+        },
         callback: (reply: unknown) => void,
       ) => {
         state.sent.push(message.type)
         switch (message.type) {
+          case protocol.beginPairing: {
+            const start = message.payload?.start
+            if (start) state.pairings.push(start)
+            queueMicrotask(() => callback(answer(message.type)))
+            return
+          }
           case protocol.fillLogin:
             deliverFill(callback, () => state.fill)
             return
@@ -325,6 +375,10 @@ export class SidePanelStubPage {
       const held = window.__nookSidePanelStub.heldFills.splice(0)
       for (const release of held) release()
     })
+  }
+
+  async pairings(): Promise<ExtensionConnectStart[]> {
+    return this.page.evaluate(() => window.__nookSidePanelStub.pairings)
   }
 
   async sent(type: string): Promise<number> {

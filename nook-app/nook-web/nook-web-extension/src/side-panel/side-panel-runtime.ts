@@ -1,11 +1,13 @@
 import { Effect, Schema } from 'effect'
+import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
+import type { ExtensionConnectStart } from '../../../nook-web-shared/src/extension/extension-connect-start'
 import {
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
-} from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
+import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
 
 /**
  * The side panel's own use of the browser: its requests to the service
@@ -15,12 +17,12 @@ import { ExtensionSessionMessageType } from '../lib/extension-session-message-ty
  * own visibility change.
  */
 
-/** Where Open in the Nook tab lands. */
-export enum SidePanelNookTabIntent {
-  /** All connections: the tab's companion home. */
-  Manage = 'manage',
-  /** Connect an identity: the tab starts pairing. */
-  Pair = 'pair',
+/** The key that connects the next identity, named for the connect page,
+ * and the choice that page continues. */
+export type SidePanelPairing = {
+  readonly device: ExtensionSessionDeviceWire
+  readonly deviceLabel: string
+  readonly start: ExtensionConnectStart
 }
 
 /** The panel's requests to the service worker: a closed set. */
@@ -31,9 +33,10 @@ type SidePanelServiceWorkerMessage =
       readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
     }
   | {
-      readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-      readonly payload: {
-        readonly intent: OpenCompanionLauncherIntent.Pair
+      readonly type: BeginExtensionPairingMessageType.NookBeginExtensionPairing
+      readonly payload: ExtensionSessionDeviceWire & {
+        readonly deviceLabel: string
+        readonly start: ExtensionConnectStart
       }
     }
 
@@ -252,11 +255,29 @@ export class SidePanelRuntime {
     return this.send(message)
   }
 
-  /** Open or focus the Nook tab, for pairing or for all connections. */
-  openNookTab(
-    intent: SidePanelNookTabIntent,
+  /** Open or focus the Nook tab's companion home: All connections. */
+  openConnections(): Effect.Effect<void, SidePanelRequestFailure> {
+    const message: SidePanelServiceWorkerMessage = {
+      type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+    }
+    return this.send(message)
+  }
+
+  /** Open Nook's connect page for this key; the panel stays as it is. */
+  beginPairing(
+    pairing: SidePanelPairing,
   ): Effect.Effect<void, SidePanelRequestFailure> {
-    return this.send(SidePanelRuntime.nookTabMessage(intent))
+    const message: SidePanelServiceWorkerMessage = {
+      type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+      payload: {
+        deviceId: pairing.device.deviceId,
+        devicePublicKey: pairing.device.devicePublicKey,
+        deviceSigningPublicKey: pairing.device.deviceSigningPublicKey,
+        deviceLabel: pairing.deviceLabel,
+        start: pairing.start,
+      },
+    }
+    return this.send(message)
   }
 
   lock(): Effect.Effect<void, SidePanelRequestFailure> {
@@ -302,22 +323,6 @@ export class SidePanelRuntime {
       Effect.mapError(() => new SidePanelRequestFailure()),
       Effect.asVoid,
     )
-  }
-
-  private static nookTabMessage(
-    intent: SidePanelNookTabIntent,
-  ): SidePanelServiceWorkerMessage {
-    switch (intent) {
-      case SidePanelNookTabIntent.Manage:
-        return {
-          type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-        }
-      case SidePanelNookTabIntent.Pair:
-        return {
-          type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-          payload: { intent: OpenCompanionLauncherIntent.Pair },
-        }
-    }
   }
 
   private static panelWindow(current: chrome.windows.Window): SidePanelWindow {

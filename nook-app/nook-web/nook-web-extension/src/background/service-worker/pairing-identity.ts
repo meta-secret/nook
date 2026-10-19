@@ -19,6 +19,7 @@ import {
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
+import { ExtensionConnectStarts } from '../../../../nook-web-shared/src/extension/extension-connect-start'
 import {
   admit_companion_handoff_identity_status,
   admit_companion_identity_status,
@@ -289,6 +290,9 @@ class ExtensionPairingIdentity {
         ExtensionConnectScope.SyncProviderCredentials,
       ].join(','),
     )
+    // The panel's choice rides in the fragment, which never reaches the
+    // server; the connect page reads it and continues that step.
+    url.hash = ExtensionConnectStarts.fragment(device.start)
     const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
       url: url.toString(),
     }

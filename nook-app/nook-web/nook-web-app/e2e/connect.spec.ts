@@ -117,6 +117,39 @@ test.describe('vault connect flow', () => {
     )
   })
 
+  test('continues the side panel choice: the named first vault, or joining', async ({
+    page,
+  }) => {
+    // The extension opens its connect route with the panel's choice in the
+    // URL fragment; the route keeps the fragment while the page starts.
+    const connect = new URLSearchParams({
+      device_id: 'side-panel-device',
+      device_public_key: 'age1sidepanel',
+      device_signing_public_key: 'side-panel-signing-key',
+      extension_id: 'side-panel-extension',
+      device_label: 'Nook Extension',
+      nonce: 'side-panel-nonce',
+      scopes: 'vault-access,password-filling',
+    })
+    await page.goto(
+      `/extension-connect?${connect}#start=create&vault_name=Home`,
+    )
+    await expect(page.getByTestId('first-vault-start')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-vault-name-input')).toHaveValue('Home')
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toBeFocused()
+
+    await page.goto(`/extension-connect?${connect}#start=join`)
+    await page.reload()
+    await expect(page.getByTestId('join-this-device')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
+  })
+
   test('does not create a new vault when open existing finds an empty provider', async ({
     page,
   }) => {

@@ -3,15 +3,7 @@
     I18N_KEYS,
     type I18nKey,
   } from '../../../nook-web-shared/src/generated/i18n-keys'
-  import {
-    ArrowUpRight,
-    Asterisk,
-    Check,
-    Fingerprint,
-    FolderKey,
-    Plus,
-    Puzzle,
-  } from '@lucide/svelte'
+  import { ArrowUpRight, Check, FolderKey, Plus } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
     ExtensionTranslationRequestKind,
@@ -20,6 +12,10 @@
     extensionLocaleCatalog,
   } from '../lib/i18n'
   import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
+  import {
+    ExtensionConnectStarts,
+    type ExtensionConnectStart,
+  } from '../../../nook-web-shared/src/extension/extension-connect-start'
   import {
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
@@ -39,8 +35,8 @@
     type IdentitySync,
   } from './popup-app-state'
   import ExtensionDeviceProtection from './ExtensionDeviceProtection.svelte'
+  import ConnectChain from './ConnectChain.svelte'
   import {
-    DeviceProtectionKeyKind,
     DeviceProtectionPhase,
     DeviceProtectionPurposeKind,
     DeviceProtectionStageMap,
@@ -104,29 +100,8 @@
       ? pairingCandidate.device.deviceId
       : '',
   )
-  /** The extension's key is a PIN rather than a passkey. */
-  const keyKind = $derived(DeviceProtectionStageMap.keyKind(stage))
   /** First use: the key is being set up; vaults connect in step 2. */
   const phase = $derived(DeviceProtectionStageMap.phase(stage))
-
-  /** The chain's accessible summary for the key being set up or used. */
-  function chainSummaryKey(): I18nKey {
-    switch (keyKind) {
-      case DeviceProtectionKeyKind.Pin:
-        return I18N_KEYS.ExtensionDeviceSetupChainPin
-      case DeviceProtectionKeyKind.Passkey:
-        return I18N_KEYS.ExtensionDeviceSetupChainPasskey
-    }
-  }
-
-  function chainKeyLabel(): I18nKey {
-    switch (keyKind) {
-      case DeviceProtectionKeyKind.Pin:
-        return I18N_KEYS.ExtensionDeviceSetupNodePin
-      case DeviceProtectionKeyKind.Passkey:
-        return I18N_KEYS.ExtensionDeviceSetupNodePasskey
-    }
-  }
 
   const groups = $derived(
     vaults.kind === PairedVaultsLoadKind.Ready
@@ -219,12 +194,16 @@
     error = ''
     const message: {
       type: string
-      payload: ExtensionSessionDeviceWire & { deviceLabel: string }
+      payload: ExtensionSessionDeviceWire & {
+        deviceLabel: string
+        start: ExtensionConnectStart
+      }
     } = {
       type: 'nook:begin-extension-pairing',
       payload: {
         ...device,
         deviceLabel: translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
+        start: ExtensionConnectStarts.unspecified(),
       },
     }
     chrome.runtime.sendMessage(message, (response: unknown) => {
@@ -551,47 +530,7 @@
         {translatePlain(I18N_KEYS.ExtensionDeviceSetupStepLabel)}
       </p>
     {/if}
-    <!-- What connects to what: the key (passkey or PIN) opens this
-         extension now; the vaults connect to it in step 2. -->
-    <div
-      class="connect-chain"
-      role="img"
-      aria-label={translatePlain(chainSummaryKey())}
-      data-testid="device-setup-chain"
-      data-key={keyKind}
-    >
-      <div class="chain-node is-on" aria-hidden="true">
-        <span class="chain-icon">
-          {#if keyKind === DeviceProtectionKeyKind.Pin}
-            <Asterisk size={18} />
-          {:else}
-            <Fingerprint size={18} />
-          {/if}
-        </span>
-        <span class="chain-label">
-          {translatePlain(chainKeyLabel())}
-        </span>
-      </div>
-      <span class="chain-link is-on" aria-hidden="true"></span>
-      <div class="chain-node is-on" aria-hidden="true">
-        <span class="chain-icon"><Puzzle size={18} /></span>
-        <span class="chain-label">
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeExtension)}
-        </span>
-      </div>
-      <span class="chain-link" aria-hidden="true"></span>
-      <div class="chain-node" aria-hidden="true">
-        <span class="chain-icon"><FolderKey size={18} /></span>
-        <span class="chain-label">
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeIdentity)}
-        </span>
-        {#if phase === DeviceProtectionPhase.Setup}
-          <span class="chain-tag">
-            {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeNext)}
-          </span>
-        {/if}
-      </div>
-    </div>
+    <ConnectChain {i18n} {status} />
     <ExtensionDeviceProtection
       {i18n}
       {status}

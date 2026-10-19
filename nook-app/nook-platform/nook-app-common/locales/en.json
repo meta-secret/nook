@@ -1743,6 +1743,8 @@
       "connect_another": "Connect another identity",
       "no_vaults_title": "No identity connected yet",
       "no_vaults_body": "Connect Nook: it opens, you unlock one of your vaults there, and this browser joins that identity with all of its vaults.",
+      "connect_choice_body": "Name the first vault of a new identity, or connect the identity you already use in Nook.",
+      "join_identity": "I already use Nook",
       "connect_vault": "Connect an identity",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",
