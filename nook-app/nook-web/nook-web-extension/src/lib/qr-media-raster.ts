@@ -16,7 +16,10 @@ export enum QrBitmapCaptureKind {
 }
 
 export type QrBitmapCapture =
-  | { readonly kind: QrBitmapCaptureKind.Captured; readonly bitmap: ImageBitmap }
+  | {
+      readonly kind: QrBitmapCaptureKind.Captured
+      readonly bitmap: ImageBitmap
+    }
   | { readonly kind: QrBitmapCaptureKind.Unavailable }
 
 enum QrRasterSourceKind {
@@ -32,8 +35,7 @@ type ReadyQrRasterSource = {
 }
 
 type QrRasterSource =
-  | ReadyQrRasterSource
-  | { readonly kind: QrRasterSourceKind.Unavailable }
+  ReadyQrRasterSource | { readonly kind: QrRasterSourceKind.Unavailable }
 
 /**
  * Draws one visible QR media element onto an opaque light canvas so the single

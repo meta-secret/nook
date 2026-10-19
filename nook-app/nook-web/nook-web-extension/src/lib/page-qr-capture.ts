@@ -86,13 +86,25 @@ enum InstructionElementCapture {
 enum InstructionCandidateKind {
   /** Headings, paragraphs, and a dialog's own label or description. */
   Prose = 'prose',
-  /** A dialog div or span that counts only when it holds its own text. */
+  /** A dialog div or span before the QR that counts only for its own text. */
   TextLeaf = 'text-leaf',
 }
 
 type InstructionCandidate = {
   readonly kind: InstructionCandidateKind
   readonly element: HTMLElement
+}
+
+/** One dialog's instruction lookup for the QR media it contains. */
+type DialogInstructionRequest = {
+  readonly dialog: HTMLElement
+  readonly media: Element
+}
+
+/** One dialog element considered as instruction copy for that media. */
+type DialogContentRequest = {
+  readonly element: HTMLElement
+  readonly media: Element
 }
 
 export enum DecodeVisibleOtpauthCandidatesResultStatus {
@@ -141,22 +153,23 @@ class PageQrCapture {
     ) {
       return false
     }
-    const style = this.browser.window.getComputedStyle(element)
+    // The size and viewport gate runs first so small icons skip computed style.
+    const rect = element.getBoundingClientRect()
     if (
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.opacity === '0'
+      rect.width < MIN_QR_EDGE_PX ||
+      rect.height < MIN_QR_EDGE_PX ||
+      rect.bottom <= 0 ||
+      rect.right <= 0 ||
+      rect.top >= this.browser.window.innerHeight ||
+      rect.left >= this.browser.window.innerWidth
     ) {
       return false
     }
-    const rect = element.getBoundingClientRect()
+    const style = this.browser.window.getComputedStyle(element)
     return (
-      rect.width >= MIN_QR_EDGE_PX &&
-      rect.height >= MIN_QR_EDGE_PX &&
-      rect.bottom > 0 &&
-      rect.right > 0 &&
-      rect.top < this.browser.window.innerHeight &&
-      rect.left < this.browser.window.innerWidth
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0'
     )
   }
 
@@ -306,7 +319,8 @@ class PageQrCapture {
   private nearbyInstructionCandidates(media: Element): InstructionCandidate[] {
     const dialog = media.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR)
     if (dialog instanceof HTMLElement) {
-      return this.dialogInstructionCandidates(dialog)
+      const request: DialogInstructionRequest = { dialog, media }
+      return this.dialogInstructionCandidates(request)
     }
     return this.nearbyInstructionElements(media).map(
       (element): InstructionCandidate => ({
@@ -322,8 +336,9 @@ class PageQrCapture {
    * leaves follow in document order. Nested dialogs keep their own copy.
    */
   private dialogInstructionCandidates(
-    dialog: HTMLElement,
+    request: DialogInstructionRequest,
   ): InstructionCandidate[] {
+    const { dialog, media } = request
     const referencedIds = PageQrCapture.DIALOG_REFERENCE_ATTRIBUTES.map(
       (attribute) => dialog.getAttribute(attribute),
     )
@@ -335,12 +350,10 @@ class PageQrCapture {
       .map((id) => this.browser.document.getElementById(id))
       .filter((element) => element instanceof HTMLElement)
       .filter((element) => dialog.contains(element))
-      .map(
-        (element): InstructionCandidate => ({
-          kind: InstructionCandidateKind.Prose,
-          element,
-        }),
-      )
+      .map((element): InstructionCandidate => ({
+        kind: InstructionCandidateKind.Prose,
+        element,
+      }))
     const contents = Array.from(
       dialog.querySelectorAll(
         `${PageQrCapture.PROSE_SELECTOR},${PageQrCapture.DIALOG_TEXT_LEAF_SELECTOR}`,
@@ -351,18 +364,37 @@ class PageQrCapture {
         (element) =>
           element.closest(PageQrCapture.DIALOG_SCOPE_SELECTOR) === dialog,
       )
-      .map((element) => this.dialogInstructionCandidate(element))
+      .flatMap((element) => {
+        const content: DialogContentRequest = { element, media }
+        return this.dialogContentCandidates(content)
+      })
     return [...references, ...contents]
   }
 
-  private dialogInstructionCandidate(
-    element: HTMLElement,
-  ): InstructionCandidate {
+  /**
+   * Prose always qualifies. A div or span leaf qualifies only before the QR
+   * media in document order, so text shown after the code (such as a setup
+   * key revealed below it) never enters the instruction copy.
+   */
+  private dialogContentCandidates(
+    request: DialogContentRequest,
+  ): InstructionCandidate[] {
+    const { element, media } = request
     switch (element.matches(PageQrCapture.PROSE_SELECTOR)) {
       case true:
-        return { kind: InstructionCandidateKind.Prose, element }
+        return [{ kind: InstructionCandidateKind.Prose, element }]
       case false:
-        return { kind: InstructionCandidateKind.TextLeaf, element }
+        break
+    }
+    const position = element.compareDocumentPosition(media)
+    const precedesMedia =
+      (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+      (position & Node.DOCUMENT_POSITION_CONTAINED_BY) === 0
+    switch (precedesMedia) {
+      case true:
+        return [{ kind: InstructionCandidateKind.TextLeaf, element }]
+      case false:
+        return []
     }
   }
 
@@ -537,9 +569,13 @@ class PageQrCapture {
   }
 
   private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
+    // An inline SVG QR may carry the marker as well as an HTML element.
     const elements = [
       ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
-    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
+    ].filter(
+      (element) =>
+        element instanceof HTMLElement || element instanceof SVGSVGElement,
+    )
     const candidates: DecodedOtpauthCandidate[] = []
     const seen = new Set<string>()
     let index = 0

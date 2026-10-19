@@ -269,7 +269,9 @@ class QrRasterDecodeFixture {
       class {
         detect(source: { readonly label: string }) {
           detectedSources.push(source.label)
-          return Promise.resolve([{ rawValue: decodedValue, format: 'qr_code' }])
+          return Promise.resolve([
+            { rawValue: decodedValue, format: 'qr_code' },
+          ])
         }
       },
     )
@@ -587,16 +589,79 @@ describe('authenticator setup dialogs', () => {
     ])
   })
 
+  test('plain-text setup keys shown after the dialog QR stay out of the instruction copy', async () => {
+    const setupKey = 'JBSW Y3DP EHPK 3PXP KRSX G5CT MVRX EZLU'
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(`
+        ${DialogQrObservationFixture.QR_SVG}
+        <div>Can't scan it? Enter this key instead:</div>
+        <div>${setupKey}</div>
+        <div>Key: <strong>${setupKey}</strong></div>
+        <span>${setupKey}</span>
+      `),
+    )
+    expect(await fixture.observation()).toBe('present')
+    const payload = fixture.payloads.at(-1)
+    expect(payload?.qrMedia).toBe('present')
+    expect(fixture.instructionCopies).toHaveLength(1)
+    const [copy] = fixture.instructionCopies
+    expect(copy).toMatch(
+      /^\nUpdate authenticator app\nScan this QR code to set up your account using your preferred authenticator app\./,
+    )
+    expect(copy).not.toContain('JBSW')
+    expect(copy).not.toContain('KRSX')
+    expect(copy).not.toContain("Can't scan it")
+  })
+
+  test('small icons skip computed style during setup media collection', async () => {
+    const fixture = new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        '<svg id="copy-icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+      ),
+    )
+    const icon = document.querySelector('#copy-icon')
+    if (!icon) throw new Error('Expected icon fixture')
+    Object.defineProperty(icon, 'getBoundingClientRect', {
+      value: () => ({
+        width: 24,
+        height: 24,
+        top: 0,
+        left: 0,
+        bottom: 24,
+        right: 24,
+      }),
+    })
+    const computedStyle = vi.spyOn(window, 'getComputedStyle')
+    expect(await fixture.observation()).toBe('absent')
+    expect(
+      computedStyle.mock.calls.filter(([element]) => element === icon),
+    ).toEqual([])
+    computedStyle.mockRestore()
+  })
+
+  test('a marked inline SVG QR decodes without BarcodeDetector', async () => {
+    const uri =
+      'otpauth://totp/Example:carol@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
+    new DialogQrObservationFixture(
+      DialogQrObservationFixture.authenticatorDialog(
+        `<svg viewBox="0 0 29 29" data-nook-otpauth-uri="${uri}"><path d="M0 0h7v7H0z"/></svg>`,
+      ),
+    )
+    await expect(
+      pageQrCapture.decodeVisibleOtpauthCandidates(),
+    ).resolves.toEqual({
+      status: 'ready',
+      candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
+    })
+  })
+
   test('sign-in, app-download, and payment QR dialogs do not suggest enrollment', async () => {
     for (const [title, body] of [
       [
         'Sign in with your phone',
         'Scan this QR code with the Nook Authenticator app to sign in.',
       ],
-      [
-        'Get the app',
-        'Scan this QR code to download our authenticator app.',
-      ],
+      ['Get the app', 'Scan this QR code to download our authenticator app.'],
       ['Checkout', 'Scan this QR code with your authenticator app to pay.'],
     ]) {
       const fixture = new DialogQrObservationFixture(`
