@@ -40,6 +40,8 @@ export enum SidePanelConnectFailure {
   Start = 'start',
   /** The page sent a message the panel does not understand. */
   Protocol = 'protocol',
+  /** The panel could not check where the page's port came from. */
+  SenderCheck = 'sender-check',
 }
 
 export enum SidePanelTabFollowKind {
@@ -178,6 +180,14 @@ export class SidePanelConnects {
           },
           followUp: SidePanelConnectFollowUp.None,
         }
+      case SidePanelConnectEventKind.SenderCheckFailure:
+        return {
+          connect: {
+            kind: SidePanelConnectKind.Failed,
+            failure: SidePanelConnectFailure.SenderCheck,
+          },
+          followUp: SidePanelConnectFollowUp.None,
+        }
       case SidePanelConnectEventKind.Step:
         break
     }
@@ -260,6 +270,8 @@ export class SidePanelConnects {
         return I18N_KEYS.ExtensionActionOpenFailed
       case SidePanelConnectFailure.Protocol:
         return I18N_KEYS.ExtensionConnectTabInterrupted
+      case SidePanelConnectFailure.SenderCheck:
+        return I18N_KEYS.ExtensionConnectTabSenderCheckFailed
     }
   }
 

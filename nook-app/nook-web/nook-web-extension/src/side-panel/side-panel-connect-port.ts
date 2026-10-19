@@ -9,18 +9,22 @@ import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
  * The side panel's live link to the Nook tab it opened for a connect. Chrome
  * hands an external `runtime.connect` to every listening extension document,
  * so the panel of each window sees each page's port. While a connect is
- * pending, the panel listens for those ports and admits one only when:
+ * pending, the panel listens for those ports:
  *
- * - the trusted Simple Vault origin rule (ExternalSenderTrustPolicy) admits
- *   its sender;
- * - the sender's tab is in this panel's window;
- * - once the service worker named the connect tab, the sender is that tab;
- * - no other port is admitted already.
+ * - The trusted Simple Vault origin rule (ExternalSenderTrustPolicy) must
+ *   admit the sender, and the sender's tab must be in this panel's window.
+ *   A policy that cannot be evaluated ends the connect visibly.
+ * - Until the service worker names the connect tab, such ports are held as
+ *   candidates and nothing acts on them. A candidate that closes or sends an
+ *   undecodable message meanwhile is dropped; the connect goes on.
+ * - When the tab id arrives, only the candidate from that tab is admitted
+ *   (its latest step applies) and the others are disconnected. Later ports
+ *   are admitted only from that tab, one at a time.
  *
  * Every other port is disconnected at once. Steps carry no authority: the
- * grant import keeps its own validation. An undecodable message ends the
- * link as a protocol failure, and a closed port ends it too; nothing
- * reconnects.
+ * grant import keeps its own validation. Once admitted, an undecodable
+ * message ends the link as a protocol failure, and a closed port or connect
+ * tab ends it too; nothing reconnects.
  */
 
 /** The Simple Vault origin rule the service worker applies to external
@@ -37,6 +41,8 @@ export enum SidePanelConnectEventKind {
   Closed = 'closed',
   /** The admitted page sent a message the protocol does not know. */
   ProtocolFailure = 'protocol-failure',
+  /** The origin rule could not be evaluated for a page's port. */
+  SenderCheckFailure = 'sender-check-failure',
 }
 
 export type SidePanelConnectEvent =
@@ -46,6 +52,7 @@ export type SidePanelConnectEvent =
     }
   | { readonly kind: SidePanelConnectEventKind.Closed }
   | { readonly kind: SidePanelConnectEventKind.ProtocolFailure }
+  | { readonly kind: SidePanelConnectEventKind.SenderCheckFailure }
 
 export type SidePanelConnectListener = (event: SidePanelConnectEvent) => void
 
@@ -85,13 +92,19 @@ export enum SidePanelConnectHoldKind {
 
 export enum SidePanelConnectAdmissionKind {
   Admitted = 'admitted',
+  /** A trusted port of the window, held until the tab id arrives. */
+  Candidate = 'candidate',
   Rejected = 'rejected',
 }
 
-/** An admitted port names the tab it came from. */
+/** An admitted or candidate port names the tab it came from. */
 export type SidePanelConnectAdmission =
   | {
       readonly kind: SidePanelConnectAdmissionKind.Admitted
+      readonly tab: chrome.tabs.Tab
+    }
+  | {
+      readonly kind: SidePanelConnectAdmissionKind.Candidate
       readonly tab: chrome.tabs.Tab
     }
   | { readonly kind: SidePanelConnectAdmissionKind.Rejected }
@@ -121,7 +134,14 @@ export type SidePanelConnectAdmissionRequest = {
 type SidePanelConnectTabAdmissionRequest = {
   readonly windowId: number
   readonly tab: SidePanelConnectTab
+  readonly hold: SidePanelConnectHoldKind
   readonly sender: chrome.runtime.MessageSender
+}
+
+type SidePanelConnectKnownTabRequest = {
+  readonly tabId: number
+  readonly hold: SidePanelConnectHoldKind
+  readonly senderTab: chrome.tabs.Tab
 }
 
 enum SidePanelConnectTabMatch {
@@ -130,7 +150,7 @@ enum SidePanelConnectTabMatch {
 }
 
 type SidePanelConnectTabMatchRequest = {
-  readonly tab: SidePanelConnectTab
+  readonly tabId: number
   readonly sender: chrome.tabs.Tab
 }
 
@@ -145,7 +165,7 @@ export class SidePanelConnectAdmissionRule {
   static admission(
     request: SidePanelConnectAdmissionRequest,
   ): SidePanelConnectAdmission {
-    const { trust, pending, hold, sender } = request
+    const { trust, pending, sender } = request
     switch (trust) {
       case SidePanelConnectSenderTrust.Untrusted:
         return SidePanelConnectAdmissionRule.REJECTED
@@ -158,12 +178,6 @@ export class SidePanelConnectAdmissionRule {
       case SidePanelConnectPendingKind.Pending:
         break
     }
-    switch (hold) {
-      case SidePanelConnectHoldKind.Held:
-        return SidePanelConnectAdmissionRule.REJECTED
-      case SidePanelConnectHoldKind.Free:
-        break
-    }
     switch (sender.kind) {
       case SidePanelConnectSenderKind.Absent:
         return SidePanelConnectAdmissionRule.REJECTED
@@ -173,17 +187,18 @@ export class SidePanelConnectAdmissionRule {
     const fromTab: SidePanelConnectTabAdmissionRequest = {
       windowId: request.windowId,
       tab: request.tab,
+      hold: request.hold,
       sender: sender.sender,
     }
     return SidePanelConnectAdmissionRule.fromTab(fromTab)
   }
 
-  /** A port from no tab, from another window, or from another tab than
-   * the connect tab is rejected. */
+  /** A port from no tab or from another window is rejected; before the tab
+   * id is known a port of the window is only a candidate. */
   private static fromTab(
     request: SidePanelConnectTabAdmissionRequest,
   ): SidePanelConnectAdmission {
-    const { windowId, tab, sender } = request
+    const { windowId, tab, hold, sender } = request
     const senderTab = sender.tab
     switch (typeof senderTab) {
       case 'object':
@@ -203,7 +218,32 @@ export class SidePanelConnectAdmissionRule {
       case true:
         break
     }
-    const match: SidePanelConnectTabMatchRequest = { tab, sender: senderTab }
+    switch (tab.kind) {
+      case SidePanelConnectTabKind.Pending:
+        return { kind: SidePanelConnectAdmissionKind.Candidate, tab: senderTab }
+      case SidePanelConnectTabKind.Known: {
+        const known: SidePanelConnectKnownTabRequest = {
+          tabId: tab.tabId,
+          hold,
+          senderTab,
+        }
+        return SidePanelConnectAdmissionRule.fromKnownTab(known)
+      }
+    }
+  }
+
+  /** Once the tab id is known: only that tab, and only one port. */
+  private static fromKnownTab(
+    request: SidePanelConnectKnownTabRequest,
+  ): SidePanelConnectAdmission {
+    const { tabId, hold, senderTab } = request
+    switch (hold) {
+      case SidePanelConnectHoldKind.Held:
+        return SidePanelConnectAdmissionRule.REJECTED
+      case SidePanelConnectHoldKind.Free:
+        break
+    }
+    const match: SidePanelConnectTabMatchRequest = { tabId, sender: senderTab }
     switch (SidePanelConnectAdmissionRule.tabMatch(match)) {
       case SidePanelConnectTabMatch.Same:
         return { kind: SidePanelConnectAdmissionKind.Admitted, tab: senderTab }
@@ -212,18 +252,10 @@ export class SidePanelConnectAdmissionRule {
     }
   }
 
-  /** Before the tab is known any tab of the window may be it. */
   static tabMatch(
     request: SidePanelConnectTabMatchRequest,
   ): SidePanelConnectTabMatch {
-    const { tab, sender } = request
-    switch (tab.kind) {
-      case SidePanelConnectTabKind.Pending:
-        return SidePanelConnectTabMatch.Same
-      case SidePanelConnectTabKind.Known:
-        break
-    }
-    switch (sender.id === tab.tabId) {
+    switch (request.sender.id === request.tabId) {
       case true:
         return SidePanelConnectTabMatch.Same
       case false:
@@ -253,7 +285,7 @@ enum SidePanelConnectPortLink {
 }
 
 /** One page port: the latest step it sent, read as it arrives so nothing
- * is missed while its sender is checked. */
+ * is missed while its sender is checked or it waits as a candidate. */
 class SidePanelIncomingPort {
   private reading: SidePanelConnectReading = {
     kind: SidePanelConnectReadingKind.Silent,
@@ -321,23 +353,43 @@ class SidePanelIncomingPort {
   }
 }
 
+/** A port the panel holds, with the tab it came from. */
+type SidePanelHeldEntry = {
+  readonly incoming: SidePanelIncomingPort
+  readonly tab: chrome.tabs.Tab
+}
+
 type SidePanelHeldPort =
   | { readonly kind: SidePanelConnectHoldKind.Free }
-  | {
-      readonly kind: SidePanelConnectHoldKind.Held
-      readonly incoming: SidePanelIncomingPort
-      /** The tab the admitted port came from. */
-      readonly tab: chrome.tabs.Tab
-    }
+  | ({ readonly kind: SidePanelConnectHoldKind.Held } & SidePanelHeldEntry)
 
-enum SidePanelHeldMatch {
-  Held = 'held',
-  Other = 'other',
+type SidePanelCandidateMeeting = {
+  readonly candidate: SidePanelHeldEntry
+  readonly tabId: number
 }
 
 type SidePanelIncomingMessage = {
   readonly incoming: SidePanelIncomingPort
   readonly message: BrowserRuntimeMessageValue
+}
+
+enum SidePanelSenderCheckKind {
+  Checked = 'checked',
+  /** The policy threw or rejected instead of answering. */
+  Failed = 'failed',
+}
+
+type SidePanelSenderCheck =
+  | {
+      readonly kind: SidePanelSenderCheckKind.Checked
+      readonly trust: SidePanelConnectSenderTrust
+    }
+  | { readonly kind: SidePanelSenderCheckKind.Failed }
+
+enum SidePanelPortRole {
+  Admitted = 'admitted',
+  Candidate = 'candidate',
+  Other = 'other',
 }
 
 /** One pending connect: from the begin-pairing request until the page
@@ -349,9 +401,17 @@ export class SidePanelConnectSession {
   private static readonly PROTOCOL_FAILURE: SidePanelConnectEvent = {
     kind: SidePanelConnectEventKind.ProtocolFailure,
   }
+  private static readonly SENDER_CHECK_FAILURE: SidePanelConnectEvent = {
+    kind: SidePanelConnectEventKind.SenderCheckFailure,
+  }
+
   private pending = SidePanelConnectPendingKind.Pending
   private tab: SidePanelConnectTab = { kind: SidePanelConnectTabKind.Pending }
   private held: SidePanelHeldPort = { kind: SidePanelConnectHoldKind.Free }
+  /** Trusted ports of the window that arrived before the tab id. */
+  private candidates: SidePanelHeldEntry[] = []
+  /** Tabs of any window that closed before the tab id arrived. */
+  private readonly removedEarly = new Set<number>()
 
   constructor(private readonly request: SidePanelConnectSessionRequest) {}
 
@@ -360,36 +420,34 @@ export class SidePanelConnectSession {
     chrome.tabs.onRemoved.addListener(this.removed)
   }
 
-  /** The service worker named the connect tab: a port admitted from
-   * another tab of the window meanwhile is dropped. */
+  /** The service worker named the connect tab: its candidate is admitted
+   * and every other candidate is dropped. */
   tabOpened(tabId: number): void {
     this.tab = { kind: SidePanelConnectTabKind.Known, tabId }
-    switch (this.held.kind) {
-      case SidePanelConnectHoldKind.Free:
+    switch (this.removedEarly.has(tabId)) {
+      case true:
+        // The connect tab is gone already: the card returns.
+        this.end()
+        this.request.onevent(SidePanelConnectSession.CLOSED)
         return
-      case SidePanelConnectHoldKind.Held:
+      case false:
         break
     }
-    const { incoming, tab } = this.held
-    const match: SidePanelConnectTabMatchRequest = {
-      tab: this.tab,
-      sender: tab,
-    }
-    switch (SidePanelConnectAdmissionRule.tabMatch(match)) {
-      case SidePanelConnectTabMatch.Same:
-        this.report(incoming)
-        return
-      case SidePanelConnectTabMatch.Other:
-        incoming.disconnect()
-        this.held = { kind: SidePanelConnectHoldKind.Free }
+    const waiting = this.candidates
+    this.candidates = []
+    for (const candidate of waiting) {
+      const meeting: SidePanelCandidateMeeting = { candidate, tabId }
+      this.decide(meeting)
     }
   }
 
-  /** Stop listening and close the admitted port, if any. */
+  /** Stop listening and close every held port. */
   end(): void {
     this.pending = SidePanelConnectPendingKind.None
     chrome.runtime.onConnectExternal.removeListener(this.connected)
     chrome.tabs.onRemoved.removeListener(this.removed)
+    for (const candidate of this.candidates) candidate.incoming.disconnect()
+    this.candidates = []
     switch (this.held.kind) {
       case SidePanelConnectHoldKind.Free:
         return
@@ -412,6 +470,7 @@ export class SidePanelConnectSession {
   private readonly removed = (tabId: number): void => {
     switch (this.tab.kind) {
       case SidePanelConnectTabKind.Pending:
+        this.removedEarly.add(tabId)
         return
       case SidePanelConnectTabKind.Known:
         break
@@ -427,7 +486,22 @@ export class SidePanelConnectSession {
   }
 
   private async admit(incoming: SidePanelIncomingPort): Promise<void> {
-    const trust = await this.trust(incoming)
+    const check = await this.check(incoming)
+    switch (check.kind) {
+      case SidePanelSenderCheckKind.Failed:
+        incoming.disconnect()
+        switch (this.pending) {
+          case SidePanelConnectPendingKind.None:
+            return
+          case SidePanelConnectPendingKind.Pending:
+            break
+        }
+        this.end()
+        this.request.onevent(SidePanelConnectSession.SENDER_CHECK_FAILURE)
+        return
+      case SidePanelSenderCheckKind.Checked:
+        break
+    }
     // A port that closed while its sender was checked is never admitted.
     switch (incoming.linked()) {
       case SidePanelConnectPortLink.Closed:
@@ -436,7 +510,7 @@ export class SidePanelConnectSession {
         break
     }
     const admission: SidePanelConnectAdmissionRequest = {
-      trust,
+      trust: check.trust,
       pending: this.pending,
       hold: this.held.kind,
       windowId: this.request.windowId,
@@ -448,53 +522,115 @@ export class SidePanelConnectSession {
       case SidePanelConnectAdmissionKind.Rejected:
         incoming.disconnect()
         return
-      case SidePanelConnectAdmissionKind.Admitted:
-        this.held = {
-          kind: SidePanelConnectHoldKind.Held,
-          incoming,
-          tab: admitted.tab,
-        }
-        this.report(incoming)
+      case SidePanelConnectAdmissionKind.Candidate: {
+        const candidate: SidePanelHeldEntry = { incoming, tab: admitted.tab }
+        this.candidates.push(candidate)
+        this.dropUndecodableCandidate(incoming)
+        return
+      }
+      case SidePanelConnectAdmissionKind.Admitted: {
+        const entry: SidePanelHeldEntry = { incoming, tab: admitted.tab }
+        this.hold(entry)
+      }
     }
   }
 
-  private trust(
+  /** A candidate meets the known tab id. */
+  private decide(meeting: SidePanelCandidateMeeting): void {
+    const { candidate, tabId } = meeting
+    const match: SidePanelConnectTabMatchRequest = {
+      tabId,
+      sender: candidate.tab,
+    }
+    switch (SidePanelConnectAdmissionRule.tabMatch(match)) {
+      case SidePanelConnectTabMatch.Other:
+        candidate.incoming.disconnect()
+        return
+      case SidePanelConnectTabMatch.Same:
+        break
+    }
+    switch (this.held.kind) {
+      case SidePanelConnectHoldKind.Held:
+        candidate.incoming.disconnect()
+        return
+      case SidePanelConnectHoldKind.Free:
+        this.hold(candidate)
+    }
+  }
+
+  private hold(entry: SidePanelHeldEntry): void {
+    this.held = { kind: SidePanelConnectHoldKind.Held, ...entry }
+    this.report(entry.incoming)
+  }
+
+  private check(
     incoming: SidePanelIncomingPort,
-  ): Promise<SidePanelConnectSenderTrust> {
+  ): Promise<SidePanelSenderCheck> {
     const sender = incoming.sender()
+    const untrusted: SidePanelSenderCheck = {
+      kind: SidePanelSenderCheckKind.Checked,
+      trust: SidePanelConnectSenderTrust.Untrusted,
+    }
     switch (sender.kind) {
       case SidePanelConnectSenderKind.Absent:
-        return Promise.resolve(SidePanelConnectSenderTrust.Untrusted)
+        return Promise.resolve(untrusted)
       case SidePanelConnectSenderKind.Present:
         break
     }
+    const failed: SidePanelSenderCheck = {
+      kind: SidePanelSenderCheckKind.Failed,
+    }
+    // A false answer rejects this port quietly; a policy that could not
+    // answer ends the connect, so the card never waits on it.
     const checked = Effect.tryPromise(() =>
       this.request.senderPolicy.admits(sender.sender),
     ).pipe(
-      Effect.map((admitted) => SidePanelConnectSession.trustOf(admitted)),
-      // A sender the policy could not check is not trusted.
-      Effect.orElseSucceed(() => SidePanelConnectSenderTrust.Untrusted),
+      Effect.map((admitted) => SidePanelConnectSession.checked(admitted)),
+      Effect.catch(() => Effect.succeed(failed)),
     )
     return Effect.runPromise(checked)
   }
 
-  private static trustOf(admitted: boolean): SidePanelConnectSenderTrust {
+  private static checked(admitted: boolean): SidePanelSenderCheck {
     switch (admitted) {
       case true:
-        return SidePanelConnectSenderTrust.Trusted
+        return {
+          kind: SidePanelSenderCheckKind.Checked,
+          trust: SidePanelConnectSenderTrust.Trusted,
+        }
       case false:
-        return SidePanelConnectSenderTrust.Untrusted
+        return {
+          kind: SidePanelSenderCheckKind.Checked,
+          trust: SidePanelConnectSenderTrust.Untrusted,
+        }
     }
   }
 
   private message(received: SidePanelIncomingMessage): void {
     const { incoming, message } = received
     incoming.receive(message)
-    switch (this.heldMatch(incoming)) {
-      case SidePanelHeldMatch.Other:
-        return
-      case SidePanelHeldMatch.Held:
+    switch (this.role(incoming)) {
+      case SidePanelPortRole.Admitted:
         this.report(incoming)
+        return
+      case SidePanelPortRole.Candidate:
+        this.dropUndecodableCandidate(incoming)
+        return
+      case SidePanelPortRole.Other:
+        return
+    }
+  }
+
+  /** A candidate that broke the protocol before the tab id is dropped. */
+  private dropUndecodableCandidate(incoming: SidePanelIncomingPort): void {
+    switch (incoming.latest().kind) {
+      case SidePanelConnectReadingKind.Undecodable:
+        incoming.disconnect()
+        this.forgetCandidate(incoming)
+        return
+      case SidePanelConnectReadingKind.Silent:
+      case SidePanelConnectReadingKind.Step:
+        return
     }
   }
 
@@ -502,15 +638,24 @@ export class SidePanelConnectSession {
     // Reading lastError marks Chrome's disconnect reason as handled.
     void chrome.runtime.lastError
     incoming.closed()
-    switch (this.heldMatch(incoming)) {
-      case SidePanelHeldMatch.Other:
+    switch (this.role(incoming)) {
+      case SidePanelPortRole.Candidate:
+        this.forgetCandidate(incoming)
         return
-      case SidePanelHeldMatch.Held:
+      case SidePanelPortRole.Other:
+        return
+      case SidePanelPortRole.Admitted:
         break
     }
     this.held = { kind: SidePanelConnectHoldKind.Free }
     this.end()
     this.request.onevent(SidePanelConnectSession.CLOSED)
+  }
+
+  private forgetCandidate(incoming: SidePanelIncomingPort): void {
+    this.candidates = this.candidates.filter(
+      (candidate) => candidate.incoming !== incoming,
+    )
   }
 
   private report(incoming: SidePanelIncomingPort): void {
@@ -532,18 +677,27 @@ export class SidePanelConnectSession {
     }
   }
 
-  private heldMatch(incoming: SidePanelIncomingPort): SidePanelHeldMatch {
+  private role(incoming: SidePanelIncomingPort): SidePanelPortRole {
     switch (this.held.kind) {
-      case SidePanelConnectHoldKind.Free:
-        return SidePanelHeldMatch.Other
       case SidePanelConnectHoldKind.Held:
+        switch (this.held.incoming === incoming) {
+          case true:
+            return SidePanelPortRole.Admitted
+          case false:
+            break
+        }
+        break
+      case SidePanelConnectHoldKind.Free:
         break
     }
-    switch (this.held.incoming === incoming) {
+    const candidate = this.candidates.some(
+      (waiting) => waiting.incoming === incoming,
+    )
+    switch (candidate) {
       case true:
-        return SidePanelHeldMatch.Held
+        return SidePanelPortRole.Candidate
       case false:
-        return SidePanelHeldMatch.Other
+        return SidePanelPortRole.Other
     }
   }
 }

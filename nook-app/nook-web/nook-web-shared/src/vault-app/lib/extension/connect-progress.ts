@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import {
   ExtensionConnectStepKind,
-  type ExtensionConnectFailureReason,
   type ExtensionConnectStep,
 } from "$web-shared/extension/extension-connect-progress";
 
@@ -43,24 +42,11 @@ enum ExtensionConnectProgressLinkKind {
   Ended = "ended",
 }
 
-enum ExtensionConnectSentKind {
-  Nothing = "nothing",
-  Sent = "sent",
-}
-
-type ExtensionConnectSent =
-  | { readonly kind: ExtensionConnectSentKind.Nothing }
-  | {
-      readonly kind: ExtensionConnectSentKind.Sent;
-      readonly step: ExtensionConnectStep;
-    };
-
 type ExtensionConnectProgressLink =
   | { readonly kind: ExtensionConnectProgressLinkKind.Idle }
   | {
       readonly kind: ExtensionConnectProgressLinkKind.Open;
       readonly port: ExtensionConnectPagePort;
-      readonly sent: ExtensionConnectSent;
     }
   | { readonly kind: ExtensionConnectProgressLinkKind.Ended };
 
@@ -80,21 +66,6 @@ export type ExtensionConnectProgressBegin = {
   /** The extension runtime id the connect URL named. */
   readonly extensionRuntimeId: string;
 };
-
-type ExtensionConnectStepPair = {
-  readonly sent: ExtensionConnectStep;
-  readonly next: ExtensionConnectStep;
-};
-
-type ExtensionConnectReasonPair = {
-  readonly sent: ExtensionConnectFailureReason;
-  readonly next: ExtensionConnectStep;
-};
-
-enum ExtensionConnectStepSameness {
-  Same = "same",
-  Changed = "changed",
-}
 
 /** Owns this page's port to the extension and the step it reports. */
 export class ExtensionConnectProgress {
@@ -116,8 +87,8 @@ export class ExtensionConnectProgress {
       case ExtensionConnectProgressLinkKind.Idle:
         break;
     }
-    const connect = this.host.chrome?.runtime?.connect;
-    switch (typeof connect) {
+    const runtime = this.host.chrome?.runtime;
+    switch (typeof runtime?.connect) {
       case "function":
         break;
       // A browser without the extension runtime has no port to open.
@@ -131,8 +102,11 @@ export class ExtensionConnectProgress {
         this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
         return;
     }
+    // Called as a runtime method, as Chrome expects.
     const opened = Effect.runSync(
-      Effect.result(Effect.try(() => connect(request.extensionRuntimeId))),
+      Effect.result(
+        Effect.try(() => runtime?.connect?.(request.extensionRuntimeId)),
+      ),
     );
     switch (opened._tag) {
       case "Failure":
@@ -142,12 +116,21 @@ export class ExtensionConnectProgress {
         break;
     }
     const port = opened.success;
+    switch (typeof port) {
+      case "object":
+        break;
+      case "undefined":
+      case "string":
+      case "number":
+      case "bigint":
+      case "boolean":
+      case "symbol":
+      case "function":
+        this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
+        return;
+    }
     port.onDisconnect.addListener(() => this.disconnected(port));
-    this.link = {
-      kind: ExtensionConnectProgressLinkKind.Open,
-      port,
-      sent: { kind: ExtensionConnectSentKind.Nothing },
-    };
+    this.link = { kind: ExtensionConnectProgressLinkKind.Open, port };
     const openedStep: ExtensionConnectStep = {
       kind: ExtensionConnectStepKind.Opened,
     };
@@ -160,7 +143,8 @@ export class ExtensionConnectProgress {
     }
   }
 
-  /** The page's current step; sent while the port is open and changed. */
+  /** The page's current step; sent while the port is open. Repeats are
+   * harmless: the panel shows the latest step. */
   report(step: ExtensionConnectStep): void {
     this.current = { kind: ExtensionConnectCurrentKind.Step, step };
     this.send(step);
@@ -188,20 +172,7 @@ export class ExtensionConnectProgress {
       case ExtensionConnectProgressLinkKind.Open:
         break;
     }
-    const { port, sent } = this.link;
-    switch (sent.kind) {
-      case ExtensionConnectSentKind.Nothing:
-        break;
-      case ExtensionConnectSentKind.Sent: {
-        const pair: ExtensionConnectStepPair = { sent: sent.step, next: step };
-        switch (ExtensionConnectProgress.sameness(pair)) {
-          case ExtensionConnectStepSameness.Same:
-            return;
-          case ExtensionConnectStepSameness.Changed:
-            break;
-        }
-      }
-    }
+    const { port } = this.link;
     const posted = Effect.runSync(
       Effect.result(Effect.try(() => port.postMessage(step))),
     );
@@ -211,11 +182,7 @@ export class ExtensionConnectProgress {
         this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
         return;
       case "Success":
-        this.link = {
-          kind: ExtensionConnectProgressLinkKind.Open,
-          port,
-          sent: { kind: ExtensionConnectSentKind.Sent, step },
-        };
+        return;
     }
   }
 
@@ -248,54 +215,6 @@ export class ExtensionConnectProgress {
         return;
       case true:
         this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
-    }
-  }
-
-  private static sameness(
-    pair: ExtensionConnectStepPair,
-  ): ExtensionConnectStepSameness {
-    const { sent, next } = pair;
-    switch (sent.kind === next.kind) {
-      case false:
-        return ExtensionConnectStepSameness.Changed;
-      case true:
-        break;
-    }
-    switch (sent.kind) {
-      case ExtensionConnectStepKind.Failed: {
-        const reasons: ExtensionConnectReasonPair = { sent: sent.reason, next };
-        return ExtensionConnectProgress.reasonSameness(reasons);
-      }
-      case ExtensionConnectStepKind.Opened:
-      case ExtensionConnectStepKind.Unlock:
-      case ExtensionConnectStepKind.Choosing:
-      case ExtensionConnectStepKind.Creating:
-      case ExtensionConnectStepKind.Consent:
-      case ExtensionConnectStepKind.Approved:
-        return ExtensionConnectStepSameness.Same;
-    }
-  }
-
-  private static reasonSameness(
-    pair: ExtensionConnectReasonPair,
-  ): ExtensionConnectStepSameness {
-    const { sent, next } = pair;
-    switch (next.kind) {
-      case ExtensionConnectStepKind.Failed:
-        break;
-      case ExtensionConnectStepKind.Opened:
-      case ExtensionConnectStepKind.Unlock:
-      case ExtensionConnectStepKind.Choosing:
-      case ExtensionConnectStepKind.Creating:
-      case ExtensionConnectStepKind.Consent:
-      case ExtensionConnectStepKind.Approved:
-        return ExtensionConnectStepSameness.Changed;
-    }
-    switch (next.reason === sent) {
-      case true:
-        return ExtensionConnectStepSameness.Same;
-      case false:
-        return ExtensionConnectStepSameness.Changed;
     }
   }
 }

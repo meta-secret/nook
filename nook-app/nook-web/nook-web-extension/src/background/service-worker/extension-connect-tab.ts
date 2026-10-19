@@ -46,25 +46,11 @@ export enum ExtensionConnectTabFocus {
   Background = 'background',
 }
 
-export enum ExtensionConnectTabRecencyKind {
-  Known = 'known',
-  /** The browser did not report when the tab was last active. */
-  Unreported = 'unreported',
-}
-
-export type ExtensionConnectTabRecency =
-  | {
-      readonly kind: ExtensionConnectTabRecencyKind.Known
-      readonly lastAccessed: number
-    }
-  | { readonly kind: ExtensionConnectTabRecencyKind.Unreported }
-
 /** A Simple Vault tab of the requesting window. */
 export type ExtensionConnectTabCandidate = {
   readonly tabId: number
   readonly index: number
   readonly focus: ExtensionConnectTabFocus
-  readonly recency: ExtensionConnectTabRecency
 }
 
 export type ExtensionConnectTabCandidates =
@@ -111,9 +97,7 @@ enum ExtensionConnectTabPreference {
 
 /**
  * Which open Simple Vault tab a connect reuses: the window's active tab
- * when it is one, otherwise the one most recently active, and the first in
- * tab-strip order when that still ties. A tab whose last activity the
- * browser did not report ranks after every tab whose activity it did.
+ * when it is one, otherwise the first Simple Vault tab in tab-strip order.
  * No Simple Vault tab in the window: a new tab opens there.
  */
 export class ExtensionConnectTabChoice {
@@ -160,21 +144,20 @@ export class ExtensionConnectTabChoice {
     }
   }
 
+  /** The active tab first; otherwise the earlier one in the tab strip. */
   private static preference(
     ranking: ExtensionConnectTabRanking,
   ): ExtensionConnectTabPreference {
-    const { first, second } = ranking
-    const order = [
-      ExtensionConnectTabChoice.focusRank(first.focus) -
-        ExtensionConnectTabChoice.focusRank(second.focus),
-      ExtensionConnectTabChoice.recencyOrder(ranking),
-      second.index - first.index,
-    ].find((difference) => difference !== 0)
-    switch (typeof order === 'number' && order > 0) {
-      case true:
+    const focus =
+      ExtensionConnectTabChoice.focusRank(ranking.first.focus) -
+      ExtensionConnectTabChoice.focusRank(ranking.second.focus)
+    switch (Math.sign(focus)) {
+      case 1:
         return ExtensionConnectTabPreference.First
-      case false:
+      case -1:
         return ExtensionConnectTabPreference.Second
+      default:
+        return ExtensionConnectTabChoice.tabStripOrder(ranking)
     }
   }
 
@@ -187,30 +170,14 @@ export class ExtensionConnectTabChoice {
     }
   }
 
-  /** Positive when the first tab was active more recently. */
-  private static recencyOrder(ranking: ExtensionConnectTabRanking): number {
-    const { first, second } = ranking
-    switch (first.recency.kind) {
-      case ExtensionConnectTabRecencyKind.Unreported:
-        return ExtensionConnectTabChoice.unreportedOrder(second.recency)
-      case ExtensionConnectTabRecencyKind.Known:
-        break
-    }
-    switch (second.recency.kind) {
-      case ExtensionConnectTabRecencyKind.Unreported:
-        return 1
-      case ExtensionConnectTabRecencyKind.Known:
-        return first.recency.lastAccessed - second.recency.lastAccessed
-    }
-  }
-
-  /** An unreported tab against another tab's recency. */
-  private static unreportedOrder(other: ExtensionConnectTabRecency): number {
-    switch (other.kind) {
-      case ExtensionConnectTabRecencyKind.Unreported:
-        return 0
-      case ExtensionConnectTabRecencyKind.Known:
-        return -1
+  private static tabStripOrder(
+    ranking: ExtensionConnectTabRanking,
+  ): ExtensionConnectTabPreference {
+    switch (ranking.first.index < ranking.second.index) {
+      case true:
+        return ExtensionConnectTabPreference.First
+      case false:
+        return ExtensionConnectTabPreference.Second
     }
   }
 }
@@ -346,7 +313,6 @@ export class ExtensionConnectTabs {
       tabId,
       index: tab.index,
       focus: ExtensionConnectTabs.focus(tab.active),
-      recency: ExtensionConnectTabs.recency(tab.lastAccessed),
     }
   }
 
@@ -430,24 +396,6 @@ export class ExtensionConnectTabs {
         return ExtensionConnectTabFocus.Active
       case false:
         return ExtensionConnectTabFocus.Background
-    }
-  }
-
-  /** Chrome reports lastAccessed from version 121 on. */
-  private static recency(
-    lastAccessed: chrome.tabs.Tab['lastAccessed'],
-  ): ExtensionConnectTabRecency {
-    switch (typeof lastAccessed) {
-      case 'number':
-        return { kind: ExtensionConnectTabRecencyKind.Known, lastAccessed }
-      case 'undefined':
-      case 'string':
-      case 'bigint':
-      case 'boolean':
-      case 'symbol':
-      case 'object':
-      case 'function':
-        return { kind: ExtensionConnectTabRecencyKind.Unreported }
     }
   }
 

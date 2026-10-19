@@ -166,10 +166,21 @@ class ConnectBrowserFixture {
 }
 
 /** Trusts only the Simple Vault origin, as ExternalSenderTrustPolicy does. */
+enum FixturePolicyAnswer {
+  Answers = 'answers',
+  /** Evaluating the policy fails, as when the companion WASM cannot load. */
+  Throws = 'throws',
+}
+
 class FixtureSenderPolicy {
-  checked = 0
+  answer = FixturePolicyAnswer.Answers
   admits(sender: chrome.runtime.MessageSender): Promise<boolean> {
-    this.checked += 1
+    switch (this.answer) {
+      case FixturePolicyAnswer.Throws:
+        return Promise.reject(new Error('companion WASM failed to load'))
+      case FixturePolicyAnswer.Answers:
+        break
+    }
     return Promise.resolve(
       typeof sender.url === 'string' &&
         sender.url.startsWith('https://simple.nokey.sh/'),
@@ -239,13 +250,20 @@ describe('side panel connect admission rule', () => {
     expect(SidePanelConnectAdmissionRule.admission(admissible).kind).toBe(
       SidePanelConnectAdmissionKind.Admitted,
     )
-    // Before the service worker named the tab, any tab of the window is it.
-    expect(
-      SidePanelConnectAdmissionRule.admission({
-        ...admissible,
-        tab: { kind: SidePanelConnectTabKind.Pending },
-      }).kind,
-    ).toBe(SidePanelConnectAdmissionKind.Admitted)
+    // Before the service worker named the tab, a port of the window is only
+    // a candidate, even while another candidate waits.
+    for (const hold of [
+      SidePanelConnectHoldKind.Free,
+      SidePanelConnectHoldKind.Held,
+    ]) {
+      expect(
+        SidePanelConnectAdmissionRule.admission({
+          ...admissible,
+          hold,
+          tab: { kind: SidePanelConnectTabKind.Pending },
+        }).kind,
+      ).toBe(SidePanelConnectAdmissionKind.Candidate)
+    }
   })
 
   test('rejects an untrusted origin, no pending connect, a second port, another window, another tab or no tab', () => {
@@ -332,26 +350,78 @@ describe('side panel connect session', () => {
     expect(scenario.events).toEqual([])
   })
 
-  test('a port admitted before the tab id arrives is dropped when the id names another tab', async () => {
+  test('a foreign candidate before the tab id does not block the real port', async () => {
     const scenario = new SessionScenario()
     scenario.open()
-    const early = nookPage({ tabId: CONNECT_TAB + 5 })
-    browser.connect(early)
-    early.send(consent)
+    const other = nookPage({ tabId: CONNECT_TAB + 5 })
+    const page = nookPage()
+    browser.connect(other)
+    other.send({ kind: ExtensionConnectStepKind.Choosing })
+    browser.connect(page)
+    page.send(consent)
     await SessionScenario.settle()
-    expect(early.disconnected).toBe(false)
+    // Candidates wait: nothing is reported or disconnected yet.
+    expect(scenario.events).toEqual([])
+    expect(other.disconnected).toBe(false)
+    expect(page.disconnected).toBe(false)
     scenario.sessions.tabOpened(CONNECT_TAB)
-    expect(early.disconnected).toBe(true)
-    // The real connect tab is admitted next, and only its steps count.
+    expect(other.disconnected).toBe(true)
+    expect(page.disconnected).toBe(false)
+    expect(scenario.events).toEqual([
+      { kind: SidePanelConnectEventKind.Step, step: consent },
+    ])
+  })
+
+  test('a candidate that closes or breaks the protocol before the tab id is dropped, and the connect goes on', async () => {
+    const scenario = new SessionScenario()
+    scenario.open()
+    const closing = nookPage()
+    const broken = nookPage()
+    browser.connect(closing)
+    browser.connect(broken)
+    await SessionScenario.settle()
+    closing.close()
+    broken.send({ kind: 'teleported' })
+    expect(broken.disconnected).toBe(true)
+    expect(scenario.events).toEqual([])
+    expect(browser.connects).toHaveLength(1)
+    // The reloaded page connects again and is admitted once the id arrives.
     const page = nookPage()
     browser.connect(page)
     page.send(consent)
     await SessionScenario.settle()
-    expect(page.disconnected).toBe(false)
+    scenario.sessions.tabOpened(CONNECT_TAB)
     expect(scenario.events).toEqual([
       { kind: SidePanelConnectEventKind.Step, step: consent },
-      { kind: SidePanelConnectEventKind.Step, step: consent },
     ])
+  })
+
+  test('a connect tab that closed before its id arrived ends the connect', () => {
+    const scenario = new SessionScenario()
+    scenario.open()
+    browser.removeTab(CONNECT_TAB + 1)
+    browser.removeTab(CONNECT_TAB)
+    expect(scenario.events).toEqual([])
+    scenario.sessions.tabOpened(CONNECT_TAB)
+    expect(scenario.events).toEqual([
+      { kind: SidePanelConnectEventKind.Closed },
+    ])
+    expect(browser.connects).toHaveLength(0)
+    expect(browser.removals).toHaveLength(0)
+  })
+
+  test('a sender policy that cannot answer ends the connect visibly', async () => {
+    const scenario = new SessionScenario()
+    scenario.open()
+    scenario.policy.answer = FixturePolicyAnswer.Throws
+    const page = nookPage()
+    browser.connect(page)
+    await SessionScenario.settle()
+    expect(page.disconnected).toBe(true)
+    expect(scenario.events).toEqual([
+      { kind: SidePanelConnectEventKind.SenderCheckFailure },
+    ])
+    expect(browser.connects).toHaveLength(0)
   })
 
   test('an undecodable message disconnects the page and reports a protocol failure', async () => {
@@ -464,6 +534,17 @@ describe('side panel connect state', () => {
     expect(
       SidePanelConnects.failureAlert(SidePanelConnectFailure.Protocol),
     ).toBe(I18N_KEYS.ExtensionConnectTabInterrupted)
+    const unchecked = SidePanelConnects.advance({
+      connect: inTab,
+      event: { kind: SidePanelConnectEventKind.SenderCheckFailure },
+    })
+    expect(unchecked.connect).toEqual({
+      kind: SidePanelConnectKind.Failed,
+      failure: SidePanelConnectFailure.SenderCheck,
+    })
+    expect(
+      SidePanelConnects.failureAlert(SidePanelConnectFailure.SenderCheck),
+    ).toBe(I18N_KEYS.ExtensionConnectTabSenderCheckFailed)
   })
 
   test('steps before the tab id arrives, or with no connect, change nothing', () => {

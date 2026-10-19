@@ -655,6 +655,7 @@ export const I18N_KEYS = {
   ExtensionConnectTabFailedGrant: 'extension.connect_tab.failed_grant',
   ExtensionConnectTabInterrupted: 'extension.connect_tab.interrupted',
   ExtensionConnectTabOpened: 'extension.connect_tab.opened',
+  ExtensionConnectTabSenderCheckFailed: 'extension.connect_tab.sender_check_failed',
   ExtensionConnectTabShowTab: 'extension.connect_tab.show_tab',
   ExtensionConnectTabUnlock: 'extension.connect_tab.unlock',
   ExtensionConsentApprovalFailed: 'extension.consent.approval_failed',

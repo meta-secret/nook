@@ -1721,6 +1721,7 @@
       "failed_grant": "Nook could not prepare this browser's access. Try again in the Nook tab.",
       "failed_delivery": "This browser did not take the approval. Try again in the Nook tab.",
       "interrupted": "Nook lost track of the Nook tab. Connect again.",
+      "sender_check_failed": "Nook could not check the Nook tab, so it stopped connecting. Connect again.",
       "show_tab": "Show Nook tab"
     },
     "action": {

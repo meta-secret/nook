@@ -20,12 +20,12 @@
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
   import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
-  import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import { extensionConnectProgress } from '$lib/extension/connect-progress'
   import {
-    ExtensionConnectAccessActivity,
-    ExtensionConnectBrowserVaults,
+    ExtensionConnectPageReportKind,
     ExtensionConnectPageSteps,
+    type ExtensionConnectPageView,
   } from '$lib/components/extension-connect-progress-steps'
 
   type AccessGateProps = ComponentProps<typeof VaultAccessGate>
@@ -74,7 +74,12 @@
   $effect(() => {
     switch (extensionConnectRequestState.kind) {
       case ExtensionConnectIntentKind.Requested: {
-        if (!extensionConnectRoute) return
+        switch (extensionConnectRoute) {
+          case false:
+            return
+          case true:
+            break
+        }
         const progressBegin: Parameters<
           typeof extensionConnectProgress.begin
         >[0] = {
@@ -92,30 +97,20 @@
   /** Before a vault is open, the access gate's step: unlock the identity
    * to connect, or create or join (the consent reports its own). */
   $effect(() => {
-    if (
-      !extensionConnectRoute ||
-      extensionConnectRequestState.kind !== ExtensionConnectIntentKind.Requested
-    )
-      return
-    if (vault.newIdentity !== NewIdentityStage.Off) {
-      extensionConnectProgress.report(ExtensionConnectPageSteps.newIdentity())
-      return
+    const view: ExtensionConnectPageView = {
+      connectRoute: extensionConnectRoute,
+      intent: extensionConnectRequestState.kind,
+      preserveAccessGate,
+      localVaultCount: vault.localVaults.length,
+      vault,
     }
-    if (vault.isAuthenticated && !preserveAccessGate) return
-    const access: Parameters<typeof ExtensionConnectPageSteps.access>[0] = {
-      vaults:
-        vault.localVaultPresent || vault.localVaults.length > 0
-          ? ExtensionConnectBrowserVaults.Held
-          : ExtensionConnectBrowserVaults.None,
-      activity:
-        vault.isVerifying ||
-        vault.isInitializing ||
-        preserveAccessGate ||
-        vault.firstRun !== FirstRunStage.Off
-          ? ExtensionConnectAccessActivity.Busy
-          : ExtensionConnectAccessActivity.Idle,
+    const report = ExtensionConnectPageSteps.page(view)
+    switch (report.kind) {
+      case ExtensionConnectPageReportKind.Silent:
+        return
+      case ExtensionConnectPageReportKind.Report:
+        extensionConnectProgress.report(report.step)
     }
-    extensionConnectProgress.report(ExtensionConnectPageSteps.access(access))
   })
 </script>
 

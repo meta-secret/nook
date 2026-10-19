@@ -823,6 +823,8 @@ pub const EXTENSION_CONNECT_TAB_FAILED_DELIVERY: &str = "extension.connect_tab.f
 pub const EXTENSION_CONNECT_TAB_FAILED_GRANT: &str = "extension.connect_tab.failed_grant";
 pub const EXTENSION_CONNECT_TAB_INTERRUPTED: &str = "extension.connect_tab.interrupted";
 pub const EXTENSION_CONNECT_TAB_OPENED: &str = "extension.connect_tab.opened";
+pub const EXTENSION_CONNECT_TAB_SENDER_CHECK_FAILED: &str =
+    "extension.connect_tab.sender_check_failed";
 pub const EXTENSION_CONNECT_TAB_SHOW_TAB: &str = "extension.connect_tab.show_tab";
 pub const EXTENSION_CONNECT_TAB_UNLOCK: &str = "extension.connect_tab.unlock";
 pub const EXTENSION_CONSENT_APPROVAL_FAILED: &str = "extension.consent.approval_failed";
