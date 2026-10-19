@@ -19,7 +19,7 @@ describe('extension-owned pairing start', () => {
               devicePublicKey: 'age1device',
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Nook Extension',
-              start: { kind: 'create', vaultName: 'Home' },
+              windowId: 7,
             },
           }),
         ),
@@ -35,13 +35,13 @@ describe('extension-owned pairing start', () => {
               devicePublicKey: '',
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Nook Extension',
-              start: { kind: 'unspecified' },
+              windowId: 7,
             },
           }),
         ),
       )._tag,
     ).toBe('Failure')
-    // The side panel's connect choice is part of the request.
+    // The requesting page's window is part of the request.
     expect(
       Effect.runSync(
         Effect.result(
