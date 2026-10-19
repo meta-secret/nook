@@ -16,6 +16,7 @@ import type {
   NookImportResult,
   PasskeyDetailsView,
   NookSecretRecord,
+  SecretHistoryView,
   SecretType,
 } from "$lib/nook";
 import { generate_secret_id } from "$lib/nook";
@@ -141,6 +142,10 @@ interface AuthenticatorCodeRequest {
 }
 
 export interface PasskeyDetailsRequest {
+  readonly id: string;
+}
+
+export interface SecretHistoryRequest {
   readonly id: string;
 }
 
@@ -850,6 +855,38 @@ export class VaultSecretActions {
         backupStatusLabelKey: result.value.backupStatusLabelKey,
       };
       return storageOk(details);
+    } finally {
+      result.value.free();
+    }
+  }
+
+  async secretHistory({
+    id,
+  }: SecretHistoryRequest): Promise<
+    Result<SecretHistoryView, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const result = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(await admittedManager.value.secret_history_js(id));
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (result.isErr()) return storageErr(result.error);
+    try {
+      const history: SecretHistoryView = {
+        originLabelKey: result.value.originLabelKey,
+        originAt: result.value.originAt,
+        originDeviceLabelKey: result.value.originDeviceLabelKey,
+        originDeviceValue: result.value.originDeviceValue,
+        modifiedAt: result.value.modifiedAt,
+        modifiedDeviceLabelKey: result.value.modifiedDeviceLabelKey,
+        modifiedDeviceValue: result.value.modifiedDeviceValue,
+      };
+      return storageOk(history);
     } finally {
       result.value.free();
     }

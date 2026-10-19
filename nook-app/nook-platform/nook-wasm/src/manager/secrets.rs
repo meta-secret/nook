@@ -13,6 +13,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 mod event_log;
 pub use event_log::*;
 mod passkey_details;
+mod secret_history;
 mod secret_import;
 
 pub(super) struct SecretReplacementInput {

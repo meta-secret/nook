@@ -6,7 +6,11 @@ import { err, ok } from 'neverthrow'
 import { Effect } from 'effect'
 import SecretVault from '$lib/components/SecretVault.svelte'
 import { NookSecretTypeFilter, secret_type_name } from '$app-wasm'
-import { SecretType, type PasskeyDetailsView } from '$lib/nook'
+import {
+  SecretType,
+  type PasskeyDetailsView,
+  type SecretHistoryView,
+} from '$lib/nook'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import type { SecretPageRefreshSnapshot } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -24,6 +28,16 @@ class PasskeyVaultDiscoveryFixture {
   readonly loadPage = vi.spyOn(this.vault, 'loadSecretPage')
   readonly decrypt = vi.spyOn(this.vault, 'decryptSecret')
   readonly passkeyDetails = vi.spyOn(this.vault, 'passkeyDetails')
+  readonly secretHistory = vi.spyOn(this.vault, 'secretHistory')
+  readonly history: SecretHistoryView = {
+    originLabelKey: I18N_KEYS.VaultFieldsHistoryCreated,
+    originAt: '2026-01-02T03:04:05Z',
+    originDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis,
+    originDeviceValue: '',
+    modifiedAt: '2026-03-01T00:00:00Z',
+    modifiedDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+    modifiedDeviceValue: 'Work laptop',
+  }
   readonly details: PasskeyDetailsView = {
     credentialId: 'Y3JlZGVudGlhbC1pZC1maXh0dXJl',
     relyingPartyName: 'Example Login',
@@ -67,6 +81,7 @@ class PasskeyVaultDiscoveryFixture {
     this.vault.secrets = [this.passkey, this.login]
     this.vault.secretTotal = 2
     this.passkeyDetails.mockResolvedValue(ok(this.details))
+    this.secretHistory.mockResolvedValue(ok(this.history))
     vi.spyOn(this.vault, 't').mockImplementation((request) => {
       switch (typeof request) {
         case 'string':
@@ -146,6 +161,16 @@ test('discovers a website passkey in the complete vault and expands safe account
   await tick()
   await tick()
   expect(fixture.passkeyDetails).toHaveBeenCalledWith('secret_website_passkey')
+  expect(fixture.secretHistory).toHaveBeenCalledWith('secret_website_passkey')
+  expect(
+    within(passkeyGroup).getByTestId('history-origin').textContent,
+  ).toContain(I18N_KEYS.VaultFieldsHistoryCreated)
+  expect(
+    within(passkeyGroup)
+      .getByTestId('history-modified')
+      .querySelector('time')
+      ?.getAttribute('datetime'),
+  ).toBe('2026-03-01T00:00:00Z')
   expect(passkeyGroup.textContent).toContain('alice@example.com')
   expect(
     within(passkeyGroup).getByTestId('passkey-credential-id').textContent,
@@ -184,6 +209,25 @@ test('shows an explicit error when passkey details cannot be read', async () => 
   ).toContain(I18N_KEYS.VaultFieldsPasskeyDetailsUnavailable)
   expect(
     passkeyGroup.querySelectorAll('[data-testid="passkey-credential-id"]'),
+  ).toHaveLength(0)
+})
+
+test('treats an unreadable event time as a failed history, not raw text', async () => {
+  const fixture = new PasskeyVaultDiscoveryFixture()
+  fixture.secretHistory.mockResolvedValue(
+    ok({ ...fixture.history, modifiedAt: '2026-13-45T99' }),
+  )
+  const view = render(SecretVault, fixture.props())
+  const passkeyGroup = view.getByTestId('vault-group-passkey')
+  await fireEvent.click(within(passkeyGroup).getByTestId('secret-row-toggle'))
+  await tick()
+  await tick()
+  expect(
+    within(passkeyGroup).getByTestId('history-error').textContent,
+  ).toContain(I18N_KEYS.VaultFieldsHistoryUnavailable)
+  expect(passkeyGroup.textContent).not.toContain('2026-13-45T99')
+  expect(
+    passkeyGroup.querySelectorAll('[data-testid="history-origin"]'),
   ).toHaveLength(0)
 })
 

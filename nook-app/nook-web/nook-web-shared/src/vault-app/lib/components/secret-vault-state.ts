@@ -2,6 +2,7 @@ import type {
   AuthenticatorCodeView,
   NookSecretRecord,
   PasskeyDetailsView,
+  SecretHistoryView,
 } from "$lib/nook";
 
 export enum SecretPageInteractionKind {
@@ -49,6 +50,24 @@ export type PasskeyDetailsPresentation =
       details: PasskeyDetailsView;
     }
   | { kind: PasskeyDetailsPresentationKind.Failed; id: string };
+
+export enum SecretHistoryPresentationKind {
+  Hidden = "hidden",
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
+
+/** Event-log history (created, modified, device) for the selected item. */
+export type SecretHistoryPresentation =
+  | { kind: SecretHistoryPresentationKind.Hidden }
+  | { kind: SecretHistoryPresentationKind.Loading; id: string }
+  | {
+      kind: SecretHistoryPresentationKind.Loaded;
+      id: string;
+      history: SecretHistoryView;
+    }
+  | { kind: SecretHistoryPresentationKind.Failed; id: string };
 
 export enum ClipboardNoticeKind {
   Hidden = "hidden",

@@ -3,7 +3,9 @@
   import type { VaultState } from "$lib/vault.svelte";
   import {
     PasskeyDetailsPresentationKind,
+    SecretHistoryPresentationKind,
     type PasskeyDetailsPresentation,
+    type SecretHistoryPresentation,
   } from "../secret-vault-state";
   import SecretSlot from "./SecretSlot.svelte";
   import { SlotWidth } from "./secret-slot";
@@ -11,13 +13,51 @@
 
   let {
     presentation,
+    history,
     copies,
     vault,
   }: {
     presentation: PasskeyDetailsPresentation;
+    history: SecretHistoryPresentation;
     copies: DetailCopies;
     vault: VaultState;
   } = $props();
+
+  /** Locale date and time for an RFC 3339 event timestamp the selection validated. */
+  function eventTime(at: string): string {
+    const formatOptions: ConstructorParameters<typeof Intl.DateTimeFormat>[1] =
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      };
+    return new Intl.DateTimeFormat(vault.locale, formatOptions).format(
+      new Date(at),
+    );
+  }
+
+  /** Creating-device text; undefined when the row does not apply. */
+  const originDevice = $derived.by(() => {
+    if (history.kind !== SecretHistoryPresentationKind.Loaded) return undefined;
+    const key = history.history.originDeviceLabelKey;
+    if (key === undefined) return undefined;
+    const request: Parameters<typeof vault.t>[0] = {
+      key,
+      replacements: { device: history.history.originDeviceValue },
+    };
+    return vault.t(request);
+  });
+
+  /** Modifying-device text; undefined when the item was never edited. */
+  const modifiedDevice = $derived.by(() => {
+    if (history.kind !== SecretHistoryPresentationKind.Loaded) return undefined;
+    const key = history.history.modifiedDeviceLabelKey;
+    if (key === undefined) return undefined;
+    const request: Parameters<typeof vault.t>[0] = {
+      key,
+      replacements: { device: history.history.modifiedDeviceValue },
+    };
+    return vault.t(request);
+  });
 </script>
 
 {#if presentation.kind === PasskeyDetailsPresentationKind.Loaded}
@@ -96,5 +136,52 @@
     data-testid="passkey-details-error"
   >
     {vault.t(I18N_KEYS.VaultFieldsPasskeyDetailsUnavailable)}
+  </p>
+{/if}
+
+{#if history.kind === SecretHistoryPresentationKind.Loaded}
+  {@const entry = history.history}
+  <SecretSlot label={vault.t(entry.originLabelKey)} testId="history-origin">
+    <time datetime={entry.originAt}>{eventTime(entry.originAt)}</time>
+  </SecretSlot>
+  {#if originDevice !== undefined}
+    <SecretSlot
+      label={vault.t(I18N_KEYS.VaultFieldsHistoryDevice)}
+      testId="history-origin-device"
+    >
+      {originDevice}
+    </SecretSlot>
+  {/if}
+  {#if entry.modifiedAt !== undefined}
+    <SecretSlot
+      label={vault.t(I18N_KEYS.VaultFieldsHistoryModified)}
+      testId="history-modified"
+    >
+      <time datetime={entry.modifiedAt}>{eventTime(entry.modifiedAt)}</time>
+    </SecretSlot>
+  {/if}
+  {#if modifiedDevice !== undefined}
+    <SecretSlot
+      label={vault.t(I18N_KEYS.VaultFieldsHistoryModifiedDevice)}
+      testId="history-modified-device"
+    >
+      {modifiedDevice}
+    </SecretSlot>
+  {/if}
+{:else if history.kind === SecretHistoryPresentationKind.Loading}
+  <p
+    class="col-span-full text-sm text-muted-foreground"
+    role="status"
+    data-testid="history-loading"
+  >
+    {vault.t(I18N_KEYS.VaultFieldsHistoryLoading)}
+  </p>
+{:else if history.kind === SecretHistoryPresentationKind.Failed}
+  <p
+    class="col-span-full text-sm text-destructive"
+    role="alert"
+    data-testid="history-error"
+  >
+    {vault.t(I18N_KEYS.VaultFieldsHistoryUnavailable)}
   </p>
 {/if}

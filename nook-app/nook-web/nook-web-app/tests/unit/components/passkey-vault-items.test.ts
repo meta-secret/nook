@@ -5,6 +5,7 @@ import {
   SecretType,
   type NookSecretListItem,
   type PasskeyDetailsView,
+  type SecretHistoryView,
 } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
@@ -14,8 +15,10 @@ import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
 import {
   PasskeyDetailsPresentationKind,
+  SecretHistoryPresentationKind,
   SecretPageInteractionKind,
   type PasskeyDetailsPresentation,
+  type SecretHistoryPresentation,
 } from '$lib/components/secret-vault-state'
 
 const vault = VaultStateTestFixture.create()
@@ -54,13 +57,19 @@ class PasskeyDetailRenderer {
     })
   }
 
-  static render({ item, passkeyDetails }: PasskeyDetailRender) {
+  static render(
+    { item, passkeyDetails }: PasskeyDetailRender,
+    secretHistory: SecretHistoryPresentation = {
+      kind: SecretHistoryPresentationKind.Hidden,
+    },
+  ) {
     return render(SecretDetailRow, {
       item,
       row: 1,
       expanded: true,
       pageInteraction: SecretPageInteractionKind.Ready,
       passkeyDetails,
+      secretHistory,
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),
@@ -205,5 +214,79 @@ describe('passkey item discovery', () => {
     expect(failedView.queryAllByTestId('passkey-signature-count')).toHaveLength(
       0,
     )
+  })
+
+  test('renders event-log history with truthful origin labels and devices', () => {
+    const history: SecretHistoryView = {
+      originLabelKey: I18N_KEYS.VaultFieldsHistoryCreated,
+      originAt: '2026-01-02T03:04:05Z',
+      originDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis,
+      originDeviceValue: '',
+      modifiedAt: '2026-03-01T00:00:00Z',
+      modifiedDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+      modifiedDeviceValue: 'Work laptop',
+    }
+    const request: PasskeyDetailRender = {
+      item: PasskeyDetailRenderer.passkey(),
+      passkeyDetails: { kind: PasskeyDetailsPresentationKind.Hidden },
+    }
+    const view = PasskeyDetailRenderer.render(request, {
+      kind: SecretHistoryPresentationKind.Loaded,
+      id: 'secret_passkey',
+      history,
+    })
+
+    const origin = view.getByTestId('history-origin')
+    expect(origin.textContent).toContain(I18N_KEYS.VaultFieldsHistoryCreated)
+    expect(origin.querySelector('time')?.getAttribute('datetime')).toBe(
+      '2026-01-02T03:04:05Z',
+    )
+    expect(view.getByTestId('history-origin-device').textContent).toContain(
+      I18N_KEYS.VaultFieldsHistoryDeviceThis,
+    )
+    expect(
+      view
+        .getByTestId('history-modified')
+        .querySelector('time')
+        ?.getAttribute('datetime'),
+    ).toBe('2026-03-01T00:00:00Z')
+    expect(vault.t).toHaveBeenCalledWith({
+      key: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+      replacements: { device: 'Work laptop' },
+    })
+    view.unmount()
+
+    const carried = PasskeyDetailRenderer.render(request, {
+      kind: SecretHistoryPresentationKind.Loaded,
+      id: 'secret_passkey',
+      history: {
+        ...history,
+        originLabelKey: I18N_KEYS.VaultFieldsHistoryInVaultSince,
+        originDeviceLabelKey: undefined,
+        modifiedAt: undefined,
+        modifiedDeviceLabelKey: undefined,
+      },
+    })
+    expect(carried.getByTestId('history-origin').textContent).toContain(
+      I18N_KEYS.VaultFieldsHistoryInVaultSince,
+    )
+    expect(carried.queryAllByTestId('history-origin-device')).toHaveLength(0)
+    expect(carried.queryAllByTestId('history-modified')).toHaveLength(0)
+    expect(carried.queryAllByTestId('history-modified-device')).toHaveLength(0)
+  })
+
+  test('shows an explicit error when the history cannot be derived', () => {
+    const request: PasskeyDetailRender = {
+      item: PasskeyDetailRenderer.passkey(),
+      passkeyDetails: { kind: PasskeyDetailsPresentationKind.Hidden },
+    }
+    const view = PasskeyDetailRenderer.render(request, {
+      kind: SecretHistoryPresentationKind.Failed,
+      id: 'secret_passkey',
+    })
+    const error = view.getByTestId('history-error')
+    expect(error.textContent).toContain(I18N_KEYS.VaultFieldsHistoryUnavailable)
+    expect(error.getAttribute('role')).toBe('alert')
+    expect(view.queryAllByTestId('history-origin')).toHaveLength(0)
   })
 })

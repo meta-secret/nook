@@ -105,7 +105,6 @@
   import {
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
-    PasskeyDetailsPresentationKind,
     SecretEditorKind,
     SecretRevealKind,
     SecretPageInteractionKind,
@@ -113,10 +112,10 @@
     type SecretSelection,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
-    type PasskeyDetailsPresentation,
     type SecretEditor,
     type SecretReveal,
   } from './secret-vault-state'
+  import { PasskeyDetailSelection } from './passkey-detail-selection.svelte'
 
   let {
     vault,
@@ -178,9 +177,7 @@
   let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
-  let passkeyDetails = $state<PasskeyDetailsPresentation>({
-    kind: PasskeyDetailsPresentationKind.Hidden,
-  })
+  const passkeySelection = new PasskeyDetailSelection(() => vault)
 
   class SecretVaultOrdering {
     static byType(...[left, right]: SecretListItemComparison): number {
@@ -537,32 +534,6 @@
       : { kind: AuthenticatorCodePresentationKind.Hidden }
   }
 
-  function passkeyDetailsPresentation(
-    itemId: string,
-  ): PasskeyDetailsPresentation {
-    return passkeyDetails.kind !== PasskeyDetailsPresentationKind.Hidden &&
-      passkeyDetails.id === itemId
-      ? passkeyDetails
-      : { kind: PasskeyDetailsPresentationKind.Hidden }
-  }
-
-  async function loadPasskeyDetails(id: string) {
-    passkeyDetails = { kind: PasskeyDetailsPresentationKind.Loading, id }
-    const details = await vault.passkeyDetails(id)
-    if (
-      passkeyDetails.kind !== PasskeyDetailsPresentationKind.Loading ||
-      passkeyDetails.id !== id
-    )
-      return
-    passkeyDetails = details.isOk()
-      ? {
-          kind: PasskeyDetailsPresentationKind.Loaded,
-          id,
-          details: details.value,
-        }
-      : { kind: PasskeyDetailsPresentationKind.Failed, id }
-  }
-
   async function toggleReveal(id: string) {
     const revealing = !(id in decryptedSecrets)
     const toggleSecretExposureArgs: Parameters<SecretExposure['toggle']>[0] = {
@@ -642,9 +613,9 @@
       selection.kind === SecretSelectionKind.Selected &&
       filteredItems.find((item) => item.id === id)?.type === SecretType.Passkey
     ) {
-      void loadPasskeyDetails(id)
+      passkeySelection.select(id)
     } else {
-      passkeyDetails = { kind: PasskeyDetailsPresentationKind.Hidden }
+      passkeySelection.clear()
     }
     if (
       previous.kind === SecretSelectionKind.Selected &&
@@ -876,7 +847,8 @@
                   authenticatorCode={authenticatorCodePresentation(
                     entry.item.id,
                   )}
-                  passkeyDetails={passkeyDetailsPresentation(entry.item.id)}
+                  passkeyDetails={passkeySelection.detailsFor(entry.item.id)}
+                  secretHistory={passkeySelection.historyFor(entry.item.id)}
                   copiedNotice={copiedKey}
                   onToggleExpand={toggleExpand}
                   onToggleReveal={toggleReveal}

@@ -74,6 +74,21 @@ export type PasskeyDetailsView = {
   readonly backupStatusLabelKey: string;
 };
 
+/**
+ * Event-log history of one item. Label fields are translation keys; a device
+ * row shows exactly when its label key is present, with its value as the
+ * `{device}` replacement. Absent rows do not apply to the item.
+ */
+export type SecretHistoryView = {
+  readonly originLabelKey: string;
+  readonly originAt: string;
+  readonly originDeviceLabelKey: string | undefined;
+  readonly originDeviceValue: string;
+  readonly modifiedAt: string | undefined;
+  readonly modifiedDeviceLabelKey: string | undefined;
+  readonly modifiedDeviceValue: string;
+};
+
 export interface VaultStorageSynchronizationRequest {
   readonly manager: NookVaultManager;
   readonly mode: NookStorageConnectArgs["mode"];

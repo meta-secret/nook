@@ -24,11 +24,13 @@
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
     PasskeyDetailsPresentationKind,
+    SecretHistoryPresentationKind,
     SecretPageInteractionKind,
     SecretRevealKind,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type PasskeyDetailsPresentation,
+    type SecretHistoryPresentation,
     type SecretReveal,
   } from "../secret-vault-state";
   import SecretSlot from "./SecretSlot.svelte";
@@ -57,6 +59,7 @@
     reveal = { kind: SecretRevealKind.Hidden },
     authenticatorCode = { kind: AuthenticatorCodePresentationKind.Hidden },
     passkeyDetails = { kind: PasskeyDetailsPresentationKind.Hidden },
+    secretHistory = { kind: SecretHistoryPresentationKind.Hidden },
     copiedNotice = { kind: ClipboardNoticeKind.Hidden },
     editRestriction = { decision: VaultEditDecision.Allowed },
     onToggleReveal,
@@ -71,6 +74,7 @@
     reveal?: SecretReveal;
     authenticatorCode?: AuthenticatorCodePresentation;
     passkeyDetails?: PasskeyDetailsPresentation;
+    secretHistory?: SecretHistoryPresentation;
     copiedNotice?: ClipboardNotice;
     editRestriction?: VaultEditRestriction;
     onToggleReveal: (id: string) => Promise<void>;
@@ -489,7 +493,12 @@
           item.passkeyUserName ||
           vault.t(I18N_KEYS.CommonNone)}
       </SecretSlot>
-      <PasskeyDetailSlots presentation={passkeyDetails} {copies} {vault} />
+      <PasskeyDetailSlots
+        presentation={passkeyDetails}
+        history={secretHistory}
+        {copies}
+        {vault}
+      />
     {:else if item.type === SecretType.CreditCard}
       <SecretSlot label={vault.t(I18N_KEYS.VaultFieldsTitle)}>
         {item.title.trim() || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)}
