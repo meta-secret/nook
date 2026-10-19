@@ -1,5 +1,5 @@
 import type { VaultState } from "$lib/vault.svelte";
-import type { SecretHistoryView } from "$lib/nook";
+import { SecretRevisionKind, type SecretHistoryView } from "$lib/nook";
 import {
   PasskeyDetailsPresentationKind,
   SecretHistoryPresentationKind,
@@ -80,10 +80,12 @@ export class PasskeyDetailSelection {
 
   /** An event time the browser cannot read is a failed history, not raw text. */
   private static datesReadable(history: SecretHistoryView): boolean {
-    return (
-      !Number.isNaN(Date.parse(history.originAt)) &&
-      (history.modifiedAt === undefined ||
-        !Number.isNaN(Date.parse(history.modifiedAt)))
-    );
+    const originReadable = !Number.isNaN(Date.parse(history.originAt));
+    switch (history.revision.kind) {
+      case SecretRevisionKind.Original:
+        return originReadable;
+      case SecretRevisionKind.Revised:
+        return originReadable && !Number.isNaN(Date.parse(history.revision.at));
+    }
   }
 }

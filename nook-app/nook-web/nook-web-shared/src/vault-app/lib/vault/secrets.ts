@@ -19,10 +19,24 @@ import type {
   SecretHistoryView,
   SecretType,
 } from "$lib/nook";
-import { generate_secret_id } from "$lib/nook";
+import {
+  generate_secret_id,
+  PasskeyNameKind,
+  SecretOriginDeviceKind,
+  SecretRevisionKind,
+  type PasskeyNameView,
+  type SecretOriginDeviceView,
+  type SecretRevisionView,
+} from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
-import { VaultEditDecision } from "$app-wasm";
+import {
+  NookPasskeyNameState,
+  NookSecretOriginDeviceState,
+  NookSecretRevisionState,
+  VaultEditDecision,
+  type NookSecretHistory,
+} from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
 import type {
   PasswordEntriesRefreshSnapshot,
@@ -147,6 +161,12 @@ export interface PasskeyDetailsRequest {
 
 export interface SecretHistoryRequest {
   readonly id: string;
+}
+
+/** One optional passkey name as the wasm wrapper reports it. */
+interface PasskeyNameProjection {
+  readonly state: NookPasskeyNameState;
+  readonly text: string;
 }
 
 /** Owns browser orchestration for one secrets context. */
@@ -844,10 +864,18 @@ export class VaultSecretActions {
     });
     if (result.isErr()) return storageErr(result.error);
     try {
+      const relyingPartyName: PasskeyNameProjection = {
+        state: result.value.relyingPartyNameState,
+        text: result.value.relyingPartyName,
+      };
+      const userName: PasskeyNameProjection = {
+        state: result.value.userNameState,
+        text: result.value.userName,
+      };
       const details: PasskeyDetailsView = {
         credentialId: result.value.credentialId,
-        relyingPartyName: result.value.relyingPartyName,
-        distinctUserName: result.value.distinctUserName,
+        relyingPartyName: VaultSecretActions.passkeyName(relyingPartyName),
+        userName: VaultSecretActions.passkeyName(userName),
         algorithmLabelKey: result.value.algorithmLabelKey,
         publicKeyFingerprint: result.value.publicKeyFingerprint,
         signatureCount: result.value.signatureCount,
@@ -880,15 +908,57 @@ export class VaultSecretActions {
       const history: SecretHistoryView = {
         originLabelKey: result.value.originLabelKey,
         originAt: result.value.originAt,
-        originDeviceLabelKey: result.value.originDeviceLabelKey,
-        originDeviceValue: result.value.originDeviceValue,
-        modifiedAt: result.value.modifiedAt,
-        modifiedDeviceLabelKey: result.value.modifiedDeviceLabelKey,
-        modifiedDeviceValue: result.value.modifiedDeviceValue,
+        originDevice: VaultSecretActions.originDevice(result.value),
+        revision: VaultSecretActions.revision(result.value),
       };
       return storageOk(history);
     } finally {
       result.value.free();
+    }
+  }
+
+  private static passkeyName({
+    state,
+    text,
+  }: PasskeyNameProjection): PasskeyNameView {
+    switch (state) {
+      case NookPasskeyNameState.Repeated:
+        return { kind: PasskeyNameKind.Repeated };
+      case NookPasskeyNameState.Distinct:
+        return { kind: PasskeyNameKind.Distinct, text };
+    }
+  }
+
+  private static originDevice(
+    history: NookSecretHistory,
+  ): SecretOriginDeviceView {
+    switch (history.originDeviceState) {
+      case NookSecretOriginDeviceState.NotApplicable:
+        return { kind: SecretOriginDeviceKind.NotApplicable };
+      case NookSecretOriginDeviceState.Recorded:
+        return {
+          kind: SecretOriginDeviceKind.Recorded,
+          device: {
+            labelKey: history.originDeviceLabelKey,
+            value: history.originDeviceValue,
+          },
+        };
+    }
+  }
+
+  private static revision(history: NookSecretHistory): SecretRevisionView {
+    switch (history.revisionState) {
+      case NookSecretRevisionState.Original:
+        return { kind: SecretRevisionKind.Original };
+      case NookSecretRevisionState.Revised:
+        return {
+          kind: SecretRevisionKind.Revised,
+          at: history.modifiedAt,
+          device: {
+            labelKey: history.modifiedDeviceLabelKey,
+            value: history.modifiedDeviceValue,
+          },
+        };
     }
   }
 }

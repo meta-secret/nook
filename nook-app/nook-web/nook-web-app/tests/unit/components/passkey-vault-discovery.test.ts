@@ -7,6 +7,9 @@ import { Effect } from 'effect'
 import SecretVault from '$lib/components/SecretVault.svelte'
 import { NookSecretTypeFilter, secret_type_name } from '$app-wasm'
 import {
+  PasskeyNameKind,
+  SecretOriginDeviceKind,
+  SecretRevisionKind,
   SecretType,
   type PasskeyDetailsView,
   type SecretHistoryView,
@@ -32,16 +35,23 @@ class PasskeyVaultDiscoveryFixture {
   readonly history: SecretHistoryView = {
     originLabelKey: I18N_KEYS.VaultFieldsHistoryCreated,
     originAt: '2026-01-02T03:04:05Z',
-    originDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis,
-    originDeviceValue: '',
-    modifiedAt: '2026-03-01T00:00:00Z',
-    modifiedDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
-    modifiedDeviceValue: 'Work laptop',
+    originDevice: {
+      kind: SecretOriginDeviceKind.Recorded,
+      device: { labelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis, value: '' },
+    },
+    revision: {
+      kind: SecretRevisionKind.Revised,
+      at: '2026-03-01T00:00:00Z',
+      device: {
+        labelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+        value: 'Work laptop',
+      },
+    },
   }
   readonly details: PasskeyDetailsView = {
     credentialId: 'Y3JlZGVudGlhbC1pZC1maXh0dXJl',
-    relyingPartyName: 'Example Login',
-    distinctUserName: 'alice@example.com',
+    relyingPartyName: { kind: PasskeyNameKind.Distinct, text: 'Example Login' },
+    userName: { kind: PasskeyNameKind.Distinct, text: 'alice@example.com' },
     algorithmLabelKey: I18N_KEYS.VaultFieldsPasskeyAlgorithmEs256,
     publicKeyFingerprint: 'SHA256:9+DIAhGaEvPhUkquTXtzDLd10GrycDMuT91vONRZCiY',
     signatureCount: 7,
@@ -215,7 +225,17 @@ test('shows an explicit error when passkey details cannot be read', async () => 
 test('treats an unreadable event time as a failed history, not raw text', async () => {
   const fixture = new PasskeyVaultDiscoveryFixture()
   fixture.secretHistory.mockResolvedValue(
-    ok({ ...fixture.history, modifiedAt: '2026-13-45T99' }),
+    ok({
+      ...fixture.history,
+      revision: {
+        kind: SecretRevisionKind.Revised,
+        at: '2026-13-45T99',
+        device: {
+          labelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+          value: 'Work laptop',
+        },
+      },
+    }),
   )
   const view = render(SecretVault, fixture.props())
   const passkeyGroup = view.getByTestId('vault-group-passkey')

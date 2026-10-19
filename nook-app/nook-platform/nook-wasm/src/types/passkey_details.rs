@@ -1,5 +1,21 @@
 use super::wasm_bindgen;
 
+/// Whether an optional passkey name adds information to the detail panel.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookPasskeyNameState {
+    /// The name is empty or repeats another shown field; its row does not apply.
+    Repeated,
+    /// The name is distinct; its text getter carries it.
+    Distinct,
+}
+
+impl NookPasskeyNameState {
+    fn of(name: Option<&String>) -> Self {
+        name.map_or(Self::Repeated, |_| Self::Distinct)
+    }
+}
+
 /// Public facts about one stored passkey for the vault detail panel.
 ///
 /// Built from a freshly decrypted record; the private key never reaches this
@@ -23,16 +39,30 @@ impl NookPasskeyDetails {
         self.inner.credential_id.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = relyingPartyName)]
+    #[wasm_bindgen(getter, js_name = relyingPartyNameState)]
     #[must_use]
-    pub fn relying_party_name(&self) -> Option<String> {
-        self.inner.relying_party_name.clone()
+    pub fn relying_party_name_state(&self) -> NookPasskeyNameState {
+        NookPasskeyNameState::of(self.inner.relying_party_name.as_ref())
     }
 
-    #[wasm_bindgen(getter, js_name = distinctUserName)]
+    /// Website display name; empty when its state is `Repeated`.
+    #[wasm_bindgen(getter, js_name = relyingPartyName)]
     #[must_use]
-    pub fn distinct_user_name(&self) -> Option<String> {
-        self.inner.distinct_user_name.clone()
+    pub fn relying_party_name(&self) -> String {
+        self.inner.relying_party_name.clone().unwrap_or_default()
+    }
+
+    #[wasm_bindgen(getter, js_name = userNameState)]
+    #[must_use]
+    pub fn user_name_state(&self) -> NookPasskeyNameState {
+        NookPasskeyNameState::of(self.inner.distinct_user_name.as_ref())
+    }
+
+    /// Account user name; empty when its state is `Repeated`.
+    #[wasm_bindgen(getter, js_name = userName)]
+    #[must_use]
+    pub fn user_name(&self) -> String {
+        self.inner.distinct_user_name.clone().unwrap_or_default()
     }
 
     #[wasm_bindgen(getter, js_name = algorithmLabelKey)]
@@ -109,10 +139,12 @@ mod tests {
 
         assert_eq!(details.credential_id(), URL_SAFE_NO_PAD.encode([8_u8; 32]));
         assert_eq!(
-            details.relying_party_name().as_deref(),
-            Some("Example Login")
+            details.relying_party_name_state(),
+            NookPasskeyNameState::Distinct
         );
-        assert_eq!(details.distinct_user_name(), None);
+        assert_eq!(details.relying_party_name(), "Example Login");
+        assert_eq!(details.user_name_state(), NookPasskeyNameState::Repeated);
+        assert_eq!(details.user_name(), "");
         assert_eq!(
             details.algorithm_label_key(),
             i18n_keys::VAULT_FIELDS_PASSKEY_ALGORITHM_ES256

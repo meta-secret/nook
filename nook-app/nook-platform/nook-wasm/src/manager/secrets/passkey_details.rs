@@ -34,6 +34,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::NookPasskeyNameState;
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     use nook_core::{
         DeviceIdentity, LoginSecret, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
@@ -90,11 +91,13 @@ mod browser_tests {
 
         let details = js(manager.passkey_details_js(&passkey_id))?;
         assert_eq!(details.credential_id(), credential_id);
-        assert_eq!(details.relying_party_name().as_deref(), Some("Example"));
         assert_eq!(
-            details.distinct_user_name().as_deref(),
-            Some("alice@example.com")
+            details.relying_party_name_state(),
+            NookPasskeyNameState::Distinct
         );
+        assert_eq!(details.relying_party_name(), "Example");
+        assert_eq!(details.user_name_state(), NookPasskeyNameState::Distinct);
+        assert_eq!(details.user_name(), "alice@example.com");
         assert!(details.public_key_fingerprint().starts_with("SHA256:"));
         assert_eq!(details.signature_count(), 0);
 

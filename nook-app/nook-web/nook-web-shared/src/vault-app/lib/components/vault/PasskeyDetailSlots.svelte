@@ -2,6 +2,12 @@
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import type { VaultState } from "$lib/vault.svelte";
   import {
+    PasskeyNameKind,
+    SecretOriginDeviceKind,
+    SecretRevisionKind,
+    type SecretHistoryDeviceView,
+  } from "$lib/nook";
+  import {
     PasskeyDetailsPresentationKind,
     SecretHistoryPresentationKind,
     type PasskeyDetailsPresentation,
@@ -35,47 +41,32 @@
     );
   }
 
-  /** Creating-device text; undefined when the row does not apply. */
-  const originDevice = $derived.by(() => {
-    if (history.kind !== SecretHistoryPresentationKind.Loaded) return undefined;
-    const key = history.history.originDeviceLabelKey;
-    if (key === undefined) return undefined;
+  /** Localized device row text from its translation key and `{device}` value. */
+  function deviceText(device: SecretHistoryDeviceView): string {
     const request: Parameters<typeof vault.t>[0] = {
-      key,
-      replacements: { device: history.history.originDeviceValue },
+      key: device.labelKey,
+      replacements: { device: device.value },
     };
     return vault.t(request);
-  });
-
-  /** Modifying-device text; undefined when the item was never edited. */
-  const modifiedDevice = $derived.by(() => {
-    if (history.kind !== SecretHistoryPresentationKind.Loaded) return undefined;
-    const key = history.history.modifiedDeviceLabelKey;
-    if (key === undefined) return undefined;
-    const request: Parameters<typeof vault.t>[0] = {
-      key,
-      replacements: { device: history.history.modifiedDeviceValue },
-    };
-    return vault.t(request);
-  });
+  }
 </script>
 
 {#if presentation.kind === PasskeyDetailsPresentationKind.Loaded}
   {@const details = presentation.details}
-  {#if details.distinctUserName}
+  {#if details.userName.kind === PasskeyNameKind.Distinct}
     <SecretSlot
       label={vault.t(I18N_KEYS.VaultFieldsUsername)}
       testId="passkey-user-name"
     >
-      {details.distinctUserName}
+      {details.userName.text}
     </SecretSlot>
   {/if}
-  {#if details.relyingPartyName}
+  {#if details.relyingPartyName.kind === PasskeyNameKind.Distinct}
     <SecretSlot
       label={vault.t(I18N_KEYS.VaultFieldsPasskeyRelyingPartyName)}
       testId="passkey-relying-party-name"
     >
-      {details.relyingPartyName}
+      {details.relyingPartyName.text}
     </SecretSlot>
   {/if}
   <SecretSlot
@@ -144,28 +135,26 @@
   <SecretSlot label={vault.t(entry.originLabelKey)} testId="history-origin">
     <time datetime={entry.originAt}>{eventTime(entry.originAt)}</time>
   </SecretSlot>
-  {#if originDevice !== undefined}
+  {#if entry.originDevice.kind === SecretOriginDeviceKind.Recorded}
     <SecretSlot
       label={vault.t(I18N_KEYS.VaultFieldsHistoryDevice)}
       testId="history-origin-device"
     >
-      {originDevice}
+      {deviceText(entry.originDevice.device)}
     </SecretSlot>
   {/if}
-  {#if entry.modifiedAt !== undefined}
+  {#if entry.revision.kind === SecretRevisionKind.Revised}
     <SecretSlot
       label={vault.t(I18N_KEYS.VaultFieldsHistoryModified)}
       testId="history-modified"
     >
-      <time datetime={entry.modifiedAt}>{eventTime(entry.modifiedAt)}</time>
+      <time datetime={entry.revision.at}>{eventTime(entry.revision.at)}</time>
     </SecretSlot>
-  {/if}
-  {#if modifiedDevice !== undefined}
     <SecretSlot
       label={vault.t(I18N_KEYS.VaultFieldsHistoryModifiedDevice)}
       testId="history-modified-device"
     >
-      {modifiedDevice}
+      {deviceText(entry.revision.device)}
     </SecretSlot>
   {/if}
 {:else if history.kind === SecretHistoryPresentationKind.Loading}

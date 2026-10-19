@@ -1,12 +1,32 @@
 use super::wasm_bindgen;
 use nook_core::{SecretHistory, SecretHistoryDevice, SecretRevision};
 
+/// Whether the item's origin names the device that created it.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookSecretOriginDeviceState {
+    /// Imported or carried-forward items have no creating device row.
+    NotApplicable,
+    /// The origin device getters carry the creating device.
+    Recorded,
+}
+
+/// Whether the item changed after its first recorded version.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookSecretRevisionState {
+    /// The first recorded version is current; no modification rows apply.
+    Original,
+    /// The modification getters carry the current version's time and device.
+    Revised,
+}
+
 /// One vault item's origin and last modification, for its detail panel.
 ///
-/// Label getters return Rust-owned translation keys. A device row is present
-/// exactly when its label key is; its value is the `{device}` replacement for
-/// that key (empty when the key takes none). Absent rows do not apply: an
-/// imported item has no creating device and an unedited item no modification.
+/// Label getters return Rust-owned translation keys; a device value is the
+/// `{device}` replacement for its key (empty when the key takes none). The
+/// state getters say which rows apply; text getters of rows that do not apply
+/// return empty strings.
 #[wasm_bindgen]
 pub struct NookSecretHistory {
     origin_label_key: String,
@@ -51,10 +71,22 @@ impl NookSecretHistory {
         self.origin_at.clone()
     }
 
+    #[wasm_bindgen(getter, js_name = originDeviceState)]
+    #[must_use]
+    pub fn origin_device_state(&self) -> NookSecretOriginDeviceState {
+        self.origin_device
+            .as_ref()
+            .map_or(NookSecretOriginDeviceState::NotApplicable, |_| {
+                NookSecretOriginDeviceState::Recorded
+            })
+    }
+
     #[wasm_bindgen(getter, js_name = originDeviceLabelKey)]
     #[must_use]
-    pub fn origin_device_label_key(&self) -> Option<String> {
-        self.origin_device.as_ref().map(|(key, _)| key.clone())
+    pub fn origin_device_label_key(&self) -> String {
+        self.origin_device
+            .as_ref()
+            .map_or_else(String::new, |(key, _)| key.clone())
     }
 
     #[wasm_bindgen(getter, js_name = originDeviceValue)]
@@ -65,17 +97,31 @@ impl NookSecretHistory {
             .map_or_else(String::new, |(_, value)| value.clone())
     }
 
-    /// RFC 3339 time of the current version, when the item was edited.
+    #[wasm_bindgen(getter, js_name = revisionState)]
+    #[must_use]
+    pub fn revision_state(&self) -> NookSecretRevisionState {
+        self.modified
+            .as_ref()
+            .map_or(NookSecretRevisionState::Original, |_| {
+                NookSecretRevisionState::Revised
+            })
+    }
+
+    /// RFC 3339 time of the current version when `Revised`.
     #[wasm_bindgen(getter, js_name = modifiedAt)]
     #[must_use]
-    pub fn modified_at(&self) -> Option<String> {
-        self.modified.as_ref().map(|(at, _)| at.clone())
+    pub fn modified_at(&self) -> String {
+        self.modified
+            .as_ref()
+            .map_or_else(String::new, |(at, _)| at.clone())
     }
 
     #[wasm_bindgen(getter, js_name = modifiedDeviceLabelKey)]
     #[must_use]
-    pub fn modified_device_label_key(&self) -> Option<String> {
-        self.modified.as_ref().map(|(_, (key, _))| key.clone())
+    pub fn modified_device_label_key(&self) -> String {
+        self.modified
+            .as_ref()
+            .map_or_else(String::new, |(_, (key, _))| key.clone())
     }
 
     #[wasm_bindgen(getter, js_name = modifiedDeviceValue)]
@@ -111,16 +157,18 @@ mod tests {
         );
         assert_eq!(created.origin_at(), "2026-01-02T03:04:05Z");
         assert_eq!(
-            created.origin_device_label_key().as_deref(),
-            Some(i18n_keys::VAULT_FIELDS_HISTORY_DEVICE_THIS)
+            created.origin_device_state(),
+            NookSecretOriginDeviceState::Recorded
         );
         assert_eq!(
-            created.modified_at().as_deref(),
-            Some("2026-03-01T00:00:00Z")
+            created.origin_device_label_key(),
+            i18n_keys::VAULT_FIELDS_HISTORY_DEVICE_THIS
         );
+        assert_eq!(created.revision_state(), NookSecretRevisionState::Revised);
+        assert_eq!(created.modified_at(), "2026-03-01T00:00:00Z");
         assert_eq!(
-            created.modified_device_label_key().as_deref(),
-            Some(i18n_keys::VAULT_FIELDS_HISTORY_DEVICE_UNRECORDED)
+            created.modified_device_label_key(),
+            i18n_keys::VAULT_FIELDS_HISTORY_DEVICE_UNRECORDED
         );
         assert_eq!(created.modified_device_value(), "");
 
@@ -134,8 +182,13 @@ mod tests {
             carried.origin_label_key(),
             i18n_keys::VAULT_FIELDS_HISTORY_IN_VAULT_SINCE
         );
-        assert_eq!(carried.origin_device_label_key(), None);
+        assert_eq!(
+            carried.origin_device_state(),
+            NookSecretOriginDeviceState::NotApplicable
+        );
+        assert_eq!(carried.origin_device_label_key(), "");
         assert_eq!(carried.origin_device_value(), "");
-        assert_eq!(carried.modified_at(), None);
+        assert_eq!(carried.revision_state(), NookSecretRevisionState::Original);
+        assert_eq!(carried.modified_at(), "");
     }
 }

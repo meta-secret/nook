@@ -2,6 +2,9 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, within } from '@testing-library/svelte'
 import {
+  PasskeyNameKind,
+  SecretOriginDeviceKind,
+  SecretRevisionKind,
   SecretType,
   type NookSecretListItem,
   type PasskeyDetailsView,
@@ -29,8 +32,8 @@ vi.spyOn(vault, 'resolveErrorMessage').mockImplementation((message) => message)
 
 const details: PasskeyDetailsView = {
   credentialId: 'Y3JlZGVudGlhbC1pZC1maXh0dXJl',
-  relyingPartyName: 'Example Login',
-  distinctUserName: 'alice@example.com',
+  relyingPartyName: { kind: PasskeyNameKind.Distinct, text: 'Example Login' },
+  userName: { kind: PasskeyNameKind.Distinct, text: 'alice@example.com' },
   algorithmLabelKey: I18N_KEYS.VaultFieldsPasskeyAlgorithmEs256,
   publicKeyFingerprint: 'SHA256:9+DIAhGaEvPhUkquTXtzDLd10GrycDMuT91vONRZCiY',
   signatureCount: 7,
@@ -165,8 +168,8 @@ describe('passkey item discovery', () => {
         id: 'secret_passkey',
         details: {
           ...details,
-          relyingPartyName: undefined,
-          distinctUserName: undefined,
+          relyingPartyName: { kind: PasskeyNameKind.Repeated },
+          userName: { kind: PasskeyNameKind.Repeated },
         },
       },
     }
@@ -220,11 +223,18 @@ describe('passkey item discovery', () => {
     const history: SecretHistoryView = {
       originLabelKey: I18N_KEYS.VaultFieldsHistoryCreated,
       originAt: '2026-01-02T03:04:05Z',
-      originDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis,
-      originDeviceValue: '',
-      modifiedAt: '2026-03-01T00:00:00Z',
-      modifiedDeviceLabelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
-      modifiedDeviceValue: 'Work laptop',
+      originDevice: {
+        kind: SecretOriginDeviceKind.Recorded,
+        device: { labelKey: I18N_KEYS.VaultFieldsHistoryDeviceThis, value: '' },
+      },
+      revision: {
+        kind: SecretRevisionKind.Revised,
+        at: '2026-03-01T00:00:00Z',
+        device: {
+          labelKey: I18N_KEYS.VaultFieldsHistoryDeviceNamed,
+          value: 'Work laptop',
+        },
+      },
     }
     const request: PasskeyDetailRender = {
       item: PasskeyDetailRenderer.passkey(),
@@ -262,9 +272,8 @@ describe('passkey item discovery', () => {
       history: {
         ...history,
         originLabelKey: I18N_KEYS.VaultFieldsHistoryInVaultSince,
-        originDeviceLabelKey: undefined,
-        modifiedAt: undefined,
-        modifiedDeviceLabelKey: undefined,
+        originDevice: { kind: SecretOriginDeviceKind.NotApplicable },
+        revision: { kind: SecretRevisionKind.Original },
       },
     })
     expect(carried.getByTestId('history-origin').textContent).toContain(

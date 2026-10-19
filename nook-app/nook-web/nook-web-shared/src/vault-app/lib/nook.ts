@@ -62,11 +62,21 @@ export type AuthenticatorCodeView = {
   expiresAtUnixSeconds: number;
 };
 
+export enum PasskeyNameKind {
+  /** Empty or repeating another shown field; the row does not apply. */
+  Repeated = "repeated",
+  Distinct = "distinct",
+}
+
+export type PasskeyNameView =
+  | { readonly kind: PasskeyNameKind.Repeated }
+  | { readonly kind: PasskeyNameKind.Distinct; readonly text: string };
+
 /** Public passkey facts for the detail panel; label fields are translation keys. */
 export type PasskeyDetailsView = {
   readonly credentialId: string;
-  readonly relyingPartyName: string | undefined;
-  readonly distinctUserName: string | undefined;
+  readonly relyingPartyName: PasskeyNameView;
+  readonly userName: PasskeyNameView;
   readonly algorithmLabelKey: string;
   readonly publicKeyFingerprint: string;
   readonly signatureCount: number;
@@ -74,19 +84,45 @@ export type PasskeyDetailsView = {
   readonly backupStatusLabelKey: string;
 };
 
-/**
- * Event-log history of one item. Label fields are translation keys; a device
- * row shows exactly when its label key is present, with its value as the
- * `{device}` replacement. Absent rows do not apply to the item.
- */
+/** A device row: its translation key and the `{device}` replacement value. */
+export type SecretHistoryDeviceView = {
+  readonly labelKey: string;
+  readonly value: string;
+};
+
+export enum SecretOriginDeviceKind {
+  /** Imported or carried-forward items have no creating device. */
+  NotApplicable = "not-applicable",
+  Recorded = "recorded",
+}
+
+export type SecretOriginDeviceView =
+  | { readonly kind: SecretOriginDeviceKind.NotApplicable }
+  | {
+      readonly kind: SecretOriginDeviceKind.Recorded;
+      readonly device: SecretHistoryDeviceView;
+    };
+
+export enum SecretRevisionKind {
+  /** The first recorded version is current. */
+  Original = "original",
+  Revised = "revised",
+}
+
+export type SecretRevisionView =
+  | { readonly kind: SecretRevisionKind.Original }
+  | {
+      readonly kind: SecretRevisionKind.Revised;
+      readonly at: string;
+      readonly device: SecretHistoryDeviceView;
+    };
+
+/** Event-log history of one item; label fields are translation keys. */
 export type SecretHistoryView = {
   readonly originLabelKey: string;
   readonly originAt: string;
-  readonly originDeviceLabelKey: string | undefined;
-  readonly originDeviceValue: string;
-  readonly modifiedAt: string | undefined;
-  readonly modifiedDeviceLabelKey: string | undefined;
-  readonly modifiedDeviceValue: string;
+  readonly originDevice: SecretOriginDeviceView;
+  readonly revision: SecretRevisionView;
 };
 
 export interface VaultStorageSynchronizationRequest {
