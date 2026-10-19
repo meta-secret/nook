@@ -260,6 +260,9 @@ document. Each open side panel, one per window, therefore sees each page's port.
 - A disconnect of the admitted port ends the connect, and so does closing the
   connect tab. The card returns, and nothing reconnects.
 - After `approved`, the panel closes the port.
+- A status change that moves the panel to another view also closes the port,
+  for example Use this identity or a lock. The
+  [Toolbar Behavior](#toolbar-behavior) connecting state describes the result.
 
 - **Prohibited:** a panel follows the first trusted port that arrives, from
   another Simple Vault tab of its window or from a page in another window.
@@ -329,9 +332,10 @@ private identity.
   - **Unlocked with a paired vault:** This site leads, with one section for
     each connected identity and vault. The identity sync status and Connect
     another identity follow those sections. Connect another identity starts
-    a connect at once and shows the connect card in place while it runs. The
-    panel has no separate list of identities. The footer offers All
-    connections.
+    a connect at once and shows the connect card in place while it runs. This
+    site has no separate list of identities; All connections lists them.
+    The footer offers All connections only on This site, and only while the
+    unlocked panel has paired vaults.
   - **All connections:** a page of the panel, with Back to This site. Each
     connected identity is a keytag card listing its vaults: what each vault
     does, the default one marked, and Make default on the others. The
@@ -345,6 +349,8 @@ private identity.
     PIN setup runs in place with Cancel. Cancel ends the connect: the connect
     card returns while no identity is connected, otherwise Connect another
     identity does. Status re-reads leave that ceremony in place until it ends.
+    While it runs, the panel shows only the ceremony, so All connections and
+    its Use this identity are out of reach.
   - **Connecting in the Nook tab:** the service worker opened or reused the
     [connect tab](#connect-tab), and the card follows its
     [steps](#connect-steps).
@@ -362,6 +368,13 @@ private identity.
       - a sender check that could not be evaluated;
       - a tab that could not open.
     - Closing the panel ends the connect.
+    - Use this identity on All connections ends the connect too. It locks
+      this identity, and the status change that moves the panel to another
+      view stops a running connect: the panel closes the page's port, and the
+      connect state resets. A lock, unlock, or lease expiry elsewhere does the
+      same.
+      - The Nook tab stays open, and its page flow is unaffected. A grant that
+        page delivers later shows on the panel's next vault read.
   - **Failure:** a device-status error or an initialization failure shows a
     failure view, never the setup ceremony. A paired-vault load failure shows
     its own failure view rather than the no-vault state.
@@ -790,9 +803,15 @@ Fill code runs the Fill gates above with these differences:
     under the [connect port admission](#connect-port-admission) rule and reads
     only strictly decoded steps.
 - The panel's outgoing messages form a closed set. The set holds the three
-  side-panel requests, lock, open vault, open tab, and paired-vault queries. It
-  also holds the status, setup, and unlock requests of the shared
-  device-protection component.
+  side-panel requests and these others:
+  - **Service worker:** lock, open vault, and begin pairing for the
+    [connect tab](#connect-tab).
+  - **Paired vaults:** the vault query, the identity refresh, and select
+    default for Make default.
+  - **Session:** the status, setup, and unlock requests of the shared
+    device-protection component. It also holds the begin and cancel
+    identity-connection requests, and activate identity for Use this identity.
+  - The panel sends no companion-launcher request.
   - None of them lists logins, reveals a credential, or returns a vault secret.
 
 - **Prohibited:** the side panel reveals a login through the offscreen session,
