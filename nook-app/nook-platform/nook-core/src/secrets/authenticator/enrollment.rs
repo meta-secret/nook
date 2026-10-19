@@ -39,6 +39,8 @@ pub enum AuthenticatorEnrollmentError {
     SetupKeyTextTooLong,
     #[error("the enrollment page origin is not an http(s) origin")]
     PageOriginInvalid,
+    #[error("the setup-key otpauth URI could not be written")]
+    OtpauthUriSerialization,
     #[error("the reviewed service name is too long")]
     IssuerTooLong,
     #[error("the reviewed service name contains control characters")]

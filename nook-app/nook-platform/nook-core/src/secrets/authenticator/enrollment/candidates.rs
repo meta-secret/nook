@@ -144,12 +144,12 @@ impl NookAuthenticatorEnrollmentCandidateRequest {
         let collection = self
             .setup_key_texts
             .iter()
-            .fold(collection, |collection, text| {
+            .try_fold(collection, |collection, text| {
                 collection.with_setup_key_text(SetupKeyTextInput {
                     text,
                     issuer: &issuer,
                 })
-            });
+            })?;
         Ok(NookAuthenticatorEnrollmentCandidates {
             candidates: collection.candidates,
         })
@@ -199,8 +199,10 @@ impl CandidateCollection {
         }
     }
 
-    #[must_use]
-    fn with_setup_key_text(self, input: SetupKeyTextInput<'_>) -> Self {
+    fn with_setup_key_text(
+        self,
+        input: SetupKeyTextInput<'_>,
+    ) -> Result<Self, AuthenticatorEnrollmentError> {
         match input.text.classify() {
             SetupKeyTextClassification::SetupKey(secret) => {
                 let authenticator = SetupKeyAuthenticator {
@@ -208,14 +210,16 @@ impl CandidateCollection {
                     issuer: input.issuer,
                 }
                 .authenticator();
-                let mut uri = authenticator.otpauth_uri();
-                self.with_candidate(AdmittedCandidate {
+                let mut uri = authenticator
+                    .otpauth_uri()
+                    .map_err(|_| AuthenticatorEnrollmentError::OtpauthUriSerialization)?;
+                Ok(self.with_candidate(AdmittedCandidate {
                     source: NookAuthenticatorEnrollmentCandidateSource::SetupKey,
                     authenticator,
                     otpauth_uri: EnrollmentOtpauthUri(mem::take(&mut *uri)),
-                })
+                }))
             }
-            SetupKeyTextClassification::NotSetupKey => self,
+            SetupKeyTextClassification::NotSetupKey => Ok(self),
         }
     }
 

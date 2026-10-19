@@ -10,27 +10,37 @@
 //!    A longer prefix is not a label, so its colon makes the text non-Base32.
 //! 2. **Grammar.** The remainder is one or more groups of Base32 characters
 //!    (`A`–`Z`, `a`–`z`, `2`–`7`) separated by exactly one ASCII space or
-//!    hyphen. Padding, `0`/`1`/`8`/`9`, punctuation, other whitespace, and
-//!    leading, trailing, or doubled separators are rejected.
-//! 3. **Grouping.** With several groups, every group except the last has the
-//!    same length and the last is not longer. Sentences of varying-length
-//!    words fail this.
-//! 4. **Key evidence.** The key contains at least one Base32 digit (`2`–`7`),
+//!    hyphen, optionally followed directly by trailing `=` padding, which
+//!    [`TotpSecret::parse`] also accepts. `0`/`1`/`8`/`9`, punctuation, other
+//!    whitespace, interior padding, and leading, trailing, or doubled
+//!    separators are rejected.
+//! 3. **Letter case.** The key contains at least one letter, and all of its
+//!    letters share one case. Services render a key entirely in upper or lower
+//!    case; prose and brand names mix cases (`Office365 Business`), and a
+//!    digit-only string (`2345 6723 4567 2345`) is a number, not a random key.
+//! 4. **Grouping.** The key is either one ungrouped token, or at least
+//!    [`MIN_KEY_GROUPS`] groups where every group except the last has the same
+//!    length of [`MIN_GROUP_CHARS`]–[`MAX_GROUP_CHARS`] characters and the last
+//!    is not longer. Two-word phrases (`WELCOME25 PROMOCODE`) and sentences of
+//!    varying-length words fail this.
+//! 5. **Key evidence.** The key contains at least one Base32 digit (`2`–`7`),
 //!    or its compact form has at least [`DIGITLESS_MIN_CHARS`] characters.
-//! 5. **Key.** [`TotpSecret::parse`] accepts the remainder (at least 10 decoded
+//! 6. **Key.** [`TotpSecret::parse`] accepts the remainder (at least 10 decoded
 //!    bytes), which also performs the canonical normalization.
 //!
-//! Rule 4 applies to grouped and ungrouped text alike, because uniform word
-//! lengths alone do not exclude prose: "Scan this code with your app" groups
+//! Rule 5 applies to grouped and ungrouped text alike, because uniform word
+//! lengths alone do not exclude prose: "scan this code with your app" groups
 //! as 4-4-4-4-4-3 letters. English words and short phrases rarely contain
 //! digits and never reach 26 letters with uniform grouping.
 //!
-//! **Tradeoff.** A random key whose characters happen to be letters only and
+//! **Tradeoffs.** A random key whose characters happen to be letters only and
 //! whose compact length is below 26 is not detected: about 3.6 % of 16-character
-//! keys and effectively no 32-character keys. The user can still add such a
-//! key through the manual form. A single invented word of 26 or more Base32
-//! letters would be accepted; it must still decode to a valid key, and the user
-//! reviews every candidate before save.
+//! keys and effectively no 32-character keys. A 16-character key displayed as
+//! two 8-character groups is not detected either. The user can still add such
+//! keys through the manual form. A single-case ungrouped token of at least 16
+//! Base32 characters containing a digit (`WELCOME25PROMOCODE`) is accepted;
+//! it must still decode to a valid key, and the user reviews every candidate
+//! before save.
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
@@ -49,6 +59,11 @@ const MAX_SETUP_KEY_TEXT_BYTES: usize = 256;
 const MAX_LABEL_BYTES: usize = 64;
 /// Compact length at which a digitless key is still accepted.
 const DIGITLESS_MIN_CHARS: usize = 26;
+/// Fewest groups in a grouped key; two-word phrases are not keys.
+const MIN_KEY_GROUPS: usize = 3;
+/// Length bounds of each full group in a grouped key.
+const MIN_GROUP_CHARS: usize = 4;
+const MAX_GROUP_CHARS: usize = 8;
 
 /// One bounded visible text string that may present a manual setup key.
 #[derive(Deserialize)]
@@ -124,15 +139,49 @@ impl<'a> UnlabeledKeyText<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 enum DigitPresence {
     Present,
     Absent,
+}
+
+/// The case of the letters seen so far.
+#[derive(Clone, Copy)]
+enum LetterCase {
+    Absent,
+    Upper,
+    Lower,
+    Mixed,
+}
+
+impl LetterCase {
+    const fn with_upper(self) -> Self {
+        match self {
+            Self::Absent | Self::Upper => Self::Upper,
+            Self::Lower | Self::Mixed => Self::Mixed,
+        }
+    }
+
+    const fn with_lower(self) -> Self {
+        match self {
+            Self::Absent | Self::Lower => Self::Lower,
+            Self::Upper | Self::Mixed => Self::Mixed,
+        }
+    }
+}
+
+/// Whether the scan is still reading key characters or only trailing padding.
+#[derive(Clone, Copy)]
+enum ScanPhase {
+    Key,
+    Padding,
 }
 
 /// Group lengths of grammatically valid Base32 text, without the characters.
 struct KeyGroups {
     lengths: Vec<usize>,
     digits: DigitPresence,
+    letters: LetterCase,
 }
 
 enum GroupScan {
@@ -140,8 +189,23 @@ enum GroupScan {
     NotBase32,
 }
 
+/// Incremental grammar scan; it records lengths and classes, never characters.
+struct KeyScan {
+    lengths: Vec<usize>,
+    current: usize,
+    digits: DigitPresence,
+    letters: LetterCase,
+    phase: ScanPhase,
+}
+
+enum ScanProgress {
+    Scanning(KeyScan),
+    NotBase32,
+}
+
 enum GroupShape {
-    Uniform,
+    Ungrouped,
+    UniformGroups,
     Irregular,
 }
 
@@ -150,35 +214,84 @@ enum KeyEvidence {
     Insufficient,
 }
 
+impl KeyScan {
+    const fn new() -> Self {
+        Self {
+            lengths: Vec::new(),
+            current: 0,
+            digits: DigitPresence::Absent,
+            letters: LetterCase::Absent,
+            phase: ScanPhase::Key,
+        }
+    }
+
+    fn with_character(mut self, character: char) -> ScanProgress {
+        match self.phase {
+            ScanPhase::Padding => match character {
+                '=' => ScanProgress::Scanning(self),
+                _ => ScanProgress::NotBase32,
+            },
+            ScanPhase::Key => match character {
+                'A'..='Z' => {
+                    self.current += 1;
+                    self.letters = self.letters.with_upper();
+                    ScanProgress::Scanning(self)
+                }
+                'a'..='z' => {
+                    self.current += 1;
+                    self.letters = self.letters.with_lower();
+                    ScanProgress::Scanning(self)
+                }
+                '2'..='7' => {
+                    self.current += 1;
+                    self.digits = DigitPresence::Present;
+                    ScanProgress::Scanning(self)
+                }
+                ' ' | '-' => self.with_completed_group(ScanPhase::Key),
+                '=' => self.with_completed_group(ScanPhase::Padding),
+                _ => ScanProgress::NotBase32,
+            },
+        }
+    }
+
+    fn with_completed_group(mut self, phase: ScanPhase) -> ScanProgress {
+        match self.current {
+            0 => ScanProgress::NotBase32,
+            length => {
+                self.lengths.push(length);
+                self.current = 0;
+                self.phase = phase;
+                ScanProgress::Scanning(self)
+            }
+        }
+    }
+
+    fn finish(mut self) -> GroupScan {
+        match self.phase {
+            ScanPhase::Padding => {}
+            ScanPhase::Key => match self.current {
+                0 => return GroupScan::NotBase32,
+                length => self.lengths.push(length),
+            },
+        }
+        GroupScan::Base32(KeyGroups {
+            lengths: self.lengths,
+            digits: self.digits,
+            letters: self.letters,
+        })
+    }
+}
+
 impl KeyGroups {
     fn scan(text: &str) -> GroupScan {
-        let mut lengths = Vec::new();
-        let mut current = 0_usize;
-        let mut digits = DigitPresence::Absent;
+        let mut scan = KeyScan::new();
         for character in text.chars() {
-            match character {
-                'A'..='Z' | 'a'..='z' => current += 1,
-                '2'..='7' => {
-                    current += 1;
-                    digits = DigitPresence::Present;
-                }
-                ' ' | '-' => match current {
-                    0 => return GroupScan::NotBase32,
-                    length => {
-                        lengths.push(length);
-                        current = 0;
-                    }
-                },
-                _ => return GroupScan::NotBase32,
-            }
+            scan = match scan.with_character(character) {
+                ScanProgress::Scanning(next) => next,
+                ScanProgress::NotBase32 => return GroupScan::NotBase32,
+            };
         }
-        match current {
-            0 => GroupScan::NotBase32,
-            length => {
-                lengths.push(length);
-                GroupScan::Base32(Self { lengths, digits })
-            }
-        }
+        scan.finish()
     }
 
     #[expect(
@@ -190,15 +303,23 @@ impl KeyGroups {
             return GroupShape::Irregular;
         };
         let Some((first, rest)) = leading.split_first() else {
-            return GroupShape::Uniform;
+            return GroupShape::Ungrouped;
         };
-        match rest.iter().all(|length| length == first) && last <= first {
-            true => GroupShape::Uniform,
+        match self.lengths.len() >= MIN_KEY_GROUPS
+            && (MIN_GROUP_CHARS..=MAX_GROUP_CHARS).contains(first)
+            && rest.iter().all(|length| length == first)
+            && last <= first
+        {
+            true => GroupShape::UniformGroups,
             false => GroupShape::Irregular,
         }
     }
 
     fn evidence(&self) -> KeyEvidence {
+        match self.letters {
+            LetterCase::Absent | LetterCase::Mixed => return KeyEvidence::Insufficient,
+            LetterCase::Upper | LetterCase::Lower => {}
+        }
         match self.digits {
             DigitPresence::Present => KeyEvidence::Sufficient,
             DigitPresence::Absent => match self.lengths.iter().sum::<usize>() {
@@ -211,7 +332,7 @@ impl KeyGroups {
     fn classify(&self, key_text: &str) -> SetupKeyTextClassification {
         match self.shape() {
             GroupShape::Irregular => SetupKeyTextClassification::NotSetupKey,
-            GroupShape::Uniform => match self.evidence() {
+            GroupShape::Ungrouped | GroupShape::UniformGroups => match self.evidence() {
                 KeyEvidence::Insufficient => SetupKeyTextClassification::NotSetupKey,
                 KeyEvidence::Sufficient => match TotpSecret::parse(key_text) {
                     Ok(secret) => SetupKeyTextClassification::SetupKey(secret),
@@ -332,7 +453,6 @@ mod tests {
             "JBSW Y3DP EHPK 3PX8",
             "JBSW Y3DP EHPK 3PX9",
             "JBSWY3DPEHPK3PXP!",
-            "JBSWY3DPEHPK3PXP====",
             "JBSW_Y3DP_EHPK_3PXP",
             "JBSW  Y3DP EHPK 3PXP",
             "JBSW Y3DP EHPK 3PXP-",
@@ -340,6 +460,65 @@ mod tests {
             "JBSW\u{a0}Y3DP\u{a0}EHPK\u{a0}3PXP",
             "JBSW Y3DP EHPK 3PXPQ",
             "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP",
+        ] {
+            TextFixture { text }.assert_rejected()?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn accepts_eight_by_four_eight_char_and_ungrouped_keys() -> anyhow::Result<()> {
+        for (text, canonical) in [
+            (
+                "GEZD GNBV GY3T QOJQ GEZD GNBV GY3T QOJQ",
+                "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            ),
+            ("gezdgnbv-gy3tqojq-gezdgnbv", "GEZDGNBVGY3TQOJQGEZDGNBV"),
+            ("JBSWY3DPEHPK3PXP", "JBSWY3DPEHPK3PXP"),
+        ] {
+            assert_eq!(TextFixture { text }.canonical_key()?, canonical, "{text:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_short_prose_brand_names_and_digit_only_numbers() -> anyhow::Result<()> {
+        for text in [
+            "Authentication 2FA",
+            "Configuration 2FA",
+            "Office365 Business",
+            "Microsoft365 Account",
+            "WELCOME25 PROMOCODE",
+            "2345 6723 4567 2345",
+            "23456723456723456723456723",
+            "JbSw Y3dP EhPk 3pXp",
+            "JBSWY3DP EHPK3PXP",
+            "JBS Y3D EHP 3PX PQR S",
+            "JBSWY3DPE HPK3PXPQR STUVWXYZ2",
+        ] {
+            TextFixture { text }.assert_rejected()?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn accepts_terminal_padding_and_rejects_misplaced_padding() -> anyhow::Result<()> {
+        for text in [
+            "JBSWY3DPEHPK3PXP====",
+            "JBSW Y3DP EHPK 3PXP====",
+            "Key: jbsw-y3dp-ehpk-3pxp=",
+        ] {
+            assert_eq!(
+                TextFixture { text }.canonical_key()?,
+                "JBSWY3DPEHPK3PXP",
+                "{text:?}"
+            );
+        }
+        for text in [
+            "====",
+            "JBSW=Y3DP EHPK 3PXP",
+            "JBSW Y3DP EHPK 3PXP =",
+            "JBSW Y3DP EHPK 3PXP==Q",
         ] {
             TextFixture { text }.assert_rejected()?;
         }
