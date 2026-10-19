@@ -136,6 +136,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
                   devicePublicKey: 'age1popup',
                   deviceSigningPublicKey: 'popup-signing-key',
                   deviceLabel: 'Nook Extension - Chromium test profile',
+                  start: { kind: 'create', vaultName: 'Home' },
                 },
               },
               resolve,
@@ -158,7 +159,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
           'popup-signing-key' &&
         url.searchParams.has('nonce') &&
         url.searchParams.get('scopes') ===
-          'vault-access,password-filling,passkey-management,sync-provider-credentials'
+          'vault-access,password-filling,passkey-management,sync-provider-credentials' &&
+        // The side panel's connect choice rides in the fragment only.
+        url.hash === '#start=create&vault_name=Home' &&
+        !url.searchParams.has('vault_name')
       )
     })
 
