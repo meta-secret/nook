@@ -74,15 +74,24 @@ them.
   authenticator setup pages.
 - A page qualifies when visible QR media sits beside instructions to scan it
   with an authenticator app.
-- A page with no QR media qualifies when nearby instructions ask the user to
-  enter a setup key in an authenticator app.
+- A page with no QR media qualifies only through an open dialog.
+  Its instructions must ask the user to enter a setup key in an authenticator
+  app.
 - Square image/canvas geometry and QR labels alone are insufficient.
 - Landing-page artwork, app-download QR codes, sign-in QR codes, payment QR
   codes, and generic security marketing do not qualify as authenticator setup.
-- Content scripts report only bounded instruction copy before consent:
-  dialog label and description targets, headings, and paragraphs.
+- Content scripts report only bounded instruction copy before consent.
+- With QR media, the copy comes from the nearby dialog label and description
+  targets, headings, and paragraphs.
   Text in a `div` or `span` after the QR media is excluded, so a setup key
   shown below the code never enters the copy.
+- Without QR media, the dialog scope is any `dialog`, `role=dialog`,
+  `role=alertdialog`, or `aria-modal` element, taking the outermost dialog.
+  The copy is the `aria-labelledby` title and the `h1`-`h6` headings.
+  A heading containing `strong`, `b`, `code`, `kbd`, `samp`, `mark`, or
+  `input` is skipped, because a site may print the key there.
+  Descriptions, paragraphs, `div` and `span` text, and `section`, `form`, or
+  `article` scopes never qualify.
 - `nook-companion-core` owns the portable eligibility classification exposed
   through `nook-companion-wasm`.
   Its additive classification is ephemeral.
@@ -92,15 +101,18 @@ them.
 ### Candidates after the trusted click
 
 - Nothing below runs before the trusted **Add 2FA from this page** click.
-- The content script rasterizes each visible QR image, canvas, or inline SVG
-  into a bounded RGBA picture, at most 8 pictures of 512 px per edge.
+- The content script draws each visible QR image, canvas, or inline SVG onto an
+  opaque canvas and encodes it as a PNG data URL.
+  It sends at most 8 pictures, each with a longer edge of at most 512 px.
 - The extension-origin offscreen document decodes those pictures with the
-  bundled ZXing reader.
+  bundled ZXing reader's existing image API.
   It is the only QR decoder.
   There is no `BarcodeDetector` path.
 - The content script also gathers visible setup-key text candidates from the
-  same setup scopes.
-  It reads at most 16 texts of 256 bytes, skips buttons and links, and never
+  single nearest setup scope: the first QR's dialog, section, or parent, or
+  the instructed dialog.
+  It orders them nearest-first by DOM distance to the QR or instructions.
+  It reads at most 64 texts of 256 bytes, skips buttons and links, and never
   judges whether a text is a key.
 - Rust/WASM resolves the decoded QR payloads and the texts into candidates.
   It drops everything else without echoing or counting it.
@@ -125,8 +137,13 @@ them.
 
 - The Pilot preview shows editable **Service** (required) and **Account**
   (optional) fields, plus the read-only protocol parameters.
-- Rust validates both labels at save: trimmed, bounded, and free of control
-  characters.
+- **Service** is prefilled from the candidate's issuer.
+  For a setup key that is the page host.
+- Rust validates both labels as the user edits.
+  A label is valid when it is trimmed, bounded, and free of control characters.
+- Continue stays disabled until both labels are valid.
+  Rust checks them again before staging, so a label never fails the save after
+  the site step.
 - The page origin is stored as the item's website URL.
 - The shared secret never appears in the preview, URLs, logs, or durable
   browser storage outside the vault.

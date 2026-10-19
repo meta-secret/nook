@@ -88,12 +88,16 @@ It is never silent page scraping or background scanning.
 **Add 2FA from this page** follows the
 [authenticator enrollment eligibility contract](../../../../../nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md#browser-enrollment-capture).
 The content script supplies visible QR media with nearby setup instructions,
-or setup-key instructions on a page without QR media,
+or, without QR media, setup-key instructions in a dialog title or heading,
 to the `nook-companion-core` classifier through `nook-companion-wasm`.
 Square media or QR labels alone do not enable the action.
 QR decoding and setup-key text reading begin only after the trusted action click.
 The extension-origin offscreen document decodes QR pictures with the bundled
-ZXing reader, and Rust/WASM resolves the QR and setup-key candidates.
+ZXing reader from PNG data URLs.
+Setup-key text comes from the single nearest setup scope.
+Rust/WASM resolves the QR and setup-key candidates.
+The preview validates the editable Service and Account through Rust/WASM and
+keeps Continue disabled until both are valid.
 
 "No vault UI in the extension" means no second vault-management UI. The side
 panel and the shared authentication tab contain the standard device-protection
