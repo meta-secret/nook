@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures'
 import { LOCAL_PROVIDER_TYPE } from '../../../nook-web-shared/src/vault-app/lib/auth/provider-types'
+import { ExtensionConnectStepKind } from '../../../nook-web-shared/src/extension/extension-connect-progress'
 import {
   clearBrowserVault,
   connectLocalVault,
@@ -116,5 +117,67 @@ test('open an empty local vault without a browser-data reload alert', async ({
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
   await expect(page.getByTestId('vault-error')).toHaveCount(0)
+  await page.waitForTimeout(DEMO_BEAT_MS)
+})
+
+test('the extension connect route reports opened then choosing, and creating once a vault is created', async ({
+  page,
+}) => {
+  // The extension opens its connect route and listens on a runtime port.
+  // This stub stands in for that port and keeps the steps the page sends.
+  await page.addInitScript(() => {
+    const steps: unknown[] = []
+    const port = {
+      postMessage: (step: unknown) => steps.push(step),
+      disconnect: () => {},
+      onDisconnect: { addListener: () => {} },
+    }
+    Object.assign(window, {
+      __nookConnectSteps: steps,
+      chrome: { runtime: { connect: () => port } },
+    })
+  })
+  const connect = new URLSearchParams({
+    device_id: 'demo-extension-device',
+    device_public_key: 'age1demoextension',
+    device_signing_public_key: 'demo-extension-signing-key',
+    extension_id: 'demo-extension',
+    device_label: 'Nook Extension',
+    nonce: 'demo-nonce',
+    scopes: 'vault-access,password-filling',
+  })
+  const reportedSteps = () =>
+    page.evaluate((): unknown => Reflect.get(window, '__nookConnectSteps'))
+
+  await page.goto(`/extension-connect?${connect}`)
+  await expect(page.getByTestId('first-vault-start')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  // Starting the app is not creating a vault: the side panel only hears
+  // that the page opened and that the person chooses to create or join.
+  await expect
+    .poll(reportedSteps, { timeout: UI_TIMEOUT_MS })
+    .toEqual([
+      { kind: ExtensionConnectStepKind.Opened },
+      { kind: ExtensionConnectStepKind.Choosing },
+    ])
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
+  // Creating starts only when the person creates the first vault.
+  await page.getByTestId('login-vault-name-input').fill('Personal')
+  await page.getByTestId('login-create-device-vault-btn').click()
+  await expect
+    .poll(
+      async () => {
+        const steps = await reportedSteps()
+        return Array.isArray(steps) ? steps.slice(0, 3) : steps
+      },
+      { timeout: UI_TIMEOUT_MS },
+    )
+    .toEqual([
+      { kind: ExtensionConnectStepKind.Opened },
+      { kind: ExtensionConnectStepKind.Choosing },
+      { kind: ExtensionConnectStepKind.Creating },
+    ])
   await page.waitForTimeout(DEMO_BEAT_MS)
 })
