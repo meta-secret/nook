@@ -1,7 +1,8 @@
 <!--
-The side panel's header band: the Nook mark and name, the state tag, Open
-vault as a quiet link (an icon button below 380px) and, once unlocked, Lock.
-Opening the vault never closes the panel.
+The side panel's header band, as the companion card's: the Nook mark, the
+Browser companion label and the state tag; Open vault as a quiet link (an
+icon button below 380px) and, once unlocked, Lock. Opening the vault never
+closes the panel.
 -->
 <script lang="ts">
   import { ArrowUpRight, FolderOpen, Lock } from '@lucide/svelte'
@@ -48,7 +49,7 @@ Opening the vault never closes the panel.
     <NookIcon src="../icons/nook.png" alt="" class="side-panel-mark" />
     <div class="side-panel-brand-copy">
       <span class="side-panel-brand-name">
-        {translatePlain(I18N_KEYS.ExtensionManifestDefaultTitle)}
+        {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
       </span>
       {#if chip.kind === SidePanelChipKind.Shown}
         <p

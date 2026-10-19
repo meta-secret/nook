@@ -54,13 +54,15 @@ application capability checks enforce the vault-type boundary.
   - **Responsibility:** The panel the toolbar icon opens, docked at full height
     beside the page. It stays open across tab switches in its window. Each
     state has at most one primary action, such as Use my passkey, Unlock,
-    Connect an identity, or the Fill of a single listed login. PIN and passkey
-    setup and unlock run in place. The panel also offers Open vault, Lock, and
-    Connect another identity. It groups This site's items by connected
-    identity and vault.
+    Create vault, or the Fill of a single listed login. PIN and passkey setup
+    and unlock run in place, and so does connecting an identity. The panel
+    also offers Open vault, Lock, and Connect another identity. It groups This
+    site's items by connected identity and vault. Its gates and connect card
+    are the companion's keytag cards: a cut corner, monospace labels, and a
+    square action bar.
 - **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
-    tab for the locked Pilot action, identity connection, and All connections.
+    tab for the locked Pilot action and All connections.
     It creates or unlocks the extension device with the device-protection
     component it shares with the side panel. It shows localized return guidance
     for Pilot and starts pairing.
@@ -112,7 +114,14 @@ administer vault items.
 3. When the user explicitly chooses Connect / pair in the authentication tab,
    the extension opens the configured Simple Vault `/extension-connect` route.
    The route receives the extension's runtime id and public device request.
-   The side panel's Connect an identity action opens that tab for pairing.
+   The side panel's connect card opens that route directly, never the
+   authentication tab, after the person chose how to start: name the first
+   vault of a new identity, or say they already use Nook. The service worker
+   carries that choice in the route's URL fragment (`start=create` with
+   `vault_name`, or `start=join`), which never reaches the server. The
+   route's first-vault screen prefills the name and focuses Create vault, or
+   opens Add this device. A browser that already holds a vault ignores the
+   fragment and shows its usual unlock.
    There is no website-first enable screen, floating companion window, or
    toolbar popup.
 4. The user creates, imports, or unlocks the full Simple vault on the website.
@@ -178,8 +187,8 @@ private identity.
 - The panel docks at full height beside the page and stays open while the user
   switches tabs in its window. Opening Simple Vault, the authentication tab, or
   any other page never closes it.
-- The header carries the Nook mark, the brand label, a state chip, Open vault
-  as a secondary link, and Lock while the device is unlocked.
+- The header carries the Nook mark, the Browser companion label, a state chip,
+  Open vault as a secondary link, and Lock while the device is unlocked.
 - Each panel state has at most one primary action:
   - **Not set up:** the shared device-protection ceremony runs in place under
     the title "Connect your passkey". Its primary action, "Use my passkey",
@@ -191,15 +200,20 @@ private identity.
   - **Passkey locked:** Unlock with passkey, run in place.
   - **Unlocked with a paired vault:** This site leads, with one section for
     each connected identity and vault. The identity sync status and Connect
-    another identity follow those sections. The panel has no separate list of
-    identities. The footer offers All connections.
-  - **Unlocked with no paired vault:** Connect an identity.
+    another identity follow those sections; Connect another identity opens
+    the connect card in place. The panel has no separate list of identities.
+    The footer offers All connections.
+  - **Unlocked with no paired vault:** the connect card leads: a vault-name
+    field, Create vault, and I already use Nook.
+  - **Next identity's key:** when Rust stages a new identity, its passkey or
+    PIN setup runs in place with Cancel, which returns to the connect card.
+    Status re-reads leave that ceremony in place until it ends.
   - **Failure:** a device-status error or an initialization failure shows a
     failure view, never the setup ceremony. A paired-vault load failure shows
     its own failure view rather than the no-vault state.
-- Connect an identity, Connect another identity, and All connections open the
-  authentication tab through the existing launcher intents. Use this identity
-  and Make default remain in that tab.
+- All connections opens the authentication tab through its launcher intent.
+  Use this identity and Make default remain in that tab. Connecting an
+  identity never opens it.
 - The panel follows device state that changes elsewhere, such as an unlock in
   the authentication tab or by Pilot, or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
@@ -226,7 +240,7 @@ private identity.
     shows "Nook can't fill on this page". Neither shows a Fill button.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
-- The Pilot lock entry and the side panel's connection actions use the same
+- The Pilot lock entry and the side panel's All connections use the same
   extension-owned authentication tab per initiating normal window. The service
   worker focuses an existing tab only when its intent matches the requested
   action. It leaves a different-intent auth tab untouched and opens the

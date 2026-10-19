@@ -117,6 +117,23 @@ test.describe('vault connect flow', () => {
     )
   })
 
+  test('continues the side panel choice: the named first vault, or joining', async ({
+    page,
+  }) => {
+    // The extension writes the panel's choice into the URL fragment.
+    await page.goto('/app/#start=create&vault_name=Home')
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toHaveValue('Home')
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toBeFocused()
+
+    await page.goto('/app/#start=join')
+    await page.reload()
+    await expect(page.getByTestId('join-this-device')).toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
+  })
+
   test('does not create a new vault when open existing finds an empty provider', async ({
     page,
   }) => {

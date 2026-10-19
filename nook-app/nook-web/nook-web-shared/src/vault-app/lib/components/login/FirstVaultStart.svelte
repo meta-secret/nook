@@ -3,6 +3,8 @@ The first screen of a browser with no vault: one name, one button. The
 identity is created with the vault and introduced on the next step, where
 its passkey is made. Joining an identity from another device is the second
 path and stands apart; restoring from a sync provider is a quiet link.
+Opened from the extension's side panel, the screen continues the choice
+made there: the vault name it was given, or straight into joining.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -12,6 +14,8 @@ path and stands apart; restoring from a sync provider is a quiet link.
   import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
+  import { onMount } from "svelte";
+  import { ExtensionConnectStarts } from "$web-shared/extension/extension-connect-start";
 
   let {
     vault,
@@ -33,9 +37,25 @@ path and stands apart; restoring from a sync provider is a quiet link.
     onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
   } = $props();
 
-  let name = $state("");
+  /** The side panel's choice, carried in the connect URL's fragment. */
+  const panelStart = ExtensionConnectStarts.fromFragment(window.location.hash);
+
+  function startingJoin(): boolean {
+    return ExtensionConnectStarts.opensJoin(panelStart) && Boolean(onUseEnrollmentCode);
+  }
+
+  let name = $state(ExtensionConnectStarts.presetVaultName(panelStart));
   /** Joining an identity this person already has replaces the screen. */
-  let joining = $state(false);
+  let joining = $state(startingJoin());
+  let createForm = $state<HTMLFormElement>();
+
+  // A name already chosen in the side panel leaves one confirmation here.
+  onMount(() => {
+    if (!ExtensionConnectStarts.presetVaultName(panelStart)) return;
+    createForm
+      ?.querySelector<HTMLButtonElement>('button[type="submit"]')
+      ?.focus();
+  });
   // An empty field takes the suggested name, so one click is enough.
   const vaultName = $derived(
     name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
@@ -81,6 +101,7 @@ path and stands apart; restoring from a sync provider is a quiet link.
   </div>
 
   <form
+    bind:this={createForm}
     class="flex flex-col gap-2 sm:flex-row"
     onsubmit={(event) => {
       event.preventDefault();

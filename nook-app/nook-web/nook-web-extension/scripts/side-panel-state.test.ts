@@ -15,17 +15,16 @@ import {
   IdentitySyncKind,
   PopupInitializationPhase,
 } from '../src/popup/popup-app-state'
-import { SidePanelNookTabIntent } from '../src/side-panel/side-panel-runtime'
+import { ExtensionConnectStartKind } from '../../nook-web-shared/src/extension/extension-connect-start'
 import {
-  SidePanelAlertKind,
   SidePanelCeremonyKind,
   SidePanelChipKind,
   SidePanelChipState,
+  SidePanelConnectKind,
+  SidePanelConnectStep,
+  SidePanelConnects,
   SidePanelContinuity,
   SidePanelGateIcon,
-  SidePanelHandOffKind,
-  SidePanelHandOffTrigger,
-  SidePanelHandOffs,
   SidePanelIdentityRelation,
   SidePanelLockReasonKind,
   SidePanelReadFreshness,
@@ -397,31 +396,82 @@ describe('side panel vaults', () => {
   })
 })
 
-describe('side panel hand-offs to the Nook tab', () => {
-  test('connecting pairs in the Nook tab and says to continue there', () => {
-    const trigger = SidePanelHandOffTrigger.ConnectIdentity
-    expect(SidePanelHandOffs.intent(trigger)).toBe(SidePanelNookTabIntent.Pair)
-    expect(SidePanelHandOffs.opened(trigger)).toEqual({
-      kind: SidePanelHandOffKind.Continued,
-      trigger,
-    })
-    expect(SidePanelHandOffs.openFailedAlert(trigger)).toEqual({
-      kind: SidePanelAlertKind.None,
+describe('side panel connecting an identity', () => {
+  test('the unlocked key pairs at once; a staged identity sets up its key first', () => {
+    expect(SidePanelConnects.step('current-key')).toBe(
+      SidePanelConnectStep.Pair,
+    )
+    expect(SidePanelConnects.step('new-key-staged')).toBe(
+      SidePanelConnectStep.SetUpKey,
+    )
+  })
+
+  test('the new identity key starts as a passkey and keeps the choice made', () => {
+    const start = SidePanelConnects.join()
+    expect(SidePanelConnects.identityKey(start)).toEqual({
+      kind: SidePanelConnectKind.IdentityKey,
+      status: DeviceProtectionStatus.Missing,
+      start,
     })
   })
 
-  test('all connections opens the Nook tab and reports a failure on the page', () => {
-    const trigger = SidePanelHandOffTrigger.Manage
-    expect(SidePanelHandOffs.intent(trigger)).toBe(
-      SidePanelNookTabIntent.Manage,
-    )
-    expect(SidePanelHandOffs.opened(trigger)).toEqual({
-      kind: SidePanelHandOffKind.Idle,
+  test('a new identity takes the typed vault name, or the suggested one', () => {
+    expect(
+      SidePanelConnects.create({ typed: '  Home  ', suggested: 'Personal' }),
+    ).toEqual({ kind: ExtensionConnectStartKind.Create, vaultName: 'Home' })
+    expect(
+      SidePanelConnects.create({ typed: '   ', suggested: 'Personal' }),
+    ).toEqual({ kind: ExtensionConnectStartKind.Create, vaultName: 'Personal' })
+    expect(SidePanelConnects.join()).toEqual({
+      kind: ExtensionConnectStartKind.Join,
     })
-    expect(SidePanelHandOffs.openFailedAlert(trigger)).toEqual({
-      kind: SidePanelAlertKind.Shown,
-      key: I18N_KEYS.ExtensionActionOpenFailed,
-    })
+  })
+
+  test('the choice leads while no identity is connected and opens on request otherwise', () => {
+    const idle = { kind: SidePanelConnectKind.Idle } as const
+    const choosing = { kind: SidePanelConnectKind.Choosing } as const
+    expect(
+      SidePanelConnects.choiceShown({
+        vaults: SidePanelVaultsKind.NoVault,
+        connect: idle,
+      }),
+    ).toBe(true)
+    expect(
+      SidePanelConnects.choiceShown({
+        vaults: SidePanelVaultsKind.Paired,
+        connect: idle,
+      }),
+    ).toBe(false)
+    expect(
+      SidePanelConnects.choiceShown({
+        vaults: SidePanelVaultsKind.Paired,
+        connect: choosing,
+      }),
+    ).toBe(true)
+    // The hand-off line stays under the sections after the page opened.
+    expect(
+      SidePanelConnects.choiceShown({
+        vaults: SidePanelVaultsKind.Paired,
+        connect: { kind: SidePanelConnectKind.Continued },
+      }),
+    ).toBe(true)
+  })
+
+  test('only the new identity key ceremony holds the panel against status reads', () => {
+    expect(
+      SidePanelConnects.holdsPanel(
+        SidePanelConnects.identityKey(SidePanelConnects.join()),
+      ),
+    ).toBe(true)
+    for (const kind of [
+      SidePanelConnectKind.Idle,
+      SidePanelConnectKind.Choosing,
+      SidePanelConnectKind.Starting,
+      SidePanelConnectKind.Continued,
+      SidePanelConnectKind.Failed,
+    ] as const) {
+      expect(SidePanelConnects.holdsPanel({ kind })).toBe(false)
+    }
   })
 })
 

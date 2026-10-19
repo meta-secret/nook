@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Effect } from 'effect'
+import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionConnectStartKind } from '../../nook-web-shared/src/extension/extension-connect-start'
 import {
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
-} from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
@@ -15,7 +16,6 @@ import {
 } from '../src/offscreen/session-sender-policy'
 import {
   SidePanelChangeKind,
-  SidePanelNookTabIntent,
   SidePanelRuntime,
   SidePanelWindowKind,
   type SidePanelWindow,
@@ -282,15 +282,32 @@ describe('side panel browser runtime', () => {
   test('sends only its own requests to the service worker', async () => {
     const runtime = new SidePanelRuntime()
     await Effect.runPromise(runtime.openVault())
-    await Effect.runPromise(runtime.openNookTab(SidePanelNookTabIntent.Pair))
-    await Effect.runPromise(runtime.openNookTab(SidePanelNookTabIntent.Manage))
+    await Effect.runPromise(
+      runtime.beginPairing({
+        device: {
+          deviceId: 'device-1',
+          devicePublicKey: 'public-1',
+          deviceSigningPublicKey: 'signing-1',
+        },
+        deviceLabel: 'Nook Extension',
+        start: { kind: ExtensionConnectStartKind.Create, vaultName: 'Home' },
+      }),
+    )
+    await Effect.runPromise(runtime.openConnections())
     await Effect.runPromise(runtime.lock())
 
     expect(fixture.sent).toEqual([
       { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
+      // Connecting opens Nook's connect page directly, never the launcher.
       {
-        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-        payload: { intent: OpenCompanionLauncherIntent.Pair },
+        type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+        payload: {
+          deviceId: 'device-1',
+          devicePublicKey: 'public-1',
+          deviceSigningPublicKey: 'signing-1',
+          deviceLabel: 'Nook Extension',
+          start: { kind: ExtensionConnectStartKind.Create, vaultName: 'Home' },
+        },
       },
       { type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher },
       { type: ExtensionSessionMessageType.Lock },
@@ -359,6 +376,13 @@ class SidePanelSources {
     ],
     createExtensionPin: [ExtensionSessionMessageType.CreatePin],
     unlockExtensionPin: [ExtensionSessionMessageType.UnlockPin],
+    // Connecting an identity: Rust picks the key, or stages one to drop.
+    beginIdentityConnection: [
+      ExtensionSessionMessageType.BeginIdentityConnection,
+    ],
+    cancelIdentityConnection: [
+      ExtensionSessionMessageType.CancelIdentityConnection,
+    ],
   }
 
   async panelSources(): Promise<readonly string[]> {

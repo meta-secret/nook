@@ -13,8 +13,11 @@ import {
   type SidePanelSiteListing,
 } from '../src/lib/side-panel-site'
 import { PairedVaultsMessageType } from '../src/lib/paired-vaults'
+import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionConnectStartKind } from '../../nook-web-shared/src/extension/extension-connect-start'
 import {
   SidePanelStubAnswer,
+  SidePanelStubConnectKey,
   SidePanelStubFillDelivery,
   SidePanelStubPage,
   SidePanelStubVaults,
@@ -388,12 +391,11 @@ test("a page that needs only 2FA codes shows Rust's typed empty state above the 
   await expect(page.getByTestId('side-panel-item')).toHaveCount(0)
 })
 
-test('the identities list is gone; sync, Connect another identity and its hand-off stay under the sections', async ({
+test('Connect another identity opens the connect card under the sections and pairs with the named vault', async ({
   page,
 }) => {
-  await openUnlocked(page)
+  const panel = await openUnlocked(page)
   await expect(page.getByTestId('side-panel-identities')).toHaveCount(0)
-  await expect(page.getByTestId('side-panel-identity')).toHaveCount(0)
   await expect(page.getByText('Identities', { exact: true })).toHaveCount(0)
   const connections = page.getByTestId('side-panel-connections')
   await expect(
@@ -404,9 +406,66 @@ test('the identities list is gone; sync, Connect another identity and its hand-o
   const connect = connections.getByTestId('side-panel-connect')
   await expect(connect).toHaveText('Connect another identity')
   await connect.click()
-  await expect(connections.getByTestId('side-panel-handoff')).toHaveText(
+  const card = connections.getByTestId('side-panel-connect-card')
+  await expect(card.getByRole('heading')).toHaveText('Connect another identity')
+  await card.getByTestId('side-panel-vault-name').fill('Work')
+  await card.getByTestId('side-panel-create-vault').click()
+  await expect(card.getByTestId('side-panel-handoff')).toHaveText(
     'Continue in the Nook tab.',
   )
+  // Nook's connect page opens on the named vault; the launcher never does.
+  expect(await panel.pairings()).toEqual([
+    { kind: ExtensionConnectStartKind.Create, vaultName: 'Work' },
+  ])
+  expect(
+    await panel.sent(
+      OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+    ),
+  ).toBe(0)
+  // Closing the card brings Connect another identity back.
+  await card.getByTestId('side-panel-connect-close').click()
+  await expect(connections.getByTestId('side-panel-connect')).toBeVisible()
+})
+
+test('with no identity the connect card leads, and I already use Nook opens joining', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
+  const card = page.getByTestId('side-panel-connect-card')
+  await expect(card.getByRole('heading')).toHaveText(
+    'No identity connected yet',
+  )
+  await expect(card.getByTestId('side-panel-connect-close')).toHaveCount(0)
+  await expect(card.getByTestId('side-panel-vault-name')).toHaveAttribute(
+    'placeholder',
+    'Personal',
+  )
+  await card.getByTestId('side-panel-join-identity').click()
+  await expect(card.getByTestId('side-panel-handoff')).toHaveText(
+    'Continue in the Nook tab.',
+  )
+  expect(await panel.pairings()).toEqual([
+    { kind: ExtensionConnectStartKind.Join },
+  ])
+})
+
+test('a new identity sets up its own key in the panel and Cancel returns to the choice', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
+  await panel.update({ connectKey: SidePanelStubConnectKey.NewStaged })
+  await page.getByTestId('side-panel-create-vault').click()
+  const ceremony = page.getByTestId('side-panel-identity-key')
+  await expect(ceremony).toBeVisible()
+  await expect(page.getByTestId('device-setup-chain')).toBeVisible()
+  // A focus re-read does not replace the ceremony while it runs.
+  await panel.focus()
+  await expect(ceremony).toBeVisible()
+  await page.getByTestId('identity-key-cancel').click()
+  await expect(page.getByTestId('side-panel-connect-card')).toBeVisible()
+  expect(await panel.pairings()).toEqual([])
 })
 
 test('a failed listing offers Try again', async ({ page }) => {

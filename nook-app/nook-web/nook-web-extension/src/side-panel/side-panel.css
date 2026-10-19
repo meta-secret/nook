@@ -1,9 +1,11 @@
 /* The Nook side panel: Chrome docks it full height at the browser edge,
  * 320-600px wide. It is the vault app's shell column in miniature: a
  * header band, the scrolling page and a status footer, divided by
- * hairlines. Lists and bands stay square; the only frame is the window.
- * Tokens and base element styles (button, .secondary-button, input,
- * label, .error-message) come from popup.css. */
+ * hairlines. Lists and bands stay square. Gates and the connect card are
+ * the companion's keytag cards (popup.css): a deep top-right cut,
+ * monospace labels and a square action bar. Tokens and base element
+ * styles (button, .secondary-button, input, label, .error-message, the
+ * key chain) come from popup.css. */
 
 html:has(.side-panel-body) {
   background: var(--card);
@@ -74,8 +76,8 @@ html:has(.side-panel-body) {
 
 .side-panel-mark {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
@@ -85,11 +87,18 @@ html:has(.side-panel-body) {
   min-width: 0;
 }
 
+/* The companion's label: monospace capitals, as on its keytag card. */
 .side-panel-brand-name {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* Status is a monospace tag with a square dot, never a coloured pill. */
@@ -100,11 +109,10 @@ html:has(.side-panel-body) {
   margin: 0;
   color: var(--muted-foreground);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.3;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
@@ -267,7 +275,163 @@ html:has(.side-panel-body) {
   margin: 12px var(--side-panel-gutter) 0;
 }
 
-/* Setup, locked, no identity and failure: one centred column. */
+/* ---- Keytag cards ------------------------------------------------------ */
+
+/* The companion's identity card: a hairline frame with a deep top-right
+ * cut, drawn as the border colour behind an inset card fill. */
+.side-panel-keytag {
+  --cut: 18px;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  background: var(--border);
+  text-align: left;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% 100%,
+    0 100%
+  );
+}
+
+.side-panel-keytag::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  background: var(--background);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut) + 0.41px) 0,
+    100% calc(var(--cut) - 0.41px),
+    100% 100%,
+    0 100%
+  );
+}
+
+.side-panel-keytag[data-tone='failure'] {
+  background: var(--destructive-border);
+}
+
+.side-panel-keytag-body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 18px 16px;
+}
+
+.side-panel-keytag-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding-right: 10px;
+}
+
+.side-panel-keytag-heading h2 {
+  margin: 0;
+}
+
+.side-panel .side-panel-keytag-close {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.side-panel-keytag-copy {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.side-panel-field {
+  display: grid;
+  gap: 6px;
+}
+
+.side-panel-field label {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.side-panel-field input {
+  min-height: 40px;
+  border-color: var(--side-panel-control-border);
+  border-radius: 0;
+}
+
+/* The card's own action bar: square cells, monospace capitals, hairline
+ * dividers. The primary cell is the lit one. */
+.side-panel-action-bar {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  border-top: 1px solid var(--border);
+}
+
+.side-panel .side-panel-action-bar > button {
+  position: relative;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.side-panel .side-panel-action-bar > button + button {
+  border-left: 1px solid var(--border);
+}
+
+.side-panel .side-panel-action-bar > button.is-primary {
+  background: var(--accent);
+}
+
+.side-panel .side-panel-action-bar > button:hover:not(:disabled) {
+  background: var(--secondary);
+}
+
+.side-panel .side-panel-action-bar > button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Two cells wrap to rows when a language's labels do not fit side by
+ * side in the narrowest panel. */
+@media (max-width: 359.98px) {
+  .side-panel-connect-card .side-panel-action-bar {
+    grid-auto-flow: row;
+  }
+
+  .side-panel
+    .side-panel-connect-card
+    .side-panel-action-bar
+    > button
+    + button {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+/* Setup, locked, a new identity's key, no identity and failure: one
+ * keytag card centred in the page. */
 .side-panel-gate {
   display: grid;
   flex: 1;
@@ -275,9 +439,16 @@ html:has(.side-panel-body) {
   justify-items: center;
   gap: 16px;
   width: 100%;
-  max-width: calc(360px + 2 * var(--side-panel-gutter));
+  max-width: calc(400px + 2 * var(--side-panel-gutter));
   margin: 0 auto;
-  padding: 32px var(--side-panel-gutter) 48px;
+  padding: 24px var(--side-panel-gutter) 40px;
+  text-align: center;
+}
+
+.side-panel-gate-body {
+  justify-items: center;
+  gap: 16px;
+  padding: 24px 18px 20px;
   text-align: center;
 }
 
@@ -288,6 +459,21 @@ html:has(.side-panel-body) {
   height: 44px;
   border: 1px solid var(--border);
   color: var(--muted-foreground);
+}
+
+/* The key chain fits the narrowest panel. */
+.side-panel .connect-chain {
+  width: 100%;
+  gap: 4px;
+  margin: 0;
+}
+
+.side-panel .chain-node {
+  width: 72px;
+}
+
+.side-panel .chain-label {
+  font-size: 11px;
 }
 
 .side-panel-gate-icon[data-tone='failure'] {
@@ -624,10 +810,30 @@ html:has(.side-panel-body) {
   margin-left: -8px;
 }
 
+/* Connect another identity: the card's action row after the sections, or
+ * the connect card itself once opened. */
 .side-panel-connections {
   display: grid;
   gap: 10px;
-  padding: 20px var(--side-panel-gutter) 16px;
+  padding: 16px var(--side-panel-gutter);
+}
+
+.side-panel-connections > .side-panel-action-row {
+  margin: 0 calc(-1 * var(--side-panel-gutter)) -16px;
+}
+
+.side-panel .side-panel-action-row > button {
+  justify-content: flex-start;
+  padding-inline: var(--side-panel-gutter);
+}
+
+.side-panel-connections:has(> .side-panel-action-row:only-child) {
+  padding-top: 0;
+}
+
+.side-panel-connections:has(> .side-panel-action-row:only-child)
+  > .side-panel-action-row {
+  border-top: 0;
 }
 
 .side-panel-tag {
@@ -650,11 +856,6 @@ html:has(.side-panel-body) {
   line-height: 1.45;
 }
 
-.side-panel-connections > .side-panel-text-button {
-  justify-self: start;
-  margin-left: -8px;
-}
-
 /* ---- Footer ------------------------------------------------------------- */
 
 .side-panel-footer {
@@ -671,6 +872,13 @@ html:has(.side-panel-body) {
 
 .side-panel-footer .side-panel-text-button {
   margin-left: -8px;
+}
+
+.side-panel .side-panel-footer-action {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ---- Utilities and motion ---------------------------------------------- */

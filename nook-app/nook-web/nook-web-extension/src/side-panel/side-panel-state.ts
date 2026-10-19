@@ -6,6 +6,7 @@ import {
   DeviceProtectionStatus,
   ExtensionSessionDeviceStateKind,
   type ExtensionSessionDeviceState,
+  type NookIdentityConnectionStart,
 } from '../lib/nook-wasm'
 import {
   PairedVaultsLoadKind,
@@ -14,12 +15,15 @@ import {
   type PairedVaultSummary,
   type PairedVaultsLoad,
 } from '../lib/paired-vaults'
-import { SidePanelNookTabIntent } from './side-panel-runtime'
 import {
   IdentitySyncKind,
   PopupInitializationPhase,
   type IdentitySync,
 } from '../popup/popup-app-state'
+import {
+  ExtensionConnectStartKind,
+  type ExtensionConnectStart,
+} from '../../../nook-web-shared/src/extension/extension-connect-start'
 
 /**
  * What the side panel shows. The panel stays open while the person works
@@ -485,66 +489,137 @@ export type SidePanelAlert =
   | { readonly kind: SidePanelAlertKind.None }
   | { readonly kind: SidePanelAlertKind.Shown; readonly key: I18nKey }
 
-/** The Nook tab hand-offs: connecting an identity and all connections. */
-export enum SidePanelHandOffTrigger {
-  ConnectIdentity = 'connect-identity',
-  Manage = 'manage',
-}
-
+/** All connections: the Nook tab's companion home, where Use this identity
+ * and Make default live. A failure is said at the top of the page. */
 export enum SidePanelHandOffKind {
   Idle = 'idle',
   Opening = 'opening',
-  /** The Nook tab opened; the person continues there. */
+}
+
+/** Connecting an identity runs in the panel itself: the person first says
+ * whether they start a new identity (naming its first vault) or join one
+ * they already use, and Nook's connect page continues that choice. */
+export enum SidePanelConnectKind {
+  Idle = 'idle',
+  /** The choice is open under This site (Connect another identity). */
+  Choosing = 'choosing',
+  /** Rust is choosing the key that connects the next identity. */
+  Starting = 'starting',
+  /** The next identity waits for its own passkey or PIN, set up in place. */
+  IdentityKey = 'identity-key',
+  /** Nook's connect page opened; the person continues there. */
   Continued = 'continued',
   Failed = 'failed',
 }
 
-export type SidePanelHandOff =
-  | { readonly kind: SidePanelHandOffKind.Idle }
+export type SidePanelConnect =
   | {
       readonly kind:
-        | SidePanelHandOffKind.Opening
-        | SidePanelHandOffKind.Continued
-        | SidePanelHandOffKind.Failed
-      readonly trigger: SidePanelHandOffTrigger
+        | SidePanelConnectKind.Idle
+        | SidePanelConnectKind.Choosing
+        | SidePanelConnectKind.Starting
+        | SidePanelConnectKind.Continued
+        | SidePanelConnectKind.Failed
+    }
+  | {
+      readonly kind: SidePanelConnectKind.IdentityKey
+      /** Passkey setup, or PIN setup when passkeys cannot work here. */
+      readonly status: DeviceProtectionStatus
+      /** The choice the connect page continues once the key exists. */
+      readonly start: ExtensionConnectStart
     }
 
-/** Where each hand-off lands and what the panel says after it. */
-export class SidePanelHandOffs {
+type SidePanelCreateStartRequest = {
+  /** What the person typed as the first vault's name. */
+  readonly typed: string
+  /** The connect page's suggested name, used for an empty field. */
+  readonly suggested: string
+}
+
+type SidePanelChoiceRequest = {
+  readonly vaults: SidePanelVaultsKind
+  readonly connect: SidePanelConnect
+}
+
+/** Whether the connect card leads the panel or opened under This site. */
+export enum SidePanelConnectCardPlacement {
+  /** No identity is connected: the card cannot be closed.
+   * @public Used from Svelte templates; Knip cannot trace enum members there. */
+  First = 'first',
+  /** Connect another identity opened it; its close button closes it.
+   * @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Another = 'another',
+}
+
+/** What the panel does once Rust chose the connecting key. */
+export enum SidePanelConnectStep {
+  /** The unlocked key joins the identity: open Nook's connect page now. */
+  Pair = 'pair',
+  /** A new identity was staged: its key is set up first. */
+  SetUpKey = 'set-up-key',
+}
+
+export class SidePanelConnects {
   private constructor() {}
 
-  static intent(trigger: SidePanelHandOffTrigger): SidePanelNookTabIntent {
-    switch (trigger) {
-      case SidePanelHandOffTrigger.ConnectIdentity:
-        return SidePanelNookTabIntent.Pair
-      case SidePanelHandOffTrigger.Manage:
-        return SidePanelNookTabIntent.Manage
+  static step(start: NookIdentityConnectionStart): SidePanelConnectStep {
+    switch (start) {
+      case 'current-key':
+        return SidePanelConnectStep.Pair
+      case 'new-key-staged':
+        return SidePanelConnectStep.SetUpKey
     }
   }
 
-  /** Connecting says to continue in the Nook tab; all connections just
-   * opens it. */
-  static opened(trigger: SidePanelHandOffTrigger): SidePanelHandOff {
-    switch (trigger) {
-      case SidePanelHandOffTrigger.ConnectIdentity:
-        return { kind: SidePanelHandOffKind.Continued, trigger }
-      case SidePanelHandOffTrigger.Manage:
-        return { kind: SidePanelHandOffKind.Idle }
+  /** The new identity's key starts as a passkey, as the Nook tab's does. */
+  static identityKey(start: ExtensionConnectStart): SidePanelConnect {
+    return {
+      kind: SidePanelConnectKind.IdentityKey,
+      status: DeviceProtectionStatus.Missing,
+      start,
     }
   }
 
-  /** A failed connect is said under its button; a failed footer action
-   * at the top of the page. */
-  static openFailedAlert(trigger: SidePanelHandOffTrigger): SidePanelAlert {
-    switch (trigger) {
-      case SidePanelHandOffTrigger.ConnectIdentity:
-        return { kind: SidePanelAlertKind.None }
-      case SidePanelHandOffTrigger.Manage:
-        return {
-          kind: SidePanelAlertKind.Shown,
-          key: I18N_KEYS.ExtensionActionOpenFailed,
-        }
+  /** Starting a new identity with an empty name takes the suggested one,
+   * as the connect page's own field does. */
+  static create(request: SidePanelCreateStartRequest): ExtensionConnectStart {
+    return {
+      kind: ExtensionConnectStartKind.Create,
+      vaultName: request.typed.trim() || request.suggested,
     }
+  }
+
+  static join(): ExtensionConnectStart {
+    return { kind: ExtensionConnectStartKind.Join }
+  }
+
+  /** Whether the choice shows: always while no identity is connected,
+   * otherwise once Connect another identity opened it. */
+  static choiceShown(request: SidePanelChoiceRequest): boolean {
+    switch (request.vaults) {
+      case SidePanelVaultsKind.NoVault:
+        return true
+      case SidePanelVaultsKind.Loading:
+      case SidePanelVaultsKind.Paired:
+      case SidePanelVaultsKind.Failed:
+        break
+    }
+    switch (request.connect.kind) {
+      case SidePanelConnectKind.Idle:
+        return false
+      case SidePanelConnectKind.Choosing:
+      case SidePanelConnectKind.Starting:
+      case SidePanelConnectKind.IdentityKey:
+      case SidePanelConnectKind.Continued:
+      case SidePanelConnectKind.Failed:
+        return true
+    }
+  }
+
+  /** The key ceremony owns the panel until it finishes or is cancelled:
+   * a status read meanwhile must not replace it. */
+  static holdsPanel(connect: SidePanelConnect): boolean {
+    return connect.kind === SidePanelConnectKind.IdentityKey
   }
 }
 
