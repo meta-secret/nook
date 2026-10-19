@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { WebsitePasskeyCeremony } from '../../../../nook-web-extension/src/lib/webauthn-message-types'
 import {
+  PasskeyLookupKind,
   PasskeyPrompt,
   PasskeyPromptChoiceKind,
   PasskeyPromptPanel,
+  type PasskeyLookup,
   type PasskeyPromptRequest,
+  type PasskeyPromptUnlock,
 } from '../../../../nook-web-extension/src/content/passkey-prompt'
 import { WIDGET_HOST_ID } from '../../../../nook-web-extension/src/content/in-page-surface'
 import { WebsitePasskeyUnavailableReason } from '../../../../nook-web-extension/src/content/webauthn-options-response'
@@ -46,16 +49,41 @@ const getRequest: PasskeyPromptRequest = {
   ],
 }
 
+const openPanels: PasskeyPromptPanel[] = []
+
 type PanelFixture = {
   panel: PasskeyPromptPanel
   onClose: ReturnType<typeof vi.fn>
 }
 
-function openPanel(request: PasskeyPromptRequest): PanelFixture {
+const lockedNook: PasskeyLookup = {
+  kind: PasskeyLookupKind.Offer,
+  offer: { options: [], unavailable: WebsitePasskeyUnavailableReason.Locked },
+}
+
+function unlockNook(
+  lookup: PasskeyPromptUnlock['lookup'] = () => Promise.resolve(lockedNook),
+): PasskeyPromptUnlock {
+  return { open: () => Promise.resolve(), lookup }
+}
+
+function openPanel(
+  request: PasskeyPromptRequest,
+  unlock: PasskeyPromptUnlock = unlockNook(),
+): PanelFixture {
   const onClose = vi.fn()
-  const panel = new PasskeyPromptPanel({ request, onClose })
+  const panel = new PasskeyPromptPanel({ request, unlock, onClose })
+  openPanels.push(panel)
   document.body.append(panel.element)
   return { panel, onClose }
+}
+
+function setVisibility(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
 }
 
 function text(panel: PasskeyPromptPanel): string {
@@ -87,6 +115,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  openPanels.splice(0).forEach((panel) => panel.dispose())
+  Reflect.deleteProperty(document, 'visibilityState')
   document.body.replaceChildren()
   document.documentElement
     .querySelectorAll('aside')
@@ -222,17 +252,107 @@ describe('passkey card with nothing to offer', () => {
       kind: PasskeyPromptChoiceKind.BrowserFallback,
     })
   })
+})
 
-  test('a locked Nook says so and closing declines', async () => {
-    const request: PasskeyPromptRequest = {
-      ...createRequest,
-      options: [],
-      unavailable: WebsitePasskeyUnavailableReason.Locked,
-    }
-    const { panel } = openPanel(request)
+describe('passkey card while Nook is locked', () => {
+  const lockedRequest: PasskeyPromptRequest = {
+    ...createRequest,
+    options: [],
+    unavailable: WebsitePasskeyUnavailableReason.Locked,
+  }
+  const unlockedNook: PasskeyLookup = {
+    kind: PasskeyLookupKind.Offer,
+    offer: { options: createRequest.options },
+  }
+
+  test('offers to unlock Nook instead of another passkey', () => {
+    const { panel } = openPanel(lockedRequest)
 
     expect(text(panel)).toContain('passkeyLocked')
+    expect(text(panel)).toContain('passkeyUnlockAction')
+    expect(text(panel)).not.toContain('passkeyUseAnother')
+    expect(text(panel)).not.toContain('passkeyUseBrowser')
     expect(panel.element.querySelectorAll('input')).toHaveLength(0)
+  })
+
+  test('opens Nook, then saves once the person continues after unlocking', async () => {
+    const open = vi.fn(() => Promise.resolve())
+    const lookup = vi.fn(() => Promise.resolve(unlockedNook))
+    const { panel } = openPanel(lockedRequest, { open, lookup })
+
+    button(panel, 'passkeyUnlockAction').click()
+    await vi.waitFor(() =>
+      expect(text(panel)).toContain('passkeyUnlockWaiting'),
+    )
+    expect(open).toHaveBeenCalledOnce()
+    expect(lookup).not.toHaveBeenCalled()
+
+    button(panel, 'passkeyContinueAction').click()
+    await vi.waitFor(() => expect(text(panel)).toContain('passkeySaveAction'))
+    expect(text(panel)).toContain('alice@example.com')
+    button(panel, 'passkeySaveAction').click()
+
+    await expect(panel.choice).resolves.toEqual({
+      kind: PasskeyPromptChoiceKind.Selected,
+      option: createRequest.options[0],
+    })
+  })
+
+  test('asks Nook again when the person comes back to the page', async () => {
+    const lookup = vi.fn(() => Promise.resolve(unlockedNook))
+    const { panel } = openPanel(lockedRequest, unlockNook(lookup))
+
+    setVisibility('visible')
+    expect(lookup).not.toHaveBeenCalled()
+
+    button(panel, 'passkeyUnlockAction').click()
+    await vi.waitFor(() =>
+      expect(text(panel)).toContain('passkeyUnlockWaiting'),
+    )
+    setVisibility('hidden')
+    expect(lookup).not.toHaveBeenCalled()
+    setVisibility('visible')
+
+    await vi.waitFor(() => expect(text(panel)).toContain('passkeySaveAction'))
+    expect(lookup).toHaveBeenCalledOnce()
+  })
+
+  test('still locked after the check shows Unlock Nook again', async () => {
+    const { panel } = openPanel(lockedRequest)
+
+    button(panel, 'passkeyUnlockAction').click()
+    await vi.waitFor(() =>
+      expect(text(panel)).toContain('passkeyUnlockWaiting'),
+    )
+    button(panel, 'passkeyContinueAction').click()
+
+    await vi.waitFor(() => expect(text(panel)).toContain('passkeyUnlockAction'))
+    expect(text(panel)).toContain('passkeyLocked')
+  })
+
+  test('stays on Unlock Nook when Nook cannot be opened', async () => {
+    const open = vi.fn(() => Promise.reject(new Error('no tab')))
+    const { panel } = openPanel(lockedRequest, {
+      open,
+      lookup: () => Promise.resolve(unlockedNook),
+    })
+
+    const unlock = button(panel, 'passkeyUnlockAction')
+    unlock.click()
+    expect(unlock.disabled).toBe(true)
+
+    await vi.waitFor(() => expect(unlock.disabled).toBe(false))
+    expect(text(panel)).toContain('passkeyLocked')
+    expect(text(panel)).not.toContain('passkeyUnlockWaiting')
+  })
+
+  test('closing while Nook is open declines', async () => {
+    const { panel } = openPanel(lockedRequest)
+
+    button(panel, 'passkeyUnlockAction').click()
+    await vi.waitFor(() =>
+      expect(text(panel)).toContain('passkeyUnlockWaiting'),
+    )
     button(panel, 'passkeyClose').click()
 
     await expect(panel.choice).resolves.toEqual({
@@ -247,7 +367,10 @@ describe('passkey card on the page', () => {
     pilot.id = WIDGET_HOST_ID
     document.body.append(pilot)
 
-    const prompt = PasskeyPrompt.open(createRequest)
+    const prompt = PasskeyPrompt.open({
+      request: createRequest,
+      unlock: unlockNook(),
+    })
     const host = document.querySelector(
       'aside[aria-label="passkeyPromptLabel"]',
     )
@@ -261,7 +384,10 @@ describe('passkey card on the page', () => {
 
   test('closes a saved confirmation on its own', () => {
     vi.useFakeTimers()
-    const prompt = PasskeyPrompt.open(createRequest)
+    const prompt = PasskeyPrompt.open({
+      request: createRequest,
+      unlock: unlockNook(),
+    })
     const host = document.querySelector(
       'aside[aria-label="passkeyPromptLabel"]',
     )
@@ -274,7 +400,10 @@ describe('passkey card on the page', () => {
   })
 
   test('Escape declines a pending choice', async () => {
-    const prompt = PasskeyPrompt.open(createRequest)
+    const prompt = PasskeyPrompt.open({
+      request: createRequest,
+      unlock: unlockNook(),
+    })
     const host = document.querySelector(
       'aside[aria-label="passkeyPromptLabel"]',
     )
