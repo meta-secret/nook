@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import {
   ExtensionConnectStepKind,
+  type ExtensionConnectFailureReason,
   type ExtensionConnectStep,
 } from "$web-shared/extension/extension-connect-progress";
 
@@ -42,11 +43,39 @@ enum ExtensionConnectProgressLinkKind {
   Ended = "ended",
 }
 
+enum ExtensionConnectSentKind {
+  Nothing = "nothing",
+  Sent = "sent",
+}
+
+type ExtensionConnectSent =
+  | { readonly kind: ExtensionConnectSentKind.Nothing }
+  | {
+      readonly kind: ExtensionConnectSentKind.Sent;
+      readonly step: ExtensionConnectStep;
+    };
+
+enum ExtensionConnectRepetition {
+  Repeat = "repeat",
+  Changed = "changed",
+}
+
+type ExtensionConnectRepeatCheck = {
+  readonly sent: ExtensionConnectSent;
+  readonly next: ExtensionConnectStep;
+};
+
+type ExtensionConnectFailureCheck = {
+  readonly sent: ExtensionConnectStep;
+  readonly reason: ExtensionConnectFailureReason;
+};
+
 type ExtensionConnectProgressLink =
   | { readonly kind: ExtensionConnectProgressLinkKind.Idle }
   | {
       readonly kind: ExtensionConnectProgressLinkKind.Open;
       readonly port: ExtensionConnectPagePort;
+      readonly sent: ExtensionConnectSent;
     }
   | { readonly kind: ExtensionConnectProgressLinkKind.Ended };
 
@@ -130,7 +159,11 @@ export class ExtensionConnectProgress {
         return;
     }
     port.onDisconnect.addListener(() => this.disconnected(port));
-    this.link = { kind: ExtensionConnectProgressLinkKind.Open, port };
+    this.link = {
+      kind: ExtensionConnectProgressLinkKind.Open,
+      port,
+      sent: { kind: ExtensionConnectSentKind.Nothing },
+    };
     const openedStep: ExtensionConnectStep = {
       kind: ExtensionConnectStepKind.Opened,
     };
@@ -143,8 +176,8 @@ export class ExtensionConnectProgress {
     }
   }
 
-  /** The page's current step; sent while the port is open. Repeats are
-   * harmless: the panel shows the latest step. */
+  /** The page's current step; sent while the port is open, unless it is
+   * the step just sent. */
   report(step: ExtensionConnectStep): void {
     this.current = { kind: ExtensionConnectCurrentKind.Step, step };
     this.send(step);
@@ -172,7 +205,14 @@ export class ExtensionConnectProgress {
       case ExtensionConnectProgressLinkKind.Open:
         break;
     }
-    const { port } = this.link;
+    const { port, sent } = this.link;
+    const repeat: ExtensionConnectRepeatCheck = { sent, next: step };
+    switch (ExtensionConnectProgress.repetition(repeat)) {
+      case ExtensionConnectRepetition.Repeat:
+        return;
+      case ExtensionConnectRepetition.Changed:
+        break;
+    }
     const posted = Effect.runSync(
       Effect.result(Effect.try(() => port.postMessage(step))),
     );
@@ -182,7 +222,70 @@ export class ExtensionConnectProgress {
         this.link = { kind: ExtensionConnectProgressLinkKind.Ended };
         return;
       case "Success":
-        return;
+        this.link = {
+          kind: ExtensionConnectProgressLinkKind.Open,
+          port,
+          sent: { kind: ExtensionConnectSentKind.Sent, step },
+        };
+    }
+  }
+
+  /** The same step as the one just sent adds nothing for the panel. */
+  private static repetition(
+    check: ExtensionConnectRepeatCheck,
+  ): ExtensionConnectRepetition {
+    const { sent, next } = check;
+    switch (sent.kind) {
+      case ExtensionConnectSentKind.Nothing:
+        return ExtensionConnectRepetition.Changed;
+      case ExtensionConnectSentKind.Sent:
+        break;
+    }
+    switch (next.kind) {
+      case ExtensionConnectStepKind.Failed: {
+        const failure: ExtensionConnectFailureCheck = {
+          sent: sent.step,
+          reason: next.reason,
+        };
+        return ExtensionConnectProgress.failureRepetition(failure);
+      }
+      case ExtensionConnectStepKind.Opened:
+      case ExtensionConnectStepKind.Unlock:
+      case ExtensionConnectStepKind.Choosing:
+      case ExtensionConnectStepKind.Creating:
+      case ExtensionConnectStepKind.Consent:
+      case ExtensionConnectStepKind.Approved:
+        break;
+    }
+    switch (sent.step.kind === next.kind) {
+      case true:
+        return ExtensionConnectRepetition.Repeat;
+      case false:
+        return ExtensionConnectRepetition.Changed;
+    }
+  }
+
+  /** A failure repeats only with the same reason. */
+  private static failureRepetition(
+    check: ExtensionConnectFailureCheck,
+  ): ExtensionConnectRepetition {
+    const { sent, reason } = check;
+    switch (sent.kind) {
+      case ExtensionConnectStepKind.Failed:
+        break;
+      case ExtensionConnectStepKind.Opened:
+      case ExtensionConnectStepKind.Unlock:
+      case ExtensionConnectStepKind.Choosing:
+      case ExtensionConnectStepKind.Creating:
+      case ExtensionConnectStepKind.Consent:
+      case ExtensionConnectStepKind.Approved:
+        return ExtensionConnectRepetition.Changed;
+    }
+    switch (sent.reason === reason) {
+      case true:
+        return ExtensionConnectRepetition.Repeat;
+      case false:
+        return ExtensionConnectRepetition.Changed;
     }
   }
 

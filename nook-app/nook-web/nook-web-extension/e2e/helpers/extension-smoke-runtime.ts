@@ -697,6 +697,71 @@ export async function openSimpleVaultConnection(
   return simplePage
 }
 
+type NookTabConnectReuse = {
+  readonly context: BrowserContext
+  /** The Simple Vault tab already open in the requesting page's window. */
+  readonly nookPage: Page
+  /** The click that starts the connect, as Connect in the auth tab. */
+  readonly connect: () => Promise<void>
+}
+
+/**
+ * Connecting from an extension page whose window already shows a Simple
+ * Vault tab reuses that tab: the service worker navigates it to the connect
+ * route, and no page opens. Pages Playwright opens share one window, so an
+ * auth tab opened with context.newPage() connects through the Nook tab
+ * already there.
+ */
+export async function reuseNookTabForConnect(
+  request: NookTabConnectReuse,
+): Promise<Page> {
+  const { context, nookPage, connect } = request
+  const opened: Page[] = []
+  const recordOpened = (page: Page) => {
+    opened.push(page)
+  }
+  context.on('page', recordOpened)
+  try {
+    await connect()
+    await expect(nookPage).toHaveURL(
+      (url) =>
+        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+        url.pathname.endsWith('/extension-connect'),
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
+  } finally {
+    context.off('page', recordOpened)
+  }
+  expect(opened.map((page) => page.url())).toEqual([])
+  return nookPage
+}
+
+type AuthTabWindowRequest = {
+  readonly context: BrowserContext
+  readonly extensionId: string
+}
+
+/**
+ * Opens the pairing auth tab in a normal window of its own. That window
+ * holds no Simple Vault tab, so its Connect opens a new connect tab there
+ * and leaves the Nook tabs of other windows as they are.
+ */
+export async function openPairingAuthTabInOwnWindow(
+  request: AuthTabWindowRequest,
+): Promise<Page> {
+  const { context, extensionId } = request
+  const worker = await getServiceWorker(context)
+  const url = `chrome-extension://${extensionId}/popup/index.html?intent=pair`
+  const [authTab] = await Promise.all([
+    waitForNewPage(context, 'pairing auth tab window'),
+    worker.evaluate(async (target) => {
+      await chrome.windows.create({ url: target, type: 'normal' })
+    }, url),
+  ])
+  await expect(authTab).toHaveURL(url)
+  return authTab
+}
+
 export async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
   return withE2eDeadline(
