@@ -127,6 +127,22 @@ jobs:
           if [ "$validation" = true ]; then
             bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
           fi
+      - name: Job capacity before validation
+        if: steps.browser-scope.outputs.validation == 'true'
+        continue-on-error: true
+        run: |
+          echo 'Job-container capacity snapshot; remote BuildKit capacity is separate.'
+          date -u '+%Y-%m-%dT%H:%M:%SZ'
+          printf 'nproc: '; nproc || echo unavailable
+          node -e 'const os = require("node:os"); console.log({availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
+          grep '^Cpus_allowed_list:' /proc/self/status || echo 'Cpus_allowed_list: unavailable'
+          for path in /proc/self/cgroup /proc/loadavg /proc/meminfo \
+            /sys/fs/cgroup/cpu.max /sys/fs/cgroup/cpuset.cpus.effective /sys/fs/cgroup/cpu.stat \
+            /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.peak \
+            /sys/fs/cgroup/memory.events; do
+            printf '\n%s:\n' "$path"
+            if [ -r "$path" ]; then cat "$path" || echo unavailable; else echo unavailable; fi
+          done
       - name: Parallel validation and browser tests
         if: steps.browser-scope.outputs.validation == 'true'
         env:
@@ -134,6 +150,22 @@ jobs:
           PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}
           PR_RESEARCH: ${{ steps.browser-scope.outputs.research }}
         run: task --silent ci:pr:validate
+      - name: Job capacity after validation
+        if: always() && steps.browser-scope.outputs.validation == 'true'
+        continue-on-error: true
+        run: |
+          echo 'Job-container capacity snapshot; remote BuildKit capacity is separate.'
+          date -u '+%Y-%m-%dT%H:%M:%SZ'
+          printf 'nproc: '; nproc || echo unavailable
+          node -e 'const os = require("node:os"); console.log({availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
+          grep '^Cpus_allowed_list:' /proc/self/status || echo 'Cpus_allowed_list: unavailable'
+          for path in /proc/self/cgroup /proc/loadavg /proc/meminfo \
+            /sys/fs/cgroup/cpu.max /sys/fs/cgroup/cpuset.cpus.effective /sys/fs/cgroup/cpu.stat \
+            /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.peak \
+            /sys/fs/cgroup/memory.events; do
+            printf '\n%s:\n' "$path"
+            if [ -r "$path" ]; then cat "$path" || echo unavailable; else echo unavailable; fi
+          done
       - name: Verification — policy-only PR
         if: steps.browser-scope.outputs.validation != 'true'
         run: task --silent ci:pr:verification:tooling
