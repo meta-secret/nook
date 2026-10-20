@@ -23,7 +23,7 @@ branches, PRs, product validation, or recursive Main builds. See
 and manual ecosystem execution in one Actions run named `CI`.
 
 - Main's secret-free classifier reads changed paths without executing source.
-- PR policy runs inside the single validation job; Main keeps its policy workflow.
+- PR policy runs inside the validation producer; Main keeps its policy workflow.
 - A validation label activates product checks for subsequent PR commits.
 - The router reads current labels to avoid stale event ordering.
 - Removing the validation label disables product checks on later pushes.
@@ -31,8 +31,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - PR replacement and close events use native concurrency.
 - PR base-branch changes revalidate; close events start no validation job.
 - Main runs remain serialized to protect cache publication.
-- The consolidated PR job has a 240-minute envelope including browser suites.
-  Other workflows retain their individual bounded job limits.
+- The PR validation producer has a 240-minute envelope. Full browser consumers
+  have 30-minute limits; the completion job has a 15-minute limit.
 - Privileged completion publishers remain separate trusted workflows.
 - Manual remote execution and release workflows remain separate.
 - Operators may dispatch `main.yml` directly on `main` with
@@ -56,7 +56,9 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`pr.yml`**
 
-- One runner owns verification, tests/coverage, heavy gates, browser checks and preview.
+- One producer owns verification, tests/coverage, heavy gates and browser artifacts.
+- Full browser validation uses separate web and extension-shard jobs.
+- The required `Verify and preview` job joins every selected validation result.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Verification completes before test compilation; failure stops later phases.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
@@ -65,13 +67,15 @@ and manual ecosystem execution in one Actions run named `CI`.
   `ci:full-e2e` label mutation to select product validation; without one they
   run tooling verification, preflight, and Loom in the same job.
 - UI-demo execution remains disabled, with its focused-spec contract retained.
-- Pages preview uses a same-runner composite action; coverage remains inside
-  the Docker/BuildKit solve.
-- No intermediate Nook image or registry layer cache is transferred for PR validation.
+- Fast-path preview remains on the producer. Full-suite preview runs in the
+  completion job after its browser consumers succeed.
+- Coverage remains inside the Docker/BuildKit solve.
+- Full-suite consumers receive an immutable `browser.tar` Actions artifact.
+  No intermediate Nook image or registry layer cache is transferred.
 
 **`repository-policy.yml`**
 
-- Runs preflight and Loom policy for Main pushes; PR policy runs in the single PR job.
+- Runs preflight and Loom policy for Main pushes; PR policy runs in the PR producer.
 - Validates the checked-out tree without fetching or comparing a base SHA and
   without classifying changed paths.
 - Delegates repository-owned commands to the repository-policy Task surfaces;
@@ -290,10 +294,11 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted PRs use one `nook-k0s-container` job, named
-`PR validation / Verify and preview`. Every step stays on that runner and
-its selected persistent node-local BuildKit shard. Fork and Dependabot PRs
-use a secret-free GitHub-hosted job container. Future runs can select a
+Trusted PR producers use `nook-k0s-container` and retain one persistent
+node-local BuildKit connection. Full browser consumers use separate ordinary
+job Pods on that scale set. Fork and Dependabot PRs use secret-free
+GitHub-hosted job containers. The required `PR validation / Verify and preview`
+check joins the producer and selected browser jobs. Future runs can select a
 different node; this is not cross-run placement affinity.
 
 The ARC container hook injects a Docker client, not a daemon or socket, and
@@ -357,7 +362,7 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - Main publishes the portable WASM dependency fingerprint from its verified ARC solve.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
-**Single-job PR validation:**
+**PR producer and browser validation:**
 
 - `ci:pr:validate` in `nook-app/ci/pr.yml` joins independent Task dependencies:
   formatting, tooling, dependency policy, product checks, repository policy,
@@ -375,19 +380,25 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - The browser branch exports production artifacts as a tar archive when built.
   It copies them into a separate checkout under `PR_ARTIFACT_DIR/runtime`.
   Browser tests never mutate the original checkout while BuildKit reads it.
-- Full web/extension suites, or the focused authentication regression, run
-  before any requested research suite within the browser branch.
-  These suites remain sequential to avoid shared browser ports.
-- Artifact import and preview deployment follow the complete validation join.
+- Full-suite PRs upload `browser.tar` after the producer's checks succeed.
+  Consumers check out the producer's source SHA and download its artifact ID.
+  One web job runs beside two extension shard jobs; separate Pods isolate ports.
+  Each extension shard retains one Playwright worker.
+- Fast PRs keep the focused authentication regression, when selected, before
+  research checks in the producer's isolated workspace.
+- Requested research checks remain in the producer. Full-suite handoffs include
+  their verified research output for preview deployment.
+- Full-suite preview follows the complete producer and browser-job join.
   For example, a failed static check blocks preview even if browser tests pass.
 - Product and requested research uploads run concurrently after validation.
   Both must succeed before publishing their outputs. GitHub comments and
   deployment records remain ordered after that upload join.
 - Job metadata, local-cache settings, scope detection and the UI demo contract
   share one setup step after BuildKit and Node setup.
-- Policy-only PRs retain the same job without product or browser validation.
-- BuildKit remains the cache authority. No additional workflow, image handoff,
-  registry transfer or cancellation job is introduced.
+- Policy-only PRs run in the producer without product or browser validation.
+  The completion job accepts the intentionally skipped browser matrix.
+- BuildKit remains the cache authority. Browser consumers restore artifacts
+  without connecting to BuildKit or rebuilding a source image.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
   verification/test failures at the joined publication boundary.
 - Compare hosted run timings before claiming a measured improvement.
@@ -408,13 +419,12 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Runs the full web suite, including isolated application
-  servers, and then the extension suite inside the same PR job after
-  verification, unit/integration tests and heavy Rust checks. They are
-  sequential because both suites own fixed loopback ports and Chromium budgets.
+- **Label effect:** Runs the full web suite beside two extension shards after
+  the validation producer succeeds. Each consumer has its own job container,
+  preserving fixed loopback ports without serializing the suites.
 - Authentication-sensitive changes run the focused extension regression when
   the full suite was not requested.
-- Research changes run their browser checks in the same job.
+- Research changes run their browser checks in the producer job.
 - All requested suites must succeed before preview deployment.
 - Extension tests keep their automatically selected Xvfb display and existing
   one-worker setting; web suites retain Playwright's internal parallelism.
@@ -614,11 +624,13 @@ authenticator-domain to 90 percent.
 
 **PR CI locality and reruns:**
 
-- One job retains one checkout and one persistent BuildKit connection.
+- The producer retains one checkout and one persistent BuildKit connection.
 - Rust/WASM/web verification precedes tests; after tests, heavy gates and artifact
   preparation run as a joined concurrent fan-out before browsers.
-- Generated files are exported locally; reporting and deployment allocate no runners.
-- Failed-job reruns repeat the single job; BuildKit decides which layers reuse cache.
+- Fast-path generated files remain local to the producer for preview.
+- Full-suite consumers and completion restore the producer's immutable artifact.
+- Browser-job reruns consume that artifact without another BuildKit solve.
+  Producer reruns let BuildKit decide which layers reuse cache.
 - There is no artifact-promotion bypass or sibling-job polling.
 - Future runs may select another node and start cold.
 
@@ -675,7 +687,8 @@ coverage solve and package floors in the verified Rust graph.
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
-- PR CI keeps one runner and local BuildKit state without registry cache transfer.
+- PR CI keeps BuildKit state on its producer without registry cache transfer.
+- Full PR browser jobs consume the producer's immutable artifact in separate Pods.
 - Requested browsers run after successful verification and tests.
 - Preview restores exported production artifacts after E2E.
 - Fork/Dependabot validation remains secret-free and never deploys previews.
