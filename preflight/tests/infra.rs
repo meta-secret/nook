@@ -338,6 +338,8 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/buildkit.yaml");
     let container_hook =
         RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/container-hook.yaml");
+    let container_runners = RepositoryFixture::repository_root()
+        .read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
     let container_job_nodes =
         RepositoryFixture::repository_root().read("infra/k0s/config/arc-container-job-nodes");
     let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc.yml");
@@ -347,6 +349,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     for contract in [
         "maxRunners: 35",
         "podAntiAffinity:",
+        "requiredDuringSchedulingIgnoredDuringExecution:",
         "topologyKey: nook.nokey.sh/arc-standard-host",
         "topologyKey: nook.nokey.sh/arc-overflow-host",
         "values: [general, hive, container]",
@@ -370,6 +373,30 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(
         !values.contains("topologySpreadConstraints:"),
         "ARC hostname spreading must not force equal cross-tier placement"
+    );
+    for execution in [&values, &container_hook] {
+        assert!(
+            execution.contains("requiredDuringSchedulingIgnoredDuringExecution:"),
+            "ARC execution pods must reserve a hostname against other execution groups"
+        );
+        assert!(
+            execution.contains("values: [general, hive, container]"),
+            "all execution groups must share hostname isolation"
+        );
+    }
+    for coordinator in [&container_runners, &buildkit] {
+        assert!(
+            !coordinator.contains("nook.nokey.sh/arc-spread-group:"),
+            "managers and BuildKit daemons must not consume execution placement slots"
+        );
+    }
+    assert!(
+        !container_runners.contains("requiredDuringSchedulingIgnoredDuringExecution:"),
+        "container managers must remain schedulable while execution slots are occupied"
+    );
+    assert!(
+        !container_hook.contains("nodeName:"),
+        "container jobs must be independently scheduled rather than pinned to their manager"
     );
     for forbidden in ["runtimeClassName:", "podman", "docker.sock", "hostPath:"] {
         assert!(
