@@ -40,7 +40,10 @@ import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
-import { authorizeDeviceProtection } from '../../nook-web-app/e2e/helpers/settings-auth'
+import {
+  authorizeDeviceProtection,
+  waitForVaultInitialized,
+} from '../../nook-web-app/e2e/helpers/settings-auth'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -337,7 +340,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(sidePanel.getByTestId('side-panel-manage')).toHaveCount(0)
     const openedVault = context.waitForEvent('page')
     await sidePanel.getByTestId('side-panel-open-vault').click()
-    await expect(await openedVault).toHaveURL(
+    const vaultPage = await openedVault
+    // The app canonicalizes its launch URL after the engine mounts.
+    await waitForVaultInitialized(vaultPage)
+    await expect(vaultPage).toHaveURL(
       simple_vault_url(simpleVaultBaseUrl, 'vault'),
     )
     // Opening a page never closes the panel.
