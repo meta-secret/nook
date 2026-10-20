@@ -396,8 +396,9 @@ describe('side panel connect session', () => {
 })
 
 describe('side panel connect state', () => {
-  const inTab = SidePanelConnects.inTab(CONNECT_TAB, {
-    kind: SidePanelTabActivationKind.None,
+  const inTab = SidePanelConnects.inTab({
+    tabId: CONNECT_TAB,
+    activation: { kind: SidePanelTabActivationKind.None },
   })
   const step = (next: ExtensionConnectStep): SidePanelConnectEvent => ({
     kind: SidePanelConnectEventKind.Step,
@@ -451,7 +452,10 @@ describe('side panel connect state', () => {
   })
 
   test('the Nook tab starts in front, goes behind another tab, and returns', () => {
-    const behind = SidePanelConnects.tabActivated(inTab, CONNECT_TAB + 1)
+    const behind = SidePanelConnects.tabActivated({
+      connect: inTab,
+      activeTabId: CONNECT_TAB + 1,
+    })
     expect(behind).toEqual({
       kind: SidePanelConnectKind.InTab,
       tabId: CONNECT_TAB,
@@ -464,22 +468,35 @@ describe('side panel connect state', () => {
       event: step({ kind: ExtensionConnectStepKind.Consent }),
     }).connect
     expect(consent).toMatchObject({ place: SidePanelTabPlace.Behind })
-    expect(SidePanelConnects.tabActivated(consent, CONNECT_TAB)).toMatchObject({
+    expect(
+      SidePanelConnects.tabActivated({
+        connect: consent,
+        activeTabId: CONNECT_TAB,
+      }),
+    ).toMatchObject({
       place: SidePanelTabPlace.Front,
     })
     // A switch while the tab opened places it once its id arrives.
-    const covered = SidePanelConnects.inTab(CONNECT_TAB, {
-      kind: SidePanelTabActivationKind.Seen,
-      tabId: CONNECT_TAB + 1,
+    const covered = SidePanelConnects.inTab({
+      tabId: CONNECT_TAB,
+      activation: {
+        kind: SidePanelTabActivationKind.Seen,
+        tabId: CONNECT_TAB + 1,
+      },
     })
     expect(covered).toEqual(behind)
-    const revealed = SidePanelConnects.inTab(CONNECT_TAB, {
-      kind: SidePanelTabActivationKind.Seen,
+    const revealed = SidePanelConnects.inTab({
       tabId: CONNECT_TAB,
+      activation: { kind: SidePanelTabActivationKind.Seen, tabId: CONNECT_TAB },
     })
     expect(revealed).toEqual(inTab)
     const idle: SidePanelConnect = { kind: SidePanelConnectKind.Idle }
-    expect(SidePanelConnects.tabActivated(idle, CONNECT_TAB + 1)).toBe(idle)
+    expect(
+      SidePanelConnects.tabActivated({
+        connect: idle,
+        activeTabId: CONNECT_TAB + 1,
+      }),
+    ).toBe(idle)
   })
 
   test('a closed tab before approval brings the card back; a protocol failure says so', () => {

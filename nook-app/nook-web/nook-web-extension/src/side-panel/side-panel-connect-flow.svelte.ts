@@ -163,8 +163,11 @@ export class SidePanelConnectFlow {
       case SidePanelConnectKind.Idle:
       case SidePanelConnectKind.IdentityKey:
       case SidePanelConnectKind.InTab:
-      case SidePanelConnectKind.Failed:
-        this.connect = SidePanelConnects.tabActivated(this.connect, tabId)
+      case SidePanelConnectKind.Failed: {
+        const activated: Parameters<typeof SidePanelConnects.tabActivated>[0] =
+          { connect: this.connect, activeTabId: tabId }
+        this.connect = SidePanelConnects.tabActivated(activated)
+      }
     }
   }
 
@@ -297,10 +300,15 @@ export class SidePanelConnectFlow {
         return
     }
     switch (opened._tag) {
-      case 'Success':
-        this.connect = SidePanelConnects.inTab(opened.success, this.opening)
+      case 'Success': {
+        const inTab: Parameters<typeof SidePanelConnects.inTab>[0] = {
+          tabId: opened.success,
+          activation: this.opening,
+        }
+        this.connect = SidePanelConnects.inTab(inTab)
         this.sessions.tabOpened(opened.success)
         return
+      }
       case 'Failure':
         this.failed()
     }

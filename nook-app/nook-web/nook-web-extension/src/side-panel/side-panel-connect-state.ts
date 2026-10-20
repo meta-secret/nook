@@ -139,6 +139,16 @@ type SidePanelConnectEventRequest = {
   readonly event: SidePanelConnectEvent
 }
 
+type SidePanelInTabRequest = {
+  readonly tabId: number
+  readonly activation: SidePanelTabActivation
+}
+
+type SidePanelTabActivatedRequest = {
+  readonly connect: SidePanelConnect
+  readonly activeTabId: number
+}
+
 type SidePanelCardRequest = {
   readonly vaults: SidePanelVaultsKind
   readonly connect: SidePanelConnect
@@ -166,10 +176,8 @@ export class SidePanelConnects {
 
   /** The Nook tab shows the connect route; no step arrived yet. It is in
    * front unless another tab became active while it was opening. */
-  static inTab(
-    tabId: number,
-    activation: SidePanelTabActivation,
-  ): SidePanelConnect {
+  static inTab(request: SidePanelInTabRequest): SidePanelConnect {
+    const { tabId, activation } = request
     const opened: SidePanelConnect = {
       kind: SidePanelConnectKind.InTab,
       tabId,
@@ -179,17 +187,20 @@ export class SidePanelConnects {
     switch (activation.kind) {
       case SidePanelTabActivationKind.None:
         return opened
-      case SidePanelTabActivationKind.Seen:
-        return SidePanelConnects.tabActivated(opened, activation.tabId)
+      case SidePanelTabActivationKind.Seen: {
+        const activated: SidePanelTabActivatedRequest = {
+          connect: opened,
+          activeTabId: activation.tabId,
+        }
+        return SidePanelConnects.tabActivated(activated)
+      }
     }
   }
 
   /** A tab became active in the panel's window: the Nook tab is in front
    * only when it is that tab. */
-  static tabActivated(
-    connect: SidePanelConnect,
-    activeTabId: number,
-  ): SidePanelConnect {
+  static tabActivated(request: SidePanelTabActivatedRequest): SidePanelConnect {
+    const { connect, activeTabId } = request
     switch (connect.kind) {
       case SidePanelConnectKind.InTab:
         break
