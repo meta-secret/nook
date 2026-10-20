@@ -41,6 +41,7 @@ here once.
     PasskeyNotAllowedMap,
     PasskeyNotAllowedOutcome,
     PasskeyNotAllowedReaction,
+    type PasskeyNotAllowedRequest,
     type DeviceProtectionCopyRequest,
     type DeviceProtectionFailure,
     type DeviceProtectionFailureRequest,
@@ -66,6 +67,13 @@ here once.
     readonly fallbackKey: I18nKey
     readonly followUp: DeviceActionFollowUp
     readonly notAllowed: PasskeyNotAllowedReaction
+  }
+
+  /** A failed step and what it does when the browser did not let it
+   * finish. */
+  type CeremonyFailure = {
+    readonly failure: DeviceProtectionFailure
+    readonly reaction: PasskeyNotAllowedReaction
   }
 
   type CeremonyAttempt = Parameters<
@@ -158,10 +166,8 @@ here once.
     attempt = attempt.next()
   }
 
-  function present(
-    failure: DeviceProtectionFailure,
-    reaction: PasskeyNotAllowedReaction,
-  ): void {
+  function present(ceremonyFailure: CeremonyFailure): void {
+    const { failure, reaction } = ceremonyFailure
     switch (failure.kind) {
       case DeviceProtectionFailureKind.PinFallback:
         onstatus(DeviceProtectionStatus.PinSetup)
@@ -173,9 +179,11 @@ here once.
       case DeviceProtectionFailureKind.NotAllowed:
         break
     }
-    switch (
-      PasskeyNotAllowedMap.outcome({ reaction, workflow: setupWorkflow })
-    ) {
+    const notAllowed: PasskeyNotAllowedRequest = {
+      reaction,
+      workflow: setupWorkflow,
+    }
+    switch (PasskeyNotAllowedMap.outcome(notAllowed)) {
       case PasskeyNotAllowedOutcome.ShowChoice:
         setupWorkflow = DeviceProtectionSetupWorkflow.NotFound
         return
@@ -217,9 +225,14 @@ here once.
         onunlocked(unlock)
         return
       }
-      case 'Failure':
+      case 'Failure': {
         failed()
-        present(outcome.failure, step.notAllowed)
+        const ceremonyFailure: CeremonyFailure = {
+          failure: outcome.failure,
+          reaction: step.notAllowed,
+        }
+        present(ceremonyFailure)
+      }
     }
   }
 

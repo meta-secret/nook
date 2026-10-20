@@ -76,16 +76,17 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
 })
 
 /** A browser that holds no Nook passkey: every lookup is refused, as an
- * empty immediate request or a closed picker is. Records each request's
- * prompt mode. */
+ * empty immediate request or a closed picker is. Each request's prompt mode
+ * is recorded on the page root. */
 function installPasskeyLookupRefused(): void {
   if (globalThis.location?.protocol !== 'chrome-extension:') return
   const prompts: string[] = []
-  Object.defineProperty(globalThis, 'nookPasskeyPrompts', { value: prompts })
   Object.defineProperty(navigator.credentials, 'get', {
     configurable: true,
-    value: async (options: { readonly uiMode?: string }) => {
-      prompts.push(options.uiMode ?? 'picker')
+    value: async (options: object) => {
+      const mode: unknown = Reflect.get(options, 'uiMode')
+      prompts.push(typeof mode === 'string' ? mode : 'picker')
+      document.documentElement.dataset.nookPasskeyPrompts = prompts.join(' ')
       throw new DOMException('No passkey for this request.', 'NotAllowedError')
     },
   })
@@ -107,10 +108,7 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     const panel = await context.newPage()
     await panel.setViewportSize({ width: 360, height: 720 })
     await panel.goto(`chrome-extension://${extensionId}/side-panel/index.html`)
-    const prompts = () =>
-      panel.evaluate(() =>
-        Reflect.get(globalThis, 'nookPasskeyPrompts'),
-      ) as Promise<string[]>
+    const prompts = panel.locator('html')
 
     // First run: an existing passkey and a new one, side by side.
     await expect(
@@ -122,7 +120,10 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     // instead of leaving the person in a phone or security-key dialog.
     const title = panel.getByTestId('device-protection-title')
     await expect(title).toHaveText("Didn't find your passkey?")
-    expect(await prompts()).toEqual(['immediate'])
+    await expect(prompts).toHaveAttribute(
+      'data-nook-passkey-prompts',
+      'immediate',
+    )
     const create = panel.getByTestId('device-protection-create-new-choice')
     await expect(create).toHaveText('Create passkey')
     await expect(create).toBeFocused()
@@ -133,7 +134,10 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     await expect(panel.getByTestId('device-protection-error')).toHaveText(
       "Your passkey wasn't used: the prompt was closed, timed out, or couldn't find it. Try again.",
     )
-    expect(await prompts()).toEqual(['immediate', 'picker'])
+    await expect(prompts).toHaveAttribute(
+      'data-nook-passkey-prompts',
+      'immediate picker',
+    )
     await expect(title).toHaveText("Didn't find your passkey?")
 
     // Creating stays an explicit step with its own options.
