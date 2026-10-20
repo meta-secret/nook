@@ -343,13 +343,13 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let container_job_nodes =
         RepositoryFixture::repository_root().read("infra/k0s/config/arc-container-job-nodes");
     let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc.yml");
+    let placement = RepositoryFixture::repository_root().read("infra/tasks/arc-placement.yml");
     let pull_request_workflow =
         RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
 
     for contract in [
         "maxRunners: 35",
         "podAntiAffinity:",
-        "requiredDuringSchedulingIgnoredDuringExecution:",
         "topologyKey: nook.nokey.sh/arc-standard-host",
         "topologyKey: nook.nokey.sh/arc-overflow-host",
         "values: [general, hive, container]",
@@ -370,18 +370,39 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC spreading is missing: {contract}"
         );
     }
-    assert!(
-        !values.contains("topologySpreadConstraints:"),
-        "ARC hostname spreading must not force equal cross-tier placement"
-    );
     for execution in [&values, &container_hook] {
+        for contract in [
+            "topologySpreadConstraints:",
+            "maxSkew: 1",
+            "topologyKey: kubernetes.io/hostname",
+            "whenUnsatisfiable: DoNotSchedule",
+            "nodeAffinityPolicy: Honor",
+            "nodeTaintsPolicy: Honor",
+            "values: [general, hive, container]",
+        ] {
+            assert!(
+                execution.contains(contract),
+                "ARC execution spread is missing: {contract}"
+            );
+        }
+        for forbidden in [
+            "requiredDuringSchedulingIgnoredDuringExecution:",
+            "minDomains:",
+            "matchLabelKeys:",
+        ] {
+            assert!(
+                !execution.contains(forbidden),
+                "ARC execution spread must allow colocation across its eligible hosts: {forbidden}"
+            );
+        }
+    }
+    for contract in [
+        "affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints",
+        "--reuse-values",
+    ] {
         assert!(
-            execution.contains("requiredDuringSchedulingIgnoredDuringExecution:"),
-            "ARC execution pods must reserve a hostname against other execution groups"
-        );
-        assert!(
-            execution.contains("values: [general, hive, container]"),
-            "all execution groups must share hostname isolation"
+            placement.contains(contract),
+            "Hive must inherit shared execution placement while preserving other values: {contract}"
         );
     }
     for coordinator in [&container_runners, &buildkit] {
@@ -391,8 +412,9 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         );
     }
     assert!(
-        !container_runners.contains("requiredDuringSchedulingIgnoredDuringExecution:"),
-        "container managers must remain schedulable while execution slots are occupied"
+        !container_runners.contains("requiredDuringSchedulingIgnoredDuringExecution:")
+            && !container_runners.contains("topologySpreadConstraints:"),
+        "container managers must remain independently schedulable"
     );
     assert!(
         !container_hook.contains("nodeName:"),
