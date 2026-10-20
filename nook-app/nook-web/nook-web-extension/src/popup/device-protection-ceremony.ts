@@ -261,7 +261,7 @@ export enum PasskeyNotAllowedReaction {
   /** Stay on the stage and say why. */
   Notice = 'notice',
   /** Looking for an existing passkey ended without one: offer creating one
-   * or looking on another device, instead of the same button again. */
+   * or looking again, instead of the same button. */
   OfferChoice = 'offer-choice',
 }
 
@@ -277,9 +277,8 @@ export type PasskeyNotAllowedRequest = {
   readonly workflow: DeviceProtectionSetupWorkflow
 }
 
-/** Where a not-allowed passkey step leads. A cancelled prompt and an empty
- * immediate lookup look alike, so neither ever starts creating a passkey:
- * the person chooses. */
+/** Where a not-allowed passkey step leads. A closed picker never proves that
+ * no passkey exists, so it never starts creating one: the person chooses. */
 export class PasskeyNotAllowedMap {
   private constructor() {}
 

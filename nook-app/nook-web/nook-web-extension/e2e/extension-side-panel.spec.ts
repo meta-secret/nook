@@ -75,9 +75,9 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
   }
 })
 
-/** A browser that holds no Nook passkey: every lookup is refused, as an
- * empty immediate request or a closed picker is. Each request's prompt mode
- * is recorded on the page root. */
+/** A browser that holds no Nook passkey: every picker is closed without one.
+ * Each request's prompt mode is recorded on the page root; only the plain
+ * picker is allowed, since Brave crashes on an immediate request. */
 function installPasskeyLookupRefused(): void {
   if (globalThis.location?.protocol !== 'chrome-extension:') return
   const prompts: string[] = []
@@ -116,27 +116,24 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     ).toHaveText('Create a new passkey')
     await panel.getByTestId('device-protection-use-existing-choice').click()
 
-    // The browser answers at once; with nothing to offer, the card says so
-    // instead of leaving the person in a phone or security-key dialog.
+    // The picker closed without a passkey: the card says so and offers
+    // what to do next instead of the same button again.
     const title = panel.getByTestId('device-protection-title')
     await expect(title).toHaveText("Didn't find your passkey?")
-    await expect(prompts).toHaveAttribute(
-      'data-nook-passkey-prompts',
-      'immediate',
-    )
+    await expect(prompts).toHaveAttribute('data-nook-passkey-prompts', 'picker')
     const create = panel.getByTestId('device-protection-create-new-choice')
     await expect(create).toHaveText('Create passkey')
     await expect(create).toBeFocused()
     await expect(panel.getByTestId('device-protection-error')).toHaveCount(0)
 
-    // Looking elsewhere opens the browser's full picker; closing it stays.
+    // Looking again opens the same picker; closing it stays and says so.
     await panel.getByTestId('device-protection-use-existing-choice').click()
     await expect(panel.getByTestId('device-protection-error')).toHaveText(
       "Your passkey wasn't used: the prompt was closed, timed out, or couldn't find it. Try again.",
     )
     await expect(prompts).toHaveAttribute(
       'data-nook-passkey-prompts',
-      'immediate picker',
+      'picker picker',
     )
     await expect(title).toHaveText("Didn't find your passkey?")
 

@@ -1,13 +1,12 @@
 <!--
 The extension's device-protection ceremony, shared by the Nook tab and the
 side panel: set up the key (an existing passkey or a new one, side by side;
-a PIN where passkeys cannot work) and unlock it again. "Use my passkey" asks
-the browser to answer at once, so a browser without a Nook passkey shows no
-dialog. When that lookup or a passkey prompt ends without a passkey, the
-ceremony offers creating one or looking on another device; it never starts
-creating one by itself. Each surface frames this ceremony
-with its own heading art; the controls, messages and Rust/WASM calls live
-here once.
+a PIN where passkeys cannot work) and unlock it again. When the browser's
+passkey picker closes without a passkey, the ceremony offers creating one or
+looking again; it never starts creating one by itself. It asks through the
+browser's plain picker only: Brave crashes on an immediate (uiMode) passkey
+request. Each surface frames this ceremony with its own heading art; the
+controls, messages and Rust/WASM calls live here once.
 -->
 <script lang="ts">
   import { Effect } from 'effect'
@@ -21,7 +20,6 @@ here once.
   import {
     DeviceMode,
     DeviceProtectionStatus,
-    PasskeyRecoveryPrompt,
     type ExtensionSessionDeviceWire,
     extensionWasmRuntime,
   } from '../lib/nook-wasm'
@@ -236,9 +234,9 @@ here once.
     }
   }
 
-  function useExistingPasskey(prompt: PasskeyRecoveryPrompt): void {
+  function useExistingPasskey(): void {
     const step: CeremonyStep = {
-      action: () => extensionWasmRuntime.recoverExtensionPasskey(prompt),
+      action: () => extensionWasmRuntime.recoverExtensionPasskey(),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
       notAllowed: PasskeyNotAllowedReaction.OfferChoice,
@@ -419,7 +417,7 @@ here once.
     aria-disabled={pending}
     aria-busy={pending}
     data-testid="device-protection-use-existing-choice"
-    onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Immediate)}
+    onclick={useExistingPasskey}
   >
     <Fingerprint size={16} aria-hidden="true" />
     {actionLabel(I18N_KEYS.ExtensionDeviceSetupUsePasskey)}
@@ -453,7 +451,7 @@ here once.
       aria-disabled={pending}
       aria-busy={pending}
       data-testid="device-protection-use-existing-choice"
-      onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Picker)}
+      onclick={useExistingPasskey}
     >
       {actionLabel(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
     </button>
@@ -521,7 +519,7 @@ here once.
         class="link-button"
         aria-disabled={pending}
         data-testid="device-protection-use-existing-choice"
-        onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Picker)}
+        onclick={useExistingPasskey}
       >
         {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
       </button>

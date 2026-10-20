@@ -361,8 +361,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-/** A browser with no Nook passkey: it refuses every lookup, as an empty
- * immediate request or a closed picker does. */
+/** A browser with no Nook passkey: its picker closes without one. */
 function refusePasskeyLookups(): void {
   Object.defineProperty(navigator.credentials, 'get', {
     configurable: true,
@@ -394,8 +393,8 @@ test('sets up in place: an existing passkey or a new one, side by side', async (
     page.getByTestId('device-protection-create-new-choice'),
   ).toHaveText('Create a new passkey')
   await demoBeat(page)
-  // This browser holds no Nook passkey: it answers at once, without a phone
-  // or security-key dialog, and the card offers what to do next.
+  // This browser holds no Nook passkey: when its picker closes without one,
+  // the card offers what to do next instead of the same button again.
   await page.getByTestId('device-protection-use-existing-choice').click()
   await expect(page.getByTestId('device-protection-title')).toHaveText(
     "Didn't find your passkey?",
