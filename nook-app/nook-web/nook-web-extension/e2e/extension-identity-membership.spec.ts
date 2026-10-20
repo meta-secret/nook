@@ -47,7 +47,8 @@ test('an identity join that cannot reach the provider is reported, and the appro
   const context = await chromium.launchPersistentContext(
     testInfo.outputPath('chromium-profile-identity-membership'),
     {
-      headless: false,
+      channel: 'chromium',
+      headless: true,
       ...(chromiumExecutablePath
         ? { executablePath: chromiumExecutablePath }
         : {}),
