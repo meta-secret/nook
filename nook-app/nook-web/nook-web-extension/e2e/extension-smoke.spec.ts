@@ -846,7 +846,8 @@ test('shows extension unlock when a paired device identity is unavailable', asyn
   const userDataDir = testInfo.outputPath('chromium-profile')
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    channel: 'chromium',
+    headless: true,
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }
       : {}),

@@ -147,7 +147,9 @@ export async function launchPairedPinExtension(
   await mkdir(userDataDir, { recursive: true })
 
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    channel: 'chromium',
+    // Automated contexts do not compete for desktop focus; demos remain headed.
+    headless: process.env.NOOK_UI_DEMO !== '1',
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }
       : {}),

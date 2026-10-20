@@ -674,7 +674,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const restartedContext = await chromium.launchPersistentContext(
       userDataDir,
       {
-        headless: false,
+        channel: 'chromium',
+        headless: true,
         ...(chromiumExecutablePath
           ? { executablePath: chromiumExecutablePath }
           : {}),
