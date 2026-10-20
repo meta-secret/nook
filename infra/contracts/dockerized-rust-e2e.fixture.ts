@@ -53,6 +53,13 @@ export class DockerizedRustE2eContract {
     expect(webPackage.scripts["test:e2e"]).toContain('exit "$failed"');
     const workflowJobSchema = z.object({
       "timeout-minutes": z.union([z.number(), z.string()]).optional(),
+      env: z.record(z.string(), z.union([
+        z.string(), z.number(), z.boolean(),
+      ])).optional(),
+      steps: z.array(z.object({
+        name: z.string().optional(),
+        run: z.string().optional(),
+      })).optional(),
       strategy: z
         .object({ "fail-fast": z.boolean().optional() })
         .optional(),
@@ -84,6 +91,17 @@ export class DockerizedRustE2eContract {
     expect(remote.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["ci-pr-e2e-suite"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["ci-pr-e2e-suite"]?.strategy?.["fail-fast"]).toBe(false);
+    const suite = remote.jobs["ci-pr-e2e-suite"];
+    expect(suite?.env?.NOOK_EXTENSION_COMMIT).toBe(
+      "${{ inputs.source_sha || github.sha }}",
+    );
+    expect(suite?.env?.NOOK_EXTENSION_CHANNEL).toBe("production");
+    const suiteCommand = suite?.steps?.find(
+      (step) => step.name === "Run complete E2E suite member",
+    )?.run;
+    expect(suiteCommand).toContain(
+      'cp -a /meta-secret/nook/.github "$GITHUB_WORKSPACE/"\ncd /meta-secret/nook\ncase "$E2E_SUITE" in',
+    );
     expect(manual.jobs.e2e?.["timeout-minutes"]).toBe(180);
     expect(this.read(".github/scripts/remote-task-batch.sh")).toContain(
       "web:e2e|web:e2e:debug|extension:e2e) echo 180",
