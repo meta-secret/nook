@@ -602,10 +602,10 @@ class ExtensionWasmRuntime {
   }
 
   async recoverExtensionPasskey(
-    request: PasskeyRecoveryRequest,
+    recovery: PasskeyRecoveryRequest,
   ): Promise<ExtensionSessionDeviceWire> {
     await this.ensureNookWasm()
-    const options = this.recoveryRequestOptions(request)
+    const options = this.recoveryRequestOptions(recovery)
     const credential = await this.getPasskey(options)
     const request: ExtensionRecoverPasskeyRequest = {
       type: ExtensionSessionMessageType.RecoverPasskey,
