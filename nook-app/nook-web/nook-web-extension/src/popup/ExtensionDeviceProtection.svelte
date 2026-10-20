@@ -236,6 +236,9 @@ controls, messages and Rust/WASM calls live here once.
         return
       case PasskeyNotAllowedOutcome.ShowNotice:
         show(failure.message)
+        return
+      case PasskeyNotAllowedOutcome.Stay:
+        return
     }
   }
 
@@ -272,7 +275,7 @@ controls, messages and Rust/WASM calls live here once.
       action: () => extensionWasmRuntime.recoverExtensionPasskey(request),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
-      notAllowed: PasskeyNotAllowedReaction.Notice,
+      notAllowed: PasskeyNotAllowedReaction.Quiet,
     }
     const ceremonyRun: CeremonyRun = { step, current: () => !signal.aborted }
     await perform(ceremonyRun)

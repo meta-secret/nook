@@ -244,6 +244,21 @@ describe('device-protection ceremony failures', () => {
     ).toBe(PasskeyNotAllowedOutcome.ShowNotice)
   })
 
+  test('autofill ending without a pick stays quiet on every step', () => {
+    for (const workflow of [
+      DeviceProtectionSetupWorkflow.Authenticate,
+      DeviceProtectionSetupWorkflow.Create,
+      DeviceProtectionSetupWorkflow.NotFound,
+    ]) {
+      expect(
+        PasskeyNotAllowedMap.outcome({
+          reaction: PasskeyNotAllowedReaction.Quiet,
+          workflow,
+        }),
+      ).toBe(PasskeyNotAllowedOutcome.Stay)
+    }
+  })
+
   test('a closed prompt while creating or unlocking stays and says so', () => {
     for (const workflow of [
       DeviceProtectionSetupWorkflow.Authenticate,
