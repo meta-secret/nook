@@ -14,6 +14,9 @@ import {
   DeviceProtectionPurposeKind,
   DeviceProtectionStage,
   DeviceProtectionStageMap,
+  PasskeyNotAllowedMap,
+  PasskeyNotAllowedOutcome,
+  PasskeyNotAllowedReaction,
   type DeviceProtectionCopyRequest,
   type DeviceProtectionFailureRequest,
 } from '../src/popup/device-protection-ceremony'
@@ -118,6 +121,16 @@ describe('device-protection ceremony copy', () => {
     expect(DeviceProtectionCopy.description(create)).toBe(
       I18N_KEYS.ExtensionDeviceSetupCreateDescription,
     )
+    const notFound: DeviceProtectionCopyRequest = {
+      ...authenticate,
+      workflow: DeviceProtectionSetupWorkflow.NotFound,
+    }
+    expect(DeviceProtectionCopy.title(notFound)).toBe(
+      I18N_KEYS.ExtensionDeviceSetupNotFoundTitle,
+    )
+    expect(DeviceProtectionCopy.description(notFound)).toBe(
+      I18N_KEYS.ExtensionDeviceSetupNotFoundDescription,
+    )
   })
 
   test('unlocking names the key that opens the extension', () => {
@@ -168,16 +181,52 @@ describe('device-protection ceremony copy', () => {
 })
 
 describe('device-protection ceremony failures', () => {
-  test('a cancelled prompt keeps the step and never counts as "no passkey"', () => {
+  test('a cancelled prompt or empty lookup is reported as not allowed', () => {
     const cancelled: DeviceProtectionFailureRequest = {
       reported:
         'Error: PASSKEY_CEREMONY_NOT_ALLOWED: Passkey get request did not finish.',
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
     }
     expect(DeviceProtectionFailureMap.from(cancelled)).toEqual({
-      kind: DeviceProtectionFailureKind.Message,
+      kind: DeviceProtectionFailureKind.NotAllowed,
       message: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
     })
+  })
+
+  test('looking for a passkey without result offers the choice, never creation', () => {
+    for (const workflow of [
+      DeviceProtectionSetupWorkflow.Authenticate,
+      DeviceProtectionSetupWorkflow.Create,
+    ]) {
+      expect(
+        PasskeyNotAllowedMap.outcome({
+          reaction: PasskeyNotAllowedReaction.OfferChoice,
+          workflow,
+        }),
+      ).toBe(PasskeyNotAllowedOutcome.ShowChoice)
+    }
+    // On the choice itself, a closed picker just says so.
+    expect(
+      PasskeyNotAllowedMap.outcome({
+        reaction: PasskeyNotAllowedReaction.OfferChoice,
+        workflow: DeviceProtectionSetupWorkflow.NotFound,
+      }),
+    ).toBe(PasskeyNotAllowedOutcome.ShowNotice)
+  })
+
+  test('a closed prompt while creating or unlocking stays and says so', () => {
+    for (const workflow of [
+      DeviceProtectionSetupWorkflow.Authenticate,
+      DeviceProtectionSetupWorkflow.Create,
+      DeviceProtectionSetupWorkflow.NotFound,
+    ]) {
+      expect(
+        PasskeyNotAllowedMap.outcome({
+          reaction: PasskeyNotAllowedReaction.Notice,
+          workflow,
+        }),
+      ).toBe(PasskeyNotAllowedOutcome.ShowNotice)
+    }
   })
 
   test('a browser without passkeys or PRF moves to the PIN', () => {

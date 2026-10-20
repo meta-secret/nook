@@ -7,6 +7,7 @@ import {
   decode_passkey_unlock_material_response,
   build_passkey_creation_options,
   build_passkey_prf_request_options,
+  build_passkey_immediate_recovery_request_options,
   build_passkey_recovery_request_options,
   configure_vault_application,
   default_password_generation_options,
@@ -196,6 +197,16 @@ export type ExtensionSessionDeviceState =
 export type CreateExtensionPasskeyArgs = {
   passkeyLabel: string
   deviceMode: DeviceMode
+}
+
+/** How the browser looks for an existing passkey. */
+export enum PasskeyRecoveryPrompt {
+  /** Answer at once: the browser's account chooser when it holds a Nook
+   * passkey, otherwise a rejection without any dialog. Needs a click. */
+  Immediate = 'immediate',
+  /** The browser's full picker: phones, security keys and other
+   * password managers included. */
+  Picker = 'picker',
 }
 
 export type ExtensionAppLocaleCandidates = string[]
@@ -581,9 +592,11 @@ class ExtensionWasmRuntime {
     return finishResponse.device
   }
 
-  async recoverExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
+  async recoverExtensionPasskey(
+    prompt: PasskeyRecoveryPrompt,
+  ): Promise<ExtensionSessionDeviceWire> {
     await this.ensureNookWasm()
-    const options = build_passkey_recovery_request_options('')
+    const options = this.recoveryRequestOptions(prompt)
     const credential = await this.getPasskey(options)
     const request: ExtensionRecoverPasskeyRequest = {
       type: ExtensionSessionMessageType.RecoverPasskey,
@@ -602,6 +615,17 @@ class ExtensionWasmRuntime {
     }
     const response = await this.sessionResponse(recoveryResponseRequest)
     return response.device
+  }
+
+  private recoveryRequestOptions(
+    prompt: PasskeyRecoveryPrompt,
+  ): CredentialRequestOptions {
+    switch (prompt) {
+      case PasskeyRecoveryPrompt.Immediate:
+        return build_passkey_immediate_recovery_request_options('')
+      case PasskeyRecoveryPrompt.Picker:
+        return build_passkey_recovery_request_options('')
+    }
   }
 
   async unlockExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
