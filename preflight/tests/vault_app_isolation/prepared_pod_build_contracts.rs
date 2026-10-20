@@ -18,7 +18,16 @@ impl PreparedPodBuildScenario<'_> {
                 && join.contains("deps:")
                 && join.contains("- ci:pr:browser")
                 && join.contains("- ci:pr:checks"),
-            "PR must fan out verified artifacts locally and deploy them in the same job"
+            "PR must retain one artifact producer and reuse its prepared outputs"
+        );
+        assert!(
+            pr_workflow
+                .contains("artifact-ids: ${{ needs.validation.outputs.browser-artifact-id }}")
+                && pr_workflow.contains("    needs: [validation, browsers]")
+                && pr_workflow.contains("task: _ci:main:web:e2e-only")
+                && pr_workflow.contains("task: _extension:test:e2e:shard")
+                && pr_tasks.contains("if [ \"${PR_BROWSER_JOBS:-false}\" != true ]; then"),
+            "full PR browser jobs must consume the same immutable artifact and join before preview without repeating suites in the producer"
         );
     }
 }

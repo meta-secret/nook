@@ -27,8 +27,18 @@ impl PrDeliveryScenario<'_> {
             );
             previous = position;
         }
-        assert_eq!(pr.matches("    runs-on:").count(), 1);
-        assert!(!pr.contains("    needs:"));
+        assert_eq!(pr.matches("    runs-on:").count(), 3);
+        assert!(pr.contains("    needs: [validation, browsers]"));
+        assert!(pr.contains("name: Verify and preview\n    needs: [validation, browsers]"));
+        assert!(pr.contains("test \"$VALIDATION_RESULT\" = success"));
+        assert!(pr.contains("test \"$BROWSER_RESULT\" = success"));
+        assert!(pr.contains("test \"$BROWSER_RESULT\" = skipped"));
+        assert!(pr.contains("artifact-ids: ${{ needs.validation.outputs.browser-artifact-id }}"));
+        assert!(pr.contains("ref: ${{ needs.validation.outputs.source-sha }}"));
+        assert!(pr.contains("fail-fast: false"));
+        for shard in ["1/2", "2/2"] {
+            assert!(pr.contains(&format!("shard: {shard}")));
+        }
         assert!(!pr.contains("continue-on-error:"));
         assert!(!pr.contains("type=registry"));
         assert!(pr.contains("PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}"));

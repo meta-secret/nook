@@ -106,7 +106,13 @@ impl WorkflowRuntimeContract<'_> {
     fn assert_native_build_envelope(&self) {
         let root = self.root;
         let pr = root.read(".github/workflows/pr.yml");
-        assert_eq!(pr.matches("    runs-on:").count(), 1);
+        assert_eq!(
+            pr.matches("uses: ./.github/actions/nook-docker-setup")
+                .count(),
+            1,
+            "only the PR producer may connect BuildKit"
+        );
+        assert!(pr.contains("    needs: [validation, browsers]"));
         assert!(pr.contains("timeout-minutes: 240"));
     }
 
