@@ -98,6 +98,8 @@ export type SidePanelRelease = () => void
 type SidePanelFollowRequest = {
   readonly window: SidePanelWindow
   readonly onchange: SidePanelChangeListener
+  /** The tab that became active in the panel's window. */
+  readonly ontabactivated: (tabId: number) => void
 }
 
 type TabUpdatedListener = Parameters<
@@ -141,6 +143,7 @@ class SidePanelFollower {
   private readonly activated = (info: chrome.tabs.OnActivatedInfo): void => {
     switch (this.windowMatch(info.windowId)) {
       case SidePanelWindowMatch.Same:
+        this.request.ontabactivated(info.tabId)
         this.request.onchange(SidePanelChangeKind.TabActivated)
         return
       case SidePanelWindowMatch.Other:

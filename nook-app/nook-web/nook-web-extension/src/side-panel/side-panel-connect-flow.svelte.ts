@@ -147,6 +147,11 @@ export class SidePanelConnectFlow {
     }
   }
 
+  /** A tab became active in the panel's window. */
+  tabActivated(tabId: number): void {
+    this.connect = SidePanelConnects.tabActivated(this.connect, tabId)
+  }
+
   async focusTab(): Promise<void> {
     switch (this.connect.kind) {
       case SidePanelConnectKind.InTab:

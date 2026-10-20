@@ -426,8 +426,9 @@ test('unlocks a PIN in place, shows identity · vault sections, and locks again'
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
-  await expect(page.getByTestId('side-panel-connect-focus-tab')).toHaveText(
-    'Show Nook tab',
+  // The Nook tab opened in front, so the card offers no Show Nook tab.
+  await expect(page.getByTestId('side-panel-connect-focus-tab')).toHaveCount(
+    0,
   )
   await demoBeat(page)
   await page.getByTestId('side-panel-lock').click()

@@ -612,10 +612,10 @@ export class SidePanelStubPage {
     )
   }
 
-  /** Another tab of the panel's window became active. */
-  async activateTab(): Promise<void> {
+  /** A tab of the panel's window became active, by default the page tab. */
+  async activateTab(tabId: number = SidePanelStubPage.TAB_ID): Promise<void> {
     const info: chrome.tabs.OnActivatedInfo = {
-      tabId: SidePanelStubPage.TAB_ID,
+      tabId,
       windowId: SidePanelStubPage.WINDOW_ID,
     }
     await this.page.evaluate((activated) => {

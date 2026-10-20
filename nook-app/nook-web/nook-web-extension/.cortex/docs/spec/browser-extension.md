@@ -381,8 +381,10 @@ private identity.
   - **Connecting in the Nook tab:** the service worker opened or reused the
     [connect tab](#connect-tab), and the card follows its
     [steps](#connect-steps).
-    - A live status line shows the page's current step. Show Nook tab, the
-      card's action, brings that tab to the front.
+    - A live status line shows the page's current step.
+    - The tab opens or is reused in front, and the card then has no action.
+      Show Nook tab appears only after another tab of the panel's window
+      becomes active; it brings the Nook tab back to the front and leaves.
     - "Continue in the Nook tab." shows only while the panel waits for the
       page's first step.
     - A `failed` step shows the page's failure line. The person retries in the

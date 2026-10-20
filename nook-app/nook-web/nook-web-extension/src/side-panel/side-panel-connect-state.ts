@@ -57,6 +57,15 @@ export type SidePanelTabFollow =
       readonly step: ExtensionConnectStep
     }
 
+/** Whether the Nook tab is the tab its window shows. Show Nook tab is
+ * offered only while another tab covers it. */
+export enum SidePanelTabPlace {
+  /** The service worker activates the tab it opens or reuses. */
+  Front = 'front',
+  /** Another tab of the panel's window became active. */
+  Behind = 'behind',
+}
+
 export type SidePanelConnect =
   | { readonly kind: SidePanelConnectKind.Idle }
   | { readonly kind: SidePanelConnectKind.Starting }
@@ -70,6 +79,7 @@ export type SidePanelConnect =
       /** The Nook tab the service worker opened or reused. */
       readonly tabId: number
       readonly follow: SidePanelTabFollow
+      readonly place: SidePanelTabPlace
     }
   | {
       readonly kind: SidePanelConnectKind.Failed
@@ -148,6 +158,30 @@ export class SidePanelConnects {
       kind: SidePanelConnectKind.InTab,
       tabId,
       follow: { kind: SidePanelTabFollowKind.Waiting },
+      place: SidePanelTabPlace.Front,
+    }
+  }
+
+  /** A tab became active in the panel's window: the Nook tab is in front
+   * only when it is that tab. */
+  static tabActivated(
+    connect: SidePanelConnect,
+    activeTabId: number,
+  ): SidePanelConnect {
+    switch (connect.kind) {
+      case SidePanelConnectKind.InTab:
+        break
+      case SidePanelConnectKind.Idle:
+      case SidePanelConnectKind.Starting:
+      case SidePanelConnectKind.IdentityKey:
+      case SidePanelConnectKind.Failed:
+        return connect
+    }
+    switch (connect.tabId === activeTabId) {
+      case true:
+        return { ...connect, place: SidePanelTabPlace.Front }
+      case false:
+        return { ...connect, place: SidePanelTabPlace.Behind }
     }
   }
 

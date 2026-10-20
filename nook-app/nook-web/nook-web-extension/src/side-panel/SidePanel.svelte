@@ -679,6 +679,7 @@ closes it.
     const followRequest: Parameters<typeof runtime.follow>[0] = {
       window: panelWindow,
       onchange: changed,
+      ontabactivated: (tabId) => connectFlow.tabActivated(tabId),
     }
     const release = runtime.follow(followRequest)
     return release

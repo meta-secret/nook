@@ -19,6 +19,7 @@ import {
   SidePanelConnectStep,
   SidePanelConnects,
   SidePanelTabFollowKind,
+  SidePanelTabPlace,
   type SidePanelConnect,
 } from '../src/side-panel/side-panel-connect-state'
 import { SidePanelVaultsKind } from '../src/side-panel/side-panel-state'
@@ -418,6 +419,7 @@ describe('side panel connect state', () => {
       kind: SidePanelConnectKind.InTab,
       tabId: CONNECT_TAB,
       follow: { kind: SidePanelTabFollowKind.Waiting },
+      place: SidePanelTabPlace.Front,
     })
     const unlocking = SidePanelConnects.advance({
       connect: inTab,
@@ -431,6 +433,7 @@ describe('side panel connect state', () => {
           kind: SidePanelTabFollowKind.Following,
           step: { kind: ExtensionConnectStepKind.Unlock },
         },
+        place: SidePanelTabPlace.Front,
       },
       followUp: SidePanelConnectFollowUp.None,
     })
@@ -442,6 +445,22 @@ describe('side panel connect state', () => {
       connect: { kind: SidePanelConnectKind.Idle },
       followUp: SidePanelConnectFollowUp.ReadVaults,
     })
+  })
+
+  test('the Nook tab starts in front, goes behind another tab, and returns', () => {
+    const behind = SidePanelConnects.tabActivated(inTab, CONNECT_TAB + 1)
+    expect(behind).toEqual({ ...inTab, place: SidePanelTabPlace.Behind })
+    // A step keeps where the tab is.
+    const consent = SidePanelConnects.advance({
+      connect: behind,
+      event: step({ kind: ExtensionConnectStepKind.Consent }),
+    }).connect
+    expect(consent).toMatchObject({ place: SidePanelTabPlace.Behind })
+    expect(SidePanelConnects.tabActivated(consent, CONNECT_TAB)).toMatchObject(
+      { place: SidePanelTabPlace.Front },
+    )
+    const idle: SidePanelConnect = { kind: SidePanelConnectKind.Idle }
+    expect(SidePanelConnects.tabActivated(idle, CONNECT_TAB + 1)).toBe(idle)
   })
 
   test('a closed tab before approval brings the card back; a protocol failure says so', () => {
