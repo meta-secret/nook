@@ -74,3 +74,75 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
     await context.close()
   }
 })
+
+/** A browser that holds no Nook passkey: every lookup is refused, as an
+ * empty immediate request or a closed picker is. Records each request's
+ * prompt mode. */
+function installPasskeyLookupRefused(): void {
+  if (globalThis.location?.protocol !== 'chrome-extension:') return
+  const prompts: string[] = []
+  Object.defineProperty(globalThis, 'nookPasskeyPrompts', { value: prompts })
+  Object.defineProperty(navigator.credentials, 'get', {
+    configurable: true,
+    value: async (options: { readonly uiMode?: string }) => {
+      prompts.push(options.uiMode ?? 'picker')
+      throw new DOMException('No passkey for this request.', 'NotAllowedError')
+    },
+  })
+}
+
+test('a passkey lookup without result offers creating one or looking elsewhere', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const context = await launchExtensionContext(
+    testInfo.outputPath('chromium-profile-side-panel-not-found'),
+  )
+  await context.addInitScript(installPasskeyLookupRefused)
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const panel = await context.newPage()
+    await panel.setViewportSize({ width: 360, height: 720 })
+    await panel.goto(`chrome-extension://${extensionId}/side-panel/index.html`)
+    const prompts = () =>
+      panel.evaluate(() =>
+        Reflect.get(globalThis, 'nookPasskeyPrompts'),
+      ) as Promise<string[]>
+
+    // First run: an existing passkey and a new one, side by side.
+    await expect(
+      panel.getByTestId('device-protection-create-new-choice'),
+    ).toHaveText('Create a new passkey')
+    await panel.getByTestId('device-protection-use-existing-choice').click()
+
+    // The browser answers at once; with nothing to offer, the card says so
+    // instead of leaving the person in a phone or security-key dialog.
+    const title = panel.getByTestId('device-protection-title')
+    await expect(title).toHaveText("Didn't find your passkey?")
+    expect(await prompts()).toEqual(['immediate'])
+    const create = panel.getByTestId('device-protection-create-new-choice')
+    await expect(create).toHaveText('Create passkey')
+    await expect(create).toBeFocused()
+    await expect(panel.getByTestId('device-protection-error')).toHaveCount(0)
+
+    // Looking elsewhere opens the browser's full picker; closing it stays.
+    await panel.getByTestId('device-protection-use-existing-choice').click()
+    await expect(panel.getByTestId('device-protection-error')).toHaveText(
+      "Your passkey wasn't used: the prompt was closed, timed out, or couldn't find it. Try again.",
+    )
+    expect(await prompts()).toEqual(['immediate', 'picker'])
+    await expect(title).toHaveText("Didn't find your passkey?")
+
+    // Creating stays an explicit step with its own options.
+    await create.click()
+    await expect(title).toHaveText('Create a passkey')
+    await expect(panel.getByTestId('device-protection-setup-btn')).toHaveText(
+      'Create passkey',
+    )
+  } finally {
+    await context.close()
+  }
+})

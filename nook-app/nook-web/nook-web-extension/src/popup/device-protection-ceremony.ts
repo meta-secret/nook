@@ -203,6 +203,8 @@ export class DeviceProtectionCopy {
         return I18N_KEYS.ExtensionDeviceSetupSetupTitle
       case DeviceProtectionSetupWorkflow.Create:
         return I18N_KEYS.ExtensionDeviceSetupCreateTitle
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return I18N_KEYS.ExtensionDeviceSetupNotFoundTitle
     }
   }
 
@@ -214,6 +216,8 @@ export class DeviceProtectionCopy {
         return I18N_KEYS.ExtensionDeviceSetupSetupDescription
       case DeviceProtectionSetupWorkflow.Create:
         return I18N_KEYS.ExtensionDeviceSetupCreateDescription
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return I18N_KEYS.ExtensionDeviceSetupNotFoundDescription
     }
   }
 }
@@ -235,6 +239,9 @@ export enum DeviceProtectionFailureKind {
   PinFallback = 'pin-fallback',
   /** Stay on the stage and say why. */
   Message = 'message',
+  /** The browser closed the passkey prompt or found nothing to offer:
+   * the step decides what follows. */
+  NotAllowed = 'not-allowed',
 }
 
 export type DeviceProtectionFailure =
@@ -243,9 +250,56 @@ export type DeviceProtectionFailure =
       readonly notice: I18nKey
     }
   | {
-      readonly kind: DeviceProtectionFailureKind.Message
+      readonly kind:
+        | DeviceProtectionFailureKind.Message
+        | DeviceProtectionFailureKind.NotAllowed
       readonly message: I18nKey
     }
+
+/** What a passkey step does when the browser did not let it finish. */
+export enum PasskeyNotAllowedReaction {
+  /** Stay on the stage and say why. */
+  Notice = 'notice',
+  /** Looking for an existing passkey ended without one: offer creating one
+   * or looking on another device, instead of the same button again. */
+  OfferChoice = 'offer-choice',
+}
+
+export enum PasskeyNotAllowedOutcome {
+  /** Show the not-found choice; its own words explain what happened. */
+  ShowChoice = 'show-choice',
+  /** Stay where the person is and say why. */
+  ShowNotice = 'show-notice',
+}
+
+export type PasskeyNotAllowedRequest = {
+  readonly reaction: PasskeyNotAllowedReaction
+  readonly workflow: DeviceProtectionSetupWorkflow
+}
+
+/** Where a not-allowed passkey step leads. A cancelled prompt and an empty
+ * immediate lookup look alike, so neither ever starts creating a passkey:
+ * the person chooses. */
+export class PasskeyNotAllowedMap {
+  private constructor() {}
+
+  static outcome(request: PasskeyNotAllowedRequest): PasskeyNotAllowedOutcome {
+    const { reaction, workflow } = request
+    switch (reaction) {
+      case PasskeyNotAllowedReaction.Notice:
+        return PasskeyNotAllowedOutcome.ShowNotice
+      case PasskeyNotAllowedReaction.OfferChoice:
+        break
+    }
+    switch (workflow) {
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return PasskeyNotAllowedOutcome.ShowNotice
+      case DeviceProtectionSetupWorkflow.Authenticate:
+      case DeviceProtectionSetupWorkflow.Create:
+        return PasskeyNotAllowedOutcome.ShowChoice
+    }
+  }
+}
 
 /** Whether a ceremony step is running; a running step keeps its control
  * focused and refuses a second start. */
@@ -331,6 +385,10 @@ export class DeviceProtectionFailureMap {
           message: I18N_KEYS.ExtensionSetupSessionBusyRetry,
         }
       case DeviceProtectionFailureMarker.CeremonyNotAllowed:
+        return {
+          kind: DeviceProtectionFailureKind.NotAllowed,
+          message: fallbackKey,
+        }
       case DeviceProtectionFailureMarker.Unrecognized:
         return {
           kind: DeviceProtectionFailureKind.Message,
