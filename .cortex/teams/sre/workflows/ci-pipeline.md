@@ -398,7 +398,7 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - Policy-only PRs run in the producer without product or browser validation.
   The completion job accepts the intentionally skipped browser matrix.
 - BuildKit remains the cache authority. Browser consumers restore artifacts
-  without connecting to BuildKit or rebuilding the application.
+  without connecting to BuildKit or rebuilding a source image.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
   verification/test failures at the joined publication boundary.
 - Compare hosted run timings before claiming a measured improvement.
