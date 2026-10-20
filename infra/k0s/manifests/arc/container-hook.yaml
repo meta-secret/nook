@@ -81,8 +81,15 @@ data:
                     operator: In
                     values: [overflow]
         podAntiAffinity:
-          # Shared workload count; managers and BuildKit daemons are excluded.
-          # Marginal penalties: home 25, Rise 50, overflow 100.
+          # Reserve capacity for this execution Pod, not its runner manager.
+          # The hook creates an independently scheduled Pod with this label.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: nook.nokey.sh/arc-spread-group
+                    operator: In
+                    values: [general, hive, container]
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 25
               podAffinityTerm:
