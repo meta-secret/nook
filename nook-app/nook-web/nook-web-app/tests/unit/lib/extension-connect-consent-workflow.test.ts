@@ -1,4 +1,5 @@
 import { err, ok } from 'neverthrow'
+import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-connect-progress'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const approvalPort = vi.hoisted(() => ({
@@ -86,6 +87,7 @@ function createHarness() {
   vault.isAuthenticated = true
   const request: ExtensionConnectRequest = {
     source: ExtensionIdentityRequestSource.ExtensionConnect,
+    follow: { kind: ExtensionConnectFollowKind.Unnamed },
     deviceId: 'device-1',
     devicePublicKey: 'device-key',
     deviceSigningPublicKey: 'signing-key',

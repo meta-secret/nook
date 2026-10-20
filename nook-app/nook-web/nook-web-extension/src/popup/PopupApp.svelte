@@ -207,6 +207,7 @@
       payload: ExtensionSessionDeviceWire & {
         deviceLabel: string
         windowId: number
+        connectId: string
       }
     } = {
       type: 'nook:begin-extension-pairing',
@@ -214,6 +215,9 @@
         ...device,
         deviceLabel: translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
         windowId,
+        // No side panel follows a connect the popup starts: its id matches
+        // no panel's.
+        connectId: crypto.randomUUID(),
       },
     }
     chrome.runtime.sendMessage(message, (response: unknown) => {

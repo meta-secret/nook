@@ -8,16 +8,8 @@ import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { DeviceProtectionStatus } from '../src/lib/nook-wasm'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import {
-  SidePanelConnectAdmissionKind,
-  SidePanelConnectAdmissionRule,
   SidePanelConnectEventKind,
-  SidePanelConnectHoldKind,
-  SidePanelConnectPendingKind,
-  SidePanelConnectSenderKind,
-  SidePanelConnectSenderTrust,
   SidePanelConnectSessions,
-  SidePanelConnectTabKind,
-  type SidePanelConnectAdmissionRequest,
   type SidePanelConnectEvent,
 } from '../src/side-panel/side-panel-connect-port'
 import {
@@ -35,6 +27,7 @@ import { browserTab } from './companion-launcher-test-support'
 const NOOK_URL = 'https://simple.nokey.sh/extension-connect?nonce=n-1'
 const PANEL_WINDOW = 7
 const CONNECT_TAB = 31
+const CONNECT_ID = 'connect-1'
 
 type PortMessageListener = Parameters<
   chrome.runtime.Port['onMessage']['addListener']
@@ -45,10 +38,20 @@ type PortDisconnectListener = Parameters<
 type ConnectListener = (port: chrome.runtime.Port) => void
 type RemovedListener = (tabId: number) => void
 
+enum PortTab {
+  /** The page runs in a tab, as the connect page does. */
+  InTab = 'in-tab',
+  /** Chrome named no tab for the sender. */
+  None = 'none',
+}
+
 type PortOrigin = {
+  /** The port's name: the page's connect id. */
+  readonly name: string
   readonly url: string
   readonly windowId: number
   readonly tabId: number
+  readonly tab: PortTab
 }
 
 /** A Chrome event the test fires itself. */
@@ -88,11 +91,17 @@ class FakePagePort {
     const sender: chrome.runtime.MessageSender = {
       url: origin.url,
       origin: new URL(origin.url).origin,
-      tab,
       frameId: 0,
     }
+    switch (origin.tab) {
+      case PortTab.InTab:
+        sender.tab = tab
+        break
+      case PortTab.None:
+        break
+    }
     this.chromePort = {
-      name: '',
+      name: origin.name,
       sender,
       postMessage: () => {},
       disconnect: () => {
@@ -174,7 +183,9 @@ enum FixturePolicyAnswer {
 
 class FixtureSenderPolicy {
   answer = FixturePolicyAnswer.Answers
+  asked = 0
   admits(sender: chrome.runtime.MessageSender): Promise<boolean> {
+    this.asked += 1
     switch (this.answer) {
       case FixturePolicyAnswer.Throws:
         return Promise.reject(new Error('companion WASM failed to load'))
@@ -195,6 +206,7 @@ class SessionScenario {
 
   open(): void {
     this.sessions.open({
+      connectId: CONNECT_ID,
       windowId: PANEL_WINDOW,
       onevent: (event) => this.events.push(event),
     })
@@ -219,9 +231,11 @@ afterEach(() => {
 
 function nookPage(origin: Partial<PortOrigin> = {}): FakePagePort {
   return new FakePagePort({
+    name: CONNECT_ID,
     url: NOOK_URL,
     windowId: PANEL_WINDOW,
     tabId: CONNECT_TAB,
+    tab: PortTab.InTab,
     ...origin,
   })
 }
@@ -229,69 +243,6 @@ function nookPage(origin: Partial<PortOrigin> = {}): FakePagePort {
 const consent: ExtensionConnectStep = {
   kind: ExtensionConnectStepKind.Consent,
 }
-
-describe('side panel connect admission rule', () => {
-  const admissible: SidePanelConnectAdmissionRequest = {
-    trust: SidePanelConnectSenderTrust.Trusted,
-    pending: SidePanelConnectPendingKind.Pending,
-    hold: SidePanelConnectHoldKind.Free,
-    windowId: PANEL_WINDOW,
-    tab: { kind: SidePanelConnectTabKind.Known, tabId: CONNECT_TAB },
-    sender: {
-      kind: SidePanelConnectSenderKind.Present,
-      sender: {
-        url: NOOK_URL,
-        tab: { ...browserTab(NOOK_URL, CONNECT_TAB), windowId: PANEL_WINDOW },
-      },
-    },
-  }
-
-  test('admits the trusted connect tab of the panel window', () => {
-    expect(SidePanelConnectAdmissionRule.admission(admissible).kind).toBe(
-      SidePanelConnectAdmissionKind.Admitted,
-    )
-    // Before the service worker named the tab, a port of the window is only
-    // a candidate, even while another candidate waits.
-    for (const hold of [
-      SidePanelConnectHoldKind.Free,
-      SidePanelConnectHoldKind.Held,
-    ]) {
-      expect(
-        SidePanelConnectAdmissionRule.admission({
-          ...admissible,
-          hold,
-          tab: { kind: SidePanelConnectTabKind.Pending },
-        }).kind,
-      ).toBe(SidePanelConnectAdmissionKind.Candidate)
-    }
-  })
-
-  test('rejects an untrusted origin, no pending connect, a second port, another window, another tab or no tab', () => {
-    const rejected: SidePanelConnectAdmissionRequest[] = [
-      { ...admissible, trust: SidePanelConnectSenderTrust.Untrusted },
-      { ...admissible, pending: SidePanelConnectPendingKind.None },
-      { ...admissible, hold: SidePanelConnectHoldKind.Held },
-      { ...admissible, windowId: PANEL_WINDOW + 1 },
-      {
-        ...admissible,
-        tab: { kind: SidePanelConnectTabKind.Known, tabId: CONNECT_TAB + 1 },
-      },
-      {
-        ...admissible,
-        sender: {
-          kind: SidePanelConnectSenderKind.Present,
-          sender: { url: NOOK_URL },
-        },
-      },
-      { ...admissible, sender: { kind: SidePanelConnectSenderKind.Absent } },
-    ]
-    for (const request of rejected) {
-      expect(SidePanelConnectAdmissionRule.admission(request).kind).toBe(
-        SidePanelConnectAdmissionKind.Rejected,
-      )
-    }
-  })
-})
 
 describe('side panel connect session', () => {
   test('listens only while a connect is pending', () => {
@@ -324,21 +275,43 @@ describe('side panel connect session', () => {
     ])
   })
 
-  test('disconnects ports from an untrusted origin, another window, another tab, or a second page', async () => {
+  test('a page that connects before the tab id is admitted by its name, and its latest step applies again once the id arrives', async () => {
     const scenario = new SessionScenario()
     scenario.open()
+    const page = nookPage()
+    browser.connect(page)
+    page.send({ kind: ExtensionConnectStepKind.Opened })
+    page.send(consent)
+    await SessionScenario.settle()
+    expect(page.disconnected).toBe(false)
     scenario.sessions.tabOpened(CONNECT_TAB)
+    // The connect state ignores steps until it knows the tab, so the
+    // latest one is reported again when the id arrives.
+    expect(scenario.events).toEqual([
+      { kind: SidePanelConnectEventKind.Step, step: consent },
+      { kind: SidePanelConnectEventKind.Step, step: consent },
+    ])
+  })
+
+  test('disconnects another connect, an untrusted origin, another window, no tab, or a second page', async () => {
+    const scenario = new SessionScenario()
+    scenario.open()
+    const otherConnect = nookPage({ name: 'connect-2' })
+    browser.connect(otherConnect)
+    // Another connect's port is dropped at once, without asking the policy.
+    expect(otherConnect.disconnected).toBe(true)
+    expect(scenario.policy.asked).toBe(0)
     const untrusted = nookPage({ url: 'https://simple.nokey.sh.example.com/x' })
     const foreignWindow = nookPage({ windowId: PANEL_WINDOW + 1 })
-    const otherTab = nookPage({ tabId: CONNECT_TAB + 1 })
-    for (const page of [untrusted, foreignWindow, otherTab]) {
+    const noTab = nookPage({ tab: PortTab.None })
+    for (const page of [untrusted, foreignWindow, noTab]) {
       browser.connect(page)
       page.send(consent)
     }
     await SessionScenario.settle()
     expect(untrusted.disconnected).toBe(true)
     expect(foreignWindow.disconnected).toBe(true)
-    expect(otherTab.disconnected).toBe(true)
+    expect(noTab.disconnected).toBe(true)
     const first = nookPage()
     const second = nookPage()
     browser.connect(first)
@@ -350,64 +323,22 @@ describe('side panel connect session', () => {
     expect(scenario.events).toEqual([])
   })
 
-  test('a foreign candidate before the tab id does not block the real port', async () => {
+  test('a port that closes while its sender is checked is not admitted, and the reloaded page is', async () => {
     const scenario = new SessionScenario()
     scenario.open()
-    const other = nookPage({ tabId: CONNECT_TAB + 5 })
-    const page = nookPage()
-    browser.connect(other)
-    other.send({ kind: ExtensionConnectStepKind.Choosing })
-    browser.connect(page)
-    page.send(consent)
-    await SessionScenario.settle()
-    // Candidates wait: nothing is reported or disconnected yet.
-    expect(scenario.events).toEqual([])
-    expect(other.disconnected).toBe(false)
-    expect(page.disconnected).toBe(false)
     scenario.sessions.tabOpened(CONNECT_TAB)
-    expect(other.disconnected).toBe(true)
-    expect(page.disconnected).toBe(false)
-    expect(scenario.events).toEqual([
-      { kind: SidePanelConnectEventKind.Step, step: consent },
-    ])
-  })
-
-  test('a candidate that closes or breaks the protocol before the tab id is dropped, and the connect goes on', async () => {
-    const scenario = new SessionScenario()
-    scenario.open()
     const closing = nookPage()
-    const broken = nookPage()
     browser.connect(closing)
-    browser.connect(broken)
-    await SessionScenario.settle()
     closing.close()
-    broken.send({ kind: 'teleported' })
-    expect(broken.disconnected).toBe(true)
+    await SessionScenario.settle()
     expect(scenario.events).toEqual([])
-    expect(browser.connects).toHaveLength(1)
-    // The reloaded page connects again and is admitted once the id arrives.
     const page = nookPage()
     browser.connect(page)
     page.send(consent)
     await SessionScenario.settle()
-    scenario.sessions.tabOpened(CONNECT_TAB)
     expect(scenario.events).toEqual([
       { kind: SidePanelConnectEventKind.Step, step: consent },
     ])
-  })
-
-  test('a connect tab that closed before its id arrived ends the connect', () => {
-    const scenario = new SessionScenario()
-    scenario.open()
-    browser.removeTab(CONNECT_TAB + 1)
-    browser.removeTab(CONNECT_TAB)
-    expect(scenario.events).toEqual([])
-    scenario.sessions.tabOpened(CONNECT_TAB)
-    expect(scenario.events).toEqual([
-      { kind: SidePanelConnectEventKind.Closed },
-    ])
-    expect(browser.connects).toHaveLength(0)
-    expect(browser.removals).toHaveLength(0)
   })
 
   test('a sender policy that cannot answer ends the connect visibly', async () => {
@@ -427,7 +358,6 @@ describe('side panel connect session', () => {
   test('an undecodable message disconnects the page and reports a protocol failure', async () => {
     const scenario = new SessionScenario()
     scenario.open()
-    scenario.sessions.tabOpened(CONNECT_TAB)
     const page = nookPage()
     browser.connect(page)
     await SessionScenario.settle()
@@ -451,6 +381,7 @@ describe('side panel connect session', () => {
     expect(closing.events).toEqual([{ kind: SidePanelConnectEventKind.Closed }])
     expect(browser.connects).toHaveLength(0)
 
+    // The tab closes before its page connected.
     const removed = new SessionScenario()
     removed.open()
     removed.sessions.tabOpened(CONNECT_TAB)

@@ -28,6 +28,24 @@ export enum ExtensionConnectStepKind {
   Failed = "failed",
 }
 
+/** Whether a side panel follows a connect. The extension page that started
+ * it named it with a fresh random id, separate from the handoff nonce, and
+ * the connect page opens its port under that name. The id only matches the
+ * port to that panel and grants nothing. */
+export enum ExtensionConnectFollowKind {
+  /** The connect URL carries the starting page's connect id. */
+  Named = "named",
+  /** The connect URL carries no connect id: the page opens no port. */
+  Unnamed = "unnamed",
+}
+
+export type ExtensionConnectFollow =
+  | {
+      readonly kind: ExtensionConnectFollowKind.Named;
+      readonly connectId: string;
+    }
+  | { readonly kind: ExtensionConnectFollowKind.Unnamed };
+
 /** Why the page could not finish connecting this browser. */
 export enum ExtensionConnectFailureReason {
   /** The vault did not authorize the extension device. */

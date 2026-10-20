@@ -144,6 +144,7 @@ test('the extension connect route reports opened then choosing, and creating onc
     extension_id: 'demo-extension',
     device_label: 'Nook Extension',
     nonce: 'demo-nonce',
+    connect_id: 'demo-connect',
     scopes: 'vault-access,password-filling',
   })
   const reportedSteps = () =>

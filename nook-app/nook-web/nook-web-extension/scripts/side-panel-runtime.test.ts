@@ -306,6 +306,7 @@ describe('side panel browser runtime', () => {
         },
         deviceLabel: 'Nook Extension',
         windowId: 7,
+        connectId: 'connect-1',
       }),
     )
     expect(tabId).toBe(31)
@@ -322,8 +323,10 @@ describe('side panel browser runtime', () => {
           devicePublicKey: 'public-1',
           deviceSigningPublicKey: 'signing-1',
           deviceLabel: 'Nook Extension',
-          // The panel names only its own window; no choice rides along.
+          // The panel names its own window and its connect; no choice
+          // rides along.
           windowId: 7,
+          connectId: 'connect-1',
         },
       },
       { type: ExtensionSessionMessageType.Lock },
@@ -342,6 +345,7 @@ describe('side panel browser runtime', () => {
       },
       deviceLabel: 'Nook Extension',
       windowId: 7,
+      connectId: 'connect-1',
     }
     // An acknowledgement without a tab id leaves nothing to follow.
     const missing = await Effect.runPromise(

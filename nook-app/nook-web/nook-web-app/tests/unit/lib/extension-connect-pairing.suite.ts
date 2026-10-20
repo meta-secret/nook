@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
+import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-connect-progress'
 import { Effect } from 'effect'
 import {
   ExtensionConnectScope,
@@ -54,6 +55,7 @@ describe('extension pairing approved message', () => {
     return {
       request: {
         source: ExtensionIdentityRequestSource.ExtensionConnect,
+        follow: { kind: ExtensionConnectFollowKind.Unnamed },
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',

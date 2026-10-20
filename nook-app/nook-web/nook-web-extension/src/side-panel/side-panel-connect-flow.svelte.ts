@@ -245,7 +245,11 @@ export class SidePanelConnectFlow {
         return
     }
     const windowId = panelWindow.id
+    // Named before the tab opens, so the page's port is known whenever it
+    // arrives. The id only matches that port and grants nothing.
+    const connectId = crypto.randomUUID()
     const listening: Parameters<typeof this.sessions.open>[0] = {
+      connectId,
       windowId,
       onevent: (event) => this.follow(event),
     }
@@ -254,6 +258,7 @@ export class SidePanelConnectFlow {
       device,
       deviceLabel: this.request.host.deviceLabel(),
       windowId,
+      connectId,
     }
     const opened = await Effect.runPromise(
       Effect.result(this.request.runtime.beginPairing(pairing)),

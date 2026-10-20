@@ -17,11 +17,13 @@ vi.mock('$lib/extension/vault-approval', () => ({
 
 import {
   ExtensionConnectFailureReason,
+  ExtensionConnectFollowKind,
   ExtensionConnectStepKind,
   type ExtensionConnectStep,
 } from '$web-shared/extension/extension-connect-progress'
 import {
   ExtensionConnectProgress,
+  type ExtensionConnectProgressBegin,
   type ExtensionConnectProgressHost,
 } from '$lib/extension/connect-progress'
 import {
@@ -72,17 +74,25 @@ class RecordingPort {
 
 class RecordingHost {
   readonly connectedTo: string[] = []
+  readonly portNames: string[] = []
   readonly port = new RecordingPort()
 
   host(): ExtensionConnectProgressHost {
     const runtime = {
-      connect: (extensionId: string) => {
+      connect: (extensionId: string, info: { readonly name: string }) => {
         this.connectedTo.push(extensionId)
+        this.portNames.push(info.name)
         return this.port
       },
     }
     return { chrome: { runtime } }
   }
+}
+
+/** The connect id the side panel named for this page. */
+const followed: ExtensionConnectProgressBegin = {
+  extensionRuntimeId: 'extension-1',
+  follow: { kind: ExtensionConnectFollowKind.Named, connectId: 'connect-1' },
 }
 
 const unlock: ExtensionConnectStep = { kind: ExtensionConnectStepKind.Unlock }
@@ -98,11 +108,14 @@ describe('connect page progress port', () => {
     const progress = new ExtensionConnectProgress(recording.host())
     // A step known before the port opens follows the opened step.
     progress.report(unlock)
-    progress.begin({ extensionRuntimeId: 'extension-1' })
-    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin(followed)
+    progress.begin(followed)
     progress.report(unlock)
     progress.report(consent)
     expect(recording.connectedTo).toEqual(['extension-1'])
+    // The port carries the connect id, so the panel that named it can
+    // tell it from other pages' ports.
+    expect(recording.portNames).toEqual(['connect-1'])
     // The step just sent is not sent again.
     expect(recording.port.posted).toEqual([opened, unlock, consent])
   })
@@ -110,10 +123,10 @@ describe('connect page progress port', () => {
   test('a port nobody listens to ends quietly: no retry, and the page goes on', () => {
     const recording = new RecordingHost()
     const progress = new ExtensionConnectProgress(recording.host())
-    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin(followed)
     recording.port.dropByExtension()
     progress.report(consent)
-    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin(followed)
     progress.report(approved)
     expect(recording.connectedTo).toEqual(['extension-1'])
     expect(recording.port.posted).toEqual([opened])
@@ -123,7 +136,7 @@ describe('connect page progress port', () => {
   test('leaving the connect route closes the port once', () => {
     const recording = new RecordingHost()
     const progress = new ExtensionConnectProgress(recording.host())
-    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin(followed)
     progress.end()
     progress.end()
     progress.report(consent)
@@ -131,11 +144,25 @@ describe('connect page progress port', () => {
     expect(recording.port.posted).toEqual([opened])
   })
 
+  test('a connect URL without a connect id opens no port, and the page goes on', () => {
+    const recording = new RecordingHost()
+    const progress = new ExtensionConnectProgress(recording.host())
+    progress.begin({
+      extensionRuntimeId: 'extension-1',
+      follow: { kind: ExtensionConnectFollowKind.Unnamed },
+    })
+    progress.report(consent)
+    progress.begin(followed)
+    progress.end()
+    expect(recording.connectedTo).toEqual([])
+    expect(recording.port.posted).toEqual([])
+  })
+
   test('a browser without the extension runtime reports nothing and does not fail', () => {
     const bare: ExtensionConnectProgressHost = {}
     const progress = new ExtensionConnectProgress(bare)
     expect(() => {
-      progress.begin({ extensionRuntimeId: 'extension-1' })
+      progress.begin(followed)
       progress.report(consent)
       progress.end()
     }).not.toThrow()
@@ -256,7 +283,7 @@ describe('connect page steps read from the shell', () => {
   test('a first run reports opened then choosing while the app starts and checks the browser', () => {
     const recording = new RecordingHost()
     const progress = new ExtensionConnectProgress(recording.host())
-    progress.begin({ extensionRuntimeId: 'extension-1' })
+    progress.begin(followed)
     // The shell re-reads the page on every state change of the first run:
     // initializing, then settled with no vault, then unrelated changes.
     const firstRun: ExtensionConnectPageView[] = [
@@ -294,6 +321,7 @@ class ConsentSteps {
     vault.isAuthenticated = true
     const request: ExtensionConnectRequest = {
       source: ExtensionIdentityRequestSource.ExtensionConnect,
+      follow: { kind: ExtensionConnectFollowKind.Unnamed },
       deviceId: 'device-1',
       devicePublicKey: 'device-key',
       deviceSigningPublicKey: 'signing-key',

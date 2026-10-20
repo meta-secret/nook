@@ -161,9 +161,18 @@ event-log import keep their Rust/WASM validation.
 
 #### Connect tab
 
-The begin-pairing request carries the public device request and the
-requester's own `windowId`. That value selects a window and grants no
-authority, as on the [active-tab target](#active-tab-target) route.
+The begin-pairing request carries the public device request, the requester's
+own `windowId`, and a `connectId`. The window value selects a window and grants
+no authority, as on the [active-tab target](#active-tab-target) route.
+
+- The requester creates `connectId` with `crypto.randomUUID()` for each connect,
+  before it sends the request. It names the connect page's port; see
+  [connect port admission](#connect-port-admission). It only matches that port
+  and grants no authority.
+- The service worker adds it to the connect URL as `connect_id`. It stays
+  separate from the handoff nonce, which is single-use handoff material.
+- The authentication tab sends its own random id. No panel follows that connect,
+  so the id matches nothing.
 
 1. The service worker reads the selected window itself. The window must exist,
    be a normal window, and match the extension's incognito context.
@@ -196,7 +205,11 @@ and closes, as before. Nothing else opens a page during the connect.
 
 On the connect route with a valid request, the page opens one long-lived port
 to the extension id named in its URL. It uses `chrome.runtime.connect` over the
-existing `externally_connectable` channel. Leaving the route closes the port.
+existing `externally_connectable` channel, with the URL's `connect_id` as the
+port name. Leaving the route closes the port.
+
+- A connect URL without `connect_id` still connects. The page opens no port,
+  because no panel could tell that port apart.
 
 - **`opened`:** the page loaded and opened the port.
 - **`unlock`:** the browser holds a vault. The person unlocks it and chooses
@@ -245,27 +258,27 @@ document. Each open side panel, one per window, therefore sees each page's port.
 - The side panel document listens on `chrome.runtime.onConnectExternal` only
   while its connect is pending. The service worker registers no
   `onConnectExternal` listener.
-- A panel considers a port only when every condition holds:
+- The panel knows its `connectId` before the connect tab opens. A port can
+  therefore be matched whenever it arrives, before or after the tab id.
+- A panel admits a port only when every condition holds:
+  - the port name equals the pending connect's `connectId`;
+  - `sender.tab` exists, with a `windowId` equal to the panel's window;
   - `ExternalSenderTrustPolicy`, the Simple Vault origin rule of external
     messages, admits the sender;
-  - the panel has a pending connect;
-  - `sender.tab` exists, with a `windowId` equal to the panel's window.
+  - no port is admitted yet for this connect.
+- A port with another name is disconnected at once, without the sender check.
 - The sender check has two failure results:
   - A `false` result rejects only that port.
   - An evaluation that errors ends the connect. For example, the companion
     WASM failed to load in the panel. The card returns with the localized
     sender-check failure.
-- Before the service worker returns the tab id, each considered port is held
-  as a candidate. Nothing acts on a candidate's steps.
-  - A candidate that closes is dropped, and so is one that sends an
-    undecodable message. The connect continues.
-- When the tab id arrives, the panel admits only the candidate whose
-  `sender.tab.id` matches. Its latest step applies. Every other candidate is
-  disconnected.
-- After that, the panel admits a port only from that tab, one at a time.
-- The panel records every `chrome.tabs.onRemoved` while the tab id is unknown.
-  If the returned tab was already removed, the connect ends and the card
-  returns.
+- A port that closes during its sender check is not admitted. A reloaded page
+  connects again under the same name.
+- The panel reads steps as they arrive. The connect card applies them once it
+  knows the tab id, so the arriving tab id re-reports the admitted page's
+  latest step.
+- Once the tab id is known, `chrome.tabs.onRemoved` for that tab ends the
+  connect, also before its page connected. The card returns.
 - The panel disconnects every other port at once.
 - An undecodable message on the admitted port disconnects it. The card returns
   with an alert.
@@ -278,10 +291,9 @@ document. Each open side panel, one per window, therefore sees each page's port.
 
 - **Prohibited:** a panel follows the first trusted port that arrives, from
   another Simple Vault tab of its window or from a page in another window.
-- **Required:** the panel rejects the other window's port, because
-  `sender.tab.windowId` names that window. It holds its own window's ports as
-  candidates and follows only the one whose `sender.tab.id` equals the
-  returned tab id.
+- **Required:** the panel follows only the port named with its own
+  `connectId`. It rejects that name from another window, because
+  `sender.tab.windowId` names that window.
 
 ### Current Primary Device-Key And Authentication UX
 

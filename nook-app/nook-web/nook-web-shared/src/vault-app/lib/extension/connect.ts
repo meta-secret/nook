@@ -96,6 +96,10 @@ import {
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
+  ExtensionConnectFollowKind,
+  type ExtensionConnectFollow,
+} from "$web-shared/extension/extension-connect-progress";
+import {
   ExtensionPairingDeliveryKind,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
@@ -230,6 +234,15 @@ class ExtensionConnectionBrowser {
     return admittedScopes;
   }
 
+  /** The connect id the starting extension page named; it only names the
+   * progress port, so a URL without one still connects, unfollowed. */
+  private parseFollow(params: URLSearchParams): ExtensionConnectFollow {
+    const connectId = params.get("connect_id")?.trim();
+    return connectId
+      ? { kind: ExtensionConnectFollowKind.Named, connectId }
+      : { kind: ExtensionConnectFollowKind.Unnamed };
+  }
+
   extensionConnectRequestFromLocation(
     location: Location,
   ): ExtensionConnectRequestState {
@@ -269,6 +282,7 @@ class ExtensionConnectionBrowser {
       kind: ExtensionConnectRequestStateKind.Requested,
       request: {
         source: ExtensionIdentityRequestSource.ExtensionConnect,
+        follow: this.parseFollow(params),
         deviceId,
         devicePublicKey,
         deviceSigningPublicKey,

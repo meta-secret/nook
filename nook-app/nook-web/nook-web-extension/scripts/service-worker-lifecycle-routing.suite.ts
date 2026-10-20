@@ -125,6 +125,7 @@ describe('service worker routing', () => {
       deviceSigningPublicKey: 'signing-1',
       deviceLabel: 'Nook Extension',
       windowId: 7,
+      connectId: 'connect-1',
     }
     const message = {
       type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,

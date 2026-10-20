@@ -20,6 +20,7 @@ import {
   SidePanelStubConnectKey,
   SidePanelStubFillDelivery,
   SidePanelStubPage,
+  SidePanelStubPortName,
   SidePanelStubVaults,
   SidePanelStubVisibility,
   type SidePanelStubScenario,
@@ -513,7 +514,7 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   expect(await panel.pairings()).toEqual([1])
 })
 
-test('ports from another window or origin are refused, and an undecodable step ends the connect visibly', async ({
+test('ports of another connect, window or origin are refused, and an undecodable step ends the connect visibly', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
@@ -523,10 +524,14 @@ test('ports from another window or origin are refused, and an undecodable step e
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
+  const otherConnect = await panel.connectPage({
+    name: SidePanelStubPortName.OtherConnect,
+  })
   const foreign = await panel.connectPage({ windowId: 2 })
   const untrusted = await panel.connectPage({
     url: 'https://simple.nokey.sh.example.com/extension-connect',
   })
+  await expect.poll(() => panel.pageDisconnected(otherConnect)).toBe(true)
   await expect.poll(() => panel.pageDisconnected(foreign)).toBe(true)
   await expect.poll(() => panel.pageDisconnected(untrusted)).toBe(true)
   const port = await panel.connectPage()

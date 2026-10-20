@@ -16,6 +16,7 @@ class PairingMessages {
     devicePublicKey: 'public-1',
     deviceSigningPublicKey: 'signing-1',
     deviceLabel: 'Nook Extension',
+    connectId: 'connect-1',
   }
 
   static message(payload: PairingPayloadFields): BrowserRuntimeMessageValue {
@@ -49,6 +50,37 @@ describe('begin-pairing message', () => {
         case 'Failure':
           break
       }
+    }
+  })
+
+  test('carries the connect id that names the page port', () => {
+    const decoded = PairingMessages.decode({
+      ...PairingMessages.device,
+      windowId: 7,
+    })
+    switch (decoded._tag) {
+      case 'Success':
+        expect(decoded.success.payload.connectId).toBe('connect-1')
+        return
+      case 'Failure':
+        throw new Error('the begin-pairing message did not decode')
+    }
+  })
+
+  test('rejects a missing or empty connect id', () => {
+    const withoutId: PairingPayloadFields = {
+      deviceId: 'device-1',
+      devicePublicKey: 'public-1',
+      deviceSigningPublicKey: 'signing-1',
+      deviceLabel: 'Nook Extension',
+      windowId: 7,
+    }
+    const rejected: PairingPayloadFields[] = [
+      withoutId,
+      { ...PairingMessages.device, windowId: 7, connectId: '' },
+    ]
+    for (const payload of rejected) {
+      expect(PairingMessages.decode(payload)._tag).toBe('Failure')
     }
   })
 
