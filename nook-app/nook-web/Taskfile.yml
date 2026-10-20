@@ -415,7 +415,7 @@ tasks:
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
-      - cd "{{.WEB_ROOT}}" && PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable
+      - cd "{{.WEB_ROOT}}" && bun x playwright test --project=stable
 
   _web:test:e2e:unstable:
     desc: Run the unstable local-provider Playwright project.
@@ -427,7 +427,7 @@ tasks:
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
-      - cd "{{.WEB_ROOT}}" && PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable
+      - cd "{{.WEB_ROOT}}" && bun x playwright test --project=unstable
 
   _web:test:e2e:run-groups:
     internal: true
@@ -444,8 +444,8 @@ tasks:
         fi
         cd "{{.WEB_ROOT}}"
         failed=0
-        PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable "$@" || failed=1
-        PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable "$@" || failed=1
+        bun x playwright test --project=stable "$@" || failed=1
+        bun x playwright test --project=unstable "$@" || failed=1
         exit "$failed"
 
   _web:e2e:build-if-needed:
@@ -485,7 +485,6 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
       VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
       VITE_VAULT_IDLE_WARNING_MS: "0"
-      PLAYWRIGHT_WORKERS: "1"
     cmds:
       - test "${NOOK_REMOTE_E2E_DEBUG:-}" = "1" || (echo "_web:test:e2e:debug is hosted-only; set NOOK_REMOTE_E2E_DEBUG=1 in the remote job" >&2; exit 1)
       - task: _web:e2e:build-if-needed
@@ -501,7 +500,7 @@ tasks:
       VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
-      - echo "==> Playwright UI demo (headless, workers=1, specs=${UI_DEMO_SPECS:-all})"
+      - echo "==> Playwright UI demo (headless, available CPUs, specs=${UI_DEMO_SPECS:-all})"
       - task: _web:e2e:build-if-needed
         vars:
           E2E_VAULT_IDLE_TIMEOUT_MS: "300000"
@@ -516,7 +515,7 @@ tasks:
       VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
-      - echo "==> Playwright stable group (workers=3, CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - echo "==> Playwright stable group (available CPUs, CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
       - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:pr
 

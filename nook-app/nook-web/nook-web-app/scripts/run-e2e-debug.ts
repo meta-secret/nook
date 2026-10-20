@@ -18,7 +18,6 @@ const child = Bun.spawn(
     'playwright',
     'test',
     '--config=playwright.config.ts',
-    '--workers=1',
     '--trace=retain-on-failure',
   ],
   {

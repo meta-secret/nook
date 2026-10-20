@@ -312,8 +312,8 @@ fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
 
     let playwright = root.read("nook-app/nook-web/nook-web-extension/playwright.config.ts");
     assert!(
-        playwright.contains("...(isCi ? { workers: 1 } : {})"),
-        "hosted headed extension tests must not compete for Chromium/Xvfb resources"
+        playwright.contains("workers: availableParallelism()"),
+        "hosted extension files must use the process's available CPU capacity"
     );
     Ok(())
 }
