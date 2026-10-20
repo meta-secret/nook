@@ -66,6 +66,30 @@ protecting a real product trust boundary.
 
 ## Prohibited actions
 
+### Reducing CPU allocation or E2E parallelism
+
+- Agents must use all CPU capacity available to the execution process.
+- Do not reduce CPU allocation, CPU affinity or CPU quotas to work around a
+  failing or slow test.
+- E2E worker counts must derive from native available CPU capacity in every
+  environment, including local, CI, Windows, demo, live and debug runs.
+- Do not introduce or retain fixed worker caps, fractional CPU defaults, or
+  environment-variable and CLI overrides that reduce E2E parallelism.
+- Do not make failures pass by lowering resources or globally serializing a
+  suite. Fix the underlying failure or report the concrete blocker.
+- Preserve serial ordering only for tests with a documented state dependency.
+  Keep that ordering within the dependent file or test group; it does not
+  authorize a global worker cap for independent tests.
+
+**Prohibited:** hide a browser failure by setting `--workers=1`, adding a worker
+environment override, or lowering the runner's CPU quota.
+
+**Required:** retain native available CPU capacity and diagnose the failure.
+If one test consumes state created by another, document that dependency and
+serialize only that test group.
+
+### Trusted internal coordination
+
 Do not create, extend, request, or approve a custom security system for
 trusted agent-internal communication, handoffs, Git operations, integration
 evidence, or validation results.
