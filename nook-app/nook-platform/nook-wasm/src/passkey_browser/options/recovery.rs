@@ -1,11 +1,10 @@
-//! Discoverable-passkey recovery options: the browser offers whichever Nook
-//! passkey the person holds, at once or through its usual picker.
+//! Discoverable-passkey recovery options: the browser's picker offers
+//! whichever Nook passkey the person holds.
 
 use super::{
     BrowserCredentialRequestOptions, BrowserPasskeyClient, BrowserPasskeyPrfExtension,
     PrfCredentialSelection, RelyingPartySelection,
 };
-use js_sys::{JsString, Reflect};
 use nook_core::WebAuthnPrfInput;
 use passkey_types::webauthn::{
     AttestationConveyancePreference, CredentialRequestOptions as PasskeyRequestOptions,
@@ -37,25 +36,6 @@ impl BrowserPasskeyClient {
                     "Failed to build passkey recovery options: {error}"
                 ))
             })
-    }
-}
-
-impl BrowserPasskeyClient {
-    /// Recovery options that ask the browser to answer at once: Chrome shows
-    /// its account chooser only when it holds a passkey for this origin and
-    /// otherwise rejects without any dialog. A browser that does not know
-    /// `uiMode` ignores it and shows its usual picker.
-    pub(crate) fn immediate_recovery_options(
-        rp_id: &str,
-    ) -> Result<BrowserCredentialRequestOptions, JsError> {
-        let options = BrowserPasskeyClient::recovery_options(rp_id)?;
-        Reflect::set(
-            &options,
-            &JsString::from("uiMode"),
-            &JsString::from("immediate"),
-        )
-        .map_err(|_| JsError::new("Failed to request an immediate passkey prompt"))?;
-        Ok(options)
     }
 }
 
@@ -129,7 +109,7 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use super::super::wasm_tests::{assert_uint8_array, get, get_string};
+    use super::super::wasm_tests::{assert_uint8_array, get};
     use super::*;
     use wasm_bindgen_test::*;
 
@@ -144,38 +124,6 @@ mod wasm_tests {
 
         assert_uint8_array(&get(&public_key, "challenge")?, 32);
         assert_uint8_array(&get(&eval, "first")?, 32);
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn immediate_recovery_options_ask_for_an_immediate_discoverable_prompt()
-    -> Result<(), wasm_bindgen::JsError> {
-        let options = BrowserPasskeyClient::immediate_recovery_options("localhost")?;
-        let public_key = get(&options, "publicKey")?;
-        let extensions = get(&public_key, "extensions")?;
-        let prf = get(&extensions, "prf")?;
-        let eval = get(&prf, "eval")?;
-
-        assert_eq!(get_string(&options, "uiMode")?, "immediate");
-        // Chrome refuses an immediate request that names credentials.
-        assert!(
-            Reflect::get(&public_key, &JsString::from("allowCredentials"))
-                .map_err(|_| JsError::new("failed to inspect credentials"))?
-                .is_undefined()
-        );
-        assert_uint8_array(&get(&eval, "first")?, 32);
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn picker_recovery_options_leave_the_browser_prompt_unchanged()
-    -> Result<(), wasm_bindgen::JsError> {
-        let options = BrowserPasskeyClient::recovery_options("localhost")?;
-        assert!(
-            Reflect::get(&options, &JsString::from("uiMode"))
-                .map_err(|_| JsError::new("failed to inspect uiMode"))?
-                .is_undefined()
-        );
         Ok(())
     }
 }

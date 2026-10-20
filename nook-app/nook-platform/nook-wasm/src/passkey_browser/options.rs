@@ -721,7 +721,7 @@ mod wasm_tests {
             .unchecked_into())
     }
 
-    pub(super) fn get_string(
+    fn get_string(
         target: &js_sys::Object,
         field: &str,
     ) -> Result<String, wasm_bindgen::JsError> {
