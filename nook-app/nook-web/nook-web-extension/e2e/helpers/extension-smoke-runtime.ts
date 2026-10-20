@@ -770,7 +770,25 @@ export async function reconnectVaultFromPairingLauncher(
   const pagesBeforeReconnect = context
     .pages()
     .filter((page) => page !== pairingLauncher)
+  const previousConnectId = new URL(simplePage.url()).searchParams.get(
+    'connect_id',
+  )
   await Promise.all([
+    // Closing the launcher only acknowledges tabs.update. The old connect
+    // document can still be loaded until the new navigation commits.
+    simplePage.waitForURL(
+      (url) => {
+        const connectId = url.searchParams.get('connect_id')
+        return (
+          belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+          url.pathname.endsWith('/extension-connect') &&
+          typeof connectId === 'string' &&
+          connectId.length > 0 &&
+          connectId !== previousConnectId
+        )
+      },
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS, waitUntil: 'load' },
+    ),
     pairingLauncher.waitForEvent('close', {
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     }),
