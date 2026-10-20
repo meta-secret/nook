@@ -33,10 +33,15 @@ type ExtensionConnectPagePort = {
 /** Chrome's connect options: the port's name. */
 type ExtensionConnectPortInfo = { readonly name: string };
 
+/** Chrome's `runtime.connect` arguments. */
+type ExtensionConnectPortRequest = readonly [
+  extensionId: string,
+  connectInfo: ExtensionConnectPortInfo,
+];
+
 type ExtensionConnectRuntime = {
   readonly connect?: (
-    extensionId: string,
-    connectInfo: ExtensionConnectPortInfo,
+    ...request: ExtensionConnectPortRequest
   ) => ExtensionConnectPagePort;
 };
 
