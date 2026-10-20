@@ -879,6 +879,14 @@ pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_create_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_ELSEWHERE: &str =
     "extension.device_setup.passkey_elsewhere";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_HINT: &str =
+    "extension.device_setup.passkey_field_hint";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_LABEL: &str =
+    "extension.device_setup.passkey_field_label";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_PLACEHOLDER: &str =
+    "extension.device_setup.passkey_field_placeholder";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_OTHER_DEVICE: &str =
+    "extension.device_setup.passkey_other_device";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_unlock_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =
@@ -897,7 +905,6 @@ pub const EXTENSION_DEVICE_SETUP_UNLOCK_DESCRIPTION: &str =
     "extension.device_setup.unlock_description";
 pub const EXTENSION_DEVICE_SETUP_UNLOCK_TITLE: &str = "extension.device_setup.unlock_title";
 pub const EXTENSION_DEVICE_SETUP_USE_EXISTING: &str = "extension.device_setup.use_existing";
-pub const EXTENSION_DEVICE_SETUP_USE_PASSKEY: &str = "extension.device_setup.use_passkey";
 pub const EXTENSION_LOGIN_PICKER_DESCRIPTION: &str = "extension.login_picker.description";
 pub const EXTENSION_LOGIN_PICKER_DESTINATION: &str = "extension.login_picker.destination";
 pub const EXTENSION_LOGIN_PICKER_FAILED: &str = "extension.login_picker.failed";

@@ -7,6 +7,7 @@ import {
   decode_passkey_unlock_material_response,
   build_passkey_creation_options,
   build_passkey_prf_request_options,
+  build_passkey_conditional_recovery_request_options,
   build_passkey_recovery_request_options,
   configure_vault_application,
   default_password_generation_options,
@@ -197,6 +198,25 @@ export type CreateExtensionPasskeyArgs = {
   passkeyLabel: string
   deviceMode: DeviceMode
 }
+
+/** How the browser offers an existing passkey. */
+export enum PasskeyRecoveryPrompt {
+  /** The browser's picker: phones, security keys and other password
+   * managers included. */
+  Picker = 'picker',
+  /** Autofill suggestions on a field marked `autocomplete="webauthn"`:
+   * only passkeys the browser holds for this extension, and no dialog
+   * when it holds none. */
+  Autofill = 'autofill',
+}
+
+export type PasskeyRecoveryRequest =
+  | { readonly prompt: PasskeyRecoveryPrompt.Picker }
+  | {
+      readonly prompt: PasskeyRecoveryPrompt.Autofill
+      /** Stops the waiting autofill request. */
+      readonly signal: AbortSignal
+    }
 
 export type ExtensionAppLocaleCandidates = string[]
 
@@ -581,9 +601,11 @@ class ExtensionWasmRuntime {
     return finishResponse.device
   }
 
-  async recoverExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
+  async recoverExtensionPasskey(
+    recovery: PasskeyRecoveryRequest,
+  ): Promise<ExtensionSessionDeviceWire> {
     await this.ensureNookWasm()
-    const options = build_passkey_recovery_request_options('')
+    const options = this.recoveryRequestOptions(recovery)
     const credential = await this.getPasskey(options)
     const request: ExtensionRecoverPasskeyRequest = {
       type: ExtensionSessionMessageType.RecoverPasskey,
@@ -602,6 +624,28 @@ class ExtensionWasmRuntime {
     }
     const response = await this.sessionResponse(recoveryResponseRequest)
     return response.device
+  }
+
+  /** Whether this browser can offer passkeys as autofill suggestions. */
+  async passkeyAutofillAvailable(): Promise<boolean> {
+    if (!window.isSecureContext || !window.PublicKeyCredential) {
+      return false
+    }
+    return PublicKeyCredential.isConditionalMediationAvailable()
+  }
+
+  private recoveryRequestOptions(
+    request: PasskeyRecoveryRequest,
+  ): CredentialRequestOptions {
+    switch (request.prompt) {
+      case PasskeyRecoveryPrompt.Picker:
+        return build_passkey_recovery_request_options('')
+      case PasskeyRecoveryPrompt.Autofill: {
+        const options = build_passkey_conditional_recovery_request_options('')
+        options.signal = request.signal
+        return options
+      }
+    }
   }
 
   async unlockExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {

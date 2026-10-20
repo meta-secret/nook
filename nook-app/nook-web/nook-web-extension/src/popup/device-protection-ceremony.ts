@@ -134,6 +134,34 @@ export class DeviceProtectionStageMap {
     }
   }
 
+  /** Passkey autofill listens while extension setup offers an existing
+   * passkey: the browser suggests only passkeys it holds, without a dialog.
+   * A further identity's key is always new, so it has none. */
+  static offersAutofill(request: DeviceProtectionCopyRequest): boolean {
+    const { stage, purpose, workflow } = request
+    switch (stage) {
+      case DeviceProtectionStage.Setup:
+        break
+      case DeviceProtectionStage.PinSetup:
+      case DeviceProtectionStage.PinUnlock:
+      case DeviceProtectionStage.PasskeyUnlock:
+        return false
+    }
+    switch (purpose) {
+      case DeviceProtectionPurposeKind.ExtensionKey:
+        break
+      case DeviceProtectionPurposeKind.IdentityKey:
+        return false
+    }
+    switch (workflow) {
+      case DeviceProtectionSetupWorkflow.Authenticate:
+        return true
+      case DeviceProtectionSetupWorkflow.Create:
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return false
+    }
+  }
+
   /** Setup starts by authenticating with an existing passkey; a further
    * identity's key is always a new one. */
   static initialWorkflow(
@@ -263,6 +291,9 @@ export enum PasskeyNotAllowedReaction {
   /** Looking for an existing passkey ended without one: offer creating one
    * or looking again, instead of the same button. */
   OfferChoice = 'offer-choice',
+  /** Passkey autofill ended without a pick, which a browser holding no
+   * passkey does at once: nothing to say, the field and Create stay. */
+  Quiet = 'quiet',
 }
 
 export enum PasskeyNotAllowedOutcome {
@@ -270,6 +301,8 @@ export enum PasskeyNotAllowedOutcome {
   ShowChoice = 'show-choice',
   /** Stay where the person is and say why. */
   ShowNotice = 'show-notice',
+  /** Stay where the person is without a message. */
+  Stay = 'stay',
 }
 
 export type PasskeyNotAllowedRequest = {
@@ -287,6 +320,8 @@ export class PasskeyNotAllowedMap {
     switch (reaction) {
       case PasskeyNotAllowedReaction.Notice:
         return PasskeyNotAllowedOutcome.ShowNotice
+      case PasskeyNotAllowedReaction.Quiet:
+        return PasskeyNotAllowedOutcome.Stay
       case PasskeyNotAllowedReaction.OfferChoice:
         break
     }
