@@ -370,7 +370,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC spreading is missing: {contract}"
         );
     }
-    for execution in [&values, &container_hook] {
+    for (execution, groups) in [
+        (&values, "[general, hive, container]"),
+        (&container_hook, "[container]"),
+    ] {
         for contract in [
             "topologySpreadConstraints:",
             "maxSkew: 1",
@@ -378,13 +381,20 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "whenUnsatisfiable: DoNotSchedule",
             "nodeAffinityPolicy: Honor",
             "nodeTaintsPolicy: Honor",
-            "values: [general, hive, container]",
         ] {
             assert!(
                 execution.contains(contract),
                 "ARC execution spread is missing: {contract}"
             );
         }
+        let (_, spread) = execution
+            .split_once("topologySpreadConstraints:")
+            .expect("execution spread must exist");
+        let spread = spread.split("affinity:").next().expect("spread section");
+        assert!(
+            spread.contains(&format!("values: {groups}")),
+            "execution spread must count its intended groups: {groups}"
+        );
         for forbidden in [
             "requiredDuringSchedulingIgnoredDuringExecution:",
             "minDomains:",

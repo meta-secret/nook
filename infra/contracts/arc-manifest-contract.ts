@@ -321,7 +321,7 @@ class ArcManifestContract {
             matchExpressions:
               - key: nook.nokey.sh/arc-spread-group
                 operator: In
-                values: [general, hive, container]`,
+                values: [container]`,
       "topologyKey: nook.nokey.sh/arc-standard-host",
       "topologyKey: nook.nokey.sh/arc-overflow-host",
       "values: [general, hive, container]",
