@@ -531,15 +531,8 @@ function vaultRowReady(storeId: string): boolean {
   return row.getClientRects().length > 0 && !row.disabled
 }
 
-/**
- * Authorize the wrapped device identity after an explicit or idle lock.
- * A locked hub unlocks from a vault row: the identity's passkey, then the
- * vault opens. An in-workspace authorization prompt is answered directly.
- */
-export async function authorizeDeviceProtection(
-  page: Page,
-  opts?: { storeId?: string },
-) {
+/** Navigation completes before WASM and the persisted identity finish loading. */
+export async function waitForVaultInitialized(page: Page) {
   await expect
     .poll(
       () =>
@@ -550,6 +543,18 @@ export async function authorizeDeviceProtection(
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
+}
+
+/**
+ * Authorize the wrapped device identity after an explicit or idle lock.
+ * A locked hub unlocks from a vault row: the identity's passkey, then the
+ * vault opens. An in-workspace authorization prompt is answered directly.
+ */
+export async function authorizeDeviceProtection(
+  page: Page,
+  opts?: { storeId?: string },
+) {
+  await waitForVaultInitialized(page)
   await keepVaultIdleLockDisabled(page)
   const storeId = ((...[v = '']) => v)(opts?.storeId)
   const overlay = page.getByTestId('passkey-auth-overlay')
@@ -906,6 +911,12 @@ export async function removeE2eDummyGithubSyncProvider(page: Page) {
   await page.evaluate(() => {})
 }
 
+export enum VaultPanelUnlockProgress {
+  Waiting = 'waiting',
+  Requested = 'requested',
+  Continued = 'continued',
+}
+
 /** Open a vault's panel beside its card and unlock it with this device's
  * key. The plain vault list unlocks on the row itself. */
 export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
@@ -913,25 +924,32 @@ export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
   const open = page.getByTestId('vault-panel-open')
   const shell = page.getByTestId('authenticated-shell')
   const row = vaultChoiceOption(page, storeId)
-  await expect(row.or(unlock).or(open).first()).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  // The row toggles its panel: open it unless it already is.
-  if (
-    !(await unlock.isVisible()) &&
-    !(await open.isVisible()) &&
-    (await row.getAttribute('aria-expanded')) !== 'true'
-  ) {
-    await expect(row).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-    await dismissSyncConflictIfVisible(page)
-    await row.click()
-  }
-  // A row whose key needs recovery prompts at once instead.
   const overlay = page.getByTestId('passkey-auth-overlay')
-  await expect(unlock.or(open).or(shell).or(overlay).first()).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  if (await unlock.isVisible()) await unlock.click()
+  const closedRow = row.and(page.locator(':not([aria-expanded="true"])'))
+  // Automatic unlock may replace a disabled row or panel between observations.
+  // Re-read the current state instead of waiting for a retired control.
+  await expect
+    .poll(
+      async () => {
+        switch (await shell.or(open).or(overlay).first().isVisible()) {
+          case true:
+            return VaultPanelUnlockProgress.Continued
+          case false:
+            break
+        }
+        switch (await pressIfReady(unlock)) {
+          case true:
+            return VaultPanelUnlockProgress.Requested
+          case false:
+            break
+        }
+        await dismissSyncConflictIfVisible(page)
+        await pressIfReady(closedRow)
+        return VaultPanelUnlockProgress.Waiting
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe(VaultPanelUnlockProgress.Waiting)
 }
 
 /** After an unlock beside the card, go into the vault the panel offers,

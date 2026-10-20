@@ -225,6 +225,7 @@ class ArcManifestContract {
 
     const admittedContract1 = runners.requireAll([
       "podAntiAffinity:",
+      "nook.nokey.sh/arc-spread-group: general",
       "topologyKey: nook.nokey.sh/arc-standard-host",
       "topologyKey: nook.nokey.sh/arc-overflow-host",
       "values: [general, hive, container]",
@@ -240,11 +241,25 @@ class ArcManifestContract {
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
-    const admittedContract2 = runners.forbid("topologySpreadConstraints:");
-    if (admittedContract2.isErr()) return err(admittedContract2.error);
-    const admittedContract3 = runners.forbid(
+    const admittedContract2 = runners.forbidAll([
       "requiredDuringSchedulingIgnoredDuringExecution:",
-    );
+      "minDomains:",
+      "matchLabelKeys:",
+    ]);
+    if (admittedContract2.isErr()) return err(admittedContract2.error);
+    const admittedContract3 = runners.requireAll([
+      `    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchExpressions:
+            - key: nook.nokey.sh/arc-spread-group
+              operator: In
+              values: [general, hive, container]`,
+    ]);
     if (admittedContract3.isErr()) return err(admittedContract3.error);
     const admittedContract4 = runners.forbidAll([
       "runtimeClassName:",
@@ -272,6 +287,9 @@ class ArcManifestContract {
     ]);
     if (admittedContract5.isErr()) return err(admittedContract5.error);
     const admittedContract6 = containerRunners.forbidAll([
+      "nook.nokey.sh/arc-spread-group:",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
+      "topologySpreadConstraints:",
       "privileged: true",
       "docker:dind",
       "dockerd",
@@ -283,6 +301,7 @@ class ArcManifestContract {
     const admittedContract7 = containerHook.requireAll([
       "apiVersion: v1",
       "kind: PodTemplate",
+      "nook.nokey.sh/arc-spread-group: container",
       "name: nook-arc-container-hook",
       "automountServiceAccountToken: false",
       'name: "$job"',
@@ -292,6 +311,17 @@ class ArcManifestContract {
       "values: [secondary]",
       "values: [overflow]",
       "podAntiAffinity:",
+      `      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchExpressions:
+              - key: nook.nokey.sh/arc-spread-group
+                operator: In
+                values: [container]`,
       "topologyKey: nook.nokey.sh/arc-standard-host",
       "topologyKey: nook.nokey.sh/arc-overflow-host",
       "values: [general, hive, container]",
@@ -313,8 +343,10 @@ class ArcManifestContract {
     ]);
     if (admittedContract7.isErr()) return err(admittedContract7.error);
     const admittedContract8 = containerHook.forbidAll([
-      "topologySpreadConstraints:",
       "requiredDuringSchedulingIgnoredDuringExecution:",
+      "minDomains:",
+      "matchLabelKeys:",
+      "nodeName:",
       "privileged: true",
       "docker.sock",
       "containerd.sock",
@@ -372,6 +404,7 @@ class ArcManifestContract {
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
     const admittedContract12 = buildkit.forbidAll([
+      "nook.nokey.sh/arc-spread-group:",
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
       "[history]",
@@ -543,7 +576,7 @@ class ArcManifestContract {
       "Upload verified development deployment handoff",
       "main-web-deploy-${{ github.run_id }}",
       "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
-      "runs-on: nook-k0s-container",
+      "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
       "task web:e2e:kubernetes-image:artifacts",
       "name: WASM and web verification",
       "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
@@ -562,7 +595,7 @@ class ArcManifestContract {
       "inputs.validation_requested",
       "inputs.full_e2e_requested",
       "name: Verify and preview",
-      "'nook-k0s-container' || 'ubuntu-latest'",
+      "(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'",
       "task --silent ci:pr:validate",
       "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
       "steps.browser-scope.outputs.validation == 'true'",
@@ -634,17 +667,19 @@ class ArcManifestContract {
       "Build research browser image",
       "nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}",
       "needs: image",
-      "runs-on: nook-k0s-container",
+      "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
     ]);
     if (admittedContract43.isErr()) return err(admittedContract43.error);
     const admittedContract44 = webTasks.requireAll([
       "_web:test:e2e:run-groups:",
       'set -- "--shard=$NOOK_E2E_SHARD"',
-      "PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable",
-      "PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable",
+      "bun x playwright test --project=stable",
+      "bun x playwright test --project=unstable",
       "bun x playwright test --config playwright.isolation.config.ts",
     ]);
     if (admittedContract44.isErr()) return err(admittedContract44.error);
+    const workerOverrides = webTasks.forbid("PLAYWRIGHT_WORKERS");
+    if (workerOverrides.isErr()) return err(workerOverrides.error);
     const admittedContract45 = webDockerTasks.requireAll([
       "NOOK_E2E_SHARD: '{{.NOOK_E2E_SHARD}}'",
       "-e NOOK_E2E_SHARD",
@@ -690,7 +725,7 @@ class ArcManifestContract {
       ': "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"',
       "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
       "Remote / browser image",
-      "runs-on: nook-k0s-container",
+      "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
       "Run repository invariant preflight",
       "run: task preflight",
       "task web:e2e:kubernetes-image",

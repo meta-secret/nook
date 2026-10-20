@@ -16,6 +16,7 @@ import {
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
   waitForVaultOperationsIdle,
+  waitForVaultInitialized,
   waitForVaultSyncIdle,
   openManagePage,
   ManagePage,
@@ -27,6 +28,7 @@ test.describe('vault connect flow', () => {
   }) => {
     await page.goto('/app/')
 
+    await waitForVaultInitialized(page)
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await createLocalVaultOnLogin(page)
 
@@ -96,6 +98,7 @@ test.describe('vault connect flow', () => {
   }) => {
     await page.goto('/app/')
 
+    await waitForVaultInitialized(page)
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
     await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
@@ -157,6 +160,7 @@ test.describe('vault connect flow', () => {
       scopes: 'vault-access,password-filling',
     })
     await page.goto(`/extension-connect?${connect}`)
+    await waitForVaultInitialized(page)
     await expect(page.getByTestId('first-vault-start')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

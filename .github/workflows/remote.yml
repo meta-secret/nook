@@ -524,6 +524,7 @@ jobs:
     name: Remote / ci:pr:e2e / ${{ matrix.suite }}
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         suite: [stable, unstable, isolation, extension]
     runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
@@ -535,12 +536,15 @@ jobs:
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     env:
       CI: "1"
+      NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.sha }}
+      NOOK_EXTENSION_CHANNEL: production
     steps:
       - name: Run complete E2E suite member
         env:
           E2E_SUITE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
+          cp -a /meta-secret/nook/.github "$GITHUB_WORKSPACE/"
           cd /meta-secret/nook
           case "$E2E_SUITE" in
             stable) task _web:test:e2e:stable ;;

@@ -14,7 +14,6 @@ class WindowsIsolationConfig {
 
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
-    workers: 2,
     ...new WindowsIsolationConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {

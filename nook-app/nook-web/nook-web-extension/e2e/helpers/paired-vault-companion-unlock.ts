@@ -1,5 +1,6 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test'
 import { pressIfReady } from '../../../nook-web-app/e2e/helpers/workspace-navigation'
+import { VaultPanelUnlockProgress } from '../../../nook-web-app/e2e/helpers/settings-auth'
 import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
 
 export enum PairedVaultCompanionUnlockKind {
@@ -303,9 +304,34 @@ export async function unlockExtensionThroughCompanion({
 export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
   const row = vaultPage.getByTestId('identity-vault-row').first()
   const unlock = vaultPage.getByTestId('vault-panel-unlock')
-  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
-  await expect(unlock).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-  await unlock.click()
+  const continued = vaultPage
+    .getByTestId('authenticated-shell')
+    .or(vaultPage.getByTestId('vault-panel-open'))
+    .or(vaultPage.getByTestId('passkey-auth-overlay'))
+    .first()
+  const closedRow = row.and(vaultPage.locator(':not([aria-expanded="true"])'))
+  // The restored identity may unlock itself while its old button disappears.
+  await expect
+    .poll(
+      async () => {
+        switch (await continued.isVisible()) {
+          case true:
+            return VaultPanelUnlockProgress.Continued
+          case false:
+            break
+        }
+        switch (await pressIfReady(unlock)) {
+          case true:
+            return VaultPanelUnlockProgress.Requested
+          case false:
+            break
+        }
+        await pressIfReady(closedRow)
+        return VaultPanelUnlockProgress.Waiting
+      },
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe(VaultPanelUnlockProgress.Waiting)
 }
 
 /** An unlocked vault waits on the identities page until Open vault. */

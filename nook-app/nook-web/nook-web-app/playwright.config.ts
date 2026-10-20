@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 import fs from 'node:fs'
+import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
@@ -25,12 +26,6 @@ process.env.NOOK_GITHUB_POLL_MS = ((...[v = '3000']) => v)(
 
 const isCi = !!process.env.CI
 const isUiDemo = process.env.NOOK_UI_DEMO === '1'
-const configuredWorkers = Number.parseInt(
-  ((v) => (v ? v : ''))(process.env.PLAYWRIGHT_WORKERS),
-  10,
-)
-const hasConfiguredWorkers =
-  Number.isSafeInteger(configuredWorkers) && configuredWorkers > 0
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
@@ -72,7 +67,7 @@ const projectDefinitions: NonNullable<PlaywrightTestConfig['projects']> = [
   {
     name: 'sync-live',
     testMatch: specPaths(SYNC_LIVE_SPECS),
-    // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
+    // Preserve ordering within each live-provider spec.
     fullyParallel: false,
     grepInvert: SENTINEL_APP_TESTS,
   },
@@ -126,14 +121,8 @@ const webServerCommand = usePreviewServer
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
-  // Each Task entry point selects a group-specific worker budget. Keep the
-  // budget deliberately small: fresh contexts concurrently fetch and compile
-  // the large WASM bundle through one preview server.
-  ...(hasConfiguredWorkers
-    ? { workers: configuredWorkers }
-    : isCi
-      ? { workers: 2 }
-      : {}),
+  // Use every CPU available to this process; dependent tests retain their ordering.
+  workers: availableParallelism(),
   ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
   retries: 0,
   globalTeardown: './e2e/global-teardown.ts',

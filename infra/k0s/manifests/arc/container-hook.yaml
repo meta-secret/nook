@@ -59,6 +59,19 @@ data:
       nodeSelector:
         nook.nokey.sh/arc-build: "true"
         nook.nokey.sh/arc-container-job: "true"
+      # The hook schedules execution independently of its runner manager.
+      # Balance container jobs independently of general/Hive runner counts.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchExpressions:
+              - key: nook.nokey.sh/arc-spread-group
+                operator: In
+                values: [container]
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -81,8 +94,6 @@ data:
                     operator: In
                     values: [overflow]
         podAntiAffinity:
-          # Shared workload count; managers and BuildKit daemons are excluded.
-          # Marginal penalties: home 25, Rise 50, overflow 100.
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 25
               podAffinityTerm:

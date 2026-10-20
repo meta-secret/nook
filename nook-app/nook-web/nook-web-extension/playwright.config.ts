@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test'
+import { availableParallelism } from 'node:os'
 
 const isCi = !!process.env.CI
 const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
@@ -12,9 +13,8 @@ export default defineConfig({
   forbidOnly: isCi,
   retries: 0,
   ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
-  // The full smoke owns several headed pages and persistent contexts. Hosted
-  // runners cannot reliably sustain it beside the other extension workers.
-  ...(isCi ? { workers: 1 } : {}),
+  // Files own separate persistent profiles; preserve their internal ordering.
+  workers: availableParallelism(),
   reporter: isCi ? 'line' : 'list',
   timeout: isHostedSmoke ? 180_000 : isCi ? 90_000 : 60_000,
   expect: {

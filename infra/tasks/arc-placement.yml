@@ -49,8 +49,9 @@ tasks:
         # Only placement is owned here. Keep Hive's image, identity, credentials,
         # security settings and queue ceiling in its existing Helm release.
         helm get values nook-k0s --namespace arc-runners --output json |
-          jq -e '.template.spec.affinity | select(.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | length == 3) |
-            {template: {spec: {affinity: ., topologySpreadConstraints: []}}}' > "$placement"
+          jq -e '.template.spec |
+            select(.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | length == 3) |
+            {template: {spec: {affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints}}}' > "$placement"
         helm upgrade nook-k0s-hive "{{.ARC_RUNNER_CHART}}" \
           --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
           --reuse-values --values "$placement" --wait --timeout 10m

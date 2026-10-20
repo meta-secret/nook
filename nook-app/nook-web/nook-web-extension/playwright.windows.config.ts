@@ -14,7 +14,6 @@ class WindowsExtensionConfig {
 
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
-    workers: 1,
     ...new WindowsExtensionConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {

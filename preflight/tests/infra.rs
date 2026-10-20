@@ -338,9 +338,12 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/buildkit.yaml");
     let container_hook =
         RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/container-hook.yaml");
+    let container_runners = RepositoryFixture::repository_root()
+        .read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
     let container_job_nodes =
         RepositoryFixture::repository_root().read("infra/k0s/config/arc-container-job-nodes");
     let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc.yml");
+    let placement = RepositoryFixture::repository_root().read("infra/tasks/arc-placement.yml");
     let pull_request_workflow =
         RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
 
@@ -367,9 +370,65 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC spreading is missing: {contract}"
         );
     }
+    for (execution, groups) in [
+        (&values, "[general, hive, container]"),
+        (&container_hook, "[container]"),
+    ] {
+        for contract in [
+            "topologySpreadConstraints:",
+            "maxSkew: 1",
+            "topologyKey: kubernetes.io/hostname",
+            "whenUnsatisfiable: DoNotSchedule",
+            "nodeAffinityPolicy: Honor",
+            "nodeTaintsPolicy: Honor",
+        ] {
+            assert!(
+                execution.contains(contract),
+                "ARC execution spread is missing: {contract}"
+            );
+        }
+        let (_, spread) = execution
+            .split_once("topologySpreadConstraints:")
+            .expect("execution spread must exist");
+        let spread = spread.split("affinity:").next().expect("spread section");
+        assert!(
+            spread.contains(&format!("values: {groups}")),
+            "execution spread must count its intended groups: {groups}"
+        );
+        for forbidden in [
+            "requiredDuringSchedulingIgnoredDuringExecution:",
+            "minDomains:",
+            "matchLabelKeys:",
+        ] {
+            assert!(
+                !execution.contains(forbidden),
+                "ARC execution spread must allow colocation across its eligible hosts: {forbidden}"
+            );
+        }
+    }
+    for contract in [
+        "affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints",
+        "--reuse-values",
+    ] {
+        assert!(
+            placement.contains(contract),
+            "Hive must inherit shared execution placement while preserving other values: {contract}"
+        );
+    }
+    for coordinator in [&container_runners, &buildkit] {
+        assert!(
+            !coordinator.contains("nook.nokey.sh/arc-spread-group:"),
+            "managers and BuildKit daemons must not consume execution placement slots"
+        );
+    }
     assert!(
-        !values.contains("topologySpreadConstraints:"),
-        "ARC hostname spreading must not force equal cross-tier placement"
+        !container_runners.contains("requiredDuringSchedulingIgnoredDuringExecution:")
+            && !container_runners.contains("topologySpreadConstraints:"),
+        "container managers must remain independently schedulable"
+    );
+    assert!(
+        !container_hook.contains("nodeName:"),
+        "container jobs must be independently scheduled rather than pinned to their manager"
     );
     for forbidden in ["runtimeClassName:", "podman", "docker.sock", "hostPath:"] {
         assert!(

@@ -14,7 +14,6 @@ class WindowsResearchConfig {
 
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
-    workers: 2,
     ...new WindowsResearchConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {
