@@ -134,7 +134,7 @@ jobs:
           echo 'Job-container capacity snapshot; remote BuildKit capacity is separate.'
           date -u '+%Y-%m-%dT%H:%M:%SZ'
           printf 'nproc: '; nproc || echo unavailable
-          node -e 'const os = require("node:os"); console.log({availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
+          node -e 'const os = require("node:os"); console.log({node: process.version, uv: process.versions.uv, availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
           grep '^Cpus_allowed_list:' /proc/self/status || echo 'Cpus_allowed_list: unavailable'
           for path in /proc/self/cgroup /proc/loadavg /proc/meminfo \
             /sys/fs/cgroup/cpu.max /sys/fs/cgroup/cpuset.cpus.effective /sys/fs/cgroup/cpu.stat \
@@ -157,7 +157,7 @@ jobs:
           echo 'Job-container capacity snapshot; remote BuildKit capacity is separate.'
           date -u '+%Y-%m-%dT%H:%M:%SZ'
           printf 'nproc: '; nproc || echo unavailable
-          node -e 'const os = require("node:os"); console.log({availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
+          node -e 'const os = require("node:os"); console.log({node: process.version, uv: process.versions.uv, availableParallelism: os.availableParallelism(), logicalCpus: os.cpus().length})'
           grep '^Cpus_allowed_list:' /proc/self/status || echo 'Cpus_allowed_list: unavailable'
           for path in /proc/self/cgroup /proc/loadavg /proc/meminfo \
             /sys/fs/cgroup/cpu.max /sys/fs/cgroup/cpuset.cpus.effective /sys/fs/cgroup/cpu.stat \
