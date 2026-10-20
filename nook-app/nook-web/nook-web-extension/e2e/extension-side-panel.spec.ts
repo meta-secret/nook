@@ -83,7 +83,7 @@ function installPasskeyLookupRefused(): void {
   const prompts: string[] = []
   Object.defineProperty(navigator.credentials, 'get', {
     configurable: true,
-    value: async (options: object) => {
+    value: async (options: CredentialRequestOptions) => {
       const mode: unknown = Reflect.get(options, 'uiMode')
       prompts.push(typeof mode === 'string' ? mode : 'picker')
       document.documentElement.dataset.nookPasskeyPrompts = prompts.join(' ')
