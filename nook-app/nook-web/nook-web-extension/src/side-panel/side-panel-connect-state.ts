@@ -66,6 +66,18 @@ export enum SidePanelTabPlace {
   Behind = 'behind',
 }
 
+export enum SidePanelTabActivationKind {
+  /** No tab became active while the Nook tab was opening. */
+  None = 'none',
+  Seen = 'seen',
+}
+
+/** The last tab that became active in the panel's window while the Nook
+ * tab was opening, before its id was known. */
+export type SidePanelTabActivation =
+  | { readonly kind: SidePanelTabActivationKind.None }
+  | { readonly kind: SidePanelTabActivationKind.Seen; readonly tabId: number }
+
 export type SidePanelConnect =
   | { readonly kind: SidePanelConnectKind.Idle }
   | { readonly kind: SidePanelConnectKind.Starting }
@@ -152,13 +164,23 @@ export class SidePanelConnects {
     }
   }
 
-  /** The Nook tab shows the connect route; no step arrived yet. */
-  static inTab(tabId: number): SidePanelConnect {
-    return {
+  /** The Nook tab shows the connect route; no step arrived yet. It is in
+   * front unless another tab became active while it was opening. */
+  static inTab(
+    tabId: number,
+    activation: SidePanelTabActivation,
+  ): SidePanelConnect {
+    const opened: SidePanelConnect = {
       kind: SidePanelConnectKind.InTab,
       tabId,
       follow: { kind: SidePanelTabFollowKind.Waiting },
       place: SidePanelTabPlace.Front,
+    }
+    switch (activation.kind) {
+      case SidePanelTabActivationKind.None:
+        return opened
+      case SidePanelTabActivationKind.Seen:
+        return SidePanelConnects.tabActivated(opened, activation.tabId)
     }
   }
 

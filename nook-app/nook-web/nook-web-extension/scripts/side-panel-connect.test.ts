@@ -18,6 +18,7 @@ import {
   SidePanelConnectKind,
   SidePanelConnectStep,
   SidePanelConnects,
+  SidePanelTabActivationKind,
   SidePanelTabFollowKind,
   SidePanelTabPlace,
   type SidePanelConnect,
@@ -395,7 +396,9 @@ describe('side panel connect session', () => {
 })
 
 describe('side panel connect state', () => {
-  const inTab = SidePanelConnects.inTab(CONNECT_TAB)
+  const inTab = SidePanelConnects.inTab(CONNECT_TAB, {
+    kind: SidePanelTabActivationKind.None,
+  })
   const step = (next: ExtensionConnectStep): SidePanelConnectEvent => ({
     kind: SidePanelConnectEventKind.Step,
     step: next,
@@ -459,6 +462,17 @@ describe('side panel connect state', () => {
     expect(SidePanelConnects.tabActivated(consent, CONNECT_TAB)).toMatchObject(
       { place: SidePanelTabPlace.Front },
     )
+    // A switch while the tab opened places it once its id arrives.
+    const covered = SidePanelConnects.inTab(CONNECT_TAB, {
+      kind: SidePanelTabActivationKind.Seen,
+      tabId: CONNECT_TAB + 1,
+    })
+    expect(covered).toEqual(behind)
+    const revealed = SidePanelConnects.inTab(CONNECT_TAB, {
+      kind: SidePanelTabActivationKind.Seen,
+      tabId: CONNECT_TAB,
+    })
+    expect(revealed).toEqual(inTab)
     const idle: SidePanelConnect = { kind: SidePanelConnectKind.Idle }
     expect(SidePanelConnects.tabActivated(idle, CONNECT_TAB + 1)).toBe(idle)
   })
