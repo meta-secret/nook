@@ -524,6 +524,7 @@ jobs:
     name: Remote / ci:pr:e2e / ${{ matrix.suite }}
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         suite: [stable, unstable, isolation, extension]
     runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}

@@ -61,7 +61,10 @@ export class DockerizedRustE2eContract {
         run: z.string().optional(),
       })).optional(),
       strategy: z
-        .object({ "fail-fast": z.boolean().optional() })
+        .object({
+          "fail-fast": z.boolean().optional(),
+          "max-parallel": z.number().optional(),
+        })
         .optional(),
     });
     const workflowSchema = z.object({
@@ -91,6 +94,7 @@ export class DockerizedRustE2eContract {
     expect(remote.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["ci-pr-e2e-suite"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["ci-pr-e2e-suite"]?.strategy?.["fail-fast"]).toBe(false);
+    expect(remote.jobs["ci-pr-e2e-suite"]?.strategy?.["max-parallel"]).toBe(2);
     const suite = remote.jobs["ci-pr-e2e-suite"];
     expect(suite?.env?.NOOK_EXTENSION_COMMIT).toBe(
       "${{ inputs.source_sha || github.sha }}",
