@@ -231,9 +231,11 @@ function tabIn(request: TabPlacement): chrome.tabs.Tab {
 describe('side panel browser runtime', () => {
   test('follows its own window without runtime broadcasts or tab messages', () => {
     const changes: SidePanelChangeKind[] = []
+    const activatedTabs: number[] = []
     const release = new SidePanelRuntime().follow({
       window: panelWindow,
       onchange: (change) => changes.push(change),
+      ontabactivated: (tabId) => activatedTabs.push(tabId),
     })
 
     fixture.fireActivated(7)
@@ -270,6 +272,8 @@ describe('side panel browser runtime', () => {
       SidePanelChangeKind.PanelShown,
       SidePanelChangeKind.PanelFocused,
     ])
+    // Only the activation in the panel's window names its tab.
+    expect(activatedTabs).toEqual([3])
     expect(fixture.runtimeListeners).toEqual([])
     expect(fixture.tabMessages).toEqual([])
 
@@ -286,6 +290,7 @@ describe('side panel browser runtime', () => {
     const release = new SidePanelRuntime().follow({
       window: { kind: SidePanelWindowKind.Unknown },
       onchange: (change) => changes.push(change),
+      ontabactivated: () => {},
     })
     expect(fixture.activated).toHaveLength(0)
     fixture.fireVisibility(FixtureVisibility.Visible)

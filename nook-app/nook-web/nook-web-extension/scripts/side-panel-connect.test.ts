@@ -452,7 +452,12 @@ describe('side panel connect state', () => {
 
   test('the Nook tab starts in front, goes behind another tab, and returns', () => {
     const behind = SidePanelConnects.tabActivated(inTab, CONNECT_TAB + 1)
-    expect(behind).toEqual({ ...inTab, place: SidePanelTabPlace.Behind })
+    expect(behind).toEqual({
+      kind: SidePanelConnectKind.InTab,
+      tabId: CONNECT_TAB,
+      follow: { kind: SidePanelTabFollowKind.Waiting },
+      place: SidePanelTabPlace.Behind,
+    })
     // A step keeps where the tab is.
     const consent = SidePanelConnects.advance({
       connect: behind,
