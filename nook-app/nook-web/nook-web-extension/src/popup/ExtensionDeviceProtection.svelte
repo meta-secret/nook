@@ -1,9 +1,11 @@
 <!--
 The extension's device-protection ceremony, shared by the Nook tab and the
-side panel: set up the key (an existing passkey by default, a new passkey
-only on an explicit choice, a PIN where passkeys cannot work) and unlock it
-again. A cancelled passkey prompt only says so; it never counts as "no
-passkey" and never starts creating one. Each surface frames this ceremony
+side panel: set up the key (an existing passkey or a new one, side by side;
+a PIN where passkeys cannot work) and unlock it again. "Use my passkey" asks
+the browser to answer at once, so a browser without a Nook passkey shows no
+dialog. When that lookup or a passkey prompt ends without a passkey, the
+ceremony offers creating one or looking on another device; it never starts
+creating one by itself. Each surface frames this ceremony
 with its own heading art; the controls, messages and Rust/WASM calls live
 here once.
 -->
@@ -19,6 +21,7 @@ here once.
   import {
     DeviceMode,
     DeviceProtectionStatus,
+    PasskeyRecoveryPrompt,
     type ExtensionSessionDeviceWire,
     extensionWasmRuntime,
   } from '../lib/nook-wasm'
@@ -35,6 +38,10 @@ here once.
     DeviceProtectionStage,
     DeviceProtectionStageMap,
     IdentityKeyCancelOutcome,
+    PasskeyNotAllowedMap,
+    PasskeyNotAllowedOutcome,
+    PasskeyNotAllowedReaction,
+    type PasskeyNotAllowedRequest,
     type DeviceProtectionCopyRequest,
     type DeviceProtectionFailure,
     type DeviceProtectionFailureRequest,
@@ -59,6 +66,14 @@ here once.
     readonly action: () => Promise<ExtensionSessionDeviceWire>
     readonly fallbackKey: I18nKey
     readonly followUp: DeviceActionFollowUp
+    readonly notAllowed: PasskeyNotAllowedReaction
+  }
+
+  /** A failed step and what it does when the browser did not let it
+   * finish. */
+  type CeremonyFailure = {
+    readonly failure: DeviceProtectionFailure
+    readonly reaction: PasskeyNotAllowedReaction
   }
 
   type CeremonyAttempt = Parameters<
@@ -151,13 +166,28 @@ here once.
     attempt = attempt.next()
   }
 
-  function present(failure: DeviceProtectionFailure): void {
+  function present(ceremonyFailure: CeremonyFailure): void {
+    const { failure, reaction } = ceremonyFailure
     switch (failure.kind) {
       case DeviceProtectionFailureKind.PinFallback:
         onstatus(DeviceProtectionStatus.PinSetup)
         show(failure.notice)
         return
       case DeviceProtectionFailureKind.Message:
+        show(failure.message)
+        return
+      case DeviceProtectionFailureKind.NotAllowed:
+        break
+    }
+    const notAllowed: PasskeyNotAllowedRequest = {
+      reaction,
+      workflow: setupWorkflow,
+    }
+    switch (PasskeyNotAllowedMap.outcome(notAllowed)) {
+      case PasskeyNotAllowedOutcome.ShowChoice:
+        setupWorkflow = DeviceProtectionSetupWorkflow.NotFound
+        return
+      case PasskeyNotAllowedOutcome.ShowNotice:
         show(failure.message)
     }
   }
@@ -195,17 +225,23 @@ here once.
         onunlocked(unlock)
         return
       }
-      case 'Failure':
+      case 'Failure': {
         failed()
-        present(outcome.failure)
+        const ceremonyFailure: CeremonyFailure = {
+          failure: outcome.failure,
+          reaction: step.notAllowed,
+        }
+        present(ceremonyFailure)
+      }
     }
   }
 
-  function useExistingPasskey(): void {
+  function useExistingPasskey(prompt: PasskeyRecoveryPrompt): void {
     const step: CeremonyStep = {
-      action: () => extensionWasmRuntime.recoverExtensionPasskey(),
+      action: () => extensionWasmRuntime.recoverExtensionPasskey(prompt),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
+      notAllowed: PasskeyNotAllowedReaction.OfferChoice,
     }
     void run(step)
   }
@@ -218,6 +254,7 @@ here once.
       action: () => extensionWasmRuntime.createExtensionPasskey(createArgs),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyCreateNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
+      notAllowed: PasskeyNotAllowedReaction.Notice,
     }
     void run(step)
   }
@@ -227,6 +264,7 @@ here once.
       action: () => extensionWasmRuntime.unlockExtensionPasskey(),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUnlockNotAllowed,
       followUp: DeviceActionFollowUp.RefreshIdentity,
+      notAllowed: PasskeyNotAllowedReaction.Notice,
     }
     void run(step)
   }
@@ -246,6 +284,7 @@ here once.
       action: () => extensionWasmRuntime.createExtensionPin(value),
       fallbackKey: I18N_KEYS.DeviceProtectionPinSetupFailed,
       followUp: DeviceActionFollowUp.Menu,
+      notAllowed: PasskeyNotAllowedReaction.Notice,
     }
     void run(step)
   }
@@ -263,6 +302,7 @@ here once.
       action: () => extensionWasmRuntime.unlockExtensionPin(value),
       fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
       followUp: DeviceActionFollowUp.RefreshIdentity,
+      notAllowed: PasskeyNotAllowedReaction.Notice,
     }
     void run(step)
   }
@@ -379,21 +419,43 @@ here once.
     aria-disabled={pending}
     aria-busy={pending}
     data-testid="device-protection-use-existing-choice"
-    onclick={useExistingPasskey}
+    onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Immediate)}
   >
     <Fingerprint size={16} aria-hidden="true" />
     {actionLabel(I18N_KEYS.ExtensionDeviceSetupUsePasskey)}
   </button>
+  <button
+    type="button"
+    class="secondary-button"
+    aria-disabled={pending}
+    data-testid="device-protection-create-new-choice"
+    onclick={() => chooseWorkflow(DeviceProtectionSetupWorkflow.Create)}
+  >
+    <KeyRound size={16} aria-hidden="true" />
+    {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
+  </button>
+{:else if stage === DeviceProtectionStage.Setup && setupWorkflow === DeviceProtectionSetupWorkflow.NotFound}
+  <button
+    type="button"
+    aria-disabled={pending}
+    data-testid="device-protection-create-new-choice"
+    onclick={() => chooseWorkflow(DeviceProtectionSetupWorkflow.Create)}
+    {@attach focus.enter}
+  >
+    <KeyRound size={16} aria-hidden="true" />
+    {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
+  </button>
   <p class="alternative-line">
-    {translatePlain(I18N_KEYS.ExtensionDeviceSetupNoPasskey)}
+    {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyElsewhere)}
     <button
       type="button"
       class="link-button"
       aria-disabled={pending}
-      data-testid="device-protection-create-new-choice"
-      onclick={() => chooseWorkflow(DeviceProtectionSetupWorkflow.Create)}
+      aria-busy={pending}
+      data-testid="device-protection-use-existing-choice"
+      onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Picker)}
     >
-      {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
+      {actionLabel(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
     </button>
   </p>
 {:else if stage === DeviceProtectionStage.Setup}
@@ -459,7 +521,7 @@ here once.
         class="link-button"
         aria-disabled={pending}
         data-testid="device-protection-use-existing-choice"
-        onclick={useExistingPasskey}
+        onclick={() => useExistingPasskey(PasskeyRecoveryPrompt.Picker)}
       >
         {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
       </button>

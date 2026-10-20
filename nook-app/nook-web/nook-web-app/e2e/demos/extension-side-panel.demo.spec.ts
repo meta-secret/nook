@@ -361,9 +361,21 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('sets up in place, starting from the passkey the person already has', async ({
+/** A browser with no Nook passkey: it refuses every lookup, as an empty
+ * immediate request or a closed picker does. */
+function refusePasskeyLookups(): void {
+  Object.defineProperty(navigator.credentials, 'get', {
+    configurable: true,
+    value: async () => {
+      throw new DOMException('No passkey for this request.', 'NotAllowedError')
+    },
+  })
+}
+
+test('sets up in place: an existing passkey or a new one, side by side', async ({
   page,
 }) => {
+  await page.addInitScript(refusePasskeyLookups)
   await openSidePanel({
     page,
     session: {
@@ -378,9 +390,22 @@ test('sets up in place, starting from the passkey the person already has', async
   ).toHaveText('Use my passkey')
   await expect(page.getByTestId('side-panel-lock')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
+  await expect(
+    page.getByTestId('device-protection-create-new-choice'),
+  ).toHaveText('Create a new passkey')
   await demoBeat(page)
-  // Creating a passkey is the explicit alternative.
-  await page.getByTestId('device-protection-create-new-choice').click()
+  // This browser holds no Nook passkey: it answers at once, without a phone
+  // or security-key dialog, and the card offers what to do next.
+  await page.getByTestId('device-protection-use-existing-choice').click()
+  await expect(page.getByTestId('device-protection-title')).toHaveText(
+    "Didn't find your passkey?",
+  )
+  const create = page.getByTestId('device-protection-create-new-choice')
+  await expect(create).toHaveText('Create passkey')
+  await expect(create).toBeFocused()
+  await demoBeat(page)
+  // Creating a passkey stays an explicit step.
+  await create.click()
   await expect(page.getByTestId('device-protection-setup-btn')).toHaveText(
     'Create passkey',
   )

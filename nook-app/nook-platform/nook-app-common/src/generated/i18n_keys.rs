@@ -866,15 +866,19 @@ pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_DESCRIPTION: &str =
     "extension.device_setup.identity_key_description";
 pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_TITLE: &str =
     "extension.device_setup.identity_key_title";
-pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
 pub const EXTENSION_DEVICE_SETUP_NODE_IDENTITY: &str = "extension.device_setup.node_identity";
 pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_next";
 pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
+pub const EXTENSION_DEVICE_SETUP_NOT_FOUND_DESCRIPTION: &str =
+    "extension.device_setup.not_found_description";
+pub const EXTENSION_DEVICE_SETUP_NOT_FOUND_TITLE: &str = "extension.device_setup.not_found_title";
 pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_create_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_ELSEWHERE: &str =
+    "extension.device_setup.passkey_elsewhere";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_unlock_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =

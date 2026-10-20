@@ -138,6 +138,16 @@ pub use shared_storage_grant::*;
     BrowserPasskeyClient::recovery_options(rp_id)
 }
 
+/// Recovery options for a prompt the browser answers at once: its account
+/// chooser when it holds a passkey, otherwise a `NotAllowedError` without any
+/// dialog. Call it from a click; the browser requires a user gesture.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_immediate_recovery_request_options(
+    rp_id: &str,
+) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
+    BrowserPasskeyClient::immediate_recovery_options(rp_id)
+}
+
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(SecretId::generate()?.to_string())
