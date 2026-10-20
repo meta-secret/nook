@@ -30,6 +30,7 @@ import {
   waitForExtensionPairingReady,
   waitForNewPage,
   reuseNookTabForConnect,
+  reconnectVaultFromPairingLauncher,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
@@ -41,7 +42,6 @@ import {
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
 } from './helpers/paired-vault-companion-unlock'
-import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import {
@@ -298,29 +298,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
 
-    // The launcher opened in the Nook tab's window, so connecting reuses
-    // that one Nook tab on the connect route instead of opening another.
-    const pagesBeforeReconnect = context
-      .pages()
-      .filter((page) => page !== pairingLauncher)
-    await Promise.all([
-      pairingLauncher.waitForEvent('close', {
-        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-      }),
-      pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(simplePage).toHaveURL(
-      (url) =>
-        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
-        url.pathname.endsWith('/extension-connect'),
-      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-    )
-    // The successful pairing reply closes its launcher. Every other page is
-    // retained, and connecting must not create a replacement Nook tab.
-    expect(context.pages()).toHaveLength(pagesBeforeReconnect.length)
-    expect(context.pages()).toEqual(
-      expect.arrayContaining(pagesBeforeReconnect),
-    )
+    const reconnectRequest: Parameters<
+      typeof reconnectVaultFromPairingLauncher
+    >[0] = { context, simplePage, pairingLauncher }
+    await reconnectVaultFromPairingLauncher(reconnectRequest)
     // Back to the vault: the paired, unlocked extension unlocks it again.
     await simplePage.goto(simpleVaultBaseUrl)
 
