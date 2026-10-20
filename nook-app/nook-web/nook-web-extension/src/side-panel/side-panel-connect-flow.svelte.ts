@@ -16,7 +16,9 @@ import {
   SidePanelConnectKind,
   SidePanelConnectStep,
   SidePanelConnects,
+  SidePanelTabActivationKind,
   type SidePanelConnect,
+  type SidePanelTabActivation,
 } from './side-panel-connect-state'
 import {
   SidePanelConnectSessions,
@@ -75,6 +77,11 @@ export type SidePanelConnectFlowRequest = {
  */
 export class SidePanelConnectFlow {
   connect = $state<SidePanelConnect>({ kind: SidePanelConnectKind.Idle })
+
+  /** A tab switch while the Nook tab opens, applied once its id arrives. */
+  private opening: SidePanelTabActivation = {
+    kind: SidePanelTabActivationKind.None,
+  }
 
   /** The connect page's port, admitted by the Simple Vault origin rule. */
   private readonly sessions = new SidePanelConnectSessions(
@@ -144,6 +151,23 @@ export class SidePanelConnectFlow {
       case SidePanelConnectStep.SetUpKey:
         this.connect = SidePanelConnects.identityKey()
         this.request.host.restartCeremony()
+    }
+  }
+
+  /** A tab became active in the panel's window. */
+  tabActivated(tabId: number): void {
+    switch (this.connect.kind) {
+      case SidePanelConnectKind.Starting:
+        this.opening = { kind: SidePanelTabActivationKind.Seen, tabId }
+        return
+      case SidePanelConnectKind.Idle:
+      case SidePanelConnectKind.IdentityKey:
+      case SidePanelConnectKind.InTab:
+      case SidePanelConnectKind.Failed: {
+        const activated: Parameters<typeof SidePanelConnects.tabActivated>[0] =
+          { connect: this.connect, activeTabId: tabId }
+        this.connect = SidePanelConnects.tabActivated(activated)
+      }
     }
   }
 
@@ -235,6 +259,7 @@ export class SidePanelConnectFlow {
    * then follow the steps its page reports; the panel stays. */
   private async pair(device: ExtensionSessionDeviceWire): Promise<void> {
     this.connect = { kind: SidePanelConnectKind.Starting }
+    this.opening = { kind: SidePanelTabActivationKind.None }
     const panelWindow = this.request.host.panelWindow()
     switch (panelWindow.kind) {
       case SidePanelWindowKind.Known:
@@ -275,10 +300,15 @@ export class SidePanelConnectFlow {
         return
     }
     switch (opened._tag) {
-      case 'Success':
-        this.connect = SidePanelConnects.inTab(opened.success)
+      case 'Success': {
+        const inTab: Parameters<typeof SidePanelConnects.inTab>[0] = {
+          tabId: opened.success,
+          activation: this.opening,
+        }
+        this.connect = SidePanelConnects.inTab(inTab)
         this.sessions.tabOpened(opened.success)
         return
+      }
       case 'Failure':
         this.failed()
     }

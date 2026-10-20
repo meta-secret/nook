@@ -432,10 +432,17 @@ test('Connect another identity opens the one Nook tab and the card follows its s
     message: { kind: ExtensionConnectStepKind.Consent },
   })
   await expect(line).toHaveText('Approve this browser in the Nook tab.')
-  await card.getByTestId('side-panel-connect-focus-tab').click()
+  // The Nook tab is in front: there is nothing to show.
+  const showTab = card.getByTestId('side-panel-connect-focus-tab')
+  await expect(showTab).toHaveCount(0)
+  // Another tab covers it: Show Nook tab brings it back, then leaves.
+  await panel.activateTab()
+  await showTab.click()
   await expect
     .poll(() => panel.focusedTabs())
     .toEqual([SidePanelStubPage.CONNECT_TAB_ID])
+  await panel.activateTab(SidePanelStubPage.CONNECT_TAB_ID)
+  await expect(showTab).toHaveCount(0)
   // Closing the card stops following the tab and brings the row back.
   await card.getByTestId('side-panel-connect-close').click()
   await expect(connections.getByTestId('side-panel-connect')).toBeVisible()
