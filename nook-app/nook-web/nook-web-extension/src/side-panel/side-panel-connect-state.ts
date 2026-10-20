@@ -57,6 +57,27 @@ export type SidePanelTabFollow =
       readonly step: ExtensionConnectStep
     }
 
+/** Whether the Nook tab is the tab its window shows. Show Nook tab is
+ * offered only while another tab covers it. */
+export enum SidePanelTabPlace {
+  /** The service worker activates the tab it opens or reuses. */
+  Front = 'front',
+  /** Another tab of the panel's window became active. */
+  Behind = 'behind',
+}
+
+export enum SidePanelTabActivationKind {
+  /** No tab became active while the Nook tab was opening. */
+  None = 'none',
+  Seen = 'seen',
+}
+
+/** The last tab that became active in the panel's window while the Nook
+ * tab was opening, before its id was known. */
+export type SidePanelTabActivation =
+  | { readonly kind: SidePanelTabActivationKind.None }
+  | { readonly kind: SidePanelTabActivationKind.Seen; readonly tabId: number }
+
 export type SidePanelConnect =
   | { readonly kind: SidePanelConnectKind.Idle }
   | { readonly kind: SidePanelConnectKind.Starting }
@@ -70,6 +91,7 @@ export type SidePanelConnect =
       /** The Nook tab the service worker opened or reused. */
       readonly tabId: number
       readonly follow: SidePanelTabFollow
+      readonly place: SidePanelTabPlace
     }
   | {
       readonly kind: SidePanelConnectKind.Failed
@@ -117,6 +139,16 @@ type SidePanelConnectEventRequest = {
   readonly event: SidePanelConnectEvent
 }
 
+type SidePanelInTabRequest = {
+  readonly tabId: number
+  readonly activation: SidePanelTabActivation
+}
+
+type SidePanelTabActivatedRequest = {
+  readonly connect: SidePanelConnect
+  readonly activeTabId: number
+}
+
 type SidePanelCardRequest = {
   readonly vaults: SidePanelVaultsKind
   readonly connect: SidePanelConnect
@@ -142,12 +174,47 @@ export class SidePanelConnects {
     }
   }
 
-  /** The Nook tab shows the connect route; no step arrived yet. */
-  static inTab(tabId: number): SidePanelConnect {
-    return {
+  /** The Nook tab shows the connect route; no step arrived yet. It is in
+   * front unless another tab became active while it was opening. */
+  static inTab(request: SidePanelInTabRequest): SidePanelConnect {
+    const { tabId, activation } = request
+    const opened: SidePanelConnect = {
       kind: SidePanelConnectKind.InTab,
       tabId,
       follow: { kind: SidePanelTabFollowKind.Waiting },
+      place: SidePanelTabPlace.Front,
+    }
+    switch (activation.kind) {
+      case SidePanelTabActivationKind.None:
+        return opened
+      case SidePanelTabActivationKind.Seen: {
+        const activated: SidePanelTabActivatedRequest = {
+          connect: opened,
+          activeTabId: activation.tabId,
+        }
+        return SidePanelConnects.tabActivated(activated)
+      }
+    }
+  }
+
+  /** A tab became active in the panel's window: the Nook tab is in front
+   * only when it is that tab. */
+  static tabActivated(request: SidePanelTabActivatedRequest): SidePanelConnect {
+    const { connect, activeTabId } = request
+    switch (connect.kind) {
+      case SidePanelConnectKind.InTab:
+        break
+      case SidePanelConnectKind.Idle:
+      case SidePanelConnectKind.Starting:
+      case SidePanelConnectKind.IdentityKey:
+      case SidePanelConnectKind.Failed:
+        return connect
+    }
+    switch (connect.tabId === activeTabId) {
+      case true:
+        return { ...connect, place: SidePanelTabPlace.Front }
+      case false:
+        return { ...connect, place: SidePanelTabPlace.Behind }
     }
   }
 

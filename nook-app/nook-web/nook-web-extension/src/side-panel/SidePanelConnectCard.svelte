@@ -2,7 +2,8 @@
 Connecting an identity, as a companion keytag card. One action opens (or
 reuses) the Nook tab on the connect route; creating, joining and choosing
 the identity happen there. While that tab is open the card follows the step
-the page reports and offers to bring the tab to the front. The card leads
+the page reports and, once another tab covers it, offers to bring it back
+to the front. The card leads
 the panel while no identity is connected and opens under This site from
 Connect another identity.
 -->
@@ -19,6 +20,7 @@ Connect another identity.
     SidePanelConnectCardPlacement,
     SidePanelConnectKind,
     SidePanelConnects,
+    SidePanelTabPlace,
     type SidePanelConnect,
   } from './side-panel-connect-state'
 
@@ -115,18 +117,23 @@ Connect another identity.
       </p>
     {/if}
   </div>
-  <div class="side-panel-action-bar">
-    {#if connect.kind === SidePanelConnectKind.InTab}
-      <button
-        type="button"
-        class="is-primary"
-        data-testid="side-panel-connect-focus-tab"
-        onclick={onfocustab}
-      >
-        {translatePlain(I18N_KEYS.ExtensionConnectTabShowTab)}
-        <ArrowUpRight size={14} aria-hidden="true" />
-      </button>
-    {:else}
+  {#if connect.kind === SidePanelConnectKind.InTab}
+    <!-- The Nook tab in front needs no action; the step line says what to do. -->
+    {#if connect.place === SidePanelTabPlace.Behind}
+      <div class="side-panel-action-bar">
+        <button
+          type="button"
+          class="is-primary"
+          data-testid="side-panel-connect-focus-tab"
+          onclick={onfocustab}
+        >
+          {translatePlain(I18N_KEYS.ExtensionConnectTabShowTab)}
+          <ArrowUpRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+    {/if}
+  {:else}
+    <div class="side-panel-action-bar">
       <button
         type="button"
         class="is-primary"
@@ -141,6 +148,6 @@ Connect another identity.
         {/if}
         {translatePlain(I18N_KEYS.ExtensionActionConnectIdentity)}
       </button>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </section>

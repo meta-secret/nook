@@ -344,6 +344,8 @@ its address, the panel's visibility or the lock state changes.
     const followRequest: Parameters<typeof runtime.follow>[0] = {
       window: panelWindow,
       onchange: changed,
+      // This site re-reads on the change itself; which tab is not needed.
+      ontabactivated: () => {},
     }
     const release = runtime.follow(followRequest)
     untrack(() => void load())
