@@ -241,16 +241,24 @@ class ArcManifestContract {
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
-    const admittedContract2 = runners.forbid("topologySpreadConstraints:");
+    const admittedContract2 = runners.forbidAll([
+      "requiredDuringSchedulingIgnoredDuringExecution:",
+      "minDomains:",
+      "matchLabelKeys:",
+    ]);
     if (admittedContract2.isErr()) return err(admittedContract2.error);
     const admittedContract3 = runners.requireAll([
-      `        requiredDuringSchedulingIgnoredDuringExecution:
-          - topologyKey: kubernetes.io/hostname
-            labelSelector:
-              matchExpressions:
-                - key: nook.nokey.sh/arc-spread-group
-                  operator: In
-                  values: [general, hive, container]`,
+      `    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchExpressions:
+            - key: nook.nokey.sh/arc-spread-group
+              operator: In
+              values: [general, hive, container]`,
     ]);
     if (admittedContract3.isErr()) return err(admittedContract3.error);
     const admittedContract4 = runners.forbidAll([
@@ -281,6 +289,7 @@ class ArcManifestContract {
     const admittedContract6 = containerRunners.forbidAll([
       "nook.nokey.sh/arc-spread-group:",
       "requiredDuringSchedulingIgnoredDuringExecution:",
+      "topologySpreadConstraints:",
       "privileged: true",
       "docker:dind",
       "dockerd",
@@ -302,13 +311,17 @@ class ArcManifestContract {
       "values: [secondary]",
       "values: [overflow]",
       "podAntiAffinity:",
-      `          requiredDuringSchedulingIgnoredDuringExecution:
-            - topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchExpressions:
-                  - key: nook.nokey.sh/arc-spread-group
-                    operator: In
-                    values: [general, hive, container]`,
+      `      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchExpressions:
+              - key: nook.nokey.sh/arc-spread-group
+                operator: In
+                values: [general, hive, container]`,
       "topologyKey: nook.nokey.sh/arc-standard-host",
       "topologyKey: nook.nokey.sh/arc-overflow-host",
       "values: [general, hive, container]",
@@ -330,7 +343,9 @@ class ArcManifestContract {
     ]);
     if (admittedContract7.isErr()) return err(admittedContract7.error);
     const admittedContract8 = containerHook.forbidAll([
-      "topologySpreadConstraints:",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
+      "minDomains:",
+      "matchLabelKeys:",
       "nodeName:",
       "privileged: true",
       "docker.sock",

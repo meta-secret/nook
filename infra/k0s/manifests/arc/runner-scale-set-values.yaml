@@ -44,6 +44,19 @@ template:
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+    # Balance execution counts across eligible hosts without limiting each to one.
+    # Managers, listeners and BuildKit daemons do not carry this label.
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchExpressions:
+            - key: nook.nokey.sh/arc-spread-group
+              operator: In
+              values: [general, hive, container]
     affinity:
       nodeAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -66,15 +79,6 @@ template:
                   operator: In
                   values: [overflow]
       podAntiAffinity:
-        # One execution Pod per host protects its node-local BuildKit capacity.
-        # Managers, listeners and BuildKit daemons do not carry this label.
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - topologyKey: kubernetes.io/hostname
-            labelSelector:
-              matchExpressions:
-                - key: nook.nokey.sh/arc-spread-group
-                  operator: In
-                  values: [general, hive, container]
         preferredDuringSchedulingIgnoredDuringExecution:
           - weight: 25
             podAffinityTerm:
