@@ -18,6 +18,6 @@ export enum DeviceProtectionSetupWorkflow {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Create = "create",
   /** The extension looked for an existing passkey and the browser did not
-   * return one: create one, or look on another device or password manager. */
+   * return one: create one, or look again. */
   NotFound = "not-found",
 }
