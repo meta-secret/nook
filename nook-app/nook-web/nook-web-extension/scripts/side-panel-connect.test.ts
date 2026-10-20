@@ -459,9 +459,9 @@ describe('side panel connect state', () => {
       event: step({ kind: ExtensionConnectStepKind.Consent }),
     }).connect
     expect(consent).toMatchObject({ place: SidePanelTabPlace.Behind })
-    expect(SidePanelConnects.tabActivated(consent, CONNECT_TAB)).toMatchObject(
-      { place: SidePanelTabPlace.Front },
-    )
+    expect(SidePanelConnects.tabActivated(consent, CONNECT_TAB)).toMatchObject({
+      place: SidePanelTabPlace.Front,
+    })
     // A switch while the tab opened places it once its id arrives.
     const covered = SidePanelConnects.inTab(CONNECT_TAB, {
       kind: SidePanelTabActivationKind.Seen,
