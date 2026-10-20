@@ -60,8 +60,10 @@ explicit Rise/overflow eligibility inventory.
 
 Execution Pods use native topology spread on `kubernetes.io/hostname`
 with `maxSkew: 1` and `whenUnsatisfiable: DoNotSchedule`.
-Its selector counts `arc-spread-group` values `general`, `hive`, and `container`
-together within the Pod's namespace, currently `arc-runners`.
+General and Hive selectors count `arc-spread-group` values `general`, `hive`,
+and `container` together. The container hook's spread selector counts only
+`container`, excluding general/Hive runners from browser-job spread counts.
+Both count within the Pod's namespace, currently `arc-runners`.
 Container-runner managers, listeners and BuildKit daemons are excluded.
 General runners include lightweight orchestration jobs; the rule does not
 measure actual CPU use or active BuildKit solves.
@@ -102,6 +104,12 @@ than simultaneous execution slots. Observe real placement and node use with
 - **Required:** allow another Pod on an occupied host when the eligible-host
   counts satisfy `maxSkew: 1`.
   Compare queue time and execution time after rollout before claiming a speedup.
+
+The Remote `ci:pr:e2e` matrix uses `max-parallel: 2` for its two eligible
+container execution hosts. GitHub queues additional matrix jobs before runner
+assignment. Each admitted job still uses all available logical CPUs for its
+Playwright workers. This reduces contention within the matrix; it does not
+reserve hosts or guarantee isolation from other workflows.
 
 ### Deployment and resource policy
 
