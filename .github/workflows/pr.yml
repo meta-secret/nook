@@ -24,12 +24,7 @@ permissions:
 
 jobs:
   validation:
-    name: Verify and prepare
-    outputs:
-      validation: ${{ steps.browser-scope.outputs.validation }}
-      research: ${{ steps.browser-scope.outputs.research }}
-      source-sha: ${{ steps.source.outputs.sha }}
-      browser-artifact-id: ${{ steps.browser-handoff.outputs.artifact-id }}
+    name: Verify and preview
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
     # Source-free Debian Trixie browser base, published only when tooling changes.
     # Configure an immutable digest; the scoped Actions token can read its repository package.
@@ -67,11 +62,6 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Record checked-out source
-        id: source
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       # GitHub-hosted job containers (forks, and trusted PRs while ARC is in
       # fallback) reach the runner's Docker socket through this client.
       - name: Install Docker client in hosted job container
@@ -143,7 +133,6 @@ jobs:
           PR_FULL_E2E: ${{ inputs.full_e2e_requested }}
           PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}
           PR_RESEARCH: ${{ steps.browser-scope.outputs.research }}
-          PR_BROWSER_JOBS: ${{ inputs.full_e2e_requested }}
         run: task --silent ci:pr:validate
       - name: Verification — policy-only PR
         if: steps.browser-scope.outputs.validation != 'true'
@@ -182,7 +171,7 @@ jobs:
           fi
       - name: Deploy and report preview
         id: previews
-        if: ${{ !inputs.full_e2e_requested && steps.browser-scope.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        if: steps.browser-scope.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-preview
         with:
           cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
@@ -190,154 +179,7 @@ jobs:
           source-sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           research-requested: ${{ steps.browser-scope.outputs.research }}
       - name: Report research preview
-        if: ${{ !inputs.full_e2e_requested && steps.browser-scope.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
-        uses: ./.github/actions/nook-pr-research-preview
-        with:
-          deployment-url: ${{ steps.previews.outputs.research-url }}
-          deploy-branch: ${{ steps.previews.outputs.research-branch }}
-      - name: Include verified research in full browser handoff
-        if: inputs.full_e2e_requested && steps.browser-scope.outputs.research == 'true'
-        run: tar -rf "$PR_ARTIFACT_DIR/browser.tar" -C "$PR_ARTIFACT_DIR/runtime" nook-app/nook-web/nook-web-research/dist
-      - name: Upload full browser handoff
-        id: browser-handoff
-        if: inputs.full_e2e_requested && steps.browser-scope.outputs.validation == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-browser-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-pr-artifacts/browser.tar
-          compression-level: 1
-          if-no-files-found: error
-          retention-days: 1
-
-  browsers:
-    name: Full browser tests (${{ matrix.suite }})
-    needs: [validation]
-    if: inputs.full_e2e_requested && needs.validation.outputs.validation == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - suite: web
-            task: _ci:main:web:e2e-only
-            shard: ""
-          - suite: extension-1
-            task: _extension:test:e2e:shard
-            shard: 1/2
-          - suite: extension-2
-            task: _extension:test:e2e:shard
-            shard: 2/2
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
-    container:
-      image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
-    timeout-minutes: 30
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-    defaults:
-      run:
-        shell: bash
-    env:
-      CI: "true"
-      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
-      NOOK_E2E_SYNC_PROVIDER: file
-      NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
-      NOOK_EXTENSION_COMMIT: ${{ needs.validation.outputs.source-sha }}
-      VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-      VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-      VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.validation.outputs.source-sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
-        with:
-          artifact-ids: ${{ needs.validation.outputs.browser-artifact-id }}
-          path: ${{ runner.temp }}/browser-handoff
-          merge-multiple: true
-      - name: Restore prepared browser artifacts
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          tar -xf "$RUNNER_TEMP/browser-handoff/browser.tar"
-          task --silent ci:pr:browser:runtime
-      - name: Run isolated browser suite
-        env:
-          BROWSER_TASK: ${{ matrix.task }}
-          E2E_SHARD: ${{ matrix.shard }}
-        run: task --silent "$BROWSER_TASK"
-      - name: Preserve browser diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-playwright-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            nook-app/nook-web/nook-web-app/test-results/
-            nook-app/nook-web/nook-web-app/playwright-report/
-            nook-app/nook-web/nook-web-extension/test-results/
-          if-no-files-found: warn
-          retention-days: 15
-
-  completion:
-    # Keep the required check name attached to the complete validation join.
-    name: Verify and preview
-    needs: [validation, browsers]
-    if: ${{ !cancelled() }}
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
-    container:
-      image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Require every selected validation result
-        env:
-          VALIDATION_RESULT: ${{ needs.validation.result }}
-          BROWSER_RESULT: ${{ needs.browsers.result }}
-          FULL_E2E: ${{ inputs.full_e2e_requested }}
-          PRODUCT_VALIDATION: ${{ needs.validation.outputs.validation }}
-        run: |
-          test "$VALIDATION_RESULT" = success
-          if [ "$FULL_E2E" = true ] && [ "$PRODUCT_VALIDATION" = true ]; then
-            test "$BROWSER_RESULT" = success
-          else
-            test "$BROWSER_RESULT" = skipped
-          fi
-      - uses: actions/checkout@v7
-        if: inputs.full_e2e_requested && needs.validation.outputs.validation == 'true'
-        with:
-          ref: ${{ needs.validation.outputs.source-sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
-        if: inputs.full_e2e_requested && needs.validation.outputs.validation == 'true'
-        with:
-          artifact-ids: ${{ needs.validation.outputs.browser-artifact-id }}
-          path: ${{ runner.temp }}/browser-handoff
-          merge-multiple: true
-      - name: Restore verified production artifacts
-        if: inputs.full_e2e_requested && needs.validation.outputs.validation == 'true'
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          tar -xf "$RUNNER_TEMP/browser-handoff/browser.tar"
-          task --silent ci:pr:browser:runtime
-      - name: Deploy full-suite preview
-        id: previews
-        if: inputs.full_e2e_requested && needs.validation.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
-        uses: ./.github/actions/nook-pr-preview
-        with:
-          cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
-          cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          source-sha: ${{ needs.validation.outputs.source-sha }}
-          research-requested: ${{ needs.validation.outputs.research }}
-      - name: Report full-suite research preview
-        if: inputs.full_e2e_requested && needs.validation.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        if: steps.browser-scope.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-research-preview
         with:
           deployment-url: ${{ steps.previews.outputs.research-url }}

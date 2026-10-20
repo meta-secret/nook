@@ -101,9 +101,7 @@ tasks:
         export REPO_ROOT="$PWD"
         export GITHUB_WORKSPACE="$PWD"
         if [ "${PR_FULL_E2E:-false}" = true ]; then
-          if [ "${PR_BROWSER_JOBS:-false}" != true ]; then
-            task --silent ci:pr:browser:full
-          fi
+          task --silent ci:pr:browser:full
         elif [ "${PR_AUTH_E2E:-false}" = true ]; then
           task --silent ci:pr:browser:auth
         fi
@@ -124,14 +122,9 @@ tasks:
         git clone --quiet --shared --no-checkout '{{.REPO_ROOT}}' '{{.PR_ARTIFACT_DIR}}/runtime'
         git -C '{{.PR_ARTIFACT_DIR}}/runtime' checkout --quiet --detach "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
         cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/'
-      - cd '{{.PR_ARTIFACT_DIR}}/runtime' && task --silent ci:pr:browser:runtime
-
-  ci:pr:browser:runtime:
-    desc: Link the exported browser dependencies and runner-provided ffmpeg.
-    cmds:
-      - test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'
+      - test -e '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules'
       - |
-        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
         install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
         ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
 

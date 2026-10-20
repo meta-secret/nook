@@ -720,7 +720,7 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("PR keeps one BuildKit producer and isolates full browser consumers", () => {
+void test("one PR job avoids telemetry and registry handoffs", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
   const arcRunnerDockerfile = fs.readFileSync(
     "infra/k0s/images/arc-runner/Dockerfile",
@@ -742,47 +742,7 @@ void test("PR keeps one BuildKit producer and isolates full browser consumers", 
     "infra/k0s/manifests/arc/container-hook.yaml",
     "utf8",
   );
-  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
-  assert.equal(
-    workflow.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
-    1,
-  );
-  assert.match(workflow, /needs: \[validation, browsers\]/);
-  assert.match(
-    workflow,
-    /name: Verify and preview\n {4}needs: \[validation, browsers\]/,
-  );
-  assert.match(workflow, /test "\$VALIDATION_RESULT" = success/);
-  assert.match(workflow, /test "\$BROWSER_RESULT" = success/);
-  assert.match(workflow, /test "\$BROWSER_RESULT" = skipped/);
-  assert.match(workflow, /fail-fast: false/);
-  assert.match(workflow, /suite: web\n {12}task: _ci:main:web:e2e-only/);
-  for (const shard of [1, 2]) {
-    assert.ok(
-      workflow.includes(
-        `suite: extension-${shard}\n            task: _extension:test:e2e:shard\n            shard: ${shard}/2`,
-      ),
-    );
-  }
-  assert.match(
-    workflow,
-    /artifact-ids: \$\{\{ needs\.validation\.outputs\.browser-artifact-id \}\}/,
-  );
-  assert.match(
-    workflow,
-    /ref: \$\{\{ needs\.validation\.outputs\.source-sha \}\}/,
-  );
-  const browserJob = workflow
-    .split("\n  browsers:\n")[1]
-    .split("\n  completion:\n")[0];
-  assert.doesNotMatch(
-    browserJob,
-    /secrets\.|deployments: write|pull-requests: write|issues: write/,
-  );
-  assert.match(
-    browserJob,
-    /permissions:\n {6}actions: read\n {6}contents: read\n {6}packages: read/,
-  );
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
   const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(
     rootWorkflow,
@@ -809,7 +769,7 @@ void test("PR keeps one BuildKit producer and isolates full browser consumers", 
   assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,
-    /type=registry|needs\.rust/,
+    /type=registry|actions\/download-artifact|needs\.rust/,
   );
   for (const credential of [
     "NOOK_SCCACHE_ACCESS_KEY",
@@ -895,7 +855,7 @@ void test(
     assert.doesNotMatch(validationStep, /^ {8}continue-on-error:/m);
     assert.equal(
       workflow.match(/^ {8}uses: actions\/upload-artifact@v7$/gm)?.length,
-      3,
+      1,
     );
   },
 );

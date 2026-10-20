@@ -17,11 +17,7 @@ impl<'a> PrProducerCacheContract<'a> {
         let pr = self.root.read(".github/workflows/pr.yml");
         let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
         let tasks = self.root.read("nook-app/ci/pr.yml");
-        assert_eq!(
-            pr.matches("uses: ./.github/actions/nook-docker-setup")
-                .count(),
-            1
-        );
+        assert_eq!(pr.matches("    runs-on:").count(), 1);
         for marker in [
             "GHA_CACHE_ENABLED=",
             "GHA_CACHE_WRITE_ENABLED=",
@@ -36,11 +32,12 @@ impl<'a> PrProducerCacheContract<'a> {
             "type=registry",
             "nook-pr-rust:",
             "nook-pr-e2e:",
+            "actions/download-artifact",
             "uses: ./.github/workflows/",
         ] {
             assert!(
                 !pr.contains(forbidden),
-                "PR must retain one BuildKit producer without image or cache handoffs: {forbidden}"
+                "PR steps must not introduce a cross-job handoff: {forbidden}"
             );
         }
         let validation = pr
@@ -90,12 +87,11 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(tasks.contains("pr-browser-artifacts.output=type=tar"));
         assert!(tasks.contains("tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar'"));
         assert!(tasks.contains(
-            "test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'",
+            "test -e '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules'",
         ));
         assert!(tasks.contains(
-            "'{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json'",
+            "'{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json'",
         ));
-        assert!(pr.contains("artifact-ids: ${{ needs.validation.outputs.browser-artifact-id }}"));
         let product = self
             .root
             .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
