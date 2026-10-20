@@ -416,6 +416,8 @@ class SidePanelSources {
     extensionDeviceProtectionStatus: [ExtensionSessionMessageType.Status],
     extensionSessionDevice: [ExtensionSessionMessageType.Status],
     recoverExtensionPasskey: [ExtensionSessionMessageType.RecoverPasskey],
+    // Asks the browser whether it offers passkey autofill; sends nothing.
+    passkeyAutofillAvailable: [],
     createExtensionPasskey: [
       ExtensionSessionMessageType.BeginPasskeySetup,
       ExtensionSessionMessageType.FinishPasskeySetup,
