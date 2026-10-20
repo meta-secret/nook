@@ -34,9 +34,9 @@ The `test:e2e` script runs `stable` and then `unstable`.
 ## Worker capacity and dependent tests
 
 Apply the [CPU and E2E circuit breaker](../../../CIRCUIT-BREAKER.md#reducing-cpu-allocation-or-e2e-parallelism)
-to every browser entry point. Playwright worker counts use Node's
-`availableParallelism()` in every environment. Demo, live-provider, debug and
-Windows runs follow the same capacity rule.
+to every browser entry point. Playwright worker counts use all available
+logical CPUs reported by Node's `availableParallelism()` in every environment.
+Demo, live-provider, debug and Windows runs follow the same capacity rule.
 
 Independent tests retain the full worker budget. A test that consumes state
 created by another may retain file ordering or a `describe.serial` group.
