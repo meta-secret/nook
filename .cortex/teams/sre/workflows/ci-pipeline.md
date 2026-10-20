@@ -119,7 +119,7 @@ and manual ecosystem execution in one Actions run named `CI`.
   the web producer but does not suppress tests of its verified browser image.
   A failed web check blocks image publication and browser consumers.
 - Local-provider web e2e and two extension shards consume the verified browser
-  image in separate pods. Each extension shard keeps one Playwright worker.
+  image in separate pods. Each extension shard uses native available CPU capacity.
   For example, `E2E_SHARD=1/2 task _extension:test:e2e:shard` runs one half.
 - Each browser E2E solve is read-only.
 - Headless UI-demo execution and new artifact publication are temporarily
@@ -417,7 +417,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - Research changes run their browser checks in the same job.
 - All requested suites must succeed before preview deployment.
 - Extension tests keep their automatically selected Xvfb display.
-  CI worker defaults use Node's `availableParallelism()` for web and extension suites.
+  Worker counts use Node's `availableParallelism()` for web and extension suites.
 
 ### Runner allocation
 
@@ -435,8 +435,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
 
 1. **`e2e` project** — IndexedDB flows plus sync-provider specs through isolated e2e remotes. One Playwright process, fully parallel, one preview server.
-2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. CI defaults to the worker capacity reported by Node's `availableParallelism()`.
-3. **`unstable` project** — local provider/sync specs. It runs separately with the same CI worker-capacity default.
+2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. Workers use the capacity reported by Node's `availableParallelism()`.
+3. **`unstable` project** — local provider/sync specs. It runs separately with the same native worker-capacity policy.
 4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; explicit manual runs only.
 
 When adding Google Drive or other sync providers, add local e2e remote specs to
@@ -444,15 +444,13 @@ the `e2e` list and thin live smoke specs to `e2e/live/`.
 
 ## Parallelism and isolation
 
-Web and extension CI configs default `workers` to Node's `availableParallelism()`.
-Their local runs retain Playwright defaults. The isolated-app config uses
-`availableParallelism()` in either environment. Explicit worker selections,
-such as `--workers=N`, retain their override behavior.
+All E2E configurations use Node's `availableParallelism()` for their worker
+budget. Apply [worker capacity and dependent tests](browser-validation.md#worker-capacity-and-dependent-tests)
+to local, CI, Windows, demo, live-provider and debug runs.
 
 Spec files that need ordering use `test.describe.configure({ mode: 'serial' })`
-within the file only. `sync-live` keeps `fullyParallel: false` because CI assigns
-one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that
-remote. The local-provider `stable` and `unstable` groups use
+only for documented state dependencies within the file. This does not reduce
+the worker budget for independent tests. The local-provider `stable` and `unstable` groups use
 `fullyParallel: true` in separate invocations without fixed worker counts.
 
 ## Rust dependency updates
@@ -488,7 +486,7 @@ UI demo rules:
   `nook-web-app/e2e/demos/*.demo.spec.ts`.
 - The PR contract rejects a UI change without a changed demo.
 - Only changed demo specs run.
-  - They run serially with one worker.
+  - They use native available CPU capacity.
   - PR CI avoids the cost of the full browser suite.
 
 **After integration, Gizmo runs the contract on the host before the first
