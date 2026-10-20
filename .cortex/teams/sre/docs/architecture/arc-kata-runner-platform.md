@@ -56,14 +56,19 @@ Home has twice each Rise node's logical CPUs, but its 250 Mbps connection makes
 Rise preferable for the first network-heavy jobs. Browser jobs retain their
 explicit Rise/overflow eligibility inventory.
 
-### Shared execution isolation
+### Shared execution spread
 
-Execution Pods use required pod anti-affinity on `kubernetes.io/hostname`.
+Execution Pods use native topology spread on `kubernetes.io/hostname`
+with `maxSkew: 1` and `whenUnsatisfiable: DoNotSchedule`.
 Its selector counts `arc-spread-group` values `general`, `hive`, and `container`
 together within the Pod's namespace, currently `arc-runners`.
 Container-runner managers, listeners and BuildKit daemons are excluded.
 General runners include lightweight orchestration jobs; the rule does not
 measure actual CPU use or active BuildKit solves.
+
+Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
+only hosts eligible for the incoming Pod, preserving each pool's placement
+constraints. No `minDomains` or `matchLabelKeys` override is configured.
 
 The existing preferred terms retain these marginal penalties per matching Pod:
 
@@ -82,20 +87,20 @@ one job on a Rise node. The scheduler also scores existing Pods' preferences,
 normalizes the scores, and combines them with its other plugins; these numbers
 are neither guaranteed allocation ratios nor concurrency limits.
 
-There is no `maxSkew` rule on execution Pods. A new execution Pod waits when
-every eligible node already hosts a matching Pod. It cannot trade isolation
-for a higher scheduling score. Required placement applies during scheduling;
-it does not evict existing co-located Pods.
+Multiple execution Pods may share a host. Scheduling keeps the incoming Pod's
+matching count within one of the minimum across its eligible hosts.
+The rule applies during scheduling; it does not evict existing Pods.
 
-This exchanges concurrent runtime contention for queue time. The unchanged
-container hook still fails a job Pod that remains Pending for ten minutes.
+Hard spread can still queue a Pod when a least-loaded eligible host cannot
+accept it because of resources or other scheduling constraints. The unchanged
+container hook fails a job Pod that remains Pending for ten minutes.
 Scale-set ceilings bound allocated runners, including Pending Pods, rather
 than simultaneous execution slots. Observe real placement and node use with
 `task infra:arc:placement:status`.
 
-- **Prohibited:** treat a larger `maxRunners` value as permission to place two
-  selected execution Pods on one occupied node.
-- **Required:** keep the second Pod Pending until an eligible node is free.
+- **Prohibited:** impose one execution Pod per host to enforce balanced placement.
+- **Required:** allow another Pod on an occupied host when the eligible-host
+  counts satisfy `maxSkew: 1`.
   Compare queue time and execution time after rollout before claiming a speedup.
 
 ### Deployment and resource policy
@@ -103,8 +108,8 @@ than simultaneous execution slots. Observe real placement and node use with
 Deployment keeps all build nodes quarantined until listeners are ready, exposes
 both Rise nodes together, then home, then overflow. The existing Hive Helm
 release keeps ownership of its image, credentials and security settings.
-`infra:arc:placement:hive` updates only its affinity and removes its old separate
-spread constraint using the general runner's deployed policy. Hive must already
+`infra:arc:placement:hive` updates its affinity and topology spread constraints
+using the general runner's deployed policy. Hive must already
 be installed by its owner; a missing release is a deployment error.
 
 Before an authorized rollout, inspect Hive's live Helm execution template and
@@ -217,8 +222,8 @@ The resource envelopes are:
 - General runner, container-scale-set coordinator, and container-job containers
   declare no resource requests or limits.
 - A selected execution Pod shares node CPU with BuildKit and other infrastructure.
-- Required hostname anti-affinity prevents new selected execution Pods from
-  sharing an occupied eligible node; excess jobs wait.
+- Hostname topology spread balances selected execution Pods across eligible
+  nodes while allowing multiple jobs per host.
 - Scale-set ceilings bound aggregate runner count.
 - Support init containers retain their role-specific memory envelopes.
 - Empty-directory size limits continue to bound disposable storage.

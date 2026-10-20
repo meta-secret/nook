@@ -68,10 +68,10 @@ protecting a real product trust boundary.
 
 ### Reducing CPU allocation or E2E parallelism
 
-- Agents must use all CPU capacity available to the execution process.
+- Agents must use all available logical CPUs of the execution process.
 - Do not reduce CPU allocation, CPU affinity or CPU quotas to work around a
   failing or slow test.
-- E2E worker counts must derive from native available CPU capacity in every
+- E2E worker counts must use all available logical CPUs in every
   environment, including local, CI, Windows, demo, live and debug runs.
 - Do not introduce or retain fixed worker caps, fractional CPU defaults, or
   environment-variable and CLI overrides that reduce E2E parallelism.
@@ -84,7 +84,7 @@ protecting a real product trust boundary.
 **Prohibited:** hide a browser failure by setting `--workers=1`, adding a worker
 environment override, or lowering the runner's CPU quota.
 
-**Required:** retain native available CPU capacity and diagnose the failure.
+**Required:** retain all available logical CPUs and diagnose the failure.
 If one test consumes state created by another, document that dependency and
 serialize only that test group.
 
