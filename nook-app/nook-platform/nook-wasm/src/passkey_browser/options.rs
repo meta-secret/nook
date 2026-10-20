@@ -721,7 +721,10 @@ mod wasm_tests {
             .unchecked_into())
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
+    pub(super) fn get_string(
+        target: &js_sys::Object,
+        field: &str,
+    ) -> Result<String, wasm_bindgen::JsError> {
         Reflect::get(target, &JsString::from(field))
             .map_err(|_| JsError::new("failed to read reflected string field"))?
             .as_string()

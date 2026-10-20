@@ -1,11 +1,13 @@
 <!--
 The extension's device-protection ceremony, shared by the Nook tab and the
 side panel: set up the key (an existing passkey or a new one, side by side;
-a PIN where passkeys cannot work) and unlock it again. When the browser's
-passkey picker closes without a passkey, the ceremony offers creating one or
-looking again; it never starts creating one by itself. It asks through the
-browser's plain picker only: Brave crashes on an immediate (uiMode) passkey
-request. Each surface frames this ceremony with its own heading art; the
+a PIN where passkeys cannot work) and unlock it again. Setup keeps a passkey
+autofill request open: clicking the passkey field lists only the Nook
+passkeys the browser holds, with no dialog when there are none. Chromium
+browsers quit on an immediate (uiMode) request from an extension page, so the
+ceremony never sends one. When the browser's picker closes without a passkey,
+the ceremony offers creating one or looking again; it never starts creating
+one by itself. Each surface frames this ceremony with its own heading art; the
 controls, messages and Rust/WASM calls live here once.
 -->
 <script lang="ts">
@@ -21,6 +23,8 @@ controls, messages and Rust/WASM calls live here once.
     DeviceMode,
     DeviceProtectionStatus,
     type ExtensionSessionDeviceWire,
+    PasskeyRecoveryPrompt,
+    type PasskeyRecoveryRequest,
     extensionWasmRuntime,
   } from '../lib/nook-wasm'
   import {
@@ -74,6 +78,13 @@ controls, messages and Rust/WASM calls live here once.
     readonly reaction: PasskeyNotAllowedReaction
   }
 
+  /** One step to perform, and whether its result still applies once it
+   * settles: a stopped autofill request's result does not. */
+  type CeremonyRun = {
+    readonly step: CeremonyStep
+    readonly current: () => boolean
+  }
+
   type CeremonyAttempt = Parameters<
     typeof Effect.tryPromise<
       ExtensionSessionDeviceWire,
@@ -113,6 +124,44 @@ controls, messages and Rust/WASM calls live here once.
   const pending = $derived(activity === DeviceProtectionActivity.Pending)
   const focus = $derived(new DeviceProtectionFocus(attempt))
   const noticePlace = $derived(DeviceProtectionStageMap.noticePlace(stage))
+  const autofillWanted = $derived(
+    DeviceProtectionStageMap.offersAutofill(copyRequest) &&
+      activity === DeviceProtectionActivity.Idle,
+  )
+  /** The passkey autofill request. Its signal is aborted once the request
+   * has ended, and another passkey prompt aborts it first, since the
+   * browser runs one request at a time. */
+  let autofill = new AbortController()
+
+  $effect(() => {
+    switch (autofillWanted) {
+      case false:
+        return
+      case true:
+        break
+    }
+    startAutofill()
+    return () => autofill.abort()
+  })
+
+  function startAutofill(): void {
+    const controller = new AbortController()
+    autofill = controller
+    void listenForAutofill(controller)
+  }
+
+  /** A try that ended leaves no request open: clicking the field again
+   * opens a new one. It never restarts by itself, so a browser that refuses
+   * autofill at once cannot loop. */
+  function reopenAutofill(): void {
+    switch (autofill.signal.aborted && autofillWanted) {
+      case true:
+        startAutofill()
+        return
+      case false:
+        return
+    }
+  }
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -197,8 +246,41 @@ controls, messages and Rust/WASM calls live here once.
       case DeviceProtectionActivity.Idle:
         break
     }
+    autofill.abort()
     activity = DeviceProtectionActivity.Pending
     clearNotice()
+    const ceremonyRun: CeremonyRun = { step, current: () => true }
+    await perform(ceremonyRun)
+  }
+
+  /** Waits for the person to pick a passkey from the field's suggestions.
+   * A browser without passkey autofill offers none; the field then only
+   * explains, and creating or the picker stay available. */
+  async function listenForAutofill(controller: AbortController): Promise<void> {
+    const { signal } = controller
+    switch (await extensionWasmRuntime.passkeyAutofillAvailable()) {
+      case false:
+        return
+      case true:
+        break
+    }
+    const request: PasskeyRecoveryRequest = {
+      prompt: PasskeyRecoveryPrompt.Autofill,
+      signal,
+    }
+    const step: CeremonyStep = {
+      action: () => extensionWasmRuntime.recoverExtensionPasskey(request),
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
+      followUp: DeviceActionFollowUp.Menu,
+      notAllowed: PasskeyNotAllowedReaction.Notice,
+    }
+    const ceremonyRun: CeremonyRun = { step, current: () => !signal.aborted }
+    await perform(ceremonyRun)
+    controller.abort()
+  }
+
+  async function perform(ceremonyRun: CeremonyRun): Promise<void> {
+    const { step, current } = ceremonyRun
     const ceremonyAttempt: CeremonyAttempt = {
       try: () => step.action(),
       catch: (caught) => {
@@ -212,6 +294,12 @@ controls, messages and Rust/WASM calls live here once.
     const outcome = await Effect.runPromise(
       Effect.result(Effect.tryPromise(ceremonyAttempt)),
     )
+    switch (current()) {
+      case false:
+        return
+      case true:
+        break
+    }
     activity = DeviceProtectionActivity.Idle
     switch (outcome._tag) {
       case 'Success': {
@@ -235,8 +323,11 @@ controls, messages and Rust/WASM calls live here once.
   }
 
   function useExistingPasskey(): void {
+    const request: PasskeyRecoveryRequest = {
+      prompt: PasskeyRecoveryPrompt.Picker,
+    }
     const step: CeremonyStep = {
-      action: () => extensionWasmRuntime.recoverExtensionPasskey(),
+      action: () => extensionWasmRuntime.recoverExtensionPasskey(request),
       fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
       notAllowed: PasskeyNotAllowedReaction.OfferChoice,
@@ -412,19 +503,29 @@ controls, messages and Rust/WASM calls live here once.
     </button>
   </form>
 {:else if stage === DeviceProtectionStage.Setup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
+  <div class="field-group">
+    <label for="device-protection-passkey">
+      {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyFieldLabel)}
+    </label>
+    <input
+      id="device-protection-passkey"
+      type="text"
+      autocomplete="username webauthn"
+      placeholder={translatePlain(
+        I18N_KEYS.ExtensionDeviceSetupPasskeyFieldPlaceholder,
+      )}
+      readonly={pending}
+      aria-describedby="device-protection-passkey-hint device-protection-notice"
+      data-testid="device-protection-passkey-field"
+      onfocus={reopenAutofill}
+      {@attach focus.enter}
+    />
+    <p id="device-protection-passkey-hint" class="field-hint">
+      {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyFieldHint)}
+    </p>
+  </div>
   <button
     type="button"
-    aria-disabled={pending}
-    aria-busy={pending}
-    data-testid="device-protection-use-existing-choice"
-    onclick={useExistingPasskey}
-  >
-    <Fingerprint size={16} aria-hidden="true" />
-    {actionLabel(I18N_KEYS.ExtensionDeviceSetupUsePasskey)}
-  </button>
-  <button
-    type="button"
-    class="secondary-button"
     aria-disabled={pending}
     data-testid="device-protection-create-new-choice"
     onclick={() => chooseWorkflow(DeviceProtectionSetupWorkflow.Create)}
@@ -432,6 +533,19 @@ controls, messages and Rust/WASM calls live here once.
     <KeyRound size={16} aria-hidden="true" />
     {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
   </button>
+  <p class="alternative-line">
+    {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyOtherDevice)}
+    <button
+      type="button"
+      class="link-button"
+      aria-disabled={pending}
+      aria-busy={pending}
+      data-testid="device-protection-use-existing-choice"
+      onclick={useExistingPasskey}
+    >
+      {actionLabel(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
+    </button>
+  </p>
 {:else if stage === DeviceProtectionStage.Setup && setupWorkflow === DeviceProtectionSetupWorkflow.NotFound}
   <button
     type="button"

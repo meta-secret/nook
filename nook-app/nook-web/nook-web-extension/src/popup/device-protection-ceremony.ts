@@ -134,6 +134,34 @@ export class DeviceProtectionStageMap {
     }
   }
 
+  /** Passkey autofill listens while extension setup offers an existing
+   * passkey: the browser suggests only passkeys it holds, without a dialog.
+   * A further identity's key is always new, so it has none. */
+  static offersAutofill(request: DeviceProtectionCopyRequest): boolean {
+    const { stage, purpose, workflow } = request
+    switch (stage) {
+      case DeviceProtectionStage.Setup:
+        break
+      case DeviceProtectionStage.PinSetup:
+      case DeviceProtectionStage.PinUnlock:
+      case DeviceProtectionStage.PasskeyUnlock:
+        return false
+    }
+    switch (purpose) {
+      case DeviceProtectionPurposeKind.ExtensionKey:
+        break
+      case DeviceProtectionPurposeKind.IdentityKey:
+        return false
+    }
+    switch (workflow) {
+      case DeviceProtectionSetupWorkflow.Authenticate:
+        return true
+      case DeviceProtectionSetupWorkflow.Create:
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return false
+    }
+  }
+
   /** Setup starts by authenticating with an existing passkey; a further
    * identity's key is always a new one. */
   static initialWorkflow(

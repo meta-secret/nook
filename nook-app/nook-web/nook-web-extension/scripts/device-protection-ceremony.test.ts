@@ -58,6 +58,36 @@ describe('device-protection ceremony stages', () => {
     ).toBe(DeviceProtectionPhase.Unlock)
   })
 
+  test('passkey autofill listens only while extension setup offers an existing passkey', () => {
+    const authenticate: DeviceProtectionCopyRequest = {
+      stage: DeviceProtectionStage.Setup,
+      purpose: DeviceProtectionPurposeKind.ExtensionKey,
+      workflow: DeviceProtectionSetupWorkflow.Authenticate,
+    }
+    expect(DeviceProtectionStageMap.offersAutofill(authenticate)).toBe(true)
+    for (const workflow of [
+      DeviceProtectionSetupWorkflow.Create,
+      DeviceProtectionSetupWorkflow.NotFound,
+    ]) {
+      const other: DeviceProtectionCopyRequest = { ...authenticate, workflow }
+      expect(DeviceProtectionStageMap.offersAutofill(other)).toBe(false)
+    }
+    // A further identity's key is always new: nothing to suggest.
+    const identityKey: DeviceProtectionCopyRequest = {
+      ...authenticate,
+      purpose: DeviceProtectionPurposeKind.IdentityKey,
+    }
+    expect(DeviceProtectionStageMap.offersAutofill(identityKey)).toBe(false)
+    for (const stage of [
+      DeviceProtectionStage.PinSetup,
+      DeviceProtectionStage.PinUnlock,
+      DeviceProtectionStage.PasskeyUnlock,
+    ]) {
+      const unlock: DeviceProtectionCopyRequest = { ...authenticate, stage }
+      expect(DeviceProtectionStageMap.offersAutofill(unlock)).toBe(false)
+    }
+  })
+
   test('setup starts with an existing passkey; creating one is a choice', () => {
     expect(
       DeviceProtectionStageMap.initialWorkflow(
