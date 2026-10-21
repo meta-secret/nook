@@ -66,8 +66,8 @@
   }
 
   /* Plate: an action tile set apart by tone, not by a border: a raised
-   * steel face lit along its top, its foot cut like a tanto tip. Hover
-   * lifts the face. */
+   * steel face lit along its top, its foot cut like a tanto tip that stays
+   * open to the background, its cut edge lit. Hover lifts the face. */
   .nk-plate {
     position: relative;
     border-color: transparent;
@@ -82,11 +82,27 @@
     clip-path: polygon(
       0 0,
       100% 0,
-      100% calc(100% - 10px),
-      calc(100% - 10px) 100%,
+      100% calc(100% - 12px),
+      calc(100% - 12px) 100%,
       0 100%
     );
     transition: background-color 0.15s;
+  }
+  .nk-plate::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
   }
   .nk-plate:hover:not(:disabled),
   .nk-plate:focus-visible {
