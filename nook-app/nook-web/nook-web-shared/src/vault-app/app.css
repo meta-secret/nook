@@ -261,14 +261,42 @@
     @apply text-[0.6875rem] font-medium tracking-[0.14em] uppercase;
   }
 
-  /* Dark theme: one soft spotlight from above; the rest stays a void. */
-  .nk-stage.dark {
-    background-image: radial-gradient(
-      ellipse 64rem 34rem at 50% -8rem,
-      color-mix(in oklch, var(--steel-hi) 6%, transparent),
-      transparent 72%
-    );
+  /* The stage: two ground planes and their edges cross the page, fixed to
+   * the viewport; the dark theme adds one soft spotlight from above. */
+  .nk-stage {
+    --nk-stage-planes:
+      linear-gradient(
+        112deg,
+        transparent 0 57%,
+        color-mix(in oklch, var(--foreground) 2%, transparent) 57% 71%,
+        transparent 71%
+      ),
+      linear-gradient(
+        112deg,
+        transparent calc(57% - 1px),
+        color-mix(in oklch, var(--foreground) 6%, transparent) calc(57% - 1px)
+          57%,
+        transparent 57%
+      ),
+      linear-gradient(
+        112deg,
+        transparent calc(71% - 1px),
+        color-mix(in oklch, var(--foreground) 6%, transparent) calc(71% - 1px)
+          71%,
+        transparent 71%
+      );
+    background-image: var(--nk-stage-planes);
+    background-attachment: fixed;
     background-repeat: no-repeat;
+  }
+  .nk-stage.dark {
+    background-image:
+      radial-gradient(
+        ellipse 64rem 34rem at 50% -8rem,
+        color-mix(in oklch, var(--steel-hi) 6%, transparent),
+        transparent 72%
+      ),
+      var(--nk-stage-planes);
   }
 
   .app-header {
