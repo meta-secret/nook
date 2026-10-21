@@ -31,7 +31,6 @@
     EnrollmentCodeUseRequest,
     ExistingVaultPasswordUnlock,
     PairedExtensionDiscoveryRetry,
-    PairedExtensionUnlockPoll,
     PairedExtensionResumeStatus,
   } from '$lib/app/app-interaction-types'
   import {
@@ -87,6 +86,13 @@
     VaultAppRouteCoordinator,
     type VaultAppRouteCoordinatorRequest,
   } from '$lib/app/vault-app-route-coordinator.svelte'
+  import {
+    pairedExtensionUnlockWasAccepted,
+    requestPairedExtensionUnlockIfEligible,
+    type PairedExtensionUnlockDeliveryRequest,
+    type PairedExtensionUnlockPollRequest,
+    waitForPairedExtensionUnlock,
+  } from '$lib/app/paired-extension-unlock-delivery'
 
   const IS_SIMPLE_APP = configured_vault_application_is_simple()
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
@@ -285,6 +291,19 @@
       return
     }
     let activeStoreId = existingVaultImportLifecycle.unlockStoreId
+    const pairedExtensionUnlockDeliveryRequest: PairedExtensionUnlockDeliveryRequest =
+      {
+        shouldRequest:
+          !skipExtensionDiscovery &&
+          SUPPORTS_EXTENSION &&
+          (vault.localVaultPresent || existingVaultImport),
+        ...(activeStoreId ? { storeId: activeStoreId } : {}),
+        requester: connectionBrowser,
+      }
+    const pairedExtensionUnlockDelivery =
+      requestPairedExtensionUnlockIfEligible(
+        pairedExtensionUnlockDeliveryRequest,
+      )
     if (existingVaultImport) {
       const discovered = await vault.discoverStagedVaultStoreId()
       if (discovered.isErr()) {
@@ -370,12 +389,20 @@
           discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked
         ) {
-          await connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
+          const pairedUnlockAccepted = await pairedExtensionUnlockWasAccepted(
+            pairedExtensionUnlockDelivery,
+          )
+          if (!pairedUnlockAccepted) {
+            vault.errorMsg = vault.t(
+              I18N_KEYS.ExtensionConnectMessagingUnavailable,
+            )
+            return
+          }
         }
-        const pairedExtensionUnlockRequest: Parameters<
-          typeof waitForPairedExtensionUnlock
-        >[0] = {
+        const pairedExtensionUnlockRequest: PairedExtensionUnlockPollRequest = {
           storeId: activeStoreId,
+          isAuthenticated: () => vault.isAuthenticated,
+          resumePairedVault: resumePairedExtensionVault,
         }
         await waitForPairedExtensionUnlock(pairedExtensionUnlockRequest)
         return
@@ -613,27 +640,6 @@
     }
     await handleUnlock(true)
     return ok(ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked)
-  }
-
-  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
-  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
-
-  async function waitForPairedExtensionUnlock(
-    request: PairedExtensionUnlockPoll,
-  ): Promise<void> {
-    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS
-    for (let attempt = 0; Date.now() < deadline; attempt += 1) {
-      if (attempt > 0) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
-        })
-      }
-      const discoveryStatus = await resumePairedExtensionVault(request.storeId)
-      if (discoveryStatus.isErr()) return
-      if (vault.isAuthenticated) {
-        return
-      }
-    }
   }
 
   function schedulePairedExtensionDiscoveryRetry(
