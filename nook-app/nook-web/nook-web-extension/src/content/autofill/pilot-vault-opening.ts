@@ -12,6 +12,11 @@ type PilotVaultOpeningSurface = {
   readonly description: HTMLParagraphElement
 }
 
+type PilotVaultOpeningFeedback = {
+  readonly onFailure: () => void
+  readonly onSuccess: () => void
+}
+
 /** Opens the configured Simple Vault through the existing background route. */
 export class PilotVaultOpening {
   private static readonly acknowledgementFields = { ok: Schema.Literal(true) }
@@ -28,6 +33,20 @@ export class PilotVaultOpening {
     if (this.surface.button.disabled) return
     this.surface.button.disabled = true
     this.surface.button.setAttribute('aria-busy', 'true')
+    const feedback: PilotVaultOpeningFeedback = {
+      onFailure: () => {
+        this.surface.description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetOpenNookFailed,
+        )
+        this.surface.description.setAttribute('role', 'alert')
+      },
+      onSuccess: () => {
+        this.surface.description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription,
+        )
+        this.surface.description.removeAttribute('role')
+      },
+    }
     const opening = Effect.tryPromise(() =>
       chrome.runtime.sendMessage<
         OpenSimpleVaultMessage,
@@ -37,20 +56,7 @@ export class PilotVaultOpening {
       Effect.flatMap(
         Schema.decodeUnknownEffect(PilotVaultOpening.acknowledgement),
       ),
-      Effect.match({
-        onFailure: () => {
-          this.surface.description.textContent = workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetOpenNookFailed,
-          )
-          this.surface.description.setAttribute('role', 'alert')
-        },
-        onSuccess: () => {
-          this.surface.description.textContent = workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription,
-          )
-          this.surface.description.removeAttribute('role')
-        },
-      }),
+      Effect.match(feedback),
       Effect.ensuring(
         Effect.sync(() => {
           this.surface.button.disabled = false

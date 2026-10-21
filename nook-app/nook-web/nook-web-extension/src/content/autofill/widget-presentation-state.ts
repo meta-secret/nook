@@ -65,10 +65,16 @@ export class SavedLoginPresentation {
   static forVault(
     presentation: WidgetVaultPresentation,
   ): SavedLoginPresentationKind {
-    return presentation.kind ===
-      WidgetVaultPresentationKind.NoMatchingCredential
-      ? SavedLoginPresentationKind.Empty
-      : SavedLoginPresentationKind.Workflow
+    switch (presentation.kind) {
+      case WidgetVaultPresentationKind.NoMatchingCredential:
+        return SavedLoginPresentationKind.Empty
+      case WidgetVaultPresentationKind.NotConnected:
+      case WidgetVaultPresentationKind.Connected:
+      case WidgetVaultPresentationKind.Locked:
+      case WidgetVaultPresentationKind.CredentialAvailable:
+      case WidgetVaultPresentationKind.Unavailable:
+        return SavedLoginPresentationKind.Workflow
+    }
   }
 }
 

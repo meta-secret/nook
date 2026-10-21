@@ -166,33 +166,26 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/widget-shell',
-  async (importOriginal) => ({
-    authenticationWidgetShell: {
-      ...(
-        await importOriginal<
-          typeof import('../../../../nook-web-extension/src/content/autofill/widget-shell')
-        >()
-      ).authenticationWidgetShell,
-      buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
-      enrollmentCopy: actions.enrollmentCopy,
-      createWidgetShell: (
-        await importOriginal<
-          typeof import('../../../../nook-web-extension/src/content/autofill/widget-shell')
-        >()
-      ).authenticationWidgetShell.createWidgetShell.bind(
-        (
-          await importOriginal<
-            typeof import('../../../../nook-web-extension/src/content/autofill/widget-shell')
-          >()
-        ).authenticationWidgetShell,
-      ),
-      mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) => {
-        shell.body.querySelector('button')?.setAttribute('data-primary', 'true')
-        shell.host.append(shell.toolbar, shell.body, shell.collapsedLaunch)
-        document.body.append(shell.host)
+  async (importOriginal) => {
+    const { authenticationWidgetShell: shell } =
+      await importOriginal<
+        typeof import('../../../../nook-web-extension/src/content/autofill/widget-shell')
+      >()
+    return {
+      authenticationWidgetShell: {
+        buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
+        enrollmentCopy: actions.enrollmentCopy,
+        createWidgetShell: shell.createWidgetShell.bind(shell),
+        mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) => {
+          shell.body
+            .querySelector('button')
+            ?.setAttribute('data-primary', 'true')
+          shell.host.append(shell.toolbar, shell.body, shell.collapsedLaunch)
+          document.body.append(shell.host)
+        },
       },
-    },
-  }),
+    }
+  },
 )
 
 vi.mock(
