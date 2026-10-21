@@ -42,12 +42,11 @@ impl PasskeyDetailRead<'_> {
         let parsed = SecretValue::from_yaml_str(SecretType::Passkey, plaintext.as_str());
         plaintext.zeroize_plaintext();
         let mut value = parsed.map_err(VaultError::from)?;
-        let details = match &value {
-            SecretValue::Passkey(passkey) => passkey.details().map_err(VaultError::from),
-            _ => {
-                value.zeroize_plaintext();
-                return Err(PasskeyDetailReadError::WrongKind);
-            }
+        let details = if let SecretValue::Passkey(passkey) = &value {
+            passkey.details().map_err(VaultError::from)
+        } else {
+            value.zeroize_plaintext();
+            return Err(PasskeyDetailReadError::WrongKind);
         };
         value.zeroize_plaintext();
         Ok(details?)
@@ -77,57 +76,66 @@ impl PasskeyDetailRead<'_> {
             if self.projection.replacement_conflicts.contains_key(id) {
                 return Err(PasskeyDetailReadError::ConflictingReplacements);
             }
+            if record.is_live(self.graph) && live.is_some() {
+                return Err(PasskeyDetailReadError::ConflictingReplacements);
+            }
             if record.is_live(self.graph) {
-                if live.replace(record).is_some() {
-                    return Err(PasskeyDetailReadError::ConflictingReplacements);
-                }
+                live = Some(record);
                 continue;
             }
-            let ProjectedSecretLifecycle::Deleted { by } = &record.lifecycle else {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            };
-            let EventLookup::Recorded(event) = self.graph.get(by) else {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            };
-            if event.body.store_id != *self.store_id {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            }
-            if event
-                .body
-                .operations
-                .iter()
-                .any(|operation| match operation {
-                    VaultOperation::SecretDeleted { secret_id } => secret_id == id,
-                    VaultOperation::SecretConflictResolved {
-                        rejected_secret_ids,
-                        ..
-                    } => rejected_secret_ids.contains(id),
-                    _ => false,
-                })
-            {
-                continue;
-            }
-            if !event.body.operations.iter().any(|operation| {
-                matches!(operation,
-                VaultOperation::SecretReplaced { old_id, .. } if old_id == id)
-            }) {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            }
-            let previous_len = pending.len();
-            pending.extend(
-                self.projection
-                    .secrets
-                    .iter()
-                    .filter_map(|(next_id, next)| match &next.origin {
-                        ProjectedSecretOrigin::Replacement { from } if from == id => Some(next_id),
-                        _ => None,
-                    }),
-            );
-            if pending.len() == previous_len {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            }
+            pending.extend(self.successors(id, record)?);
         }
         live.ok_or(PasskeyDetailReadError::NotFound)
+    }
+
+    fn successors(
+        &self,
+        id: &SecretId,
+        record: &ProjectedSecret,
+    ) -> Result<Vec<&SecretId>, PasskeyDetailReadError> {
+        let ProjectedSecretLifecycle::Deleted { by } = &record.lifecycle else {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        };
+        let EventLookup::Recorded(event) = self.graph.get(by) else {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        };
+        if event.body.store_id != *self.store_id {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        }
+        if event
+            .body
+            .operations
+            .iter()
+            .any(|operation| match operation {
+                VaultOperation::SecretDeleted { secret_id } => secret_id == id,
+                VaultOperation::SecretConflictResolved {
+                    rejected_secret_ids,
+                    ..
+                } => rejected_secret_ids.contains(id),
+                _ => false,
+            })
+        {
+            return Ok(Vec::new());
+        }
+        if !event.body.operations.iter().any(|operation| {
+            matches!(operation,
+            VaultOperation::SecretReplaced { old_id, .. } if old_id == id)
+        }) {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        }
+        let successors = self
+            .projection
+            .secrets
+            .iter()
+            .filter_map(|(next_id, next)| match &next.origin {
+                ProjectedSecretOrigin::Replacement { from } if from == id => Some(next_id),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if successors.is_empty() {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        }
+        Ok(successors)
     }
 }
 
@@ -303,11 +311,10 @@ mod tests {
                 allow_credentials: Vec::new(),
                 user_verification: PasskeyUserVerification::Required,
             };
-            let signed = match &value {
-                SecretValue::Passkey(passkey) => {
-                    request.prepare(std::slice::from_ref(passkey))?.sign()
-                }
-                _ => anyhow::bail!("fixture registration is not a passkey"),
+            let signed = if let SecretValue::Passkey(passkey) = &value {
+                request.prepare(std::slice::from_ref(passkey))?.sign()
+            } else {
+                anyhow::bail!("fixture registration is not a passkey");
             };
             value.zeroize_plaintext();
             self.credential.zeroize_plaintext();
