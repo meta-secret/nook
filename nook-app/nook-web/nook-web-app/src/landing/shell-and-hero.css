@@ -413,8 +413,8 @@ h1 {
 /* Primary: black oxide with a lit top edge, cut like a tanto tip. */
 .button.primary {
   border-color: #101214;
-  background: linear-gradient(180deg, #2a2e33, #101214 55%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  background: linear-gradient(180deg, #23272b, #101214 60%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
   color: white;
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
 }
@@ -435,18 +435,13 @@ h1 {
   background: white;
 }
 
-/* Dark: ground steel, a hard bevel line across a mirror face. */
+/* Dark: satin steel, an even matte face shaded softly from a lit top edge. */
 :root[data-theme='dark'] .button.primary {
-  border-color: #f2f4f5;
-  background: linear-gradient(
-    102deg,
-    #9aa1a9 0,
-    #f4f6f8 34%,
-    #c3c8ce 34.5%,
-    #f4f6f8 78%,
-    #9aa1a9 100%
-  );
-  box-shadow: inset 0 1px 0 white;
+  border-color: #c9cdd2;
+  background: linear-gradient(180deg, #dfe2e6, #c4c8cd);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -1px 0 rgb(0 0 0 / 0.18);
   color: #111417;
 }
 
