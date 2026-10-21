@@ -613,4 +613,16 @@ describe('This site memory', () => {
       reload: ThisSiteReload.None,
     })
   })
+  test('a vault change lists the site again while the current list stays shown', () => {
+    const state = shownState()
+    const request: Parameters<typeof ThisSiteMemory.changed>[0] = {
+      state,
+      change: SidePanelChangeKind.VaultChanged,
+    }
+    expect(ThisSiteMemory.changed(request)).toEqual({
+      memory: ThisSiteMemoryKind.Kept,
+      state,
+      reload: ThisSiteReload.List,
+    })
+  })
 })

@@ -991,6 +991,7 @@
     extensionSetupState: extensionSetupOffer.offer,
     identityHealth,
     onExtensionConnect: () => void extensionSetupOffer.connect(),
+    onExtensionOpenPanel: () => void extensionSetupOffer.openSidePanel(),
     onSettingsReconnect: handleSettingsReconnect,
     onEditorOpenChange: setSecretsAddOpen,
   }}

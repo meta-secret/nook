@@ -18,9 +18,11 @@ import {
   SidePanelConnectKind,
   SidePanelConnectStep,
   SidePanelConnects,
+  SidePanelSide,
   SidePanelTabActivationKind,
   SidePanelTabFollowKind,
   SidePanelTabPlace,
+  SidePanelTabPointer,
   type SidePanelConnect,
 } from '../src/side-panel/side-panel-connect-state'
 import { SidePanelVaultsKind } from '../src/side-panel/side-panel-state'
@@ -587,6 +589,90 @@ describe('side panel connect state', () => {
         },
       }),
     ).toBe(I18N_KEYS.ExtensionConnectTabFailedDelivery)
+  })
+
+  test("points from the panel toward the Nook tab while the next step there is the person's", () => {
+    const at = (next: ExtensionConnectStep): SidePanelConnect =>
+      SidePanelConnects.advance({ connect: inTab, event: step(next) }).connect
+    const choosing = at({ kind: ExtensionConnectStepKind.Choosing })
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: choosing,
+        side: SidePanelSide.Right,
+      }),
+    ).toBe(SidePanelTabPointer.Left)
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: choosing,
+        side: SidePanelSide.Left,
+      }),
+    ).toBe(SidePanelTabPointer.Right)
+    // A panel that cannot say where it is docked points nowhere.
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: choosing,
+        side: SidePanelSide.Unknown,
+      }),
+    ).toBe(SidePanelTabPointer.None)
+
+    const personSteps: ExtensionConnectStep[] = [
+      { kind: ExtensionConnectStepKind.Opened },
+      { kind: ExtensionConnectStepKind.Unlock },
+      { kind: ExtensionConnectStepKind.Consent },
+      {
+        kind: ExtensionConnectStepKind.Failed,
+        reason: ExtensionConnectFailureReason.Grant,
+      },
+    ]
+    for (const next of personSteps) {
+      expect(
+        SidePanelConnects.tabPointer({
+          connect: at(next),
+          side: SidePanelSide.Right,
+        }),
+      ).toBe(SidePanelTabPointer.Left)
+    }
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: inTab,
+        side: SidePanelSide.Right,
+      }),
+    ).toBe(SidePanelTabPointer.Left)
+
+    // Nook works on its own, so there is nothing to point at.
+    for (const kind of [
+      ExtensionConnectStepKind.Creating,
+      ExtensionConnectStepKind.Approved,
+    ] as const) {
+      expect(
+        SidePanelConnects.tabPointer({
+          connect: at({ kind }),
+          side: SidePanelSide.Right,
+        }),
+      ).toBe(SidePanelTabPointer.None)
+    }
+
+    // Another tab covers the Nook tab: Show Nook tab leads instead.
+    const behind = SidePanelConnects.tabActivated({
+      connect: choosing,
+      activeTabId: CONNECT_TAB + 1,
+    })
+    expect(behind).toMatchObject({ place: SidePanelTabPlace.Behind })
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: behind,
+        side: SidePanelSide.Right,
+      }),
+    ).toBe(SidePanelTabPointer.None)
+
+    for (const connect of [
+      { kind: SidePanelConnectKind.Idle },
+      { kind: SidePanelConnectKind.Starting },
+    ] satisfies SidePanelConnect[]) {
+      expect(
+        SidePanelConnects.tabPointer({ connect, side: SidePanelSide.Right }),
+      ).toBe(SidePanelTabPointer.None)
+    }
   })
 
   test('the card leads with no identity and shows under This site while a connect runs', () => {

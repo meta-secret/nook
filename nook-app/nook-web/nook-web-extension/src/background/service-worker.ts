@@ -15,7 +15,10 @@ import { FocusedLoginMessageRoute } from './service-worker/focused-login-message
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
-import { SiteSidePanelOpening } from './service-worker/site-side-panel-opening'
+import {
+  ExternalSidePanelSignal,
+  SiteSidePanelOpening,
+} from './service-worker/site-side-panel-opening'
 import {
   SiteSidePanelOpenKind,
   SiteSidePanelOpenMessage as SiteSidePanelOpenMessageSchema,
@@ -309,6 +312,9 @@ const pilotAttemptRuntimeSchema: RuntimeMessageSchema<PilotAttemptMessage> = {
   decode: PilotAttemptCodec.decodeMessage,
 }
 const siteSidePanelOpening = new SiteSidePanelOpening(chrome.sidePanel)
+const externalSidePanelSignal = new ExternalSidePanelSignal(
+  siteSidePanelOpening,
+)
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(pilotAttemptRuntimeSchema)
     .respondWith(PilotAttempts.handle)
@@ -790,6 +796,10 @@ const externalRuntimeMessageListener: ExternalRuntimeMessageListener = (
   ...listenerArguments: ExternalRuntimeMessageListenerArguments
 ) => {
   const [externalMessage, sender, sendResponse] = listenerArguments
+  // Before the router's first await: the panel opens only during the click.
+  const sidePanelSignal: Parameters<typeof externalSidePanelSignal.handled>[0] =
+    { message: externalMessage, sender, respond: sendResponse }
+  if (externalSidePanelSignal.handled(sidePanelSignal)) return true
   const externalRoutingArgs: ExternalCompanionRoutingRequest = {
     dependencies: externalCompanionRoutingDependencies,
     message: externalMessage,

@@ -18,6 +18,12 @@ import {
   SidePanelWindowKind,
   type SidePanelWindow,
 } from '../src/side-panel/side-panel-runtime'
+import { SidePanelSide } from '../src/side-panel/side-panel-connect-state'
+import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionAnnouncement,
+  VaultRevisionSignal,
+} from '../src/lib/vault-revision-signal'
 import { browserTab } from './companion-launcher-test-support'
 
 type ActivatedListener = Parameters<
@@ -54,6 +60,13 @@ enum FixtureWindowKind {
   Rejected = 'rejected',
 }
 
+/** The side panel layouts the fixture can report. */
+enum FixtureLayoutKind {
+  Left = 'left',
+  Right = 'right',
+  Rejected = 'rejected',
+}
+
 /** The document visibility states the fixture can switch the panel to. */
 enum FixtureVisibility {
   Visible = 'visible',
@@ -74,6 +87,7 @@ class SidePanelBrowserFixture {
   readonly window = new EventTarget()
   reply = FixtureReplyKind.Acknowledged
   currentWindow = FixtureWindowKind.Identified
+  layout = FixtureLayoutKind.Right
 
   private readonly runtime = {
     id: 'nook-extension',
@@ -128,11 +142,16 @@ class SidePanelBrowserFixture {
     getCurrent: () => this.currentWindowReply(),
   }
 
+  private readonly sidePanel = {
+    getLayout: () => this.layoutReply(),
+  }
+
   install(): void {
     const chromeStub = {
       runtime: this.runtime,
       tabs: this.tabs,
       windows: this.windows,
+      sidePanel: this.sidePanel,
     }
     Object.assign(globalThis, {
       chrome: chromeStub,
@@ -190,6 +209,17 @@ class SidePanelBrowserFixture {
     }
   }
 
+  private layoutReply(): Promise<chrome.sidePanel.PanelLayout> {
+    switch (this.layout) {
+      case FixtureLayoutKind.Left:
+        return Promise.resolve({ side: 'left' })
+      case FixtureLayoutKind.Right:
+        return Promise.resolve({ side: 'right' })
+      case FixtureLayoutKind.Rejected:
+        return Promise.reject(new Error('No side panel layout.'))
+    }
+  }
+
   fireActivated(windowId: number): void {
     const info: chrome.tabs.OnActivatedInfo = { tabId: 3, windowId }
     for (const listener of this.activated) listener(info)
@@ -229,6 +259,31 @@ function tabIn(request: TabPlacement): chrome.tabs.Tab {
 }
 
 describe('side panel browser runtime', () => {
+  test('a vault change announced on its own channel re-reads, until released', async () => {
+    const changes: SidePanelChangeKind[] = []
+    const release = new SidePanelRuntime().follow({
+      window: panelWindow,
+      onchange: (change) => changes.push(change),
+      ontabactivated: () => {},
+    })
+    const serviceWorker = new BroadcastChannel(VAULT_REVISION_CHANNEL)
+    const elsewhere = new BroadcastChannel('nook:other-channel')
+    const delivered = (): Promise<void> =>
+      new Promise((resolve) => setTimeout(resolve, 20))
+
+    elsewhere.postMessage(VaultRevisionAnnouncement.Changed)
+    new VaultRevisionSignal(serviceWorker).raise()
+    await delivered()
+    expect(changes).toEqual([SidePanelChangeKind.VaultChanged])
+
+    release()
+    new VaultRevisionSignal(serviceWorker).raise()
+    await delivered()
+    expect(changes).toEqual([SidePanelChangeKind.VaultChanged])
+    serviceWorker.close()
+    elsewhere.close()
+  })
+
   test('follows its own window without runtime broadcasts or tab messages', () => {
     const changes: SidePanelChangeKind[] = []
     const activatedTabs: number[] = []
@@ -378,6 +433,21 @@ describe('side panel browser runtime', () => {
     expect(unanswered._tag).toBe('Failure')
   })
 
+  test('names the edge it is docked on only when the browser does', async () => {
+    const runtime = new SidePanelRuntime()
+    expect(await Effect.runPromise(runtime.panelSide())).toBe(
+      SidePanelSide.Right,
+    )
+    fixture.layout = FixtureLayoutKind.Left
+    expect(await Effect.runPromise(runtime.panelSide())).toBe(
+      SidePanelSide.Left,
+    )
+    fixture.layout = FixtureLayoutKind.Rejected
+    expect(await Effect.runPromise(runtime.panelSide())).toBe(
+      SidePanelSide.Unknown,
+    )
+  })
+
   test('names its window only when the browser does', async () => {
     const runtime = new SidePanelRuntime()
     expect(await Effect.runPromise(runtime.currentWindow())).toEqual(
@@ -403,6 +473,7 @@ class SidePanelSources {
     '../src/popup/popup-app-state.ts',
     '../src/lib/side-panel-site.ts',
     '../src/lib/paired-vaults.ts',
+    '../src/lib/vault-revision-signal.ts',
     '../src/lib/i18n.ts',
     '../src/lib/extension-runtime-retry.ts',
     '../src/lib/nook-wasm.ts',
@@ -416,8 +487,6 @@ class SidePanelSources {
     extensionDeviceProtectionStatus: [ExtensionSessionMessageType.Status],
     extensionSessionDevice: [ExtensionSessionMessageType.Status],
     recoverExtensionPasskey: [ExtensionSessionMessageType.RecoverPasskey],
-    // Asks the browser whether it offers passkey autofill; sends nothing.
-    passkeyAutofillAvailable: [],
     createExtensionPasskey: [
       ExtensionSessionMessageType.BeginPasskeySetup,
       ExtensionSessionMessageType.FinishPasskeySetup,
@@ -485,6 +554,10 @@ describe('side panel sources', () => {
       expect(source).not.toContain('tabs.sendMessage')
       expect(source).not.toContain('chrome.scripting')
       expect(source).not.toContain('chrome.storage')
+      // The one channel the panel opens is the vault revision channel,
+      // which carries only an announcement's kind.
+      for (const opened of source.matchAll(/new BroadcastChannel\(([^)]*)\)/g))
+        expect(opened[1]).toBe('VAULT_REVISION_CHANNEL')
       expect(source).not.toMatch(/\bconsole\./)
       expect(source).not.toContain('window.close')
     }

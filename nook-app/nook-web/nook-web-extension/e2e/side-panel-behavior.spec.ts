@@ -432,11 +432,16 @@ test('Connect another identity opens the one Nook tab and the card follows its s
     message: { kind: ExtensionConnectStepKind.Consent },
   })
   await expect(line).toHaveText('Approve this browser in the Nook tab.')
-  // The Nook tab is in front: there is nothing to show.
+  // The Nook tab is in front: there is nothing to show, and the guide at the
+  // top of the panel points from it toward that page.
   const showTab = card.getByTestId('side-panel-connect-focus-tab')
   await expect(showTab).toHaveCount(0)
+  const pointer = page.getByTestId('side-panel-tab-pointer')
+  await expect(pointer).toHaveAttribute('data-direction', 'left')
+  await expect(pointer).toHaveAccessibleName('Show Nook tab')
   // Another tab covers it: Show Nook tab brings it back, then leaves.
   await panel.activateTab()
+  await expect(pointer).toHaveCount(0)
   await showTab.click()
   await expect
     .poll(() => panel.focusedTabs())
@@ -515,9 +520,18 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   await expect(card.getByTestId('side-panel-connect-step')).toHaveText(
     'In the Nook tab, create your first vault or join with an identity you already use.',
   )
+  // The panel is docked on the right, so the guide points left to the page,
+  // and clicking it brings the Nook tab forward.
+  const guide = page.getByTestId('side-panel-tab-pointer')
+  await expect(guide).toHaveAttribute('data-direction', 'left')
+  await guide.click()
+  await expect
+    .poll(() => panel.focusedTabs())
+    .toEqual([SidePanelStubPage.CONNECT_TAB_ID])
   await panel.pageCloses(port)
   await expect(card.getByTestId('side-panel-connect-start')).toBeVisible()
   await expect(card.getByTestId('side-panel-connect-step')).toHaveCount(0)
+  await expect(guide).toHaveCount(0)
   expect(await panel.pairings()).toEqual([1])
 })
 
@@ -697,6 +711,49 @@ test('an unreadable vault list offers Try again', async ({ page }) => {
   await panel.update({ vaults: SidePanelStubVaults.Paired })
   await page.getByTestId('side-panel-retry-identities').click()
   await expect(page.getByTestId('side-panel-connections')).toBeVisible()
+})
+
+test('a vault change the extension took shows in the panel without a click', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  // The active tab is a page Nook does not fill, so the panel lists
+  // the connected identities.
+  const otherPage: SidePanelSiteListing = {
+    kind: SidePanelSiteListingKind.PageUnavailable,
+  }
+  await panel.open({ ...unlockedScenario, listing: otherPage })
+  const connected = page.getByTestId('side-panel-connected-identity')
+  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  await panel.update({ vaults: SidePanelStubVaults.PairedWithNew })
+  // Nothing re-reads before the service worker announces the change.
+  await expect(connected).toHaveText(['Alice Martin · Personal'])
+  await panel.announceVaultChange()
+  await expect(connected).toHaveText([
+    'Alice Martin · Personal',
+    'Alice Martin · Work',
+  ])
+})
+
+test('Refresh loads the panel again and reads its state afresh', async ({
+  page,
+}) => {
+  await openUnlocked(page)
+  const refresh = page.getByTestId('side-panel-refresh')
+  await expect(refresh).toHaveAccessibleName('Refresh')
+  // A mark on this document is gone once the panel loads again.
+  await page.evaluate(() => {
+    document.documentElement.dataset.beforeRefresh = 'yes'
+  })
+  await refresh.click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.dataset.beforeRefresh),
+    )
+    .toBeUndefined()
+  await expect(page.getByTestId('side-panel-site-host')).toHaveText(
+    'accounts.example.com',
+  )
 })
 
 test('Open vault and Lock failures show a page alert', async ({ page }) => {

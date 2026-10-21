@@ -105,6 +105,47 @@ describe('extension connect route parsing', () => {
   })
 })
 
+describe('connected extension side panel', () => {
+  test('signals the detected extension over the vault channel and reports whether it opened', async () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-123',
+    )
+    const answers = [{ ok: true }, { ok: false, reason: 'side-panel-failed' }]
+    const sendMessage = vi.fn(
+      (
+        extensionId: string,
+        message: unknown,
+        callback: (response: unknown) => void,
+      ) => {
+        expect(extensionId).toBe('extension-123')
+        expect(message).toEqual({ type: 'nook:open-side-panel' })
+        callback(answers.shift())
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      extensionConnectionBrowser.openExtensionSidePanel(),
+    ).resolves.toBe(true)
+    await expect(
+      extensionConnectionBrowser.openExtensionSidePanel(),
+    ).resolves.toBe(false)
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  test('sends nothing when no extension is detected', async () => {
+    document.documentElement.removeAttribute('data-nook-extension-runtime-id')
+    const sendMessage = vi.fn()
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      extensionConnectionBrowser.openExtensionSidePanel(),
+    ).resolves.toBe(false)
+    expect(sendMessage).not.toHaveBeenCalled()
+  })
+})
+
 describe('installed extension launcher', () => {
   test('asks the detected extension to open its authenticated pairing UI', async () => {
     document.documentElement.setAttribute(
