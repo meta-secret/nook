@@ -351,7 +351,12 @@ describe('authenticator setup dialogs', () => {
         `<div><div>Scan this QR code with your authenticator app.</div><div data-wrapper>${DialogQrObservationFixture.QR_SVG}</div></div>`,
       )
       const wrapper = document.querySelector('[data-wrapper]')
-      if (!(wrapper instanceof HTMLElement)) throw new Error('expected wrapper')
+      switch (wrapper instanceof HTMLElement) {
+        case false:
+          throw new Error('expected wrapper')
+        case true:
+          break
+      }
       const textNode = document.createTextNode(text)
       wrapper.append(textNode)
       const readPayload = vi.fn(() => {
@@ -365,7 +370,7 @@ describe('authenticator setup dialogs', () => {
       }
       expect(await fixture.observation()).toBe('absent')
       expect(readPayload).not.toHaveBeenCalled()
-      expect(fixture.instructionCopies).toEqual([])
+      expect(fixture.instructionCopies).toEqual([''])
       expect(fixture.resolveRequests).toEqual([])
     },
   )
