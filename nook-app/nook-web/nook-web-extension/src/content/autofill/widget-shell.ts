@@ -339,7 +339,7 @@ const WIDGET_PANEL_STYLES = `
     }
     .text-button:hover { color: var(--nk-fg); text-decoration-color: var(--nk-fg); }
     button:focus-visible {
-      outline: 2px solid oklch(0.66 0.1 275 / 60%);
+      outline: 2px solid oklch(0.7 0.04 270 / 55%);
       outline-offset: 2px;
     }
   `

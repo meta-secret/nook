@@ -15,7 +15,7 @@
   --line: #dfe1df;
   --control-border: #cdd0d3;
   --section-line: #cfd2d2;
-  --titanium: oklch(0.5 0.13 272);
+  --titanium: oklch(0.5 0.06 270);
 }
 
 :root[data-theme='dark'] {
@@ -27,7 +27,7 @@
   --line: #262a31;
   --control-border: #363b44;
   --section-line: #32373f;
-  --titanium: oklch(0.64 0.11 275);
+  --titanium: oklch(0.66 0.05 270);
 }
 
 * {
@@ -302,7 +302,7 @@ nav a {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: oklch(0.76 0.05 222);
+  background: oklch(0.78 0.025 225);
   box-shadow: 0 0 0 4px oklch(0.76 0.05 222 / 0.12);
 }
 
