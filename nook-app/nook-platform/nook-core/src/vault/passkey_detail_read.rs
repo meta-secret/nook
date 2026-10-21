@@ -109,7 +109,7 @@ mod tests {
                 self.signing.signing_key(),
             )?;
             let bytes = VaultEvent::serialize_event_storage_yaml(&event)?;
-            let imported = VaultEvent::parse_event_storage_bytes(&bytes.to_vec().into())?;
+            let imported = VaultEvent::parse_event_storage_bytes(&bytes)?;
             self.head = imported.id()?;
             self.graph = std::mem::take(&mut self.graph)
                 .insert(EventGraphInsert {
