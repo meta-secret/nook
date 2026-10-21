@@ -1276,20 +1276,24 @@ The gate must:
 - support collapsing to a compact chip (the Nook mark beside the step count,
   nothing overlapping it) and expanding again;
 - preserve current/total progress in the compact state and accessible label;
+  - For the confirmed no-matching-login state below, omit the checklist and
+    step count from the expanded panel, compact chip, and accessible label.
 - support dismissal without blocking the host page;
 - show the requesting hostname, Rust-classified workflow, current step, and
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
-- offer one primary Sign in with Nook action that lists matching logins for the
-  page origin. Reveal one credential after explicit choice and fill a detected
+- offer one primary Sign in with Nook action, except for the confirmed
+  no-matching-login state below. It lists matching logins for the page
+  origin. Reveal one credential after explicit choice and fill a detected
   form. Require explicit submission approval except for the
   [selected Google username advance](#google-two-step-login).
   When locked, open the shared extension authentication tab and keep the host
   page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
   with existing origin/workflow revalidation before any page interaction;
-- keep the Pilot panel to that one action: Open vault lives in the extension
-  side panel, and the close button is how the person takes over the page;
+- keep the Pilot panel to that one action. Open vault lives in the extension
+  side panel, except for the Open Nook replacement below. The close button is
+  how the person takes over the page;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
@@ -1307,6 +1311,20 @@ The gate must:
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
 - open Simple Vault for full search, creation, editing, and settings.
+
+When `ContinueWithNook` has a confirmed `NoMatchingCredential` presentation,
+show the localized title **No saved login for this site**. Explain that the
+person can add a login in Nook. Replace Sign in with one primary **Open Nook**
+action through the existing configured Simple Vault route. A failed open
+remains visible in Pilot. Vault creation and editing stay in Simple Vault.
+
+- **Prohibited:** show Ready to sign in or a 1/3 checklist when no saved login
+  matches. Treat an unknown, loading, locked, or unavailable result as zero
+  matches, or claim that the vault is empty.
+- **Required:** for confirmed zero matches on `ContinueWithNook`, show the
+  site-specific message and Open Nook without progress indicators. Preserve
+  the existing presentation for positive matches, unresolved results, and
+  other workflow actions.
 
 The inline login picker keeps its existing `requestId` out of the iframe URL
 and host-page DOM. Initialization sends it only to the retained child window.
