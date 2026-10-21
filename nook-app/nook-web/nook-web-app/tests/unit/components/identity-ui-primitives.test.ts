@@ -36,7 +36,7 @@ describe('identity UI primitives', () => {
     expect(hotRuns.length).toBeLessThanOrEqual(1)
   })
 
-  test('a crawling cipher block jumps, holds, then crawls a short stretch along one row', () => {
+  test('a crawling cipher block jumps, then crawls a stretch along one row', () => {
     const block = new CipherBlock({ rows: 5, columns: 64 })
     const litRun = () => {
       for (const [row, line] of block.segments.entries()) {

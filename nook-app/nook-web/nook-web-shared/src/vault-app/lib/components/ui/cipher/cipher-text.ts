@@ -35,11 +35,8 @@ function replaceCharacter(line: string): string {
 /** Characters a lit run spans. */
 const HOT_RUN = 6;
 /** Columns a lit run crawls after landing, before it jumps again. */
-export const CRAWL_MIN = 8;
-export const CRAWL_MAX = 24;
-/** Ticks a lit run holds still where it lands, so the jump reads. */
-const LAND_HOLD_MIN = 2;
-const LAND_HOLD_MAX = 4;
+export const CRAWL_MIN = 12;
+export const CRAWL_MAX = 36;
 
 function randomBetween(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
@@ -51,7 +48,6 @@ export class CipherBlock {
   private hotLine = -1;
   private hotStart = 0;
   private crawlLeft = 0;
-  private holdLeft = 0;
 
   constructor(private readonly dimensions: CipherDimensions) {
     this.lines = [ARMOR_HEADER];
@@ -70,18 +66,14 @@ export class CipherBlock {
   }
 
   /** Re-encrypt `changes` characters and move the lit run: it jumps to a
-   * random place, holds there for a beat, crawls a short stretch along its
-   * row one column per tick, then jumps again. */
+   * random place, crawls a stretch along its row one column per tick, then
+   * jumps again. */
   crawl(changes: number): void {
     const bodyRows = this.lines.length - 1;
     if (bodyRows <= 0) return;
     this.reencrypt(changes);
     if (this.hotLine < 1 || this.crawlLeft <= 0) {
       this.jump(bodyRows);
-      return;
-    }
-    if (this.holdLeft > 0) {
-      this.holdLeft -= 1;
       return;
     }
     this.hotStart += 1;
@@ -100,7 +92,6 @@ export class CipherBlock {
         : pick;
     this.hotStart = Math.floor(Math.random() * (room - crawl + 1));
     this.crawlLeft = crawl;
-    this.holdLeft = randomBetween(LAND_HOLD_MIN, LAND_HOLD_MAX);
   }
 
   private reencrypt(changes: number): void {

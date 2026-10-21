@@ -88,12 +88,12 @@ Inner pages use quiet page bars instead.
     {/if}
   </div>
   <!-- age wraps armored output at 64 columns: the BEGIN line and four rows.
-       The lit run jumps, holds for a beat, then crawls a short stretch. -->
+       The lit run jumps, then crawls a stretch along its row. -->
   <CipherField
     class="nk-terminal-armor"
     rows={5}
     columns={64}
     crawl
-    intervalMs={300}
+    intervalMs={250}
   />
 </section>
