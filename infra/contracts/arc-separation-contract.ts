@@ -395,7 +395,7 @@ class ArcSeparationDrainContract {
         guard: templateGuard,
         input: {
           items: currentTemplates.map((item) =>
-            item.metadata.ownerReferences[0].name === pool ? candidate : item,
+            item.metadata.ownerReferences[0]?.name === pool ? candidate : item,
           ),
         },
         expected,

@@ -381,11 +381,10 @@ There is no automatic rollback, job cancellation, controller restart, or cache/P
 mutation. Source review and unchanged ceilings do not establish a speedup;
 compare hosted queue time, placement, and execution time after an approved rollout.
 
-**Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
-old runner Pods to bypass the drain, or claim a speedup from registration alone.
-
-**Required:** use the approved scoped sequence, inspect a failure before any
-further mutation, and report measured hosted results separately from configuration.
+- **Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
+  old runner Pods to bypass the drain, or claim a speedup from registration alone.
+- **Required:** use the approved scoped sequence, inspect a failure before any
+  further mutation, and report measured hosted results separately from configuration.
 
 ### Full platform operations
 
