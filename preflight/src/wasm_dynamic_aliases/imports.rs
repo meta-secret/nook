@@ -1,4 +1,5 @@
-use super::{DynamicWasmAliases, HashMap, HashSet, JavaScriptLiteral, Path, WasmModuleSources};
+use super::{DynamicWasmAliases, HashMap, HashSet, JavaScriptLiteral, WasmModuleSources};
+use crate::wasm_module_sources::inputs::ModuleSource;
 
 impl DynamicWasmAliases<'_> {
     pub fn collect_namespace_import_bindings(self) -> HashMap<String, String> {
@@ -59,7 +60,7 @@ impl DynamicWasmAliases<'_> {
     pub(crate) fn collect_wasm_type_import_bindings(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         module: &str,
         wasm_type_names: &HashSet<String>,
         mut wasm_class_bindings: HashMap<String, String>,

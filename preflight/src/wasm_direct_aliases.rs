@@ -2,7 +2,7 @@ use crate::javascript_literals::JavaScriptLiteralFailure;
 pub struct DirectWasmAliases<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
     pub first_line: usize,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_type_names: &'scan HashSet<String>,
@@ -11,8 +11,8 @@ pub struct DirectWasmAliases<'scan> {
     pub imported_callable_bindings: HashSet<String>,
     pub lines: Vec<usize>,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::wasm_dynamic_aliases::DynamicWasmAliases;
@@ -177,7 +177,7 @@ impl DirectWasmAliases<'_> {
     fn collect_default_callable_import(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         module: &str,
         first_line: usize,
         callable_names: &HashSet<String>,
@@ -236,7 +236,7 @@ impl DirectWasmAliases<'_> {
     fn collect_callable_alias_specifiers(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         module: &str,
         first_line: usize,
         callable_names: &HashSet<String>,
