@@ -158,6 +158,88 @@
   }
 }
 
+/* ---- Tab guide --------------------------------------------------------- */
+
+/* While the next connect step is the person's on the Nook tab beside the
+ * panel, a strip under the header points at that page: chevrons light one
+ * after another toward its edge. Pointing at the strip quickens them. */
+.side-panel .side-panel-tab-pointer {
+  position: sticky;
+  top: 56px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  min-height: 64px;
+  padding: 0 var(--side-panel-gutter);
+  border: 0;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--success) 35%, var(--border));
+  border-radius: 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--success) 22%, var(--card)),
+    var(--card) 75%
+  );
+  color: var(--success);
+  cursor: pointer;
+  --side-panel-pointer-cycle: 1.4s;
+  --side-panel-pointer-travel: -10px;
+}
+
+.side-panel .side-panel-tab-pointer[data-direction='right'] {
+  flex-direction: row-reverse;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklab, var(--success) 22%, var(--card)),
+    var(--card) 75%
+  );
+  --side-panel-pointer-travel: 10px;
+}
+
+.side-panel .side-panel-tab-pointer:hover:not(:disabled) {
+  background-color: var(--card);
+  --side-panel-pointer-cycle: 0.8s;
+}
+
+.side-panel .side-panel-tab-pointer:focus-visible {
+  outline: 2px solid var(--success);
+  outline-offset: -2px;
+}
+
+.side-panel-tab-pointer-chevron {
+  display: inline-flex;
+  margin-inline: -9px;
+  opacity: 0.15;
+  animation: side-panel-pointer-march var(--side-panel-pointer-cycle)
+    ease-in-out infinite;
+  animation-delay: calc(
+    var(--side-panel-pointer-step) * var(--side-panel-pointer-cycle) / 8
+  );
+}
+
+@keyframes side-panel-pointer-march {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: translateX(0);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateX(var(--side-panel-pointer-travel));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-panel-tab-pointer-chevron {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 /* ---- All connections ---------------------------------------------------- */
 
 /* One keytag card per connected identity, its vaults as square rows; the

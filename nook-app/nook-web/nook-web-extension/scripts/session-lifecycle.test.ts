@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionAnnouncement,
+} from '../src/lib/vault-revision-signal'
 
 function browserTab(url: string, id: number | false = false): chrome.tabs.Tab {
   const tab: chrome.tabs.Tab = {
@@ -120,6 +124,31 @@ describe('authentication surface notifications', () => {
       { tabId: 7, type: 'nook:refresh-authentication-surfaces' },
       { tabId: 11, type: 'nook:refresh-authentication-surfaces' },
     ])
+  })
+
+  test('announces the change to the side panel on the vault revision channel, even when a tab refuses', async () => {
+    installAuthenticationSurfaceHost({
+      tabs: [browserTab('https://login.example.test/', 7)],
+      sendMessage: () => Promise.reject(new Error('tab unavailable')),
+    })
+    const panel = new BroadcastChannel(VAULT_REVISION_CHANNEL)
+    const announced = new Promise<string>((resolve) => {
+      panel.addEventListener('message', (event: MessageEvent<string>) =>
+        resolve(event.data),
+      )
+    })
+    const { extensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    const refreshed = extensionSessionLifecycle
+      .refreshAuthenticationSurfaces()
+      .then(
+        () => true,
+        () => false,
+      )
+    expect(await announced).toBe(VaultRevisionAnnouncement.Changed)
+    expect(await refreshed).toBe(false)
+    panel.close()
   })
 
   test('reports refresh failure when every eligible tab rejects delivery', async () => {

@@ -65,6 +65,68 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
+  test('a session activated mid-operation starts the next message only after that operation ends', async () => {
+    // Unlock and passkey setup activate the session from inside their own
+    // operation, then still use the vault manager. A message that arrives
+    // meanwhile (the side panel re-reading status) must wait: two operations
+    // on one manager make wasm-bindgen throw and leave the queue hung.
+    const activated = Promise.withResolvers<void>()
+    const finishActivation = Promise.withResolvers<void>()
+    const events: string[] = []
+    const dispatcher: ExtensionSessionMessageDispatcher<unknown> =
+      new ExtensionSessionMessageDispatcher({
+        handleCompanionIdentityDiscovery: async () =>
+          err(
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
+          ),
+        handleCompanionIdentityHandoff: async () =>
+          err(
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
+          ),
+        decodeProviders,
+        handleMessage: async (message) => {
+          events.push(`start ${message.type}`)
+          if (
+            message.type === ExtensionSessionMessageType.MigrateAuthProviders
+          ) {
+            dispatcher.resetOperations()
+            activated.resolve()
+            await finishActivation.promise
+          }
+          events.push(`end ${message.type}`)
+          return ok({ ok: true })
+        },
+      })
+
+    const activating = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.MigrateAuthProviders,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    })
+    await activated.promise
+    const status = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.Status,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(events).toEqual([
+      `start ${ExtensionSessionMessageType.MigrateAuthProviders}`,
+    ])
+
+    finishActivation.resolve()
+    await activating
+    await status
+    expect(events).toEqual([
+      `start ${ExtensionSessionMessageType.MigrateAuthProviders}`,
+      `end ${ExtensionSessionMessageType.MigrateAuthProviders}`,
+      `start ${ExtensionSessionMessageType.Status}`,
+      `end ${ExtensionSessionMessageType.Status}`,
+    ])
+  })
+
   test('rejects foreign and malformed runtime messages without hanging', async () => {
     type RuntimeListener = Parameters<
       typeof chrome.runtime.onMessage.addListener

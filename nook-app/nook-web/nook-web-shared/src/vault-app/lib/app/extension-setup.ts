@@ -96,6 +96,10 @@ class ExtensionSetupBrowser {
     return extensionConnectionBrowser.openInstalledExtension();
   }
 
+  async openExtensionSidePanel(): Promise<boolean> {
+    return extensionConnectionBrowser.openExtensionSidePanel();
+  }
+
   observeExtensionSetupChanges(refresh: () => Promise<void>): () => void {
     const onVisibilityChange = () => {
       if (this.browser.document.visibilityState === "visible") void refresh();

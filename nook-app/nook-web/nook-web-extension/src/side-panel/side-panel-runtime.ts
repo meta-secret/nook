@@ -6,6 +6,8 @@ import {
 import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
+import { VAULT_REVISION_CHANNEL } from '../lib/vault-revision-signal'
+import { SidePanelSide } from './side-panel-connect-state'
 
 /**
  * The side panel's own use of the browser: its requests to the service
@@ -88,6 +90,9 @@ export enum SidePanelChangeKind {
   PanelFocused = 'panel-focused',
   /** The panel was hidden: drop what it showed about the page. */
   PanelHidden = 'panel-hidden',
+  /** The extension took a vault update or pairing, or a session unlocked:
+   * re-read state and the site's logins, keeping what is shown meanwhile. */
+  VaultChanged = 'vault-changed',
 }
 
 export type SidePanelChangeListener = (change: SidePanelChangeKind) => void
@@ -188,9 +193,18 @@ class SidePanelFollower {
     this.request.onchange(SidePanelChangeKind.PanelFocused)
   }
 
+  /** The vault revision channel carries only the announcement's kind; the
+   * panel reads nothing from it and re-reads its own state instead. */
+  private readonly vaultRevision = new BroadcastChannel(VAULT_REVISION_CHANNEL)
+
+  private readonly announced = (): void => {
+    this.request.onchange(SidePanelChangeKind.VaultChanged)
+  }
+
   start(): SidePanelRelease {
     document.addEventListener('visibilitychange', this.visibility)
     window.addEventListener('focus', this.focused)
+    this.vaultRevision.addEventListener('message', this.announced)
     switch (this.request.window.kind) {
       case SidePanelWindowKind.Known:
         chrome.tabs.onActivated.addListener(this.activated)
@@ -206,6 +220,8 @@ class SidePanelFollower {
   private stop(): void {
     document.removeEventListener('visibilitychange', this.visibility)
     window.removeEventListener('focus', this.focused)
+    this.vaultRevision.removeEventListener('message', this.announced)
+    this.vaultRevision.close()
     chrome.tabs.onActivated.removeListener(this.activated)
     chrome.tabs.onUpdated.removeListener(this.updated)
   }
@@ -360,6 +376,25 @@ export class SidePanelRuntime {
       Effect.mapError(() => new SidePanelRequestFailure()),
       Effect.asVoid,
     )
+  }
+
+  /** The window edge this panel is docked on. */
+  panelSide(): Effect.Effect<SidePanelSide> {
+    return Effect.tryPromise(() => chrome.sidePanel.getLayout()).pipe(
+      Effect.map((layout) => SidePanelRuntime.side(layout.side)),
+      Effect.orElseSucceed(() => SidePanelSide.Unknown),
+    )
+  }
+
+  private static side(
+    side: chrome.sidePanel.PanelLayout['side'],
+  ): SidePanelSide {
+    switch (side) {
+      case 'left':
+        return SidePanelSide.Left
+      case 'right':
+        return SidePanelSide.Right
+    }
   }
 
   private static panelWindow(current: chrome.windows.Window): SidePanelWindow {

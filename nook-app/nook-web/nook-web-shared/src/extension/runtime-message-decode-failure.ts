@@ -3,6 +3,7 @@ import type { Schema } from "effect";
 export enum RuntimeMessageDecodeFailureKind {
   OpenCompanionLauncher = "open-companion-launcher",
   OpenSimpleVault = "open-simple-vault",
+  DismissAuthSidePanel = "dismiss-auth-side-panel",
   BeginExtensionPairing = "begin-extension-pairing",
   ExtensionConnectStep = "extension-connect-step",
   ExtensionEventLogRecord = "extension-event-log-record",

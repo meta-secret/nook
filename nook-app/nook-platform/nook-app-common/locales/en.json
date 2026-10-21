@@ -331,7 +331,8 @@
     "vault_connect": "Use with extension",
     "vault_connect_title": "Let the browser extension fill passwords from this vault. It can serve several vaults.",
     "vault_connected": "Extension",
-    "vault_connected_title": "The browser extension fills passwords from this vault."
+    "vault_connected_title": "The browser extension fills passwords from this vault.",
+    "vault_panel_failed": "Nook could not open its panel. Click the Nook icon in the browser toolbar."
   },
   "vault": {
     "search_placeholder": "Search secrets...",
@@ -1673,10 +1674,7 @@
       "node_next": "Next",
       "setup_title": "Connect your passkey",
       "setup_description": "It becomes the key to this extension.",
-      "passkey_field_label": "Saved passkeys",
-      "passkey_field_placeholder": "Choose your passkey",
-      "passkey_picker_empty": "No list showed up? This browser has no Nook passkey saved yet: create one below.",
-      "passkey_other_device": "On a phone or security key?",
+      "use_passkey": "Use my passkey",
       "create_one": "Create a new passkey",
       "not_found_title": "Didn't find your passkey?",
       "not_found_description": "Create one for this extension, or use a passkey saved on your phone, on a security key or in another password manager.",
@@ -1735,6 +1733,7 @@
       "state_setup": "Not set up",
       "open_vault": "Open vault",
       "lock": "Lock Nook",
+      "refresh": "Refresh",
       "identities": "Identities",
       "connect_identity": "Connect an identity",
       "connect_another": "Connect another identity",
@@ -2070,8 +2069,8 @@
   },
   "workspace": {
     "identities_title": "Identities",
-    "identities_eyebrow": "age · X25519 · local-first",
-    "identities_description": "Each identity has its own keys and its own vaults. Open a vault to unlock its identity. Nothing leaves this browser unencrypted.",
+    "identities_prompt_path": "~/nook",
+    "identities_prompt_command": "age --decrypt identities.age",
     "stats_identities": "Identities",
     "stats_keys": "Keys",
     "stats_vaults": "Vaults",

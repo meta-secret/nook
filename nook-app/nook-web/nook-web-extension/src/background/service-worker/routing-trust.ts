@@ -1,4 +1,13 @@
-import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
+import {
+  SimpleVaultUrlAdmissionKind,
+  simpleVaultRuntime,
+} from '../../lib/simple-vault-runtime'
+
+export enum ExternalSenderTrustDecision {
+  NotReady = 'not-ready',
+  Admitted = 'admitted',
+  Rejected = 'rejected',
+}
 
 /** Trust only messages issued by this installed extension runtime. */
 export function isExtensionRuntimeSender(
@@ -9,6 +18,28 @@ export function isExtensionRuntimeSender(
 
 /** Trust external messages only when they originate from Simple Vault. */
 export class ExternalSenderTrustPolicy {
+  /**
+   * Uses the same canonical Rust URL admission synchronously when companion
+   * WASM has already initialized. User-gesture gated browser APIs must not
+   * wait for WASM startup before they are invoked.
+   */
+  static admitsSynchronouslyIfReady(
+    sender: chrome.runtime.MessageSender,
+  ): ExternalSenderTrustDecision {
+    if (!sender.url) return ExternalSenderTrustDecision.Rejected
+    const admission = simpleVaultRuntime.isRuntimeSimpleVaultUrlIfReady(
+      sender.url,
+    )
+    switch (admission) {
+      case SimpleVaultUrlAdmissionKind.NotReady:
+        return ExternalSenderTrustDecision.NotReady
+      case SimpleVaultUrlAdmissionKind.Admitted:
+        return ExternalSenderTrustDecision.Admitted
+      case SimpleVaultUrlAdmissionKind.Rejected:
+        return ExternalSenderTrustDecision.Rejected
+    }
+  }
+
   static async admits(sender: chrome.runtime.MessageSender): Promise<boolean> {
     if (!sender.url) return false
     return simpleVaultRuntime.isRuntimeSimpleVaultUrl(sender.url)

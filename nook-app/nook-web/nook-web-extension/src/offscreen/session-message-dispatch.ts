@@ -284,9 +284,13 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     private readonly context: SessionMessageDispatchContext<SessionResponse>,
   ) {}
 
+  /** A new session starts: work staged for the previous one expires by its
+   * generation. The queue stays, because the operation activating the
+   * session is still running and still uses the vault manager; a fresh
+   * queue would start the next message alongside it, and wasm-bindgen
+   * throws on that second borrow without ever settling its promise. */
   resetOperations(): void {
     this.operationGeneration += 1
-    this.operations = new SessionOperationQueue()
   }
 
   replaceOperations(error: SessionOperationFailure): void {

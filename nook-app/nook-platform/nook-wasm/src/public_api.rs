@@ -138,16 +138,6 @@ pub use shared_storage_grant::*;
     BrowserPasskeyClient::recovery_options(rp_id)
 }
 
-/// Recovery options for passkey autofill (conditional mediation): the browser
-/// offers only passkeys it holds for this extension, on a field marked
-/// `autocomplete="webauthn"`. Pass an `AbortSignal` to stop the request.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_conditional_recovery_request_options(
-    rp_id: &str,
-) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
-    BrowserPasskeyClient::conditional_recovery_options(rp_id)
-}
-
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(SecretId::generate()?.to_string())

@@ -231,6 +231,48 @@ tasks:
         profile_dir="${NOOK_BRAVE_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/brave-extension-dev}";
         exec bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.sh" launch-local brave "$extension_dir" "$profile_dir";'
 
+  extension:dev:
+    desc: >-
+      Host-native fast loop: build dev WASM, serve https://localhost:5173 with Vite, open Brave with the
+      unpacked localhost extension, and rebuild/reload it on Rust or web source changes.
+    interactive: true
+    env:
+      NOOK_DEV_FRESH_PROFILE: '{{default "" .FRESH}}'
+    deps:
+      - extension:dev:bun
+    vars:
+      DEV_BUN_VERSION: &dev-bun-version
+        sh: jq -r '.packageManager | sub("^bun@"; "")' "{{.EXTENSION_ROOT}}/package.json"
+    preconditions:
+      - sh: command -v wasm-pack >/dev/null && command -v cargo >/dev/null
+        msg: The host loop needs cargo (with the wasm32-unknown-unknown target) and wasm-pack on PATH.
+      - sh: test -x "{{.WEB_ROOT}}/node_modules/.bin/vite"
+        msg: Run `cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile` once to seed host web dependencies.
+      - sh: test -s "{{.LOCAL_HTTPS_DIR}}/localhost.pem"
+        msg: Run `task web:https:setup` once to create and trust the localhost certificate.
+    cmds:
+      # The pinned Bun matches the Docker images; newer bundlers emit different content-script output.
+      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" bun scripts/dev-loop.ts
+
+  extension:dev:fresh:
+    desc: >-
+      Run extension:dev from an empty Brave dev profile, deleting its extension pairing,
+      device key, and localhost vault data first.
+    interactive: true
+    cmds:
+      - task: extension:dev
+        vars: { FRESH: '1' }
+
+  extension:dev:bun:
+    desc: Install the repository-pinned Bun for host-native dev builds under ~/.nook/bun/<version>.
+    internal: true
+    vars:
+      DEV_BUN_VERSION: *dev-bun-version
+    status:
+      - test -x "$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin/bun"
+    cmds:
+      - curl -fsSL https://bun.sh/install | BUN_INSTALL="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}" bash -s -- "bun-v{{.DEV_BUN_VERSION}}"
+
   extension:setup:brave:
     desc: Install a hosted extension in Brave, PIN-protect the device, create a Simple Vault, approve pairing, and leave Brave open (CHANNEL=dev or PR=<number>).
     env:

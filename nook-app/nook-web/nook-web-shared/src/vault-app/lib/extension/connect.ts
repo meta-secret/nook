@@ -96,6 +96,10 @@ import {
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
+  ExtensionSidePanelSignalType,
+  type ExtensionSidePanelSignal,
+} from "$web-shared/extension/side-panel-signal-message";
+import {
   ExtensionConnectFollowKind,
   type ExtensionConnectFollow,
 } from "$web-shared/extension/extension-connect-progress";
@@ -363,6 +367,36 @@ class ExtensionConnectionBrowser {
     const message: OpenCompanionLauncherMessage = {
       type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
       payload: { intent: OpenCompanionLauncherIntent.Pair },
+    };
+    const sendExtensionMessageArgs: Parameters<
+      ExtensionMessageChannel["send"]
+    >[0] = {
+      extensionId: installedExtension.extensionRuntimeId,
+      message,
+      responseWait: {
+        kind: ExtensionMessageResponseWaitKind.Bounded,
+        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+      },
+    };
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
+    if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
+    const decoded = Effect.runSync(
+      Effect.result(companionResponseDecoder.decodeLauncher(delivery.response)),
+    );
+    return decoded._tag === "Success";
+  }
+
+  /** Ask the installed extension to show its side panel in this window.
+   * Answers whether the browser opened it. */
+  async openExtensionSidePanel(): Promise<boolean> {
+    const installedExtension = this.readInstalledExtensionRuntimeId();
+    if (
+      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
+    ) {
+      return false;
+    }
+    const message: ExtensionSidePanelSignal = {
+      type: ExtensionSidePanelSignalType.NookOpenSidePanel,
     };
     const sendExtensionMessageArgs: Parameters<
       ExtensionMessageChannel["send"]
