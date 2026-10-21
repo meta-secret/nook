@@ -137,11 +137,11 @@ describe('Namecheap two-factor code field detection', () => {
       document.body.innerHTML = `<form method="post" action="/login"><input id="entry-code" name="entry-code" type="text" ${initial}><button type="submit">Sign in</button></form>`
       expect(page.codeFieldCount()).toBe(0)
       const field = document.getElementById('entry-code')
-      switch (field instanceof HTMLInputElement) {
-        case false:
-          throw new Error('Expected challenge field')
-        case true:
+      switch (true) {
+        case field instanceof HTMLInputElement:
           break
+        default:
+          throw new Error('Expected challenge field')
       }
       const observer = new MutationObserver(() => {})
       observer.observe(document.body, {

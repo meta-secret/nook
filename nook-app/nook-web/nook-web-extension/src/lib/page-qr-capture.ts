@@ -458,15 +458,15 @@ class PageQrCapture {
       return this.dialogInstructionCandidates(request)
     }
     const scope = media.closest(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR)
-    switch (scope instanceof HTMLElement) {
-      case true:
+    switch (true) {
+      case scope instanceof HTMLElement:
         return this.scopeProseElements(scope).map(
           (element): InstructionCandidate => ({
             kind: InstructionCandidateKind.Prose,
             element,
           }),
         )
-      case false:
+      default:
         return this.adjacentInstructionCandidates(media)
     }
   }
@@ -613,10 +613,10 @@ class PageQrCapture {
     let branch = media
     while (branch.parentElement instanceof HTMLElement) {
       const preceding = branch.previousElementSibling
-      switch (preceding instanceof HTMLElement) {
-        case true:
+      switch (true) {
+        case preceding instanceof HTMLElement:
           return this.adjacentBranchCandidates(preceding)
-        case false:
+        default:
           break
       }
       const parent = branch.parentElement
