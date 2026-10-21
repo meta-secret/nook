@@ -63,7 +63,7 @@ test('treats vendored Meta-Cortex links as external graph dependencies', () => {
   const dependencyLinks: readonly string[] = [
     '../.meta-cortex/AGENTS.md',
     '../.meta-cortex/teams/../AGENTS.md',
-    '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md#control-local-feature-changes',
+    '../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md#team-architecture',
   ];
   const expected: CortexDocumentMapResult = {
     kind: CortexDocumentMapContractKind.Result,
