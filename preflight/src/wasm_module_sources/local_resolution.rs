@@ -1,3 +1,4 @@
+use super::inputs::ModuleSource;
 use super::{
     Component, MODULE_EXTENSIONS, OsStr, Path, PathBuf, WASM_MODULE_PATHS, WasmModuleSources, fs,
 };
@@ -7,7 +8,7 @@ use std::io;
 impl WasmModuleSources<'_> {
     pub(super) fn resolve_module(
         module: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
     ) -> Result<PathBuf, ModuleResolutionFailure> {
         if Path::new(module).is_absolute() {
             return WasmModuleSources::resolve_local_module(Path::new(module));
@@ -51,24 +52,33 @@ mod bounds_tests {
 impl WasmModuleSources<'_> {
     pub(super) fn configured_alias_path(
         module: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
     ) -> Result<PathBuf, ModuleResolutionFailure> {
         let ancestors = WasmModuleSources::configuration_ancestors(source_path);
         for ancestor in &ancestors {
-            if let Ok(path) =
-                WasmModuleSources::tsconfig_alias_path(&ancestor.join("tsconfig.json"), module)
-            {
+            if let Ok(path) = WasmModuleSources::tsconfig_alias_path(
+                &ModuleSource {
+                    path: &ancestor.join("tsconfig.json"),
+                    inputs: source_path.inputs,
+                },
+                module,
+            ) {
                 return WasmModuleSources::resolve_local_module(&path);
             }
         }
         for ancestor in ancestors {
-            let Ok(entries) = fs::read_dir(ancestor) else {
+            let Ok(entries) = source_path.inputs.directory(&ancestor) else {
                 continue;
             };
-            for entry in entries.filter_map(Result::ok) {
-                let config = entry.path().join("tsconfig.json");
-                if let Ok(path) = WasmModuleSources::tsconfig_alias_path(&config, module)
-                    && let Ok(resolved) = WasmModuleSources::resolve_local_module(&path)
+            for entry in entries {
+                let config = entry.join("tsconfig.json");
+                if let Ok(path) = WasmModuleSources::tsconfig_alias_path(
+                    &ModuleSource {
+                        path: &config,
+                        inputs: source_path.inputs,
+                    },
+                    module,
+                ) && let Ok(resolved) = WasmModuleSources::resolve_local_module(&path)
                 {
                     return Ok(resolved);
                 }
@@ -79,7 +89,7 @@ impl WasmModuleSources<'_> {
 }
 
 impl WasmModuleSources<'_> {
-    fn configuration_ancestors(source_path: &Path) -> Vec<PathBuf> {
+    pub(super) fn configuration_ancestors(source_path: &Path) -> Vec<PathBuf> {
         let ancestors = source_path
             .parent()
             .into_iter()
@@ -98,13 +108,10 @@ impl WasmModuleSources<'_> {
 
 impl WasmModuleSources<'_> {
     pub(super) fn tsconfig_alias_path(
-        config: &Path,
+        config: &ModuleSource<'_>,
         module: &str,
     ) -> Result<PathBuf, ModuleResolutionFailure> {
-        let source =
-            fs::read_to_string(config).map_err(ModuleResolutionFailure::ConfigurationRead)?;
-        let value: TypeScriptAliasConfiguration =
-            serde_json::from_str(&source).map_err(ModuleResolutionFailure::ConfigurationSyntax)?;
+        let value = config.inputs.configuration(config.path)?;
         for (alias, targets) in &value.compiler_options.paths {
             let suffix = if let Some(prefix) = alias.strip_suffix('*') {
                 let Some(suffix) = module.strip_prefix(prefix) else {
@@ -194,6 +201,7 @@ impl WasmModuleSources<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::inputs::{ModuleInputs, ModuleSource};
     use std::{
         env, fs, io,
         ops::Deref,
@@ -235,7 +243,10 @@ mod tests {
         assert!(
             (WasmModuleSources {
                 module: "./bridge",
-                source_path: &consumer
+                source_path: &ModuleSource {
+                    path: &consumer,
+                    inputs: &ModuleInputs::default()
+                }
             })
             .is_wasm_callable_source()
         );
@@ -256,7 +267,10 @@ mod tests {
         assert!(WasmModuleSources::is_wasm_callable_export(
             "./bridge",
             "generate_secret_id",
-            &consumer,
+            &ModuleSource {
+                path: &consumer,
+                inputs: &ModuleInputs::default()
+            },
         ));
         fs::remove_dir_all(root)?;
         Ok(())
@@ -275,7 +289,10 @@ mod tests {
         assert!(WasmModuleSources::is_wasm_callable_export(
             "./bridge.cjs",
             "generate_secret_id",
-            &consumer,
+            &ModuleSource {
+                path: &consumer,
+                inputs: &ModuleInputs::default()
+            },
         ));
         fs::remove_dir_all(root)?;
         Ok(())
@@ -294,10 +311,18 @@ mod tests {
         assert!(WasmModuleSources::is_wasm_callable_export(
             "./bridge",
             "generate_secret_id",
-            &consumer,
+            &ModuleSource {
+                path: &consumer,
+                inputs: &ModuleInputs::default()
+            },
         ));
         assert!(!WasmModuleSources::is_wasm_callable_export(
-            "./bridge", "connect", &consumer
+            "./bridge",
+            "connect",
+            &ModuleSource {
+                path: &consumer,
+                inputs: &ModuleInputs::default()
+            }
         ));
         fs::remove_dir_all(root)?;
         Ok(())
@@ -306,7 +331,7 @@ mod tests {
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct TypeScriptAliasConfiguration {
+pub(super) struct TypeScriptAliasConfiguration {
     compiler_options: TypeScriptAliasOptions,
 }
 #[derive(serde::Deserialize)]
@@ -325,4 +350,12 @@ pub(crate) enum ModuleResolutionFailure {
     ModuleNotFound,
     ConfigurationRead(io::Error),
     ConfigurationSyntax(serde_json::Error),
+}
+
+impl TypeScriptAliasConfiguration {
+    pub(super) fn read(path: &Path) -> Result<Self, ModuleResolutionFailure> {
+        let source =
+            fs::read_to_string(path).map_err(ModuleResolutionFailure::ConfigurationRead)?;
+        serde_json::from_str(&source).map_err(ModuleResolutionFailure::ConfigurationSyntax)
+    }
 }

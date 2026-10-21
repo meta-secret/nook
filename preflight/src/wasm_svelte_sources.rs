@@ -1,12 +1,12 @@
 pub struct WasmSvelteSources<'scan> {
     pub source: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_type_names: &'scan HashSet<String>,
     pub wasm_types: &'scan WasmTypeInventory,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::HashSet;
-use std::path::Path;
 
 use crate::rust_wasm_names::RustWasmNames;
 use crate::wasm_inventory::WasmTypeInventory;

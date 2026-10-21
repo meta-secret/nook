@@ -1,9 +1,11 @@
+pub(crate) mod inputs;
 use crate::javascript_literals::JavaScriptLiteralFailure;
+use inputs::ModuleSource;
 mod traversal;
 use traversal::ModuleTraversal;
 pub struct WasmModuleSources<'scan> {
     pub module: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
 }
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -53,7 +55,7 @@ enum ForwardedExport {
 
 impl WasmModuleSources<'_> {
     pub fn is_wasm_callable_source(&self) -> bool {
-        ModuleTraversal::default()
+        ModuleTraversal::new(self.source_path.inputs)
             .any(self.module, self.source_path)
             .1
     }
@@ -63,9 +65,9 @@ impl WasmModuleSources<'_> {
     pub(super) fn is_wasm_callable_export(
         module: &str,
         exported_name: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
     ) -> bool {
-        ModuleTraversal::default()
+        ModuleTraversal::new(source_path.inputs)
             .symbol(module, exported_name, source_path)
             .1
     }
@@ -75,18 +77,22 @@ impl WasmModuleSources<'_> {
     pub(super) fn wasm_callable_export_name(
         module: &str,
         exported_name: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         callable_names: &HashSet<String>,
     ) -> Result<String, ExportResolutionFailure> {
-        ModuleTraversal::default()
+        ModuleTraversal::new(source_path.inputs)
             .callable(module, exported_name, source_path, callable_names)
             .1
     }
 }
 
 impl WasmModuleSources<'_> {
-    pub(super) fn is_wasm_export(module: &str, exported_name: &str, source_path: &Path) -> bool {
-        ModuleTraversal::default()
+    pub(super) fn is_wasm_export(
+        module: &str,
+        exported_name: &str,
+        source_path: &ModuleSource<'_>,
+    ) -> bool {
+        ModuleTraversal::new(source_path.inputs)
             .symbol(module, exported_name, source_path)
             .1
     }
@@ -96,9 +102,9 @@ impl WasmModuleSources<'_> {
     pub(super) fn wasm_namespace_export_source(
         module: &str,
         exported_name: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
     ) -> Result<String, ExportResolutionFailure> {
-        ModuleTraversal::default()
+        ModuleTraversal::new(source_path.inputs)
             .namespace(module, exported_name, source_path)
             .1
     }
@@ -108,10 +114,10 @@ impl WasmModuleSources<'_> {
     pub(super) fn wasm_factory_return_type(
         module: &str,
         exported_name: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         wasm_type_names: &HashSet<String>,
     ) -> Result<String, ExportResolutionFailure> {
-        ModuleTraversal::default()
+        ModuleTraversal::new(source_path.inputs)
             .factory(module, exported_name, source_path, wasm_type_names)
             .1
     }
@@ -119,47 +125,25 @@ impl WasmModuleSources<'_> {
 
 impl WasmModuleSources<'_> {
     fn local_factory_return_type(
-        path: &Path,
+        path: &ModuleSource<'_>,
         exported_name: &str,
         wasm_type_names: &HashSet<String>,
     ) -> Result<String, ExportResolutionFailure> {
-        let source = fs::read_to_string(path).map_err(ExportResolutionFailure::SourceRead)?;
-        let language = if path
-            .extension()
-            .and_then(OsStr::to_str)
-            .is_some_and(|extension| matches!(extension, "tsx" | "jsx"))
-        {
-            tree_sitter_typescript::LANGUAGE_TSX.into()
-        } else {
-            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-        };
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&language)
-            .map_err(ExportResolutionFailure::Language)?;
-        let tree = parser
-            .parse(&source, None)
-            .ok_or(ExportResolutionFailure::ParseUnavailable)?;
-        let mut imported_bindings = HashMap::new();
-        imported_bindings = WasmModuleSources::collect_imported_bindings(
-            tree.root_node(),
-            &source,
-            imported_bindings,
-        );
+        let module = path.inputs.module(path.path)?;
         WasmModuleSources::find_factory_return_type(
-            tree.root_node(),
-            &source,
+            module.tree.root_node(),
+            &module.source,
             path,
             exported_name,
             wasm_type_names,
-            &imported_bindings,
+            &module.imports,
         )
     }
 }
 
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
-fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, exported_name: &str, wasm_type_names: &HashSet<String>, imported_bindings: &HashMap<String, (String, String)>) -> Result<String, ExportResolutionFailure> {
+fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, exported_name: &str, wasm_type_names: &HashSet<String>, imported_bindings: &HashMap<String, (String, String)>) -> Result<String, ExportResolutionFailure> {
     if exported_name == "default"
         && node.kind() == "export_statement"
         && node
@@ -262,7 +246,7 @@ impl WasmModuleSources<'_> {
     fn referenced_wasm_type(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         wasm_type_names: &HashSet<String>,
         imported_bindings: &HashMap<String, (String, String)>,
     ) -> Result<String, ExportResolutionFailure> {
@@ -291,39 +275,9 @@ impl WasmModuleSources<'_> {
 
 impl WasmModuleSources<'_> {
     fn local_forwarded_exports(
-        path: &Path,
+        path: &ModuleSource<'_>,
     ) -> Result<Vec<ForwardedExport>, ExportResolutionFailure> {
-        let source = fs::read_to_string(path).map_err(ExportResolutionFailure::SourceRead)?;
-        let language = if path
-            .extension()
-            .and_then(OsStr::to_str)
-            .is_some_and(|extension| matches!(extension, "tsx" | "jsx"))
-        {
-            tree_sitter_typescript::LANGUAGE_TSX.into()
-        } else {
-            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-        };
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&language)
-            .map_err(ExportResolutionFailure::Language)?;
-        let tree = parser
-            .parse(&source, None)
-            .ok_or(ExportResolutionFailure::ParseUnavailable)?;
-        let mut imported_bindings = HashMap::new();
-        imported_bindings = WasmModuleSources::collect_imported_bindings(
-            tree.root_node(),
-            &source,
-            imported_bindings,
-        );
-        let mut exports = Vec::new();
-        exports = WasmModuleSources::collect_forwarded_exports(
-            tree.root_node(),
-            &source,
-            &imported_bindings,
-            exports,
-        );
-        Ok(exports)
+        Ok(path.inputs.module(path.path)?.exports.clone())
     }
 }
 
@@ -889,7 +843,7 @@ struct FactoryReturnTraversal<'a> {
     node: tree_sitter::Node<'a>,
     value_context: FactoryValueContext,
     source: &'a str,
-    source_path: &'a Path,
+    source_path: &'a ModuleSource<'a>,
     wasm_type_names: &'a HashSet<String>,
     imports: &'a HashMap<String, (String, String)>,
 }
