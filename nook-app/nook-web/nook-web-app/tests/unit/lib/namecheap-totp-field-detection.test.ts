@@ -33,6 +33,8 @@ class NamecheapTwoFactorPage {
   static readonly MASKED_CODE_INPUT = `<input type="password" name="${NamecheapTwoFactorPage.CONTROL}txtCode" placeholder="Enter OTP Code" class="gb-form-control">`
   static readonly PLACEHOLDER_CODE_INPUT =
     '<input type="text" name="challenge" placeholder="Enter OTP Code">'
+  static readonly LIVE_CODE_INPUT =
+    '<input type="tel" class="gb-form-control gb-mb-small " autocomplete="off" placeholder="Enter OTP Code" data-ncid="verification-otp">'
 
   render(codeInput: string): void {
     const control = NamecheapTwoFactorPage.CONTROL
@@ -53,6 +55,20 @@ ${codeInput}
 </div></div></div>
 <footer><input type="email" name="email" placeholder="you@yours.com" aria-labelledby="join-newsletter"><span id="join-newsletter">Join our newsletter</span><button type="button">Subscribe</button></footer>
 </form>`
+  }
+
+  renderLiveChallenge(): void {
+    document.body.innerHTML = `<fragment><fragment-app-test><div><form>
+      <div><div><div class="gb-scope twofa"><div class="gb-panel">
+        <header class="gb-panel__header"><h2>Enter OTP Code</h2></header>
+        <div class="gb-panel__body">
+          <label class="gb-d-block gb-mb-1">Open the two-factor authentication app on your device to view your authentication code.</label>
+          ${NamecheapTwoFactorPage.LIVE_CODE_INPUT}
+          <p class="gb-text-base gb-my-2"><a href="/twofa/backup/">Want to use a Backup Code?</a></p>
+          <div><button type="button">Cancel</button><button type="submit">Submit</button></div>
+        </div>
+      </div></div></div></div>
+    </form></div></fragment-app-test></fragment>`
   }
 
   codeFieldCount(): number {
@@ -96,6 +112,15 @@ afterEach(() => {
 })
 
 describe('Namecheap two-factor code field detection', () => {
+  test('offers code fill for the observed unnamed GET form and telephone field', () => {
+    const page = new NamecheapTwoFactorPage()
+    page.renderLiveChallenge()
+    expect(page.passwordFieldCount()).toBe(0)
+    expect(page.codeFieldCount()).toBe(1)
+    expect(page.workflow().kind).toBe(AuthenticationWorkflowKind.TotpChallenge)
+    expect(page.workflow().action).toBe(AuthenticationWorkflowAction.FillTotp)
+  })
+
   test.each([
     { initial: 'maxlength="6"', attribute: 'inputmode', value: 'numeric' },
     { initial: 'inputmode="numeric"', attribute: 'maxlength', value: '6' },
@@ -137,6 +162,10 @@ describe('Namecheap two-factor code field detection', () => {
   )
 
   test.each([
+    {
+      name: 'live unnamed telephone input with autocomplete off and placeholder only',
+      codeInput: NamecheapTwoFactorPage.LIVE_CODE_INPUT,
+    },
     {
       name: 'plain text input with the reported placeholder on initial load',
       codeInput: NamecheapTwoFactorPage.PLACEHOLDER_CODE_INPUT,
