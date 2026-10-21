@@ -635,7 +635,14 @@ test('shows no matching credentials as a distinct Pilot state', async ({
 
   const widget = page.locator('#nook-auth-widget')
   const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
-  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(widget.getByText('No saved login for this site')).toBeVisible()
+  const openNookButton: { name: string; exact: boolean } = {
+    name: 'Open Nook',
+    exact: true,
+  }
+  await expect(widget.getByRole('button', openNookButton)).toBeVisible()
+  await expect(widget.locator('.pilot-checklist')).toHaveCount(0)
+  await expect(widget.locator('.step-label')).toHaveText('Nook Pilot')
   await expect(vaultStatus).toHaveAttribute(
     'data-state',
     'no-matching-credential',
