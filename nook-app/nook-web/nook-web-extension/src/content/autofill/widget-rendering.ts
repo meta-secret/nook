@@ -1,6 +1,9 @@
 import { LoginChecklistMountKind } from './state'
 import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import { LoginChecklistProgress } from './login-checklist-progress'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -52,10 +55,13 @@ import type { PilotVaultConnection } from './workflow-ui'
 
 import { WorkflowCopy, workflowUi } from './workflow-ui'
 import {
+  SavedLoginPresentation,
+  SavedLoginPresentationKind,
   WidgetVaultPresentationKind,
   WidgetVaultPresentationProjection,
 } from './widget-presentation-state'
 import { SiteSidePanel } from './site-side-panel'
+import { PilotVaultOpening } from './pilot-vault-opening'
 import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
 type RenderEnrollmentWidgetArgs = {
@@ -76,6 +82,12 @@ type RenderWidgetArgs = {
   savedLoginActionAvailable: boolean
 }
 
+type MountLoginChecklistArgs = ConstructorParameters<
+  typeof LoginChecklistProgress
+>[0] & {
+  readonly presentation: SavedLoginPresentationKind
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 type AuthenticationWidgetRendererContext = {
   readonly widgetState: typeof widgetState
@@ -83,6 +95,23 @@ type AuthenticationWidgetRendererContext = {
 }
 class AuthenticationWidgetRenderer {
   constructor(private readonly ui: AuthenticationWidgetRendererContext) {}
+
+  private async mountLoginChecklist(
+    request: MountLoginChecklistArgs,
+  ): Promise<void> {
+    switch (request.presentation) {
+      case SavedLoginPresentationKind.Empty:
+        return
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
+    const checklist = new LoginChecklistProgress(request)
+    this.ui.widgetState.loginChecklist = {
+      kind: LoginChecklistMountKind.Mounted,
+      progress: checklist,
+    }
+    await checklist.initialize()
+  }
 
   renderEnrollmentWidget({
     authenticatorSetupSnapshot,
@@ -128,6 +157,7 @@ class AuthenticationWidgetRenderer {
       copy: authenticationWidgetShell.enrollmentCopy(hints),
       vaultPresentation,
       savedLoginAction: false,
+      savedLoginPresentation: SavedLoginPresentationKind.Workflow,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -245,6 +275,21 @@ class AuthenticationWidgetRenderer {
     const enrollmentAction =
       snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
       snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+    let savedLoginPresentation = SavedLoginPresentationKind.Workflow
+    switch (snapshot.action) {
+      case AuthenticationWorkflowAction.ContinueWithNook:
+        savedLoginPresentation =
+          SavedLoginPresentation.forVault(vaultPresentation)
+        break
+      case AuthenticationWorkflowAction.FillTotp:
+      case AuthenticationWorkflowAction.EnrollAuthenticator:
+      case AuthenticationWorkflowAction.SaveBackupCodes:
+      case AuthenticationWorkflowAction.GeneratePassword:
+      case AuthenticationWorkflowAction.UsePasskey:
+      case AuthenticationWorkflowAction.CreatePasskey:
+      case AuthenticationWorkflowAction.TakeOver:
+        break
+    }
     const nookTypedArgs0_3: Parameters<
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
@@ -256,6 +301,7 @@ class AuthenticationWidgetRenderer {
       vaultPresentation,
       savedLoginAction:
         snapshot.action === AuthenticationWorkflowAction.ContinueWithNook,
+      savedLoginPresentation,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -273,7 +319,7 @@ class AuthenticationWidgetRenderer {
     const unlocksFirst =
       vaultPresentation.kind === WidgetVaultPresentationKind.Locked &&
       snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
-    const continueMessageKey = unlocksFirst
+    let continueMessageKey: BrowserMessageKey = unlocksFirst
       ? BROWSER_MESSAGE_KEYS.WidgetUnlock
       : snapshot.action === AuthenticationWorkflowAction.FillTotp
         ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
@@ -290,6 +336,13 @@ class AuthenticationWidgetRenderer {
                   : canContinueWithNook
                     ? BROWSER_MESSAGE_KEYS.WidgetContinue
                     : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+    switch (savedLoginPresentation) {
+      case SavedLoginPresentationKind.Empty:
+        continueMessageKey = BROWSER_MESSAGE_KEYS.WidgetOpenNook
+        break
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
     continueButton.setAttribute(
       'aria-label',
       workflowUi.translatedMessage(continueMessageKey),
@@ -299,6 +352,20 @@ class AuthenticationWidgetRenderer {
 
     const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
+      switch (savedLoginPresentation) {
+        case SavedLoginPresentationKind.Empty: {
+          const openingSurface: ConstructorParameters<
+            typeof PilotVaultOpening
+          >[0] = {
+            button: continueButton,
+            description,
+          }
+          new PilotVaultOpening(openingSurface).activate()
+          return
+        }
+        case SavedLoginPresentationKind.Workflow:
+          break
+      }
       if (unlocksFirst) {
         SiteSidePanel.open()
         return
@@ -461,19 +528,13 @@ class AuthenticationWidgetRenderer {
       case AuthenticationWorkflowKind.Login:
         switch (snapshot.action) {
           case AuthenticationWorkflowAction.ContinueWithNook: {
-            const mount: ConstructorParameters<
-              typeof LoginChecklistProgress
-            >[0] = {
+            const mount: MountLoginChecklistArgs = {
               surface: { body, title, description },
               control: continueButton,
               workflow,
+              presentation: savedLoginPresentation,
             }
-            const checklist = new LoginChecklistProgress(mount)
-            this.ui.widgetState.loginChecklist = {
-              kind: LoginChecklistMountKind.Mounted,
-              progress: checklist,
-            }
-            await checklist.initialize()
+            await this.mountLoginChecklist(mount)
             break
           }
           case AuthenticationWorkflowAction.GeneratePassword:

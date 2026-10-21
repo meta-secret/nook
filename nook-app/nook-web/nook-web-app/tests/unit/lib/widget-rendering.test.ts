@@ -20,6 +20,9 @@ const actions = vi.hoisted(() => ({
   revalidateEnrollment:
     vi.fn<(request: RevalidatedEnrollmentRequest) => void>(),
   startQrEnrollment: vi.fn<() => void>(),
+  initializeChecklist: vi.fn<() => void>(),
+  openSidePanel: vi.fn<() => void>(),
+  sendMessage: vi.fn<() => Promise<WidgetOpeningAcknowledgement>>(),
   events: [] as string[],
 }))
 
@@ -58,9 +61,45 @@ vi.mock(
 )
 
 type MountTestWidgetShellArgs = {
-  shell: { host: HTMLElement }
+  shell: {
+    host: HTMLElement
+    body: HTMLElement
+    toolbar: HTMLElement
+    collapsedLaunch: HTMLElement
+  }
 }
 type RevalidatedEnrollmentRequest = { start: () => void }
+type WidgetProgressFixture = { currentStep: number; totalSteps: number }
+type WidgetChromeFixture = {
+  runtime: {
+    getURL: (path: string) => string
+    sendMessage: typeof actions.sendMessage
+  }
+}
+type WidgetOpeningAcknowledgement = { readonly ok: boolean }
+type WidgetCopyFixture = {
+  readonly titleKey: string
+  readonly descriptionKey: string
+}
+type WidgetOpenMessageFixture = { readonly type: string }
+enum WidgetOpeningFailureFixture {
+  Rejected = 'rejected',
+  TransportError = 'transport-error',
+}
+type WidgetMatchFixture = Parameters<
+  typeof authenticationWidgetRenderer.renderWidget
+>[0]['loginMatches']
+class SavedLoginWidgetFixture {
+  static readonly failures: ReadonlyArray<WidgetOpeningFailureFixture> = [
+    WidgetOpeningFailureFixture.Rejected,
+    WidgetOpeningFailureFixture.TransportError,
+  ]
+  static readonly existingMatches: ReadonlyArray<WidgetMatchFixture> = [
+    { kind: 'ready', count: 1 },
+    { kind: 'locked' },
+    { kind: 'unavailable' },
+  ]
+}
 
 vi.mock('../../../../nook-web-extension/src/lib/auth-widget-policy', () => ({
   AuthenticationGesture: class AuthenticationGestureFixture {
@@ -133,6 +172,7 @@ vi.mock(
 )
 
 vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
+  LoginChecklistMountKind: { Mounted: 'mounted' },
   AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
   LoginPickerKind: { Closed: 'closed', Open: 'open' },
   WidgetHostKind: { Detached: 'detached', Attached: 'attached' },
@@ -157,31 +197,26 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/widget-shell',
-  () => ({
-    authenticationWidgetShell: {
-      buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
-      enrollmentCopy: actions.enrollmentCopy,
-      createWidgetShell: () => {
-        const host = document.createElement('aside')
-        host.id = 'widget-host'
-        const body = document.createElement('div')
-        const continueButton = document.createElement('button')
-        continueButton.dataset.primary = 'true'
-        body.append(continueButton)
-        host.append(body)
-        return {
-          host,
-          body,
-          step: document.createElement('p'),
-          title: document.createElement('h1'),
-          description: document.createElement('p'),
-          continueButton,
-        }
+  async (importOriginal) => {
+    const { authenticationWidgetShell: shell } =
+      await importOriginal<
+        typeof import('../../../../nook-web-extension/src/content/autofill/widget-shell')
+      >()
+    return {
+      authenticationWidgetShell: {
+        buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
+        enrollmentCopy: actions.enrollmentCopy,
+        createWidgetShell: shell.createWidgetShell.bind(shell),
+        mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) => {
+          shell.body
+            .querySelector('button')
+            ?.setAttribute('data-primary', 'true')
+          shell.host.append(shell.toolbar, shell.body, shell.collapsedLaunch)
+          document.body.append(shell.host)
+        },
       },
-      mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) =>
-        document.body.append(shell.host),
-    },
-  }),
+    }
+  },
 )
 
 vi.mock(
@@ -193,7 +228,27 @@ vi.mock(
     workflowUi: {
       removeWidget: vi.fn(),
       translatedMessage: (key: string) => key,
+      progressLabel: ({ currentStep, totalSteps }: WidgetProgressFixture) =>
+        `widgetPilotLabel · ${currentStep}/${totalSteps}`,
+      vaultConnectionLabel: () => 'vault-status',
     },
+  }),
+)
+
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/login-checklist-progress',
+  () => ({
+    LoginChecklistProgress: class {
+      initialize() {
+        actions.initializeChecklist()
+      }
+    },
+  }),
+)
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/site-side-panel',
+  () => ({
+    SiteSidePanel: { open: () => actions.openSidePanel() },
   }),
 )
 
@@ -299,9 +354,152 @@ const authenticatorSetupSnapshot = {
 beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
+  const enrollmentCopy: WidgetCopyFixture = {
+    titleKey: 'widgetEnrollTitle',
+    descriptionKey: 'widgetEnrollDescription',
+  }
+  actions.enrollmentCopy.mockReturnValue(enrollmentCopy)
+  const opened: WidgetOpeningAcknowledgement = { ok: true }
+  actions.sendMessage.mockResolvedValue(opened)
+  const chromeFixture: WidgetChromeFixture = {
+    runtime: {
+      getURL: (path: string) => path,
+      sendMessage: actions.sendMessage,
+    },
+  }
+  vi.stubGlobal('chrome', chromeFixture)
   actions.events.length = 0
   renderState.pickerState.login = { kind: 'closed' }
   renderState.pickerState.authenticator = { kind: 'closed' }
+})
+
+describe('saved-login empty state', () => {
+  test('offers Open Nook without sign-in progress for confirmed zero matches', async () => {
+    const args: Parameters<
+      typeof authenticationWidgetRenderer.renderWidget
+    >[0] = {
+      authenticatorSetupSnapshot,
+      snapshot: {
+        ...snapshot,
+        action: AuthenticationWorkflowAction.ContinueWithNook,
+      },
+      workflow,
+      facts,
+      factsBindingToken: 'approved-observation',
+      loginMatches: { kind: 'ready', count: 0 },
+      savedLoginActionAvailable: false,
+      vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+    }
+    await authenticationWidgetRenderer.renderWidget(args)
+    expect(document.querySelector('h1')?.textContent).toBe(
+      'widgetLoginNoMatchTitle',
+    )
+    expect(document.querySelector('.description')?.textContent).toBe(
+      'widgetLoginNoMatchDescription',
+    )
+    expect(document.querySelector('.step-label')?.textContent).toBe(
+      'widgetPilotLabel',
+    )
+    expect(document.querySelector('.collapsed-progress')?.textContent).toBe(
+      'widgetPilotLabel',
+    )
+    expect(
+      document.querySelector('.collapsed-launch')?.getAttribute('aria-label'),
+    ).not.toContain('1/3')
+    expect(actions.initializeChecklist).not.toHaveBeenCalled()
+    const button = document.querySelector<HTMLButtonElement>('.primary-button')
+    expect(button?.textContent).toBe('widgetOpenNook')
+    button?.click()
+    const openMessage: WidgetOpenMessageFixture = {
+      type: 'nook:open-simple-vault',
+    }
+    await vi.waitFor(() =>
+      expect(actions.sendMessage).toHaveBeenCalledWith(openMessage),
+    )
+    await vi.waitFor(() => expect(button?.disabled).toBe(false))
+    expect(actions.continueWithNook).not.toHaveBeenCalled()
+  })
+
+  test.each(SavedLoginWidgetFixture.failures)(
+    'keeps failed opening visible: %j',
+    async (response) => {
+      switch (response) {
+        case WidgetOpeningFailureFixture.TransportError:
+          actions.sendMessage.mockRejectedValue(new Error('closed'))
+          break
+        case WidgetOpeningFailureFixture.Rejected: {
+          const rejected: WidgetOpeningAcknowledgement = { ok: false }
+          actions.sendMessage.mockResolvedValue(rejected)
+          break
+        }
+      }
+      const args: Parameters<
+        typeof authenticationWidgetRenderer.renderWidget
+      >[0] = {
+        authenticatorSetupSnapshot,
+        snapshot: {
+          ...snapshot,
+          action: AuthenticationWorkflowAction.ContinueWithNook,
+        },
+        workflow,
+        facts,
+        factsBindingToken: 'approved-observation',
+        loginMatches: { kind: 'ready', count: 0 },
+        savedLoginActionAvailable: false,
+        vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+      }
+      await authenticationWidgetRenderer.renderWidget(args)
+      const button =
+        document.querySelector<HTMLButtonElement>('.primary-button')
+      button?.click()
+      await vi.waitFor(() =>
+        expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+          'widgetOpenNookFailed',
+        ),
+      )
+      expect(button?.disabled).toBe(false)
+      expect(actions.continueWithNook).not.toHaveBeenCalled()
+    },
+  )
+
+  test.each(SavedLoginWidgetFixture.existingMatches)(
+    'preserves sign-in workflow for %j',
+    async (loginMatches) => {
+      const args: Parameters<
+        typeof authenticationWidgetRenderer.renderWidget
+      >[0] = {
+        authenticatorSetupSnapshot,
+        snapshot: {
+          ...snapshot,
+          action: AuthenticationWorkflowAction.ContinueWithNook,
+        },
+        workflow,
+        facts,
+        factsBindingToken: 'approved-observation',
+        loginMatches,
+        savedLoginActionAvailable: false,
+        vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+      }
+      await authenticationWidgetRenderer.renderWidget(args)
+      expect(document.querySelector('.step-label')?.textContent).toContain(
+        '1/3',
+      )
+      switch (loginMatches.kind) {
+        case 'locked':
+          expect(document.querySelector('.primary-button')?.textContent).toBe(
+            'widgetUnlock',
+          )
+          break
+        case 'ready':
+        case 'unavailable':
+          expect(document.querySelector('.primary-button')?.textContent).toBe(
+            'widgetContinue',
+          )
+          break
+      }
+      expect(actions.initializeChecklist).toHaveBeenCalledOnce()
+    },
+  )
 })
 
 describe('passkey workflow saved-login fallback', () => {

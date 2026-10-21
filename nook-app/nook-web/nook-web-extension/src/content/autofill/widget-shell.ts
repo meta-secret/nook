@@ -29,6 +29,7 @@ import {
 
 import type { WorkflowCopy } from './workflow-ui'
 import {
+  SavedLoginPresentationKind,
   WidgetVaultPresentationKind,
   savedLoginDescriptionKey,
   type WidgetVaultPresentation,
@@ -379,6 +380,7 @@ type CreateWidgetShellArgs = {
   copy: WorkflowCopy
   vaultPresentation: WidgetVaultPresentation
   savedLoginAction: boolean
+  savedLoginPresentation: SavedLoginPresentationKind
   currentStep: number
   totalSteps: number
 }
@@ -528,6 +530,7 @@ class AuthenticationWidgetShell {
     copy,
     vaultPresentation,
     savedLoginAction,
+    savedLoginPresentation,
     currentStep,
     totalSteps,
   }: CreateWidgetShellArgs): WidgetShell {
@@ -628,20 +631,15 @@ class AuthenticationWidgetShell {
     siteRow.className = 'site-row'
     siteRow.append(site, vaultStatus)
 
-    // One action: the vault opens from the Nook toolbar button, and the
-    // close button hands the page back to the person.
+    // One primary action; the close button hands the page back to the person.
     body.append(siteRow, title, description, continueButton)
 
     const collapsedLaunch = document.createElement('button')
     collapsedLaunch.type = 'button'
     collapsedLaunch.className = 'collapsed-launch'
-    const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
-      currentStep,
-      totalSteps,
-    }
     collapsedLaunch.setAttribute(
       'aria-label',
-      `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${workflowUi.progressLabel(nookTypedArgs0_2)}`,
+      `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${step.textContent}`,
     )
     collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
 
@@ -654,6 +652,24 @@ class AuthenticationWidgetShell {
     collapsedProgress.className = 'collapsed-progress'
     collapsedProgress.textContent = `${currentStep}/${totalSteps}`
     collapsedLaunch.append(collapsedMark, collapsedProgress)
+
+    switch (savedLoginPresentation) {
+      case SavedLoginPresentationKind.Empty:
+        title.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchTitle,
+        )
+        step.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetPilotLabel,
+        )
+        collapsedProgress.textContent = step.textContent
+        collapsedLaunch.setAttribute(
+          'aria-label',
+          `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${step.textContent}`,
+        )
+        break
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
 
     return {
       host,

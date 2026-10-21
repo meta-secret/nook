@@ -45,6 +45,8 @@ type NookLocaleCatalogShape = {
       checklist_inactive: string
       checklist_label: string
       open_vault: string
+      open_nook: string
+      open_nook_failed: string
       dismiss: string
       collapse: string
       expand: string
@@ -58,6 +60,7 @@ type NookLocaleCatalogShape = {
       login_single_description: string
       login_multiple_description: string
       login_no_match_description: string
+      login_no_match_title: string
       login_unavailable: string
       login_unavailable_description: string
       signup_title: string
@@ -411,6 +414,12 @@ export async function buildChromeLocales({
         widgetOpenVault: {
           message: catalog.extension.widget.message('open_vault', locale),
         },
+        widgetOpenNook: {
+          message: catalog.extension.widget.message('open_nook', locale),
+        },
+        widgetOpenNookFailed: {
+          message: catalog.extension.widget.message('open_nook_failed', locale),
+        },
         widgetDismiss: {
           message: catalog.extension.widget.message('dismiss', locale),
         },
@@ -474,6 +483,12 @@ export async function buildChromeLocales({
         widgetLoginNoMatchDescription: {
           message: catalog.extension.widget.message(
             'login_no_match_description',
+            locale,
+          ),
+        },
+        widgetLoginNoMatchTitle: {
+          message: catalog.extension.widget.message(
+            'login_no_match_title',
             locale,
           ),
         },
