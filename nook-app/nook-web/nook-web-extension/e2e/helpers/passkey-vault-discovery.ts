@@ -22,6 +22,7 @@ export class PasskeyVaultDiscovery {
     }
     await this.captureNativeFailures(true)
     try {
+      await this.waitForAssertedRevision(state.credentialId)
       await test.step(
         'discover the extension-created passkey in the reopened local vault',
         this.discover.bind(this),
@@ -29,6 +30,67 @@ export class PasskeyVaultDiscovery {
     } finally {
       await this.captureNativeFailures(false)
     }
+  }
+
+  private async waitForAssertedRevision(credentialId: string): Promise<void> {
+    let currentRecordId = ''
+    await expect
+      .poll(async () => {
+        currentRecordId = await this.page.evaluate(
+          async (expectedCredentialId) => {
+            const vault = (
+              window as Window & {
+                __nookVault?: Pick<
+                  VaultState,
+                  'admitManager' | 'enqueueStorage' | 'secrets'
+                >
+              }
+            ).__nookVault
+            if (!vault) throw new Error('Vault runtime is not exposed')
+            const result = await vault.enqueueStorage(async () => {
+              const admission = vault.admitManager()
+              if (admission.isErr())
+                throw new Error('Vault manager is unavailable')
+              const selected = vault.secrets.find(
+                (item) => item.typeName === 'passkey',
+              )
+              if (!selected) return admission.map(() => '')
+              const details = await admission.value.passkey_details_js(
+                selected.id,
+              )
+              try {
+                return admission.map(() =>
+                  details.credentialId === expectedCredentialId &&
+                  details.signatureCount === 1
+                    ? details.currentRecordId
+                    : '',
+                )
+              } finally {
+                details.free()
+              }
+            })
+            if (result.isErr()) throw new Error('Passkey revision read failed')
+            return result.value
+          },
+          credentialId,
+        )
+        return currentRecordId !== ''
+      })
+      .toBe(true)
+
+    // A fresh detail read can resolve an old list ID. Wait for the actual
+    // companion import to publish the signed replacement before selecting it.
+    await expect
+      .poll(() =>
+        this.page.evaluate((expectedRecordId) => {
+          const vault = (
+            window as Window & { __nookVault?: Pick<VaultState, 'secrets'> }
+          ).__nookVault
+          if (!vault) throw new Error('Vault runtime is not exposed')
+          return vault.secrets.some((item) => item.id === expectedRecordId)
+        }, currentRecordId),
+      )
+      .toBe(true)
   }
 
   private async discover(): Promise<void> {
