@@ -93,6 +93,7 @@ band, the scrolling page and the status line.
     extensionSetupState,
     identityHealth,
     onExtensionConnect,
+    onExtensionOpenPanel,
     onSettingsReconnect,
     onEditorOpenChange,
   }: {
@@ -101,6 +102,8 @@ band, the scrolling page and the status line.
     /** Day-2 health of the identity, assessed by nook-core. */
     identityHealth: NookIdentityHealth
     onExtensionConnect: () => void
+    /** Show the connected extension's side panel. */
+    onExtensionOpenPanel: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
   } = $props()
@@ -533,6 +536,7 @@ band, the scrolling page and the status line.
     {vault}
     offer={extensionSetupState}
     onConnect={onExtensionConnect}
+    onOpenPanel={onExtensionOpenPanel}
   />
 {/snippet}
 

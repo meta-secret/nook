@@ -734,6 +734,7 @@ pub const EXTENSION_ACTION_OPEN_FAILED: &str = "extension.action.open_failed";
 pub const EXTENSION_ACTION_OPEN_VAULT: &str = "extension.action.open_vault";
 pub const EXTENSION_ACTION_OPENS_NEW_TAB: &str = "extension.action.opens_new_tab";
 pub const EXTENSION_ACTION_OTHER_IDENTITY: &str = "extension.action.other_identity";
+pub const EXTENSION_ACTION_REFRESH: &str = "extension.action.refresh";
 pub const EXTENSION_ACTION_REOPEN_HINT: &str = "extension.action.reopen_hint";
 pub const EXTENSION_ACTION_SITE_EMPTY: &str = "extension.action.site_empty";
 pub const EXTENSION_ACTION_SITE_EMPTY_ANY: &str = "extension.action.site_empty_any";
@@ -879,14 +880,6 @@ pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_create_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_ELSEWHERE: &str =
     "extension.device_setup.passkey_elsewhere";
-pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_LABEL: &str =
-    "extension.device_setup.passkey_field_label";
-pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_PLACEHOLDER: &str =
-    "extension.device_setup.passkey_field_placeholder";
-pub const EXTENSION_DEVICE_SETUP_PASSKEY_OTHER_DEVICE: &str =
-    "extension.device_setup.passkey_other_device";
-pub const EXTENSION_DEVICE_SETUP_PASSKEY_PICKER_EMPTY: &str =
-    "extension.device_setup.passkey_picker_empty";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_unlock_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =
@@ -905,6 +898,7 @@ pub const EXTENSION_DEVICE_SETUP_UNLOCK_DESCRIPTION: &str =
     "extension.device_setup.unlock_description";
 pub const EXTENSION_DEVICE_SETUP_UNLOCK_TITLE: &str = "extension.device_setup.unlock_title";
 pub const EXTENSION_DEVICE_SETUP_USE_EXISTING: &str = "extension.device_setup.use_existing";
+pub const EXTENSION_DEVICE_SETUP_USE_PASSKEY: &str = "extension.device_setup.use_passkey";
 pub const EXTENSION_LOGIN_PICKER_DESCRIPTION: &str = "extension.login_picker.description";
 pub const EXTENSION_LOGIN_PICKER_DESTINATION: &str = "extension.login_picker.destination";
 pub const EXTENSION_LOGIN_PICKER_FAILED: &str = "extension.login_picker.failed";
@@ -1202,6 +1196,7 @@ pub const EXTENSION_SETUP_VAULT_CONNECT_TITLE: &str = "extension_setup.vault_con
 pub const EXTENSION_SETUP_VAULT_CONNECTED: &str = "extension_setup.vault_connected";
 pub const EXTENSION_SETUP_VAULT_CONNECTED_TITLE: &str = "extension_setup.vault_connected_title";
 pub const EXTENSION_SETUP_VAULT_INSTALL_TITLE: &str = "extension_setup.vault_install_title";
+pub const EXTENSION_SETUP_VAULT_PANEL_FAILED: &str = "extension_setup.vault_panel_failed";
 pub const FIRST_RUN_BACK: &str = "first_run.back";
 pub const FIRST_RUN_BACKUP_BODY: &str = "first_run.backup_body";
 pub const FIRST_RUN_BACKUP_CTA: &str = "first_run.backup_cta";
@@ -2498,8 +2493,8 @@ pub const WORKSPACE_FIRST_IDENTITY_STATUS: &str = "workspace.first_identity.stat
 pub const WORKSPACE_FIRST_IDENTITY_TITLE: &str = "workspace.first_identity.title";
 pub const WORKSPACE_FIRST_IDENTITY_VAULT_LABEL: &str = "workspace.first_identity.vault_label";
 pub const WORKSPACE_FIRST_VAULT_SHEET: &str = "workspace.first_vault_sheet";
-pub const WORKSPACE_IDENTITIES_DESCRIPTION: &str = "workspace.identities_description";
-pub const WORKSPACE_IDENTITIES_EYEBROW: &str = "workspace.identities_eyebrow";
+pub const WORKSPACE_IDENTITIES_PROMPT_COMMAND: &str = "workspace.identities_prompt_command";
+pub const WORKSPACE_IDENTITIES_PROMPT_PATH: &str = "workspace.identities_prompt_path";
 pub const WORKSPACE_IDENTITIES_TITLE: &str = "workspace.identities_title";
 pub const WORKSPACE_IDENTITY_FALLBACK: &str = "workspace.identity_fallback";
 pub const WORKSPACE_IDENTITY_VAULT_SETUP: &str = "workspace.identity_vault_setup";

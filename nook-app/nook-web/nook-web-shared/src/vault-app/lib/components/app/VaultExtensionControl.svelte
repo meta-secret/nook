@@ -2,10 +2,16 @@
 The browser extension, seen from a vault: it fills passwords from vaults,
 so it is one of the open vault's own items beside its card. Not installed:
 install it. Installed without this vault: connect this vault too (the
-extension serves several vaults). Connected: a quiet item says so.
+extension serves several vaults). Connected: the item opens the extension's
+side panel beside the vault.
 -->
 <script lang="ts">
-  import { ArrowUpRight, ChevronRight, Puzzle } from "@lucide/svelte";
+  import {
+    ArrowUpRight,
+    ChevronRight,
+    PanelRightOpen,
+    Puzzle,
+  } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     ExtensionSetupOfferKind,
@@ -21,11 +27,14 @@ extension serves several vaults). Connected: a quiet item says so.
     vault,
     offer,
     onConnect,
+    onOpenPanel,
   }: {
     vault: VaultState;
     offer: ExtensionSetupOffer;
     /** Ask the installed extension to connect the open vault. */
     onConnect: () => void;
+    /** Show the connected extension's side panel in this window. */
+    onOpenPanel: () => void;
   } = $props();
 
   let installing = $state(false);
@@ -50,9 +59,11 @@ extension serves several vaults). Connected: a quiet item says so.
 
 {#if offer.kind === ExtensionSetupOfferKind.Visible}
   {#if status === ExtensionSetupStatus.Paired}
-    <div
+    <button
+      type="button"
       class="nk-identity-menu-item border border-border"
       data-testid="vault-extension-connected"
+      onclick={onOpenPanel}
     >
       <span class="nk-vault-icon nk-vault-icon-open" aria-hidden="true">
         <Puzzle class="size-4" />
@@ -65,7 +76,11 @@ extension serves several vaults). Connected: a quiet item says so.
           >{vault.t(I18N_KEYS.ExtensionSetupVaultConnectedTitle)}</span
         >
       </span>
-    </div>
+      <PanelRightOpen
+        class="size-4 flex-none text-muted-foreground opacity-60"
+        aria-hidden="true"
+      />
+    </button>
   {:else}
     {@const notInstalled = status === ExtensionSetupStatus.NotInstalled}
     <button

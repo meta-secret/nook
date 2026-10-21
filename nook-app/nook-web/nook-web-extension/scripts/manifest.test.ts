@@ -162,6 +162,10 @@ describe('extension origin isolation', () => {
     expect(defaultManifest().permissions).toContain(ExtensionPermission.Storage)
   })
 
+  test('requires the browser version that can close the side panel', () => {
+    expect(defaultManifest().min_chrome_version).toBe('141')
+  })
+
   test('exposes the icon, host, and companion WASM to in-page content scripts', () => {
     expect(defaultManifest().web_accessible_resources).toEqual([
       {

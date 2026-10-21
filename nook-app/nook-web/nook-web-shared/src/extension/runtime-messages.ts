@@ -1,3 +1,4 @@
+import type { ExtensionSidePanelSignal } from "./side-panel-signal-message";
 import { err, ok, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
 import {
@@ -697,7 +698,8 @@ export type RuntimeMessage =
   | ExtensionPairedVaultUnlockRequestMessage
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
-  | ExtensionLocalEventLogUpdatedMessage;
+  | ExtensionLocalEventLogUpdatedMessage
+  | ExtensionSidePanelSignal;
 
 export const ExtensionStorageProviderPayload =
   ExtensionStorageProviderPayloadAdmission;
