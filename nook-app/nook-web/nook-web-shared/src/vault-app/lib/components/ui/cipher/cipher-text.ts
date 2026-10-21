@@ -32,6 +32,9 @@ function replaceCharacter(line: string): string {
   return line.slice(0, position) + randomBase64(1) + line.slice(position + 1);
 }
 
+/** Characters a lit run spans. */
+const HOT_RUN = 6;
+
 /** A block of age-armored-looking ciphertext that re-encrypts a few characters per tick. */
 export class CipherBlock {
   private lines: string[];
@@ -49,13 +52,36 @@ export class CipherBlock {
   tick(changes: number): void {
     const bodyRows = this.lines.length - 1;
     if (bodyRows <= 0) return;
+    this.reencrypt(changes);
+    this.hotLine = 1 + Math.floor(Math.random() * bodyRows);
+    this.hotStart = Math.floor(Math.random() * this.dimensions.columns);
+  }
+
+  /** Re-encrypt `changes` characters and move the lit run one column along
+   * its row, starting on another row once it reaches the end: a slow crawl
+   * instead of a flash in a new place every tick. */
+  crawl(changes: number): void {
+    const bodyRows = this.lines.length - 1;
+    if (bodyRows <= 0) return;
+    this.reencrypt(changes);
+    if (
+      this.hotLine < 1 ||
+      this.hotStart + HOT_RUN >= this.dimensions.columns
+    ) {
+      this.hotLine = 1 + Math.floor(Math.random() * bodyRows);
+      this.hotStart = 0;
+      return;
+    }
+    this.hotStart += 1;
+  }
+
+  private reencrypt(changes: number): void {
+    const bodyRows = this.lines.length - 1;
     for (let change = 0; change < changes; change += 1) {
       const row = 1 + Math.floor(Math.random() * bodyRows);
       const line = this.lines[row];
       if (line) this.lines[row] = replaceCharacter(line);
     }
-    this.hotLine = 1 + Math.floor(Math.random() * bodyRows);
-    this.hotStart = Math.floor(Math.random() * this.dimensions.columns);
   }
 
   get segments(): readonly CipherLine[] {
@@ -69,7 +95,7 @@ export class CipherBlock {
   }
 
   private hotSegments(line: string): CipherLine {
-    const end = this.hotStart + 6;
+    const end = this.hotStart + HOT_RUN;
     const hot: CipherSegment = {
       text: line.slice(this.hotStart, end),
       hot: true,

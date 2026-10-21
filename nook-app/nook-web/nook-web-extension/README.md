@@ -193,6 +193,25 @@ task extension:run:chrome
 task extension:run:brave
 ```
 
+For fast local iteration without Docker, run the host-native loop:
+
+```bash
+task extension:dev
+```
+
+It builds dev WASM with the host Rust toolchain, serves the unified web app at
+`https://localhost:5173` through Vite, builds the extension with the pinned Bun
+(installed once under `~/.nook/bun/<version>`), and opens Brave on an isolated
+dev profile with the extension unpacked. Rust changes rebuild WASM and the
+extension; extension or shared web changes rebuild the extension. Each rebuild
+reloads the extension through `chrome://extensions` (keeping Developer mode on in
+that profile) and refreshes open web tabs; Vite reloads the vault page itself.
+Press `r` to rebuild everything, `e` to rebuild the extension, `q` to stop.
+Brave stays open, and rerunning the task reattaches to it. Pairing state persists
+in the profile, so device setup and vault pairing are done once by hand. To
+start over with no extension or vault data, run `task extension:dev:fresh`: it
+closes Brave, deletes the dev profile, and starts the same loop.
+
 `extension:run:*` only installs and launches the browser; it does not create a
 vault or approve pairing. Use `extension:setup:brave` for that bootstrap, or
 `extension:smoke:hosted` for a disposable Chromium CI-style smoke.

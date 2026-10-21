@@ -42,6 +42,7 @@ closes it.
   import SidePanelAllConnections from './SidePanelAllConnections.svelte'
   import SidePanelConnectCard from './SidePanelConnectCard.svelte'
   import SidePanelConnections from './SidePanelConnections.svelte'
+  import SidePanelTabGuide from './SidePanelTabGuide.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
   import {
@@ -67,6 +68,9 @@ closes it.
     SidePanelConnectCardPlacement,
     SidePanelConnectKind,
     SidePanelConnects,
+    SidePanelSide,
+    SidePanelTabPointer,
+    type SidePanelTabPointerRequest,
   } from './side-panel-connect-state'
   import {
     SidePanelConnectFlow,
@@ -117,6 +121,16 @@ closes it.
   let manage = $state<SidePanelManage>({ kind: SidePanelManageKind.Idle })
   let panelWindow = $state<SidePanelWindow>({
     kind: SidePanelWindowKind.Resolving,
+  })
+  /** The window edge the panel is docked on: the tab guide points from it
+   * toward the Nook tab. */
+  let panelSide = $state<SidePanelSide>(SidePanelSide.Unknown)
+  const tabPointer = $derived.by(() => {
+    const request: SidePanelTabPointerRequest = {
+      connect: connectFlow.connect,
+      side: panelSide,
+    }
+    return SidePanelConnects.tabPointer(request)
   })
   /** A new entry into the ceremony views starts the ceremony afresh. */
   let ceremonyEntry = $state(0)
@@ -641,10 +655,15 @@ closes it.
 
   function changed(change: SidePanelChangeKind): void {
     switch (change) {
+      case SidePanelChangeKind.PanelShown:
+        // The person may have moved the panel to the other edge meanwhile.
+        void resolveSide()
+        void refresh()
+        return
       case SidePanelChangeKind.TabActivated:
       case SidePanelChangeKind.TabNavigated:
-      case SidePanelChangeKind.PanelShown:
       case SidePanelChangeKind.PanelFocused:
+      case SidePanelChangeKind.VaultChanged:
         void refresh()
         return
       case SidePanelChangeKind.PanelHidden:
@@ -658,8 +677,21 @@ closes it.
     panelWindow = await Effect.runPromise(runtime.currentWindow())
   }
 
+  /** Refresh: load the panel again, so startup reads the lock state, the
+   * connected identities and vaults, and this site afresh. The unlocked
+   * session lives in the offscreen document and survives; a connect the
+   * panel was following is let go, while its Nook tab stays open. */
+  function reloadPanel(): void {
+    window.location.reload()
+  }
+
+  async function resolveSide(): Promise<void> {
+    panelSide = await Effect.runPromise(runtime.panelSide())
+  }
+
   onMount(() => {
     void resolveWindow()
+    void resolveSide()
     switch (view.kind) {
       case SidePanelViewKind.Unlocked:
         void loadVaults()
@@ -693,9 +725,17 @@ closes it.
     controls={lockControl}
     action={headerAction}
     onopenvault={() => void openVault()}
+    onrefresh={reloadPanel}
     onlock={() => void lock()}
   />
   <main class="side-panel-page">
+    {#if tabPointer !== SidePanelTabPointer.None}
+      <SidePanelTabGuide
+        {i18n}
+        pointer={tabPointer}
+        onfocustab={() => void connectFlow.focusTab()}
+      />
+    {/if}
     {#if alert.kind === SidePanelAlertKind.Shown}
       <p
         class="error-message side-panel-alert"

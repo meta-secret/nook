@@ -108,6 +108,28 @@ export enum SidePanelConnectCardPlacement {
   Another = 'another',
 }
 
+/** The edge of the window the panel is docked on, as the browser reports
+ * it. Unknown when the browser cannot say. */
+export enum SidePanelSide {
+  Left = 'left',
+  Right = 'right',
+  Unknown = 'unknown',
+}
+
+/** Where the panel points the person while the next step is theirs on the
+ * Nook tab beside it: toward the page, or nowhere.
+ * @public Members are used from Svelte templates; Knip cannot trace them. */
+export enum SidePanelTabPointer {
+  None = 'none',
+  Left = 'left',
+  Right = 'right',
+}
+
+export type SidePanelTabPointerRequest = {
+  readonly connect: SidePanelConnect
+  readonly side: SidePanelSide
+}
+
 /** What the panel does once Rust chose the connecting key. */
 export enum SidePanelConnectStep {
   /** The unlocked key joins the identity: open the Nook tab now. */
@@ -327,6 +349,53 @@ export class SidePanelConnects {
         return I18N_KEYS.ExtensionConnectTabFailedGrant
       case ExtensionConnectFailureReason.Delivery:
         return I18N_KEYS.ExtensionConnectTabFailedDelivery
+    }
+  }
+
+  /** Points at the Nook tab while it is the page beside the panel and the
+   * next move is the person's there; not while Nook works on its own, and
+   * not while another tab covers it, where Show Nook tab leads. */
+  static tabPointer(request: SidePanelTabPointerRequest): SidePanelTabPointer {
+    const { connect, side } = request
+    if (connect.kind !== SidePanelConnectKind.InTab) {
+      return SidePanelTabPointer.None
+    }
+    switch (connect.place) {
+      case SidePanelTabPlace.Front:
+        break
+      case SidePanelTabPlace.Behind:
+        return SidePanelTabPointer.None
+    }
+    if (!SidePanelConnects.awaitsPerson(connect.follow)) {
+      return SidePanelTabPointer.None
+    }
+    switch (side) {
+      case SidePanelSide.Left:
+        return SidePanelTabPointer.Right
+      case SidePanelSide.Right:
+        return SidePanelTabPointer.Left
+      case SidePanelSide.Unknown:
+        return SidePanelTabPointer.None
+    }
+  }
+
+  private static awaitsPerson(follow: SidePanelTabFollow): boolean {
+    switch (follow.kind) {
+      case SidePanelTabFollowKind.Waiting:
+        return true
+      case SidePanelTabFollowKind.Following:
+        break
+    }
+    switch (follow.step.kind) {
+      case ExtensionConnectStepKind.Opened:
+      case ExtensionConnectStepKind.Unlock:
+      case ExtensionConnectStepKind.Choosing:
+      case ExtensionConnectStepKind.Consent:
+      case ExtensionConnectStepKind.Failed:
+        return true
+      case ExtensionConnectStepKind.Creating:
+      case ExtensionConnectStepKind.Approved:
+        return false
     }
   }
 

@@ -673,8 +673,8 @@ export async function launchExtensionContext(userDataDir: string) {
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
-    // Automated contexts do not compete for desktop focus; demos remain headed.
-    headless: process.env.NOOK_UI_DEMO !== '1',
+    // Automated contexts, including recorded demos, remain headless.
+    headless: true,
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }
       : {}),

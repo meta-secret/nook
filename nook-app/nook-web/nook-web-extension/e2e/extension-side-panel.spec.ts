@@ -28,10 +28,10 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
 
     const state = panel.getByTestId('side-panel-state')
     await expect(state).toHaveText('Not set up')
-    // Setup offers saved passkeys in its field; creating one is a choice.
+    // Setup starts with an existing passkey; creating one is a choice.
     await expect(
-      panel.getByTestId('device-protection-passkey-field'),
-    ).toBeVisible()
+      panel.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use my passkey')
     await panel.getByTestId('device-protection-create-new-choice').click()
     await panel.getByTestId('device-protection-setup-btn').click()
     // This profile has no passkeys, so the same ceremony offers the PIN.
@@ -75,39 +75,19 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
   }
 })
 
-/** A browser that holds no Nook passkey: autofill suggests nothing and
- * waits until it is stopped, and every picker closes without one. Each
- * request is recorded on the page root, so an immediate (uiMode) request,
- * which quits Chromium browsers on extension pages, would show up. */
+/** A browser that holds no Nook passkey: every picker is closed without one.
+ * Each request's prompt mode is recorded on the page root; only the plain
+ * picker is allowed, since Brave crashes on an immediate request. */
 function installPasskeyLookupRefused(): void {
   if (globalThis.location?.protocol !== 'chrome-extension:') return
   const prompts: string[] = []
-  const record = (prompt: string): void => {
-    prompts.push(prompt)
-    document.documentElement.dataset.nookPasskeyPrompts = prompts.join(' ')
-  }
   Object.defineProperty(navigator.credentials, 'get', {
     configurable: true,
     value: async (options: CredentialRequestOptions) => {
-      const immediate: unknown = Reflect.get(options, 'uiMode')
-      const mediation: unknown = Reflect.get(options, 'mediation')
-      if (typeof immediate === 'string') record(`uiMode-${immediate}`)
-      if (mediation !== 'conditional') {
-        record('picker')
-        throw new DOMException(
-          'No passkey for this request.',
-          'NotAllowedError',
-        )
-      }
-      record('autofill')
-      const signal: unknown = Reflect.get(options, 'signal')
-      return new Promise((...[, reject]) => {
-        if (!(signal instanceof AbortSignal)) return
-        signal.addEventListener('abort', () => {
-          record('stopped')
-          reject(new DOMException('Stopped.', 'AbortError'))
-        })
-      })
+      const mode: unknown = Reflect.get(options, 'uiMode')
+      prompts.push(typeof mode === 'string' ? mode : 'picker')
+      document.documentElement.dataset.nookPasskeyPrompts = prompts.join(' ')
+      throw new DOMException('No passkey for this request.', 'NotAllowedError')
     },
   })
 }
@@ -130,39 +110,17 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     await panel.goto(`chrome-extension://${extensionId}/side-panel/index.html`)
     const prompts = panel.locator('html')
 
-    // First run: the field offers saved passkeys as autofill, with no
-    // dialog, next to creating a new one.
-    const field = panel.getByTestId('device-protection-passkey-field')
-    await expect(field).toHaveAttribute('autocomplete', 'username webauthn')
-    await expect(field).toBeFocused()
-    await expect(prompts).toHaveAttribute(
-      'data-nook-passkey-prompts',
-      'autofill',
-    )
+    // First run: an existing passkey and a new one, side by side.
     await expect(
       panel.getByTestId('device-protection-create-new-choice'),
     ).toHaveText('Create a new passkey')
-
-    // The field is a picker for the browser's saved-passkey list, not a
-    // search: typing changes nothing, and opening it with nothing to list
-    // says what that means.
-    await field.press('a')
-    await expect(field).toHaveValue('')
-    await field.click()
-    await expect(
-      panel.getByTestId('device-protection-passkey-empty'),
-    ).toHaveText(
-      'No list showed up? This browser has no Nook passkey saved yet: create one below.',
-    )
-
-    // A phone or security key needs the picker, which stops autofill first.
     await panel.getByTestId('device-protection-use-existing-choice').click()
+
+    // The picker closed without a passkey: the card says so and offers
+    // what to do next instead of the same button again.
     const title = panel.getByTestId('device-protection-title')
     await expect(title).toHaveText("Didn't find your passkey?")
-    await expect(prompts).toHaveAttribute(
-      'data-nook-passkey-prompts',
-      'autofill stopped picker',
-    )
+    await expect(prompts).toHaveAttribute('data-nook-passkey-prompts', 'picker')
     const create = panel.getByTestId('device-protection-create-new-choice')
     await expect(create).toHaveText('Create passkey')
     await expect(create).toBeFocused()
@@ -175,7 +133,7 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     )
     await expect(prompts).toHaveAttribute(
       'data-nook-passkey-prompts',
-      'autofill stopped picker picker',
+      'picker picker',
     )
     await expect(title).toHaveText("Didn't find your passkey?")
 

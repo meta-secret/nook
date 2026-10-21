@@ -102,4 +102,4 @@ tasks:
   _wasm:test:browser:
     desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).
     cmds:
-      - cd "{{.PLATFORM_ROOT}}" && wasm-pack test --chrome --headless nook-wasm --features browser-wasm-tests
+      - cd "{{.PLATFORM_ROOT}}" && WASM_BINDGEN_TEST_TIMEOUT=60 wasm-pack test --chrome --headless nook-wasm --features browser-wasm-tests

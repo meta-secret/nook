@@ -1,3 +1,7 @@
+import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionAnnouncement,
+} from '../../src/lib/vault-revision-signal'
 import path from 'node:path'
 import { expect, type Page, type Route } from '@playwright/test'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
@@ -431,6 +435,10 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
           incognito: false,
         }),
     },
+    // Docked on the right edge, as Chrome docks it by default.
+    sidePanel: {
+      getLayout: () => Promise.resolve({ side: 'right' }),
+    },
   }
   const descriptor: PropertyDescriptor = { value: chromeStub }
   Object.defineProperty(globalThis, 'chrome', descriptor)
@@ -485,6 +493,21 @@ export class SidePanelStubPage {
       `${SidePanelStubPage.ORIGIN}${SidePanelStubPage.ROUTE_PREFIX}${SIDE_PANEL_PAGE_PATH}`,
     )
     await expect(this.page.getByTestId('side-panel')).toBeVisible()
+  }
+
+  /** The service worker announces that the extension took a vault change. */
+  async announceVaultChange(): Promise<void> {
+    await this.page.evaluate(
+      ({ channel, announcement }) => {
+        const serviceWorker = new BroadcastChannel(channel)
+        serviceWorker.postMessage(announcement)
+        serviceWorker.close()
+      },
+      {
+        channel: VAULT_REVISION_CHANNEL,
+        announcement: VaultRevisionAnnouncement.Changed,
+      },
+    )
   }
 
   async update(change: Partial<SidePanelStubState>): Promise<void> {

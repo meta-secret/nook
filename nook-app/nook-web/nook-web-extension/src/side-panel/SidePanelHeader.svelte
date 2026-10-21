@@ -1,11 +1,11 @@
 <!--
 The side panel's header band, as the companion card's: the Nook mark, the
 Browser companion label and the state tag; Open vault as a quiet link (an
-icon button below 380px) and, once unlocked, Lock. Opening the vault never
-closes the panel.
+icon button below 380px), Refresh, which reads everything again, and, once
+unlocked, Lock. Opening the vault never closes the panel.
 -->
 <script lang="ts">
-  import { ArrowUpRight, FolderOpen, Lock } from '@lucide/svelte'
+  import { ArrowUpRight, FolderOpen, Lock, RotateCw } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
     I18N_KEYS,
@@ -25,6 +25,7 @@ closes the panel.
     readonly controls: SidePanelSessionControls
     readonly action: SidePanelHeaderActionKind
     readonly onopenvault: () => void
+    readonly onrefresh: () => void
     readonly onlock: () => void
   }
 
@@ -34,6 +35,7 @@ closes the panel.
     controls,
     action,
     onopenvault,
+    onrefresh,
     onlock,
   }: SidePanelHeaderProps = $props()
 
@@ -87,6 +89,17 @@ closes the panel.
         class="side-panel-open-vault-arrow"
         aria-hidden="true"
       />
+    </button>
+    <button
+      type="button"
+      class="side-panel-icon-button"
+      aria-label={translatePlain(I18N_KEYS.ExtensionActionRefresh)}
+      title={translatePlain(I18N_KEYS.ExtensionActionRefresh)}
+      aria-disabled={busy}
+      data-testid="side-panel-refresh"
+      onclick={onrefresh}
+    >
+      <RotateCw size={16} aria-hidden="true" />
     </button>
     {#if controls === SidePanelSessionControls.Shown}
       <button

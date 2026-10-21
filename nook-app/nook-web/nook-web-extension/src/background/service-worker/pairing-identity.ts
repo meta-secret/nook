@@ -17,7 +17,6 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
-import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
   admit_companion_handoff_identity_status,
@@ -61,6 +60,7 @@ import type {
 import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
+  CompanionLauncherSourceKind,
   extensionSessionLifecycle,
 } from './session-lifecycle'
 import type { CompanionLauncherSource } from './session-lifecycle'
@@ -748,14 +748,14 @@ class ExtensionPairingIdentity {
       if (statusDelivery.isErr())
         return { ...statusDelivery.error.response, requestId, vaultStoreId }
       const statusResponse = statusDelivery.value
-      if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
-        const launcherRequest: Parameters<
-          typeof extensionSessionLifecycle.openCompanionLauncher
-        >[0] = {
-          intent: OpenCompanionLauncherIntent.Default,
-          source,
+      if (
+        extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse) &&
+        source.kind === CompanionLauncherSourceKind.SourceWindow
+      ) {
+        const sidePanelCloseOptions: chrome.sidePanel.CloseOptions = {
+          windowId: source.windowId,
         }
-        await extensionSessionLifecycle.openCompanionLauncher(launcherRequest)
+        await chrome.sidePanel.close(sidePanelCloseOptions)
       }
       return { ok: true, requestId, vaultStoreId }
     } catch {

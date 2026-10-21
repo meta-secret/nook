@@ -3,10 +3,12 @@ import { NookVaultManager } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 describe('passkey details and history wasm boundary', () => {
-  test('the generated binding rejects a passkey id without an unlocked vault', () => {
+  test('the generated binding rejects a passkey id without an unlocked vault', async () => {
     const manager = new NookVaultManager()
     try {
-      expect(() => manager.passkey_details_js('secret_missing')).toThrow()
+      await expect(
+        manager.passkey_details_js('secret_missing'),
+      ).rejects.toThrow()
     } finally {
       manager.free()
     }

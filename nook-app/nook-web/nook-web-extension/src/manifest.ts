@@ -39,6 +39,7 @@ export enum ExtensionPermission {
 
 export type ExtensionManifest = {
   manifest_version: 3
+  min_chrome_version: '141'
   default_locale: 'en'
   name: string
   short_name: string
@@ -127,6 +128,7 @@ export function createManifest(
     nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)
   const manifest: ExtensionManifest = {
     manifest_version: 3,
+    min_chrome_version: '141',
     default_locale: 'en',
     name:
       args.kind === ExtensionManifestBuildKind.StoreRelease

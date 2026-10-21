@@ -11,10 +11,15 @@
   let {
     rows = 22,
     columns = 184,
+    crawl = false,
+    intervalMs = 140,
     class: className = '',
   }: {
     rows?: number
     columns?: number
+    /** The lit run creeps along its row instead of flashing elsewhere. */
+    crawl?: boolean
+    intervalMs?: number
     class?: string
   } = $props()
 
@@ -23,11 +28,15 @@
   let lines = $state<readonly CipherLine[]>(block.segments)
 
   $effect(() => {
-    const timer = window.setInterval(() => {
-      if (!cipherMotionAllowed()) return
-      block.tick(10)
-      lines = block.segments
-    }, 140)
+    const timer = window.setInterval(
+      () => {
+        if (!cipherMotionAllowed()) return
+        if (crawl) block.crawl(1)
+        else block.tick(10)
+        lines = block.segments
+      },
+      untrack(() => intervalMs),
+    )
     return () => window.clearInterval(timer)
   })
 </script>

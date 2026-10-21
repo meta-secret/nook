@@ -106,8 +106,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       'Your passkey connects to this extension. Your identity comes next.',
     )
     await expect(
-      popupPage.getByTestId('device-protection-passkey-field'),
-    ).toBeVisible()
+      popupPage.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use my passkey')
     await expect(popupPage.getByTestId('device-mode-select')).toBeHidden()
     await expect(
       popupPage.getByTestId('device-protection-create-new-choice'),
@@ -331,8 +331,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       'Not set up',
     )
     await expect(
-      sidePanel.getByTestId('device-protection-passkey-field'),
-    ).toBeVisible()
+      sidePanel.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use my passkey')
     await expect(
       sidePanel.getByTestId('device-protection-create-new-choice'),
     ).toBeVisible()
