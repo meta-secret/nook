@@ -161,22 +161,20 @@
 /* ---- Tab guide --------------------------------------------------------- */
 
 /* While the next connect step is the person's on the Nook tab beside the
- * panel, a strip under the header points at that page: chevrons light one
- * after another toward its edge. Pointing at the strip quickens them. */
+ * panel, a strip right on top of the connect card points at that page:
+ * chevrons light one after another toward its edge. Pointing at the strip
+ * quickens them. */
 .side-panel .side-panel-tab-pointer {
-  position: sticky;
-  top: 56px;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  justify-self: stretch;
   gap: 0;
   width: 100%;
-  min-height: 64px;
-  padding: 0 var(--side-panel-gutter);
-  border: 0;
-  border-bottom: 1px solid
-    color-mix(in oklab, var(--success) 35%, var(--border));
+  min-height: 56px;
+  margin-bottom: -8px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in oklab, var(--success) 35%, var(--border));
   border-radius: 0;
   background: linear-gradient(
     to right,

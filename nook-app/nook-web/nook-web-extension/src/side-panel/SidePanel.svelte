@@ -42,7 +42,6 @@ closes it.
   import SidePanelAllConnections from './SidePanelAllConnections.svelte'
   import SidePanelConnectCard from './SidePanelConnectCard.svelte'
   import SidePanelConnections from './SidePanelConnections.svelte'
-  import SidePanelTabGuide from './SidePanelTabGuide.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
   import {
@@ -69,7 +68,6 @@ closes it.
     SidePanelConnectKind,
     SidePanelConnects,
     SidePanelSide,
-    SidePanelTabPointer,
     type SidePanelTabPointerRequest,
   } from './side-panel-connect-state'
   import {
@@ -740,13 +738,6 @@ closes it.
     onlock={() => void lock()}
   />
   <main class="side-panel-page">
-    {#if tabPointer !== SidePanelTabPointer.None}
-      <SidePanelTabGuide
-        {i18n}
-        pointer={tabPointer}
-        onfocustab={() => void connectFlow.focusTab()}
-      />
-    {/if}
     {#if alert.kind === SidePanelAlertKind.Shown}
       <p
         class="error-message side-panel-alert"
@@ -840,6 +831,7 @@ closes it.
           {i18n}
           identitySync={view.identitySync}
           connect={connectFlow.connect}
+          pointer={tabPointer}
           {cardShown}
           onconnect={() => void connectFlow.start()}
           onfocustab={() => void connectFlow.focusTab()}
@@ -851,6 +843,7 @@ closes it.
             {i18n}
             placement={SidePanelConnectCardPlacement.First}
             connect={connectFlow.connect}
+            pointer={tabPointer}
             identitySync={view.identitySync}
             onconnect={() => void connectFlow.start()}
             onfocustab={() => void connectFlow.focusTab()}

@@ -17,12 +17,15 @@ runs; the sections already name every connected identity and vault.
   import {
     SidePanelConnectCardPlacement,
     type SidePanelConnect,
+    type SidePanelTabPointer,
   } from './side-panel-connect-state'
 
   type SidePanelConnectionsProps = {
     readonly i18n: ExtensionI18n
     readonly identitySync: IdentitySync
     readonly connect: SidePanelConnect
+    /** Where the Nook tab is from the panel, for the card's tab guide. */
+    readonly pointer: SidePanelTabPointer
     /** The connect card is open under the sections. */
     readonly cardShown: boolean
     readonly onconnect: () => void
@@ -34,6 +37,7 @@ runs; the sections already name every connected identity and vault.
     i18n,
     identitySync,
     connect,
+    pointer,
     cardShown,
     onconnect,
     onfocustab,
@@ -54,6 +58,7 @@ runs; the sections already name every connected identity and vault.
       {i18n}
       placement={SidePanelConnectCardPlacement.Another}
       {connect}
+      {pointer}
       {identitySync}
       {onconnect}
       {onfocustab}
