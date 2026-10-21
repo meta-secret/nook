@@ -1,5 +1,7 @@
 //! Public passkey details for a selected immutable record revision.
 
+use std::cmp::Ordering;
+
 use crate::{
     AgeArmoredCiphertext, EventGraph, EventLookup, PasskeyDetails, ProjectedSecret,
     ProjectedSecretLifecycle, ProjectedSecretOrigin, RecordTypeDeclaration, SecretId, SecretType,
@@ -30,6 +32,16 @@ pub struct PasskeyDetailRead<'a> {
     pub crypto: &'a VaultCrypto,
 }
 
+enum PasskeyProjectionAccess {
+    Readable,
+    Unavailable,
+}
+
+enum PasskeyRevisionState {
+    Live,
+    Tombstoned,
+}
+
 impl PasskeyDetailRead<'_> {
     pub fn read(&self) -> Result<PasskeyDetails, PasskeyDetailReadError> {
         let record = self.resolve()?;
@@ -53,9 +65,9 @@ impl PasskeyDetailRead<'_> {
     }
 
     fn resolve(&self) -> Result<&ProjectedSecret, PasskeyDetailReadError> {
-        if self.projection.store_id != *self.store_id || self.projection.cleared {
+        let PasskeyProjectionAccess::Readable = self.projection_access() else {
             return Err(PasskeyDetailReadError::NotFound);
-        }
+        };
         let mut pending = vec![self.selected_id];
         let mut remaining = self.projection.secrets.len();
         let mut live = None;
@@ -65,76 +77,118 @@ impl PasskeyDetailRead<'_> {
                 .secrets
                 .get(id)
                 .ok_or(PasskeyDetailReadError::NotFound)?;
-            if remaining == 0 {
-                return Err(PasskeyDetailReadError::BrokenLineage);
-            }
-            remaining -= 1;
-            if record.record.secret_type != RecordTypeDeclaration::Secret(SecretType::Passkey) {
+            remaining = remaining
+                .checked_sub(1)
+                .ok_or(PasskeyDetailReadError::BrokenLineage)?;
+            let RecordTypeDeclaration::Secret(SecretType::Passkey) = record.record.secret_type
+            else {
                 return Err(PasskeyDetailReadError::WrongKind);
-            }
+            };
             // A simple branch deletion does not resolve a concurrent replacement conflict.
-            if self.projection.replacement_conflicts.contains_key(id) {
+            let None = self.projection.replacement_conflicts.get(id) else {
                 return Err(PasskeyDetailReadError::ConflictingReplacements);
+            };
+            match (self.revision_state(record), live) {
+                (PasskeyRevisionState::Live, Some(_)) => {
+                    return Err(PasskeyDetailReadError::ConflictingReplacements);
+                }
+                (PasskeyRevisionState::Live, None) => live = Some(record),
+                (PasskeyRevisionState::Tombstoned, None | Some(_)) => {
+                    pending.extend(self.successors(record)?);
+                }
             }
-            if record.is_live(self.graph) && live.is_some() {
-                return Err(PasskeyDetailReadError::ConflictingReplacements);
-            }
-            if record.is_live(self.graph) {
-                live = Some(record);
-                continue;
-            }
-            pending.extend(self.successors(id, record)?);
         }
         live.ok_or(PasskeyDetailReadError::NotFound)
     }
 
+    fn projection_access(&self) -> PasskeyProjectionAccess {
+        match (
+            self.projection.store_id.cmp(self.store_id),
+            self.projection.cleared,
+        ) {
+            (Ordering::Equal, false) => PasskeyProjectionAccess::Readable,
+            (Ordering::Equal, true) | (Ordering::Less | Ordering::Greater, false | true) => {
+                PasskeyProjectionAccess::Unavailable
+            }
+        }
+    }
+
+    #[expect(
+        clippy::match_bool,
+        reason = "Convert the projection's native boolean into revision state"
+    )]
+    fn revision_state(&self, record: &ProjectedSecret) -> PasskeyRevisionState {
+        match record.is_live(self.graph) {
+            true => PasskeyRevisionState::Live,
+            false => PasskeyRevisionState::Tombstoned,
+        }
+    }
+
     fn successors(
         &self,
-        id: &SecretId,
         record: &ProjectedSecret,
     ) -> Result<Vec<&SecretId>, PasskeyDetailReadError> {
+        let id = &record.record.key;
         let ProjectedSecretLifecycle::Deleted { by } = &record.lifecycle else {
             return Err(PasskeyDetailReadError::BrokenLineage);
         };
         let EventLookup::Recorded(event) = self.graph.get(by) else {
             return Err(PasskeyDetailReadError::BrokenLineage);
         };
-        if event.body.store_id != *self.store_id {
+        let Ordering::Equal = event.body.store_id.cmp(self.store_id) else {
             return Err(PasskeyDetailReadError::BrokenLineage);
-        }
-        if event
-            .body
-            .operations
-            .iter()
-            .any(|operation| match operation {
-                VaultOperation::SecretDeleted { secret_id } => secret_id == id,
-                VaultOperation::SecretConflictResolved {
-                    rejected_secret_ids,
-                    ..
-                } => rejected_secret_ids.contains(id),
-                _ => false,
-            })
-        {
+        };
+        for operation in &event.body.operations {
+            let VaultOperation::SecretDeleted { secret_id } = operation else {
+                continue;
+            };
+            let Ordering::Equal = secret_id.cmp(id) else {
+                continue;
+            };
             return Ok(Vec::new());
         }
-        if !event.body.operations.iter().any(|operation| {
-            matches!(operation,
-            VaultOperation::SecretReplaced { old_id, .. } if old_id == id)
-        }) {
-            return Err(PasskeyDetailReadError::BrokenLineage);
+        for operation in &event.body.operations {
+            let VaultOperation::SecretConflictResolved {
+                rejected_secret_ids,
+                ..
+            } = operation
+            else {
+                continue;
+            };
+            let Some(_) = rejected_secret_ids.iter().find(|rejected| *rejected == id) else {
+                continue;
+            };
+            return Ok(Vec::new());
         }
+        let replacement = event.body.operations.iter().find_map(|operation| {
+            let VaultOperation::SecretReplaced { old_id, .. } = operation else {
+                return None;
+            };
+            match old_id.cmp(id) {
+                Ordering::Equal => Some(old_id),
+                Ordering::Less | Ordering::Greater => None,
+            }
+        });
+        let Some(_) = replacement else {
+            return Err(PasskeyDetailReadError::BrokenLineage);
+        };
         let successors = self
             .projection
             .secrets
             .iter()
-            .filter_map(|(next_id, next)| match &next.origin {
-                ProjectedSecretOrigin::Replacement { from } if from == id => Some(next_id),
-                _ => None,
+            .filter_map(|(next_id, next)| {
+                let ProjectedSecretOrigin::Replacement { from } = &next.origin else {
+                    return None;
+                };
+                match from.cmp(id) {
+                    Ordering::Equal => Some(next_id),
+                    Ordering::Less | Ordering::Greater => None,
+                }
             })
             .collect::<Vec<_>>();
-        if successors.is_empty() {
-            return Err(PasskeyDetailReadError::BrokenLineage);
-        }
+        successors
+            .first()
+            .ok_or(PasskeyDetailReadError::BrokenLineage)?;
         Ok(successors)
     }
 }
@@ -155,6 +209,11 @@ mod tests {
         credential: PasskeySecret,
         original_id: SecretId,
         current_id: SecretId,
+    }
+
+    struct FixtureEventImport {
+        parents: Vec<EventId>,
+        operation: VaultOperation,
     }
 
     impl PasskeyReadFixture {
@@ -196,19 +255,19 @@ mod tests {
                 original_id: original_id.clone(),
                 current_id: original_id,
             };
-            fixture.import(
-                Vec::new(),
-                VaultOperation::VaultImported {
+            fixture.import(FixtureEventImport {
+                parents: Vec::new(),
+                operation: VaultOperation::VaultImported {
                     source_content_hash: Sha256Hex::from_bytes(b"passkey read genesis"),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
-            )?;
+            })?;
             let payload = fixture.payload(&fixture.original_id)?;
-            fixture.import(
-                vec![fixture.head.clone()],
-                VaultOperation::SecretCreated { secret: payload },
-            )?;
+            fixture.import(FixtureEventImport {
+                parents: vec![fixture.head.clone()],
+                operation: VaultOperation::SecretCreated { secret: payload },
+            })?;
             Ok(fixture)
         }
 
@@ -229,21 +288,17 @@ mod tests {
             ))
         }
 
-        fn import(
-            &mut self,
-            parents: Vec<EventId>,
-            operation: VaultOperation,
-        ) -> anyhow::Result<()> {
+        fn import(&mut self, request: FixtureEventImport) -> anyhow::Result<()> {
             let event = VaultEvent::sign(
                 VaultEventBody {
                     schema_version: VaultEventSchemaVersion::CURRENT,
                     store_id: self.store_id.clone(),
                     actor_id: self.signing.actor_id()?,
                     actor_signing_public_key: self.signing.public_key(),
-                    parents,
+                    parents: request.parents,
                     created_at: IsoTimestamp::parse("2026-10-21T00:00:00Z")?,
                     key_epoch: self.epoch.clone(),
-                    operations: vec![operation],
+                    operations: vec![request.operation],
                 },
                 self.signing.signing_key(),
             )?;
@@ -275,22 +330,22 @@ mod tests {
             self.credential = result.updated_credential;
             let new_id = SecretId::generate()?;
             let payload = self.payload(&new_id)?;
-            self.import(
-                vec![self.head.clone()],
-                VaultOperation::SecretReplaced {
+            self.import(FixtureEventImport {
+                parents: vec![self.head.clone()],
+                operation: VaultOperation::SecretReplaced {
                     old_id: self.current_id.clone(),
                     new_secret: payload,
                 },
-            )?;
+            })?;
             self.current_id = new_id;
             Ok(())
         }
 
         fn delete(&mut self, id: SecretId) -> anyhow::Result<()> {
-            self.import(
-                vec![self.head.clone()],
-                VaultOperation::SecretDeleted { secret_id: id },
-            )
+            self.import(FixtureEventImport {
+                parents: vec![self.head.clone()],
+                operation: VaultOperation::SecretDeleted { secret_id: id },
+            })
         }
 
         fn conflicting_assertion(&mut self, parent: EventId) -> anyhow::Result<SecretId> {
@@ -321,13 +376,13 @@ mod tests {
             self.credential = signed?.updated_credential;
             let branch_id = SecretId::generate()?;
             let payload = self.payload(&branch_id)?;
-            self.import(
-                vec![parent],
-                VaultOperation::SecretReplaced {
+            self.import(FixtureEventImport {
+                parents: vec![parent],
+                operation: VaultOperation::SecretReplaced {
                     old_id: self.original_id.clone(),
                     new_secret: payload,
                 },
-            )?;
+            })?;
             Ok(branch_id)
         }
 
@@ -464,12 +519,12 @@ mod tests {
             fixture.details(&fixture.original_id),
             Err(super::PasskeyDetailReadError::ConflictingReplacements)
         ));
-        fixture.import(
-            vec![first_head, fixture.head.clone()],
-            VaultOperation::SecretDeleted {
+        fixture.import(FixtureEventImport {
+            parents: vec![first_head, fixture.head.clone()],
+            operation: VaultOperation::SecretDeleted {
                 secret_id: branch_id,
             },
-        )?;
+        })?;
         assert!(matches!(
             fixture.details(&fixture.original_id),
             Err(super::PasskeyDetailReadError::ConflictingReplacements)
@@ -484,14 +539,14 @@ mod tests {
         fixture.assert_and_import()?;
         let first_head = fixture.head.clone();
         let branch_id = fixture.conflicting_assertion(parent)?;
-        fixture.import(
-            vec![first_head, fixture.head.clone()],
-            VaultOperation::SecretConflictResolved {
+        fixture.import(FixtureEventImport {
+            parents: vec![first_head, fixture.head.clone()],
+            operation: VaultOperation::SecretConflictResolved {
                 old_id: fixture.original_id.clone(),
                 chosen_secret_id: fixture.current_id.clone(),
                 rejected_secret_ids: vec![branch_id],
             },
-        )?;
+        })?;
         assert_eq!(
             u32::from(fixture.details(&fixture.original_id)?.signature_count),
             1
