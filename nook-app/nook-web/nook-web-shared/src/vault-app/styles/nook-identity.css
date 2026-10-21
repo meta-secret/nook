@@ -319,7 +319,7 @@
     position: absolute;
     inset: 0;
     padding: 0.75rem 1rem;
-    opacity: 0.09;
+    opacity: 0.2;
     mask-image: linear-gradient(
       90deg,
       transparent 0%,
@@ -329,7 +329,7 @@
   }
   @media (width < 40rem) {
     .nk-hero-cipher {
-      opacity: 0.05;
+      opacity: 0.1;
       mask-image: linear-gradient(180deg, transparent 0%, #000 75%);
     }
   }
@@ -519,7 +519,7 @@
     flex: none;
     width: 1.75rem;
     height: 1.75rem;
-    border: 1px solid var(--border);
+    border: 0;
     background: color-mix(in oklch, var(--background) 65%, var(--card));
     box-shadow:
       inset 0 1px 3px var(--pocket-shade),
@@ -542,8 +542,7 @@
     color: var(--success);
   }
   .nk-vault-row-add .nk-vault-icon {
-    border-style: dashed;
-    border-color: var(--input);
+    border: 1px dashed var(--input);
   }
   .nk-lead {
     flex: 1;
@@ -551,11 +550,10 @@
     height: 0;
     align-self: center;
     border-bottom: 1px dotted
-      color-mix(in oklch, var(--foreground) 28%, transparent);
+      color-mix(in oklch, var(--foreground) 16%, transparent);
     transform: translateY(0.25rem);
   }
   .nk-card-actions {
-    position: relative;
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
@@ -614,9 +612,6 @@
   .nk-identity-menu-item:focus-visible {
     background: var(--accent);
     outline: none;
-  }
-  .nk-identity-menu-lead {
-    box-shadow: inset 2px 0 0 var(--success);
   }
   .nk-identity-menu-lead .nk-vault-icon {
     border-color: var(--success);

@@ -95,7 +95,7 @@ a device waits for it.
     <button
       type="button"
       role="menuitem"
-      class="nk-identity-menu-item nk-plate border border-border disabled:cursor-default disabled:opacity-50"
+      class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-50"
       class:nk-identity-menu-lead={index === 0 && !item.disabled}
       data-testid={item.testId}
       disabled={item.disabled}

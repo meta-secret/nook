@@ -1,39 +1,9 @@
-/* Nook material finish, after a blackened tanto blade: ground steel
- * primaries, plates, stepped bands, the maker's lockup and the G10 weave.
+/* Nook material finish, after a blackened tanto blade: steel primaries,
+ * plates, the maker's lockup, stepped bands on the large structure, facets
+ * over large faces and the G10 weave. Elements carry tone rather than lines:
+ * the lines live in the background and the structure, not on every tile.
  * Loaded after nook-identity.css, whose shape vocabulary it finishes. */
 @layer components {
-  /* Stepped rule: a chunky band that steps down at 45 degrees into a
-   * hairline, like the fuller ground into the blade flat. nk-stepline sits on
-   * an element's bottom border, nk-stepline-top on its top border. */
-  .nk-stepline,
-  .nk-stepline-top {
-    position: relative;
-  }
-  .nk-stepline::after,
-  .nk-stepline-top::after,
-  .nk-card-actions::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    left: 0;
-    height: 4px;
-    pointer-events: none;
-    background: linear-gradient(
-      90deg,
-      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
-      var(--border) 0
-    );
-  }
-  .nk-stepline::after {
-    bottom: -1px;
-    clip-path: var(--nk-step-foot);
-  }
-  .nk-stepline-top::after,
-  .nk-card-actions::after {
-    top: -1px;
-    clip-path: var(--nk-step-head);
-  }
-
   /* Maker's lockup: a tracked label run out into a hairline that ends in a
    * small diamond, as engraved beside the mark on a blade. */
   .nk-lockup {
@@ -59,23 +29,30 @@
     order: 2;
     flex: none;
     width: 5px;
-    height: 4px;
+    height: 5px;
     margin-left: 0.25rem;
     border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
     transform: rotate(45deg);
   }
 
-  /* Primary fill: matte black oxide with a soft lit top edge (light
-   * theme); the dark theme's satin steel is defined unlayered at the end of
-   * this file. The tip is cut like a tanto, square again while focused so the
+  /* Primary fill: brushed black oxide with one soft sheen (light theme);
+   * the dark theme's brushed steel is defined unlayered at the end of this
+   * file. The tip is cut like a tanto, square again while focused so the
    * ring shows. */
   .nk-steel {
-    background-image: linear-gradient(
-      180deg,
-      color-mix(in oklch, white 7%, transparent),
-      transparent 60%
-    );
-    box-shadow: inset 0 1px 0 color-mix(in oklch, white 14%, transparent);
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent 22%,
+        color-mix(in oklch, white 9%, transparent) 46%,
+        transparent 70%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, white 8%, transparent),
+        transparent 60%
+      );
+    box-shadow: inset 0 1px 0 color-mix(in oklch, white 16%, transparent);
   }
   /* A go action keeps its pointed edge (nk-go) instead of the tanto tip. */
   .nk-steel:not(.nk-go) {
@@ -85,20 +62,23 @@
     clip-path: none;
   }
   .nk-steel:hover:not(:disabled) {
-    filter: brightness(1.04);
+    filter: brightness(1.05);
   }
 
-  /* Plate: a bordered action tile ground like a blade flat, lit along its
-   * top, its foot cut like a tanto tip; the edge takes titanium on hover. */
+  /* Plate: an action tile set apart by tone, not by a border: a raised
+   * steel face lit along its top, its foot cut like a tanto tip. Hover
+   * lifts the face. */
   .nk-plate {
     position: relative;
+    border-color: transparent;
+    background-color: color-mix(in oklch, var(--card) 50%, var(--secondary));
     background-image: linear-gradient(
       180deg,
-      color-mix(in oklch, var(--card) 95%, var(--steel-hi)),
-      var(--card) 70%
+      color-mix(in oklch, var(--steel-hi) 4%, transparent),
+      transparent 70%
     );
     box-shadow: inset 0 1px 0
-      color-mix(in oklch, var(--steel-hi) 8%, transparent);
+      color-mix(in oklch, var(--steel-hi) 7%, transparent);
     clip-path: polygon(
       0 0,
       100% 0,
@@ -106,59 +86,11 @@
       calc(100% - 10px) 100%,
       0 100%
     );
-    transition: box-shadow 0.15s;
-  }
-  .nk-plate::after {
-    content: "";
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 10px;
-    height: 10px;
-    pointer-events: none;
-    background: linear-gradient(
-      to top left,
-      transparent calc(50% - 0.75px),
-      var(--border) calc(50% - 0.75px),
-      var(--border) calc(50% + 0.75px),
-      transparent calc(50% + 0.75px)
-    );
-  }
-  .nk-plate::before {
-    content: "";
-    position: absolute;
-    bottom: -1px;
-    left: -1px;
-    width: min(45%, 10rem);
-    height: 4px;
-    pointer-events: none;
-    background: linear-gradient(
-      90deg,
-      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
-      color-mix(in oklch, var(--nk-step-ink) 45%, transparent) 0,
-      transparent
-    );
-    clip-path: var(--nk-step-foot);
     transition: background-color 0.15s;
-    --nk-step-at: 2.25rem;
-  }
-  .nk-plate:hover:not(:disabled)::before,
-  .nk-plate:focus-visible::before {
-    --nk-step-ink: var(--titanium);
-  }
-  .nk-plate.nk-identity-menu-lead::before {
-    --nk-step-ink: var(--success);
   }
   .nk-plate:hover:not(:disabled),
   .nk-plate:focus-visible {
-    box-shadow:
-      inset 2px 0 0 var(--titanium),
-      inset 0 1px 0 color-mix(in oklch, var(--steel-hi) 8%, transparent);
-  }
-  .nk-plate.nk-identity-menu-lead {
-    box-shadow:
-      inset 2px 0 0 var(--success),
-      inset 0 1px 0 color-mix(in oklch, var(--steel-hi) 8%, transparent);
+    background-color: color-mix(in oklch, var(--card) 15%, var(--secondary));
   }
 
   /* Facets: the blade's ground planes and broken lines laid faintly over a
@@ -172,7 +104,7 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: color-mix(in oklch, var(--foreground) 3%, transparent);
+    background: color-mix(in oklch, var(--foreground) 4.5%, transparent);
     -webkit-mask: var(--nk-facets) right top / cover no-repeat;
     mask: var(--nk-facets) right top / cover no-repeat;
   }
@@ -181,8 +113,9 @@
     isolation: isolate;
   }
 
-  /* The shell page band and the app header run a stepped rule along
-   * their foot. */
+  /* Stepped bands on the large structure only: the shell page band and the
+   * app header run a chunky band that steps down at 45 degrees into their
+   * hairline, like the fuller ground into the blade flat. */
   .nk-shell-bar::after,
   .app-header::after {
     content: "";
@@ -221,31 +154,35 @@
     );
 }
 
-/* Dark primary: satin steel, an even matte face shaded softly from a lit
- * top edge, with no mirror bands. */
+/* Dark primary: brushed steel, a fine horizontal grain under one soft
+ * diagonal sheen, lit along the top edge. */
 .dark .nk-steel {
-  background-image: linear-gradient(
-    180deg,
-    oklch(0.89 0.004 250),
-    oklch(0.81 0.005 250)
-  );
+  background-image:
+    linear-gradient(
+      105deg,
+      transparent 18%,
+      oklch(1 0 0 / 38%) 44%,
+      transparent 72%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      oklch(1 0 0 / 5%) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(180deg, oklch(0.88 0.004 250), oklch(0.76 0.006 250));
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 55%),
-    inset 0 -1px 0 oklch(0 0 0 / 18%);
+    inset 0 1px 0 oklch(1 0 0 / 60%),
+    inset 0 -1px 0 oklch(0 0 0 / 22%);
 }
 
-/* Stepped-rule geometry: thick until --nk-step-at, a 45 degree step, then a
- * hairline. The foot hangs from a bottom edge, the head from a top edge.
- * Declared on each band itself so the theme and the band's own step apply. */
+/* Stepped-band geometry: thick until --nk-step-at, a 45 degree step, then a
+ * hairline. Declared on each band itself so the theme and the band's own
+ * step apply. */
 @layer components {
-  .nk-stepline::after,
-  .nk-stepline-top::after,
-  .nk-card-actions::after,
   .nk-shell-bar::after,
   .app-header::after,
-  .nk-hero::after,
-  .nk-plate::before {
-    --nk-step-ink: color-mix(in oklch, var(--foreground) 19%, transparent);
+  .nk-hero::after {
+    --nk-step-ink: color-mix(in oklch, var(--foreground) 26%, transparent);
     --nk-step-foot: polygon(
       0 0,
       var(--nk-step-at, 3rem) 0,
@@ -253,14 +190,6 @@
       100% 3px,
       100% 100%,
       0 100%
-    );
-    --nk-step-head: polygon(
-      0 0,
-      100% 0,
-      100% 1px,
-      calc(var(--nk-step-at, 3rem) + 3px) 1px,
-      var(--nk-step-at, 3rem) 4px,
-      0 4px
     );
   }
 }

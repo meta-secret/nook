@@ -304,7 +304,7 @@ once it is open.
          its pages below, rather than a bare button. -->
     <button
       type="button"
-      class="nk-identity-menu-item nk-plate nk-identity-menu-lead group w-full max-w-md border border-border py-3"
+      class="nk-identity-menu-item nk-plate nk-identity-menu-lead group w-full max-w-md py-3"
       data-testid="vault-panel-open"
       disabled={busy}
       onclick={onOpen}
@@ -463,10 +463,10 @@ once it is open.
   {/if}
 
   {#if reachable}
-    <section class="nk-stepline-top grid gap-3 border-t border-border pt-5">
+    <section class="grid gap-3 border-t border-border pt-5">
       <header class="flex items-baseline justify-between gap-3">
         <h3
-          class="nk-lockup flex-1 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
+          class="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
         >
           {vault.t(I18N_KEYS.WorkspaceVaultPanelManage)}
         </h3>
@@ -480,7 +480,7 @@ once it is open.
         {#each manageItems as item (item.section)}
           <button
             type="button"
-            class="nk-identity-menu-item nk-plate border border-border disabled:cursor-default disabled:opacity-45"
+            class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-45"
             data-testid={item.testId}
             disabled={busy || !open}
             onclick={() => onManage(item.section)}

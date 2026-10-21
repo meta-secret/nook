@@ -34,8 +34,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: rgb(204 209 219 / 78%);
   --input: rgb(184 190 202 / 88%);
-  --ring: oklch(0.5 0.06 270 / 50%);
-  --titanium: oklch(0.5 0.06 270);
+  --ring: oklch(0.5 0.13 272 / 55%);
+  --titanium: oklch(0.5 0.13 272);
   --steel-hi: oklch(1 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -49,8 +49,8 @@
   --sidebar-accent: oklch(0.955 0.004 255);
   --sidebar-accent-foreground: oklch(0.19 0.009 260);
   --sidebar-border: oklch(0.91 0.006 255);
-  --sidebar-ring: oklch(0.5 0.06 270 / 50%);
-  --success: oklch(0.5 0.035 230);
+  --sidebar-ring: oklch(0.5 0.13 272 / 55%);
+  --success: oklch(0.52 0.06 228);
   --warning: oklch(0.55 0.09 72);
   --pocket-shade: oklch(0.16 0.008 260 / 14%);
 }
@@ -73,8 +73,8 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: rgb(180 186 200 / 12%);
   --input: rgb(180 186 200 / 18%);
-  --ring: oklch(0.7 0.04 270 / 55%);
-  --titanium: oklch(0.66 0.05 270);
+  --ring: oklch(0.66 0.1 275 / 60%);
+  --titanium: oklch(0.64 0.11 275);
   --steel-hi: oklch(0.98 0.004 250);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -83,13 +83,13 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.18 0.006 260);
   --sidebar-foreground: oklch(0.955 0.003 255);
-  --sidebar-primary: oklch(0.66 0.05 270);
+  --sidebar-primary: oklch(0.64 0.11 275);
   --sidebar-primary-foreground: oklch(0.955 0.003 255);
   --sidebar-accent: oklch(0.25 0.007 260);
   --sidebar-accent-foreground: oklch(0.955 0.003 255);
   --sidebar-border: rgb(180 186 200 / 12%);
-  --sidebar-ring: oklch(0.7 0.04 270 / 55%);
-  --success: oklch(0.82 0.025 225);
+  --sidebar-ring: oklch(0.66 0.1 275 / 60%);
+  --success: oklch(0.8 0.05 220);
   --warning: oklch(0.78 0.08 80);
   --pocket-shade: rgb(0 0 0 / 45%);
 }
@@ -266,20 +266,20 @@
       linear-gradient(
         112deg,
         transparent 0 57%,
-        color-mix(in oklch, var(--foreground) 0.8%, transparent) 57% 71%,
+        color-mix(in oklch, var(--foreground) 1.2%, transparent) 57% 71%,
         transparent 71%
       ),
       linear-gradient(
         112deg,
         transparent calc(57% - 1px),
-        color-mix(in oklch, var(--foreground) 2.5%, transparent) calc(57% - 1px)
+        color-mix(in oklch, var(--foreground) 3.5%, transparent) calc(57% - 1px)
           57%,
         transparent 57%
       ),
       linear-gradient(
         112deg,
         transparent calc(71% - 1px),
-        color-mix(in oklch, var(--foreground) 2.5%, transparent) calc(71% - 1px)
+        color-mix(in oklch, var(--foreground) 3.5%, transparent) calc(71% - 1px)
           71%,
         transparent 71%
       );
