@@ -753,11 +753,11 @@ class LoginSaveInteraction {
     [hidden] { display: none !important; }
     .panel {
       width: min(292px, calc(100vw - 24px));
-      border: 1px solid rgb(255 255 255 / 10%);
+      border: 1px solid rgb(180 186 200 / 12%);
       border-radius: 18px;
-      background: oklch(0.21 0.006 285.885);
+      background: oklch(0.18 0.006 260);
       box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
-      color: oklch(0.985 0 0);
+      color: oklch(0.955 0.003 255);
       font: 400 13px/1.35 Inter, ui-sans-serif, system-ui, sans-serif;
       overflow: hidden;
     }
@@ -771,7 +771,7 @@ class LoginSaveInteraction {
     .step-label {
       flex: 1;
       margin: 0;
-      color: oklch(0.705 0.015 286.067);
+      color: oklch(0.7 0.01 258);
       font-size: 11px;
       font-weight: 650;
       letter-spacing: 0.02em;
@@ -784,7 +784,7 @@ class LoginSaveInteraction {
       border: 0;
       border-radius: 999px;
       background: transparent;
-      color: oklch(0.705 0.015 286.067);
+      color: oklch(0.7 0.01 258);
       cursor: pointer;
       font: 700 16px/1 Inter, ui-sans-serif, system-ui, sans-serif;
     }
@@ -798,7 +798,7 @@ class LoginSaveInteraction {
     .mark { display: block; }
     .site-context {
       margin: 0;
-      color: oklch(0.705 0.015 286.067);
+      color: oklch(0.7 0.01 258);
       font-size: 12px;
     }
     h1 {
@@ -818,8 +818,8 @@ class LoginSaveInteraction {
       min-height: 40px;
       border-radius: 9px;
       border: 1px solid transparent;
-      background: oklch(0.92 0.004 286.32);
-      color: oklch(0.21 0.006 285.885);
+      background: oklch(0.91 0.006 250);
+      color: oklch(0.18 0.006 260);
       cursor: pointer;
       font: inherit;
       font-size: 13px;
@@ -827,7 +827,7 @@ class LoginSaveInteraction {
       padding: 9px 12px;
     }
     button.primary-button:hover:not(:disabled) {
-      background: color-mix(in oklab, oklch(0.92 0.004 286.32) 90%, black);
+      background: color-mix(in oklab, oklch(0.91 0.006 250) 90%, black);
     }
     button:disabled { cursor: wait; opacity: 0.68; }
     .text-button {
@@ -837,11 +837,11 @@ class LoginSaveInteraction {
       padding: 4px 8px;
       border: 0;
       background: transparent;
-      color: oklch(0.705 0.015 286.067);
+      color: oklch(0.7 0.01 258);
       cursor: pointer;
       font: 650 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
     }
-    .text-button:hover { color: oklch(0.985 0 0); }
+    .text-button:hover { color: oklch(0.955 0.003 255); }
   `
 
     panel.append(toolbar, body)

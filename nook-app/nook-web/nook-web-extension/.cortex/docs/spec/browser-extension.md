@@ -123,10 +123,14 @@ administer vault items.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. When the user explicitly chooses Connect an identity in the side panel, or
-   Connect / pair in the authentication tab, the extension opens the configured
-   Simple Vault `/extension-connect` route. The route receives the extension's
-   runtime id and public device request. It opens in one Nook tab of the
+3. When the person unlocks or sets up the extension in the side panel with
+   no identity connected, the panel starts the connect itself, once. A panel
+   the extension opens for a vault's unlock request does not. Otherwise the
+   user starts it with Connect an identity, Connect another identity, or
+   Connect / pair in the authentication tab. The extension
+   then opens the configured Simple Vault `/extension-connect` route. The
+   route receives the extension's runtime id and public device request. It
+   opens in one Nook tab of the
    requesting window, under the [connect tab](#connect-tab) rule. The side
    panel opens that route directly, never the authentication tab.
    - The route carries no start choice. The page owns create, join, and the
@@ -372,7 +376,10 @@ private identity.
     identity's own unlock in place. The footer leaves while it shows, and a
     lock or a vault list that is no longer paired returns to This site.
   - **Unlocked with no paired vault:** the connect card leads with one action,
-    Connect an identity.
+    Connect an identity. Right after an unlock or setup in the panel,
+    connecting is the only next step, so the panel starts it at once, once;
+    after the tab closes or the connect fails, the card offers Connect an
+    identity.
   - **Next identity's key:** when Rust stages a new identity, its passkey or
     PIN setup runs in place with Cancel. The ceremony replaces the page
     content; the footer keeps its own rule. Status re-reads leave that

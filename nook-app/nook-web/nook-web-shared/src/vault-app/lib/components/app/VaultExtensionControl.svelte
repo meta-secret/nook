@@ -61,7 +61,7 @@ side panel beside the vault.
   {#if status === ExtensionSetupStatus.Paired}
     <button
       type="button"
-      class="nk-identity-menu-item border border-border"
+      class="nk-identity-menu-item nk-plate"
       data-testid="vault-extension-connected"
       onclick={onOpenPanel}
     >
@@ -85,7 +85,7 @@ side panel beside the vault.
     {@const notInstalled = status === ExtensionSetupStatus.NotInstalled}
     <button
       type="button"
-      class="nk-identity-menu-item border border-border disabled:cursor-default disabled:opacity-45"
+      class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-45"
       data-testid={notInstalled
         ? "vault-extension-install"
         : "vault-pair-extension-btn"}

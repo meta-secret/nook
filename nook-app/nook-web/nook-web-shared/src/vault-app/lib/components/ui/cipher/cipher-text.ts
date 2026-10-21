@@ -34,12 +34,21 @@ function replaceCharacter(line: string): string {
 
 /** Characters a lit run spans. */
 const HOT_RUN = 6;
+/** Columns a lit run crawls after landing, before it jumps again. */
+export const CRAWL_MIN = 12;
+export const CRAWL_MAX = 36;
+
+/** A crawl length between CRAWL_MIN and CRAWL_MAX, inclusive. */
+function randomCrawl(): number {
+  return CRAWL_MIN + Math.floor(Math.random() * (CRAWL_MAX - CRAWL_MIN + 1));
+}
 
 /** A block of age-armored-looking ciphertext that re-encrypts a few characters per tick. */
 export class CipherBlock {
   private lines: string[];
   private hotLine = -1;
   private hotStart = 0;
+  private crawlLeft = 0;
 
   constructor(private readonly dimensions: CipherDimensions) {
     this.lines = [ARMOR_HEADER];
@@ -57,22 +66,33 @@ export class CipherBlock {
     this.hotStart = Math.floor(Math.random() * this.dimensions.columns);
   }
 
-  /** Re-encrypt `changes` characters and move the lit run one column along
-   * its row, starting on another row once it reaches the end: a slow crawl
-   * instead of a flash in a new place every tick. */
+  /** Re-encrypt `changes` characters and move the lit run: it jumps to a
+   * random place, crawls a stretch along its row one column per tick, then
+   * jumps again. */
   crawl(changes: number): void {
     const bodyRows = this.lines.length - 1;
     if (bodyRows <= 0) return;
     this.reencrypt(changes);
-    if (
-      this.hotLine < 1 ||
-      this.hotStart + HOT_RUN >= this.dimensions.columns
-    ) {
-      this.hotLine = 1 + Math.floor(Math.random() * bodyRows);
-      this.hotStart = 0;
+    if (this.hotLine < 1 || this.crawlLeft <= 0) {
+      this.jump(bodyRows);
       return;
     }
     this.hotStart += 1;
+    this.crawlLeft -= 1;
+  }
+
+  private jump(bodyRows: number): void {
+    const room = Math.max(this.dimensions.columns - HOT_RUN, 0);
+    const crawl = Math.min(randomCrawl(), room);
+    // Land on another row so the move reads as a jump, not a stutter.
+    const others = this.hotLine >= 1 && bodyRows > 1 ? bodyRows - 1 : bodyRows;
+    const pick = 1 + Math.floor(Math.random() * others);
+    this.hotLine =
+      this.hotLine >= 1 && bodyRows > 1 && pick >= this.hotLine
+        ? pick + 1
+        : pick;
+    this.hotStart = Math.floor(Math.random() * (room - crawl + 1));
+    this.crawlLeft = crawl;
   }
 
   private reencrypt(changes: number): void {

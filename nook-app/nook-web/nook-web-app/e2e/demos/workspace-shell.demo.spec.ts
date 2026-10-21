@@ -35,6 +35,25 @@ test('the vault page holds items; the identity card manages the rest', async ({
   // Manage on the identity card holds actions, adding a device first;
   // a fresh identity also offers its protection checklist, above its vaults.
   await page.getByTestId('header-identities-btn').click()
+
+  // The hero and key-tag cards keep their steel finish in both themes:
+  // switch once and back, ending where the person started.
+  await expect(page.getByTestId('identities-hero')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  const themeToggle = page.getByTestId('theme-toggle-btn')
+  const startLabel = await themeToggle.getAttribute('aria-label')
+  if (!startLabel) {
+    throw new Error('The theme toggle must have an accessible name')
+  }
+  await page.waitForTimeout(DEMO_BEAT_MS)
+  await themeToggle.click()
+  await expect(themeToggle).not.toHaveAttribute('aria-label', startLabel)
+  await expect(page.getByTestId('identities-hero')).toBeVisible()
+  await page.waitForTimeout(DEMO_BEAT_MS)
+  await themeToggle.click()
+  await expect(themeToggle).toHaveAttribute('aria-label', startLabel)
+
   const protection = page.getByTestId('identity-protection-toggle')
   await expect(protection).toContainText('Protect this identity')
   const vaultRow = page.getByTestId('identity-vault-row').first()

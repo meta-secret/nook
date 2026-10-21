@@ -83,6 +83,12 @@ export class SidePanelConnectFlow {
     kind: SidePanelTabActivationKind.None,
   }
 
+  /** The person unlocked or set up the extension in this panel. */
+  private unlockedHere = false
+
+  /** Whether this panel already started the first connect on its own. */
+  private firstConnectStarted = false
+
   /** The connect page's port, admitted by the Simple Vault origin rule. */
   private readonly sessions = new SidePanelConnectSessions(
     ExternalSenderTrustPolicy,
@@ -152,6 +158,29 @@ export class SidePanelConnectFlow {
         this.connect = SidePanelConnects.identityKey()
         this.request.host.restartCeremony()
     }
+  }
+
+  /** The panel's own unlock or setup ceremony finished. A panel the
+   * extension opened for a vault's unlock request never runs one, so it does
+   * not start a connect over the page that asked. */
+  unlockedInPanel(): void {
+    this.unlockedHere = true
+  }
+
+  /** Right after the person unlocks or sets up the extension here with no
+   * identity connected, the connect is the only next step, so it starts at
+   * once, as if the card's button were pressed: once per panel. Closing the
+   * Nook tab or a failure returns the card with its button. */
+  async startFirstConnect(): Promise<void> {
+    if (!this.unlockedHere || this.firstConnectStarted) return
+    if (
+      this.request.host.connectingDevice().kind !==
+      SidePanelConnectingDeviceKind.Active
+    ) {
+      return
+    }
+    this.firstConnectStarted = true
+    await this.start()
   }
 
   /** A tab became active in the panel's window. */

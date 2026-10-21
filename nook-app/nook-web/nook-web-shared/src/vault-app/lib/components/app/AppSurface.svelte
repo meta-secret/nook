@@ -127,7 +127,7 @@
   <AppLogsApiPage />
 {:else}
   <main
-    class="min-h-svh min-w-0 max-w-full overflow-x-clip bg-background text-foreground"
+    class="nk-stage min-h-svh min-w-0 max-w-full overflow-x-clip bg-background text-foreground"
     class:dark={colorMode === ColorMode.Dark}
   >
     <AppHeader

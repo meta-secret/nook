@@ -161,7 +161,7 @@
           <button
             bind:this={mobileToolsTrigger}
             type="button"
-            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
+            class="nk-cut-foot inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
             data-testid="header-mobile-tools-btn"
             aria-label={vault.t(I18N_KEYS.SettingsTitle)}
             aria-haspopup="true"
@@ -246,7 +246,7 @@
       {#if IS_SENTINEL_APP}
         <a
           href={SIMPLE_VAULT_APP_URL}
-          class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
+          class="nk-cut-foot hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
           data-testid="sibling-vault-app-link"
           onclick={navigateToSiblingApp}
         >
@@ -256,7 +256,7 @@
 
       <button
         type="button"
-        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {authenticatedSessionControlsVisible
+        class="nk-cut-foot size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {authenticatedSessionControlsVisible
           ? 'hidden sm:inline-flex'
           : 'inline-flex'}"
         aria-label={colorMode === ColorMode.Dark
@@ -279,7 +279,7 @@
         href="https://github.com/meta-secret/nook"
         target="_blank"
         rel="noreferrer"
-        class="h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
+        class="nk-cut-foot h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
           ? 'hidden w-10 sm:inline-flex'
           : 'inline-flex px-3.5'}"
         aria-label={vault.t(I18N_KEYS.AppGithubAria)}

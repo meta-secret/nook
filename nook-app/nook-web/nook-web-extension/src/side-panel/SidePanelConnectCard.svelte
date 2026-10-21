@@ -1,11 +1,14 @@
 <!--
 Connecting an identity, as a companion keytag card. One action opens (or
 reuses) the Nook tab on the connect route; creating, joining and choosing
-the identity happen there. While that tab is open the card follows the step
+the identity happen there. When the person unlocks or sets up the extension
+in the panel with no identity connected, the panel takes that action itself,
+once; the card's button returns after the tab closes or the connect fails. While that tab is open the card follows the step
 the page reports and, once another tab covers it, offers to bring it back
 to the front. The card leads
 the panel while no identity is connected and opens under This site from
-Connect another identity.
+Connect another identity. While the next step is on the Nook tab, the tab
+guide sits right on top of the card.
 -->
 <script lang="ts">
   import { ArrowUpRight, LoaderCircle, Plus, X } from '@lucide/svelte'
@@ -16,11 +19,13 @@ Connect another identity.
   import { type ExtensionI18n, extensionLocaleCatalog } from '../lib/i18n'
   import type { IdentitySync } from '../popup/popup-app-state'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
+  import SidePanelTabGuide from './SidePanelTabGuide.svelte'
   import {
     SidePanelConnectCardPlacement,
     SidePanelConnectKind,
     SidePanelConnects,
     SidePanelTabPlace,
+    SidePanelTabPointer,
     type SidePanelConnect,
   } from './side-panel-connect-state'
 
@@ -28,6 +33,8 @@ Connect another identity.
     readonly i18n: ExtensionI18n
     readonly placement: SidePanelConnectCardPlacement
     readonly connect: SidePanelConnect
+    /** Where the Nook tab is from the panel; None shows no guide. */
+    readonly pointer: SidePanelTabPointer
     readonly identitySync: IdentitySync
     readonly onconnect: () => void
     readonly onfocustab: () => void
@@ -38,6 +45,7 @@ Connect another identity.
     i18n,
     placement,
     connect,
+    pointer,
     identitySync,
     onconnect,
     onfocustab,
@@ -65,6 +73,9 @@ Connect another identity.
   }
 </script>
 
+{#if pointer !== SidePanelTabPointer.None}
+  <SidePanelTabGuide {i18n} {pointer} {onfocustab} />
+{/if}
 <section
   class="side-panel-keytag side-panel-connect-card"
   aria-labelledby="side-panel-connect-title"

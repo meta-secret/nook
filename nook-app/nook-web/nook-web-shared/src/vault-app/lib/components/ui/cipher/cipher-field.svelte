@@ -17,7 +17,8 @@
   }: {
     rows?: number
     columns?: number
-    /** The lit run creeps along its row instead of flashing elsewhere. */
+    /** The lit run jumps to a new place, then crawls a stretch along its
+     * row, instead of flashing somewhere new every tick. */
     crawl?: boolean
     intervalMs?: number
     class?: string
