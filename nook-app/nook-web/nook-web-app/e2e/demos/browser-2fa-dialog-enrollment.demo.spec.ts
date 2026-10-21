@@ -22,9 +22,15 @@ enum DemoQrMedia {
   Canvas = 'canvas',
 }
 
+enum DemoSetupLayout {
+  SemanticDialog = 'semantic dialog',
+  NestedPlainDivs = 'nested plain divs',
+}
+
 type DemoDialogRequest = {
   readonly page: Page
   readonly media: DemoQrMedia
+  readonly layout: DemoSetupLayout
 }
 
 type CanvasQrDrawing = {
@@ -99,6 +105,7 @@ async function openSettingsPage(page: Page): Promise<void> {
 async function openSetupDialog({
   page,
   media,
+  layout,
 }: DemoDialogRequest): Promise<void> {
   const raster = new QrModuleRaster({
     modules: OTPAUTH_QR_MODULES,
@@ -109,21 +116,27 @@ async function openSetupDialog({
     [DemoQrMedia.Canvas]: `<canvas data-testid="demo-dialog-qr" width="${raster.edgePx}" height="${raster.edgePx}"></canvas>`,
   }[media]
   await page.evaluate(
-    ({ description, qr, manualKey }) => {
+    ({ description, qr, manualKey, layout, layouts }) => {
       // The companion runtime records only into an existing list.
       window.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
         window.__nookDemoRuntimeMessageTypes,
       )
       const dialog = document.createElement('div')
       dialog.className = 'setup-dialog'
-      dialog.setAttribute('role', 'dialog')
-      dialog.setAttribute('aria-modal', 'true')
-      dialog.setAttribute('aria-labelledby', 'mfa-title')
-      dialog.setAttribute('aria-describedby', 'mfa-description')
+      switch (layout) {
+        case layouts.SemanticDialog:
+          dialog.setAttribute('role', 'dialog')
+          dialog.setAttribute('aria-modal', 'true')
+          dialog.setAttribute('aria-labelledby', 'mfa-title')
+          dialog.setAttribute('aria-describedby', 'mfa-description')
+          break
+        case layouts.NestedPlainDivs:
+          break
+      }
       dialog.innerHTML = `
         <h2 id="mfa-title">Update authenticator app</h2>
         <div id="mfa-description">${description}</div>
-        ${qr}
+        <div><div>${qr}</div></div>
         <button type="button" data-testid="demo-enter-code-manually">Enter code manually</button>
         <footer>
           <button type="button">Cancel</button>
@@ -138,7 +151,13 @@ async function openSetupDialog({
         })
       document.body.append(dialog)
     },
-    { description: dialogDescription, qr: qrMarkup, manualKey: manualKeyView },
+    {
+      description: dialogDescription,
+      qr: qrMarkup,
+      manualKey: manualKeyView,
+      layout,
+      layouts: DemoSetupLayout,
+    },
   )
   if (media === DemoQrMedia.Canvas) {
     const drawing: CanvasQrDrawing = {
@@ -179,8 +198,14 @@ async function recordedRuntimeMessages(page: Page): Promise<string[]> {
   })
 }
 
-for (const media of [DemoQrMedia.InlineSvg, DemoQrMedia.Canvas]) {
-  test(`enrolls 2FA from a real ${media} QR in a portaled setup dialog`, async ({
+const setupScenarios = [
+  { media: DemoQrMedia.InlineSvg, layout: DemoSetupLayout.SemanticDialog },
+  { media: DemoQrMedia.Canvas, layout: DemoSetupLayout.SemanticDialog },
+  { media: DemoQrMedia.InlineSvg, layout: DemoSetupLayout.NestedPlainDivs },
+]
+
+for (const { media, layout } of setupScenarios) {
+  test(`enrolls 2FA from a real ${media} QR in portaled ${layout}`, async ({
     page,
   }) => {
     await openSettingsPage(page)
@@ -188,11 +213,19 @@ for (const media of [DemoQrMedia.InlineSvg, DemoQrMedia.Canvas]) {
     await demoBeat(page)
     await expect(widget).toHaveCount(0)
 
-    const dialogRequest: DemoDialogRequest = { page, media }
+    const dialogRequest: DemoDialogRequest = { page, media, layout }
     await openSetupDialog(dialogRequest)
-    await expect(
-      page.getByRole('dialog', { name: 'Update authenticator app' }),
-    ).toBeVisible()
+    await expect(page.locator('.setup-dialog')).toBeVisible()
+    switch (layout) {
+      case DemoSetupLayout.SemanticDialog:
+        await expect(
+          page.getByRole('dialog', { name: 'Update authenticator app' }),
+        ).toBeVisible()
+        break
+      case DemoSetupLayout.NestedPlainDivs:
+        await expect(page.getByRole('dialog')).toHaveCount(0)
+        break
+    }
     await expect(page.getByTestId('demo-dialog-qr')).toBeVisible()
     const addButton = widget.getByRole('button', {
       name: 'Add 2FA from this page',
@@ -200,6 +233,13 @@ for (const media of [DemoQrMedia.InlineSvg, DemoQrMedia.Canvas]) {
     await expect(addButton).toBeVisible()
     await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
       'Connected to Demo vault',
+    )
+    const beforeConsent = await recordedRuntimeMessages(page)
+    expect(beforeConsent).not.toContain(
+      CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates,
+    )
+    expect(beforeConsent).not.toContain(
+      'nook:website-authenticator-enroll-stage',
     )
     await demoBeat(page)
 
@@ -249,6 +289,7 @@ test('enrolls 2FA from a setup key shown after "Enter code manually"', async ({
   const dialogRequest: DemoDialogRequest = {
     page,
     media: DemoQrMedia.InlineSvg,
+    layout: DemoSetupLayout.SemanticDialog,
   }
   await openSetupDialog(dialogRequest)
   await expect(
