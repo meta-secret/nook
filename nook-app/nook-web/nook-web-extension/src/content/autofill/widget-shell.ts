@@ -555,10 +555,7 @@ class AuthenticationWidgetShell {
       currentStep,
       totalSteps,
     }
-    step.textContent =
-      savedLoginPresentation === SavedLoginPresentationKind.Empty
-        ? workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)
-        : workflowUi.progressLabel(nookTypedArgs0_0)
+    step.textContent = workflowUi.progressLabel(nookTypedArgs0_0)
 
     const collapseButton = document.createElement('button')
     collapseButton.type = 'button'
@@ -597,11 +594,7 @@ class AuthenticationWidgetShell {
     body.className = 'body'
 
     const title = document.createElement('h1')
-    title.textContent = workflowUi.translatedMessage(
-      savedLoginPresentation === SavedLoginPresentationKind.Empty
-        ? BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchTitle
-        : copy.titleKey,
-    )
+    title.textContent = workflowUi.translatedMessage(copy.titleKey)
 
     const site = document.createElement('p')
     site.className = 'site-context'
@@ -657,11 +650,26 @@ class AuthenticationWidgetShell {
     const collapsedMark = this.createWidgetMark(nookTypedArgs0_3)
     const collapsedProgress = document.createElement('span')
     collapsedProgress.className = 'collapsed-progress'
-    collapsedProgress.textContent =
-      savedLoginPresentation === SavedLoginPresentationKind.Empty
-        ? workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)
-        : `${currentStep}/${totalSteps}`
+    collapsedProgress.textContent = `${currentStep}/${totalSteps}`
     collapsedLaunch.append(collapsedMark, collapsedProgress)
+
+    switch (savedLoginPresentation) {
+      case SavedLoginPresentationKind.Empty:
+        title.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchTitle,
+        )
+        step.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetPilotLabel,
+        )
+        collapsedProgress.textContent = step.textContent
+        collapsedLaunch.setAttribute(
+          'aria-label',
+          `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${step.textContent}`,
+        )
+        break
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
 
     return {
       host,

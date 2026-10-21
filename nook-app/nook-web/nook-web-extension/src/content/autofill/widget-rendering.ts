@@ -1,6 +1,9 @@
 import { LoginChecklistMountKind } from './state'
 import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import { LoginChecklistProgress } from './login-checklist-progress'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -79,6 +82,12 @@ type RenderWidgetArgs = {
   savedLoginActionAvailable: boolean
 }
 
+type MountLoginChecklistArgs = ConstructorParameters<
+  typeof LoginChecklistProgress
+>[0] & {
+  readonly presentation: SavedLoginPresentationKind
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 type AuthenticationWidgetRendererContext = {
   readonly widgetState: typeof widgetState
@@ -86,6 +95,23 @@ type AuthenticationWidgetRendererContext = {
 }
 class AuthenticationWidgetRenderer {
   constructor(private readonly ui: AuthenticationWidgetRendererContext) {}
+
+  private async mountLoginChecklist(
+    request: MountLoginChecklistArgs,
+  ): Promise<void> {
+    switch (request.presentation) {
+      case SavedLoginPresentationKind.Empty:
+        return
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
+    const checklist = new LoginChecklistProgress(request)
+    this.ui.widgetState.loginChecklist = {
+      kind: LoginChecklistMountKind.Mounted,
+      progress: checklist,
+    }
+    await checklist.initialize()
+  }
 
   renderEnrollmentWidget({
     authenticatorSetupSnapshot,
@@ -249,10 +275,21 @@ class AuthenticationWidgetRenderer {
     const enrollmentAction =
       snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
       snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
-    const savedLoginPresentation =
-      snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
-        ? SavedLoginPresentation.forVault(vaultPresentation)
-        : SavedLoginPresentationKind.Workflow
+    let savedLoginPresentation = SavedLoginPresentationKind.Workflow
+    switch (snapshot.action) {
+      case AuthenticationWorkflowAction.ContinueWithNook:
+        savedLoginPresentation =
+          SavedLoginPresentation.forVault(vaultPresentation)
+        break
+      case AuthenticationWorkflowAction.FillTotp:
+      case AuthenticationWorkflowAction.EnrollAuthenticator:
+      case AuthenticationWorkflowAction.SaveBackupCodes:
+      case AuthenticationWorkflowAction.GeneratePassword:
+      case AuthenticationWorkflowAction.UsePasskey:
+      case AuthenticationWorkflowAction.CreatePasskey:
+      case AuthenticationWorkflowAction.TakeOver:
+        break
+    }
     const nookTypedArgs0_3: Parameters<
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
@@ -282,29 +319,30 @@ class AuthenticationWidgetRenderer {
     const unlocksFirst =
       vaultPresentation.kind === WidgetVaultPresentationKind.Locked &&
       snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
-    const continueMessageKey =
-      savedLoginPresentation === SavedLoginPresentationKind.Empty
-        ? BROWSER_MESSAGE_KEYS.WidgetOpenNook
-        : unlocksFirst
-          ? BROWSER_MESSAGE_KEYS.WidgetUnlock
-          : snapshot.action === AuthenticationWorkflowAction.FillTotp
-            ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
-            : snapshot.action ===
-                AuthenticationWorkflowAction.EnrollAuthenticator
-              ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
-              : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
-                ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
-                : snapshot.action ===
-                    AuthenticationWorkflowAction.GeneratePassword
-                  ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
-                  : snapshot.action === AuthenticationWorkflowAction.UsePasskey
-                    ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
-                    : snapshot.action ===
-                        AuthenticationWorkflowAction.CreatePasskey
-                      ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
-                      : canContinueWithNook
-                        ? BROWSER_MESSAGE_KEYS.WidgetContinue
-                        : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+    let continueMessageKey: BrowserMessageKey = unlocksFirst
+      ? BROWSER_MESSAGE_KEYS.WidgetUnlock
+      : snapshot.action === AuthenticationWorkflowAction.FillTotp
+        ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
+        : snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
+          ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
+          : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+            ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
+            : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
+              ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
+              : snapshot.action === AuthenticationWorkflowAction.UsePasskey
+                ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
+                : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+                  ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
+                  : canContinueWithNook
+                    ? BROWSER_MESSAGE_KEYS.WidgetContinue
+                    : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+    switch (savedLoginPresentation) {
+      case SavedLoginPresentationKind.Empty:
+        continueMessageKey = BROWSER_MESSAGE_KEYS.WidgetOpenNook
+        break
+      case SavedLoginPresentationKind.Workflow:
+        break
+    }
     continueButton.setAttribute(
       'aria-label',
       workflowUi.translatedMessage(continueMessageKey),
@@ -314,15 +352,19 @@ class AuthenticationWidgetRenderer {
 
     const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
-      if (savedLoginPresentation === SavedLoginPresentationKind.Empty) {
-        const openingSurface: ConstructorParameters<
-          typeof PilotVaultOpening
-        >[0] = {
-          button: continueButton,
-          description,
+      switch (savedLoginPresentation) {
+        case SavedLoginPresentationKind.Empty: {
+          const openingSurface: ConstructorParameters<
+            typeof PilotVaultOpening
+          >[0] = {
+            button: continueButton,
+            description,
+          }
+          new PilotVaultOpening(openingSurface).activate()
+          return
         }
-        new PilotVaultOpening(openingSurface).activate()
-        return
+        case SavedLoginPresentationKind.Workflow:
+          break
       }
       if (unlocksFirst) {
         SiteSidePanel.open()
@@ -486,21 +528,13 @@ class AuthenticationWidgetRenderer {
       case AuthenticationWorkflowKind.Login:
         switch (snapshot.action) {
           case AuthenticationWorkflowAction.ContinueWithNook: {
-            if (savedLoginPresentation === SavedLoginPresentationKind.Empty)
-              break
-            const mount: ConstructorParameters<
-              typeof LoginChecklistProgress
-            >[0] = {
+            const mount: MountLoginChecklistArgs = {
               surface: { body, title, description },
               control: continueButton,
               workflow,
+              presentation: savedLoginPresentation,
             }
-            const checklist = new LoginChecklistProgress(mount)
-            this.ui.widgetState.loginChecklist = {
-              kind: LoginChecklistMountKind.Mounted,
-              progress: checklist,
-            }
-            await checklist.initialize()
+            await this.mountLoginChecklist(mount)
             break
           }
           case AuthenticationWorkflowAction.GeneratePassword:

@@ -17,9 +17,12 @@ type PilotVaultOpeningFeedback = {
   readonly onSuccess: () => void
 }
 
+type PilotVaultAcknowledgementFields = { readonly ok: Schema.Literal<true> }
+
 /** Opens the configured Simple Vault through the existing background route. */
 export class PilotVaultOpening {
-  private static readonly acknowledgementFields = { ok: Schema.Literal(true) }
+  private static readonly acknowledgementFields: PilotVaultAcknowledgementFields =
+    { ok: Schema.Literal(true) }
   private static readonly acknowledgement = Schema.Struct(
     PilotVaultOpening.acknowledgementFields,
   )
@@ -30,7 +33,12 @@ export class PilotVaultOpening {
   constructor(private readonly surface: PilotVaultOpeningSurface) {}
 
   activate(): void {
-    if (this.surface.button.disabled) return
+    switch (this.surface.button.disabled) {
+      case true:
+        return
+      case false:
+        break
+    }
     this.surface.button.disabled = true
     this.surface.button.setAttribute('aria-busy', 'true')
     const feedback: PilotVaultOpeningFeedback = {
