@@ -304,7 +304,7 @@ once it is open.
          its pages below, rather than a bare button. -->
     <button
       type="button"
-      class="nk-identity-menu-item nk-identity-menu-lead group w-full max-w-md border border-border py-3"
+      class="nk-identity-menu-item nk-plate nk-identity-menu-lead group w-full max-w-md py-3"
       data-testid="vault-panel-open"
       disabled={busy}
       onclick={onOpen}
@@ -480,7 +480,7 @@ once it is open.
         {#each manageItems as item (item.section)}
           <button
             type="button"
-            class="nk-identity-menu-item border border-border disabled:cursor-default disabled:opacity-45"
+            class="nk-identity-menu-item nk-plate disabled:cursor-default disabled:opacity-45"
             data-testid={item.testId}
             disabled={busy || !open}
             onclick={() => onManage(item.section)}

@@ -6,7 +6,9 @@
  *   nk-frame-tab      bottom-right cut ...... hero, page bars, logs
  *   nk-frame-sheet    opposite diagonal ..... secret detail
  *   nk-frame-nick     small bottom-right .... field slots
- * Lists and banners stay square with a heavy left edge (nk-list). */
+ * Lists and banners stay square with a heavy left edge (nk-list).
+ * Finish follows a black-oxide blade: edges catch light like a ground bevel,
+ * fasteners are anodised titanium, matte faces carry a G10 weave. */
 @layer components {
   .nk-frame,
   .nk-frame-keytag,
@@ -15,8 +17,16 @@
   .nk-frame-nick {
     --nk-cut: 12px;
     --nk-cut-in: calc(var(--nk-cut) - 0.41px);
-    --nk-edge: var(--border);
-    --nk-face: var(--card);
+    --nk-edge: linear-gradient(
+      150deg,
+      color-mix(in oklch, var(--steel-hi) 55%, var(--border)) 0,
+      var(--border) 4.5rem
+    );
+    --nk-face: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 96%, var(--steel-hi)) 0,
+      var(--card) 5rem
+    );
     --nk-shape: polygon(
       0 0,
       calc(100% - var(--nk-cut)) 0,
@@ -114,18 +124,32 @@
   }
   .nk-frame-interactive:hover,
   .nk-frame-interactive:focus-within {
-    --nk-edge: color-mix(in oklch, var(--foreground) 26%, transparent);
+    --nk-edge: linear-gradient(
+      150deg,
+      color-mix(in oklch, var(--titanium) 70%, transparent) 0,
+      color-mix(in oklch, var(--foreground) 22%, transparent) 5rem
+    );
   }
+  /* A live frame: its edge lit like the cutting edge, brightest at the cut. */
   .nk-frame-live,
   .nk-frame-live:hover {
-    --nk-edge: color-mix(in oklch, var(--success) 60%, transparent);
+    --nk-edge: linear-gradient(
+      150deg,
+      color-mix(in oklch, var(--success) 70%, transparent) 0,
+      color-mix(in oklch, var(--success) 25%, transparent) 9rem
+    );
   }
 
   /* Lists and banners: square, heavy left edge. */
   .nk-list {
     border: 1px solid var(--border);
     border-radius: 0;
-    background: var(--card);
+    background: var(--card)
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 96%, var(--steel-hi)),
+        var(--card) 4rem
+      );
     box-shadow: inset 2px 0 0
       color-mix(in oklch, var(--foreground) 45%, transparent);
   }
@@ -258,6 +282,38 @@
     padding: clamp(1.25rem, 4vw, 2.25rem) clamp(1.125rem, 4vw, 2.25rem);
     overflow: hidden;
     --nk-cut: 16px;
+    /* Spotlit from the top right, like a blade on a black table. */
+    --nk-face:
+      radial-gradient(
+        ellipse 60% 140% at 88% -10%,
+        color-mix(in oklch, var(--steel-hi) 4%, transparent),
+        transparent 70%
+      ),
+      var(--nk-g10), var(--card);
+  }
+  /* Hero foot: the stepped band, its hairline polished like the edge. */
+  .nk-hero::after {
+    content: "";
+    position: absolute;
+    right: var(--nk-cut);
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    pointer-events: none;
+    background:
+      linear-gradient(
+          color-mix(in oklch, var(--foreground) 30%, transparent),
+          color-mix(in oklch, var(--foreground) 30%, transparent)
+        )
+        0 0 / calc(4.5rem + 3px) 100% no-repeat,
+      linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in oklch, var(--steel-hi) 45%, transparent) 62%,
+        transparent
+      );
+    clip-path: var(--nk-step-foot);
+    --nk-step-at: 4.5rem;
   }
   .nk-hero-cipher {
     position: absolute;
@@ -405,12 +461,22 @@
       7px 100%,
       0 calc(100% - 7px)
     );
-    background: oklch(0.93 0.05 var(--nk-hue, 250));
-    color: oklch(0.4 0.12 var(--nk-hue, 250));
+    background: linear-gradient(
+      160deg,
+      oklch(0.96 0.012 var(--nk-hue, 250)),
+      oklch(0.85 0.02 var(--nk-hue, 250))
+    );
+    box-shadow: inset 0 1px 0 white;
+    color: oklch(0.36 0.04 var(--nk-hue, 250));
   }
   .dark .nk-monogram {
-    background: oklch(0.32 0.06 var(--nk-hue, 250));
-    color: oklch(0.88 0.08 var(--nk-hue, 250));
+    background: linear-gradient(
+      160deg,
+      oklch(0.42 0.02 var(--nk-hue, 250)),
+      oklch(0.24 0.015 var(--nk-hue, 250))
+    );
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 18%);
+    color: oklch(0.92 0.015 var(--nk-hue, 250));
   }
   .nk-monogram-sm {
     width: 2rem;
@@ -441,9 +507,15 @@
     z-index: 1;
     width: 0.5625rem;
     height: 0.5625rem;
-    border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
+    border: 1px solid
+      color-mix(in oklch, var(--titanium) 55%, var(--background));
     border-radius: 9999px;
-    background: var(--background);
+    background: radial-gradient(
+      circle at 35% 30%,
+      color-mix(in oklch, var(--titanium) 30%, white) 0,
+      var(--titanium) 45%,
+      color-mix(in oklch, var(--titanium) 55%, black) 100%
+    );
   }
   .nk-frame-live .nk-eyelet {
     border-color: var(--success);
@@ -472,6 +544,21 @@
   }
   .nk-vault-row:hover:not(:disabled) {
     background: color-mix(in oklch, var(--accent) 70%, transparent);
+  }
+  /* Stacked rows: a hairline between neighbours, inset past the icon. */
+  .nk-vault-row + .nk-vault-row {
+    position: relative;
+    margin-top: 0.375rem;
+  }
+  .nk-vault-row + .nk-vault-row::before {
+    content: "";
+    position: absolute;
+    top: -0.25rem;
+    right: 0.625rem;
+    left: 3.125rem;
+    height: 1px;
+    pointer-events: none;
+    background: var(--border);
   }
   .nk-vault-row:focus-visible {
     outline: 2px solid var(--ring);
@@ -518,8 +605,22 @@
     flex: none;
     width: 1.75rem;
     height: 1.75rem;
-    border: 1px solid var(--border);
+    border: 0;
+    background: color-mix(in oklch, var(--background) 65%, var(--card));
+    box-shadow:
+      inset 0 1px 3px var(--pocket-shade),
+      inset 0 -1px 0 color-mix(in oklch, var(--steel-hi) 7%, transparent);
     color: var(--muted-foreground);
+    clip-path: polygon(
+      3px 0,
+      calc(100% - 3px) 0,
+      100% 3px,
+      100% calc(100% - 3px),
+      calc(100% - 3px) 100%,
+      3px 100%,
+      0 calc(100% - 3px),
+      0 3px
+    );
   }
   .nk-vault-row[data-state="open"] .nk-vault-icon,
   .nk-vault-icon.nk-vault-icon-open {
@@ -527,8 +628,7 @@
     color: var(--success);
   }
   .nk-vault-row-add .nk-vault-icon {
-    border-style: dashed;
-    border-color: var(--input);
+    border: 1px dashed var(--input);
   }
   .nk-lead {
     flex: 1;
@@ -536,7 +636,7 @@
     height: 0;
     align-self: center;
     border-bottom: 1px dotted
-      color-mix(in oklch, var(--foreground) 28%, transparent);
+      color-mix(in oklch, var(--foreground) 16%, transparent);
     transform: translateY(0.25rem);
   }
   .nk-card-actions {
@@ -545,6 +645,8 @@
     grid-auto-flow: column;
     margin-top: auto;
     border-top: 1px solid var(--border);
+    box-shadow: inset 0 1px 0
+      color-mix(in oklch, var(--steel-hi) 5%, transparent);
   }
   .nk-card-actions > button {
     display: inline-flex;
@@ -597,13 +699,11 @@
     background: var(--accent);
     outline: none;
   }
-  .nk-identity-menu-lead {
-    box-shadow: inset 2px 0 0 var(--success);
-  }
   .nk-identity-menu-lead .nk-vault-icon {
     border-color: var(--success);
     color: var(--success);
   }
+
   .nk-new-tile {
     display: grid;
     place-content: center;
@@ -747,7 +847,12 @@
       "main"
       "status";
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--card)
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 96%, var(--steel-hi)),
+        var(--card) 6rem
+      );
   }
   /* Phones: the shell runs edge to edge and the page grows with its
    * content, so the page band stays pinned under the app header. */
@@ -766,6 +871,12 @@
   .nk-shell-bar {
     grid-area: bar;
     border-bottom: 1px solid var(--border);
+    background-image: var(--nk-g10);
+  }
+  @media (width >= 40rem) {
+    .nk-shell-bar {
+      position: relative;
+    }
   }
   .nk-shell-main {
     grid-area: main;

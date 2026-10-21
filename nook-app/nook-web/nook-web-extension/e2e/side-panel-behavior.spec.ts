@@ -535,6 +535,26 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   expect(await panel.pairings()).toEqual([1])
 })
 
+test('unlocking in the panel with no identity starts the connect at once', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({
+    ...unlockedScenario,
+    status: DeviceProtectionStatus.Pin,
+    vaults: SidePanelStubVaults.None,
+  })
+  const pin = page.getByTestId('device-protection-pin-unlock-input')
+  await pin.fill('123456')
+  await pin.press('Enter')
+  // Connecting is the only next step after the unlock, so no click is needed.
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
+    'Continue in the Nook tab.',
+  )
+  await expect(page.getByTestId('side-panel-connect-start')).toHaveCount(0)
+  expect(await panel.pairings()).toEqual([1])
+})
+
 test('ports of another connect, window or origin are refused, and an undecodable step ends the connect visibly', async ({
   page,
 }) => {
@@ -748,9 +768,9 @@ test('Refresh loads the panel again and reads its state afresh', async ({
   await refresh.click()
   await expect
     .poll(() =>
-      page.evaluate(() => document.documentElement.dataset.beforeRefresh),
+      page.evaluate(() => 'beforeRefresh' in document.documentElement.dataset),
     )
-    .toBeUndefined()
+    .toBe(false)
   await expect(page.getByTestId('side-panel-site-host')).toHaveText(
     'accounts.example.com',
   )

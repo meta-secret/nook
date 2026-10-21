@@ -40,7 +40,7 @@ recover here, then the import continues with it.
       <li>
         <button
           type="button"
-          class="nk-identity-menu-item group w-full border border-border"
+          class="nk-identity-menu-item nk-plate group w-full"
           data-testid="remote-vault-choice-item"
           disabled={busy}
           onclick={() => void onChoose(storeId)}

@@ -57,7 +57,7 @@
     aria-haspopup="listbox"
     aria-expanded={open}
     data-testid="header-language-select"
-    class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
+    class="nk-cut-foot inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
     onclick={() => {
       open = !open
     }}

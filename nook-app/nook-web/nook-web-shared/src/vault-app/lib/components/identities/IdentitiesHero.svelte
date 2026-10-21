@@ -70,7 +70,7 @@ Inner pages use quiet page bars instead.
     {#key vault.locale}
       <h1
         id="identities-hero-title"
-        class="font-sans text-[clamp(1.75rem,4.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
+        class="font-sans text-[clamp(1.75rem,4.5vw,2.75rem)] leading-[1.05] font-light tracking-[-0.045em] text-foreground"
         use:scramble
       >
         {vault.t(I18N_KEYS.WorkspaceIdentitiesTitle)}
@@ -88,12 +88,12 @@ Inner pages use quiet page bars instead.
     {/if}
   </div>
   <!-- age wraps armored output at 64 columns: the BEGIN line and four rows.
-       The lit run crawls one character at a time, never flashing around. -->
+       The lit run jumps, then crawls a stretch along its row. -->
   <CipherField
     class="nk-terminal-armor"
     rows={5}
     columns={64}
     crawl
-    intervalMs={450}
+    intervalMs={250}
   />
 </section>

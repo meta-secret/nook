@@ -128,7 +128,7 @@ Every place that offers "Add a device" opens this.
           {onBack}
         />
         <div class="min-w-0">
-          <p class="nk-eyebrow">
+          <p class="nk-eyebrow nk-lockup">
             <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
             {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
               class="nk-caret"
@@ -137,7 +137,7 @@ Every place that offers "Add a device" opens this.
           </p>
           {#key vault.locale}
             <h1
-              class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
+              class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.75rem)] leading-[1.05] font-light tracking-[-0.045em] text-foreground"
               use:scramble
             >
               {vault.t(I18N_KEYS.AddDeviceTitle)}

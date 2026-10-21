@@ -10,7 +10,6 @@ import type { Subprocess } from 'bun'
 
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
-const webRoot = join(webGroupRoot, 'nook-web-app')
 const sharedSourceRoot = join(webGroupRoot, 'nook-web-shared', 'src')
 const platformRoot = resolve(webGroupRoot, '..', 'nook-platform')
 const repoRoot = resolve(platformRoot, '..', '..')
@@ -20,9 +19,6 @@ const vaultUrl = 'https://localhost:5173/'
 const httpsDir =
   process.env.LOCAL_HTTPS_DIR?.trim() || join(homedir(), '.nook', 'https')
 const cdpPort = Number(process.env.NOOK_DEV_CDP_PORT?.trim() || '9333')
-const browserBinary =
-  process.env.NOOK_DEV_BROWSER_BIN?.trim() ||
-  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
 const profileDir =
   process.env.NOOK_DEV_PROFILE_DIR?.trim() ||
   join(
@@ -52,26 +48,31 @@ const wasmOutputDirs = [
   join('extension', 'nook-companion-wasm'),
 ]
 
+// The WASM and extension builds and Vite inherit their settings from this
+// process: a dev WASM build, the local channel against the HTTPS dev vault.
+process.env.WASM_BUILD_MODE = 'dev'
+process.env.NOOK_SIMPLE_VAULT_URL = vaultUrl
+process.env.NOOK_EXTENSION_CHANNEL = 'local'
+process.env.NOOK_LOCAL_HTTPS = '1'
+process.env.NOOK_LOCAL_HTTPS_CERT_PATH = join(httpsDir, 'localhost.pem')
+process.env.NOOK_LOCAL_HTTPS_KEY_PATH = join(httpsDir, 'localhost-key.pem')
+
 const startedAt = performance.now()
 const log = (message: string): void => {
   const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1)
   console.log(`\x1b[36m[dev ${elapsed}s]\x1b[0m ${message}`)
 }
 
+// Runs one build step; each step spawns its own fixed command. The loop runs
+// from the extension root (its Taskfile changes there first), so commands name
+// fixed paths relative to it.
 const runStep = async (
   label: string,
-  command: readonly string[],
-  cwd: string,
-  env: Readonly<Record<string, string>>,
+  launch: () => Subprocess,
 ): Promise<boolean> => {
   const stepStart = performance.now()
   log(`${label}…`)
-  const child = Bun.spawn([...command], {
-    cwd,
-    env: { ...process.env, ...env },
-    stdout: 'inherit',
-    stderr: 'inherit',
-  })
+  const child = launch()
   const exitCode = await child.exited
   const seconds = ((performance.now() - stepStart) / 1000).toFixed(1)
   log(
@@ -83,28 +84,27 @@ const runStep = async (
 }
 
 const buildWasm = (): Promise<boolean> =>
-  runStep(
-    'WASM (dev, no wasm-opt)',
-    ['task', '--silent', '_wasm:build'],
-    repoRoot,
-    {
-      WASM_BUILD_MODE: 'dev',
-    },
+  runStep('WASM (dev, no wasm-opt)', () =>
+    Bun.spawn(['task', '--dir', repoRoot, '--silent', '_wasm:build'], {
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }),
   )
 
 const buildExtension = (): Promise<boolean> =>
-  runStep('Extension build', ['bun', 'scripts/build.ts'], extensionRoot, {
-    NOOK_SIMPLE_VAULT_URL: vaultUrl,
-    NOOK_EXTENSION_CHANNEL: 'local',
-  })
+  runStep('Extension build', () =>
+    Bun.spawn(['bun', 'scripts/build.ts'], {
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }),
+  )
 
 const startVite = (): Subprocess =>
   Bun.spawn(
     [
       'bun',
-      'run',
-      'dev',
-      '--',
+      '../nook-web-app/node_modules/.bin/vite',
+      '../nook-web-app',
       '--host',
       'localhost',
       '--port',
@@ -112,13 +112,6 @@ const startVite = (): Subprocess =>
       '--strictPort',
     ],
     {
-      cwd: webRoot,
-      env: {
-        ...process.env,
-        NOOK_LOCAL_HTTPS: '1',
-        NOOK_LOCAL_HTTPS_CERT_PATH: join(httpsDir, 'localhost.pem'),
-        NOOK_LOCAL_HTTPS_KEY_PATH: join(httpsDir, 'localhost-key.pem'),
-      },
       stdout: 'inherit',
       stderr: 'inherit',
     },
@@ -134,9 +127,14 @@ const extensionIdFromManifestKey = (manifestKey: string): string => {
     .join('')
 }
 
+// Marks a property that parsed JSON does not carry.
+const MISSING: unique symbol = Symbol('missing')
+
 // Reads one property of parsed JSON without asserting its shape.
 const field = (value: unknown, key: string): unknown =>
-  value instanceof Object ? Reflect.get(value, key) : undefined
+  value instanceof Object && Reflect.has(value, key)
+    ? Reflect.get(value, key)
+    : MISSING
 
 const readBuiltManifestKey = async (): Promise<string> => {
   const key = field(
@@ -151,16 +149,34 @@ const readBuiltManifestKey = async (): Promise<string> => {
   return key
 }
 
-// The browser-level CDP WebSocket URL, when a browser listens on the dev port.
-const cdpBrowserUrl = async (): Promise<string | undefined> => {
-  const response = await fetch(
-    `http://127.0.0.1:${cdpPort}/json/version`,
-  ).catch(() => undefined)
-  const url = response?.ok
-    ? field(await response.json(), 'webSocketDebuggerUrl')
-    : undefined
-  return typeof url === 'string' ? url : undefined
+enum CdpEndpointKind {
+  Listening = 'listening',
+  Absent = 'absent',
 }
+
+type CdpEndpoint =
+  | { readonly kind: CdpEndpointKind.Listening; readonly url: string }
+  | { readonly kind: CdpEndpointKind.Absent }
+
+// The browser-level CDP WebSocket endpoint: listening when a browser serves
+// the dev port, absent when nothing answers there.
+const cdpBrowserEndpoint = async (): Promise<CdpEndpoint> => {
+  let response: Response
+  try {
+    response = await fetch(`http://127.0.0.1:${cdpPort}/json/version`)
+  } catch {
+    return { kind: CdpEndpointKind.Absent }
+  }
+  const url = response.ok
+    ? field(await response.json(), 'webSocketDebuggerUrl')
+    : MISSING
+  return typeof url === 'string'
+    ? { kind: CdpEndpointKind.Listening, url }
+    : { kind: CdpEndpointKind.Absent }
+}
+
+const cdpListening = async (): Promise<boolean> =>
+  (await cdpBrowserEndpoint()).kind === CdpEndpointKind.Listening
 
 // Minimal flat-session CDP client over the browser endpoint.
 class CdpConnection {
@@ -198,7 +214,7 @@ class CdpConnection {
       this.pending.set(id, (reply) => {
         this.pending.delete(id)
         const error = field(reply, 'error')
-        if (error === undefined) resolveSend(field(reply, 'result'))
+        if (error === MISSING) resolveSend(field(reply, 'result'))
         else
           rejectSend(new Error(`${method}: ${String(field(error, 'message'))}`))
       })
@@ -224,7 +240,7 @@ const evaluateIn = async (
     sessionId,
   )
   const exception = field(result, 'exceptionDetails')
-  if (exception !== undefined) throw new Error(JSON.stringify(exception))
+  if (exception !== MISSING) throw new Error(JSON.stringify(exception))
   return field(field(result, 'result'), 'value')
 }
 
@@ -244,15 +260,15 @@ const developerReloadScript = (extensionId: string): string => `
 // Reload the unpacked extension through the extensions page, then reload web tabs so
 // content scripts and the vault bridge reattach to the new extension instance.
 const reloadExtension = async (): Promise<void> => {
-  const browserUrl = await cdpBrowserUrl()
-  if (!browserUrl) {
+  const endpoint = await cdpBrowserEndpoint()
+  if (endpoint.kind === CdpEndpointKind.Absent) {
     log(
       `\x1b[31mBrowser CDP is not reachable on port ${cdpPort}; relaunch the loop.\x1b[0m`,
     )
     return
   }
   const extensionId = extensionIdFromManifestKey(await readBuiltManifestKey())
-  const cdp = await CdpConnection.open(browserUrl)
+  const cdp = await CdpConnection.open(endpoint.url)
   try {
     const created = await cdp.send('Target.createTarget', {
       url: 'chrome://extensions/',
@@ -317,14 +333,16 @@ const closeBrowser = async (browserUrl: string): Promise<void> => {
   void cdp.send('Browser.close', {})
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await sleep(100)
-    if (!(await cdpBrowserUrl())) return
+    if (!(await cdpListening())) return
   }
   throw new Error(`Browser on CDP port ${cdpPort} did not close.`)
 }
 
 const resetProfile = async (): Promise<void> => {
-  const browserUrl = await cdpBrowserUrl()
-  if (browserUrl) await closeBrowser(browserUrl)
+  const endpoint = await cdpBrowserEndpoint()
+  if (endpoint.kind === CdpEndpointKind.Listening) {
+    await closeBrowser(endpoint.url)
+  }
   // Chromium releases the profile lock just after its CDP endpoint goes away.
   await sleep(500)
   await rm(profileDir, { recursive: true, force: true })
@@ -333,7 +351,7 @@ const resetProfile = async (): Promise<void> => {
 
 const launchBrowser = async (): Promise<void> => {
   if (freshProfile) await resetProfile()
-  if (await cdpBrowserUrl()) {
+  if (await cdpListening()) {
     log(`Reusing browser already listening on CDP port ${cdpPort}`)
     await reloadExtension()
     return
@@ -341,7 +359,7 @@ const launchBrowser = async (): Promise<void> => {
   await mkdir(profileDir, { recursive: true })
   const browser = Bun.spawn(
     [
-      browserBinary,
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
       `--user-data-dir=${profileDir}`,
       `--load-extension=${distDir}`,
       '--remote-debugging-address=127.0.0.1',
@@ -354,7 +372,7 @@ const launchBrowser = async (): Promise<void> => {
   )
   browser.unref()
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (await cdpBrowserUrl()) {
+    if (await cdpListening()) {
       log(`Browser up (profile ${profileDir})`)
       return
     }
@@ -368,7 +386,8 @@ const launchBrowser = async (): Promise<void> => {
 type PendingWork = { rust: boolean; extension: boolean }
 const pending: PendingWork = { rust: false, extension: false }
 let building = false
-let debounce: ReturnType<typeof setTimeout> | undefined
+// Each schedule call starts a newer generation; only the latest one drains.
+let generation = 0
 
 const drain = async (): Promise<void> => {
   if (building) return
@@ -393,19 +412,21 @@ const drain = async (): Promise<void> => {
 const schedule = (work: Partial<PendingWork>): void => {
   pending.rust ||= work.rust === true
   pending.extension ||= work.extension === true
-  clearTimeout(debounce)
-  debounce = setTimeout(() => void drain(), 250)
+  generation += 1
+  const scheduled = generation
+  setTimeout(() => {
+    if (scheduled === generation) void drain()
+  }, 250)
 }
 
 const watchSources = (): void => {
   watch(platformRoot, { recursive: true }, (_event, fileName) => {
     if (!fileName) return
-    const [crate] = fileName.split(sep)
+    const [crate = ''] = fileName.split(sep)
     const isWasmInput =
       fileName === 'Cargo.toml' ||
       fileName === 'Cargo.lock' ||
-      (wasmCrates.includes(crate ?? '') &&
-        !fileName.includes(`${sep}target${sep}`))
+      (wasmCrates.includes(crate) && !fileName.includes(`${sep}target${sep}`))
     if (isWasmInput) {
       log(`Rust change: ${fileName}`)
       schedule({ rust: true })

@@ -1,0 +1,292 @@
+/* Nook material finish, after a blackened tanto blade: steel primaries,
+ * plates, the maker's lockup, stepped bands on the large structure, facets
+ * over large faces and the G10 weave. Elements carry tone rather than lines:
+ * the lines live in the background and the structure, not on every tile.
+ * Loaded after nook-identity.css, whose shape vocabulary it finishes. */
+@layer components {
+  /* Maker's lockup: a tracked label run out into a hairline that ends in a
+   * small diamond, as engraved beside the mark on a blade. */
+  .nk-lockup {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .nk-lockup::after {
+    content: "";
+    order: 1;
+    flex: 1 1 2rem;
+    max-width: 10rem;
+    height: 1px;
+    margin-left: 0.75rem;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--foreground) 34%, transparent),
+      color-mix(in oklch, var(--foreground) 10%, transparent)
+    );
+  }
+  .nk-lockup::before {
+    content: "";
+    order: 2;
+    flex: none;
+    width: 5px;
+    height: 5px;
+    margin-left: 0.25rem;
+    border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
+    transform: rotate(45deg);
+  }
+
+  /* Primary fill: brushed black oxide with one soft sheen (light theme);
+   * the dark theme's brushed steel is defined unlayered at the end of this
+   * file. The tip is cut like a tanto, square again while focused so the
+   * ring shows. */
+  .nk-steel {
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent 22%,
+        color-mix(in oklch, white 9%, transparent) 46%,
+        transparent 70%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, white 8%, transparent),
+        transparent 60%
+      );
+    box-shadow: inset 0 1px 0 color-mix(in oklch, white 16%, transparent);
+  }
+  /* A go action keeps its pointed edge (nk-go) instead of the tanto tip. */
+  .nk-steel:not(.nk-go) {
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  }
+  .nk-steel:focus-visible {
+    clip-path: none;
+  }
+  .nk-steel:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+
+  /* Action shape by kind: a commit action (nk-steel) is cut at the top like
+   * a blade tip; an action that navigates or chooses (outline and secondary
+   * buttons, plates) is cut at its foot, the cut open to the background with
+   * a lit edge. Square again while focused so the ring shows. */
+  .nk-cut-foot {
+    position: relative;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 8px),
+      calc(100% - 8px) 100%,
+      0 100%
+    );
+  }
+  .nk-cut-foot::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
+  .nk-cut-foot:focus-visible {
+    clip-path: none;
+  }
+  .nk-cut-foot:focus-visible::after {
+    content: none;
+  }
+
+  /* Plate: an action tile set apart by tone, not by a border: a raised
+   * steel face lit along its top, its foot cut like a tanto tip that stays
+   * open to the background, its cut edge lit. Hover lifts the face. */
+  .nk-plate {
+    position: relative;
+    border-color: transparent;
+    background-color: color-mix(in oklch, var(--card) 50%, var(--secondary));
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--steel-hi) 4%, transparent),
+      transparent 70%
+    );
+    box-shadow: inset 0 1px 0
+      color-mix(in oklch, var(--steel-hi) 7%, transparent);
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 12px),
+      calc(100% - 12px) 100%,
+      0 100%
+    );
+    transition: background-color 0.15s;
+  }
+  .nk-plate::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
+  .nk-plate:hover:not(:disabled),
+  .nk-plate:focus-visible {
+    background-color: color-mix(in oklch, var(--card) 15%, var(--secondary));
+  }
+  /* The lead plate commits (opens the vault): cut at the top like the
+   * primary actions, not at the foot. */
+  .nk-plate.nk-identity-menu-lead {
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  }
+  .nk-plate.nk-identity-menu-lead::after {
+    top: 0;
+    bottom: auto;
+    background: linear-gradient(
+      to top right,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
+  /* Keyboard focus: square the plate off, drop the cut edge and draw the
+   * standard ring, as primaries and foot-cut buttons do. */
+  .nk-plate:focus-visible {
+    clip-path: none;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .nk-plate:focus-visible::after {
+    content: none;
+  }
+
+  /* Facets: the blade's ground planes and broken lines laid faintly over a
+   * large face so it is never one flat tone. The overlay sits above the face
+   * and below the content, drawn in the text colour for either theme. */
+  .nk-frame-keytag::after,
+  .nk-frame-sheet::after,
+  .nk-shell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: color-mix(in oklch, var(--foreground) 4.5%, transparent);
+    -webkit-mask: var(--nk-facets) right top / cover no-repeat;
+    mask: var(--nk-facets) right top / cover no-repeat;
+  }
+  .nk-shell {
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* Stepped bands on the large structure only: the shell page band and the
+   * app header run a chunky band that steps down at 45 degrees into their
+   * hairline, like the fuller ground into the blade flat. */
+  .nk-shell-bar::after,
+  .app-header::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 4px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
+      var(--border) 0
+    );
+    clip-path: var(--nk-step-foot);
+  }
+  .app-header::after {
+    --nk-step-at: 6rem;
+  }
+}
+
+/* G10 handle scale: a faint diagonal weave for matte faces. Facets: the
+ * blade's planes and stepped lines, used as a mask over large faces. */
+:root {
+  --nk-facets: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%201200%20600%27%20preserveAspectRatio%3D%27xMaxYMin%20slice%27%3E%3Cg%20fill%3D%27white%27%3E%3Cpolygon%20points%3D%27520%2C0%201200%2C0%201200%2C600%20820%2C600%27%20fill-opacity%3D%27.22%27%2F%3E%3Cpolygon%20points%3D%27760%2C0%20860%2C0%201150%2C600%201050%2C600%27%20fill-opacity%3D%27.3%27%2F%3E%3Cpolygon%20points%3D%270%2C0%20300%2C0%20180%2C600%200%2C600%27%20fill-opacity%3D%27.08%27%2F%3E%3Crect%20x%3D%270%27%20y%3D%2786%27%20width%3D%27150%27%20height%3D%275%27%2F%3E%3Crect%20x%3D%27640%27%20y%3D%27470%27%20width%3D%27120%27%20height%3D%275%27%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27white%27%20stroke-width%3D%271%27%20vector-effect%3D%27non-scaling-stroke%27%3E%3Cpath%20d%3D%27M520%200%20L820%20600%27%20stroke-opacity%3D%27.9%27%2F%3E%3Cpath%20d%3D%27M860%200%20L1150%20600%27%20stroke-opacity%3D%27.6%27%2F%3E%3Cpath%20d%3D%27M0%2088%20H360%20L392%20120%20H1200%27%20stroke-opacity%3D%27.8%27%2F%3E%3Cpath%20d%3D%27M0%20472%20H760%20L736%20448%20H1200%27%20stroke-opacity%3D%27.6%27%2F%3E%3Cpath%20d%3D%27M300%200%20L180%20600%27%20stroke-opacity%3D%27.4%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  --nk-g10:
+    repeating-linear-gradient(
+      45deg,
+      rgb(120 130 150 / 3.5%) 0 1px,
+      transparent 1px 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgb(120 130 150 / 3.5%) 0 1px,
+      transparent 1px 4px
+    );
+}
+
+/* Dark primary: a dark blade with a polished rim. A graphite steel face
+ * under one soft sheen, a bright steel rim that also traces the tanto cut,
+ * and a brighter strip along the foot like the cutting edge. Unlayered so
+ * its face and light text outrank the button's colour utilities. */
+.dark .nk-steel {
+  --nk-rim: oklch(0.82 0.005 250 / 55%);
+  background:
+    linear-gradient(
+        to top right,
+        transparent calc(50% - 0.75px),
+        var(--nk-rim) calc(50% - 0.75px),
+        var(--nk-rim) calc(50% + 0.75px),
+        transparent calc(50% + 0.75px)
+      )
+      right top / 10px 10px no-repeat,
+    linear-gradient(
+      105deg,
+      transparent 20%,
+      oklch(1 0 0 / 7%) 46%,
+      transparent 72%
+    ),
+    linear-gradient(180deg, oklch(0.37 0.006 255), oklch(0.25 0.006 255));
+  box-shadow:
+    inset 0 0 0 1px var(--nk-rim),
+    inset 0 -2px 0 oklch(0.93 0.004 250 / 80%),
+    inset 0 1px 0 oklch(1 0 0 / 18%);
+  color: oklch(0.96 0.003 255);
+}
+.dark .nk-steel.nk-go {
+  background:
+    linear-gradient(
+      105deg,
+      transparent 20%,
+      oklch(1 0 0 / 7%) 46%,
+      transparent 72%
+    ),
+    linear-gradient(180deg, oklch(0.37 0.006 255), oklch(0.25 0.006 255));
+}
+
+/* Stepped-band geometry: thick until --nk-step-at, a 45 degree step, then a
+ * hairline. Declared on each band itself so the theme and the band's own
+ * step apply. */
+@layer components {
+  .nk-shell-bar::after,
+  .app-header::after,
+  .nk-hero::after {
+    --nk-step-ink: color-mix(in oklch, var(--foreground) 26%, transparent);
+    --nk-step-foot: polygon(
+      0 0,
+      var(--nk-step-at, 3rem) 0,
+      calc(var(--nk-step-at, 3rem) + 3px) 3px,
+      100% 3px,
+      100% 100%,
+      0 100%
+    );
+  }
+}

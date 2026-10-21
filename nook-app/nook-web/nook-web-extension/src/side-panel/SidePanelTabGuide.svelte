@@ -1,7 +1,8 @@
 <!--
 The way to the Nook tab. While the next connect step is the person's on the
-page beside the panel, a strip at the top of the panel points at that page
-with chevrons marching toward its edge; pointing at the strip speeds them up.
+page beside the panel, a strip right on top of the connect card points at
+that page with chevrons marching toward its edge; pointing at it speeds them
+up.
 Clicking it brings the Nook tab forward. The connect card's step line says
 what to do there; the strip only shows the way.
 -->
