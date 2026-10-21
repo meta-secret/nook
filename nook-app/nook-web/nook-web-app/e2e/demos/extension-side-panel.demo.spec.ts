@@ -473,7 +473,7 @@ test('unlocks with the connected passkey in place', async ({ page }) => {
   await demoBeat(page)
 })
 
-test('leads with connecting an identity when none is connected', async ({
+test('starts connecting an identity at once when none is connected', async ({
   page,
 }) => {
   await openSidePanel({
@@ -488,8 +488,9 @@ test('leads with connecting an identity when none is connected', async ({
   await expect(
     page.getByTestId('side-panel-connect-card').getByRole('heading'),
   ).toHaveText('No identity connected yet')
-  await expect(page.getByTestId('side-panel-connect-start')).toHaveText(
-    'Connect an identity',
+  // Connecting is the only next step, so the panel starts it without a click.
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
+    'Continue in the Nook tab.',
   )
   await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
   // Nothing to manage yet: All connections waits for an identity.

@@ -123,10 +123,13 @@ administer vault items.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. When the user explicitly chooses Connect an identity in the side panel, or
-   Connect / pair in the authentication tab, the extension opens the configured
-   Simple Vault `/extension-connect` route. The route receives the extension's
-   runtime id and public device request. It opens in one Nook tab of the
+3. When the side panel unlocks with no identity connected, it starts the
+   connect itself, once per panel. The user starts it again with Connect an
+   identity after closing the Nook tab or a failure, with Connect another
+   identity, or with Connect / pair in the authentication tab. The extension
+   then opens the configured Simple Vault `/extension-connect` route. The
+   route receives the extension's runtime id and public device request. It
+   opens in one Nook tab of the
    requesting window, under the [connect tab](#connect-tab) rule. The side
    panel opens that route directly, never the authentication tab.
    - The route carries no start choice. The page owns create, join, and the
@@ -371,8 +374,10 @@ private identity.
     and offers Use this identity, which locks this one and shows that
     identity's own unlock in place. The footer leaves while it shows, and a
     lock or a vault list that is no longer paired returns to This site.
-  - **Unlocked with no paired vault:** the connect card leads with one action,
-    Connect an identity.
+  - **Unlocked with no paired vault:** connecting is the only next step, so
+    the panel starts it at once and the connect card follows the Nook tab. It
+    starts on its own once per panel; after the tab closes or the connect
+    fails, the card offers Connect an identity.
   - **Next identity's key:** when Rust stages a new identity, its passkey or
     PIN setup runs in place with Cancel. The ceremony replaces the page
     content; the footer keeps its own rule. Status re-reads leave that

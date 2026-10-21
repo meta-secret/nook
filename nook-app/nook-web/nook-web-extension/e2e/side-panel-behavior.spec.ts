@@ -493,7 +493,7 @@ test('approval on the connect page shows the new identity in the panel at once',
   expect(await panel.pageDisconnected(port)).toBe(true)
 })
 
-test('with no identity the card leads with one Connect, and closing the Nook tab brings it back', async ({
+test('with no identity the panel starts the connect at once, and closing the Nook tab brings back Connect', async ({
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
@@ -505,10 +505,8 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   await expect(card.getByTestId('side-panel-connect-close')).toHaveCount(0)
   await expect(card.getByTestId('side-panel-vault-name')).toHaveCount(0)
   await expect(card.getByTestId('side-panel-join-identity')).toHaveCount(0)
-  const start = card.getByTestId('side-panel-connect-start')
-  await expect(start).toHaveText('Connect an identity')
-  await start.click()
-  // The panel listens once the Nook tab is open.
+  // Connecting is the only next step, so the panel starts it without a
+  // click; the panel listens once the Nook tab is open.
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
@@ -529,7 +527,10 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
     .poll(() => panel.focusedTabs())
     .toEqual([SidePanelStubPage.CONNECT_TAB_ID])
   await panel.pageCloses(port)
-  await expect(card.getByTestId('side-panel-connect-start')).toBeVisible()
+  // It started once; after the tab closes the card offers Connect again.
+  await expect(card.getByTestId('side-panel-connect-start')).toHaveText(
+    'Connect an identity',
+  )
   await expect(card.getByTestId('side-panel-connect-step')).toHaveCount(0)
   await expect(guide).toHaveCount(0)
   expect(await panel.pairings()).toEqual([1])
@@ -540,8 +541,7 @@ test('ports of another connect, window or origin are refused, and an undecodable
 }) => {
   const panel = new SidePanelStubPage(page)
   await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
-  await page.getByTestId('side-panel-connect-start').click()
-  // The panel listens once the Nook tab is open.
+  // The panel starts the connect itself and listens once the Nook tab opens.
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
@@ -568,9 +568,15 @@ test('a new identity sets up its own key in the panel and Cancel returns to the 
   page,
 }) => {
   const panel = new SidePanelStubPage(page)
-  await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
-  await panel.update({ connectKey: SidePanelStubConnectKey.NewStaged })
-  await page.getByTestId('side-panel-connect-start').click()
+  await panel.open(unlockedScenario)
+  // Rust stages a new key, then the last identity goes away: with none
+  // connected the panel starts the connect, and the new identity's key
+  // is set up in place.
+  await panel.update({
+    connectKey: SidePanelStubConnectKey.NewStaged,
+    vaults: SidePanelStubVaults.None,
+  })
+  await panel.focus()
   const ceremony = page.getByTestId('side-panel-identity-key')
   await expect(ceremony).toBeVisible()
   await expect(page.getByTestId('device-setup-chain')).toBeVisible()

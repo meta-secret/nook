@@ -707,6 +707,17 @@ closes it.
   // Closing the panel stops following the Nook tab.
   onDestroy(() => connectFlow.stop())
 
+  // No identity connected: connecting is the only next step, so the panel
+  // starts it instead of waiting for the card's button.
+  $effect(() => {
+    if (
+      view.kind === SidePanelViewKind.Unlocked &&
+      view.vaults.kind === SidePanelVaultsKind.NoVault
+    ) {
+      void connectFlow.startFirstConnect()
+    }
+  })
+
   $effect(() => {
     const followRequest: Parameters<typeof runtime.follow>[0] = {
       window: panelWindow,
