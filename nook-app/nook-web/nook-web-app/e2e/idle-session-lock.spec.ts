@@ -18,12 +18,17 @@ const IDLE_LOCK_MS = Number(
 
 test.describe('idle session auto-lock', () => {
   test.beforeEach(async ({ page }) => {
+    const clockStart = new Date()
+    await page.clock.install({ time: clockStart })
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
     await disableLoginAutoUnlock(page)
     await page.reload()
+    // Finish setup with real time, then pause before the tested unlock starts
+    // its idle timer. A future instant avoids racing the clock's current time.
+    await page.clock.pauseAt(new Date(clockStart.getTime() + 60 * 60 * 1000))
   })
 
   test('locks after inactivity and allows unlock again', async ({ page }) => {
@@ -36,7 +41,7 @@ test.describe('idle session auto-lock', () => {
     })
     await waitForVaultOperationsIdle(page)
 
-    await page.waitForTimeout(IDLE_LOCK_MS + 1500)
+    await page.clock.runFor(IDLE_LOCK_MS)
 
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
     await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
@@ -71,16 +76,21 @@ test.describe('idle session auto-lock', () => {
 
     const bumpInterval = Math.max(500, Math.floor(IDLE_LOCK_MS / 2))
     for (let i = 0; i < 3; i += 1) {
-      await page.waitForTimeout(bumpInterval)
-      // The page title is inert; the shell's corner is the workspace rail.
-      await page.getByTestId('page-bar-title').click({
-        position: { x: 4 + i * 4, y: 4 },
-      })
+      await page.clock.runFor(bumpInterval)
+      // Real keyboard input reaches the document's activity listener without
+      // depending on an animated element becoming actionable before expiry.
+      await page.keyboard.press('Shift')
     }
 
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
+
+    await page.clock.runFor(IDLE_LOCK_MS - 1)
+    await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+    await page.clock.runFor(1)
+    await expect(page.getByTestId('login-session-expired')).toBeVisible()
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
   })
 })
