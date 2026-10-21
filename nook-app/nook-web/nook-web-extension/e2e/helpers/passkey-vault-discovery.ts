@@ -61,9 +61,9 @@ export class PasskeyVaultDiscovery {
         return ''
       }
       const original = manager.passkey_details_js
-      manager.passkey_details_js = function (...args) {
+      manager.passkey_details_js = async function (...args) {
         try {
-          return original.apply(this, args)
+          return await original.apply(this, args)
         } catch (nativeFailure) {
           const message =
             nativeFailure instanceof Error
