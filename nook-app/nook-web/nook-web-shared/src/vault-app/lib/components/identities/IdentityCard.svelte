@@ -407,7 +407,7 @@ panel sits inside the card, which then spans the full row.
     </header>
 
     {#if protection}
-      <section class="border-t border-border px-2 py-2">
+      <section class="nk-stepline-top border-t border-border px-2 py-2">
         <button
           type="button"
           class="nk-vault-row {protection.nudge === NookIdentityNudge.Urge
@@ -453,7 +453,7 @@ panel sits inside the card, which then spans the full row.
     {/if}
 
     <section
-      class="flex-1 border-t border-border px-2 pb-2 pt-1"
+      class="nk-stepline-top flex-1 border-t border-border px-2 pb-2 pt-1"
       aria-label={card.label}
     >
       <div class="flex items-center justify-between px-2.5 pb-1 pt-2">
@@ -582,7 +582,7 @@ panel sits inside the card, which then spans the full row.
 
     {#if managesHere}
       <section
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 border-t border-border px-2 py-2"
+        class="nk-stepline-top grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 border-t border-border px-2 py-2"
       >
         {@render panelRow(
           'identity-overview-toggle',

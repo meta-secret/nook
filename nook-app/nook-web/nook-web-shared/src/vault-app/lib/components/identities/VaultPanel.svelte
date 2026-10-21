@@ -463,7 +463,7 @@ once it is open.
   {/if}
 
   {#if reachable}
-    <section class="grid gap-3 border-t border-border pt-5">
+    <section class="nk-stepline-top grid gap-3 border-t border-border pt-5">
       <header class="flex items-baseline justify-between gap-3">
         <h3
           class="nk-lockup flex-1 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"

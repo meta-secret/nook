@@ -291,21 +291,29 @@
       ),
       var(--nk-g10), var(--card);
   }
-  /* The edge line along the hero foot, like the polished cutting edge. */
+  /* Hero foot: the stepped band, its hairline polished like the edge. */
   .nk-hero::after {
     content: "";
     position: absolute;
     right: var(--nk-cut);
     bottom: 0;
     left: 0;
-    height: 1px;
+    height: 5px;
     pointer-events: none;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklch, var(--steel-hi) 70%, transparent) 62%,
-      transparent
-    );
+    background:
+      linear-gradient(
+          color-mix(in oklch, var(--foreground) 45%, transparent),
+          color-mix(in oklch, var(--foreground) 45%, transparent)
+        )
+        0 0 / calc(4.5rem + 4px) 100% no-repeat,
+      linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in oklch, var(--steel-hi) 70%, transparent) 62%,
+        transparent
+      );
+    clip-path: var(--nk-step-foot);
+    --nk-step-at: 4.5rem;
   }
   .nk-hero-cipher {
     position: absolute;
@@ -532,6 +540,7 @@
     transform: translateY(0.25rem);
   }
   .nk-card-actions {
+    position: relative;
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
@@ -641,6 +650,31 @@
       var(--border) calc(50% + 0.75px),
       transparent calc(50% + 0.75px)
     );
+  }
+  .nk-plate::before {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: -1px;
+    width: min(45%, 10rem);
+    height: 5px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      color-mix(in oklch, var(--nk-step-ink) 45%, transparent) 0,
+      transparent
+    );
+    clip-path: var(--nk-step-foot);
+    transition: background-color 0.15s;
+    --nk-step-at: 2.25rem;
+  }
+  .nk-plate:hover:not(:disabled)::before,
+  .nk-plate:focus-visible::before {
+    --nk-step-ink: var(--titanium);
+  }
+  .nk-plate.nk-identity-menu-lead::before {
+    --nk-step-ink: var(--success);
   }
   .nk-plate:hover:not(:disabled),
   .nk-plate:focus-visible {
@@ -822,6 +856,30 @@
     border-bottom: 1px solid var(--border);
     background-image: var(--nk-g10);
   }
+  @media (width >= 40rem) {
+    .nk-shell-bar {
+      position: relative;
+    }
+  }
+  .nk-shell-bar::after,
+  .app-header::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 5px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      var(--border) 0
+    );
+    clip-path: var(--nk-step-foot);
+  }
+  .app-header::after {
+    --nk-step-at: 6rem;
+  }
   .nk-shell-main {
     grid-area: main;
   }
@@ -835,6 +893,38 @@
   }
   .nk-band-success {
     box-shadow: inset 2px 0 0 var(--success);
+  }
+
+  /* Stepped rule: a chunky band that steps down at 45 degrees into a
+   * hairline, like the fuller ground into the blade flat. nk-stepline sits on
+   * an element's bottom border, nk-stepline-top on its top border. */
+  .nk-stepline,
+  .nk-stepline-top {
+    position: relative;
+  }
+  .nk-stepline::after,
+  .nk-stepline-top::after,
+  .nk-card-actions::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    left: 0;
+    height: 5px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      var(--border) 0
+    );
+  }
+  .nk-stepline::after {
+    bottom: -1px;
+    clip-path: var(--nk-step-foot);
+  }
+  .nk-stepline-top::after,
+  .nk-card-actions::after {
+    top: -1px;
+    clip-path: var(--nk-step-head);
   }
 
   /* Maker's lockup: a tracked label run out into a hairline that ends in a
@@ -938,4 +1028,35 @@
     inset 0 -1px 0 var(--blade-edge),
     inset 0 1px 0 color-mix(in oklch, var(--blade-edge) 22%, transparent);
   color: var(--steel-hi);
+}
+
+/* Stepped-rule geometry: thick until --nk-step-at, a 45 degree step, then a
+ * hairline. The foot hangs from a bottom edge, the head from a top edge.
+ * Declared on each band itself so the theme and the band's own step apply. */
+@layer components {
+  .nk-stepline::after,
+  .nk-stepline-top::after,
+  .nk-card-actions::after,
+  .nk-shell-bar::after,
+  .app-header::after,
+  .nk-hero::after,
+  .nk-plate::before {
+    --nk-step-ink: color-mix(in oklch, var(--foreground) 52%, transparent);
+    --nk-step-foot: polygon(
+      0 0,
+      var(--nk-step-at, 3rem) 0,
+      calc(var(--nk-step-at, 3rem) + 4px) 4px,
+      100% 4px,
+      100% 100%,
+      0 100%
+    );
+    --nk-step-head: polygon(
+      0 0,
+      100% 0,
+      100% 1px,
+      calc(var(--nk-step-at, 3rem) + 4px) 1px,
+      var(--nk-step-at, 3rem) 5px,
+      0 5px
+    );
+  }
 }
