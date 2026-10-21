@@ -5,7 +5,7 @@ pub struct WasmMemberAliases<'scan> {
     pub binding: tree_sitter::Node<'scan>,
     pub value: tree_sitter::Node<'scan>,
     pub source: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
     pub first_line: usize,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_type_names: &'scan HashSet<String>,
@@ -17,8 +17,8 @@ pub struct WasmMemberAliases<'scan> {
     pub scoped_wasm_instances: &'scan [ScopedBinding],
     pub inventory: CallableAliasInventory,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::javascript_scopes::ScopedBinding;
@@ -214,7 +214,7 @@ impl CallableAliasInventory {
         first_line: usize,
         callable_names: &HashSet<String>,
         module: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
     ) -> Self {
         let mut cursor = pattern.walk();
         for child in pattern.named_children(&mut cursor) {
@@ -250,7 +250,7 @@ impl CallableAliasInventory {
         binding: tree_sitter::Node<'_>,
         value: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         first_line: usize,
         callable_names: &HashSet<String>,
         wasm_type_names: &HashSet<String>,
@@ -349,7 +349,7 @@ self
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
 impl CallableAliasInventory {
-pub(super) fn collect_object_literal_aliases(mut self, object: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding],) -> Self {
+pub(super) fn collect_object_literal_aliases(mut self, object: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding],) -> Self {
     let mut cursor = object.walk();
     for child in object.named_children(&mut cursor) {
         let pair = (child.kind() == "pair").then(|| {
@@ -411,7 +411,7 @@ impl CallableAliasInventory {
         mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         first_line: usize,
         callable_names: &HashSet<String>,
         wasm_type_names: &HashSet<String>,
@@ -462,7 +462,7 @@ impl CallableAliasInventory {
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
 impl WasmMemberAliases<'_> {
-fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Result<String, MemberResolutionFailure> {
+fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Result<String, MemberResolutionFailure> {
     let mut value = DynamicWasmAliases::unwrap_transparent_expression(value);
     if value.kind() == "sequence_expression" {
         let mut cursor = value.walk();
@@ -559,7 +559,7 @@ impl WasmMemberAliases<'_> {
     pub(super) fn wasm_receiver_type(
         receiver: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         wasm_type_names: &HashSet<String>,
         wasm_namespace_bindings: &HashMap<String, String>,
         wasm_class_bindings: &HashMap<String, String>,
@@ -684,7 +684,7 @@ impl WasmMemberAliases<'_> {
     fn namespace_member_wasm_type(
         expression: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         wasm_type_names: &HashSet<String>,
         wasm_namespace_bindings: &HashMap<String, String>,
         scoped_wasm_namespaces: &[ScopedBinding],

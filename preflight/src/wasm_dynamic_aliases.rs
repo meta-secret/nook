@@ -4,12 +4,12 @@ mod resolution;
 pub struct DynamicWasmAliases<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
     pub module: &'scan str,
     pub wasm_namespace_bindings: HashMap<String, String>,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::javascript_scopes::ScopedBinding;
@@ -86,7 +86,7 @@ impl DynamicWasmAliases<'_> {
 #[allow(clippy::too_many_lines)]
 #[rustfmt::skip]
 impl DynamicWasmAliases<'_> {
-pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, imported_callable_bindings: HashSet<String>, lines: Vec<usize>) -> DynamicAliasInventory {
+pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<'_>, source: &str, source_path: &ModuleSource<'_>, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, imported_callable_bindings: HashSet<String>, lines: Vec<usize>) -> DynamicAliasInventory {
     let member_alias_receivers = WasmInstanceFactories::collect_member_alias_receiver_names(node, source, callable_names, HashSet::new());
     let called_bindings = WasmInstanceFactories::collect_factory_calls_for_receivers(node, source, &member_alias_receivers, HashSet::new());
     let scoped_wasm_factories = (WasmInstanceFactories { node, source, wasm_class_bindings, factories: Vec::new() }).collect_wasm_instance_factories();
@@ -360,7 +360,7 @@ impl DynamicScopeInventory {
 struct DynamicAliasTraversal<'a> {
     node: tree_sitter::Node<'a>,
     source: &'a str,
-    source_path: &'a Path,
+    source_path: &'a ModuleSource<'a>,
     first_line: usize,
     callable_names: &'a HashSet<String>,
     wasm_type_names: &'a HashSet<String>,
@@ -526,7 +526,7 @@ struct BindingAliasObservation<'a> {
     binding: tree_sitter::Node<'a>,
     value: tree_sitter::Node<'a>,
     source: &'a str,
-    source_path: &'a Path,
+    source_path: &'a ModuleSource<'a>,
     first_line: usize,
     callable_names: &'a HashSet<String>,
     wasm_type_names: &'a HashSet<String>,

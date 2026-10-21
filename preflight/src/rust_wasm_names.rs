@@ -1,3 +1,4 @@
+use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource};
 pub struct RustWasmNames<'scan> {
     pub root: &'scan Path,
 }
@@ -70,7 +71,12 @@ impl RustWasmNames<'_> {
             files: &mut web_files,
         })
         .collect_web_source_files()?;
+        let inputs = ModuleInputs::collect(&web_files);
         for path in web_files {
+            let source_path = ModuleSource {
+                path: &path,
+                inputs: &inputs,
+            };
             let source = fs::read_to_string(&path)?;
             let lines = if path
                 .extension()
@@ -78,7 +84,7 @@ impl RustWasmNames<'_> {
             {
                 (WasmSvelteSources {
                     source: &source,
-                    source_path: &path,
+                    source_path: &source_path,
                     callable_names: &callable_names,
                     wasm_type_names: &wasm_type_names,
                     wasm_types: &wasm_types,
@@ -91,7 +97,7 @@ impl RustWasmNames<'_> {
             {
                 RustWasmNames::tsx_wasm_import_alias_lines(
                     &source,
-                    &path,
+                    &source_path,
                     1,
                     &callable_names,
                     &wasm_type_names,
@@ -101,7 +107,7 @@ impl RustWasmNames<'_> {
             } else {
                 RustWasmNames::typescript_wasm_import_alias_lines_at_path(
                     &source,
-                    &path,
+                    &source_path,
                     1,
                     &callable_names,
                     &wasm_type_names,
@@ -137,7 +143,10 @@ impl RustWasmNames<'_> {
         let wasm_types = RustWasmNames::test_wasm_methods_by_type();
         RustWasmNames::typescript_wasm_import_alias_lines_at_path(
             source,
-            Path::new("nook-app/nook-web/test.ts"),
+            &ModuleSource {
+                path: Path::new("nook-app/nook-web/test.ts"),
+                inputs: &ModuleInputs::default(),
+            },
             first_line,
             callable_names,
             &wasm_type_names,
@@ -149,7 +158,7 @@ impl RustWasmNames<'_> {
 impl RustWasmNames<'_> {
     pub(super) fn typescript_wasm_import_alias_lines_at_path(
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         first_line: usize,
         callable_names: &HashSet<String>,
         wasm_type_names: &HashSet<String>,
@@ -170,7 +179,7 @@ impl RustWasmNames<'_> {
 impl RustWasmNames<'_> {
     fn tsx_wasm_import_alias_lines(
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         first_line: usize,
         callable_names: &HashSet<String>,
         wasm_type_names: &HashSet<String>,
@@ -191,7 +200,7 @@ impl RustWasmNames<'_> {
 impl RustWasmNames<'_> {
     fn script_wasm_import_alias_lines(
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         first_line: usize,
         callable_names: &HashSet<String>,
         wasm_type_names: &HashSet<String>,

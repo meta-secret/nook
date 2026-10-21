@@ -1,20 +1,35 @@
+use super::inputs::{ModuleInputs, ModuleSource};
 use super::{
     ExportResolutionFailure, ForwardedExport, HashSet, Path, PathBuf, WASM_MODULE_ALIASES,
     WasmModuleSources,
 };
 
 /// Each recursive branch returns its visited set before the next sibling starts.
-#[derive(Default)]
-pub(super) struct ModuleTraversal {
+pub(super) struct ModuleTraversal<'scan> {
+    inputs: &'scan ModuleInputs,
     modules: HashSet<PathBuf>,
     symbols: HashSet<(PathBuf, String)>,
 }
-impl ModuleTraversal {
+impl<'scan> ModuleTraversal<'scan> {
+    pub(super) fn new(inputs: &'scan ModuleInputs) -> Self {
+        Self {
+            inputs,
+            modules: HashSet::new(),
+            symbols: HashSet::new(),
+        }
+    }
+
     pub(super) fn any(mut self, module: &str, source_path: &Path) -> (Self, bool) {
         if WASM_MODULE_ALIASES.contains(&module) {
             return (self, true);
         }
-        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(
+            module,
+            &ModuleSource {
+                path: source_path,
+                inputs: self.inputs,
+            },
+        ) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -25,7 +40,10 @@ impl ModuleTraversal {
         if !self.modules.insert(resolved.clone()) {
             return (self, false);
         }
-        let Ok(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+        let Ok(exports) = WasmModuleSources::local_forwarded_exports(&ModuleSource {
+            path: &resolved,
+            inputs: self.inputs,
+        }) else {
             return (self, false);
         };
         for export in exports {
@@ -51,7 +69,13 @@ impl ModuleTraversal {
         if WASM_MODULE_ALIASES.contains(&module) {
             return (self, exported_name != "default");
         }
-        let Ok(resolved) = WasmModuleSources::resolve_module(module, source_path) else {
+        let Ok(resolved) = WasmModuleSources::resolve_module(
+            module,
+            &ModuleSource {
+                path: source_path,
+                inputs: self.inputs,
+            },
+        ) else {
             return (self, false);
         };
         if WasmModuleSources::is_known_wasm_path(&WasmModuleSources::strip_module_extension(
@@ -65,7 +89,10 @@ impl ModuleTraversal {
         {
             return (self, false);
         }
-        let Ok(exports) = WasmModuleSources::local_forwarded_exports(&resolved) else {
+        let Ok(exports) = WasmModuleSources::local_forwarded_exports(&ModuleSource {
+            path: &resolved,
+            inputs: self.inputs,
+        }) else {
             return (self, false);
         };
         let explicit = exports.iter().any(|export| matches!(export, ForwardedExport::Named { exported, .. } if exported == exported_name));
@@ -107,7 +134,13 @@ impl ModuleTraversal {
                 },
             );
         }
-        let resolved = match WasmModuleSources::resolve_module(module, source_path) {
+        let resolved = match WasmModuleSources::resolve_module(
+            module,
+            &ModuleSource {
+                path: source_path,
+                inputs: self.inputs,
+            },
+        ) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };
@@ -129,7 +162,10 @@ impl ModuleTraversal {
         {
             return (self, Err(ExportResolutionFailure::RepeatedExport));
         }
-        let exports = match WasmModuleSources::local_forwarded_exports(&resolved) {
+        let exports = match WasmModuleSources::local_forwarded_exports(&ModuleSource {
+            path: &resolved,
+            inputs: self.inputs,
+        }) {
             Ok(exports) => exports,
             Err(failure) => return (self, Err(failure)),
         };
@@ -162,7 +198,13 @@ impl ModuleTraversal {
         exported_name: &str,
         source_path: &Path,
     ) -> (Self, Result<String, ExportResolutionFailure>) {
-        let resolved = match WasmModuleSources::resolve_module(module, source_path) {
+        let resolved = match WasmModuleSources::resolve_module(
+            module,
+            &ModuleSource {
+                path: source_path,
+                inputs: self.inputs,
+            },
+        ) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };
@@ -172,7 +214,10 @@ impl ModuleTraversal {
         {
             return (self, Err(ExportResolutionFailure::RepeatedExport));
         }
-        let exports = match WasmModuleSources::local_forwarded_exports(&resolved) {
+        let exports = match WasmModuleSources::local_forwarded_exports(&ModuleSource {
+            path: &resolved,
+            inputs: self.inputs,
+        }) {
             Ok(exports) => exports,
             Err(failure) => return (self, Err(failure)),
         };
@@ -180,10 +225,16 @@ impl ModuleTraversal {
             let found;
             match export {
                 ForwardedExport::Namespace { exported, module } if exported == exported_name => {
-                    found = if Self::default().any(&module, &resolved).1 {
+                    found = if Self::new(self.inputs).any(&module, &resolved).1 {
                         Ok({
-                            WasmModuleSources::resolve_module(&module, &resolved)
-                                .map_or(module, |path| path.to_string_lossy().into_owned())
+                            WasmModuleSources::resolve_module(
+                                &module,
+                                &ModuleSource {
+                                    path: &resolved,
+                                    inputs: self.inputs,
+                                },
+                            )
+                            .map_or(module, |path| path.to_string_lossy().into_owned())
                         })
                     } else {
                         Err(ExportResolutionFailure::NoMatchingExport)
@@ -214,7 +265,13 @@ impl ModuleTraversal {
         source_path: &Path,
         wasm_type_names: &HashSet<String>,
     ) -> (Self, Result<String, ExportResolutionFailure>) {
-        let resolved = match WasmModuleSources::resolve_module(module, source_path) {
+        let resolved = match WasmModuleSources::resolve_module(
+            module,
+            &ModuleSource {
+                path: source_path,
+                inputs: self.inputs,
+            },
+        ) {
             Ok(path) => path,
             Err(failure) => return (self, Err(ExportResolutionFailure::Module(failure))),
         };
@@ -224,12 +281,20 @@ impl ModuleTraversal {
         {
             return (self, Err(ExportResolutionFailure::RepeatedExport));
         }
-        if let Ok(found) =
-            WasmModuleSources::local_factory_return_type(&resolved, exported_name, wasm_type_names)
-        {
+        if let Ok(found) = WasmModuleSources::local_factory_return_type(
+            &ModuleSource {
+                path: &resolved,
+                inputs: self.inputs,
+            },
+            exported_name,
+            wasm_type_names,
+        ) {
             return (self, Ok(found));
         }
-        let exports = match WasmModuleSources::local_forwarded_exports(&resolved) {
+        let exports = match WasmModuleSources::local_forwarded_exports(&ModuleSource {
+            path: &resolved,
+            inputs: self.inputs,
+        }) {
             Ok(exports) => exports,
             Err(failure) => return (self, Err(failure)),
         };

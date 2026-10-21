@@ -6,8 +6,8 @@ pub struct WasmInstanceFactories<'scan> {
     pub wasm_class_bindings: &'scan HashMap<String, String>,
     pub factories: Vec<ScopedBinding>,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::javascript_scopes::ScopedBinding;
@@ -144,7 +144,7 @@ impl WasmInstanceFactories<'_> {
     pub(super) fn collect_imported_wasm_instance_factories(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         wasm_type_names: &HashSet<String>,
         called_bindings: &HashSet<String>,
         mut factories: HashMap<String, String>,
@@ -225,7 +225,7 @@ impl WasmInstanceFactories<'_> {
     fn collect_imported_factory_specifiers(
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         module: &str,
         wasm_type_names: &HashSet<String>,
         called_bindings: &HashSet<String>,

@@ -4,14 +4,14 @@ use crate::javascript_scopes::ScopeAdmissionFailure;
 pub struct DynamicWasmCallables<'scan> {
     pub node: tree_sitter::Node<'scan>,
     pub source: &'scan str,
-    pub source_path: &'scan Path,
+    pub source_path: &'scan ModuleSource<'scan>,
     pub callable_names: &'scan HashSet<String>,
     pub wasm_namespace_bindings: &'scan HashMap<String, String>,
     pub state: ScopedCallableInventory,
     pub first_line: usize,
 }
+use crate::wasm_module_sources::inputs::ModuleSource;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use crate::javascript_literals::JavaScriptLiteral;
 use crate::javascript_scopes::ScopedBinding;
@@ -73,7 +73,7 @@ impl ScopedCallableInventory {
         mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         callable_names: &HashSet<String>,
         wasm_namespace_bindings: &HashMap<String, String>,
         first_line: usize,
@@ -120,7 +120,7 @@ impl ScopedCallableInventory {
         mut self,
         node: tree_sitter::Node<'_>,
         source: &str,
-        source_path: &Path,
+        source_path: &ModuleSource<'_>,
         callable_names: &HashSet<String>,
         first_line: usize,
     ) -> Self {
@@ -191,7 +191,7 @@ impl ScopedCallableInventory {
 
 struct PatternContext<'a> {
     source: &'a str,
-    source_path: &'a Path,
+    source_path: &'a ModuleSource<'a>,
     callable_names: &'a HashSet<String>,
     module: &'a str,
     first_line: usize,
