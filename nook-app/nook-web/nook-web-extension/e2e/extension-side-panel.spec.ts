@@ -143,6 +143,18 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
       panel.getByTestId('device-protection-create-new-choice'),
     ).toHaveText('Create a new passkey')
 
+    // The field is a picker for the browser's saved-passkey list, not a
+    // search: typing changes nothing, and opening it with nothing to list
+    // says what that means.
+    await field.press('a')
+    await expect(field).toHaveValue('')
+    await field.click()
+    await expect(
+      panel.getByTestId('device-protection-passkey-empty'),
+    ).toHaveText(
+      'No list showed up? This browser has no Nook passkey saved yet: create one below.',
+    )
+
     // A phone or security key needs the picker, which stops autofill first.
     await panel.getByTestId('device-protection-use-existing-choice').click()
     const title = panel.getByTestId('device-protection-title')

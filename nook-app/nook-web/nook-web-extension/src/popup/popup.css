@@ -648,6 +648,27 @@ button:disabled {
   text-decoration-color: var(--foreground);
 }
 
+/* The saved-passkey picker. It is a field only because the browser anchors
+ * its passkey list to one; it reads and behaves as a choice, not a search. */
+.passkey-picker {
+  position: relative;
+}
+
+.passkey-picker input {
+  padding-right: 36px;
+  cursor: pointer;
+  caret-color: transparent;
+}
+
+.passkey-picker svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .setup-options {
   display: grid;
   gap: 12px;

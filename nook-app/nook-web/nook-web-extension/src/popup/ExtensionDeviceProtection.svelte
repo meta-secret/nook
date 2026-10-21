@@ -12,7 +12,7 @@ controls, messages and Rust/WASM calls live here once.
 -->
 <script lang="ts">
   import { Effect } from 'effect'
-  import { Fingerprint, KeyRound } from '@lucide/svelte'
+  import { ChevronDown, Fingerprint, KeyRound } from '@lucide/svelte'
   import {
     I18N_KEYS,
     type I18nKey,
@@ -148,6 +148,22 @@ controls, messages and Rust/WASM calls live here once.
     const controller = new AbortController()
     autofill = controller
     void listenForAutofill(controller)
+  }
+
+  /** Set once the person opened the saved-passkey picker. The browser lists
+   * saved passkeys only by itself, so the card cannot tell an empty list
+   * from one the person dismissed; it explains what an empty one means. */
+  let pickerOpened = $state(false)
+
+  function openPicker(): void {
+    pickerOpened = true
+    reopenAutofill()
+  }
+
+  /** The picker is a field only because the browser anchors its passkey
+   * list to one; nothing is typed into it. */
+  function keepPickerEmpty(event: Event): void {
+    event.preventDefault()
   }
 
   /** A try that ended leaves no request open: clicking the field again
@@ -510,22 +526,36 @@ controls, messages and Rust/WASM calls live here once.
     <label for="device-protection-passkey">
       {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyFieldLabel)}
     </label>
-    <input
-      id="device-protection-passkey"
-      type="text"
-      autocomplete="username webauthn"
-      placeholder={translatePlain(
-        I18N_KEYS.ExtensionDeviceSetupPasskeyFieldPlaceholder,
-      )}
-      readonly={pending}
-      aria-describedby="device-protection-passkey-hint device-protection-notice"
-      data-testid="device-protection-passkey-field"
-      onfocus={reopenAutofill}
-      {@attach focus.enter}
-    />
-    <p id="device-protection-passkey-hint" class="field-hint">
-      {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyFieldHint)}
-    </p>
+    <div class="passkey-picker">
+      <input
+        id="device-protection-passkey"
+        type="text"
+        autocomplete="username webauthn"
+        inputmode="none"
+        spellcheck="false"
+        placeholder={translatePlain(
+          I18N_KEYS.ExtensionDeviceSetupPasskeyFieldPlaceholder,
+        )}
+        readonly={pending}
+        aria-describedby="device-protection-notice"
+        data-testid="device-protection-passkey-field"
+        onfocus={reopenAutofill}
+        onclick={openPicker}
+        onbeforeinput={keepPickerEmpty}
+        onpaste={keepPickerEmpty}
+        {@attach focus.enter}
+      />
+      <ChevronDown size={16} aria-hidden="true" />
+    </div>
+    {#if pickerOpened}
+      <p
+        class="field-hint"
+        role="status"
+        data-testid="device-protection-passkey-empty"
+      >
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyPickerEmpty)}
+      </p>
+    {/if}
   </div>
   <button
     type="button"
