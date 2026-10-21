@@ -419,6 +419,13 @@ h1 {
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
 }
 
+/* Focused, the tip squares off so the outline is not clipped away. */
+.button.primary:focus-visible {
+  clip-path: none;
+  outline: 2px solid var(--titanium);
+  outline-offset: 2px;
+}
+
 .button.primary::after {
   content: '↗';
   font-size: 17px;
