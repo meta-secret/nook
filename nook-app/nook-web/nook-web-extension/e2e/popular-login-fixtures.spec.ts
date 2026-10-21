@@ -250,6 +250,12 @@ test.describe('popular login fixture coverage', () => {
       vaultName: 'Popular login templates vault',
     })
     try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
       for (const templateId of genericContinueWithNookTemplateIds) {
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
@@ -718,6 +724,12 @@ test.describe('popular login fixture coverage', () => {
       vaultName: 'Targeted auth shell detector vault',
     })
     try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
       for (const templateId of [
         'phone-first',
         'pin-login',
