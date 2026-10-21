@@ -27,7 +27,7 @@ title that decrypts into place. Inner pages use quiet page bars instead.
 >
   <CipherField class="nk-hero-cipher" />
   <div class="relative max-w-[40rem]">
-    <p class="nk-eyebrow">
+    <p class="nk-eyebrow nk-lockup">
       <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
       {vault.t(I18N_KEYS.WorkspaceIdentitiesEyebrow)}<span
         class="nk-caret"

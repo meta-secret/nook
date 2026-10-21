@@ -58,7 +58,7 @@ first key are made together with that vault.
     class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
     aria-label={vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel)}
   >
-    <p class="nk-label mb-4">
+    <p class="nk-label nk-lockup mb-4">
       {vault.t(I18N_KEYS.WorkspaceFirstIdentityVaultLabel)}
     </p>
     {@render children()}

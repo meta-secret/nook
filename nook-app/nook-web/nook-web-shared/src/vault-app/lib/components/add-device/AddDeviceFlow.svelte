@@ -128,7 +128,7 @@ Every place that offers "Add a device" opens this.
           {onBack}
         />
         <div class="min-w-0">
-          <p class="nk-eyebrow">
+          <p class="nk-eyebrow nk-lockup">
             <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
             {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
               class="nk-caret"

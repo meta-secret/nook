@@ -102,7 +102,7 @@ identity card the hub will show once setup finishes.
       class="m-0 grid min-w-0 gap-2"
       aria-label={vault.t(I18N_KEYS.FirstRunPreviewLabel)}
     >
-      <figcaption class="nk-label">
+      <figcaption class="nk-label nk-lockup">
         {vault.t(I18N_KEYS.FirstRunPreviewLabel)}
       </figcaption>
       <div class="min-w-0" inert data-testid="first-run-identity-preview">

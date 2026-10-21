@@ -59,9 +59,14 @@ body {
     color 220ms ease;
 }
 
+/* Dark: one blued spotlight over the hero object; the rest stays a void. */
 :root[data-theme='dark'] body {
   background:
-    radial-gradient(circle at 72% 28%, rgb(57 68 77 / 0.28), transparent 29rem),
+    radial-gradient(
+      ellipse 52rem 40rem at 72% 26%,
+      rgb(110 132 176 / 0.2),
+      transparent 70%
+    ),
     var(--page-background);
 }
 
@@ -319,6 +324,32 @@ main {
   color: var(--muted-text);
   font-size: 11px;
   letter-spacing: 0.21em;
+}
+
+/* Maker's lockup: the label runs into a hairline ending in a diamond. */
+.eyebrow {
+  display: flex;
+  align-items: center;
+}
+
+.eyebrow::after {
+  content: '';
+  flex: 1 1 2rem;
+  max-width: 10rem;
+  height: 1px;
+  margin-left: 14px;
+  background: linear-gradient(90deg, var(--control-border), transparent);
+}
+
+.eyebrow::before {
+  content: '';
+  order: 2;
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border: 1px solid var(--control-border);
+  transform: rotate(45deg);
 }
 
 h1 {

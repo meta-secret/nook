@@ -251,6 +251,16 @@
     @apply text-[0.6875rem] font-medium tracking-[0.14em] uppercase;
   }
 
+  /* Dark theme: one soft spotlight from above; the rest stays a void. */
+  .nk-stage.dark {
+    background-image: radial-gradient(
+      ellipse 64rem 34rem at 50% -8rem,
+      color-mix(in oklch, var(--blade-edge) 9%, transparent),
+      transparent 72%
+    );
+    background-repeat: no-repeat;
+  }
+
   .app-header {
     position: sticky;
     top: 0;

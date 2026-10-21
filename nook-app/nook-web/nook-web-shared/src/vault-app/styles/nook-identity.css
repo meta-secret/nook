@@ -268,7 +268,14 @@
     padding: clamp(1.25rem, 4vw, 2.25rem) clamp(1.125rem, 4vw, 2.25rem);
     overflow: hidden;
     --nk-cut: 16px;
-    --nk-face: var(--nk-g10), var(--card);
+    /* Spotlit from the top right, like a blade on a black table. */
+    --nk-face:
+      radial-gradient(
+        ellipse 60% 140% at 88% -10%,
+        color-mix(in oklch, var(--steel-hi) 7%, transparent),
+        transparent 70%
+      ),
+      var(--nk-g10), var(--card);
   }
   /* The edge line along the hero foot, like the polished cutting edge. */
   .nk-hero::after {
@@ -728,6 +735,37 @@
   }
   .nk-band-success {
     box-shadow: inset 2px 0 0 var(--success);
+  }
+
+  /* Maker's lockup: a tracked label run out into a hairline that ends in a
+   * small diamond, as engraved beside the mark on a blade. */
+  .nk-lockup {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .nk-lockup::after {
+    content: "";
+    order: 1;
+    flex: 1 1 2rem;
+    max-width: 10rem;
+    height: 1px;
+    margin-left: 0.75rem;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--foreground) 34%, transparent),
+      color-mix(in oklch, var(--foreground) 10%, transparent)
+    );
+  }
+  .nk-lockup::before {
+    content: "";
+    order: 2;
+    flex: none;
+    width: 5px;
+    height: 5px;
+    margin-left: 0.25rem;
+    border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
+    transform: rotate(45deg);
   }
 
   /* Primary fill: black oxide with a lit top edge (light theme); the dark

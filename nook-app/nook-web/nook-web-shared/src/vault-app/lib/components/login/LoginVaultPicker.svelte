@@ -38,7 +38,7 @@ lists them (for example while the identity directory cannot be read).
 </script>
 
 <section class="grid gap-3" data-testid="login-vault-picker">
-  <h3 class="nk-label">{vault.t(I18N_KEYS.LoginVaultPickerOnDevice)}</h3>
+  <h3 class="nk-label nk-lockup">{vault.t(I18N_KEYS.LoginVaultPickerOnDevice)}</h3>
   <ul class="nk-list">
     {#each vaults as entry (entry.storeId)}
       <li class="[&+&]:border-t [&+&]:border-border">
