@@ -369,7 +369,10 @@ pre-resume check leaves admission stopped. A partial resume can instead leave
 some pools running, as described above.
 
 Decide whether to retain or manually roll back the experiment using observed
-queue and execution times. Rollback requires approval too. With admission
+queue and execution times. Retain it only when comparable hosted runs improve
+end-to-end latency without new scheduling failures. If queue or execution
+regressions offset the preflight gain, or general work cannot schedule on the
+remaining hosts, request manual rollback. Rollback requires approval too. With admission
 drained and idle, check out the previous reviewed placement source, run its
 same sync/apply sequence, verify
 the previous templates, and resume the original 35/16/4/10 ceilings. Inspect
