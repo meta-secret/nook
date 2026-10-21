@@ -56,6 +56,7 @@ pub(crate) use sync::{
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
+pub use vault::passkey_detail_read::{PasskeyDetailRead, PasskeyDetailReadError};
 pub use vault::secret_history::{
     SecretHistory, SecretHistoryDevice, SecretHistoryError, SecretHistoryLocalSigner,
     SecretHistoryOrigin, SecretHistoryRequest, SecretRevision,

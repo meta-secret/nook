@@ -1,8 +1,8 @@
 //! On-demand public detail projection for one stored website passkey.
 
 use super::NookVaultManager;
-use crate::{NookError, NookPasskeyDetails};
-use nook_core::{SecretId, SecretValue};
+use crate::{NookDatabase, NookPasskeyDetails};
+use nook_core::{PasskeyDetailRead, SecretId, StoreId, VaultProjection};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -13,21 +13,22 @@ impl NookVaultManager {
     /// The full record, including the private key, is zeroized before return
     /// on every path. Non-passkey items are rejected.
     #[wasm_bindgen]
-    pub fn passkey_details_js(&self, id: &str) -> Result<NookPasskeyDetails, JsError> {
+    pub async fn passkey_details_js(&self, id: &str) -> Result<NookPasskeyDetails, JsError> {
         let crypto = self.vault.crypto.get()?;
+        let store_id = StoreId::parse(&self.vault.store_id)?;
+        let store = NookDatabase::load_local_event_store_strict(store_id.as_str()).await?;
+        let graph = store.load_graph(store_id.as_str())?;
+        let projection = VaultProjection::from_graph(&graph, store_id.as_str())?;
         let id = SecretId::from_vault_record(id);
-        let mut record =
-            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
-        let details = if let SecretValue::Passkey(value) = &record.data {
-            value.details()
-        } else {
-            record.zeroize_plaintext();
-            return Err(
-                NookError::Database("Requested secret is not a passkey item.".to_owned()).into(),
-            );
-        };
-        record.zeroize_plaintext();
-        Ok(NookPasskeyDetails::from_core(details?))
+        let details = PasskeyDetailRead {
+            projection: &projection,
+            graph: &graph,
+            store_id: &store_id,
+            selected_id: &id,
+            crypto,
+        }
+        .read()?;
+        Ok(NookPasskeyDetails::from_core(details))
     }
 }
 
@@ -38,7 +39,7 @@ mod browser_tests {
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     use nook_core::{
         DeviceIdentity, LoginSecret, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
-        PasskeyUserVerification, SecretType,
+        PasskeyUserVerification, SecretType, SecretValue,
     };
     use wasm_bindgen_test::*;
 
@@ -49,9 +50,9 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn empty_session_rejects_passkey_details() {
+    async fn empty_session_rejects_passkey_details() {
         let manager = NookVaultManager::new();
-        assert!(manager.passkey_details_js("secret_missing").is_err());
+        assert!(manager.passkey_details_js("secret_missing").await.is_err());
     }
 
     #[wasm_bindgen_test]
@@ -89,7 +90,7 @@ mod browser_tests {
             .add_secret(passkey_id.clone(), SecretType::Passkey, passkey_data)
             .await)?;
 
-        let details = js(manager.passkey_details_js(&passkey_id))?;
+        let details = js(manager.passkey_details_js(&passkey_id).await)?;
         assert_eq!(details.credential_id(), credential_id);
         assert_eq!(
             details.relying_party_name_state(),
@@ -113,7 +114,7 @@ mod browser_tests {
         js(manager
             .add_secret(login_id.clone(), SecretType::Login, login_data)
             .await)?;
-        assert!(manager.passkey_details_js(&login_id).is_err());
+        assert!(manager.passkey_details_js(&login_id).await.is_err());
 
         js(manager.delete_local_browser_data().await)?;
         Ok(())

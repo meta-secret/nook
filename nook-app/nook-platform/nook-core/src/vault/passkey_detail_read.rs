@@ -1,5 +1,136 @@
 //! Public passkey details for a selected immutable record revision.
 
+use crate::{
+    AgeArmoredCiphertext, EventGraph, EventLookup, PasskeyDetails, ProjectedSecret,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, RecordTypeDeclaration, SecretId, SecretType,
+    SecretValue, StoreId, VaultCrypto, VaultError, VaultOperation, VaultProjection,
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum PasskeyDetailReadError {
+    #[error("The selected passkey is not in the current vault.")]
+    NotFound,
+    #[error("Requested secret is not a passkey item.")]
+    WrongKind,
+    #[error("The selected passkey has conflicting replacements.")]
+    ConflictingReplacements,
+    #[error("The selected passkey replacement history is inconsistent.")]
+    BrokenLineage,
+    #[error(transparent)]
+    Vault(#[from] VaultError),
+}
+
+/// One current-vault signed projection owns both revision resolution and ciphertext selection.
+/// No old payload is decrypted, and deleted or conflicting branches cannot be resurrected.
+pub struct PasskeyDetailRead<'a> {
+    pub projection: &'a VaultProjection,
+    pub graph: &'a EventGraph,
+    pub store_id: &'a StoreId,
+    pub selected_id: &'a SecretId,
+    pub crypto: &'a VaultCrypto,
+}
+
+impl PasskeyDetailRead<'_> {
+    pub fn read(&self) -> Result<PasskeyDetails, PasskeyDetailReadError> {
+        let record = self.resolve()?;
+        let ciphertext =
+            AgeArmoredCiphertext::parse(record.record.value.as_str()).map_err(VaultError::from)?;
+        let mut plaintext = self
+            .crypto
+            .decrypt_value(&ciphertext)
+            .map_err(VaultError::from)?;
+        let parsed = SecretValue::from_yaml_str(SecretType::Passkey, plaintext.as_str());
+        plaintext.zeroize_plaintext();
+        let mut value = parsed.map_err(VaultError::from)?;
+        let details = match &value {
+            SecretValue::Passkey(passkey) => passkey.details().map_err(VaultError::from),
+            _ => {
+                value.zeroize_plaintext();
+                return Err(PasskeyDetailReadError::WrongKind);
+            }
+        };
+        value.zeroize_plaintext();
+        Ok(details?)
+    }
+
+    fn resolve(&self) -> Result<&ProjectedSecret, PasskeyDetailReadError> {
+        if self.projection.store_id != *self.store_id || self.projection.cleared {
+            return Err(PasskeyDetailReadError::NotFound);
+        }
+        let mut pending = vec![self.selected_id];
+        let mut remaining = self.projection.secrets.len();
+        let mut live = None;
+        while let Some(id) = pending.pop() {
+            let record = self
+                .projection
+                .secrets
+                .get(id)
+                .ok_or(PasskeyDetailReadError::NotFound)?;
+            if remaining == 0 {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            }
+            remaining -= 1;
+            if record.record.secret_type != RecordTypeDeclaration::Secret(SecretType::Passkey) {
+                return Err(PasskeyDetailReadError::WrongKind);
+            }
+            // A simple branch deletion does not resolve a concurrent replacement conflict.
+            if self.projection.replacement_conflicts.contains_key(id) {
+                return Err(PasskeyDetailReadError::ConflictingReplacements);
+            }
+            if record.is_live(self.graph) {
+                if live.replace(record).is_some() {
+                    return Err(PasskeyDetailReadError::ConflictingReplacements);
+                }
+                continue;
+            }
+            let ProjectedSecretLifecycle::Deleted { by } = &record.lifecycle else {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            };
+            let EventLookup::Recorded(event) = self.graph.get(by) else {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            };
+            if event.body.store_id != *self.store_id {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            }
+            if event
+                .body
+                .operations
+                .iter()
+                .any(|operation| match operation {
+                    VaultOperation::SecretDeleted { secret_id } => secret_id == id,
+                    VaultOperation::SecretConflictResolved {
+                        rejected_secret_ids,
+                        ..
+                    } => rejected_secret_ids.contains(id),
+                    _ => false,
+                })
+            {
+                continue;
+            }
+            if !event.body.operations.iter().any(|operation| {
+                matches!(operation,
+                VaultOperation::SecretReplaced { old_id, .. } if old_id == id)
+            }) {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            }
+            let previous_len = pending.len();
+            pending.extend(
+                self.projection
+                    .secrets
+                    .iter()
+                    .filter_map(|(next_id, next)| match &next.origin {
+                        ProjectedSecretOrigin::Replacement { from } if from == id => Some(next_id),
+                        _ => None,
+                    }),
+            );
+            if pending.len() == previous_len {
+                return Err(PasskeyDetailReadError::BrokenLineage);
+            }
+        }
+        live.ok_or(PasskeyDetailReadError::NotFound)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -147,20 +278,66 @@ mod tests {
             Ok(())
         }
 
-        fn details(&self, selected_id: &SecretId) -> anyhow::Result<PasskeyDetails> {
+        fn delete(&mut self, id: SecretId) -> anyhow::Result<()> {
+            self.import(
+                vec![self.head.clone()],
+                VaultOperation::SecretDeleted { secret_id: id },
+            )
+        }
+
+        fn conflicting_assertion(&mut self, parent: EventId) -> anyhow::Result<SecretId> {
             let projection = VaultProjection::from_graph(&self.graph, self.store_id.as_str())?;
-            let records = projection.live_secrets(&self.graph).into_values().collect();
-            let mut meta = VaultMetaState::default();
-            VaultUserRecordBatch::new(records).replace(&mut meta);
-            // The original WASM detail method reads this live map using the captured list ID.
-            let mut record =
-                VaultSecretSession::new(&meta.secrets, &self.crypto).decrypt(selected_id)?;
-            let result = match &record.data {
-                SecretValue::Passkey(value) => value.details(),
-                _ => anyhow::bail!("fixture did not contain a passkey"),
+            let original = projection
+                .secrets
+                .get(&self.original_id)
+                .ok_or_else(|| anyhow::anyhow!("missing fixture registration"))?;
+            let ciphertext = AgeArmoredCiphertext::parse(original.record.value.as_str())?;
+            let mut plaintext = self.crypto.decrypt_value(&ciphertext)?;
+            let parsed = SecretValue::from_yaml_str(SecretType::Passkey, plaintext.as_str());
+            plaintext.zeroize_plaintext();
+            let mut value = parsed?;
+            let request = WebsitePasskeyAssertionRequest {
+                origin: "https://login.example.com".to_owned(),
+                challenge: URL_SAFE_NO_PAD.encode([9_u8; 32]),
+                rp_id: "example.com".to_owned(),
+                allow_credentials: Vec::new(),
+                user_verification: PasskeyUserVerification::Required,
             };
-            record.zeroize_plaintext();
-            Ok(result?)
+            let signed = match &value {
+                SecretValue::Passkey(passkey) => {
+                    request.prepare(std::slice::from_ref(passkey))?.sign()
+                }
+                _ => anyhow::bail!("fixture registration is not a passkey"),
+            };
+            value.zeroize_plaintext();
+            self.credential.zeroize_plaintext();
+            self.credential = signed?.updated_credential;
+            let branch_id = SecretId::generate()?;
+            let payload = self.payload(&branch_id)?;
+            self.import(
+                vec![parent],
+                VaultOperation::SecretReplaced {
+                    old_id: self.original_id.clone(),
+                    new_secret: payload,
+                },
+            )?;
+            Ok(branch_id)
+        }
+
+        fn details(
+            &self,
+            selected_id: &SecretId,
+        ) -> Result<PasskeyDetails, super::PasskeyDetailReadError> {
+            let projection = VaultProjection::from_graph(&self.graph, self.store_id.as_str())
+                .map_err(VaultError::from)?;
+            super::PasskeyDetailRead {
+                projection: &projection,
+                graph: &self.graph,
+                store_id: &self.store_id,
+                selected_id,
+                crypto: &self.crypto,
+            }
+            .read()
         }
     }
 
@@ -181,6 +358,158 @@ mod tests {
         let selected = fixture.details(&fixture.original_id)?;
         assert_eq!(selected.credential_id, before.credential_id);
         assert_eq!(selected.signature_count, current.signature_count);
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_assertions_resolve_only_latest_live_payload() -> anyhow::Result<()> {
+        let mut fixture = PasskeyReadFixture::registered()?;
+        fixture.assert_and_import()?;
+        fixture.assert_and_import()?;
+        let mut projection =
+            VaultProjection::from_graph(&fixture.graph, fixture.store_id.as_str())?;
+        // Prove the old private-key payload is never decrypted while following its public lineage.
+        projection
+            .secrets
+            .get_mut(&fixture.original_id)
+            .ok_or_else(|| anyhow::anyhow!("missing original"))?
+            .record
+            .value =
+            StoredRecordPayload::from_trusted("obsolete ciphertext must not be read".to_owned());
+        let details = super::PasskeyDetailRead {
+            projection: &projection,
+            graph: &fixture.graph,
+            store_id: &fixture.store_id,
+            selected_id: &fixture.original_id,
+            crypto: &fixture.crypto,
+        }
+        .read()?;
+        assert_eq!(u32::from(details.signature_count), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn deletion_does_not_resurrect_any_revision() -> anyhow::Result<()> {
+        let mut fixture = PasskeyReadFixture::registered()?;
+        fixture.assert_and_import()?;
+        fixture.delete(fixture.current_id.clone())?;
+        assert!(matches!(
+            fixture.details(&fixture.original_id),
+            Err(super::PasskeyDetailReadError::NotFound)
+        ));
+        assert!(matches!(
+            fixture.details(&fixture.current_id),
+            Err(super::PasskeyDetailReadError::NotFound)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn missing_wrong_kind_and_other_vault_are_rejected() -> anyhow::Result<()> {
+        let fixture = PasskeyReadFixture::registered()?;
+        let missing = SecretId::generate()?;
+        assert!(matches!(
+            fixture.details(&missing),
+            Err(super::PasskeyDetailReadError::NotFound)
+        ));
+        let mut projection =
+            VaultProjection::from_graph(&fixture.graph, fixture.store_id.as_str())?;
+        let other_store = StoreId::generate()?;
+        let read = super::PasskeyDetailRead {
+            projection: &projection,
+            graph: &fixture.graph,
+            store_id: &other_store,
+            selected_id: &fixture.original_id,
+            crypto: &fixture.crypto,
+        };
+        assert!(matches!(
+            read.read(),
+            Err(super::PasskeyDetailReadError::NotFound)
+        ));
+        projection
+            .secrets
+            .get_mut(&fixture.original_id)
+            .ok_or_else(|| anyhow::anyhow!("missing original"))?
+            .record
+            .secret_type = RecordTypeDeclaration::Secret(SecretType::Login);
+        let read = super::PasskeyDetailRead {
+            projection: &projection,
+            graph: &fixture.graph,
+            store_id: &fixture.store_id,
+            selected_id: &fixture.original_id,
+            crypto: &fixture.crypto,
+        };
+        assert!(matches!(
+            read.read(),
+            Err(super::PasskeyDetailReadError::WrongKind)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn conflicting_replacements_stay_blocked_when_one_branch_is_deleted() -> anyhow::Result<()> {
+        let mut fixture = PasskeyReadFixture::registered()?;
+        let parent = fixture.head.clone();
+        fixture.assert_and_import()?;
+        let first_head = fixture.head.clone();
+        let branch_id = fixture.conflicting_assertion(parent)?;
+        assert!(matches!(
+            fixture.details(&fixture.original_id),
+            Err(super::PasskeyDetailReadError::ConflictingReplacements)
+        ));
+        fixture.import(
+            vec![first_head, fixture.head.clone()],
+            VaultOperation::SecretDeleted {
+                secret_id: branch_id,
+            },
+        )?;
+        assert!(matches!(
+            fixture.details(&fixture.original_id),
+            Err(super::PasskeyDetailReadError::ConflictingReplacements)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn explicit_conflict_resolution_selects_only_its_live_branch() -> anyhow::Result<()> {
+        let mut fixture = PasskeyReadFixture::registered()?;
+        let parent = fixture.head.clone();
+        fixture.assert_and_import()?;
+        let first_head = fixture.head.clone();
+        let branch_id = fixture.conflicting_assertion(parent)?;
+        fixture.import(
+            vec![first_head, fixture.head.clone()],
+            VaultOperation::SecretConflictResolved {
+                old_id: fixture.original_id.clone(),
+                chosen_secret_id: fixture.current_id.clone(),
+                rejected_secret_ids: vec![branch_id],
+            },
+        )?;
+        assert_eq!(
+            u32::from(fixture.details(&fixture.original_id)?.signature_count),
+            1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn broken_replacement_is_not_a_live_read() -> anyhow::Result<()> {
+        let mut fixture = PasskeyReadFixture::registered()?;
+        fixture.assert_and_import()?;
+        let mut projection =
+            VaultProjection::from_graph(&fixture.graph, fixture.store_id.as_str())?;
+        projection.secrets.remove(&fixture.current_id);
+        let read = super::PasskeyDetailRead {
+            projection: &projection,
+            graph: &fixture.graph,
+            store_id: &fixture.store_id,
+            selected_id: &fixture.original_id,
+            crypto: &fixture.crypto,
+        };
+        assert!(matches!(
+            read.read(),
+            Err(super::PasskeyDetailReadError::BrokenLineage)
+        ));
         Ok(())
     }
 }
