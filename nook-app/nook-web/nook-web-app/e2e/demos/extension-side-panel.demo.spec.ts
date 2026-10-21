@@ -398,10 +398,14 @@ test('sets up in place: an existing passkey or a new one, side by side', async (
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Not set up')
-  // Saved passkeys appear as suggestions on the field; there is no dialog.
-  await expect(
-    page.getByTestId('device-protection-passkey-field'),
-  ).toBeFocused()
+  // The picker opens the browser's list of saved passkeys; there is no
+  // dialog. This browser has none, so the card says what to do instead.
+  const picker = page.getByTestId('device-protection-passkey-field')
+  await expect(picker).toBeFocused()
+  await picker.click()
+  await expect(page.getByTestId('device-protection-passkey-empty')).toHaveText(
+    'No list showed up? This browser has no Nook passkey saved yet: create one below.',
+  )
   await expect(page.getByTestId('side-panel-lock')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
   await expect(
