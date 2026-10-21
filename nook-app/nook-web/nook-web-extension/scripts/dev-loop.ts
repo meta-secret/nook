@@ -10,7 +10,6 @@ import type { Subprocess } from 'bun'
 
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
-const webRoot = join(webGroupRoot, 'nook-web-app')
 const sharedSourceRoot = join(webGroupRoot, 'nook-web-shared', 'src')
 const platformRoot = resolve(webGroupRoot, '..', 'nook-platform')
 const repoRoot = resolve(platformRoot, '..', '..')
@@ -20,9 +19,6 @@ const vaultUrl = 'https://localhost:5173/'
 const httpsDir =
   process.env.LOCAL_HTTPS_DIR?.trim() || join(homedir(), '.nook', 'https')
 const cdpPort = Number(process.env.NOOK_DEV_CDP_PORT?.trim() || '9333')
-const browserBinary =
-  process.env.NOOK_DEV_BROWSER_BIN?.trim() ||
-  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
 const profileDir =
   process.env.NOOK_DEV_PROFILE_DIR?.trim() ||
   join(
@@ -52,26 +48,31 @@ const wasmOutputDirs = [
   join('extension', 'nook-companion-wasm'),
 ]
 
+// The WASM and extension builds and Vite inherit their settings from this
+// process: a dev WASM build, the local channel against the HTTPS dev vault.
+process.env.WASM_BUILD_MODE = 'dev'
+process.env.NOOK_SIMPLE_VAULT_URL = vaultUrl
+process.env.NOOK_EXTENSION_CHANNEL = 'local'
+process.env.NOOK_LOCAL_HTTPS = '1'
+process.env.NOOK_LOCAL_HTTPS_CERT_PATH = join(httpsDir, 'localhost.pem')
+process.env.NOOK_LOCAL_HTTPS_KEY_PATH = join(httpsDir, 'localhost-key.pem')
+
 const startedAt = performance.now()
 const log = (message: string): void => {
   const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1)
   console.log(`\x1b[36m[dev ${elapsed}s]\x1b[0m ${message}`)
 }
 
+// Runs one build step; each step spawns its own fixed command. The loop runs
+// from the extension root (its Taskfile changes there first), so commands name
+// fixed paths relative to it.
 const runStep = async (
   label: string,
-  command: readonly string[],
-  cwd: string,
-  env: Readonly<Record<string, string>>,
+  launch: () => Subprocess,
 ): Promise<boolean> => {
   const stepStart = performance.now()
   log(`${label}…`)
-  const child = Bun.spawn([...command], {
-    cwd,
-    env: { ...process.env, ...env },
-    stdout: 'inherit',
-    stderr: 'inherit',
-  })
+  const child = launch()
   const exitCode = await child.exited
   const seconds = ((performance.now() - stepStart) / 1000).toFixed(1)
   log(
@@ -83,28 +84,27 @@ const runStep = async (
 }
 
 const buildWasm = (): Promise<boolean> =>
-  runStep(
-    'WASM (dev, no wasm-opt)',
-    ['task', '--silent', '_wasm:build'],
-    repoRoot,
-    {
-      WASM_BUILD_MODE: 'dev',
-    },
+  runStep('WASM (dev, no wasm-opt)', () =>
+    Bun.spawn(['task', '--dir', repoRoot, '--silent', '_wasm:build'], {
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }),
   )
 
 const buildExtension = (): Promise<boolean> =>
-  runStep('Extension build', ['bun', 'scripts/build.ts'], extensionRoot, {
-    NOOK_SIMPLE_VAULT_URL: vaultUrl,
-    NOOK_EXTENSION_CHANNEL: 'local',
-  })
+  runStep('Extension build', () =>
+    Bun.spawn(['bun', 'scripts/build.ts'], {
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }),
+  )
 
 const startVite = (): Subprocess =>
   Bun.spawn(
     [
       'bun',
-      'run',
-      'dev',
-      '--',
+      '../nook-web-app/node_modules/.bin/vite',
+      '../nook-web-app',
       '--host',
       'localhost',
       '--port',
@@ -112,13 +112,6 @@ const startVite = (): Subprocess =>
       '--strictPort',
     ],
     {
-      cwd: webRoot,
-      env: {
-        ...process.env,
-        NOOK_LOCAL_HTTPS: '1',
-        NOOK_LOCAL_HTTPS_CERT_PATH: join(httpsDir, 'localhost.pem'),
-        NOOK_LOCAL_HTTPS_KEY_PATH: join(httpsDir, 'localhost-key.pem'),
-      },
       stdout: 'inherit',
       stderr: 'inherit',
     },
@@ -366,7 +359,7 @@ const launchBrowser = async (): Promise<void> => {
   await mkdir(profileDir, { recursive: true })
   const browser = Bun.spawn(
     [
-      browserBinary,
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
       `--user-data-dir=${profileDir}`,
       `--load-extension=${distDir}`,
       '--remote-debugging-address=127.0.0.1',

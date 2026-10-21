@@ -271,7 +271,8 @@ tasks:
     status:
       - test -x "$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin/bun"
     cmds:
-      - curl -fsSL https://bun.sh/install | BUN_INSTALL="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}" bash -s -- "bun-v{{.DEV_BUN_VERSION}}"
+      - curl -fsSL --create-dirs -o "$HOME/.nook/bun-install.sh" https://bun.sh/install
+      - BUN_INSTALL="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}" bash "$HOME/.nook/bun-install.sh" "bun-v{{.DEV_BUN_VERSION}}"
 
   extension:setup:brave:
     desc: Install a hosted extension in Brave, PIN-protect the device, create a Simple Vault, approve pairing, and leave Brave open (CHANNEL=dev or PR=<number>).

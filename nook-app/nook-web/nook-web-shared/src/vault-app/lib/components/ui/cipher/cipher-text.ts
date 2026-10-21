@@ -38,8 +38,9 @@ const HOT_RUN = 6;
 export const CRAWL_MIN = 12;
 export const CRAWL_MAX = 36;
 
-function randomBetween(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1));
+/** A crawl length between CRAWL_MIN and CRAWL_MAX, inclusive. */
+function randomCrawl(): number {
+  return CRAWL_MIN + Math.floor(Math.random() * (CRAWL_MAX - CRAWL_MIN + 1));
 }
 
 /** A block of age-armored-looking ciphertext that re-encrypts a few characters per tick. */
@@ -82,7 +83,7 @@ export class CipherBlock {
 
   private jump(bodyRows: number): void {
     const room = Math.max(this.dimensions.columns - HOT_RUN, 0);
-    const crawl = Math.min(randomBetween(CRAWL_MIN, CRAWL_MAX), room);
+    const crawl = Math.min(randomCrawl(), room);
     // Land on another row so the move reads as a jump, not a stutter.
     const others = this.hotLine >= 1 && bodyRows > 1 ? bodyRows - 1 : bodyRows;
     const pick = 1 + Math.floor(Math.random() * others);
