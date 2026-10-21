@@ -956,7 +956,7 @@ WORKDIR /meta-secret/nook
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     CI=1 task _wasm:test:browser \
-    && nook-sccache-report wasm-browser-dev
+    && nook-sccache-report --require wasm-browser-dev
 
 # -----------------------------------------------------------------------------
 
