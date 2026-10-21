@@ -134,7 +134,7 @@ describe('Namecheap two-factor code field detection', () => {
     ({ initial, attribute, value }) => {
       const page = new NamecheapTwoFactorPage()
       window.history.replaceState({}, '', '/login')
-      document.body.innerHTML = `<form method="post" action="/login"><input id="entry-code" type="text" ${initial}><button type="submit">Sign in</button></form>`
+      document.body.innerHTML = `<form method="post" action="/login"><input id="entry-code" name="entry-code" type="text" ${initial}><button type="submit">Sign in</button></form>`
       expect(page.codeFieldCount()).toBe(0)
       const field = document.getElementById('entry-code')
       switch (field instanceof HTMLInputElement) {
