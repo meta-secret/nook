@@ -116,21 +116,21 @@ async function openSetupDialog({
     [DemoQrMedia.Canvas]: `<canvas data-testid="demo-dialog-qr" width="${raster.edgePx}" height="${raster.edgePx}"></canvas>`,
   }[media]
   await page.evaluate(
-    ({ description, qr, manualKey, semanticDialog }) => {
+    ({ description, qr, manualKey, layout, layouts }) => {
       // The companion runtime records only into an existing list.
       window.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
         window.__nookDemoRuntimeMessageTypes,
       )
       const dialog = document.createElement('div')
       dialog.className = 'setup-dialog'
-      switch (semanticDialog) {
-        case true:
+      switch (layout) {
+        case layouts.SemanticDialog:
           dialog.setAttribute('role', 'dialog')
           dialog.setAttribute('aria-modal', 'true')
           dialog.setAttribute('aria-labelledby', 'mfa-title')
           dialog.setAttribute('aria-describedby', 'mfa-description')
           break
-        case false:
+        case layouts.NestedPlainDivs:
           break
       }
       dialog.innerHTML = `
@@ -155,7 +155,8 @@ async function openSetupDialog({
       description: dialogDescription,
       qr: qrMarkup,
       manualKey: manualKeyView,
-      semanticDialog: layout === DemoSetupLayout.SemanticDialog,
+      layout,
+      layouts: DemoSetupLayout,
     },
   )
   if (media === DemoQrMedia.Canvas) {
