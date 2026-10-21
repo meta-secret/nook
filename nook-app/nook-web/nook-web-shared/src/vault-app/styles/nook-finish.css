@@ -161,6 +161,16 @@
       transparent calc(50% + 0.75px)
     );
   }
+  /* Keyboard focus: square the plate off, drop the cut edge and draw the
+   * standard ring, as primaries and foot-cut buttons do. */
+  .nk-plate:focus-visible {
+    clip-path: none;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .nk-plate:focus-visible::after {
+    content: none;
+  }
 
   /* Facets: the blade's ground planes and broken lines laid faintly over a
    * large face so it is never one flat tone. The overlay sits above the face
