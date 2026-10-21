@@ -86,6 +86,15 @@ tasks:
         {{.DOCKER_RUST_BROWSER_IMAGE}}
         task {{.TASK}}
 
+  docker:wasm:test:browser:dev:
+    desc: Run debug-profile WASM browser tests inside BuildKit.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        wasm-browser-dev
+
   docker:wasm:build:fast:
     internal: true
     # Mounted fast path uses a manifest-keyed image whose Cargo target lives outside the bind mount.

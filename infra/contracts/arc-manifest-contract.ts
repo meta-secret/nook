@@ -4,6 +4,7 @@ import {
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
+import { ArcSeparationContract } from "./arc-separation-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 
@@ -275,7 +276,7 @@ class ArcManifestContract {
     if (admittedContract4.isErr()) return err(admittedContract4.error);
     const admittedContract5 = containerRunners.requireAll([
       "runnerScaleSetName: nook-k0s-container",
-      "maxRunners: 20",
+      "maxRunners: 16",
       "type: kubernetes-novolume",
       "automountServiceAccountToken: true",
       "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
@@ -396,7 +397,7 @@ class ArcManifestContract {
       'reservedSpace = "64GB"',
       'maxUsedSpace = "112GB"',
       'minFreeSpace = "16GB"',
-      'minFreeSpace = "25%"',
+      'minFreeSpace = "33%"',
       'filters = ["type==regular"]',
       'keepDuration = "24h"',
       "all = true",
@@ -576,7 +577,7 @@ class ArcManifestContract {
       "Upload verified development deployment handoff",
       "main-web-deploy-${{ github.run_id }}",
       "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
-      "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
+      "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
       "task web:e2e:kubernetes-image:artifacts",
       "name: WASM and web verification",
       "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
@@ -596,10 +597,23 @@ class ArcManifestContract {
       "inputs.full_e2e_requested",
       "name: Verify and preview",
       "(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'",
+      "(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest'",
       "task --silent ci:pr:validate",
       "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
       "steps.browser-scope.outputs.validation == 'true'",
       "PR_FULL_E2E:",
+      'PR_BROWSER_JOBS: "true"',
+      "needs: [prepare, browser]",
+      "if: ${{ always() }}",
+      "fail-fast: false",
+      "suite: [web, extension-1, extension-2, extension-3]",
+      "inputs.full_e2e_requested && needs.prepare.outputs.validation == 'true'",
+      'test "$PREPARE_RESULT" = success',
+      'test "$BROWSER_RESULT" = success',
+      'test "$BROWSER_RESULT" = skipped',
+      "pr-browser-${{ github.run_id }}-${{ github.run_attempt }}",
+      "name: ${{ needs.prepare.outputs.browser_artifact }}",
+      "task --silent ci:pr:browser:suite",
       "PR_AUTH_E2E:",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
       "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
@@ -726,6 +740,7 @@ class ArcManifestContract {
       "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
       "Remote / browser image",
       "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
+      "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
       "Run repository invariant preflight",
       "run: task preflight",
       "task web:e2e:kubernetes-image",
@@ -771,6 +786,8 @@ class ArcManifestContract {
       "inputs.dispatch_nonce || 'default'",
     );
     if (admittedContract53.isErr()) return err(admittedContract53.error);
+    const separation = await new ArcSeparationContract(root).assert();
+    if (separation.isErr()) return err(separation.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();
     if (worker.isErr()) return err(worker.error);
     const frontend = await new DockerfileFrontendContract(root).assert();

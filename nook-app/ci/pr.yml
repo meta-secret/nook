@@ -101,7 +101,9 @@ tasks:
         export REPO_ROOT="$PWD"
         export GITHUB_WORKSPACE="$PWD"
         if [ "${PR_FULL_E2E:-false}" = true ]; then
-          task --silent ci:pr:browser:full
+          if [ "${PR_BROWSER_JOBS:-false}" != true ]; then
+            task --silent ci:pr:browser:full
+          fi
         elif [ "${PR_AUTH_E2E:-false}" = true ]; then
           task --silent ci:pr:browser:auth
         fi
@@ -133,6 +135,32 @@ tasks:
     cmds:
       - task: _ci:main:web:e2e-only
       - task: _extension:test:e2e
+
+  ci:pr:browser:restore:
+    desc: Restore the producer's immutable browser and preview artifact in this job.
+    requires:
+      vars: [PR_ARTIFACT_DIR]
+    cmds:
+      - tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar' -C '{{.REPO_ROOT}}'
+      - test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'
+      - |
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
+        install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
+        ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
+
+  ci:pr:browser:suite:
+    desc: Run one selected full browser suite in its own job and filesystem.
+    requires:
+      vars: [PR_BROWSER_SUITE]
+    cmds:
+      - |
+        case '{{.PR_BROWSER_SUITE}}' in
+          web) task --silent _ci:main:web:e2e-only ;;
+          extension-1) E2E_SHARD=1/3 task --silent _extension:test:e2e:shard ;;
+          extension-2) E2E_SHARD=2/3 task --silent _extension:test:e2e:shard ;;
+          extension-3) E2E_SHARD=3/3 task --silent _extension:test:e2e:shard ;;
+          *) echo 'Unsupported PR browser suite' >&2; exit 1 ;;
+        esac
 
   ci:pr:browser:auth:
     desc: Run the required focused real-extension authentication regression.

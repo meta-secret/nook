@@ -59,6 +59,7 @@ class DockerizedRustContract {
 
   previewGates(): void {
     const stepContract = z.object({
+      name: z.string().optional(),
       run: z.string().optional(),
       uses: z.string().optional(),
       if: z.string().optional(),
@@ -70,8 +71,12 @@ class DockerizedRustContract {
         jobs: z.record(z.string(), jobContract),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    expect(Object.keys(workflow.jobs)).toEqual(["validation"]);
-    const steps = jobContract.parse(workflow.jobs.validation).steps;
+    expect(Object.keys(workflow.jobs)).toEqual([
+      "prepare",
+      "browser",
+      "validation",
+    ]);
+    const steps = jobContract.parse(workflow.jobs.prepare).steps;
     let previous = -1;
     for (const command of ["task --silent ci:pr:validate"]) {
       const index = steps.findIndex((step) => step.run === command);
@@ -81,11 +86,32 @@ class DockerizedRustContract {
       expect(step["continue-on-error"]).not.toBe(true);
       previous = index;
     }
-    const preview = steps.findIndex(
+    const finalSteps = jobContract.parse(workflow.jobs.validation).steps;
+    const checkoutStep = stepContract.parse(finalSteps[0]);
+    expect(checkoutStep.uses).toBe("actions/checkout@v7");
+    expect(checkoutStep).not.toHaveProperty("if");
+    const guard = finalSteps.findIndex(
+      (step) => step.name === "Require every selected validation branch",
+    );
+    expect(guard).toBeGreaterThan(0);
+    expect(finalSteps.findIndex((step) => Object.hasOwn(step, "run"))).toBe(
+      guard,
+    );
+    const guardStep = stepContract.parse(finalSteps[guard]);
+    expect(guardStep.run).toContain('test "$PREPARE_RESULT" = success');
+    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = success');
+    expect(guardStep.run).toContain('test "$BROWSER_RESULT" = skipped');
+    expect(guardStep).not.toHaveProperty("if");
+    expect(guardStep["continue-on-error"]).not.toBe(true);
+    const restore = finalSteps.findIndex(
+      (step) => step.uses === "actions/download-artifact@v8",
+    );
+    expect(restore).toBeGreaterThan(guard);
+    const preview = finalSteps.findIndex(
       (step) => step.uses === "./.github/actions/nook-pr-preview",
     );
-    expect(preview).toBeGreaterThan(previous);
-    const previewStep = stepContract.parse(steps[preview]);
+    expect(preview).toBeGreaterThan(restore);
+    const previewStep = stepContract.parse(finalSteps[preview]);
     expect(previewStep.if).not.toContain("always()");
     expect(previewStep.if).toContain(
       "github.event.pull_request.head.repo.full_name == github.repository",

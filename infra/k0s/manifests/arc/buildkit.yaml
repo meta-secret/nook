@@ -134,11 +134,13 @@ data:
       # above never evict records used within a day. Heavy CI then filled a
       # 466GB node past kubelet's 15% nodefs eviction line, which evicted
       # BuildKit and every runner Pod there. This last policy may evict
-      # recent records, but only to keep a quarter of the disk free.
+      # recent records. BuildKit counts filesystem-reserved blocks as free;
+      # its percentage conversion also rounds in GiB before using decimal GB.
+      # On the 466GiB node, 33% leaves about 25% usable space after ext4 reserves.
       [[worker.oci.gcpolicy]]
         all = true
         reservedSpace = "64GB"
-        minFreeSpace = "25%"
+        minFreeSpace = "33%"
 
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]

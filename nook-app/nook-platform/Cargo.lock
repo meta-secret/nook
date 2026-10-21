@@ -2029,6 +2029,7 @@ dependencies = [
  "prost",
  "psl",
  "rand_core 0.10.1",
+ "rust-embed",
  "serde",
  "serde_json",
  "serde_yaml",

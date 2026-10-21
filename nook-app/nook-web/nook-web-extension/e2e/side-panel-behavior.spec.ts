@@ -5,6 +5,7 @@ import type {
   SiteSecretSection,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
+import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import {
   SidePanelCodeFillKind,
   SidePanelLoginFillKind,
@@ -695,7 +696,7 @@ test('a failed listing offers Try again', async ({ page }) => {
   }
   await panel.open({ ...unlockedScenario, listing: failed })
   await expect(page.getByTestId('side-panel-site-failed')).toHaveText(
-    'Nook could not load saved items for this site.',
+    enLocale.extension.action.site_failed,
   )
   await panel.update({ listing: accountsSite })
   await page.getByTestId('side-panel-site-retry').click()
@@ -768,7 +769,9 @@ test('Refresh loads the panel again and reads its state afresh', async ({
   await refresh.click()
   await expect
     .poll(() =>
-      page.evaluate(() => 'beforeRefresh' in document.documentElement.dataset),
+      page.evaluate(() =>
+        document.documentElement.hasAttribute('data-before-refresh'),
+      ),
     )
     .toBe(false)
   await expect(page.getByTestId('side-panel-site-host')).toHaveText(

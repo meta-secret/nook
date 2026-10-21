@@ -367,9 +367,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('passkey-auth-overlay'),
     ).toHaveCount(0)
-    await new PasskeyVaultDiscovery(reopenedVaultPage).assert(
-      websitePasskeyState,
-    )
+    try {
+      await new PasskeyVaultDiscovery(reopenedVaultPage).assert(
+        websitePasskeyState,
+      )
+    } finally {
+      await attachNookLogsForTest(reopenedVaultPage, testInfo, { print: true })
+    }
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(

@@ -85,9 +85,18 @@ export class DockerizedRustE2eContract {
     const manual = workflowSchema.parse(
       Bun.YAML.parse(this.read(".github/workflows/e2e-pr.yml")),
     );
-    expect(Object.keys(pr.jobs)).toEqual(["validation"]);
+    expect(Object.keys(pr.jobs)).toEqual([
+      "prepare",
+      "browser",
+      "validation",
+    ]);
+    const prepare = workflowJobSchema.parse(pr.jobs.prepare);
+    const browser = workflowJobSchema.parse(pr.jobs.browser);
     const validation = workflowJobSchema.parse(pr.jobs.validation);
-    expect(validation["timeout-minutes"]).toBe(240);
+    expect(prepare["timeout-minutes"]).toBe(240);
+    expect(browser["timeout-minutes"]).toBe(180);
+    expect(browser.strategy?.["fail-fast"]).toBe(false);
+    expect(validation["timeout-minutes"]).toBe(15);
     expect(Object.keys(validation)).not.toContain("strategy");
     expect(main.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(main.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);

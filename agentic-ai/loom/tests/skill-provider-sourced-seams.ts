@@ -146,7 +146,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/contracts/main-producer-parallel.test.ts',
-    '50fb6aeae565ddc007044d33273b9b84defe81242eaeaa6c980350740fa35687',
+    'a94aa3b48a9c6657d9e3bc2fe2ff2c7691cfef5242f29b0cd81ae1097c04edd1',
   ],
   [
     'infra/contracts/pr-preview-parallel.test.ts',
@@ -178,7 +178,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'efe94dd8abe5d5b0fb272034dd6267bbd89b3ef007b8a7ed07cd68bb729638a2',
+    'da3117fcf29e3c6861691fff7c6cc80a2e2ea2cf4d7eee7431b95d631876a850',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',

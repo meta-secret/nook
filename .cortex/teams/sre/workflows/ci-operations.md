@@ -76,6 +76,13 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 browser evidence. Existing Linux PR, Main, nightly, extension, and credentialed
 live-suite policies retain their owning workflows.
 
+The `source` job is an explicit `ubuntu-latest` metadata-admission exception:
+it checks the requested PR or ref, checks out the admitted source, and records
+the Git SHA without executing selected-source scripts or Task commands. The
+`artifact` job remains on ARC. The `edge` job is an explicit `windows-latest`
+exception because it executes native Microsoft Edge. The placement contract
+binds each exception to that exact job and runner.
+
 ### Required actions
 
 1. Route an authorized dispatch through CI/CD with Nook SRE context.
@@ -165,6 +172,19 @@ reaches 108 GB ahead of the configured 120 GB GC maximum.
 The portable WASM proof uses `wasm-proof` to compute the immutable dependency
 fingerprint. It performs no availability probes because the proof owns its
 explicit repair and verification refs.
+
+### Research image publication
+
+The research runtime-image publisher sets `GHA_CACHE_WRITE_ENABLED` to an
+empty value. It retains exact cache imports and publishes the final registry
+image without re-exporting native or WASM cache graphs. The dependency job
+retains its existing cache exports.
+
+**Prohibited:** enable cache exports in the research image publisher merely
+because it consumes native and WASM dependencies.
+
+**Required:** reuse those imports with exports disabled in the image job.
+Keep dependency-cache publication in its owning verified job.
 
 ### Network transport evidence
 

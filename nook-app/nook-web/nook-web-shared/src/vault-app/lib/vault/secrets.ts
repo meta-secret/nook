@@ -857,7 +857,7 @@ export class VaultSecretActions {
       const admittedManager = state.admitManager();
       if (admittedManager.isErr()) return storageErr(admittedManager.error);
       try {
-        return storageOk(admittedManager.value.passkey_details_js(id));
+        return storageOk(await admittedManager.value.passkey_details_js(id));
       } catch (nativeFailure) {
         return storageErr(new NativeVaultStorageFailure(nativeFailure));
       }

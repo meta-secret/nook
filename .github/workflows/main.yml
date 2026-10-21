@@ -1,5 +1,5 @@
 # Main runs native and WASM/web verification concurrently after preflight.
-# The WASM/web producer overlaps verified WASM cache publication with web checks and image publication
+# The WASM/web producer overlaps Node and web checks, then verified WASM cache publication with image publication
 # on its own builder. Web and two isolated extension shards consume one verified image.
 # All validation and cache gates join before development deployment.
 # Each browser solve is read-only. Headless UI demos are temporarily disabled while their
@@ -237,25 +237,12 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-      - name: WASM Node tests
-        run: task ci:main:wasm-node-test
-        env:
-          CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-          WASM_BUILD_MODE: dev
-
-      - name: Prepare web artifacts alongside verified WASM cache publication
+      - name: Verify Node and web concurrently, then publish verified artifacts
         id: prepare_web
         shell: bash
         run: |
           cache_log="$RUNNER_TEMP/main-wasm-cache.log"
-          GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache >"$cache_log" 2>&1 &
-          cache_pid=$!
-          web_status=0
+          web_log="$RUNNER_TEMP/main-web-artifacts.log"
           task ci:main:web:artifacts \
             CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
             VITE_BASE="$CI_MAIN_VITE_BASE" \
@@ -263,15 +250,29 @@ jobs:
             VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
             VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
             VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
-            WASM_BUILD_MODE=dev || web_status=$?
-          if [ "$web_status" -eq 0 ]; then
+            WASM_BUILD_MODE=dev >"$web_log" 2>&1 &
+          web_pid=$!
+          node_status=0
+          task ci:main:wasm-node-test || node_status=$?
+          cache_outcome=skipped
+          if [ "$node_status" -eq 0 ]; then
+            GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache >"$cache_log" 2>&1 &
+            cache_pid=$!
+          fi
+          web_status=0
+          wait "$web_pid" || web_status=$?
+          if [ "$node_status" -eq 0 ] && [ "$web_status" -eq 0 ]; then
             task web:e2e:kubernetes-image:artifacts \
               CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" || web_status=$?
           fi
-          cache_outcome=success
-          wait "$cache_pid" || cache_outcome=failure
-          cat "$cache_log"
+          if [ "$node_status" -eq 0 ]; then
+            cache_outcome=success
+            wait "$cache_pid" || cache_outcome=failure
+            cat "$cache_log"
+          fi
+          cat "$web_log"
           echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
+          if [ "$node_status" -ne 0 ]; then exit "$node_status"; fi
           exit "$web_status"
         env:
           CI: true
@@ -367,7 +368,10 @@ jobs:
     name: Web e2e
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
-    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
+    runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -400,7 +404,10 @@ jobs:
         shard: [1, 2]
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
-    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
+    runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -425,10 +432,12 @@ jobs:
   ui-demos:
     name: UI demos
     if: ${{ false }}
-    # This is the final local cache producer. Serialize it behind web so it
-    # clones the promoted web generation instead of racing a sibling lineage.
+    # Consume the immutable browser image published by the web producer.
     needs: [web]
-    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
+    runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}

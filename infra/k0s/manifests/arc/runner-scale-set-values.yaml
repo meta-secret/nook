@@ -44,6 +44,7 @@ template:
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+      nook.nokey.sh/arc-workload: build
     # Balance execution counts across eligible hosts without limiting each to one.
     # Managers, listeners and BuildKit daemons do not carry this label.
     topologySpreadConstraints:

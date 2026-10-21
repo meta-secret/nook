@@ -20,7 +20,7 @@ This document owns:
 
 Runner Pods are disposable and unprivileged.
 
-They receive:
+Build-capable runner Pods receive:
 
 - the Docker CLI and Buildx client;
 - a node-local BuildKit service address;
@@ -38,31 +38,60 @@ They do not receive:
 - a Kata runtime class.
 
 The Docker CLI is a BuildKit client. It must not be treated as a general
-container-runtime API.
+container-runtime API. Browser-only job Pods consume prepared images or
+artifacts under the `arc-browser-job` role. Their distinct hook supplies no
+BuildKit environment, client mount, client init container, or BuildKit ingress
+permission.
 
 ## Compute and placement
 
 ARC keeps no warm runner Pod. It creates one Pod for each queued job and removes
 that Pod after completion.
 
-Three scale sets share the cluster: `nook-k0s` serves general jobs,
-`nook-k0s-container` launches browser job Pods, and the separately owned
-`nook-k0s-hive` serves Hive jobs. Their existing queue ceilings are 35, 20,
-and 10 respectively.
+Browser-only jobs use Rise-S-2. General jobs, Hive, and mixed container jobs
+use Rise-S-1, the home worker, and the OVH control/storage worker.
+Required node eligibility separates these workloads before soft preferences
+choose a node within the build pool.
 
-The four qualified nodes use soft tier preferences: Rise-S workers score 100,
-the home 7950X3D scores 90, and the older control/storage worker scores 1.
-Home has twice each Rise node's logical CPUs, but its 250 Mbps connection makes
-Rise preferable for the first network-heavy jobs. Browser jobs retain their
-explicit Rise/overflow eligibility inventory.
+- General `nook-k0s` retains a ceiling of 35.
+- Mixed `nook-k0s-container` decreases from 20 to 16.
+- Browser-only `nook-k0s-browser` has a ceiling of 4.
+- Separately owned `nook-k0s-hive` retains a ceiling of 10.
+- The aggregate ceiling remains 65; it is not a throughput guarantee.
+
+Build nodes retain tier preferences: Rise-S-1 scores 100, the home 7950X3D
+scores 90, and the control/storage worker scores 1. Home's 250 Mbps link
+requires at least 32 seconds per decimal GB before protocol or storage overhead.
+New placements may need cold imports despite retained caches.
+
+### Browser capacity and availability
+
+The selected Rise-S-2 host has 16 logical CPUs and approximately 62 GiB memory.
+The separation assessment observed a 466 GiB disk with 97 GiB free.
+These are capacity observations, not reserved resources or performance promises.
+
+- Browser concurrency is bounded by the four-runner ceiling.
+- Exhausting four runner slots queues additional browser work.
+- An unavailable or unschedulable Rise-S-2 leaves browser work queued.
+- There is no automatic overflow to build nodes.
+- Its retained BuildKit shard may still perform idle garbage collection or
+  background I/O. Separation removes ordinary build scheduling, not the daemon.
+- Explicit maintenance benchmarks may use all four retained shards.
+  They are outside ordinary workload placement and require their own authorization.
+
+**Prohibited:** silently route browser work to a build node when Rise-S-2 is
+unavailable, or call the configured ceiling a measured speedup.
+
+**Required:** report the queue and node condition. Measure full hosted runs
+after an authorized rollout before claiming improved latency.
 
 ### Shared execution spread
 
-Execution Pods use native topology spread on `kubernetes.io/hostname`
+Build-pool execution Pods use native topology spread on `kubernetes.io/hostname`
 with `maxSkew: 1` and `whenUnsatisfiable: DoNotSchedule`.
 General and Hive selectors count `arc-spread-group` values `general`, `hive`,
-and `container` together. The container hook's spread selector counts only
-`container`, excluding general/Hive runners from browser-job spread counts.
+and `container` together. The mixed container hook's spread selector counts
+only `container`, excluding general/Hive runners from mixed-job spread counts.
 Both count within the Pod's namespace, currently `arc-runners`.
 Container-runner managers, listeners and BuildKit daemons are excluded.
 General runners include lightweight orchestration jobs; the rule does not
@@ -71,11 +100,14 @@ measure actual CPU use or active BuildKit solves.
 Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
 only hosts eligible for the incoming Pod, preserving each pool's placement
 constraints. No `minDomains` or `matchLabelKeys` override is configured.
+General and Hive runners count three eligible build hosts. Mixed container
+jobs count Rise-S-1 and the OVH control/storage host. Browser-only jobs remain
+on Rise-S-2 outside these build-pool spread constraints.
 
 The existing preferred terms retain these marginal penalties per matching Pod:
 
 - Home: 25 from the hostname term.
-- Each Rise: 50, combining hostname (25) and standard-host (25).
+- Rise-S-1: 50, combining hostname (25) and standard-host (25).
 - Control/storage: 100, combining hostname (25), standard-host (25),
   and overflow-host (50).
 
@@ -85,7 +117,7 @@ capacity tier. They are used only in preferred terms. Deployment applies them
 through `infra:arc:placement:labels` before updating runner templates.
 Do not use these partial topology labels for required anti-affinity or spread
 constraints. For example, two jobs on home contribute the same raw penalty as
-one job on a Rise node. The scheduler also scores existing Pods' preferences,
+one job on Rise-S-1. The scheduler also scores existing Pods' preferences,
 normalizes the scores, and combines them with its other plugins; these numbers
 are neither guaranteed allocation ratios nor concurrency limits.
 
@@ -105,20 +137,20 @@ than simultaneous execution slots. Observe real placement and node use with
   counts satisfy `maxSkew: 1`.
   Compare queue time and execution time after rollout before claiming a speedup.
 
-The Remote `ci:pr:e2e` matrix uses `max-parallel: 2` for its two eligible
-container execution hosts. GitHub queues additional matrix jobs before runner
-assignment. Each admitted job still uses all available logical CPUs for its
-Playwright workers. This reduces contention within the matrix; it does not
-reserve hosts or guarantee isolation from other workflows.
+The Remote `ci:pr:e2e` matrix retains `max-parallel: 2`. GitHub queues additional
+matrix jobs before runner assignment. Its sealed browser jobs use the single
+Rise-S-2 browser host. Each admitted job uses all available logical CPUs for
+Playwright workers. The matrix limit does not reserve the host or guarantee
+isolation from other workflows.
 
 ### Deployment and resource policy
 
-Deployment keeps all build nodes quarantined until listeners are ready, exposes
+Full platform deployment keeps all build nodes quarantined until listeners are ready, exposes
 both Rise nodes together, then home, then overflow. The existing Hive Helm
 release keeps ownership of its image, credentials and security settings.
-`infra:arc:placement:hive` updates its affinity and topology spread constraints
-using the general runner's deployed policy. Hive must already
-be installed by its owner; a missing release is a deployment error.
+`infra:arc:placement:hive` updates its build-pool node selector, affinity and
+topology spread constraints using the general runner's deployed policy.
+Hive must already be installed by its owner; a missing release is a deployment error.
 
 Before an authorized rollout, inspect Hive's live Helm execution template and
 its `arc-spread-group: hive` label. Confirm the shared policy reaches its actual
@@ -126,8 +158,9 @@ execution Pods, not a manager template, before using `infra:arc:placement:hive`.
 The separately owned release is not defined by the checked-in general template.
 Committing this policy does not deploy it or establish a measured improvement.
 
-Scale-set ceilings remain unchanged. Runner, job and BuildKit containers have
-no CPU or memory requests or limits. Tools retain automatic full-CPU
+The browser ceiling replaces four slots from the mixed scale set.
+Runner, job and BuildKit containers have no CPU or memory requests or limits.
+Tools retain automatic full-CPU
 parallelism. Support-container memory envelopes and storage sizes remain
 unchanged. Do not infer available CPUs from a Kubernetes request: CPU affinity,
 cgroup quota and tool configuration determine runtime parallelism.
@@ -142,9 +175,19 @@ Each replica uses:
 - rootless BuildKit `v0.32.2`;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
-- garbage collection with a 112 GB maximum-use target, 16 GB free-space
-  target, and 64 GB reserved floor; and
+- garbage collection through the shared policy below; and
 - no CPU or memory requests or limits.
+
+The shared four-node ConfigMap retains its preceding age-filtered GC policies.
+The ordinary layer policy keeps configured `112GB` maximum use, `16GB` free
+space, and `64GB` reserved space.
+Its final `all = true` policy uses `minFreeSpace = "33%"` and retains the
+`64GB` reserved floor, which BuildKit parses as 64 GiB.
+BuildKit measures `statfs.Bfree`, including filesystem-reserved blocks, rather
+than usable `Bavail`. Its native percentage conversion targets approximately
+25% usable space on the assessed Rise-S-2 filesystem. This is not a universal
+usable-space guarantee: actual reclamation depends on native GC eligibility
+and the retained floor.
 
 Build-host key quotas follow these rules:
 
@@ -174,7 +217,7 @@ Dependabot, and other untrusted jobs remain on GitHub-hosted runners. Build
 publication refs and credentials remain job scoped, but they are not a sandbox
 for hostile build instructions.
 
-The manifest and deployment own exactly four qualified build nodes:
+The manifest and deployment retain exactly four BuildKit storage nodes:
 
 - two Rise-S workers;
 - the home worker; and
@@ -182,7 +225,9 @@ The manifest and deployment own exactly four qualified build nodes:
 
 Adding another node requires its retained PV and a matching StatefulSet replica
 in the same change. Deployment fails closed when the qualified-node inventory
-differs.
+differs. Rise-S-2 remains in that storage inventory even though ordinary build
+producers are excluded from its workload pool. Separation does not delete or
+move its cached layers.
 
 The node-local Service uses `internalTrafficPolicy: Local`. A runner therefore
 reaches only the BuildKit endpoint on its own node.
@@ -263,6 +308,50 @@ Credential rules are:
 - Run `task infra:arc:fallback` before emergency ARC credential revocation.
 
 ## Operations and validation
+
+### Workload-separation rollout
+
+Source changes do not apply live placement. Obtain approval for the scoped
+maintenance rollout before running the following steps.
+Keep the PR's `ci:full-e2e` label removed while preparing the new pool.
+`NOOK_BROWSER_RUNS_ON` is not an activation gate: the workflow's default
+already selects `nook-k0s-browser` when the variable is absent.
+
+1. Run `task infra:arc:separation:drain` to stop new assignments.
+   - Existing jobs finish naturally. Pending and terminating runner objects
+     also block the next step until ARC removes them.
+2. Run `task infra:arc:separation:apply` after the drain completes.
+   - It runs `infra:k0s:sync` to upload the checked-out infrastructure sources
+     before rendering or applying remote manifests.
+   - It applies placement labels, hooks, and scale-set templates with admission
+     still stopped. Hive retains its separately owned non-placement settings.
+3. Run `task infra:arc:separation:resume` after apply succeeds.
+   - It checks for old runner templates before restoring ceilings 35/16/4/10.
+   - A failed check remains visible; the workflow does not automatically recover.
+4. Run `task infra:arc:separation:activate` to register the explicit
+   `NOOK_BROWSER_RUNS_ON` value after the new pool is ready.
+5. Use `task infra:arc:separation:status` for read-only configuration evidence.
+   - Registration and configuration do not prove real job placement or latency.
+   - After the approved rollout, restore `ci:full-e2e` through PR Lifecycle.
+     Validate actual browser/build placement and full hosted runs.
+
+These steps preserve active jobs, BuildKit daemons, all retained PVs, and the
+node-local Service. They do not restart the ARC controller, buy capacity, or
+perform broad platform deployment.
+
+- Drain and resume update pools through sequential Helm calls. A partial
+  failure can leave earlier pools changed and later pools unchanged.
+- Inspect native Helm and ARC status after a partial failure. Diagnose the
+  failure before rerunning the relevant ordinary phase. There is no automatic recovery.
+- Apply keeps admission at zero after its idle check succeeds.
+
+**Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
+old runner Pods to bypass the drain, or claim a speedup from registration alone.
+
+**Required:** use the approved scoped sequence, inspect a failure before any
+further mutation, and report measured hosted results separately from configuration.
+
+### Full platform operations
 
 Deploy the platform with:
 

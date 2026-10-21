@@ -527,7 +527,10 @@ jobs:
       max-parallel: 2
       matrix:
         suite: [stable, unstable, isolation, extension]
-    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
+    runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}

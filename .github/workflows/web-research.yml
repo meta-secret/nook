@@ -119,6 +119,10 @@ jobs:
 
       - name: Publish exact-source research browser image
         run: task web:e2e:kubernetes-image
+        env:
+          # Keep the exact dependency imports and image push, without exporting
+          # the overlapping native/WASM graphs owned by Main's verified producers.
+          GHA_CACHE_WRITE_ENABLED: ""
 
   deploy:
     name: Build and deploy research catalog

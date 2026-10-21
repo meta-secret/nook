@@ -11,9 +11,11 @@ import { workflowSchema } from "./arc-manifest-model";
 export class ArcWorkflowPlacementContract {
   constructor(private readonly root: string) {}
   async assert(): Promise<Result<void, OperationalContractFailure>> {
-    const hostedUntrustedBoundary = new Set([
-      "ci.yml#scope",
-      "web-research.yml#validate-untrusted",
+    const hostedPlacements = new Map([
+      ["ci.yml#scope", "ubuntu-latest"],
+      ["web-research.yml#validate-untrusted", "ubuntu-latest"],
+      ["e2e-windows.yml#source", "ubuntu-latest"],
+      ["e2e-windows.yml#edge", "windows-latest"],
     ]);
     const workflowsDir = resolve(this.root, ".github/workflows");
     let entries: string[];
@@ -51,11 +53,11 @@ export class ArcWorkflowPlacementContract {
           });
         }
         const identity = `${workflowFile}#${jobName}`;
-        if (placement === "ubuntu-latest") {
-          if (!hostedUntrustedBoundary.has(identity)) {
+        if (placement === "ubuntu-latest" || placement === "windows-latest") {
+          if (hostedPlacements.get(identity) !== placement) {
             return err({
               kind: OperationalContractFailureKind.Requirement,
-              message: `${identity} routes trusted work to GitHub cloud`,
+              message: `${identity} has an undocumented GitHub-hosted runner placement: ${placement}`,
             });
           }
           observedHostedExceptions = new Set([
@@ -64,7 +66,7 @@ export class ArcWorkflowPlacementContract {
           ]);
           const { if: condition = "" } = job;
           if (
-            identity !== "ci.yml#scope" &&
+            identity === "web-research.yml#validate-untrusted" &&
             (!condition.includes("head.repo.full_name") ||
               !condition.includes("dependabot[bot]"))
           ) {
@@ -96,7 +98,7 @@ export class ArcWorkflowPlacementContract {
       }
     }
 
-    for (const exception of hostedUntrustedBoundary) {
+    for (const exception of hostedPlacements.keys()) {
       if (!observedHostedExceptions.has(exception)) {
         return err({
           kind: OperationalContractFailureKind.Requirement,

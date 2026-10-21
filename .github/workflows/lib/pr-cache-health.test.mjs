@@ -720,7 +720,7 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("one PR job avoids telemetry and registry handoffs", () => {
+void test("PR browser fanout preserves read-only cache boundaries", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
   const arcRunnerDockerfile = fs.readFileSync(
     "infra/k0s/images/arc-runner/Dockerfile",
@@ -742,7 +742,55 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
     "infra/k0s/manifests/arc/container-hook.yaml",
     "utf8",
   );
-  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
+  const browserStart = workflow.indexOf("\n  browser:\n");
+  assert.notEqual(browserStart, -1);
+  const validationStart = workflow.indexOf("\n  validation:\n", browserStart);
+  assert.notEqual(validationStart, -1);
+  const prepare = workflow.slice(0, browserStart);
+  const browser = workflow.slice(browserStart, validationStart);
+  const validation = workflow.slice(validationStart);
+  assert.match(validation, /needs: \[prepare, browser\]\n {4}if: \$\{\{ always\(\) \}\}/);
+  assert.match(
+    validation,
+    / {4}steps:\n {6}- uses: actions\/checkout@v7\n {8}with:\n {10}ref: \$\{\{ inputs\.source_sha \|\| github\.event\.pull_request\.head\.sha \}\}\n {10}persist-credentials: false\n {6}- name: Require every selected validation branch\n/,
+  );
+  const guardStart = validation.indexOf("      - name: Require every selected validation branch\n");
+  const restoreStart = validation.indexOf("      - name: Import production artifacts after all validation succeeds\n");
+  const previewStart = validation.indexOf("      - name: Deploy and report preview\n");
+  assert.ok(guardStart >= 0 && restoreStart > guardStart && previewStart > restoreStart);
+  const trustedRoute = "runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && ";
+  for (const mixedJob of [prepare, validation]) {
+    assert.ok(mixedJob.includes(`${trustedRoute}(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}`));
+    assert.doesNotMatch(mixedJob, /NOOK_BROWSER_RUNS_ON/);
+  }
+  assert.ok(browser.includes(`${trustedRoute}(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}`));
+  assert.doesNotMatch(browser, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
+  assert.equal(
+    prepare.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
+    1,
+  );
+  assert.equal(
+    workflow.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
+    1,
+  );
+  assert.equal(prepare.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
+  assert.equal(workflow.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
+  assert.match(prepare, /cache-write: "false"/);
+  assert.match(prepare, /main-cache-only: "true"/);
+  assert.equal(
+    workflow.match(/uses: actions\/download-artifact@v8/g)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/git config --global --add safe\.directory "\$GITHUB_WORKSPACE"\n {10}task --silent ci:pr:browser:restore/g)?.length,
+    2,
+  );
+  assert.doesNotMatch(workflow, /safe\.directory ["']?\*/);
   const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(
     rootWorkflow,
@@ -769,7 +817,7 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
   assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,
-    /type=registry|actions\/download-artifact|needs\.rust/,
+    /type=registry|needs\.rust/,
   );
   for (const credential of [
     "NOOK_SCCACHE_ACCESS_KEY",
@@ -780,6 +828,40 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
     assert.ok(workflow.includes(credential));
   }
   assert.match(workflow, /require-sccache: "true"/);
+});
+
+void test("sealed browser jobs use browser capacity while arbitrary remote tasks retain build capacity", () => {
+  const browserRoute = "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}";
+  const mixedRoute = "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}";
+  for (const { path, start, end } of [
+    { path: ".github/workflows/main.yml", start: "\n  web-e2e:\n", end: "\n  extension-e2e:\n" },
+    { path: ".github/workflows/main.yml", start: "\n  extension-e2e:\n", end: "\n  ui-demos:\n" },
+    { path: ".github/workflows/main.yml", start: "\n  ui-demos:\n", end: "\n  deploy:\n" },
+    { path: ".github/workflows/remote.yml", start: "\n  ci-pr-e2e-suite:\n", end: "\n  ci-pr-e2e:\n" },
+  ]) {
+    const workflow = fs.readFileSync(path, "utf8");
+    const jobStart = workflow.indexOf(start);
+    const jobEnd = workflow.indexOf(end, jobStart);
+    assert.notEqual(jobStart, -1, `${path}: ${start}`);
+    assert.notEqual(jobEnd, -1, `${path}: ${end}`);
+    const job = workflow.slice(jobStart, jobEnd);
+    assert.ok(job.includes(browserRoute), `${path}: ${start}`);
+    assert.doesNotMatch(job, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
+  }
+  const manualBrowser = fs.readFileSync(".github/workflows/e2e-pr.yml", "utf8");
+  const manualStart = manualBrowser.indexOf("\n  e2e:\n");
+  assert.notEqual(manualStart, -1);
+  const manualConsumer = manualBrowser.slice(manualStart);
+  assert.ok(manualConsumer.includes(browserRoute));
+  assert.doesNotMatch(manualConsumer, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
+  const remote = fs.readFileSync(".github/workflows/remote.yml", "utf8");
+  const genericStart = remote.indexOf("\n  web-e2e:\n");
+  const sealedStart = remote.indexOf("\n  ci-pr-e2e-suite:\n", genericStart);
+  assert.notEqual(genericStart, -1);
+  assert.notEqual(sealedStart, -1);
+  const generic = remote.slice(genericStart, sealedStart);
+  assert.ok(generic.includes(mixedRoute));
+  assert.doesNotMatch(generic, /NOOK_BROWSER_RUNS_ON/);
 });
 
 void test("remote browser checkout supplies repository actions before sealed task execution", () => {
@@ -831,7 +913,7 @@ void test(
 
     assert.match(
       step,
-      /^ {8}if: always\(\) && \(inputs\.full_e2e_requested \|\| steps\.browser-scope\.outputs\.auth == 'true'\)$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
     );
     assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(
@@ -855,7 +937,7 @@ void test(
     assert.doesNotMatch(validationStep, /^ {8}continue-on-error:/m);
     assert.equal(
       workflow.match(/^ {8}uses: actions\/upload-artifact@v7$/gm)?.length,
-      1,
+      3,
     );
   },
 );

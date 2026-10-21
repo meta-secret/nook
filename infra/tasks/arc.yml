@@ -542,7 +542,8 @@ tasks:
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
         container_render="$(mktemp)"
-        trap 'rm -f "$controller_render" "$runner_render" "$container_render"' EXIT
+        browser_render="$(mktemp)"
+        trap 'rm -f "$controller_render" "$runner_render" "$container_render" "$browser_render"' EXIT
         helm template nook-arc \
           "{{.ARC_CONTROLLER_CHART}}" \
           --version "$chart_version" \
@@ -561,6 +562,18 @@ tasks:
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/container-runner-scale-set-values.yaml" \
           > "$container_render"
+        helm template nook-k0s-browser \
+          "{{.ARC_RUNNER_CHART}}" \
+          --version "$chart_version" --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/browser-runner-scale-set-values.yaml" \
+          > "$browser_render"
+        grep -q 'kind: AutoscalingRunnerSet' "$browser_render"
+        grep -q 'ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE' "$browser_render"
+        grep -q 'nook-arc-browser-hook' "$browser_render"
+        if grep -Eq 'NOOK_BUILDKIT|docker-client|privileged: true|hostPath:' "$browser_render"; then
+          echo "Browser managers must not carry BuildKit access or privileged mounts" >&2
+          exit 1
+        fi
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
         grep -q 'kind: AutoscalingRunnerSet' "$container_render"
@@ -576,6 +589,8 @@ tasks:
           -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" >/dev/null
         sudo -n k0s kubectl apply --dry-run=client \
           -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml" >/dev/null
+        sudo -n k0s kubectl apply --dry-run=client \
+          -f "$remote_dir/infra/k0s/manifests/arc/browser-hook.yaml" >/dev/null
         echo "Pinned ARC renders satisfy the regular-pod persistent-BuildKit contract"
         REMOTE
 
@@ -642,6 +657,7 @@ tasks:
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/browser-hook.yaml"
         current_buildkit_storage="$(kubectl get statefulset nook-buildkit \
           --namespace arc-runners \
           -o jsonpath='{.spec.volumeClaimTemplates[0].spec.resources.requests.storage}' \
@@ -679,13 +695,19 @@ tasks:
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/container-runner-scale-set-values.yaml" \
           --wait --timeout 10m
+        helm upgrade --install nook-k0s-browser \
+          "$runner_chart" --version "$chart_version" --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/browser-runner-scale-set-values.yaml" \
+          --wait --timeout 10m
         helm uninstall nook-k0s-cache --namespace arc-runners >/dev/null 2>&1 || true
 
         test "$(kubectl get autoscalingrunnerset/nook-k0s \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 35
         test "$(kubectl get autoscalingrunnerset/nook-k0s-container \
-          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 20
-        for scale_set in nook-k0s nook-k0s-container; do
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 16
+        test "$(kubectl get autoscalingrunnerset/nook-k0s-browser \
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 4
+        for scale_set in nook-k0s nook-k0s-container nook-k0s-browser; do
           deadline="$(( $(date +%s) + 600 ))"
           until kubectl get pod --namespace arc-systems \
             -l "actions.github.com/scale-set-name=$scale_set" \

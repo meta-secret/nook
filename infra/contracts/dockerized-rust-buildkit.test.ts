@@ -59,7 +59,7 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^ {8}if: always\(\) && \(inputs\.full_e2e_requested \|\| steps\.browser-scope\.outputs\.auth == 'true'\)$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
     );
     expect(diagnosticsStep).toMatch(
       /^ {8}uses: actions\/upload-artifact@v7$/m,
@@ -74,7 +74,31 @@ class DockerizedRustBuildKitContract {
     ]);
     expect(workflow.match(/uses: actions\/upload-artifact@[^\s]+/g)).toEqual([
       "uses: actions/upload-artifact@v7",
+      "uses: actions/upload-artifact@v7",
+      "uses: actions/upload-artifact@v7",
     ]);
+    expect(workflow).toContain("needs: [prepare, browser]");
+    expect(workflow).toContain("if: ${{ always() }}");
+    expect(workflow).toContain("fail-fast: false");
+    expect(workflow).toContain("suite: [web, extension-1, extension-2, extension-3]");
+    expect(
+      workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g),
+    ).toHaveLength(2);
+    expect(workflow).toContain('test "$PREPARE_RESULT" = success');
+    expect(workflow).toContain('test "$BROWSER_RESULT" = success');
+    expect(workflow).toContain('test "$BROWSER_RESULT" = skipped');
+    expect(workflow).toContain(
+      "pr-playwright-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(tasks).toContain(
+      "E2E_SHARD=1/3 task --silent _extension:test:e2e:shard",
+    );
+    expect(tasks).toContain(
+      "E2E_SHARD=2/3 task --silent _extension:test:e2e:shard",
+    );
+    expect(tasks).toContain(
+      "E2E_SHARD=3/3 task --silent _extension:test:e2e:shard",
+    );
     const validationStep = workflowStep(
       "Parallel validation and browser tests",
     );

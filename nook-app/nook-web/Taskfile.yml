@@ -84,7 +84,7 @@ tasks:
         vars: { TASK: _web:test }
 
   web:test:e2e:
-    desc: Run full local-provider Playwright e2e in Docker (stable 3 workers, unstable 2; no PAT).
+    desc: Run full local-provider Playwright e2e in Docker (all available logical CPUs; no PAT).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -114,7 +114,7 @@ tasks:
           E2E_OUTPUT: type=registry
 
   web:test:e2e:parallel:
-    desc: Full local-provider Playwright e2e when wasm/dist is built (stable 3 workers, unstable 2).
+    desc: Full local-provider Playwright e2e when wasm/dist is built (all available logical CPUs).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -148,7 +148,7 @@ tasks:
       - task: docker:ui-demo:run
 
   web:test:e2e:pr:
-    desc: Stable Playwright subset in Docker (IndexedDB specs, 3 workers).
+    desc: Stable Playwright subset in Docker (IndexedDB specs, all available logical CPUs).
     deps:
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
@@ -166,7 +166,7 @@ tasks:
         vars: { TASK: _web:test:e2e:isolation }
 
   web:test:e2e:pr:parallel:
-    desc: Stable Playwright subset at 3 workers when wasm and e2e dist are built.
+    desc: Stable Playwright subset using all available logical CPUs when wasm and e2e dist are built.
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr:parallel }
@@ -393,7 +393,7 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Full or deterministically sharded Playwright e2e, with stable specs at 3 workers and sync specs at 2.
+    desc: Full or deterministically sharded Playwright e2e using all available logical CPUs.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
@@ -401,7 +401,7 @@ tasks:
       VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
-      - echo "==> Playwright e2e groups (stable=3 workers, unstable=2 workers, shard=${NOOK_E2E_SHARD:-all}, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - echo "==> Playwright e2e groups (workers=all available logical CPUs, shard=${NOOK_E2E_SHARD:-all}, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
       - task: _web:e2e:build-if-needed
       - task: _web:test:e2e:run-groups
 
@@ -494,6 +494,7 @@ tasks:
   _web:test:ui-demo:
     desc: Record selected headless Playwright demo specs at a human-readable pace.
     env:
+      NOOK_SIMPLE_VAULT_URL: "http://127.0.0.1:5174/"
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
@@ -504,10 +505,12 @@ tasks:
       - task: _web:e2e:build-if-needed
         vars:
           E2E_VAULT_IDLE_TIMEOUT_MS: "300000"
+      - cd "{{.EXTENSION_ROOT}}" && bun run build
+      - cd "{{.EXTENSION_ROOT}}" && bun run e2e:mock-auth:build
       - cd "{{.WEB_ROOT}}" && bun run test:ui-demo -- ${UI_DEMO_SPECS:-}
 
   _web:test:e2e:pr:parallel:
-    desc: Stable Playwright subset at 3 workers when wasm/dist is built.
+    desc: Stable Playwright subset using all available logical CPUs when wasm/dist is built.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
