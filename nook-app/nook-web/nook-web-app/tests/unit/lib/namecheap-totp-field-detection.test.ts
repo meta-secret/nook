@@ -10,6 +10,10 @@ import {
   passwordFieldDiscovery,
   type PasswordFieldQuery,
 } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
+  authenticationSurfaceObservation,
+} from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
 type WorkflowFacts = Parameters<
   typeof classify_companion_authentication_workflow_facts
@@ -27,6 +31,10 @@ class NamecheapTwoFactorPage {
   static readonly WORDLESS_CODE_INPUT = `<input type="text" name="${NamecheapTwoFactorPage.CONTROL}tbValue" inputmode="numeric" maxlength="6" class="gb-form-control">`
   static readonly NAMED_CODE_INPUT = `<input type="text" name="${NamecheapTwoFactorPage.CONTROL}txtCode" inputmode="numeric" maxlength="6" class="gb-form-control">`
   static readonly MASKED_CODE_INPUT = `<input type="password" name="${NamecheapTwoFactorPage.CONTROL}txtCode" placeholder="Enter OTP Code" class="gb-form-control">`
+  static readonly PLACEHOLDER_CODE_INPUT =
+    '<input type="text" name="challenge" placeholder="Enter OTP Code">'
+  static readonly LIVE_CODE_INPUT =
+    '<input type="tel" class="gb-form-control gb-mb-small " autocomplete="off" placeholder="Enter OTP Code" data-ncid="verification-otp">'
 
   render(codeInput: string): void {
     const control = NamecheapTwoFactorPage.CONTROL
@@ -47,6 +55,20 @@ ${codeInput}
 </div></div></div>
 <footer><input type="email" name="email" placeholder="you@yours.com" aria-labelledby="join-newsletter"><span id="join-newsletter">Join our newsletter</span><button type="button">Subscribe</button></footer>
 </form>`
+  }
+
+  renderLiveChallenge(): void {
+    document.body.innerHTML = `<fragment><fragment-app-test><div><form>
+      <div><div><div class="gb-scope twofa"><div class="gb-panel">
+        <header class="gb-panel__header"><h2>Enter OTP Code</h2></header>
+        <div class="gb-panel__body">
+          <label class="gb-d-block gb-mb-1">Open the two-factor authentication app on your device to view your authentication code.</label>
+          ${NamecheapTwoFactorPage.LIVE_CODE_INPUT}
+          <p class="gb-text-base gb-my-2"><a href="/twofa/backup/">Want to use a Backup Code?</a></p>
+          <div><button type="button">Cancel</button><button type="submit">Submit</button></div>
+        </div>
+      </div></div></div></div>
+    </form></div></fragment-app-test></fragment>`
   }
 
   codeFieldCount(): number {
@@ -90,7 +112,70 @@ afterEach(() => {
 })
 
 describe('Namecheap two-factor code field detection', () => {
+  test('offers code fill for the observed unnamed GET form and telephone field', () => {
+    const page = new NamecheapTwoFactorPage()
+    page.renderLiveChallenge()
+    expect(page.passwordFieldCount()).toBe(0)
+    expect(page.codeFieldCount()).toBe(1)
+    expect(page.workflow().kind).toBe(AuthenticationWorkflowKind.TotpChallenge)
+    expect(page.workflow().action).toBe(AuthenticationWorkflowAction.FillTotp)
+  })
+
   test.each([
+    { initial: 'maxlength="6"', attribute: 'inputmode', value: 'numeric' },
+    {
+      initial: 'inputmode="numeric" maxlength="20"',
+      attribute: 'maxlength',
+      value: '6',
+    },
+    { initial: 'maxlength="6"', attribute: 'pattern', value: '[0-9]{6}' },
+  ])(
+    'rediscovers the challenge when $attribute supplies the missing entry hint',
+    ({ initial, attribute, value }) => {
+      const page = new NamecheapTwoFactorPage()
+      window.history.replaceState({}, '', '/login')
+      document.body.innerHTML = `<form method="post" action="/login"><input id="entry-code" name="entry-code" type="text" ${initial}><button type="submit">Sign in</button></form>`
+      expect(page.codeFieldCount()).toBe(0)
+      const field = document.getElementById('entry-code')
+      switch (true) {
+        case field instanceof HTMLInputElement:
+          break
+        case true:
+        default:
+          throw new Error('Expected challenge field')
+      }
+      const observer = new MutationObserver(() => {})
+      observer.observe(document.body, {
+        attributes: true,
+        attributeOldValue: true,
+        attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
+        subtree: true,
+      })
+      field.setAttribute(attribute, value)
+      const records = observer.takeRecords()
+      observer.disconnect()
+      expect(records).toHaveLength(1)
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact({
+          records,
+          mountedHost: false,
+          renderedWorkflow: false,
+        }).shouldScheduleScan,
+      ).toBe(true)
+      expect(page.codeFieldCount()).toBe(1)
+      expect(page.workflow().action).toBe(AuthenticationWorkflowAction.FillTotp)
+    },
+  )
+
+  test.each([
+    {
+      name: 'live unnamed telephone input with autocomplete off and placeholder only',
+      codeInput: NamecheapTwoFactorPage.LIVE_CODE_INPUT,
+    },
+    {
+      name: 'plain text input with the reported placeholder on initial load',
+      codeInput: NamecheapTwoFactorPage.PLACEHOLDER_CODE_INPUT,
+    },
     {
       name: 'wordless numeric code input',
       codeInput: NamecheapTwoFactorPage.WORDLESS_CODE_INPUT,

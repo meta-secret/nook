@@ -26,7 +26,7 @@ Nook has one root router, project specifications and architecture, six
 functional owner graphs, shared knowledge, and project-local document owners.
 
 - The root graph selects project requirements and functional owner catalogs.
-- Project documents supply Nook requirements to upstream Prime and Team Gizmo.
+- Project documents supply Nook requirements to Prime and its specialists.
 - The six owner graphs describe Delivery Pipeline, AI, development core,
   security, SRE, and web development context.
 - All executable roles and coordinator behavior come from Meta-Cortex.
@@ -45,7 +45,7 @@ functional owner graphs, shared knowledge, and project-local document owners.
 **Prohibited:** launch separate AI and web coordinators because their contexts
 have separate graphs.
 
-**Preferred:** the existing Team Gizmo supplies the AI and web contexts to their
+**Preferred:** the existing Prime supplies the AI and web contexts to their
 bounded worker assignments.
 
 - **Prohibited:** move an auth specification beside `nook-auth2` but retain a

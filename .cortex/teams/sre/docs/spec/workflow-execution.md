@@ -7,14 +7,14 @@
 For CI execution and assigned pipeline repairs, apply the
 [upstream CI/CD agent](../../../../../.meta-cortex/teams/sre-team/agents/cicd-agent/AGENTS.md)
 and its CI/CD Operations skill with [Nook SRE context](functional-ownership.md).
-Team Gizmo supplies
+Prime supplies
 the project root, library root, assigned workspace, source branch, authorized
 operation, and existing run evidence.
 
 Use [remote execution](../../workflows/remote-execution.md) for Nook's hosted
 validation boundary. PR publication and merge remain with the PR agent under
 Nook's delivery policy. Return run URLs, tested revisions, complete job outcomes,
-diagnostics, and unresolved blockers through Team Gizmo.
+diagnostics, and unresolved blockers through Prime.
 
 - **Prohibited:** substitute local tests for required hosted evidence or merge a
   PR because an assigned workflow completed.

@@ -16,7 +16,7 @@ authorities without copying their policies.
 ## Skill catalog
 
 - **[Branch naming](../../../docs/spec/branch-naming.md)**
-  - Purpose: Name feature, Team Gizmo, and Team Agent branches consistently.
+  - Purpose: Name feature and specialist branches consistently.
 - **[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)**
   - Purpose: Preserve repository and generated-state hygiene before publication.
 - **[Team-oriented development](../../../docs/spec/functional-team-development.md)**
@@ -43,7 +43,7 @@ authorities without copying their policies.
 - **[Cortex consistency](cortex-consistency/SKILL.md)**
   - Purpose: Compile Nook's typed Cortex policy contracts and workflow bindings.
 - **[Delegation visualization](delegation-visualization/SKILL.md)**
-  - Purpose: Render Gizmo's ordered ephemeral Team Agent plan without acquiring lifecycle authority.
+  - Purpose: Render Prime's ordered ephemeral Team Agent plan without acquiring lifecycle authority.
 - **[Product-spec lifecycle](product-spec-lifecycle.md)**
   - Purpose: Read owning product specs before implementation and update them
     when chat, task, or PR iterations establish durable knowledge.

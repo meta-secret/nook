@@ -457,12 +457,19 @@ class PageQrCapture {
       const request: DialogInstructionRequest = { dialog, media }
       return this.dialogInstructionCandidates(request)
     }
-    return this.nearbyInstructionElements(media).map(
-      (element): InstructionCandidate => ({
-        kind: InstructionCandidateKind.Prose,
-        element,
-      }),
-    )
+    const scope = media.closest(PageQrCapture.INSTRUCTION_SCOPE_SELECTOR)
+    switch (true) {
+      case scope instanceof HTMLElement:
+        return this.scopeProseElements(scope).map(
+          (element): InstructionCandidate => ({
+            kind: InstructionCandidateKind.Prose,
+            element,
+          }),
+        )
+      case true:
+      default:
+        return this.adjacentInstructionCandidates(media)
+    }
   }
 
   /**
@@ -583,15 +590,79 @@ class PageQrCapture {
     }
   }
 
-  private nearbyInstructionElements(media: Element): HTMLElement[] {
-    const scopeSelector = PageQrCapture.INSTRUCTION_SCOPE_SELECTOR
-    const scopes = [media.closest(scopeSelector)].filter(
-      (element) => element instanceof HTMLElement,
-    )
-    for (const scope of scopes) return this.scopeProseElements(scope)
-    return [media.previousElementSibling, media.nextElementSibling]
+  /**
+   * Ordinary page widgets often wrap their media in empty divs. Follow only
+   * those media-only wrappers to the nearest preceding sibling branch, then
+   * stop. Any text node, including whitespace, stops traversal without reading
+   * its payload. Never search outward past text or read an ancestor's copy.
+   */
+  private adjacentInstructionCandidates(
+    media: Element,
+  ): InstructionCandidate[] {
+    const directProse = [media.previousElementSibling, media.nextElementSibling]
       .filter((element) => element instanceof HTMLElement)
       .filter((element) => element.matches(PageQrCapture.PROSE_SELECTOR))
+    switch (directProse.length > 0) {
+      case true:
+        return directProse.map((element): InstructionCandidate => ({
+          kind: InstructionCandidateKind.Prose,
+          element,
+        }))
+      case false:
+        break
+    }
+    let branch = media
+    while (branch.parentElement instanceof HTMLElement) {
+      const preceding = branch.previousElementSibling
+      switch (true) {
+        case preceding instanceof HTMLElement:
+          return this.adjacentBranchCandidates(preceding)
+        case true:
+        default:
+          break
+      }
+      const parent = branch.parentElement
+      switch (
+        parent.matches('div,span') &&
+        parent.children.length === 1 &&
+        !Array.from(parent.childNodes).some((node) => node instanceof Text)
+      ) {
+        case true:
+          branch = parent
+          break
+        case false:
+          return []
+      }
+    }
+    return []
+  }
+
+  /** A single adjacent instruction branch, excluding other page surfaces. */
+  private adjacentBranchCandidates(
+    branch: HTMLElement,
+  ): InstructionCandidate[] {
+    const copySelector = `${PageQrCapture.PROSE_SELECTOR},div,span`
+    const otherSurface = `${PageQrCapture.INSTRUCTION_SCOPE_SELECTOR},${PageQrCapture.DIALOG_SCOPE_SELECTOR},main,aside,nav,header,footer,canvas,img,svg,input,textarea,select,button,code,pre,kbd,samp,[data-secret],[data-setup-key],[data-nook-backup-codes],[data-nook-backup-code]`
+    switch (
+      branch.matches(copySelector) &&
+      !branch.matches(otherSurface) &&
+      !(branch.querySelector(otherSurface) instanceof Element)
+    ) {
+      case false:
+        return []
+      case true:
+        break
+    }
+    return [branch, ...branch.querySelectorAll(copySelector)]
+      .filter((element) => element instanceof HTMLElement)
+      .map((element): InstructionCandidate => {
+        switch (element.matches(PageQrCapture.PROSE_SELECTOR)) {
+          case true:
+            return { kind: InstructionCandidateKind.Prose, element }
+          case false:
+            return { kind: InstructionCandidateKind.TextLeaf, element }
+        }
+      })
   }
 
   /** Headings and paragraphs that belong to this section scope, not a nested one. */

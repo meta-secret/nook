@@ -3,7 +3,7 @@
 ## Purpose
 
 Keep agents inside their assigned Nook feature and focused issue scope. Upstream
-[Team Gizmo](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md) owns worker
+[Prime](../../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md) owns worker
 coordination. The upstream
 [integration agent](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 owns local feature and task branches, worktrees, integration, and cleanup.

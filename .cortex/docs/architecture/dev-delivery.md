@@ -6,9 +6,9 @@ This is the canonical delivery contract for feature work. The repository has
 one permanent delivery branch: `main`. Every feature uses a short-lived feature
 branch created from freshly fetched `origin/main`.
 
-The owning Feature Gizmo carries one delivery cycle from implementation through
+The owning Prime carries one delivery cycle from implementation through
 the merged pull request. There is no `dev` integration branch, snapshot
-publication stage, promotion stage, or separate Feature Gizmo delivery cycle.
+publication stage, promotion stage, or separate Prime delivery cycle.
 
 Read the complete [multiagent delivery visual
 model](multiagent-delivery-diagrams.md) before using this contract.
@@ -16,20 +16,20 @@ model](multiagent-delivery-diagrams.md) before using this contract.
 ## Ownership
 
 - Gizmo Prime remains the mission/root coordinator.
-- The Feature Gizmo owns implementation, repair, readiness, and final delivery.
-- The single Team Gizmo coordinates bounded workers.
+- The Prime owns implementation, repair, readiness, and final delivery.
+- The single Prime coordinates bounded workers.
 - The upstream integration agent owns local workspace setup, branch integration,
   combined validation, and cleanup.
-- Team Gizmo (Delivery Pipeline context) routes GitHub mechanics to PR Lifecycle Agent.
+- Prime (Delivery Pipeline context) routes GitHub mechanics to PR Lifecycle Agent.
 - PR Lifecycle applies the upstream PR agent with Nook delivery policy.
-- Team Gizmo assigns workflow dispatch, reruns, diagnostics, and pipeline
+- Prime assigns workflow dispatch, reruns, diagnostics, and pipeline
   repairs to upstream CI/CD with Nook SRE context. Reuse one observer's evidence
   per run; PR observation does not require another workflow dispatch.
 - PR Lifecycle Agent pushes the canonical feature branch, creates or updates
   its pull request, observes checks, performs the authorized squash merge, and
   deletes the remote feature branch.
 - Reviews may improve the change, but missing review or approval is never a
-  delivery blocker. The owning Feature Gizmo may merge its own pull request.
+  delivery blocker. The owning Prime may merge its own pull request.
 
 ## Fresh-main bootstrap
 
@@ -76,7 +76,7 @@ follows the latest head and reruns the affected checks.
 
 Review requests and approvals are optional. Unresolved security findings or
 known correctness defects still block readiness. Absence of a reviewer,
-approval, or review count does not block the owning Feature Gizmo.
+approval, or review count does not block the owning Prime.
 
 ### Merge and cleanup
 

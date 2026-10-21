@@ -24,8 +24,8 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-The owning Feature Gizmo authorizes publication of its canonical feature branch
-through PR Lifecycle. Team Gizmo assigns hosted execution to the upstream CI/CD
+The owning Prime authorizes publication of its canonical feature branch
+through PR Lifecycle. Prime assigns hosted execution to the upstream CI/CD
 agent with Nook SRE context. Each stage re-fetches and resolves the latest
 committed branch head; the returned exact SHA is observational evidence only.
 
@@ -52,11 +52,11 @@ committed branch head; the returned exact SHA is observational evidence only.
 
 ## Feature PR validation
 
-The Feature Gizmo authorizes publication of the canonical feature branch and
-the full existing PR checks. Team Gizmo (Delivery Pipeline context) routes that
+The Prime authorizes publication of the canonical feature branch and
+the full existing PR checks. Prime (Delivery Pipeline context) routes that
 packet through the active harness to PR Lifecycle Agent for branch publication
 and check observation. Upstream CI/CD handles required dispatches, reruns, and
-pipeline diagnostics with SRE context. The Feature Gizmo retains policy authority, and
+pipeline diagnostics with SRE context. The Prime retains policy authority, and
 the feature PR lifecycle remains the sole path for pull-request
 creation/update. Follow
 [dev delivery](../../../docs/architecture/dev-delivery.md).
@@ -76,16 +76,16 @@ operations. Their existence never permits feature-stage test execution.
 
 ### Routing rules
 
-Team Gizmo routes remote task execution through upstream CI/CD with Nook SRE
+Prime routes remote task execution through upstream CI/CD with Nook SRE
 context and the authorized canonical feature branch. The execution owner
 re-fetches and resolves that branch's latest committed head before each stage
 and returns the exact SHA as observational evidence only. A stale caller-provided
 feature SHA does not reject branch-authorized execution. Forward user-requested
 selectors directly under the root circuit breaker.
 
-For feature-branch publication, PR check observation, and squash merge, Team
-Gizmo assigns PR Lifecycle under Feature Gizmo authorization. CI/CD returns run
-evidence through Team Gizmo for PR observation. Neither role decides product
+For authorized feature-branch publication, PR check observation, and squash
+merge, Prime assigns PR Lifecycle. CI/CD returns run evidence through Prime
+for PR observation. Neither execution role decides product
 policy or readiness.
 
 - **Prohibited:** dispatch a second run solely because PR observation changed

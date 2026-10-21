@@ -68,9 +68,7 @@ Model text.
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Nook Cortex Index');
   expect(markdown).toContain('## Product and operational contexts');
-  expect(markdown).toContain(
-    '[Prime, single Team Gizmo, and delivery](docs/spec/index.md)',
-  );
+  expect(markdown).toContain('[Prime and delivery](docs/spec/index.md)');
   expect(markdown).not.toContain('[Gizmo Prime](teams/gizmo/index.md)');
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
@@ -82,7 +80,7 @@ Model text.
   expect(markdown).toContain('[Shared knowledge](shared/index.md)');
   expect(markdown).toContain('meta-cortex-integration.md');
   expect(markdown).toContain(
-    '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
+    '[Upstream Gizmo Prime](../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md)',
   );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
@@ -109,7 +107,7 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
-    '[Prime, single Team Gizmo, and delivery](docs/spec/index.md)',
+    '[Prime and delivery](docs/spec/index.md)',
     '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
     '[AI](teams/ai/index.md)',
     '[Development Core](teams/dev-core/index.md)',
@@ -320,7 +318,7 @@ test('uses upstream roles directly with Nook project requirements', () => {
   expect(root).toContain(
     '../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
   );
-  expect(root).toContain(
+  expect(root).not.toContain(
     '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
   );
   expect(root).toContain(

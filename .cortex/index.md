@@ -11,12 +11,12 @@ context.
 - [Root routing contract](AGENTS.md)
 - [Meta-Cortex integration and provenance](meta-cortex-integration.md)
 - [Installed Meta-Cortex entry point](../.meta-cortex/AGENTS.md)
-- [Upstream Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
+- [Upstream Gizmo Prime](../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md)
 - [Upstream local feature integration](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 
 ## Coordination
 
-- [Prime, single Team Gizmo, and delivery](docs/spec/index.md)
+- [Prime and delivery](docs/spec/index.md)
 - [Coordination and delivery architecture](docs/architecture/index.md)
 
 ## Project-local context
