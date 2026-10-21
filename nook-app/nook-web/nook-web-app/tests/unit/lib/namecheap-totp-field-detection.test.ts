@@ -10,6 +10,10 @@ import {
   passwordFieldDiscovery,
   type PasswordFieldQuery,
 } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
+  authenticationSurfaceObservation,
+} from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
 type WorkflowFacts = Parameters<
   typeof classify_companion_authentication_workflow_facts
@@ -27,6 +31,8 @@ class NamecheapTwoFactorPage {
   static readonly WORDLESS_CODE_INPUT = `<input type="text" name="${NamecheapTwoFactorPage.CONTROL}tbValue" inputmode="numeric" maxlength="6" class="gb-form-control">`
   static readonly NAMED_CODE_INPUT = `<input type="text" name="${NamecheapTwoFactorPage.CONTROL}txtCode" inputmode="numeric" maxlength="6" class="gb-form-control">`
   static readonly MASKED_CODE_INPUT = `<input type="password" name="${NamecheapTwoFactorPage.CONTROL}txtCode" placeholder="Enter OTP Code" class="gb-form-control">`
+  static readonly PLACEHOLDER_CODE_INPUT =
+    '<input type="text" name="challenge" placeholder="Enter OTP Code">'
 
   render(codeInput: string): void {
     const control = NamecheapTwoFactorPage.CONTROL
@@ -91,6 +97,50 @@ afterEach(() => {
 
 describe('Namecheap two-factor code field detection', () => {
   test.each([
+    { initial: 'maxlength="6"', attribute: 'inputmode', value: 'numeric' },
+    { initial: 'inputmode="numeric"', attribute: 'maxlength', value: '6' },
+    { initial: 'maxlength="6"', attribute: 'pattern', value: '[0-9]{6}' },
+  ])(
+    'rediscovers the challenge when $attribute supplies the missing entry hint',
+    ({ initial, attribute, value }) => {
+      const page = new NamecheapTwoFactorPage()
+      page.render(`<input id="dynamic-challenge" type="text" ${initial}>`)
+      expect(page.codeFieldCount()).toBe(0)
+      const field = document.getElementById('dynamic-challenge')
+      switch (field instanceof HTMLInputElement) {
+        case false:
+          throw new Error('Expected challenge field')
+        case true:
+          break
+      }
+      const observer = new MutationObserver(() => {})
+      observer.observe(document.body, {
+        attributes: true,
+        attributeOldValue: true,
+        attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
+        subtree: true,
+      })
+      field.setAttribute(attribute, value)
+      const records = observer.takeRecords()
+      observer.disconnect()
+      expect(records).toHaveLength(1)
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact({
+          records,
+          mountedHost: false,
+          renderedWorkflow: false,
+        }).shouldScheduleScan,
+      ).toBe(true)
+      expect(page.codeFieldCount()).toBe(1)
+      expect(page.workflow().action).toBe(AuthenticationWorkflowAction.FillTotp)
+    },
+  )
+
+  test.each([
+    {
+      name: 'plain text input with the reported placeholder on initial load',
+      codeInput: NamecheapTwoFactorPage.PLACEHOLDER_CODE_INPUT,
+    },
     {
       name: 'wordless numeric code input',
       codeInput: NamecheapTwoFactorPage.WORDLESS_CODE_INPUT,

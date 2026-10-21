@@ -64,6 +64,8 @@ export class NamecheapOtpScenario {
     return page.locator('form').evaluate((form) => {
       form.querySelector('input')?.setAttribute('placeholder', 'Coupon code')
       form.querySelector('input')?.setAttribute('name', 'coupon')
+      form.querySelector('input')?.removeAttribute('inputmode')
+      form.querySelector('input')?.removeAttribute('maxlength')
       form.querySelector('a')?.remove()
       form.querySelector('button[type="submit"]')?.replaceChildren('Apply')
       document.querySelector('h1')?.replaceChildren('Apply discount')
@@ -97,6 +99,22 @@ export class NamecheapOtpScenario {
       )
       yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
       expect(this.submissions).toBe(0)
+      // Keep the initial-load placeholder regression above, then model a
+      // client-rendered challenge whose numeric hint arrives after its field.
+      yield* Effect.tryPromise(() =>
+        input.evaluate((field) => {
+          field.removeAttribute('placeholder')
+          field.setAttribute('maxlength', '6')
+        }),
+      )
+      yield* Effect.tryPromise(() => expect(widget).toHaveCount(0))
+      yield* Effect.tryPromise(() =>
+        input.evaluate((field) => field.setAttribute('inputmode', 'numeric')),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(widget.getByText('Fill your 2FA code')).toBeVisible(),
+      )
+      yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
       const pickerPromise = page.context().waitForEvent('page')
       const fillButton: NamecheapOtpButtonOptions = { name: 'Fill 2FA code' }
       yield* Effect.tryPromise(() =>
