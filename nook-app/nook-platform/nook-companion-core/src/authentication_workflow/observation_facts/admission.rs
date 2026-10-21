@@ -59,7 +59,12 @@ mod tests {
         }
 
         fn facts() -> AuthenticationPageObservationFacts {
-            let control = Self::get_submit();
+            Self::facts_for(Self::get_submit())
+        }
+
+        fn facts_for(
+            control: AuthenticationAdvanceControlObservation,
+        ) -> AuthenticationPageObservationFacts {
             AuthenticationPageObservationFacts {
                 fields: AuthenticationFieldObservationFacts {
                     one_time_code_field_count: 1.into(),
@@ -139,6 +144,15 @@ mod tests {
                 AuthenticationWorkflowMatch::NoMatch
             );
         }
+
+        fn enrollment_verification() -> AuthenticationPageObservationFacts {
+            let mut control = Self::get_submit();
+            control.submission_method = PageControlSubmissionMethod::Post;
+            control.form_identity = "enroll-otp-form".to_owned();
+            control.destination_identity = "https://example.test/auth/verify".to_owned();
+            control.label = "Verify".to_owned();
+            Self::facts_for(control)
+        }
     }
 
     #[test]
@@ -165,6 +179,44 @@ mod tests {
         let mut facts = OtpChallengeScenario::facts();
         facts.detailed_advance_control = AuthenticationDetailedAdvanceControlObservation::Absent;
         OtpChallengeScenario::assert_fill_only(facts);
+    }
+
+    #[test]
+    fn enrollment_verification_is_not_admitted_as_a_login_challenge() {
+        OtpChallengeScenario::assert_no_match(OtpChallengeScenario::enrollment_verification());
+        for destination in [
+            "https://example.test/auth/totp/enroll/verify",
+            "https://example.test/auth/verify?flow=totp-setup",
+        ] {
+            let mut control = OtpChallengeScenario::get_submit();
+            control.submission_method = PageControlSubmissionMethod::Post;
+            control.destination_identity = destination.to_owned();
+            let mut facts = OtpChallengeScenario::facts_for(control);
+            facts.detailed_advance_control =
+                AuthenticationDetailedAdvanceControlObservation::Absent;
+            OtpChallengeScenario::assert_no_match(facts);
+        }
+    }
+
+    #[test]
+    fn explicit_authenticator_setup_keeps_enrollment_verification_available() {
+        let mut facts = OtpChallengeScenario::enrollment_verification();
+        facts.authenticator.authenticator_setup =
+            crate::AuthenticationAuthenticatorSetupObservation::Present;
+        let AuthenticationWorkflowMatch::Matched(snapshot) =
+            (AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            })
+            .classify()
+        else {
+            panic!("expected authenticator enrollment verification");
+        };
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpEnrollment);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
+        assert_eq!(
+            snapshot.stage,
+            crate::AuthenticationWorkflowStage::Verification
+        );
     }
 
     #[test]
