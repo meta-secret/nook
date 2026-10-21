@@ -494,6 +494,7 @@ tasks:
   _web:test:ui-demo:
     desc: Record selected headless Playwright demo specs at a human-readable pace.
     env:
+      NOOK_SIMPLE_VAULT_URL: "http://127.0.0.1:5174/"
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
@@ -504,6 +505,7 @@ tasks:
       - task: _web:e2e:build-if-needed
         vars:
           E2E_VAULT_IDLE_TIMEOUT_MS: "300000"
+      - task: _extension:build
       - cd "{{.EXTENSION_ROOT}}" && bun run e2e:mock-auth:build
       - cd "{{.WEB_ROOT}}" && bun run test:ui-demo -- ${UI_DEMO_SPECS:-}
 
