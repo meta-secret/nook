@@ -35,8 +35,8 @@ function replaceCharacter(line: string): string {
 /** Characters a lit run spans. */
 const HOT_RUN = 6;
 /** Columns a lit run crawls after landing, before it jumps again. */
-export const CRAWL_MIN = 4;
-export const CRAWL_MAX = 12;
+export const CRAWL_MIN = 8;
+export const CRAWL_MAX = 24;
 /** Ticks a lit run holds still where it lands, so the jump reads. */
 const LAND_HOLD_MIN = 2;
 const LAND_HOLD_MAX = 4;

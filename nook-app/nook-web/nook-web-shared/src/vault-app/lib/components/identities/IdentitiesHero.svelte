@@ -94,6 +94,6 @@ Inner pages use quiet page bars instead.
     rows={5}
     columns={64}
     crawl
-    intervalMs={160}
+    intervalMs={300}
   />
 </section>
