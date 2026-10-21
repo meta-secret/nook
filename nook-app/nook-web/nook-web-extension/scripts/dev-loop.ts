@@ -134,32 +134,63 @@ const extensionIdFromManifestKey = (manifestKey: string): string => {
     .join('')
 }
 
-// Reads one property of parsed JSON without asserting its shape.
-const field = (value: unknown, key: string): unknown =>
-  value instanceof Object ? Reflect.get(value, key) : undefined
+enum JsonFieldKind {
+  Missing = 'missing',
+  Present = 'present',
+}
+type JsonField =
+  | { kind: JsonFieldKind.Missing }
+  | { kind: JsonFieldKind.Present; value: unknown }
+
+// Parsed JSON cannot contain an absent-value literal: observe field presence.
+const field = (value: unknown, key: string): JsonField =>
+  value instanceof Object && Object.hasOwn(value, key)
+    ? { kind: JsonFieldKind.Present, value: Reflect.get(value, key) }
+    : { kind: JsonFieldKind.Missing }
+
+const requiredField = (value: unknown, key: string): unknown => {
+  const found = field(value, key)
+  if (found.kind === JsonFieldKind.Missing)
+    throw new Error(`CDP response has no ${key} field`)
+  return found.value
+}
 
 const readBuiltManifestKey = async (): Promise<string> => {
   const key = field(
     JSON.parse(await readFile(join(distDir, 'manifest.json'), 'utf8')),
     'key',
   )
-  if (typeof key !== 'string') {
+  if (key.kind === JsonFieldKind.Missing || typeof key.value !== 'string') {
     throw new Error(
       'Built manifest has no key; the local channel build must set one.',
     )
   }
-  return key
+  return key.value
 }
 
+enum CdpBrowserKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+type CdpBrowser =
+  | { kind: CdpBrowserKind.Unavailable }
+  | { kind: CdpBrowserKind.Available; url: string }
+
 // The browser-level CDP WebSocket URL, when a browser listens on the dev port.
-const cdpBrowserUrl = async (): Promise<string | undefined> => {
-  const response = await fetch(
-    `http://127.0.0.1:${cdpPort}/json/version`,
-  ).catch(() => undefined)
-  const url = response?.ok
-    ? field(await response.json(), 'webSocketDebuggerUrl')
-    : undefined
-  return typeof url === 'string' ? url : undefined
+const cdpBrowserUrl = async (): Promise<CdpBrowser> => {
+  let response: Response
+  try {
+    response = await fetch(`http://127.0.0.1:${cdpPort}/json/version`)
+  } catch {
+    return { kind: CdpBrowserKind.Unavailable }
+  }
+  if (!response.ok) return { kind: CdpBrowserKind.Unavailable }
+  const url = field(await response.json(), 'webSocketDebuggerUrl')
+  return url.kind === JsonFieldKind.Present &&
+    typeof url.value === 'string' &&
+    url.value
+    ? { kind: CdpBrowserKind.Available, url: url.value }
+    : { kind: CdpBrowserKind.Unavailable }
 }
 
 // Minimal flat-session CDP client over the browser endpoint.
@@ -171,7 +202,8 @@ class CdpConnection {
     socket.addEventListener('message', (event) => {
       const reply: unknown = JSON.parse(String(event.data))
       const id = field(reply, 'id')
-      if (typeof id === 'number') this.pending.get(id)?.(reply)
+      if (id.kind === JsonFieldKind.Present && typeof id.value === 'number')
+        this.pending.get(id.value)?.(reply)
     })
   }
 
@@ -197,10 +229,19 @@ class CdpConnection {
     return new Promise((resolveSend, rejectSend) => {
       this.pending.set(id, (reply) => {
         this.pending.delete(id)
-        const error = field(reply, 'error')
-        if (error === undefined) resolveSend(field(reply, 'result'))
-        else
-          rejectSend(new Error(`${method}: ${String(field(error, 'message'))}`))
+        try {
+          const error = field(reply, 'error')
+          if (error.kind === JsonFieldKind.Missing)
+            resolveSend(requiredField(reply, 'result'))
+          else
+            rejectSend(
+              new Error(
+                `${method}: ${String(requiredField(error.value, 'message'))}`,
+              ),
+            )
+        } catch (error) {
+          rejectSend(error)
+        }
       })
     })
   }
@@ -224,8 +265,9 @@ const evaluateIn = async (
     sessionId,
   )
   const exception = field(result, 'exceptionDetails')
-  if (exception !== undefined) throw new Error(JSON.stringify(exception))
-  return field(field(result, 'result'), 'value')
+  if (exception.kind === JsonFieldKind.Present)
+    throw new Error(JSON.stringify(exception.value))
+  return requiredField(requiredField(result, 'result'), 'value')
 }
 
 // Runs on chrome://extensions. Chromium disables a --load-extension extension on reload
@@ -245,24 +287,24 @@ const developerReloadScript = (extensionId: string): string => `
 // content scripts and the vault bridge reattach to the new extension instance.
 const reloadExtension = async (): Promise<void> => {
   const browserUrl = await cdpBrowserUrl()
-  if (!browserUrl) {
+  if (browserUrl.kind === CdpBrowserKind.Unavailable) {
     log(
       `\x1b[31mBrowser CDP is not reachable on port ${cdpPort}; relaunch the loop.\x1b[0m`,
     )
     return
   }
   const extensionId = extensionIdFromManifestKey(await readBuiltManifestKey())
-  const cdp = await CdpConnection.open(browserUrl)
+  const cdp = await CdpConnection.open(browserUrl.url)
   try {
     const created = await cdp.send('Target.createTarget', {
       url: 'chrome://extensions/',
       background: true,
     })
     const attached = await cdp.send('Target.attachToTarget', {
-      targetId: field(created, 'targetId'),
+      targetId: requiredField(created, 'targetId'),
       flatten: true,
     })
-    const sessionId = String(field(attached, 'sessionId'))
+    const sessionId = String(requiredField(attached, 'sessionId'))
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const ready = await evaluateIn(
         cdp,
@@ -278,7 +320,7 @@ const reloadExtension = async (): Promise<void> => {
       developerReloadScript(extensionId),
     )
     await cdp.send('Target.closeTarget', {
-      targetId: field(created, 'targetId'),
+      targetId: requiredField(created, 'targetId'),
     })
     if (state !== 'enabled') {
       throw new Error(
@@ -286,18 +328,32 @@ const reloadExtension = async (): Promise<void> => {
       )
     }
     const targets = await cdp.send('Target.getTargets', {})
-    const targetInfos: unknown = field(targets, 'targetInfos')
-    const webPages = (Array.isArray(targetInfos) ? targetInfos : []).filter(
-      (target: unknown) =>
-        field(target, 'type') === 'page' &&
-        /^https?:/.test(String(field(target, 'url'))),
-    )
+    const targetInfos = field(targets, 'targetInfos')
+    const webPages = (
+      targetInfos.kind === JsonFieldKind.Present &&
+      Array.isArray(targetInfos.value)
+        ? targetInfos.value
+        : []
+    ).filter((target: unknown) => {
+      const type = field(target, 'type')
+      const url = field(target, 'url')
+      return (
+        type.kind === JsonFieldKind.Present &&
+        type.value === 'page' &&
+        url.kind === JsonFieldKind.Present &&
+        /^https?:/.test(String(url.value))
+      )
+    })
     for (const page of webPages) {
       const pageSession = await cdp.send('Target.attachToTarget', {
-        targetId: field(page, 'targetId'),
+        targetId: requiredField(page, 'targetId'),
         flatten: true,
       })
-      await cdp.send('Page.reload', {}, String(field(pageSession, 'sessionId')))
+      await cdp.send(
+        'Page.reload',
+        {},
+        String(requiredField(pageSession, 'sessionId')),
+      )
     }
     log(
       `Extension ${extensionId} reloaded; ${webPages.length} web tab(s) refreshed`,
@@ -317,14 +373,15 @@ const closeBrowser = async (browserUrl: string): Promise<void> => {
   void cdp.send('Browser.close', {})
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await sleep(100)
-    if (!(await cdpBrowserUrl())) return
+    if ((await cdpBrowserUrl()).kind === CdpBrowserKind.Unavailable) return
   }
   throw new Error(`Browser on CDP port ${cdpPort} did not close.`)
 }
 
 const resetProfile = async (): Promise<void> => {
   const browserUrl = await cdpBrowserUrl()
-  if (browserUrl) await closeBrowser(browserUrl)
+  if (browserUrl.kind === CdpBrowserKind.Available)
+    await closeBrowser(browserUrl.url)
   // Chromium releases the profile lock just after its CDP endpoint goes away.
   await sleep(500)
   await rm(profileDir, { recursive: true, force: true })
@@ -333,7 +390,7 @@ const resetProfile = async (): Promise<void> => {
 
 const launchBrowser = async (): Promise<void> => {
   if (freshProfile) await resetProfile()
-  if (await cdpBrowserUrl()) {
+  if ((await cdpBrowserUrl()).kind === CdpBrowserKind.Available) {
     log(`Reusing browser already listening on CDP port ${cdpPort}`)
     await reloadExtension()
     return
@@ -354,7 +411,7 @@ const launchBrowser = async (): Promise<void> => {
   )
   browser.unref()
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (await cdpBrowserUrl()) {
+    if ((await cdpBrowserUrl()).kind === CdpBrowserKind.Available) {
       log(`Browser up (profile ${profileDir})`)
       return
     }
@@ -368,7 +425,14 @@ const launchBrowser = async (): Promise<void> => {
 type PendingWork = { rust: boolean; extension: boolean }
 const pending: PendingWork = { rust: false, extension: false }
 let building = false
-let debounce: ReturnType<typeof setTimeout> | undefined
+enum DebounceKind {
+  Idle = 'idle',
+  Scheduled = 'scheduled',
+}
+type Debounce =
+  | { kind: DebounceKind.Idle }
+  | { kind: DebounceKind.Scheduled; timer: ReturnType<typeof setTimeout> }
+let debounce: Debounce = { kind: DebounceKind.Idle }
 
 const drain = async (): Promise<void> => {
   if (building) return
@@ -393,19 +457,21 @@ const drain = async (): Promise<void> => {
 const schedule = (work: Partial<PendingWork>): void => {
   pending.rust ||= work.rust === true
   pending.extension ||= work.extension === true
-  clearTimeout(debounce)
-  debounce = setTimeout(() => void drain(), 250)
+  if (debounce.kind === DebounceKind.Scheduled) clearTimeout(debounce.timer)
+  debounce = {
+    kind: DebounceKind.Scheduled,
+    timer: setTimeout(() => void drain(), 250),
+  }
 }
 
 const watchSources = (): void => {
   watch(platformRoot, { recursive: true }, (_event, fileName) => {
     if (!fileName) return
-    const [crate] = fileName.split(sep)
+    const [crate = ''] = fileName.split(sep)
     const isWasmInput =
       fileName === 'Cargo.toml' ||
       fileName === 'Cargo.lock' ||
-      (wasmCrates.includes(crate ?? '') &&
-        !fileName.includes(`${sep}target${sep}`))
+      (wasmCrates.includes(crate) && !fileName.includes(`${sep}target${sep}`))
     if (isWasmInput) {
       log(`Rust change: ${fileName}`)
       schedule({ rust: true })

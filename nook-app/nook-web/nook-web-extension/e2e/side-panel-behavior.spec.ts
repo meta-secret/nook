@@ -748,9 +748,11 @@ test('Refresh loads the panel again and reads its state afresh', async ({
   await refresh.click()
   await expect
     .poll(() =>
-      page.evaluate(() => document.documentElement.dataset.beforeRefresh),
+      page.evaluate(() =>
+        document.documentElement.hasAttribute('data-before-refresh'),
+      ),
     )
-    .toBeUndefined()
+    .toBe(false)
   await expect(page.getByTestId('side-panel-site-host')).toHaveText(
     'accounts.example.com',
   )

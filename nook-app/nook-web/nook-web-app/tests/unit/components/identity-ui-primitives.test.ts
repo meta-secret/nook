@@ -43,7 +43,8 @@ describe('identity UI primitives', () => {
         const start = line
           .slice(0, before)
           .reduce((length, segment) => length + segment.text.length, 0)
-        return { row, start, text: line[before]?.text ?? '' }
+        const segment = line[before]
+        return { row, start, text: segment ? segment.text : '' }
       }
       throw new Error('no lit run')
     }
