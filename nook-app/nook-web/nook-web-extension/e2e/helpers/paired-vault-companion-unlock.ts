@@ -196,37 +196,6 @@ async function openOwnedCompanionPopup(
   return { page: popupPage, closeAfterUse: true, diagnostics }
 }
 
-async function waitForOwnedCompanionPopup(
-  request: OwnedCompanionPopupOpen,
-): Promise<CompanionPopupHandle> {
-  const existingPopup = findOwnedCompanionPopup(request)
-  if (existingPopup.kind === CompanionPopupLookupKind.Found) {
-    return {
-      page: existingPopup.page,
-      closeAfterUse: true,
-      diagnostics: captureCompanionPopupDiagnostics(
-        existingPopup.page,
-        request.extensionId,
-      ),
-    }
-  }
-
-  const popupPage = await request.context.waitForEvent('page', {
-    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    predicate: (page) =>
-      !request.ignoredPages.includes(page) &&
-      isOwnedCompanionPopup(page, request.extensionId),
-  })
-  return {
-    page: popupPage,
-    closeAfterUse: true,
-    diagnostics: captureCompanionPopupDiagnostics(
-      popupPage,
-      request.extensionId,
-    ),
-  }
-}
-
 async function completeCompanionPopupUnlock(
   request: CompanionPopupUnlock,
 ): Promise<void> {
@@ -383,7 +352,7 @@ export async function unlockPairedVaultThroughCompanion(
       try {
         await expectVaultOpened(vaultPage)
       } catch {
-        const companionPopup = await waitForOwnedCompanionPopup({
+        const companionPopup = await openOwnedCompanionPopup({
           context,
           extensionId,
           ignoredPages: existingCompanionPages,
@@ -398,7 +367,9 @@ export async function unlockPairedVaultThroughCompanion(
         }
       }
     } else {
-      const companionPopup = await waitForOwnedCompanionPopup({
+      // The vault opens the browser-owned side panel, which Playwright does not
+      // expose as a Page; the same packaged auth UI unlocks from a tab.
+      const companionPopup = await openOwnedCompanionPopup({
         context,
         extensionId,
         ignoredPages: existingCompanionPages,

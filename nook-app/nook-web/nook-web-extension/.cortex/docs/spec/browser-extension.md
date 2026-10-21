@@ -12,8 +12,12 @@ for the locked Pilot action and for pairing, in the initiating normal window.
 Both surfaces use the same device-protection component. A launcher reuses only
 a tab whose intent matches the requested action. It leaves an open tab with
 another intent untouched and opens the requested intent in a separate tab in
-that window. When the user connects an identity, the extension sends its public
-keys directly to the configured Simple Vault deployment.
+that window. When the user explicitly chooses Unlock on a paired Simple Vault
+website, the website request opens the side panel in that window while the
+click still carries its user gesture; the website then resumes on its own once
+the panel unlocks the extension. When the user connects an identity, the
+extension sends its public keys directly to the configured Simple Vault
+deployment.
 That deployment remains the only surface for creating, importing, unlocking,
 browsing, editing, recovering, and administering vaults.
 
