@@ -97,6 +97,7 @@ mod browser_tests {
             .id
             .clone();
         let before = js(website.passkey_details_js(selected.as_str()).await)?;
+        assert_eq!(before.current_record_id(), selected.as_str());
         assert_eq!(before.signature_count(), 0);
 
         let assertion = js(decode_website_passkey_assertion_request(
@@ -132,6 +133,8 @@ mod browser_tests {
             .ok_or_else(|| anyhow::anyhow!("replacement was not listed"))?
             .id
             .clone();
+        assert_eq!(details.current_record_id(), current.as_str());
+        assert_ne!(details.current_record_id(), selected.as_str());
         js(website.delete_secret(current.to_string()).await)?;
         assert!(website.passkey_details_js(selected.as_str()).await.is_err());
         website.clear_vault_keys();
@@ -176,6 +179,7 @@ mod browser_tests {
             .await)?;
 
         let details = js(manager.passkey_details_js(&passkey_id).await)?;
+        assert_eq!(details.current_record_id(), passkey_id);
         assert_eq!(details.credential_id(), credential_id);
         assert_eq!(
             details.relying_party_name_state(),

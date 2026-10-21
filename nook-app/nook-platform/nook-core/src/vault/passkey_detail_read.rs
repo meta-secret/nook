@@ -32,6 +32,12 @@ pub struct PasskeyDetailRead<'a> {
     pub crypto: &'a VaultCrypto,
 }
 
+/// Public details and the live record selected from the same signed vault snapshot.
+pub struct ResolvedPasskeyDetails {
+    pub current_record_id: SecretId,
+    pub details: PasskeyDetails,
+}
+
 enum PasskeyProjectionAccess {
     Readable,
     Unavailable,
@@ -43,7 +49,7 @@ enum PasskeyRevisionState {
 }
 
 impl PasskeyDetailRead<'_> {
-    pub fn read(&self) -> Result<PasskeyDetails, PasskeyDetailReadError> {
+    pub fn read(&self) -> Result<ResolvedPasskeyDetails, PasskeyDetailReadError> {
         let record = self.resolve()?;
         let ciphertext =
             AgeArmoredCiphertext::parse(record.record.value.as_str()).map_err(VaultError::from)?;
@@ -61,7 +67,10 @@ impl PasskeyDetailRead<'_> {
             return Err(PasskeyDetailReadError::WrongKind);
         };
         value.zeroize_plaintext();
-        Ok(details?)
+        Ok(ResolvedPasskeyDetails {
+            current_record_id: record.record.key.clone(),
+            details: details?,
+        })
     }
 
     fn resolve(&self) -> Result<&ProjectedSecret, PasskeyDetailReadError> {
@@ -388,7 +397,7 @@ mod tests {
         fn details(
             &self,
             selected_id: &SecretId,
-        ) -> Result<PasskeyDetails, super::PasskeyDetailReadError> {
+        ) -> Result<ResolvedPasskeyDetails, super::PasskeyDetailReadError> {
             let projection = VaultProjection::from_graph(&self.graph, self.store_id.as_str())
                 .map_err(VaultError::from)?;
             super::PasskeyDetailRead {
@@ -412,13 +421,19 @@ mod tests {
     fn imported_assertion_keeps_visible_passkey_reference_readable() -> anyhow::Result<()> {
         let mut fixture = PasskeyReadFixture::registered()?;
         let before = fixture.details(&fixture.original_id)?;
+        assert_eq!(before.current_record_id, fixture.original_id);
         fixture.assert_and_import()?;
         assert_ne!(fixture.original_id, fixture.current_id);
         let current = fixture.details(&fixture.current_id)?;
-        assert_eq!(u32::from(current.signature_count), 1);
+        assert_eq!(u32::from(current.details.signature_count), 1);
         let selected = fixture.details(&fixture.original_id)?;
-        assert_eq!(selected.credential_id, before.credential_id);
-        assert_eq!(selected.signature_count, current.signature_count);
+        assert_eq!(selected.current_record_id, fixture.current_id);
+        assert_eq!(selected.current_record_id, current.current_record_id);
+        assert_eq!(selected.details.credential_id, before.details.credential_id);
+        assert_eq!(
+            selected.details.signature_count,
+            current.details.signature_count
+        );
         Ok(())
     }
 
@@ -445,7 +460,8 @@ mod tests {
             crypto: &fixture.crypto,
         }
         .read()?;
-        assert_eq!(u32::from(details.signature_count), 2);
+        assert_eq!(details.current_record_id, fixture.current_id);
+        assert_eq!(u32::from(details.details.signature_count), 2);
         Ok(())
     }
 
@@ -547,7 +563,12 @@ mod tests {
             },
         })?;
         assert_eq!(
-            u32::from(fixture.details(&fixture.original_id)?.signature_count),
+            u32::from(
+                fixture
+                    .details(&fixture.original_id)?
+                    .details
+                    .signature_count
+            ),
             1
         );
         Ok(())

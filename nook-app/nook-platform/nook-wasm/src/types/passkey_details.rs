@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use nook_core::{ResolvedPasskeyDetails, SecretId};
 
 /// Whether an optional passkey name adds information to the detail panel.
 #[wasm_bindgen]
@@ -23,16 +24,27 @@ impl NookPasskeyNameState {
 #[wasm_bindgen]
 pub struct NookPasskeyDetails {
     inner: nook_core::PasskeyDetails,
+    current_record_id: SecretId,
 }
 
 impl NookPasskeyDetails {
-    pub(crate) fn from_core(inner: nook_core::PasskeyDetails) -> Self {
-        Self { inner }
+    pub(crate) fn from_core(resolved: ResolvedPasskeyDetails) -> Self {
+        Self {
+            inner: resolved.details,
+            current_record_id: resolved.current_record_id,
+        }
     }
 }
 
 #[wasm_bindgen]
 impl NookPasskeyDetails {
+    /// Live record selected in the same signed vault snapshot as these details.
+    #[wasm_bindgen(getter, js_name = currentRecordId)]
+    #[must_use]
+    pub fn current_record_id(&self) -> String {
+        self.current_record_id.to_string()
+    }
+
     #[wasm_bindgen(getter, js_name = credentialId)]
     #[must_use]
     pub fn credential_id(&self) -> String {
@@ -135,8 +147,13 @@ mod tests {
             backup_state: false,
         };
 
-        let details = NookPasskeyDetails::from_core(passkey.details()?);
+        let record_id = SecretId::generate()?;
+        let details = NookPasskeyDetails::from_core(ResolvedPasskeyDetails {
+            current_record_id: record_id.clone(),
+            details: passkey.details()?,
+        });
 
+        assert_eq!(details.current_record_id(), record_id.as_str());
         assert_eq!(details.credential_id(), URL_SAFE_NO_PAD.encode([8_u8; 32]));
         assert_eq!(
             details.relying_party_name_state(),
