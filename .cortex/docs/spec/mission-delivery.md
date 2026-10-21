@@ -9,7 +9,7 @@ throughout the delivery cycle. Treat every other active task as read-only.
 - Use the upstream [local feature workflow](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md)
   for workspace setup, worker completion, branch integration, and cleanup.
 - Keep Nook's functional ownership and product acceptance requirements with
-  Team Gizmo.
+  Prime.
 - Keep GitHub PR policy separate and under Gizmo Prime's authorization.
 - Do not create a persistent Delivery Pipeline or PR Lifecycle Agent service,
   scheduler, or notification journal.
@@ -17,7 +17,7 @@ throughout the delivery cycle. Treat every other active task as read-only.
 ## Outcome
 
 A feature starts from freshly fetched `origin/main`, completes implementation
-through bounded Team Agents, passes every required PR check, squash-merges into
+through bounded specialists, passes every required PR check, squash-merges into
 `main`, and deletes its remote feature branch.
 
 ## Procedure
@@ -26,7 +26,7 @@ through bounded Team Agents, passes every required PR check, squash-merges into
 2. Run `git fetch --prune origin`.
 3. Select freshly fetched `origin/main` as the upstream local workflow's base.
 4. Use one feature branch for the entire feature.
-5. Let Team Gizmo coordinate workers and the integration agent.
+5. Let Prime coordinate workers and the integration agent.
 6. Stop after validated local integration when the user requested local-only work.
 7. For authorized publication, route GitHub mechanics through Delivery Pipeline
    and PR Lifecycle.
@@ -45,5 +45,5 @@ through bounded Team Agents, passes every required PR check, squash-merges into
 15. Delete the remote feature branch.
 16. Confirm upstream local cleanup completed for finished worker branches.
 
-Reviews and approvals are optional. The owning Feature Gizmo may merge its own
+Reviews and approvals are optional. The owning Prime may merge its own
 pull request. Required checks and known defects remain blocking.

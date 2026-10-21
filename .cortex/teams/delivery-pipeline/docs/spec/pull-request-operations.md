@@ -11,7 +11,7 @@ to upstream.
 Supply the [Delivery Pipeline policy](functional-ownership.md),
 [authorization packet](authorization-handshake.md), and
 [Nook lifecycle integration](pull-request-lifecycle.md) with the
-project and library roots. The Feature Gizmo retains functional acceptance and
+project and library roots. The Prime retains functional acceptance and
 authorizes each operation.
 
 - **Prohibited:** interpret a publish-only packet as permission to merge or deploy.
@@ -25,7 +25,7 @@ workflow; it does not edit pull-request labels.
 ## CI execution boundary
 
 Report workflow dispatch, rerun, log investigation, and infrastructure repair
-needs to Team Gizmo for the upstream CI/CD role with Nook SRE context. Reuse its
+needs to Prime for the upstream CI/CD role with Nook SRE context. Reuse its
 run evidence when observing PR readiness. Application fixes and local branch
 integration remain with their assigned owners.
 

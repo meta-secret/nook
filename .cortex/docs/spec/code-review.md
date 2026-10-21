@@ -1,7 +1,7 @@
 # Code Review
 
 Code review improves feature quality but is not an approval gate. The owning
-Feature Gizmo may merge its own pull request after all required checks are
+Prime may merge its own pull request after all required checks are
 green.
 
 ## Required actions

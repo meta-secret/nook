@@ -14,4 +14,4 @@
 9. Delete the remote feature branch.
 
 Reviews and approvals are optional. Required checks are mandatory. The owning
-Feature Gizmo carries the full cycle and may merge its own pull request.
+Prime carries the full cycle and may merge its own pull request.

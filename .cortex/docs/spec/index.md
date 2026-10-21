@@ -3,7 +3,6 @@
 ## Upstream roles and project routing
 
 - [Gizmo Prime contract](../../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md)
-- [Single Team Gizmo](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
 - [Nook scope routing](upstream-role-routing.md)
 
 ## Architecture

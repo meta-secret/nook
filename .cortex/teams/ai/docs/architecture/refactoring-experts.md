@@ -23,7 +23,7 @@ role. It receives typed `Completed` and `Failed` structural observations from
 the active harness and does not inspect the repository. A failed observation
 remains failed. The aggregate is diagnostic output for the delivery owner.
 
-Team Gizmos and Team Agents follow the root
+Prime and specialists follow the root
 [Agent Derailment Circuit Breaker](../../../../CIRCUIT-BREAKER.md). This registry
 adds only its typed structural-observation fields.
 
@@ -254,7 +254,7 @@ workflow for bounded evidence collection.
 Both forms load only AI team context. Foreign-team documents may be declared as
 bounded repository evidence paths, but the expert never loads another team's
 graph, entrypoint, skills, or context. It reports any need for foreign-team
-semantic ownership to Gizmo, which routes that team.
+semantic ownership to Prime, which routes that team.
 
 The expert proposes the smallest correction that restores one clear owner.
 It preserves disagreements and uncertainty when evidence cannot resolve them.

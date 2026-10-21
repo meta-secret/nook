@@ -65,13 +65,13 @@ Does not apply to:
 6. Keep profiles isolated by channel and PR.
 7. Security reviews the functional-owner branch and evidence, formats only its
    allowed security-owned Cortex changes, finishes its assigned worker branch,
-   and returns a pending acceptance verdict to Gizmo.
-8. Gizmo routes the Web, SRE, and Security worker branches through the upstream
+   and returns a pending acceptance verdict to Prime.
+8. Prime routes the Web, SRE, and Security worker branches through the upstream
    integration agent and waits for its feature branch, integration outcome, and
    checks.
-9. Gizmo routes feature-branch publication and required PR-check evidence through
+9. Prime routes feature-branch publication and required PR-check evidence through
    the Delivery Pipeline.
-10. The Feature Gizmo's slow PR stage executes security-required focused extension
+10. The Prime's slow PR stage executes security-required focused extension
    checks and applicable deployment verification.
 11. Return the exact SHA, deployed channel, origin, checksum, and packaged
     manifest evidence to Security. Promotion remains blocked until Security
@@ -87,6 +87,6 @@ Deployment verification must prove:
 - the packaged manifest.
 
 The security worker returns its worker branch and focused evidence.
-Gizmo waits for upstream local integration, obtains hosted extension proof and
+Prime waits for upstream local integration, obtains hosted extension proof and
 deployment evidence, and returns both to Security. Security accepts or rejects
 that exact-head evidence before readiness.

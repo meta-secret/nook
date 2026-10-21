@@ -11,8 +11,8 @@ PR checks.
 ## Required actions
 
 - **Feature compilation**
-  - The owning Feature Gizmo publishes the canonical feature branch.
-  - Gizmo Prime authorizes the canonical feature branch request. Team Gizmo
+  - The owning Prime publishes the canonical feature branch.
+  - Gizmo Prime authorizes the canonical feature branch request. Prime
     assigns publication to PR Lifecycle and hosted execution to upstream CI/CD
     with Nook SRE context.
   - Each stage re-fetches and resolves the latest committed branch head for
@@ -23,14 +23,14 @@ PR checks.
   - Author meaningful tests for later execution.
   - Require code review and security acceptance before feature pull-request delivery.
 - **Feature PR required checks**
-  - The manually run Feature Gizmo selects the published feature branch.
-  - The Feature Gizmo authorizes Team Gizmo (Delivery Pipeline context) to route the
-    publication and validation packet through the active harness to internal
+  - The manually run Prime selects the published feature branch.
+  - Prime routes the authorized publication and validation packet with
+    Delivery Pipeline context through the active harness to internal
     PR Lifecycle Agent for publication and check observation. Upstream CI/CD
     handles required workflow dispatches, reruns, and pipeline diagnostics.
-  - The Feature Gizmo retains readiness policy authority, and
-    `feature PR lifecycle` remains the sole pull-request creation/update path; Team
-    Gizmo routes authorized mechanics and PR Lifecycle Agent creates or updates
+  - The Prime retains readiness policy authority, and
+    `feature PR lifecycle` remains the sole pull-request creation/update path.
+    Prime routes authorized mechanics and PR Lifecycle Agent creates or updates
     the pull request without deciding policy, readiness, or promotion verdicts.
   - Run the full required PR checks on the captured feature head SHA.
   - Preserve e2e opt-ins and security-required focused browser checks.
@@ -61,7 +61,7 @@ PR checks.
 ## Evidence
 
 Capture source SHA, run, attempt, and result. Feature build success proves
-compilation only. Return evidence through Team Gizmo (Delivery Pipeline context) to the
-owning controller. The Feature Gizmo decides merge readiness; merge requires
+compilation only. Return evidence to Prime with Delivery Pipeline context.
+Prime decides merge readiness; merge requires
 the feature PR required checks and any separately scoped security acceptance
 for the published feature head. Review and approval remain optional.

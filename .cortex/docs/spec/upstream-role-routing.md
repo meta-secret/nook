@@ -9,7 +9,7 @@ in several Nook scopes without creating another role identity.
 - Select roles from the installed Meta-Cortex team catalogs.
 - Supply the relevant Nook ownership specification and module context.
 - Keep functional ownership separate from language expertise.
-- Use one upstream Team Gizmo per feature.
+- Use one upstream Prime per feature.
 
 **Prohibited:** launch a Nook Auth2 developer or a second security coordinator.
 
@@ -52,7 +52,8 @@ skills, verification, configuration, and launch procedures remain upstream.
 - Regenerate in-memory task contexts from their functional team and selected upstream role.
 - Worker branch role segments now use upstream role names; new assignments reject retired Nook names.
 - Skill scaffolding accepts shared or functional ownership; the retired Gizmo skill owner is unsupported.
-- Existing feature ledger schemas and published Cortex identifiers remain unchanged.
+- Published Nook Cortex identifiers remain unchanged. Upstream feature ledger
+  migration follows the [integration contract](../../meta-cortex-integration.md#repository-identity-and-ledger-migration).
 
 **Prohibited:** accept a retired Nook agent selector as another name for a team.
 
