@@ -1,20 +1,20 @@
 :root {
   /* Mirrored from nook-web-shared vault-app dark tokens (app.css .dark). */
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --border: rgb(255 255 255 / 10%);
+  --background: oklch(0.13 0.007 260);
+  --foreground: oklch(0.965 0.004 250);
+  --card: oklch(0.178 0.008 260);
+  --muted-foreground: oklch(0.69 0.016 255);
+  --primary: oklch(0.91 0.006 250);
+  --primary-foreground: oklch(0.178 0.008 260);
+  --secondary: oklch(0.245 0.009 260);
+  --secondary-foreground: oklch(0.965 0.004 250);
+  --border: rgb(196 206 228 / 11%);
   --input: rgb(255 255 255 / 14%);
-  --ring: rgb(180 186 198 / 45%);
+  --ring: oklch(0.68 0.17 275 / 70%);
   --destructive-border: oklch(0.45 0.12 25);
   --destructive-bg: oklch(0.22 0.05 25);
   --destructive-fg: oklch(0.85 0.08 30);
-  --accent: oklch(0.274 0.006 286.033);
+  --accent: oklch(0.245 0.009 260);
   --success: oklch(0.765 0.177 163.223);
   --radius: 0.1875rem;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

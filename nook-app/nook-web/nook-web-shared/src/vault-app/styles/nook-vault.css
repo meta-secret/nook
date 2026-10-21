@@ -10,6 +10,9 @@
     height: 2.5rem;
     border: 1px solid var(--border);
     color: var(--muted-foreground);
+    /* Stepped recess, like the pockets milled into the guard. */
+    outline: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+    outline-offset: -4px;
   }
   .nk-tile-sm {
     width: 2.25rem;

@@ -6,7 +6,9 @@
  *   nk-frame-tab      bottom-right cut ...... hero, page bars, logs
  *   nk-frame-sheet    opposite diagonal ..... secret detail
  *   nk-frame-nick     small bottom-right .... field slots
- * Lists and banners stay square with a heavy left edge (nk-list). */
+ * Lists and banners stay square with a heavy left edge (nk-list).
+ * Finish follows a black-oxide blade: edges catch light like a ground bevel,
+ * fasteners are anodised titanium, matte faces carry a G10 weave. */
 @layer components {
   .nk-frame,
   .nk-frame-keytag,
@@ -15,7 +17,11 @@
   .nk-frame-nick {
     --nk-cut: 12px;
     --nk-cut-in: calc(var(--nk-cut) - 0.41px);
-    --nk-edge: var(--border);
+    --nk-edge: linear-gradient(
+      150deg,
+      color-mix(in oklch, var(--steel-hi) 55%, var(--border)) 0,
+      var(--border) 4.5rem
+    );
     --nk-face: var(--card);
     --nk-shape: polygon(
       0 0,
@@ -114,7 +120,11 @@
   }
   .nk-frame-interactive:hover,
   .nk-frame-interactive:focus-within {
-    --nk-edge: color-mix(in oklch, var(--foreground) 26%, transparent);
+    --nk-edge: linear-gradient(
+      150deg,
+      color-mix(in oklch, var(--titanium) 70%, transparent) 0,
+      color-mix(in oklch, var(--foreground) 22%, transparent) 5rem
+    );
   }
   .nk-frame-live,
   .nk-frame-live:hover {
@@ -258,6 +268,23 @@
     padding: clamp(1.25rem, 4vw, 2.25rem) clamp(1.125rem, 4vw, 2.25rem);
     overflow: hidden;
     --nk-cut: 16px;
+    --nk-face: var(--nk-g10), var(--card);
+  }
+  /* The edge line along the hero foot, like the polished cutting edge. */
+  .nk-hero::after {
+    content: "";
+    position: absolute;
+    right: var(--nk-cut);
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--steel-hi) 70%, transparent) 62%,
+      transparent
+    );
   }
   .nk-hero-cipher {
     position: absolute;
@@ -355,9 +382,15 @@
     z-index: 1;
     width: 0.5625rem;
     height: 0.5625rem;
-    border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
+    border: 1px solid
+      color-mix(in oklch, var(--titanium) 55%, var(--background));
     border-radius: 9999px;
-    background: var(--background);
+    background: radial-gradient(
+      circle at 35% 30%,
+      color-mix(in oklch, var(--titanium) 30%, white) 0,
+      var(--titanium) 45%,
+      color-mix(in oklch, var(--titanium) 55%, black) 100%
+    );
   }
   .nk-frame-live .nk-eyelet {
     border-color: var(--success);
@@ -680,6 +713,7 @@
   .nk-shell-bar {
     grid-area: bar;
     border-bottom: 1px solid var(--border);
+    background-image: var(--nk-g10);
   }
   .nk-shell-main {
     grid-area: main;
@@ -694,6 +728,31 @@
   }
   .nk-band-success {
     box-shadow: inset 2px 0 0 var(--success);
+  }
+
+  /* Primary fill: ground steel in the dark theme (a hard bevel line across
+   * a mirror face), black oxide with a lit top edge in the light theme. */
+  .nk-steel {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklch, white 12%, transparent),
+      transparent 45%
+    );
+    box-shadow: inset 0 1px 0 color-mix(in oklch, white 22%, transparent);
+  }
+  .dark .nk-steel {
+    background-image: linear-gradient(
+      102deg,
+      var(--steel-lo) 0,
+      var(--steel-hi) 34%,
+      color-mix(in oklch, var(--steel-lo) 60%, var(--steel-hi)) 34.5%,
+      var(--steel-hi) 78%,
+      var(--steel-lo) 100%
+    );
+    box-shadow: inset 0 1px 0 white;
+  }
+  .nk-steel:hover:not(:disabled) {
+    filter: brightness(1.06);
   }
 
   /* Primary action that takes you somewhere: pointed right edge. */
@@ -720,4 +779,19 @@
   .nk-caret {
     animation: none;
   }
+}
+
+/* G10 handle scale: a faint diagonal weave for matte faces. */
+:root {
+  --nk-g10:
+    repeating-linear-gradient(
+      45deg,
+      rgb(120 130 150 / 5%) 0 1px,
+      transparent 1px 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgb(120 130 150 / 5%) 0 1px,
+      transparent 1px 4px
+    );
 }

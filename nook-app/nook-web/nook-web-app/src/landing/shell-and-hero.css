@@ -15,6 +15,7 @@
   --line: #dfe1df;
   --control-border: #cdd0d3;
   --section-line: #cfd2d2;
+  --titanium: oklch(0.52 0.2 272);
 }
 
 :root[data-theme='dark'] {
@@ -26,6 +27,7 @@
   --line: #292f34;
   --control-border: #394148;
   --section-line: #343b41;
+  --titanium: oklch(0.66 0.18 275);
 }
 
 * {
@@ -120,7 +122,7 @@ footer,
 .protocol-tag {
   margin-left: 4px;
   border: 1px solid var(--control-border);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 7px 10px 6px;
   color: var(--muted-text);
   font-size: 10px;
@@ -146,7 +148,7 @@ nav a {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--control-border);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 0 11px;
   color: var(--muted-text);
   font-size: 11px;
@@ -169,7 +171,7 @@ nav a {
 }
 
 .github-stars:focus-visible {
-  outline: 2px solid #5d6872;
+  outline: 2px solid var(--titanium);
   outline-offset: 2px;
 }
 
@@ -190,14 +192,14 @@ nav a {
   display: flex;
   gap: 2px;
   border: 1px solid var(--control-border);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 3px;
 }
 
 .locale-switch button {
   min-width: 31px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 5px 7px 4px;
   background: transparent;
   color: var(--muted-text);
@@ -220,7 +222,7 @@ nav a {
 }
 
 .locale-switch button:focus-visible {
-  outline: 2px solid #5d6872;
+  outline: 2px solid var(--titanium);
   outline-offset: 2px;
 }
 
@@ -231,7 +233,7 @@ nav a {
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--control-border);
-  border-radius: 50%;
+  border-radius: 2px;
   padding: 0;
   background: transparent;
   color: var(--muted-text);
@@ -253,7 +255,7 @@ nav a {
 }
 
 .theme-toggle:focus-visible {
-  outline: 2px solid #5d6872;
+  outline: 2px solid var(--titanium);
   outline-offset: 2px;
 }
 
@@ -363,7 +365,7 @@ h1 {
   gap: 13px;
   min-height: 54px;
   border: 1px solid var(--control-border);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 0 22px;
   font-size: 14px;
   font-weight: 650;
@@ -377,10 +379,13 @@ h1 {
   transform: translateY(-2px);
 }
 
+/* Primary: black oxide with a lit top edge, cut like a tanto tip. */
 .button.primary {
   border-color: #101214;
-  background: #101214;
+  background: linear-gradient(180deg, #2a2e33, #101214 55%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
   color: white;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
 }
 
 .button.primary::after {
@@ -392,9 +397,18 @@ h1 {
   background: white;
 }
 
+/* Dark: ground steel, a hard bevel line across a mirror face. */
 :root[data-theme='dark'] .button.primary {
   border-color: #f2f4f5;
-  background: #f2f4f5;
+  background: linear-gradient(
+    102deg,
+    #9aa1a9 0,
+    #f4f6f8 34%,
+    #c3c8ce 34.5%,
+    #f4f6f8 78%,
+    #9aa1a9 100%
+  );
+  box-shadow: inset 0 1px 0 white;
   color: #111417;
 }
 

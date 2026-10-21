@@ -371,7 +371,7 @@ const PASSKEY_PROMPT_STYLES = `
     .status[data-tone='success'] .status-mark { color: var(--nk-success); }
     .status[data-tone='warning'] .status-mark { color: var(--nk-warning); }
     button:focus-visible, input:focus-visible {
-      outline: 2px solid rgb(180 186 198 / 45%);
+      outline: 2px solid oklch(0.68 0.17 275 / 70%);
       outline-offset: 2px;
     }
     @media (prefers-reduced-motion: reduce) {

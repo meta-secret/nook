@@ -115,7 +115,7 @@
   gap: 1px;
   overflow: hidden;
   border: 1px solid #262b2f;
-  border-radius: 26px;
+  border-radius: 3px;
   background: #30353a;
   box-shadow: 0 34px 80px rgb(38 43 47 / 0.13);
 }
@@ -136,7 +136,7 @@
 
 .crypto-term {
   border: 1px solid #383e43;
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 11px 14px 10px;
   background: #1b1f22;
   color: #adb5bc;
