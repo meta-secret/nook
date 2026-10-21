@@ -75,10 +75,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 ## 8. Deliver Through One Feature Pull Request
 
-- Each feature Gizmo follows [mission delivery](../../../../docs/spec/mission-delivery.md).
-- Team Agents own scoped implementation and authored tests.
-- Gizmo owns feature compilation, review, and feature pull-request delivery decisions.
-- A manually run Feature Gizmo owns publication, slow PR validation, and merge readiness.
+- Each feature coordinator follows [mission delivery](../../../../docs/spec/mission-delivery.md).
+- Specialists own scoped implementation and authored tests.
+- Prime owns feature compilation, review, and feature pull-request delivery decisions.
+- A manually run Prime owns publication, slow PR validation, and merge readiness.
 - PR Lifecycle Agent executes bounded operations under the owning controller's packets.
 - The upstream integration agent owns local feature-branch integration.
 - PR Lifecycle squash-merges the tested feature branch into `main`.

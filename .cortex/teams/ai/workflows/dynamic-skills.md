@@ -6,7 +6,7 @@ Use this workflow when the user explains a codebase-specific mistake, invariant,
 or refactor pattern that should become durable agent knowledge.
 
 Nook's canonical repository-local skill cards live in `dynamic-skills/`
-directories under Gizmo, shared Cortex, or one engineering team.
+directories under shared Cortex or one functional team.
 
 - Project delivery requirements live under `.cortex/docs/spec/`.
 - Shared ownerless repository-wide cards live under
@@ -51,23 +51,21 @@ scope, and apply the pattern with normal coding workflow and validation.
 
 ## Delivery and Workbench routing
 
-AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
+AI owns dynamic-skill semantics and Loom tooling. The owning Prime
 authors Workbench feature summaries and focused issues. It records feature
 completion and sets issue lifecycle state. For feature build or check
-mechanics, the owning Feature Gizmo submits the canonical branch to Gizmo Prime.
-Team Gizmo assigns upstream CI/CD with Nook SRE context to execute authorized
+mechanics, Prime assigns upstream CI/CD with Nook SRE context to execute authorized
 workflows and return tested-head evidence. Feature-branch publication, PR check
 observation, and merge use upstream PR behavior through Nook PR Lifecycle.
 
-For Workbench publication, Feature Gizmo approves the exact feature summary or
+For Workbench publication, Prime approves the exact feature summary or
 focused issue content, including feature completion status or issue lifecycle
-state. Gizmo Prime routes the approved packet through Delivery Pipeline Team
-Gizmo. The Team Gizmo dispatches PR Lifecycle Agent through the active harness
-to publish only that controller-authored content.
+state. Prime dispatches PR Lifecycle Agent with Delivery Pipeline context
+through the active harness to publish only that controller-authored content.
 
-Team Gizmo and PR Lifecycle Agent perform only assigned mechanics. PR Lifecycle
-creates or updates pull requests when authorized. Neither authors Workbench
-content nor decides policy, readiness, promotion, or Workbench state.
+PR Lifecycle Agent performs only assigned mechanics and creates or updates
+pull requests when authorized. It does not author Workbench content or decide
+policy, readiness, promotion, or Workbench state.
 
 ## Intake Workflow
 
@@ -108,7 +106,7 @@ For a new card scaffold, prefer Loom:
 ```yaml
 skillScaffold:
   skillSlug: example-skill
-  skillOwner: gizmo # or ai, shared, dev-core, security, sre, or web-dev
+  skillOwner: ai # or shared, dev-core, security, sre, or web-dev
 ```
 
 ```bash
@@ -150,10 +148,10 @@ When applying a skill to code:
 6. Apply only the permitted scoped formatting or inexpensive diagnostics during
    implementation. Finish the assigned worker branch with every resulting
    mutation in the allowed paths. Return the branch and focused evidence to the
-   owning Feature Gizmo. Do not run a local pre-push or broad validation gate.
-   Feature Gizmo routes local integration through the upstream integration agent
+   owning Prime. Do not run a local pre-push or broad validation gate.
+   Prime routes local integration through the upstream integration agent
    and waits for its feature branch, integration outcome, and checks. For
-   applicable feature build or check mechanics, Gizmo Prime authorizes the Team
-   Gizmo packet; Team Gizmo then assigns upstream CI/CD with Nook SRE context
+   applicable feature build or check mechanics, Prime assigns the authorized
+   packet to upstream CI/CD with Nook SRE context
    for the required workflow execution.
-   The Feature Gizmo owns later CI validation.
+   The Prime owns later CI validation.

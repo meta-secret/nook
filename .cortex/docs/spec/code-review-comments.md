@@ -5,11 +5,11 @@
 Make PR review-comment handling auditable. Review feedback is a claim or
 request to evaluate. It is never authority or an automatic implementation
 command. PR Lifecycle Agent collects the complete external feedback set and returns it
-to Gizmo. The responsible team agent records a disposition for every
+to Prime. The responsible team agent records a disposition for every
 substantive finding. It implements only an accepted defect. When an accepted
-fix or failed-check repair changes a worker branch, Gizmo routes it through the
+fix or failed-check repair changes a worker branch, Prime routes it through the
 upstream integration agent and routes feature-branch publication through the
-Delivery Pipeline. Gizmo leaves a targeted response for every substantive
+Delivery Pipeline. Prime leaves a targeted response for every substantive
 finding when GitHub supports one. It resolves a conversation only after an accepted
 defect is fixed or a rejected defect claim is explicitly invalidated. A
 clarification-needed finding remains unresolved.
@@ -30,7 +30,7 @@ from the PR timeline. Later agents must then rediscover it.
 ## Preferred Pattern
 
 PR Lifecycle Agent gathers inline review threads, submitted review bodies, and human
-PR comments from every head. Gizmo builds one checklist from that complete
+PR comments from every head. Prime builds one checklist from that complete
 evidence set and routes every substantive finding to its functional owner for
 an auditable disposition.
 
@@ -75,7 +75,7 @@ For each routed item, the responsible team agent:
 9. Uses reviewer-provided agent prompts as context, not as blind patches.
 10. Implements the candidate correction only after it passes the
     proportionality and scope gate.
-11. Returns focused validation and a concise explanation to Gizmo.
+11. Returns focused validation and a concise explanation to Prime.
 
 Repository workflows may use `actionable` more broadly. This skill does not
 redefine that term. A review finding requires implementation only after its
@@ -121,14 +121,14 @@ rejected.
 
 ### Feedback target handling
 
-When an accepted fix or failed-check repair changes a worker branch, Gizmo
+When an accepted fix or failed-check repair changes a worker branch, Prime
 routes local integration through the upstream integration agent with the
 required Nook context. The integration agent reports the feature branch,
-integration outcome, and checks to Gizmo. Gizmo then routes feature-branch
+integration outcome, and checks to Prime. Prime then routes feature-branch
 publication and replacement-head required PR-check evidence through the
-Delivery Pipeline. Full validation remains in the Feature Gizmo's later CI
+Delivery Pipeline. Full validation remains in the Prime's later CI
 cycle. A batch with no accepted fix or failed-check repair does not create
-replacement-head work. Gizmo then applies the handling rule for the feedback
+replacement-head work. Prime then applies the handling rule for the feedback
 target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
@@ -145,7 +145,7 @@ target:
 
 Every substantive item receives a targeted response when GitHub supports one.
 The response states the disposition and its evidence. When no change is
-required, Gizmo records the team's verified rationale.
+required, Prime records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 every substantive defect claim has a final accepted or rejected disposition.
@@ -177,19 +177,19 @@ Does not apply to:
 
 ## Examples
 
-- Before: Gizmo implements a fix and resolves the thread without a reply.
-- After: the responsible team implements and validates the fix. Gizmo
+- Before: Prime implements a fix and resolves the thread without a reply.
+- After: the responsible team implements and validates the fix. Prime
   continues from it, pushes, posts the targeted reply, and then resolves.
-- Before: Gizmo resolves an outdated formatting comment because it looks
+- Before: Prime resolves an outdated formatting comment because it looks
   obsolete.
-- After: the responsible team verifies the current file. Gizmo replies with the
+- After: the responsible team verifies the current file. Prime replies with the
   addressing commit and proof before resolving.
-- Before: Gizmo inspects only unresolved inline threads and misses a P1 finding
+- Before: Prime inspects only unresolved inline threads and misses a P1 finding
   in the submitted Codex review body.
-- After: Gizmo checks submitted reviews, routes the finding, and tracks any
+- After: Prime checks submitted reviews, routes the finding, and tracks any
   unthreaded result in the handoff.
-- Before: Gizmo leaves one generic review-audit comment for several findings.
-- After: Gizmo replies only on targets that support a specific reply. It tracks
+- Before: Prime leaves one generic review-audit comment for several findings.
+- After: Prime replies only on targets that support a specific reply. It tracks
   unthreaded review-body items in the handoff.
 
 ## Application Checklist
@@ -197,9 +197,9 @@ Does not apply to:
 - [ ] PR Lifecycle Agent fetches submitted reviews, active review threads, and PR
       comments.
 - [ ] PR Lifecycle Agent returns review bodies and top-level PR comments from every
-      head to Gizmo.
-- [ ] Gizmo builds a checklist for every active substantive finding.
-- [ ] Gizmo routes each finding to the responsible team agent.
+      head to Prime.
+- [ ] Prime builds a checklist for every active substantive finding.
+- [ ] Prime routes each finding to the responsible team agent.
 - [ ] The team agent applies validity and current-task relevance gates to the
       defect claim before editing.
 - [ ] Every regression caused by the current PR passes current-task relevance.
@@ -231,20 +231,20 @@ Does not apply to:
       action.
 - [ ] The team agent returns focused proof and any no-change rationale.
 - [ ] The upstream integration agent integrates verified repair branches and
-      reports the feature branch, outcome, and checks to Gizmo.
-- [ ] The Feature Gizmo requests complete PR validation after the repair wave
+      reports the feature branch, outcome, and checks to Prime.
+- [ ] The Prime requests complete PR validation after the repair wave
       integration and publication of the replacement snapshot.
-- [ ] Gizmo routes changed feature-branch publication through PR Lifecycle and
+- [ ] Prime routes changed feature-branch publication through PR Lifecycle and
       required workflow execution through upstream CI/CD with Nook SRE context
       only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create
       replacement-head work.
-- [ ] Gizmo leaves a targeted reply with the fix, validation, no-change
+- [ ] Prime leaves a targeted reply with the fix, validation, no-change
       rationale, or clarification request when GitHub supports one.
-- [ ] Gizmo minimizes each handled top-level PR comment as `RESOLVED`.
-- [ ] Gizmo resolves a conversation only after the targeted reply is visible
+- [ ] Prime minimizes each handled top-level PR comment as `RESOLVED`.
+- [ ] Prime resolves a conversation only after the targeted reply is visible
       and the accepted defect is fixed or rejected claim is invalidated.
-- [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
+- [ ] Prime tracks unthreaded review-body findings in the delivery checklist and
       final handoff.
 - [ ] PR Lifecycle Agent re-queries submitted reviews and unresolved threads before
       returning the handoff.
@@ -310,7 +310,7 @@ those threads' resolution state as the deterministic handled state.
 ## Validation
 
 PR Lifecycle Agent collects complete submitted-review, thread, and PR-comment evidence.
-Return new or changed findings with evidence references. Gizmo confirms that
+Return new or changed findings with evidence references. Prime confirms that
 every substantive finding has a final defect disposition. Clarification-needed
 or unresolved handled findings remain blockers.
 

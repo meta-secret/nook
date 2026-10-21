@@ -30,7 +30,7 @@ Analyze in this order:
 
 Keep knowledge routing separate from write authorization. Invoke the registered
 semantic role through the active harness as read-only against an immutable
-snapshot of the exact accepted baseline. Team Gizmo assigns accepted implementation findings to a
+snapshot of the exact accepted baseline. Prime assigns accepted implementation findings to a
 worker. The upstream integration agent supplies the workspace and integrates
 the finished task branch. Follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
@@ -65,9 +65,9 @@ Do not use this skill to:
 3. Select the smallest allowed authority and skill context for the task.
 4. Verify the role contract and selection against the exact source commit.
 5. Return findings directly through the harness.
-6. Let Team Gizmo assign accepted findings to an implementation worker.
+6. Let Prime assign accepted findings to an implementation worker.
 7. Let the upstream integration agent integrate the finished worker branch.
-8. Let Team Gizmo review combined validation and decide continuation.
+8. Let Prime review combined validation and decide continuation.
 
 ## Validation
 

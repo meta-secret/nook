@@ -15,8 +15,8 @@ for any local diagnostic.
   checks, or E2E.
 - Preserve unrelated changes and finish only the assigned worker-branch scope.
 - Author meaningful tests and required UI flow evidence.
-- Return the worker branch and focused evidence to Team Gizmo for upstream local
-  integration. Team Gizmo assigns feature-branch publication and PR check
+- Return the worker branch and focused evidence to Prime for upstream local
+  integration. Prime assigns feature-branch publication and PR check
   observation to PR Lifecycle, and required workflow execution to upstream
   CI/CD with Nook SRE context.
 - Hosted execution is the default. Required hosted PR checks remain mandatory

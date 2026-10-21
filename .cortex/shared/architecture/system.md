@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../docs/architecture/dev-delivery.md) for
-feature compilation and the manually run Feature Gizmo's slow PR cycle.
+feature compilation and the manually run Prime's slow PR cycle.
 Use the root [delivery and validation policy](../../AGENTS.md#delivery-and-validation)
 to decide whether a bounded local test, check, or E2E diagnostic may run.
 Runtime workflow details below do not independently grant that permission or

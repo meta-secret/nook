@@ -1,6 +1,6 @@
 # Nook Web Development ownership
 
-This is a Nook functional context. The single Team Gizmo supplies it alongside
+This is a Nook functional context. The single Prime supplies it alongside
 Meta-Cortex roles and skill composition. Generic upstream rules take precedence
 over legacy generic wording here; Nook product and delivery requirements remain.
 
@@ -32,7 +32,7 @@ used by this context.
 
 Load a development-core specification only when an explicit typed consumer
 contract requires it. Treat that authority as read-only and return provider
-changes to Gizmo.
+changes to Prime.
 
 For an expertise request, load the named consumer contract as read-only. Do not
 load the consumer team's complete graph.

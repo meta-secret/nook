@@ -8,7 +8,7 @@
 3. Identify the functional owner of each affected module.
 4. For each dependency-ready wave, have the upstream integration agent prepare
    only that wave's worker branches and worktrees.
-5. Dispatch bounded module work through the single Team Gizmo using the
+5. Dispatch bounded module work through the single Prime using the
    prepared assignments.
 6. Preserve dependency order across provider and consumer changes.
 7. Have the upstream integration agent integrate finished worker branches into
@@ -20,4 +20,4 @@
 12. Squash-merge when the unchanged head is fully green.
 13. Delete the remote feature branch.
 
-The same Feature Gizmo owns the whole cycle. Reviews are useful but optional.
+The same Prime owns the whole cycle. Reviews are useful but optional.

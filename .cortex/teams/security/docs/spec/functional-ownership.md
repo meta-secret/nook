@@ -1,6 +1,6 @@
 # Nook Security ownership
 
-This is a Nook functional context. The single Team Gizmo supplies it alongside
+This is a Nook functional context. The single Prime supplies it alongside
 Meta-Cortex roles and skill composition. Generic upstream rules take precedence
 over legacy generic wording here; Nook product and delivery requirements remain.
 
