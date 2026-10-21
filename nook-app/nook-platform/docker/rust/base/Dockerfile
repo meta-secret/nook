@@ -951,6 +951,13 @@ RUN test -f nook-app/Taskfile.yml \
 FROM builder-wasm AS nook-rust-browser
 COPY --from=nook-rust /meta-secret/nook /meta-secret/nook
 
+FROM nook-rust-browser AS wasm-browser-dev
+WORKDIR /meta-secret/nook
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    CI=1 task _wasm:test:browser \
+    && nook-sccache-report wasm-browser-dev
+
 # -----------------------------------------------------------------------------
 
 FROM rust-platform AS rust-ecosystem-deterministic

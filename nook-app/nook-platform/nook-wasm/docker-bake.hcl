@@ -151,3 +151,9 @@ target "nook-rust-browser" {
   tags     = [DOCKER_RUST_BROWSER_IMAGE]
   output   = ["type=docker"]
 }
+
+target "wasm-browser-dev" {
+  inherits = ["_nook-rust-browser-common"]
+  target   = "wasm-browser-dev"
+  output   = ["type=cacheonly"]
+}
