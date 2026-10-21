@@ -135,8 +135,8 @@
   .nk-frame-live:hover {
     --nk-edge: linear-gradient(
       150deg,
-      var(--success) 0,
-      color-mix(in oklch, var(--success) 35%, transparent) 9rem
+      color-mix(in oklch, var(--success) 70%, transparent) 0,
+      color-mix(in oklch, var(--success) 25%, transparent) 9rem
     );
   }
 
@@ -298,18 +298,18 @@
     right: var(--nk-cut);
     bottom: 0;
     left: 0;
-    height: 5px;
+    height: 4px;
     pointer-events: none;
     background:
       linear-gradient(
-          color-mix(in oklch, var(--foreground) 45%, transparent),
-          color-mix(in oklch, var(--foreground) 45%, transparent)
+          color-mix(in oklch, var(--foreground) 30%, transparent),
+          color-mix(in oklch, var(--foreground) 30%, transparent)
         )
-        0 0 / calc(4.5rem + 4px) 100% no-repeat,
+        0 0 / calc(4.5rem + 3px) 100% no-repeat,
       linear-gradient(
         90deg,
         transparent,
-        color-mix(in oklch, var(--steel-hi) 70%, transparent) 62%,
+        color-mix(in oklch, var(--steel-hi) 45%, transparent) 62%,
         transparent
       );
     clip-path: var(--nk-step-foot);

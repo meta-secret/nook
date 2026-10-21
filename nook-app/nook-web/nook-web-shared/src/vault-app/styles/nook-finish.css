@@ -16,11 +16,11 @@
     position: absolute;
     right: 0;
     left: 0;
-    height: 5px;
+    height: 4px;
     pointer-events: none;
     background: linear-gradient(
       90deg,
-      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
       var(--border) 0
     );
   }
@@ -59,7 +59,7 @@
     order: 2;
     flex: none;
     width: 5px;
-    height: 5px;
+    height: 4px;
     margin-left: 0.25rem;
     border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
     transform: rotate(45deg);
@@ -129,11 +129,11 @@
     bottom: -1px;
     left: -1px;
     width: min(45%, 10rem);
-    height: 5px;
+    height: 4px;
     pointer-events: none;
     background: linear-gradient(
       90deg,
-      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
       color-mix(in oklch, var(--nk-step-ink) 45%, transparent) 0,
       transparent
     );
@@ -171,7 +171,7 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: color-mix(in oklch, var(--foreground) 7%, transparent);
+    background: color-mix(in oklch, var(--foreground) 4.5%, transparent);
     -webkit-mask: var(--nk-facets) right top / cover no-repeat;
     mask: var(--nk-facets) right top / cover no-repeat;
   }
@@ -189,11 +189,11 @@
     right: 0;
     bottom: -1px;
     left: 0;
-    height: 5px;
+    height: 4px;
     pointer-events: none;
     background: linear-gradient(
       90deg,
-      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 4px),
+      var(--nk-step-ink) 0 calc(var(--nk-step-at, 3rem) + 3px),
       var(--border) 0
     );
     clip-path: var(--nk-step-foot);
@@ -210,12 +210,12 @@
   --nk-g10:
     repeating-linear-gradient(
       45deg,
-      rgb(120 130 150 / 5%) 0 1px,
+      rgb(120 130 150 / 3.5%) 0 1px,
       transparent 1px 4px
     ),
     repeating-linear-gradient(
       -45deg,
-      rgb(120 130 150 / 5%) 0 1px,
+      rgb(120 130 150 / 3.5%) 0 1px,
       transparent 1px 4px
     );
 }
@@ -244,12 +244,12 @@
   .app-header::after,
   .nk-hero::after,
   .nk-plate::before {
-    --nk-step-ink: color-mix(in oklch, var(--foreground) 38%, transparent);
+    --nk-step-ink: color-mix(in oklch, var(--foreground) 26%, transparent);
     --nk-step-foot: polygon(
       0 0,
       var(--nk-step-at, 3rem) 0,
-      calc(var(--nk-step-at, 3rem) + 4px) 4px,
-      100% 4px,
+      calc(var(--nk-step-at, 3rem) + 3px) 3px,
+      100% 3px,
       100% 100%,
       0 100%
     );
@@ -257,9 +257,9 @@
       0 0,
       100% 0,
       100% 1px,
-      calc(var(--nk-step-at, 3rem) + 4px) 1px,
-      var(--nk-step-at, 3rem) 5px,
-      0 5px
+      calc(var(--nk-step-at, 3rem) + 3px) 1px,
+      var(--nk-step-at, 3rem) 4px,
+      0 4px
     );
   }
 }
