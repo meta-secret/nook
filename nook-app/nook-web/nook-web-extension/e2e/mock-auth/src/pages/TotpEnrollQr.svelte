@@ -12,17 +12,13 @@
         you approve.
       </div>
     </div>
-    <div>
-      <div>
-        <img
-          data-testid="mock-auth-totp-qr"
-          src="/totp-enroll-qr.png"
-          width="220"
-          height="220"
-          alt="Authenticator QR code"
-        />
-      </div>
-    </div>
+    <div><div><img
+      data-testid="mock-auth-totp-qr"
+      src="/totp-enroll-qr.png"
+      width="220"
+      height="220"
+      alt="Authenticator QR code"
+    /></div></div>
   </div>
   <p>
     <button

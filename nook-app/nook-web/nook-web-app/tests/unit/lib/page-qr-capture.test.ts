@@ -344,6 +344,32 @@ describe('authenticator setup dialogs', () => {
     expect(fixture.resolveRequests).toEqual([])
   })
 
+  test.each([' ', 'JBSWY3DPEHPK3PXP'])(
+    'does not inspect direct wrapper text before consent: %s',
+    async (text) => {
+      const fixture = new DialogQrObservationFixture(
+        `<div><div>Scan this QR code with your authenticator app.</div><div data-wrapper>${DialogQrObservationFixture.QR_SVG}</div></div>`,
+      )
+      const wrapper = document.querySelector('[data-wrapper]')
+      if (!(wrapper instanceof HTMLElement)) throw new Error('expected wrapper')
+      const textNode = document.createTextNode(text)
+      wrapper.append(textNode)
+      const readPayload = vi.fn(() => {
+        throw new Error('wrapper text must not be inspected')
+      })
+      for (const property of ['data', 'textContent', 'nodeValue']) {
+        Object.defineProperty(textNode, property, { get: readPayload })
+      }
+      for (const property of ['textContent', 'innerText']) {
+        Object.defineProperty(wrapper, property, { get: readPayload })
+      }
+      expect(await fixture.observation()).toBe('absent')
+      expect(readPayload).not.toHaveBeenCalled()
+      expect(fixture.instructionCopies).toEqual([])
+      expect(fixture.resolveRequests).toEqual([])
+    },
+  )
+
   test.each([
     '<main><p>Scan this QR code with your authenticator app.</p></main><div><div>Artwork</div><div>MEDIA</div></div>',
     '<div><p>Scan this QR code with your authenticator app.</p><div>Unrelated artwork</div><div>MEDIA</div></div>',

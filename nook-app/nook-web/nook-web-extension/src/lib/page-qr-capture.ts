@@ -592,7 +592,8 @@ class PageQrCapture {
   /**
    * Ordinary page widgets often wrap their media in empty divs. Follow only
    * those media-only wrappers to the nearest preceding sibling branch, then
-   * stop. Never search outward past unrelated text or read an ancestor's copy.
+   * stop. Any text node, including whitespace, stops traversal without reading
+   * its payload. Never search outward past text or read an ancestor's copy.
    */
   private adjacentInstructionCandidates(
     media: Element,
@@ -622,9 +623,7 @@ class PageQrCapture {
       switch (
         parent.matches('div,span') &&
         parent.children.length === 1 &&
-        !Array.from(parent.childNodes).some(
-          (node) => node instanceof Text && node.data.trim().length > 0,
-        )
+        !Array.from(parent.childNodes).some((node) => node instanceof Text)
       ) {
         case true:
           branch = parent
