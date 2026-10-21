@@ -11,6 +11,12 @@ import { NamedLoginScenario } from './login-form-named-properties'
 import { NamecheapOtpScenario } from './namecheap-otp-challenge'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
+  test('fills the observed Namecheap GET challenge through the side-panel content receiver without submitting', ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    return new NamecheapOtpScenario(testInfo).runSidePanelFill()
+  })
   test('offers Namecheap OTP selection on an initially focused standalone challenge', ({
     browserName,
   }, testInfo) => {

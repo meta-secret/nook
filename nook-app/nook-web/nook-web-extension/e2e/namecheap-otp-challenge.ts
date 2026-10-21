@@ -9,7 +9,9 @@ import { Effect } from 'effect'
 import {
   launchPairedPinExtension,
   saveVaultAuthenticator,
+  unlockExtensionPopupPin,
 } from './helpers/paired-pin-extension'
+import { NamecheapSidePanelFill } from './namecheap-side-panel-fill'
 
 type NamecheapOtpEnvironment = Awaited<
   ReturnType<typeof launchPairedPinExtension>
@@ -39,6 +41,89 @@ export class NamecheapOtpScenario {
     )
   }
 
+  runSidePanelFill(): Promise<void> {
+    return Effect.runPromise(
+      Effect.acquireUseRelease(
+        Effect.tryPromise(() => launchPairedPinExtension(this.testInfo)),
+        this.exerciseSidePanel.bind(this),
+        (paired) =>
+          Effect.tryPromise(paired.context.close.bind(paired.context)),
+      ),
+    )
+  }
+
+  private exerciseSidePanel = Effect.fn(
+    this.generatorContext,
+    function* (paired: NamecheapOtpEnvironment) {
+      yield* Effect.tryPromise(() =>
+        NamecheapSidePanelFill.saveAuthenticator(paired.vaultPage),
+      )
+      yield* Effect.tryPromise(() =>
+        unlockExtensionPopupPin(paired.context, paired.extensionId),
+      )
+      const [worker] = paired.context.serviceWorkers()
+      switch (true) {
+        case !!worker:
+          break
+        case true:
+        default:
+          throw new Error('Expected the paired extension worker')
+      }
+      const manualFill = new NamecheapSidePanelFill(worker)
+      const page = yield* Effect.tryPromise(() => paired.context.newPage())
+      yield* Effect.tryPromise(() =>
+        page.route('https://namecheap.com/**', this.fulfill.bind(this)),
+      )
+      const challengeUrl = 'https://namecheap.com/twofa/totp/'
+      yield* Effect.tryPromise(() => page.goto(challengeUrl))
+      const input = page.locator('[data-ncid="verification-otp"]')
+      yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
+      // Obtain only the legitimate synthetic selection's opaque account IDs
+      // and session generation. No code or observation binding is retained.
+      const selectedAccount = manualFill.observeSelectedAccount(
+        'https://namecheap.com',
+      )
+      const pickerPromise = paired.context.waitForEvent('page')
+      const fillButton: NamecheapOtpButtonOptions = { name: 'Fill 2FA code' }
+      yield* Effect.tryPromise(() =>
+        page
+          .locator('#nook-auth-widget')
+          .getByRole('button', fillButton)
+          .click(),
+      )
+      const picker = yield* Effect.tryPromise(() => pickerPromise)
+      yield* Effect.tryPromise(() =>
+        picker.waitForURL(/intent=authenticator-picker/),
+      )
+      const accountButton: NamecheapOtpButtonOptions = { name: /Namecheap/ }
+      yield* Effect.tryPromise(() =>
+        picker.getByRole('button', accountButton).click(),
+      )
+      const account = yield* Effect.tryPromise(() => selectedAccount)
+      yield* Effect.tryPromise(() => expect(input).toHaveValue(/^\d{6}$/))
+      yield* Effect.tryPromise(() =>
+        expect(page.locator('body')).toHaveAttribute('data-submissions', '0'),
+      )
+      // A new document removes all prior field observations and bindings.
+      // The explicit receiver must discover and revalidate the original GET
+      // form itself; picker authorization is not a substitute for discovery.
+      yield* Effect.tryPromise(() => page.reload())
+      yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
+      const request: Parameters<NamecheapSidePanelFill['fill']>[0] = {
+        account,
+        url: challengeUrl,
+      }
+      yield* Effect.tryPromise(() => manualFill.fill(request))
+      yield* Effect.tryPromise(() => expect(input).toHaveValue(/^\d{6}$/))
+      yield* Effect.tryPromise(() =>
+        expect(page.locator('body')).toHaveAttribute('data-submissions', '0'),
+      )
+      yield* Effect.tryPromise(() => expect(page).toHaveURL(challengeUrl))
+      expect(this.submissions).toBe(0)
+      expect(this.navigationRequests).toBe(2)
+    },
+  )
+
   private fulfill(route: Route): Promise<void> {
     switch (route.request().isNavigationRequest()) {
       case true:
@@ -54,7 +139,7 @@ export class NamecheapOtpScenario {
     }
     const response: NamecheapOtpDocumentResponse = {
       contentType: 'text/html',
-      body: `<!doctype html><html><body>
+      body: `<!doctype html><html><body data-submissions="0">
         <fragment><fragment-app-test><div><form>
           <div><div style="display:flex"><div class="gb-scope twofa"><div class="gb-panel">
             <header class="gb-panel__header"><h1>Enter OTP Code</h1></header>
@@ -66,7 +151,12 @@ export class NamecheapOtpScenario {
             </div>
           </div></div></div></div>
         </form></div></fragment-app-test></fragment>
-        <script>document.querySelector('[data-ncid="verification-otp"]').focus()</script>
+        <script>
+          document.querySelector('form').addEventListener('submit', () => {
+            document.body.dataset.submissions = String(Number(document.body.dataset.submissions) + 1)
+          })
+          document.querySelector('[data-ncid="verification-otp"]').focus()
+        </script>
       </body></html>`,
     }
     return route.fulfill(response)
