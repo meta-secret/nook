@@ -5,6 +5,7 @@ import {
   extensionApprovalVaultName,
   installMockPasskeyRuntime,
   launchExtensionContext,
+  leaveFirstRunReady,
   openSimpleVaultConnection,
   readExtensionStorage,
   registerWebsitePasskeyThroughExtension,
@@ -399,6 +400,7 @@ test('discover a website passkey after sign-in in the reopened local paired vaul
       readSetupState,
       extensionApprovalVaultName,
     )
+    await leaveFirstRunReady(vault)
     await expect(vault.getByTestId('authenticated-shell')).toBeVisible()
 
     const credentialId = await registerWebsitePasskeyThroughExtension(website)
