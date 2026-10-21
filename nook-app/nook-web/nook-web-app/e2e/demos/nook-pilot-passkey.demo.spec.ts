@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '../fixtures'
 import {
   advanceCreateVaultWizardToFinalStep,
+  assertWebsitePasskeyThroughExtension,
   extensionApprovalVaultName,
   installMockPasskeyRuntime,
   launchExtensionContext,
@@ -12,6 +13,7 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
   waitForNewPage,
+  type WebsitePasskeyAssertionBrowserFlow,
 } from '../../../nook-web-extension/e2e/helpers/extension-smoke-runtime'
 import {
   PasskeyVaultDiscovery,
@@ -363,7 +365,7 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   await demoBeat(page)
 })
 
-test('discover a website passkey in the reopened local paired vault', async ({
+test('discover a website passkey after sign-in in the reopened local paired vault', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -401,6 +403,13 @@ test('discover a website passkey in the reopened local paired vault', async ({
 
     const credentialId = await registerWebsitePasskeyThroughExtension(website)
     expect(credentialId).not.toBe('')
+    const assertion: WebsitePasskeyAssertionBrowserFlow = {
+      page: website,
+      credentialId,
+    }
+    // A real sign-in commits the incremented counter as a replacement before
+    // the reopened vault imports it and reads the public passkey details.
+    await assertWebsitePasskeyThroughExtension(assertion)
     await website.close()
     await vault.close()
     await popup.close()
@@ -442,7 +451,7 @@ test('discover a website passkey in the reopened local paired vault', async ({
     )
     await expect(
       passkeyGroup.getByTestId('passkey-signature-count'),
-    ).toContainText('0')
+    ).toContainText('1')
     await expect(passkeyGroup.getByTestId('history-origin')).toContainText(
       'Created',
       visibility,
