@@ -55,6 +55,29 @@ export type WidgetVaultPresentation =
     }
   | { readonly kind: WidgetVaultPresentationKind.Unavailable }
 
+export enum SavedLoginPresentationKind {
+  Workflow = 'workflow',
+  Empty = 'empty',
+}
+
+/** Chooses the saved-login surface from the already resolved vault outcome. */
+export class SavedLoginPresentation {
+  static forVault(
+    presentation: WidgetVaultPresentation,
+  ): SavedLoginPresentationKind {
+    switch (presentation.kind) {
+      case WidgetVaultPresentationKind.NoMatchingCredential:
+        return SavedLoginPresentationKind.Empty
+      case WidgetVaultPresentationKind.NotConnected:
+      case WidgetVaultPresentationKind.Connected:
+      case WidgetVaultPresentationKind.Locked:
+      case WidgetVaultPresentationKind.CredentialAvailable:
+      case WidgetVaultPresentationKind.Unavailable:
+        return SavedLoginPresentationKind.Workflow
+    }
+  }
+}
+
 export type WidgetVaultPresentationProjectionArgs = {
   readonly vaultConnection: PilotVaultConnection
   readonly loginMatches: WebsiteLoginMatchAvailability

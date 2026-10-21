@@ -3,6 +3,7 @@ import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/exte
 import { authenticationWidgetShell } from './widget-shell'
 import { WidgetWorkflowRootKind } from './state'
 import {
+  SavedLoginPresentationKind,
   WidgetVaultPresentationProjection,
   type PilotVaultConnection,
 } from './widget-presentation-state'
@@ -31,6 +32,7 @@ export class FocusedCredentialWidget {
         request.vaultConnection,
       ),
       savedLoginAction: true,
+      savedLoginPresentation: SavedLoginPresentationKind.Workflow,
       currentStep: 1,
       totalSteps: 1,
     }
