@@ -20,10 +20,15 @@ export class PasskeyVaultDiscovery {
       case WebsitePasskeyStateKind.Created:
         break
     }
-    await test.step(
-      'discover the extension-created passkey in the reopened local vault',
-      this.discover.bind(this),
-    )
+    await this.captureNativeFailures(true)
+    try {
+      await test.step(
+        'discover the extension-created passkey in the reopened local vault',
+        this.discover.bind(this),
+      )
+    } finally {
+      await this.captureNativeFailures(false)
+    }
   }
 
   private async discover(): Promise<void> {
@@ -35,16 +40,11 @@ export class PasskeyVaultDiscovery {
     await expect(
       this.page.getByTestId('vault-site-group').filter(siteGroup),
     ).toContainText('localhost')
-    await this.captureNativeFailures(true)
-    try {
-      await passkeyGroup.getByTestId('secret-row-toggle').click()
-      await expect(passkeyGroup).toContainText('alice@example.com')
-      await expect(passkeyGroup.getByTestId('reveal-secret-btn')).toHaveCount(0)
-      await expect(passkeyGroup.getByTestId('edit-secret-btn')).toHaveCount(0)
-      await expect(passkeyGroup.getByTestId('delete-secret-btn')).toBeVisible()
-    } finally {
-      await this.captureNativeFailures(false)
-    }
+    await passkeyGroup.getByTestId('secret-row-toggle').click()
+    await expect(passkeyGroup).toContainText('alice@example.com')
+    await expect(passkeyGroup.getByTestId('reveal-secret-btn')).toHaveCount(0)
+    await expect(passkeyGroup.getByTestId('edit-secret-btn')).toHaveCount(0)
+    await expect(passkeyGroup.getByTestId('delete-secret-btn')).toBeVisible()
   }
 
   private async captureNativeFailures(enabled: boolean): Promise<void> {
