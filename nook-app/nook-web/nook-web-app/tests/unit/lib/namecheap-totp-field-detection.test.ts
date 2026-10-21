@@ -123,15 +123,20 @@ describe('Namecheap two-factor code field detection', () => {
 
   test.each([
     { initial: 'maxlength="6"', attribute: 'inputmode', value: 'numeric' },
-    { initial: 'inputmode="numeric"', attribute: 'maxlength', value: '6' },
+    {
+      initial: 'inputmode="numeric" maxlength="20"',
+      attribute: 'maxlength',
+      value: '6',
+    },
     { initial: 'maxlength="6"', attribute: 'pattern', value: '[0-9]{6}' },
   ])(
     'rediscovers the challenge when $attribute supplies the missing entry hint',
     ({ initial, attribute, value }) => {
       const page = new NamecheapTwoFactorPage()
-      page.render(`<input id="dynamic-challenge" type="text" ${initial}>`)
+      window.history.replaceState({}, '', '/login')
+      document.body.innerHTML = `<form method="post" action="/login"><input id="entry-code" type="text" ${initial}><button type="submit">Sign in</button></form>`
       expect(page.codeFieldCount()).toBe(0)
-      const field = document.getElementById('dynamic-challenge')
+      const field = document.getElementById('entry-code')
       switch (field instanceof HTMLInputElement) {
         case false:
           throw new Error('Expected challenge field')
