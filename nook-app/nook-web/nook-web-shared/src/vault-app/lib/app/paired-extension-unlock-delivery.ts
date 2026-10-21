@@ -1,4 +1,5 @@
 import type { Result } from "neverthrow";
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { PairedExtensionDiscoveryFailure } from "$lib/extension/connect";
 import type { PairedExtensionResumeStatus } from "./app-interaction-types";
 
@@ -33,6 +34,27 @@ export type PairedExtensionUnlockPollRequest = {
     Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>
   >;
 };
+
+/** What a paired extension reports while another flow owns this vault: an
+ * extension holding a different vault counts as unavailable here. */
+export function pairedResumeStatusWhileBusy(
+  status: ExtensionPairedVaultIdentityStatusMessageStatus,
+): PairedExtensionResumeStatus {
+  return status ===
+    ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+    ? ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+    : status;
+}
+
+/** A paired extension that is not unlocked yet is asked again shortly;
+ * until then it reads as locked, or otherwise as unavailable. */
+export function pairedResumeStatusWhileRetrying(
+  status: ExtensionPairedVaultIdentityStatusMessageStatus,
+): PairedExtensionResumeStatus {
+  return status === ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+    ? ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+    : ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable;
+}
 
 const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000;
 const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350;

@@ -88,6 +88,8 @@
   } from '$lib/app/vault-app-route-coordinator.svelte'
   import {
     pairedExtensionUnlockWasAccepted,
+    pairedResumeStatusWhileBusy,
+    pairedResumeStatusWhileRetrying,
     requestPairedExtensionUnlockIfEligible,
     type PairedExtensionUnlockDeliveryRequest,
     type PairedExtensionUnlockPollRequest,
@@ -603,12 +605,7 @@
       vault.deviceAuthorizationInProgress ||
       (openVaultIsDifferentStore && !discoveringStagedImport)
     ) {
-      return ok(
-        discovery.status ===
-          ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-          ? ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-          : discovery.status,
-      )
+      return ok(pairedResumeStatusWhileBusy(discovery.status))
     }
     if (decision === VaultCompanionUnlockDecision.WebsiteDevice) {
       if (vault.deviceProtectionReady && vault.shouldAutoUnlock())
@@ -627,12 +624,7 @@
         discoveringStagedImport,
       }
       schedulePairedExtensionDiscoveryRetry(discoveryRetryRequest)
-      return ok(
-        discovery.status ===
-          ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-          ? ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-          : ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-      )
+      return ok(pairedResumeStatusWhileRetrying(discovery.status))
     }
     routeCoordinator.extensionIdentityRequestState = {
       kind: ExtensionConnectIntentKind.Requested,
