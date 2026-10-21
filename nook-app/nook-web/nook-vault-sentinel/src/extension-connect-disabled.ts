@@ -101,6 +101,10 @@ export async function openInstalledExtension(): Promise<boolean> {
   return false;
 }
 
+export async function openExtensionSidePanel(): Promise<boolean> {
+  return false;
+}
+
 export async function discoverPairedExtensionIdentity(
   _vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery> {
@@ -155,6 +159,7 @@ export const extensionConnectionBrowser = {
   },
   companionProviderPresence,
   openInstalledExtension,
+  openExtensionSidePanel,
   discoverPairedExtensionIdentity,
   discoverAdmittedPairedExtensionIdentity,
   requestPairedExtensionUnlock,
