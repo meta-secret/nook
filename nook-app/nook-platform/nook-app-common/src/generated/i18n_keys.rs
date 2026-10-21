@@ -1136,6 +1136,7 @@ pub const EXTENSION_WIDGET_LOGIN_MULTIPLE_DESCRIPTION: &str =
     "extension.widget.login_multiple_description";
 pub const EXTENSION_WIDGET_LOGIN_NO_MATCH_DESCRIPTION: &str =
     "extension.widget.login_no_match_description";
+pub const EXTENSION_WIDGET_LOGIN_NO_MATCH_TITLE: &str = "extension.widget.login_no_match_title";
 pub const EXTENSION_WIDGET_LOGIN_PICKER_CANCELED: &str = "extension.widget.login_picker_canceled";
 pub const EXTENSION_WIDGET_LOGIN_PICKER_OPENED: &str = "extension.widget.login_picker_opened";
 pub const EXTENSION_WIDGET_LOGIN_SINGLE_DESCRIPTION: &str =
@@ -1148,6 +1149,8 @@ pub const EXTENSION_WIDGET_MANUAL_DESCRIPTION: &str = "extension.widget.manual_d
 pub const EXTENSION_WIDGET_MANUAL_TITLE: &str = "extension.widget.manual_title";
 pub const EXTENSION_WIDGET_NO_AUTHENTICATOR: &str = "extension.widget.no_authenticator";
 pub const EXTENSION_WIDGET_NO_MATCH: &str = "extension.widget.no_match";
+pub const EXTENSION_WIDGET_OPEN_NOOK: &str = "extension.widget.open_nook";
+pub const EXTENSION_WIDGET_OPEN_NOOK_FAILED: &str = "extension.widget.open_nook_failed";
 pub const EXTENSION_WIDGET_OPEN_VAULT: &str = "extension.widget.open_vault";
 pub const EXTENSION_WIDGET_PASSKEY_CEREMONY_STARTED: &str =
     "extension.widget.passkey_ceremony_started";

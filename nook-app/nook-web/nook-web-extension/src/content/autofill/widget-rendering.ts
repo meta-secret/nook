@@ -52,10 +52,13 @@ import type { PilotVaultConnection } from './workflow-ui'
 
 import { WorkflowCopy, workflowUi } from './workflow-ui'
 import {
+  SavedLoginPresentation,
+  SavedLoginPresentationKind,
   WidgetVaultPresentationKind,
   WidgetVaultPresentationProjection,
 } from './widget-presentation-state'
 import { SiteSidePanel } from './site-side-panel'
+import { PilotVaultOpening } from './pilot-vault-opening'
 import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
 type RenderEnrollmentWidgetArgs = {
@@ -128,6 +131,7 @@ class AuthenticationWidgetRenderer {
       copy: authenticationWidgetShell.enrollmentCopy(hints),
       vaultPresentation,
       savedLoginAction: false,
+      savedLoginPresentation: SavedLoginPresentationKind.Workflow,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -245,6 +249,10 @@ class AuthenticationWidgetRenderer {
     const enrollmentAction =
       snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
       snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+    const savedLoginPresentation =
+      snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
+        ? SavedLoginPresentation.forVault(vaultPresentation)
+        : SavedLoginPresentationKind.Workflow
     const nookTypedArgs0_3: Parameters<
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
@@ -256,6 +264,7 @@ class AuthenticationWidgetRenderer {
       vaultPresentation,
       savedLoginAction:
         snapshot.action === AuthenticationWorkflowAction.ContinueWithNook,
+      savedLoginPresentation,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -273,23 +282,29 @@ class AuthenticationWidgetRenderer {
     const unlocksFirst =
       vaultPresentation.kind === WidgetVaultPresentationKind.Locked &&
       snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
-    const continueMessageKey = unlocksFirst
-      ? BROWSER_MESSAGE_KEYS.WidgetUnlock
-      : snapshot.action === AuthenticationWorkflowAction.FillTotp
-        ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
-        : snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
-          ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
-          : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
-            ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
-            : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
-              ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
-              : snapshot.action === AuthenticationWorkflowAction.UsePasskey
-                ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
-                : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-                  ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
-                  : canContinueWithNook
-                    ? BROWSER_MESSAGE_KEYS.WidgetContinue
-                    : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+    const continueMessageKey =
+      savedLoginPresentation === SavedLoginPresentationKind.Empty
+        ? BROWSER_MESSAGE_KEYS.WidgetOpenNook
+        : unlocksFirst
+          ? BROWSER_MESSAGE_KEYS.WidgetUnlock
+          : snapshot.action === AuthenticationWorkflowAction.FillTotp
+            ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
+            : snapshot.action ===
+                AuthenticationWorkflowAction.EnrollAuthenticator
+              ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
+              : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+                ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
+                : snapshot.action ===
+                    AuthenticationWorkflowAction.GeneratePassword
+                  ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
+                  : snapshot.action === AuthenticationWorkflowAction.UsePasskey
+                    ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
+                    : snapshot.action ===
+                        AuthenticationWorkflowAction.CreatePasskey
+                      ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
+                      : canContinueWithNook
+                        ? BROWSER_MESSAGE_KEYS.WidgetContinue
+                        : BROWSER_MESSAGE_KEYS.WidgetTakeOver
     continueButton.setAttribute(
       'aria-label',
       workflowUi.translatedMessage(continueMessageKey),
@@ -299,6 +314,16 @@ class AuthenticationWidgetRenderer {
 
     const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
+      if (savedLoginPresentation === SavedLoginPresentationKind.Empty) {
+        const openingSurface: ConstructorParameters<
+          typeof PilotVaultOpening
+        >[0] = {
+          button: continueButton,
+          description,
+        }
+        new PilotVaultOpening(openingSurface).activate()
+        return
+      }
       if (unlocksFirst) {
         SiteSidePanel.open()
         return
@@ -461,6 +486,8 @@ class AuthenticationWidgetRenderer {
       case AuthenticationWorkflowKind.Login:
         switch (snapshot.action) {
           case AuthenticationWorkflowAction.ContinueWithNook: {
+            if (savedLoginPresentation === SavedLoginPresentationKind.Empty)
+              break
             const mount: ConstructorParameters<
               typeof LoginChecklistProgress
             >[0] = {

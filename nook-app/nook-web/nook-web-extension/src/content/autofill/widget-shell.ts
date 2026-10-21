@@ -29,6 +29,7 @@ import {
 
 import type { WorkflowCopy } from './workflow-ui'
 import {
+  SavedLoginPresentationKind,
   WidgetVaultPresentationKind,
   savedLoginDescriptionKey,
   type WidgetVaultPresentation,
@@ -379,6 +380,7 @@ type CreateWidgetShellArgs = {
   copy: WorkflowCopy
   vaultPresentation: WidgetVaultPresentation
   savedLoginAction: boolean
+  savedLoginPresentation: SavedLoginPresentationKind
   currentStep: number
   totalSteps: number
 }
@@ -528,6 +530,7 @@ class AuthenticationWidgetShell {
     copy,
     vaultPresentation,
     savedLoginAction,
+    savedLoginPresentation,
     currentStep,
     totalSteps,
   }: CreateWidgetShellArgs): WidgetShell {
@@ -552,7 +555,10 @@ class AuthenticationWidgetShell {
       currentStep,
       totalSteps,
     }
-    step.textContent = workflowUi.progressLabel(nookTypedArgs0_0)
+    step.textContent =
+      savedLoginPresentation === SavedLoginPresentationKind.Empty
+        ? workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)
+        : workflowUi.progressLabel(nookTypedArgs0_0)
 
     const collapseButton = document.createElement('button')
     collapseButton.type = 'button'
@@ -591,7 +597,11 @@ class AuthenticationWidgetShell {
     body.className = 'body'
 
     const title = document.createElement('h1')
-    title.textContent = workflowUi.translatedMessage(copy.titleKey)
+    title.textContent = workflowUi.translatedMessage(
+      savedLoginPresentation === SavedLoginPresentationKind.Empty
+        ? BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchTitle
+        : copy.titleKey,
+    )
 
     const site = document.createElement('p')
     site.className = 'site-context'
@@ -628,20 +638,15 @@ class AuthenticationWidgetShell {
     siteRow.className = 'site-row'
     siteRow.append(site, vaultStatus)
 
-    // One action: the vault opens from the Nook toolbar button, and the
-    // close button hands the page back to the person.
+    // One primary action; the close button hands the page back to the person.
     body.append(siteRow, title, description, continueButton)
 
     const collapsedLaunch = document.createElement('button')
     collapsedLaunch.type = 'button'
     collapsedLaunch.className = 'collapsed-launch'
-    const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
-      currentStep,
-      totalSteps,
-    }
     collapsedLaunch.setAttribute(
       'aria-label',
-      `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${workflowUi.progressLabel(nookTypedArgs0_2)}`,
+      `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${step.textContent}`,
     )
     collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
 
@@ -652,7 +657,10 @@ class AuthenticationWidgetShell {
     const collapsedMark = this.createWidgetMark(nookTypedArgs0_3)
     const collapsedProgress = document.createElement('span')
     collapsedProgress.className = 'collapsed-progress'
-    collapsedProgress.textContent = `${currentStep}/${totalSteps}`
+    collapsedProgress.textContent =
+      savedLoginPresentation === SavedLoginPresentationKind.Empty
+        ? workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)
+        : `${currentStep}/${totalSteps}`
     collapsedLaunch.append(collapsedMark, collapsedProgress)
 
     return {
