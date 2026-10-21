@@ -6,6 +6,6 @@
 
 ## Canonical delivery
 
-The owning Feature Gizmo carries the feature through implementation, required
+The owning Prime carries the feature through implementation, required
 PR checks, squash merge to `main`, and remote branch deletion. Delivery
 Pipeline owns only the bounded GitHub mechanics.

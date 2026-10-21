@@ -2,7 +2,7 @@
 
 ## Required packet
 
-- **Controller:** owning Feature Gizmo.
+- **Controller:** owning Prime.
 - **Branch:** one canonical feature branch.
 - **Base:** freshly fetched `origin/main`.
 - **Target:** `main`.
@@ -12,7 +12,7 @@
 
 ## Required actions
 
-1. Verify the packet came through Gizmo Prime and Team Gizmo (Delivery Pipeline context).
+1. Verify Gizmo Prime authorized the packet with Delivery Pipeline context.
 2. Fetch and prune origin.
 3. Resolve the canonical feature branch's latest committed head.
 4. Reject a target other than `main`.

@@ -34,7 +34,7 @@ The expert is read-only and nondelegating.
 It loads only AI team context. A foreign-team document may be inspected only as
 bounded repository evidence under an explicitly declared path; it is never
 loaded as another team graph, entrypoint, skill set, or context. If a finding
-requires foreign-team semantic ownership, report that dependency to Gizmo for
+requires foreign-team semantic ownership, report that dependency to Prime for
 routing to the responsible team.
 
 It does not apply patches, silently change product meaning, generate workflow
@@ -43,7 +43,7 @@ topology from Markdown, or mutate lifecycle state.
 Follow the canonical
 [structural expert registry](../docs/architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
-Internal Team Gizmo and Team Agent handoffs follow the root
+Internal Prime and specialist handoffs follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Examples

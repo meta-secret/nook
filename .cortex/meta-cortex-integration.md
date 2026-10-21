@@ -4,7 +4,7 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex `0.20.0` in [`.meta-cortex-version`](../.meta-cortex-version).
+Nook pins Meta-Cortex `0.21.0` in [`.meta-cortex-version`](../.meta-cortex-version).
 Use the checked-in [POSIX wrapper](../meta-cortexw) or
 [PowerShell wrapper](../meta-cortexw.ps1) from the consuming worktree.
 Identify the consuming project root and installed library root separately.
@@ -32,11 +32,11 @@ On Windows x86-64, use the native PowerShell wrapper:
 .\meta-cortexw.ps1 list
 ```
 
-The upstream [wrapper contract](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/2e88d51d535bb56e25fc6e545c3ed14306019833/README.md#run-the-pinned-command)
+The upstream [wrapper contract](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/9d00b7d1a600446233c37b2434aba907272ab6cb/README.md#run-the-pinned-command)
 owns installation, cache paths, prerequisites, and failure behavior. The wrapper
 bootstraps the exact pin into a separate cache directory per version.
 A global command is optional and does not select Nook's executable.
-On Linux, install the pinned release's [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/2e88d51d535bb56e25fc6e545c3ed14306019833/CONTRIBUTING.md#native-dashboard-prerequisites)
+On Linux, install the pinned release's [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/9d00b7d1a600446233c37b2434aba907272ab6cb/CONTRIBUTING.md#native-dashboard-prerequisites)
 before either command. GTK 3 and WebKitGTK 4.1 are required even for headless use.
 
 - **Prohibited:** invoke `./meta-cortexw list` on Linux before installing its native
@@ -91,7 +91,7 @@ operation:
 
 Do not initialize over an existing installation. If either required framework
 file is missing, initialization fails, or the versions do not match, follow
-the upstream [replacement procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/2e88d51d535bb56e25fc6e545c3ed14306019833/README.md#replace-an-installed-framework).
+the upstream [replacement procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/9d00b7d1a600446233c37b2434aba907272ab6cb/README.md#replace-an-installed-framework).
 Back up or move the old installation before Initialize.
 Set `host.max_total_agents` in the newly generated configuration to Nook's
 chosen ceiling of `20`; the former `required_total_agents` key is rejected.
@@ -133,7 +133,7 @@ operation:
 
 - `schema_version` is `7`.
 - `cli_version` and `framework_version` both match the consuming worktree's pin
-  (`0.20.0` here).
+  (`0.21.0` here).
 - The Codex and Claude integrations each report `Connected` for the project
   owning the installation.
   - The tracked `AGENTS.md` and `CLAUDE.md` each end their managed
@@ -162,7 +162,7 @@ PATH in each new shell. Stop if that check fails.
 #### Different versions in simultaneous worktrees
 
 Each worktree uses its checked-out wrapper and exact version pin. Follow the
-upstream [pin upgrade procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/2e88d51d535bb56e25fc6e545c3ed14306019833/README.md#upgrade-the-project-pin)
+upstream [pin upgrade procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/9d00b7d1a600446233c37b2434aba907272ab6cb/README.md#upgrade-the-project-pin)
 when choosing a different published release. A pin change selects the CLI.
 It leaves installed frameworks unchanged.
 
@@ -183,11 +183,11 @@ root request file. PowerShell uses
 `..\meta-cortexw.ps1 run --request ..\request.yaml`. Use actual paths from deeper
 directories. Every YAML `project` remains the explicit absolute consuming path.
 
-**Prohibited:** replace a shared `0.19.0` library while another assignment uses
-it, or pass it to an assignment whose wrapper pin is `0.20.0`.
+**Prohibited:** replace a shared `0.20.0` library while another assignment uses
+it, or pass it to an assignment whose wrapper pin is `0.21.0`.
 
 **Required:** keep the older library for its existing assignments. Initialize
-and verify `0.20.0` in the consuming worktree, then pass that library to its
+and verify `0.21.0` in the consuming worktree, then pass that library to its
 assignments. Check [shared ledger compatibility](#repository-identity-and-ledger-migration)
 before either version writes. Separate CLI caches do not isolate ledger storage.
 
@@ -210,7 +210,7 @@ Execution speed is selected by host-native settings. Keep Nook's session
 speed and reasoning effort. Resolve it through the upstream
 [delivery workflow](../.meta-cortex/AGENTS.md#development-delivery). It selects
 the delivery path; it is not framework configuration or a launch field.
-Development always runs through Prime and Team Gizmo. Apply Nook's assignment
+Development runs through Prime and its directly assigned specialists. Apply Nook's assignment
 and delivery constraints to every assignment.
 
 When upgrading an older configuration, retain the new `[host]` section.
@@ -257,7 +257,7 @@ from the installed library root.
   [verifier context boundary](../.meta-cortex/teams/gizmo-team/docs/project-context.md#carry-and-refresh-assignment-context)
   for operational project context and framework practice review.
 
-Use Meta-Cortex Prime, Team Gizmo, and specialist roles directly. Nook's
+Use Meta-Cortex Prime and specialist roles directly. Nook's
 [scope routing](docs/spec/upstream-role-routing.md) supplies functional and module
 requirements without maintaining project agent identities. Loom resolves Nook
 context by functional team; upstream catalogs own role and skill authority.
@@ -276,16 +276,16 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The [v0.20.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.20.0)
+The [v0.21.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.21.0)
 identifies upstream commit
-[`2e88d51d535bb56e25fc6e545c3ed14306019833`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/2e88d51d535bb56e25fc6e545c3ed14306019833).
+[`9d00b7d1a600446233c37b2434aba907272ab6cb`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/9d00b7d1a600446233c37b2434aba907272ab6cb).
 The checked-in launchers are the official source files from that revision.
 Keep their upstream behavior. Do not maintain a Nook launcher implementation.
 
-The Nook CLI release pin is `0.20.0` in `.meta-cortex-version`.
+The Nook CLI release pin is `0.21.0` in `.meta-cortex-version`.
 `preflight/Dockerfile` uses the project wrapper with that pin.
 `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin the
-upstream library commit `2e88d51d535bb56e25fc6e545c3ed14306019833`.
+upstream library commit `9d00b7d1a600446233c37b2434aba907272ab6cb`.
 `preflight/tests/loom_contracts.rs` owns the corresponding policy assertions.
 Future upgrades update this contract, the exact version pin, every library
 source pin, and their owning assertions together. Update launcher source from
@@ -304,9 +304,8 @@ for the current database and record contracts. Nook does not maintain a second
 copy of those formats.
 
 The framework Info schema `7` describes installation verification. It is
-separate from ledger database schema `6`. Release `0.20.0` writes the same
-event-envelope version `2` as `0.19.0`; an unchanged database version does not
-establish mixed-version compatibility. The upstream ledger protocol owns
+separate from ledger database schema `7` in release `0.21.0`. Matching numeric
+schema values do not establish mixed-version compatibility. The upstream ledger protocol owns
 released request and task formats, migration behavior, and supported readers.
 Keep the existing per-feature database in the resolved repository data directory.
 
@@ -317,8 +316,14 @@ writers use the same feature, verify compatibility through the upstream ledger
 contract for both releases. Stop older writers before any schema migration.
 Do not claim mixed-version compatibility from successful wrapper bootstrap alone.
 
-- Stop all older writers to a feature before its first newer-format write.
+- Stop all older participants before selecting a feature with the newer CLI.
+  Feature-selecting reads can migrate its storage; a read is not a compatibility probe.
 - Move every active participant on that feature to the current executable.
+- Release `0.21.0` retires Team Gizmo coordination. Follow upstream
+  [task recovery](../.meta-cortex/teams/gizmo-team/docs/ledger-task-lifecycle.md)
+  to requeue and reassign retained activities directly to Prime after the old
+  workers stop. Preserve historical roles and events rather than relabeling
+  history or editing the database to reactivate retired reporting lines.
 - Preserve a consistent database backup with its engine-managed sidecars.
 - Preserve `.meta-cortex/repository-id` from the actual Git main checkout.
 - Restore that exact UUID to the replacement main-checkout installation before

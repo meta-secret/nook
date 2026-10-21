@@ -2,13 +2,13 @@
 
 ## Required actions
 
-- Use [upstream Team Gizmo](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
+- Use [upstream Prime](../../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md)
   for assignment and coordination.
 - Use the upstream [integration agent](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
   for local branches, worktrees, integration, validation, and cleanup.
 - Preserve Nook's functional team identity, bounded file scope, dependency
   order, product constraints, and acceptance evidence in each assignment.
-- Send authorized PR operations through Team Gizmo to PR Lifecycle. Assign
+- Send authorized PR operations through Prime to PR Lifecycle. Assign
   workflow execution and pipeline repairs to upstream CI/CD with Nook SRE context.
 
 **Prohibited:** launch a second coordinator because one task needs security review.

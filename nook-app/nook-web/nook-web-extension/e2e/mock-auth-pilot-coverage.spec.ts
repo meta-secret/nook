@@ -11,6 +11,12 @@ import { NamedLoginScenario } from './login-form-named-properties'
 import { NamecheapOtpScenario } from './namecheap-otp-challenge'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
+  test('fills the observed Namecheap GET challenge through the side-panel content receiver without submitting', ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    return new NamecheapOtpScenario(testInfo).runSidePanelFill()
+  })
   test('offers Namecheap OTP selection on an initially focused standalone challenge', ({
     browserName,
   }, testInfo) => {
@@ -37,14 +43,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const loginWidget = loginPage.locator('#nook-auth-widget')
-      await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        loginWidget.getByText('No saved login for this site'),
+      ).toBeVisible()
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveText('Matching saved logins: 0')
       await expect(
-        loginWidget.getByText(
-          'No saved login matches this site. Sign in checks again; if none is found, sign in manually or add one in Nook.',
-        ),
+        loginWidget.getByText('Add a login for this site in your Nook vault.'),
       ).toBeVisible()
       await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(
         0,
@@ -52,13 +58,29 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
-      await loginWidget.getByRole('button', { name: 'Sign in' }).click()
+      const signInButton: { name: string; exact: boolean } = {
+        name: 'Sign in',
+        exact: true,
+      }
+      await expect(loginWidget.getByRole('button', signInButton)).toHaveCount(0)
+      await expect(loginWidget.locator('.pilot-checklist')).toHaveCount(0)
+      await expect(loginWidget.locator('.step-label')).toHaveText('Nook Pilot')
+      const vaultOpened = paired.context.waitForEvent('page')
+      const openNookButton: { name: string; exact: boolean } = {
+        name: 'Open Nook',
+        exact: true,
+      }
+      await loginWidget.getByRole('button', openNookButton).click()
+      const vaultPage = await vaultOpened
+      await vaultPage.waitForURL(new URL('/', paired.vaultPage.url()).href)
+      await expect(loginPage.locator('[autocomplete="username"]')).toHaveValue(
+        '',
+      )
       await expect(
-        loginWidget.getByText(
-          'No saved login matches this site yet. Add one in your vault from the Nook toolbar button.',
-        ),
-      ).toBeVisible()
+        loginPage.locator('[autocomplete="current-password"]'),
+      ).toHaveValue('')
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
+      await vaultPage.close()
 
       const otpPage = await paired.context.newPage()
       await otpPage.goto(`${mockAuth.origin}/otp`)

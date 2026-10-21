@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../docs/architecture/dev-delivery.md) for
-feature compilation and the manually run Feature Gizmo's slow PR cycle.
+feature compilation and the manually run Prime's slow PR cycle.
 Local test, check, and E2E diagnostics follow the root
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
 Runtime workflow details below do not override that policy or grant permission
@@ -518,7 +518,7 @@ UI demo rules:
   - They use native available CPU capacity.
   - PR CI avoids the cost of the full browser suite.
 
-**After integration, Gizmo runs the contract on the host before the first
+**After integration, Prime runs the contract on the host before the first
 push** (and after any later UI edit) so Verify does not discover a missing demo:
 
 ```bash
@@ -579,7 +579,7 @@ The Playwright project catalog and command grouping live in
 
 ## Task commands
 
-Product checks run remotely in the Feature Gizmo's slow PR cycle. Feature
+Product checks run remotely in the Prime's slow PR cycle. Feature
 feedback requires a separate build-only capability. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
@@ -716,17 +716,17 @@ coverage solve and package floors in the verified Rust graph.
   solve; no base revision comparison or PR coverage report is produced.
 - Use remote CI as the **sole PR product validation gate**.
 
-**Gizmo remote commands:**
+**Prime remote commands:**
 
-- Ordinary Team Agents format every changed file in their allowed scope and
+- Ordinary specialists format every changed file in their allowed scope and
   finish their assigned worker branches. They report the branch and focused
-  evidence to Team Gizmo. They do not push, dispatch remote work, or operate
+  evidence to Prime. They do not push, dispatch remote work, or operate
   external PR/check state.
-- Feature Gizmos route those branches through the upstream integration agent,
+- Prime coordinators route those branches through the upstream integration agent,
   wait for its feature branch, integration outcome, and checks, and then request
   repeatable required PR-check evidence.
 - The build-only command contract must be integrated before feature acceptance.
-- Only the Feature Gizmo's feature pull-request cycle uses the full slow PR workflow.
+- Only the Prime's feature pull-request cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.
 - Focused tasks are optional for that head and never replace complete
   validation.
@@ -797,7 +797,7 @@ coverage solve and package floors in the verified Rust graph.
   A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
-- Gizmo still dispatches build, proof, and required validation tasks remotely.
+- Prime still dispatches build, proof, and required validation tasks remotely.
   Local test, check, and E2E diagnostics follow the root policy; local results
   never replace hosted PR checks.
 - Commit-scoped local publish requires a clean worktree. Dirty builds remain

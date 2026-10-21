@@ -11,7 +11,6 @@ for future refactors.
 - **Gizmo Prime**
   - Authorizes feature delivery when a card is applied.
   - Retains feature policy and readiness decisions.
-- **Team Gizmo**
   - The single coordinator assigns PR mechanics to PR Lifecycle with
     Delivery Pipeline context and workflow execution to upstream CI/CD with
     Nook SRE context through the active harness.
@@ -20,8 +19,8 @@ for future refactors.
 
 **Prohibited:** have a skill author create a PR outside the assigned delivery route.
 
-**Preferred:** Prime authorizes the PR operation. Team Gizmo assigns it to
-PR Lifecycle. PR Lifecycle executes it with the supplied Delivery Pipeline context.
+**Preferred:** Prime authorizes and assigns the PR operation to PR Lifecycle,
+which executes it with the supplied Delivery Pipeline context.
 
 ## Problem Pattern
 
@@ -40,7 +39,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
    instead of creating another local language or agent rule. Capture Nook-only
    requirements as a concise supplement in the owner's
    `dynamic-skills/` directory.
-   - Use Gizmo for delivery-control knowledge.
+   - Keep delivery-control requirements in `.cortex/docs/spec/` under Prime's authority.
    - Use the responsible engineering team for implementation knowledge.
    - Use shared only for ownerless repository-wide policy.
    - Preserve security ownership for security policy and acceptance.
@@ -83,8 +82,8 @@ Does not apply to:
 - For a new card:
   - scaffold with
     `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>`;
-  - set `skillOwner` to `gizmo` for delivery control, to the responsible team
-    for implementation knowledge, to `ai` for AI-system knowledge, or to
+  - set `skillOwner` to the responsible team for implementation knowledge,
+    to `ai` for AI-system knowledge, or to
     `shared` for ownerless repository-wide policy;
   - use `security` for security policy, trust boundaries, and acceptance;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
@@ -118,9 +117,9 @@ For code refactors using a dynamic skill, keep routine local feedback to
 permitted scoped formatters or inexpensive diagnostics. Local test, check, or
 E2E execution follows the root policy. Finish the assigned worker branch with
 every resulting mutation in the allowed paths. Return the branch and focused
-evidence to Gizmo. Do not run a local pre-push or broad validation gate. Prime
-authorizes hosted validation. Gizmo routes local integration through the
+evidence to Prime. Do not run a local pre-push or broad validation gate. Prime
+authorizes hosted validation. Prime routes local integration through the
 upstream integration agent and waits for its feature branch, integration
-outcome, and checks. Team Gizmo assigns publication to PR Lifecycle with
+outcome, and checks. Prime assigns publication to PR Lifecycle with
 Delivery Pipeline context and workflow execution to upstream CI/CD with Nook
 SRE context. Prime owns readiness based on the returned CI evidence.

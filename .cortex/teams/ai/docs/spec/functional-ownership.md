@@ -46,7 +46,7 @@ Language expertise does not transfer product-policy ownership. Portable
 business rules, cryptography, authorization, device identity, and vault storage
 remain with their Nook product and security owners. Browser behavior remains
 with Web Development. Infrastructure and deployment remain with SRE. Delivery
-state and external GitHub operations remain with Gizmo and the authorized
+state and external GitHub operations remain with Prime and the authorized
 upstream delivery roles.
 
 ## Nook AI boundaries
@@ -61,8 +61,7 @@ AI-owned tests, and Nook tooling contracts. It does not own:
   explicit expertise contract.
 - Independent changes to external delivery state.
 
-Raise a product, security, web, SRE, shared, or delivery dependency to Team
-Gizmo for routing.
+Raise a product, security, web, SRE, shared, or delivery dependency to Prime for routing.
 
 ## Validation
 

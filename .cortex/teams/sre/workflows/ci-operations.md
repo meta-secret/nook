@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../docs/architecture/dev-delivery.md) for
-feature compilation and the manually run Feature Gizmo's slow PR cycle.
+feature compilation and the manually run Prime's slow PR cycle.
 Local diagnostics follow the root
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
 The runtime workflow below documents CI operations; it does not override that
@@ -268,10 +268,10 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
   Direct Docker/BuildKit control, direct cache operations or mutation, and
   daemon/container destruction remain prohibited.
 - Feature teams author tests and finish scoped worker branches.
-- Feature Gizmos route those branches through the upstream integration agent and
+- Prime coordinators route those branches through the upstream integration agent and
   wait for its feature branch, integration outcome, and checks.
-- Feature Gizmos request only the required PR-check capability.
-- The Feature Gizmo alone requests the full slow feature pull request checks.
+- Prime coordinators request only the required PR-check capability.
+- The Prime alone requests the full slow feature pull request checks.
 - Missing build-only tooling is a visible runtime prerequisite.
 - Repairs return through the feature path and serialized feature pull-request delivery.
 
@@ -279,7 +279,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** return the formatted worker branch and focused evidence to Team Gizmo
+3. **Do** return the formatted worker branch and focused evidence to Prime
    for upstream local integration. Use the root policy for bounded local
    test/check/E2E diagnostics; do not run unrelated heavy product builds or
    broad local gates.
@@ -295,7 +295,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.
      - The repair follows the feature path into the canonical feature branch.
-     - The Feature Gizmo controls slow checks and squash-merge authorization.
+     - The Prime controls slow checks and squash-merge authorization.
      - Incident completion retains replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
