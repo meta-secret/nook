@@ -457,7 +457,9 @@ panel sits inside the card, which then spans the full row.
       aria-label={card.label}
     >
       <div class="flex items-center justify-between px-2.5 pb-1 pt-2">
-        <span class="nk-label">{vault.t(I18N_KEYS.WorkspaceCardVaults)}</span>
+        <span class="nk-label nk-lockup flex-1 pr-3"
+          >{vault.t(I18N_KEYS.WorkspaceCardVaults)}</span
+        >
         <span class="nk-label">{card.vaults.length}</span>
       </div>
       <ul>

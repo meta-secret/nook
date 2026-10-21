@@ -22,7 +22,11 @@
       color-mix(in oklch, var(--steel-hi) 55%, var(--border)) 0,
       var(--border) 4.5rem
     );
-    --nk-face: var(--card);
+    --nk-face: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 93%, var(--steel-hi)) 0,
+      var(--card) 5rem
+    );
     --nk-shape: polygon(
       0 0,
       calc(100% - var(--nk-cut)) 0,
@@ -126,16 +130,26 @@
       color-mix(in oklch, var(--foreground) 22%, transparent) 5rem
     );
   }
+  /* A live frame: its edge lit like the cutting edge, brightest at the cut. */
   .nk-frame-live,
   .nk-frame-live:hover {
-    --nk-edge: color-mix(in oklch, var(--success) 60%, transparent);
+    --nk-edge: linear-gradient(
+      150deg,
+      var(--success) 0,
+      color-mix(in oklch, var(--success) 35%, transparent) 9rem
+    );
   }
 
   /* Lists and banners: square, heavy left edge. */
   .nk-list {
     border: 1px solid var(--border);
     border-radius: 0;
-    background: var(--card);
+    background: var(--card)
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 93%, var(--steel-hi)),
+        var(--card) 4rem
+      );
     box-shadow: inset 2px 0 0
       color-mix(in oklch, var(--foreground) 45%, transparent);
   }
@@ -353,12 +367,22 @@
       7px 100%,
       0 calc(100% - 7px)
     );
-    background: oklch(0.93 0.05 var(--nk-hue, 250));
-    color: oklch(0.4 0.12 var(--nk-hue, 250));
+    background: linear-gradient(
+      160deg,
+      oklch(0.96 0.025 var(--nk-hue, 250)),
+      oklch(0.85 0.04 var(--nk-hue, 250))
+    );
+    box-shadow: inset 0 1px 0 white;
+    color: oklch(0.38 0.08 var(--nk-hue, 250));
   }
   .dark .nk-monogram {
-    background: oklch(0.32 0.06 var(--nk-hue, 250));
-    color: oklch(0.88 0.08 var(--nk-hue, 250));
+    background: linear-gradient(
+      160deg,
+      oklch(0.44 0.045 var(--nk-hue, 250)),
+      oklch(0.25 0.035 var(--nk-hue, 250))
+    );
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 18%);
+    color: oklch(0.92 0.035 var(--nk-hue, 250));
   }
   .nk-monogram-sm {
     width: 2rem;
@@ -473,7 +497,21 @@
     width: 1.75rem;
     height: 1.75rem;
     border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--background) 65%, var(--card));
+    box-shadow:
+      inset 0 1px 3px var(--pocket-shade),
+      inset 0 -1px 0 color-mix(in oklch, var(--steel-hi) 7%, transparent);
     color: var(--muted-foreground);
+    clip-path: polygon(
+      3px 0,
+      calc(100% - 3px) 0,
+      100% 3px,
+      100% calc(100% - 3px),
+      calc(100% - 3px) 100%,
+      3px 100%,
+      0 calc(100% - 3px),
+      0 3px
+    );
   }
   .nk-vault-row[data-state="open"] .nk-vault-icon,
   .nk-vault-icon.nk-vault-icon-open {
@@ -499,6 +537,8 @@
     grid-auto-flow: column;
     margin-top: auto;
     border-top: 1px solid var(--border);
+    box-shadow: inset 0 1px 0
+      color-mix(in oklch, var(--steel-hi) 5%, transparent);
   }
   .nk-card-actions > button {
     display: inline-flex;
@@ -557,6 +597,61 @@
   .nk-identity-menu-lead .nk-vault-icon {
     border-color: var(--success);
     color: var(--success);
+  }
+  .nk-vault-row[data-state="open"] .nk-vault-icon,
+  .nk-vault-icon.nk-vault-icon-open,
+  .nk-identity-menu-lead .nk-vault-icon {
+    box-shadow:
+      inset 0 1px 3px var(--pocket-shade),
+      inset 0 0 10px color-mix(in oklch, var(--success) 22%, transparent);
+  }
+
+  /* Plate: a bordered action tile ground like a blade flat, lit along its
+   * top, its foot cut like a tanto tip; the edge takes titanium on hover. */
+  .nk-plate {
+    position: relative;
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 90%, var(--steel-hi)),
+      var(--card) 70%
+    );
+    box-shadow: inset 0 1px 0
+      color-mix(in oklch, var(--steel-hi) 8%, transparent);
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 10px),
+      calc(100% - 10px) 100%,
+      0 100%
+    );
+    transition: box-shadow 0.15s;
+  }
+  .nk-plate::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.75px),
+      var(--border) calc(50% - 0.75px),
+      var(--border) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
+  .nk-plate:hover:not(:disabled),
+  .nk-plate:focus-visible {
+    box-shadow:
+      inset 2px 0 0 var(--titanium),
+      inset 0 1px 0 color-mix(in oklch, var(--steel-hi) 8%, transparent);
+  }
+  .nk-plate.nk-identity-menu-lead {
+    box-shadow:
+      inset 2px 0 0 var(--success),
+      inset 0 1px 0 color-mix(in oklch, var(--steel-hi) 8%, transparent);
   }
   .nk-new-tile {
     display: grid;
@@ -701,7 +796,12 @@
       "main"
       "status";
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--card)
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 93%, var(--steel-hi)),
+        var(--card) 6rem
+      );
   }
   /* Phones: the shell runs edge to edge and the page grows with its
    * content, so the page band stays pinned under the app header. */

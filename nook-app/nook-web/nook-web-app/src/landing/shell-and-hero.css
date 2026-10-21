@@ -302,8 +302,8 @@ nav a {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2f9b68;
-  box-shadow: 0 0 0 4px rgb(47 155 104 / 0.11);
+  background: oklch(0.72 0.11 222);
+  box-shadow: 0 0 0 4px oklch(0.72 0.11 222 / 0.14);
 }
 
 main {

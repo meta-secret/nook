@@ -133,7 +133,7 @@ for the approval step that follows.
     {#if approvalVault}
       <button
         type="button"
-        class="nk-identity-menu-item group w-full border border-border disabled:cursor-default disabled:opacity-45"
+        class="nk-identity-menu-item nk-plate group w-full border border-border disabled:cursor-default disabled:opacity-45"
         data-testid="extension-request-unlock"
         data-store-id={approvalVault.storeId}
         disabled={busy}

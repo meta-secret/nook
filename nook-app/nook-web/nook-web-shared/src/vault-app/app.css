@@ -11,8 +11,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Palette after a blackened blade: light is satin steel, dark is blued
- * gunmetal and G10. Neutrals lean cool; anodised titanium (screw heads) is the
- * one hue, kept for focus and fasteners. */
+ * gunmetal and G10. Neutrals lean cool; anodised titanium (screw heads) is
+ * kept for focus and fasteners. Live state is the lit cutting edge (ice
+ * blue) and warning is engraving gold. */
 :root {
   --radius: 0.1875rem;
   --background: oklch(0.975 0.003 255);
@@ -49,8 +50,9 @@
   --sidebar-accent-foreground: oklch(0.19 0.009 260);
   --sidebar-border: oklch(0.91 0.006 255);
   --sidebar-ring: oklch(0.52 0.2 272 / 60%);
-  --success: oklch(0.596 0.145 163.225);
-  --warning: oklch(0.555 0.163 48.998);
+  --success: oklch(0.56 0.11 228);
+  --warning: oklch(0.56 0.11 72);
+  --pocket-shade: oklch(0.16 0.008 260 / 14%);
 }
 
 .dark {
@@ -91,8 +93,9 @@
   --sidebar-accent-foreground: oklch(0.955 0.008 255);
   --sidebar-border: rgb(150 172 214 / 14%);
   --sidebar-ring: oklch(0.68 0.17 275 / 70%);
-  --success: oklch(0.765 0.177 163.223);
-  --warning: oklch(0.879 0.169 91.605);
+  --success: oklch(0.8 0.1 218);
+  --warning: oklch(0.8 0.11 80);
+  --pocket-shade: rgb(0 0 0 / 45%);
 }
 
 @theme inline {
@@ -165,6 +168,15 @@
   textarea,
   select {
     font: inherit;
+  }
+
+  /* Dark fields sit recessed, like pockets milled into the guard. */
+  .dark
+    :is(
+      input:not([type="checkbox"], [type="radio"], [type="range"]),
+      textarea
+    ) {
+    box-shadow: inset 0 1px 3px var(--pocket-shade);
   }
 
   #app {

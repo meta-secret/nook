@@ -16,7 +16,7 @@ export const IN_PAGE_SURFACE_TOKENS = `
       --nk-primary-fg: oklch(0.185 0.018 262);
       --nk-border: rgb(150 172 214 / 14%);
       --nk-input: rgb(255 255 255 / 16%);
-      --nk-success: oklch(0.765 0.177 163.223);
+      --nk-success: oklch(0.8 0.1 218);
       --nk-warning: oklch(0.8 0.13 75);
       --nk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --nk-cut: 18px;

@@ -9,6 +9,8 @@
     width: 2.5rem;
     height: 2.5rem;
     border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--background) 65%, var(--card));
+    box-shadow: inset 0 1px 3px var(--pocket-shade);
     color: var(--muted-foreground);
     /* Stepped recess, like the pockets milled into the guard. */
     outline: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
@@ -136,6 +138,14 @@
     border-color: var(--primary);
     background: var(--primary);
     color: var(--primary-foreground);
+  }
+  /* Dark: the pressed filter is a blued blade with a lit edge. */
+  .dark .nk-chip[aria-pressed="true"],
+  .dark .nk-chip[aria-checked="true"] {
+    border-color: var(--blade-lo);
+    background: linear-gradient(180deg, var(--blade-hi), var(--blade-lo));
+    box-shadow: inset 0 -1px 0 var(--blade-edge);
+    color: var(--steel-hi);
   }
   .nk-chip:focus-visible {
     outline: 2px solid var(--ring);
@@ -282,7 +292,12 @@
   /* Square panel for forms: no clip-path, so field popovers are not cut. */
   .nk-panel {
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--card)
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 93%, var(--steel-hi)),
+        var(--card) 4rem
+      );
     box-shadow: inset 2px 0 0
       color-mix(in oklch, var(--foreground) 45%, transparent);
   }

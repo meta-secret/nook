@@ -15,7 +15,7 @@
   --destructive-bg: oklch(0.22 0.05 25);
   --destructive-fg: oklch(0.85 0.08 30);
   --accent: oklch(0.255 0.022 262);
-  --success: oklch(0.765 0.177 163.223);
+  --success: oklch(0.8 0.1 218);
   --radius: 0.1875rem;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 

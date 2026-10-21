@@ -51,7 +51,7 @@ extension serves several vaults). Connected: a quiet item says so.
 {#if offer.kind === ExtensionSetupOfferKind.Visible}
   {#if status === ExtensionSetupStatus.Paired}
     <div
-      class="nk-identity-menu-item border border-border"
+      class="nk-identity-menu-item nk-plate border border-border"
       data-testid="vault-extension-connected"
     >
       <span class="nk-vault-icon nk-vault-icon-open" aria-hidden="true">
@@ -70,7 +70,7 @@ extension serves several vaults). Connected: a quiet item says so.
     {@const notInstalled = status === ExtensionSetupStatus.NotInstalled}
     <button
       type="button"
-      class="nk-identity-menu-item border border-border disabled:cursor-default disabled:opacity-45"
+      class="nk-identity-menu-item nk-plate border border-border disabled:cursor-default disabled:opacity-45"
       data-testid={notInstalled
         ? "vault-extension-install"
         : "vault-pair-extension-btn"}
