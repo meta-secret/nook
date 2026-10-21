@@ -10,8 +10,8 @@
 // stay after the shared tool stage. rust-base remains the only linked context.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
-// Every registry writer forces zstd. Scope generations rotate as one family
-// when compression changes so retired mixed-compression indexes are not read.
+// Registry writers use zstd for newly compressed blobs. Ecosystem exporters
+// retain inherited compression; the other writers still force zstd.
 // Empty cache-from= and cache-to= overrides are prohibited.
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
 // nook-app/docker-bake.hcl and are merged via NOOK_BAKE_FILES.
@@ -43,19 +43,19 @@ rust_ecosystem_dylint_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_ecosystem_dylint_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // Source-sensitive cargo-fuzz smoke leaf. Own scope only; same short-chain rule
 // as dylint. Dylint's job remains the sole shared nightly writer.
-// v4 matches the forced-zstd family and leaves the older implicit writer.
+// v4 retains the existing cache scope while inherited layers keep their compression.
 rust_ecosystem_fuzz_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v4:buildcache,ignore-error=true",
 ]
 
 rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // Pinned cargo-deny/cargo-audit install image. Own scope so other ecosystem
@@ -72,7 +72,7 @@ rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_ecosystem_policy_tools_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // Proptest/Insta/Loom compile layers on top of rust-platform (source over cooked deps).
@@ -86,7 +86,7 @@ rust_ecosystem_deterministic_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_ecosystem_deterministic_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // Kani uses its own compiler, so sccache cannot safely wrap the proof build.
@@ -97,7 +97,7 @@ rust_ecosystem_kani_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_ecosystem_kani_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // Product native deps. Exact dependency scopes remain the narrowest restore for

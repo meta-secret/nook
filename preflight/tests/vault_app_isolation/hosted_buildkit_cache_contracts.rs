@@ -59,6 +59,21 @@ impl MainProducerCacheContract<'_> {
                 "hosted BuildKit cache contract is missing: {required}"
             );
         }
+        for scope in [
+            "dylint-v4",
+            "fuzz-v4",
+            "policy-tools-v5",
+            "deterministic-v2",
+            "kani-v2",
+        ] {
+            let exporter = format!(
+                "nook-rust-ecosystem-{scope}${{GHA_CACHE_SCOPE_SUFFIX}}:buildcache,mode=${{GHA_CACHE_EXPORT_MODE}},compression=zstd,timeout=10m"
+            );
+            assert!(
+                rust_toolchain_bake.contains(&exporter),
+                "ecosystem export must retain its scope, mode, zstd, and timeout without forcing inherited-layer recompression: {scope}"
+            );
+        }
         assert!(
             bake_retry.contains("nook-bake-flake.XXXXXX\"")
                 && !bake_retry.contains("nook-bake-flake.XXXXXX.log"),
