@@ -354,6 +354,7 @@ describe('authenticator setup dialogs', () => {
       switch (true) {
         case wrapper instanceof HTMLElement:
           break
+        case true:
         default:
           throw new Error('expected wrapper')
       }

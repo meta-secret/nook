@@ -466,6 +466,7 @@ class PageQrCapture {
             element,
           }),
         )
+      case true:
       default:
         return this.adjacentInstructionCandidates(media)
     }
@@ -616,6 +617,7 @@ class PageQrCapture {
       switch (true) {
         case preceding instanceof HTMLElement:
           return this.adjacentBranchCandidates(preceding)
+        case true:
         default:
           break
       }

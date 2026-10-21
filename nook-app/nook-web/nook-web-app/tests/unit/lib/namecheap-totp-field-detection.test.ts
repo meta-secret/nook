@@ -140,6 +140,7 @@ describe('Namecheap two-factor code field detection', () => {
       switch (true) {
         case field instanceof HTMLInputElement:
           break
+        case true:
         default:
           throw new Error('Expected challenge field')
       }
