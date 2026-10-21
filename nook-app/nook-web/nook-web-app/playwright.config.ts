@@ -141,37 +141,58 @@ export default defineConfig({
         : {}),
     },
   },
-  webServer: {
-    command: webServerCommand,
-    url: `http://127.0.0.1:${webPort}`,
-    reuseExistingServer: !isCi && !isUiDemo,
-    timeout: isCi ? 120_000 : 30_000,
-    gracefulShutdown: {
-      signal: 'SIGTERM',
-      timeout: 5_000,
+  webServer: [
+    {
+      command: webServerCommand,
+      url: `http://127.0.0.1:${webPort}`,
+      reuseExistingServer: !isCi && !isUiDemo,
+      timeout: isCi ? 120_000 : 30_000,
+      gracefulShutdown: {
+        signal: 'SIGTERM',
+        timeout: 5_000,
+      },
+      env: usePreviewServer
+        ? {
+            VITE_E2E_EXPOSE_VAULT: 'true',
+            VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+            VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
+            NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
+              process.env.NOOK_E2E_SYNC_PROVIDER,
+            ),
+          }
+        : {
+            VITE_VAULT_SYNC_INTERVAL_MS:
+              process.env.VITE_VAULT_SYNC_INTERVAL_MS,
+            VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+            VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
+            NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
+            VITE_E2E_EXPOSE_VAULT: 'true',
+            // Capture debug logs so auto-dump-on-failure carries a useful trail
+            // (dev server only; prebuilt CI dist keeps the `info` default).
+            VITE_LOG_LEVEL: ((...[v = 'debug']) => v)(
+              process.env.VITE_LOG_LEVEL,
+            ),
+            NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
+              process.env.NOOK_E2E_SYNC_PROVIDER,
+            ),
+          },
     },
-    env: usePreviewServer
-      ? {
-          VITE_E2E_EXPOSE_VAULT: 'true',
-          VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
-          VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
-          NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
-            process.env.NOOK_E2E_SYNC_PROVIDER,
-          ),
-        }
-      : {
-          VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
-          VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
-          VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
-          NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
-          VITE_E2E_EXPOSE_VAULT: 'true',
-          // Capture debug logs so auto-dump-on-failure carries a useful trail
-          // (dev server only; prebuilt CI dist keeps the `info` default).
-          VITE_LOG_LEVEL: ((...[v = 'debug']) => v)(process.env.VITE_LOG_LEVEL),
-          NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
-            process.env.NOOK_E2E_SYNC_PROVIDER,
-          ),
-        },
-  },
+    ...(isUiDemo
+      ? [
+          {
+            command: 'bun run dev -- --host 127.0.0.1 --port 5174',
+            cwd: '../nook-vault-simple',
+            url: 'http://127.0.0.1:5174',
+            reuseExistingServer: false,
+            timeout: isCi ? 120_000 : 30_000,
+            env: {
+              VITE_E2E_EXPOSE_VAULT: 'true',
+              VITE_VAULT_IDLE_TIMEOUT_MS: '300000',
+              VITE_VAULT_IDLE_WARNING_MS: '0',
+            },
+          },
+        ]
+      : []),
+  ],
   projects: configuredProjects,
 })
