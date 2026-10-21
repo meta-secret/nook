@@ -702,7 +702,7 @@ class ArcManifestContract {
     const admittedContract46 = wasmCacheProof.requireAll([
       "Publish from the already-selected node-local rootless BuildKit shard",
       'cache_scope="nook-rust-wasm-deps-v6"',
-      "compression=zstd,force-compression=true",
+      "mode=max,compression=zstd,timeout=10m",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
       "verify-registry-cache-blobs.ts",
     ]);
