@@ -23,7 +23,7 @@ explicit handoff.
   in hosted CI. Removing a status-only job must preserve its required assertion.
 - Return every failed or cancelled required job before repair.
 - Treat reviews and approvals as optional.
-- Permit the owning Feature Gizmo to merge its own pull request.
+- Permit the owning Prime to merge its own pull request.
 - Use squash merge to preserve linear `main` history.
 - Verify GitHub's actual merged state and the squash result on `origin/main`.
 - Delete the remote feature branch after merge.

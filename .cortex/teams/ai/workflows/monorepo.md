@@ -18,13 +18,13 @@ AI workers do not publish or promote branches.
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Finish the scoped worker branch through the upstream local feature workflow.
-10. Return authored tests and interface evidence to Team Gizmo.
+10. Return authored tests and interface evidence to Prime.
 11. Have the integration agent merge the finished worker branch and validate
     the combined feature.
-12. Have Gizmo route feature-branch publication through PR Lifecycle and required
+12. Have Prime route feature-branch publication through PR Lifecycle and required
     workflow execution through upstream CI/CD with Nook SRE context.
 13. Route corrections through the responsible team and repeat validation.
-14. Hand publication and full slow checks to the Feature Gizmo.
+14. Hand publication and full slow checks to the Prime.
 
 ## Package boundaries
 

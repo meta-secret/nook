@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../docs/architecture/dev-delivery.md) for
-feature compilation and the manually run Feature Gizmo's slow PR cycle.
+feature compilation and the manually run Prime's slow PR cycle.
 Local diagnostics follow the root
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
 The workflow below does not override that policy or grant permission for broad
@@ -157,7 +157,7 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy** — see subsections below. Gizmo follows
+10. **CI policy** — see subsections below. Prime follows
     [the pull request pipeline](../../../docs/spec/pull-requests.md).
 
     #### Workflows and runners
@@ -454,12 +454,12 @@ Use this workflow for quality, CI, and deployment changes.
 
 11. **GitHub Actions agent execution:**
     - Feature teams author tests and return their worker branches with focused
-      evidence to Team Gizmo for upstream local integration.
-    - Team Gizmo waits for the integration agent's feature branch, integration
+      evidence to Prime for upstream local integration.
+    - Prime waits for the integration agent's feature branch, integration
       outcome, and checks before requesting remote validation.
     - Feature feedback requires required PR-check capability.
     - Missing capability is a blocker, not permission for slow feature checks.
-    - The manually run Feature Gizmo owns the full slow feature pull request cycle.
+    - The manually run Prime owns the full slow feature pull request cycle.
     - Hosted execution is the default; required PR checks remain mandatory for
       delivery and readiness. Local results do not replace them. A specific
       local preflight, coverage, or build target may be selected directly only

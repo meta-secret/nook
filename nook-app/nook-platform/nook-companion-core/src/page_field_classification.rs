@@ -245,13 +245,24 @@ impl OneTimeCodeRouteEvidence<'_> {
         ) {
             return OneTimeCodeRouteDecision::Rejected;
         }
-        if [form_identity, destination.path_identity.as_str()]
-            .into_iter()
-            .any(|identity| RouteIdentity::new(identity).indicates_one_time_code_authentication())
-        {
-            OneTimeCodeRouteDecision::Authentication
-        } else {
-            OneTimeCodeRouteDecision::Unrelated
+        match destination {
+            destination
+                if [form_identity, destination.route_identity.as_str()]
+                    .map(RouteIdentity::new)
+                    .iter()
+                    .any(RouteIdentity::indicates_authenticator_enrollment) =>
+            {
+                OneTimeCodeRouteDecision::Unrelated
+            }
+            destination
+                if [form_identity, destination.path_identity.as_str()]
+                    .map(RouteIdentity::new)
+                    .iter()
+                    .any(RouteIdentity::indicates_one_time_code_authentication) =>
+            {
+                OneTimeCodeRouteDecision::Authentication
+            }
+            _ => OneTimeCodeRouteDecision::Unrelated,
         }
     }
 }

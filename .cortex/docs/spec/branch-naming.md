@@ -53,7 +53,7 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Do not append opaque attempt suffixes such as `v2`.
 - Do not use a generic work label such as `cleanup` as the bounded outcome.
 - Do not encode UUIDs or timestamps in a branch name.
-- Do not omit the literal `child` namespace from a Team Gizmo or leaf branch.
+- Do not omit the literal `child` namespace from a worker branch.
 - Do not place the feature segment before the team and role segments.
 - Do not duplicate an agent-type segment, such as
   `cortex-specialist/cortex-specialist`.
@@ -69,11 +69,11 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 
 ## Feature branch authority
 
-Use the upstream [Team Gizmo coordination contract](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md#coordinate-assignments)
+Use the upstream [Prime coordination contract](../../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md)
 and [coordination circuit breaker](../../../.meta-cortex/teams/gizmo-team/CIRCUIT-BREAKER.md#securing-trusted-agent-handoffs)
 for generic assignment admission and backpressure.
 
-- Prime remains the user-facing mission coordinator and root, not a subagent.
+- The active host launches Prime as the feature coordinator.
 - Prime authorizes the canonical feature branch name. The branch name is the
   workflow authority for publication and remote work.
 - After the mandatory fetch, Prime selects `origin/main` as the feature base.
@@ -83,12 +83,12 @@ for generic assignment admission and backpressure.
   remote dispatch, PR mutation, or merge. If the branch advances, follow the
   latest head and rerun affected evidence instead of failing on stale head
   observations.
-- Temporary Team Gizmo and leaf branches are private. Only the canonical
+- Temporary worker branches are private. Only the canonical
   feature branch is published or used as a remote workflow ref.
 - After every required PR check is green, squash-merge the canonical feature
   branch into `main` and delete the remote feature branch.
 
-Follow [Team Agent Delegation](subagent-delegation.md) for Nook
+Follow [Specialist delegation](subagent-delegation.md) for Nook
 assignment scope and the upstream integration skill for Git sequencing.
 
 ## Examples

@@ -327,6 +327,74 @@ describe('page QR otpauth capture', () => {
 })
 
 describe('authenticator setup dialogs', () => {
+  test('nested QR wrappers retain the immediately preceding setup instructions without dialog roles', async () => {
+    const fixture = new DialogQrObservationFixture(`
+      <main><p>Account settings</p></main>
+      <div>
+        <div>Update authenticator app</div>
+        <div><div>Scan this QR code to set up your account using your preferred authenticator app.</div></div>
+        <div><div>${DialogQrObservationFixture.QR_SVG}</div></div>
+        <div data-setup-key>JBSWY3DPEHPK3PXP</div>
+      </div>
+    `)
+    expect(await fixture.observation()).toBe('present')
+    expect(fixture.instructionCopies).toEqual([
+      '\nScan this QR code to set up your account using your preferred authenticator app.',
+    ])
+    expect(fixture.resolveRequests).toEqual([])
+  })
+
+  test.each([' ', 'JBSWY3DPEHPK3PXP'])(
+    'does not inspect direct wrapper text before consent: %s',
+    async (text) => {
+      const fixture = new DialogQrObservationFixture(
+        `<div><div>Scan this QR code with your authenticator app.</div><div data-wrapper>${DialogQrObservationFixture.QR_SVG}</div></div>`,
+      )
+      const wrapper = document.querySelector('[data-wrapper]')
+      switch (true) {
+        case wrapper instanceof HTMLElement:
+          break
+        case true:
+        default:
+          throw new Error('expected wrapper')
+      }
+      const textNode = document.createTextNode(text)
+      wrapper.append(textNode)
+      const readPayload = vi.fn(() => {
+        throw new Error('wrapper text must not be inspected')
+      })
+      for (const property of ['data', 'textContent', 'nodeValue']) {
+        Object.defineProperty(textNode, property, { get: readPayload })
+      }
+      for (const property of ['textContent', 'innerText']) {
+        Object.defineProperty(wrapper, property, { get: readPayload })
+      }
+      expect(await fixture.observation()).toBe('absent')
+      expect(readPayload).not.toHaveBeenCalled()
+      expect(fixture.instructionCopies).toEqual([''])
+      expect(fixture.resolveRequests).toEqual([])
+    },
+  )
+
+  test.each([
+    '<main><p>Scan this QR code with your authenticator app.</p></main><div><div>Artwork</div><div>MEDIA</div></div>',
+    '<div><p>Scan this QR code with your authenticator app.</p><div>Unrelated artwork</div><div>MEDIA</div></div>',
+    '<aside><p>Scan this QR code with your authenticator app.</p></aside><div><div>MEDIA</div></div>',
+    '<div><section><p>Scan this QR code with your authenticator app.</p></section><div>MEDIA</div></div>',
+    '<div><div><p>Scan this QR code with your authenticator app.</p><input value="private"></div><div>MEDIA</div></div>',
+    '<div><div hidden>Scan this QR code with your authenticator app.</div><div>MEDIA</div></div>',
+    '<div><div>Scan this QR code with your authenticator app.<code>JBSWY3DPEHPK3PXP</code></div><div>MEDIA</div></div>',
+  ])(
+    'does not borrow remote, hidden, or secret-bearing wrapper copy: %s',
+    async (markup) => {
+      const fixture = new DialogQrObservationFixture(
+        markup.replace('MEDIA', DialogQrObservationFixture.QR_SVG),
+      )
+      expect(await fixture.observation()).toBe('absent')
+      expect(fixture.resolveRequests).toEqual([])
+    },
+  )
+
   test('an inline SVG QR in a portaled setup dialog offers enrollment from its title and body', async () => {
     const fixture = new DialogQrObservationFixture(
       DialogQrObservationFixture.authenticatorDialog(

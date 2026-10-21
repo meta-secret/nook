@@ -48,13 +48,12 @@ checks.”
 Meta-Cortex owns generic agents and skills. Nook retains six functional contexts:
 AI, Development Core, Security, SRE, Web Development, and Delivery Pipeline.
 They describe product ownership, not six coordinator instances.
-Each feature uses one functional team identity: the single Team Gizmo coordinates
-bounded Team Agents and owns their integration order. See [agent feature
+Prime directly coordinates bounded specialists and independent verifiers,
+with a functional owner for each assignment. See [agent feature
 ownership](docs/spec/agent-feature-ownership.md) for the
 ownership boundary.
 
 - Use [Meta-Cortex Gizmo Prime](../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md) directly.
-- Use [Meta-Cortex Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md) directly.
 - [Nook scope routing](docs/spec/upstream-role-routing.md) maps project requirements to upstream roles.
 - The active ignored `.meta-cortex/meta-cortex.toml` configures the host
   concurrency ceiling. Follow Meta-Cortex's
@@ -117,7 +116,7 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 
 ## Team worker contract
 
-Use upstream Prime, Team Gizmo, and specialist roles directly with Nook's
+Use upstream Prime and specialist roles directly with Nook's
 functional scopes and acceptance requirements. Supply the relevant ownership
 specifications to the feature's single coordinator. Another active task remains
 read-only without an explicit handoff. Add Nook-specific assignment details through the
@@ -141,8 +140,7 @@ The user's explicit intermediate stopping point takes precedence over full deliv
 Route live-agent GitHub PR operations, including read-only queries and wrapper
 calls, through upstream PR agent behavior with Nook's pull-request operations specification.
 Route workflow dispatch, reruns, logs, and pipeline repairs through upstream
-CI/CD with Nook's SRE context. Both require Prime's authorization and Team
-Gizmo's assignment.
+CI/CD with Nook's SRE context. Both require Prime's authorization and assignment.
 Repository-owned CI retains its existing execution contracts.
 Use the [operation handshake](teams/delivery-pipeline/docs/spec/authorization-handshake.md).
 An explicit user-directed direct task follows the integration contract instead.

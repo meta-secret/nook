@@ -7,6 +7,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+mod admission;
 mod authenticator;
 mod batch;
 mod ceremony;
@@ -77,11 +78,7 @@ impl AuthenticationPageObservationFacts {
 
     #[must_use]
     pub fn form_priority(self) -> AuthenticationFormObservationPriority {
-        if self.is_bounded() && self.has_progression() {
-            AuthenticationPageObservation::from(self).form_priority()
-        } else {
-            AuthenticationPageObservation::default().form_priority()
-        }
+        self.into_workflow_observation().form_priority()
     }
 
     fn has_progression(&self) -> bool {
@@ -900,7 +897,7 @@ pub mod tests {
     }
 
     #[test]
-    fn otp_auto_submit_survives_only_when_a_rust_recognized_handler_is_kept() {
+    fn otp_fill_does_not_turn_unrecognized_handlers_into_auto_submit_evidence() {
         let invalid = "oninput=validate_requestSubmit()".to_owned();
         let mut signals = vec![invalid; crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize];
         let invalid_only = AuthenticationPageObservationFacts {
@@ -921,12 +918,19 @@ pub mod tests {
             ..Default::default()
         };
         assert_eq!(
+            invalid_only
+                .ceremony
+                .derived_one_time_code_progression(invalid_only.fields),
+            crate::AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
+        );
+        assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![invalid_only],
             }
             .classify(),
-            AuthenticationWorkflowMatch::NoMatch
-        );
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.action == crate::AuthenticationWorkflowAction::FillTotp
+        ));
 
         let Some(last_signal) = signals.last_mut() else {
             panic!("handler signal fixture must not be empty");

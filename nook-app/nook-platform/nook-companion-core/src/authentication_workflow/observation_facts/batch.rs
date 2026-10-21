@@ -1,7 +1,5 @@
 use super::AuthenticationPageObservationFacts;
-use crate::{
-    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowMatch,
-};
+use crate::{AuthenticationPageObservations, AuthenticationWorkflowMatch};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -36,13 +34,7 @@ impl AuthenticationPageObservationFactsBatch {
                 .observations
                 .iter()
                 .cloned()
-                .map(|observation| {
-                    if observation.has_progression() {
-                        AuthenticationPageObservation::from(observation)
-                    } else {
-                        AuthenticationPageObservation::default()
-                    }
-                })
+                .map(AuthenticationPageObservationFacts::into_workflow_observation)
                 .collect(),
         };
         AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
