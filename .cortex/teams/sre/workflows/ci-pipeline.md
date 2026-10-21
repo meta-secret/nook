@@ -352,7 +352,14 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   local workflows.
 - Their Docker-backed task selectors are not exposed through ARC until a direct
   ordinary-Pod implementation exists.
-- Complete trusted PR, Main, manual, agent, and release graphs run on ARC.
+- Trusted Linux build and validation jobs run on ARC. Hosted exceptions are
+  `ci.yml#scope` metadata admission and `web-research.yml#validate-untrusted`
+  fork/Dependabot validation on `ubuntu-latest`, plus the manual Windows lane's
+  `e2e-windows.yml#source` metadata admission on `ubuntu-latest` and
+  `e2e-windows.yml#edge` native Edge execution on `windows-latest`.
+- The Windows lane's Linux artifact producer remains on ARC. Its hosted source
+  job resolves the authorized ref, checks it out, and records the Git SHA;
+  it does not execute selected-source scripts or Task commands.
 
 **BuildKit cache propagation:**
 
