@@ -34,10 +34,21 @@ export class PasskeyVaultDiscovery {
     await expect(
       this.page.getByTestId('vault-site-group').filter(siteGroup),
     ).toContainText('localhost')
-    await passkeyGroup.getByTestId('secret-row-toggle').click()
-    await expect(passkeyGroup).toContainText('alice@example.com')
-    await expect(passkeyGroup.getByTestId('reveal-secret-btn')).toHaveCount(0)
-    await expect(passkeyGroup.getByTestId('edit-secret-btn')).toHaveCount(0)
-    await expect(passkeyGroup.getByTestId('delete-secret-btn')).toBeVisible()
+    const toggle = passkeyGroup.getByTestId('secret-row-toggle')
+    // The extension's passkey sync can re-render the reopened vault list,
+    // which closes an open row; open it again until its details show.
+    await expect(async () => {
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+        await toggle.click()
+      }
+      await expect(passkeyGroup).toContainText('alice@example.com', {
+        timeout: 2_000,
+      })
+      await expect(passkeyGroup.getByTestId('reveal-secret-btn')).toHaveCount(0)
+      await expect(passkeyGroup.getByTestId('edit-secret-btn')).toHaveCount(0)
+      await expect(passkeyGroup.getByTestId('delete-secret-btn')).toBeVisible({
+        timeout: 2_000,
+      })
+    }).toPass()
   }
 }
