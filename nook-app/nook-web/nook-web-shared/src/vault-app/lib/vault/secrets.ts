@@ -14,13 +14,29 @@ import type { VaultState } from "$lib/vault.svelte";
 import type {
   AuthenticatorCodeView,
   NookImportResult,
+  PasskeyDetailsView,
   NookSecretRecord,
+  SecretHistoryView,
   SecretType,
 } from "$lib/nook";
-import { generate_secret_id } from "$lib/nook";
+import {
+  generate_secret_id,
+  PasskeyNameKind,
+  SecretOriginDeviceKind,
+  SecretRevisionKind,
+  type PasskeyNameView,
+  type SecretOriginDeviceView,
+  type SecretRevisionView,
+} from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
-import { VaultEditDecision } from "$app-wasm";
+import {
+  NookPasskeyNameState,
+  NookSecretOriginDeviceState,
+  NookSecretRevisionState,
+  VaultEditDecision,
+  type NookSecretHistory,
+} from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
 import type {
   PasswordEntriesRefreshSnapshot,
@@ -137,6 +153,20 @@ interface SecretDecryption {
 
 interface AuthenticatorCodeRequest {
   readonly id: string;
+}
+
+export interface PasskeyDetailsRequest {
+  readonly id: string;
+}
+
+export interface SecretHistoryRequest {
+  readonly id: string;
+}
+
+/** One optional passkey name as the wasm wrapper reports it. */
+interface PasskeyNameProjection {
+  readonly state: NookPasskeyNameState;
+  readonly text: string;
 }
 
 /** Owns browser orchestration for one secrets context. */
@@ -814,6 +844,121 @@ export class VaultSecretActions {
       return storageOk(codeView);
     } finally {
       result.value.free();
+    }
+  }
+
+  async passkeyDetails({
+    id,
+  }: PasskeyDetailsRequest): Promise<
+    Result<PasskeyDetailsView, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const result = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(admittedManager.value.passkey_details_js(id));
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (result.isErr()) return storageErr(result.error);
+    try {
+      const relyingPartyName: PasskeyNameProjection = {
+        state: result.value.relyingPartyNameState,
+        text: result.value.relyingPartyName,
+      };
+      const userName: PasskeyNameProjection = {
+        state: result.value.userNameState,
+        text: result.value.userName,
+      };
+      const details: PasskeyDetailsView = {
+        credentialId: result.value.credentialId,
+        relyingPartyName: VaultSecretActions.passkeyName(relyingPartyName),
+        userName: VaultSecretActions.passkeyName(userName),
+        algorithmLabelKey: result.value.algorithmLabelKey,
+        publicKeyFingerprint: result.value.publicKeyFingerprint,
+        signatureCount: result.value.signatureCount,
+        discoverableLabelKey: result.value.discoverableLabelKey,
+        backupStatusLabelKey: result.value.backupStatusLabelKey,
+      };
+      return storageOk(details);
+    } finally {
+      result.value.free();
+    }
+  }
+
+  async secretHistory({
+    id,
+  }: SecretHistoryRequest): Promise<
+    Result<SecretHistoryView, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const result = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(await admittedManager.value.secret_history_js(id));
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (result.isErr()) return storageErr(result.error);
+    try {
+      const history: SecretHistoryView = {
+        originLabelKey: result.value.originLabelKey,
+        originAt: result.value.originAt,
+        originDevice: VaultSecretActions.originDevice(result.value),
+        revision: VaultSecretActions.revision(result.value),
+      };
+      return storageOk(history);
+    } finally {
+      result.value.free();
+    }
+  }
+
+  private static passkeyName({
+    state,
+    text,
+  }: PasskeyNameProjection): PasskeyNameView {
+    switch (state) {
+      case NookPasskeyNameState.Repeated:
+        return { kind: PasskeyNameKind.Repeated };
+      case NookPasskeyNameState.Distinct:
+        return { kind: PasskeyNameKind.Distinct, text };
+    }
+  }
+
+  private static originDevice(
+    history: NookSecretHistory,
+  ): SecretOriginDeviceView {
+    switch (history.originDeviceState) {
+      case NookSecretOriginDeviceState.NotApplicable:
+        return { kind: SecretOriginDeviceKind.NotApplicable };
+      case NookSecretOriginDeviceState.Recorded:
+        return {
+          kind: SecretOriginDeviceKind.Recorded,
+          device: {
+            labelKey: history.originDeviceLabelKey,
+            value: history.originDeviceValue,
+          },
+        };
+    }
+  }
+
+  private static revision(history: NookSecretHistory): SecretRevisionView {
+    switch (history.revisionState) {
+      case NookSecretRevisionState.Original:
+        return { kind: SecretRevisionKind.Original };
+      case NookSecretRevisionState.Revised:
+        return {
+          kind: SecretRevisionKind.Revised,
+          at: history.modifiedAt,
+          device: {
+            labelKey: history.modifiedDeviceLabelKey,
+            value: history.modifiedDeviceValue,
+          },
+        };
     }
   }
 }

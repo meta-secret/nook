@@ -42,6 +42,7 @@ impl AuthenticationDetailedAdvanceControlObservation {
                         AuthenticationAdvanceControlDecision::AdvancesAuthentication
                     )
                     || observation.is_inert_webauthn_email_planning_advance()
+                    || observation.is_inert_password_login_planning_advance()
                     || observation.allows_tesla_password_disclosure_planning())
         ));
         if advances {
@@ -402,6 +403,60 @@ mod tests {
                 control_machine_identity: String::new(),
             }
         }
+    }
+
+    /// Stripe's login: an in-form `type="button"` "Sign in" that stays
+    /// `aria-disabled` until the email and password are typed.
+    fn stripe_sign_in(
+        actionability: PageControlActionability,
+    ) -> AuthenticationAdvanceControlObservation {
+        AuthenticationAdvanceControlObservation {
+            actionability,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::Activation,
+            authentication_username: AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 1.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 0.into(),
+            source_origin: "https://dashboard.stripe.com".to_owned(),
+            form_identity: String::new(),
+            destination_identity: "https://dashboard.stripe.com/login".to_owned(),
+            label: "Sign in".to_owned(),
+            machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+        }
+    }
+
+    #[test]
+    fn in_form_sign_in_button_advances_a_password_login() {
+        let fields = AuthenticationFieldObservationFacts {
+            username_field_count: 1.into(),
+            current_password_field_count: 1.into(),
+            actionable_password_field_count: 1.into(),
+            ..Default::default()
+        };
+        let enabled = stripe_sign_in(PageControlActionability::Actionable);
+        assert!(enabled.authentication_advance_control_is_safe());
+
+        // While disabled it plans the login but never authorizes actuation.
+        let disabled = stripe_sign_in(PageControlActionability::Inert);
+        assert!(!disabled.authentication_advance_control_is_safe());
+        assert!(disabled.is_inert_password_login_planning_advance());
+        for control in [enabled, disabled] {
+            assert!(matches!(
+                AuthenticationDetailedAdvanceControlObservation::observed(control).evidence(fields),
+                AuthenticationAdvanceControlEvidence::Present
+            ));
+        }
+
+        let mut other_page = stripe_sign_in(PageControlActionability::Actionable);
+        other_page.destination_identity = "https://dashboard.stripe.com/settings".to_owned();
+        assert!(!other_page.authentication_advance_control_is_safe());
+        let mut other_label = stripe_sign_in(PageControlActionability::Inert);
+        other_label.label = "Passkey".to_owned();
+        assert!(!other_label.is_inert_password_login_planning_advance());
     }
 
     #[test]

@@ -1,5 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import {
+  passkeyCardMessages,
+  type PasskeyLocaleMessages,
+} from './chrome-locale-passkey-card'
 
 type ExtensionChromeLocaleBuildRequest = {
   appCommonLocalesRoot: string
@@ -94,6 +98,7 @@ type NookLocaleCatalogShape = {
       continue: string
       working: string
       unlock_then_continue: string
+      unlock: string
       no_match: string
       choose_account: string
       saved_login: string
@@ -120,9 +125,10 @@ type NookLocaleCatalogShape = {
       add_from_page: string
       save_backup_codes: string
       enroll_working: string
-      enroll_unsupported: string
       enroll_no_qr: string
       enroll_ambiguous: string
+      enroll_candidate_qr: string
+      enroll_candidate_setup_key: string
       enroll_preview: string
       enroll_confirm: string
       enroll_cancel: string
@@ -152,29 +158,7 @@ type NookLocaleCatalogShape = {
       backup_mode_replace: string
       backup_mode_merge: string
     }
-    passkey: {
-      prompt_label: string
-      label: string
-      close: string
-      save_title: string
-      use_title: string
-      account_label: string
-      save_to_label: string
-      choose_account: string
-      save_action: string
-      saving: string
-      signing_in: string
-      saved_title: string
-      saved_detail: string
-      save_failed: string
-      use_failed: string
-      no_match: string
-      locked: string
-      no_vault: string
-      check_failed: string
-      use_another: string
-      use_browser: string
-    }
+    passkey: PasskeyLocaleMessages
   }
 }
 
@@ -673,6 +657,9 @@ export async function buildChromeLocales({
             locale,
           ),
         },
+        widgetUnlock: {
+          message: catalog.extension.widget.message('unlock', locale),
+        },
         widgetNoMatch: {
           message: catalog.extension.widget.message('no_match', locale),
         },
@@ -802,17 +789,23 @@ export async function buildChromeLocales({
         widgetEnrollWorking: {
           message: catalog.extension.widget.message('enroll_working', locale),
         },
-        widgetEnrollUnsupported: {
-          message: catalog.extension.widget.message(
-            'enroll_unsupported',
-            locale,
-          ),
-        },
         widgetEnrollNoQr: {
           message: catalog.extension.widget.message('enroll_no_qr', locale),
         },
         widgetEnrollAmbiguous: {
           message: catalog.extension.widget.message('enroll_ambiguous', locale),
+        },
+        widgetEnrollCandidateQr: {
+          message: catalog.extension.widget.message(
+            'enroll_candidate_qr',
+            locale,
+          ),
+        },
+        widgetEnrollCandidateSetupKey: {
+          message: catalog.extension.widget.message(
+            'enroll_candidate_setup_key',
+            locale,
+          ),
         },
         widgetEnrollPreview: {
           message: catalog.extension.widget.message('enroll_preview', locale),
@@ -916,69 +909,7 @@ export async function buildChromeLocales({
             locale,
           ),
         },
-        passkeyPromptLabel: {
-          message: catalog.extension.passkey.message('prompt_label', locale),
-        },
-        passkeyLabel: {
-          message: catalog.extension.passkey.message('label', locale),
-        },
-        passkeyClose: {
-          message: catalog.extension.passkey.message('close', locale),
-        },
-        passkeySaveTitle: {
-          message: catalog.extension.passkey.message('save_title', locale),
-        },
-        passkeyUseTitle: {
-          message: catalog.extension.passkey.message('use_title', locale),
-        },
-        passkeyAccountLabel: {
-          message: catalog.extension.passkey.message('account_label', locale),
-        },
-        passkeySaveToLabel: {
-          message: catalog.extension.passkey.message('save_to_label', locale),
-        },
-        passkeyChooseAccount: {
-          message: catalog.extension.passkey.message('choose_account', locale),
-        },
-        passkeySaveAction: {
-          message: catalog.extension.passkey.message('save_action', locale),
-        },
-        passkeySaving: {
-          message: catalog.extension.passkey.message('saving', locale),
-        },
-        passkeySigningIn: {
-          message: catalog.extension.passkey.message('signing_in', locale),
-        },
-        passkeySavedTitle: {
-          message: catalog.extension.passkey.message('saved_title', locale),
-        },
-        passkeySavedDetail: {
-          message: catalog.extension.passkey.message('saved_detail', locale),
-        },
-        passkeySaveFailed: {
-          message: catalog.extension.passkey.message('save_failed', locale),
-        },
-        passkeyUseFailed: {
-          message: catalog.extension.passkey.message('use_failed', locale),
-        },
-        passkeyNoMatch: {
-          message: catalog.extension.passkey.message('no_match', locale),
-        },
-        passkeyLocked: {
-          message: catalog.extension.passkey.message('locked', locale),
-        },
-        passkeyNoVault: {
-          message: catalog.extension.passkey.message('no_vault', locale),
-        },
-        passkeyCheckFailed: {
-          message: catalog.extension.passkey.message('check_failed', locale),
-        },
-        passkeyUseAnother: {
-          message: catalog.extension.passkey.message('use_another', locale),
-        },
-        passkeyUseBrowser: {
-          message: catalog.extension.passkey.message('use_browser', locale),
-        },
+        ...passkeyCardMessages(catalog.extension.passkey, locale),
       }
       const localeDir = join(distDir, '_locales', locale)
       await mkdir(localeDir, { recursive: true })

@@ -8,9 +8,8 @@ import {
   readExtensionStorage,
   setupPasskeyExtensionPopup,
   simpleVaultBaseUrl,
-  waitForNewPage,
+  reuseNookTabForConnect,
 } from './helpers/extension-smoke-runtime'
-import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   authorizeDeviceProtection,
   connectGithubSyncProviderFromSettings,
@@ -48,7 +47,8 @@ test('an identity join that cannot reach the provider is reported, and the appro
   const context = await chromium.launchPersistentContext(
     testInfo.outputPath('chromium-profile-identity-membership'),
     {
-      headless: false,
+      channel: 'chromium',
+      headless: true,
       ...(chromiumExecutablePath
         ? { executablePath: chromiumExecutablePath }
         : {}),
@@ -92,13 +92,13 @@ test('an identity join that cannot reach the provider is reported, and the appro
     await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    const [connectPage] = await Promise.all([
-      waitForNewPage(context, 'identity connection page'),
-      pairPopup.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(connectPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
-    )
+    // The auth tab shares the vault tab's window, so Connect reuses that
+    // Nook tab on the connect route instead of opening another.
+    const connectPage = await reuseNookTabForConnect({
+      context,
+      nookPage: vaultPage,
+      connect: () => pairPopup.getByTestId('connect-simple-vault-btn').click(),
+    })
     const consent = connectPage.getByTestId('extension-connect-consent')
     const unlockStep = connectPage.getByTestId('identity-vault-row').first()
     await expect(consent.or(unlockStep)).toBeVisible({

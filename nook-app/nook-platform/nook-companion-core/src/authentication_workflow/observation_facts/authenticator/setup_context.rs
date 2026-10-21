@@ -46,12 +46,9 @@ impl AuthenticationAuthenticatorSetupObservation {
     pub fn classify_authentication_authenticator_setup_observation(
         evidence: &AuthenticationAuthenticatorSetupEvidence,
     ) -> Self {
-        match evidence.qr_media {
-            AuthenticationQrMediaObservation::Absent => Self::Absent,
-            AuthenticationQrMediaObservation::Present => {
-                evidence.visible_context_copy.classify_setup_instructions()
-            }
-        }
+        evidence
+            .visible_context_copy
+            .classify_setup_instructions(evidence.qr_media)
     }
 }
 
@@ -63,20 +60,26 @@ enum AuthenticatorReference {
     Mentioned,
     NotMentioned,
 }
+/// Scan-QR copy needs visible media; setup-key copy also admits a manual-key-only view.
 enum EnrollmentInstruction {
-    Recognized,
+    ScanQr,
+    EnterSetupKey,
     Unrecognized,
 }
 
 impl AuthenticationAuthenticatorSetupCopy {
-    fn classify_setup_instructions(&self) -> AuthenticationAuthenticatorSetupObservation {
+    fn classify_setup_instructions(
+        &self,
+        qr_media: AuthenticationQrMediaObservation,
+    ) -> AuthenticationAuthenticatorSetupObservation {
         let Self(value) = self;
         let normalized = Self(value.to_ascii_lowercase());
-        normalized.classify_normalized_setup_instructions()
+        normalized.classify_normalized_setup_instructions(qr_media)
     }
 
     fn classify_normalized_setup_instructions(
         &self,
+        qr_media: AuthenticationQrMediaObservation,
     ) -> AuthenticationAuthenticatorSetupObservation {
         let Self(value) = self;
         let text = crate::AuthenticationControlText::new(value);
@@ -91,9 +94,17 @@ impl AuthenticationAuthenticatorSetupCopy {
             AuthenticatorReference::Mentioned => {}
         }
         match Self::recognize_enrollment_instruction(&text) {
-            EnrollmentInstruction::Recognized => {
+            EnrollmentInstruction::EnterSetupKey => {
                 AuthenticationAuthenticatorSetupObservation::Present
             }
+            EnrollmentInstruction::ScanQr => match qr_media {
+                AuthenticationQrMediaObservation::Present => {
+                    AuthenticationAuthenticatorSetupObservation::Present
+                }
+                AuthenticationQrMediaObservation::Absent => {
+                    AuthenticationAuthenticatorSetupObservation::Absent
+                }
+            },
             EnrollmentInstruction::Unrecognized => {
                 AuthenticationAuthenticatorSetupObservation::Absent
             }
@@ -143,14 +154,17 @@ impl AuthenticationAuthenticatorSetupCopy {
     fn recognize_enrollment_instruction(
         text: &crate::AuthenticationControlText<'_>,
     ) -> EnrollmentInstruction {
-        match (text.contains_word_phrase("scan")
-            && text.contains_word_phrase("qr")
-            && text.contains_any_word(&["with", "using", "in", "connect", "set up", "setup"]))
-            || (text.contains_word_phrase("enter")
-                && text.contains_any_word(&["setup key", "secret key", "manual key"]))
+        match text.contains_any_word(&["enter", "set up"])
+            && text.contains_any_word(&["setup key", "secret key", "manual key", "key manually"])
         {
-            true => EnrollmentInstruction::Recognized,
-            false => EnrollmentInstruction::Unrecognized,
+            true => EnrollmentInstruction::EnterSetupKey,
+            false => match text.contains_word_phrase("scan")
+                && text.contains_word_phrase("qr")
+                && text.contains_any_word(&["with", "using", "in", "connect", "set up", "setup"])
+            {
+                true => EnrollmentInstruction::ScanQr,
+                false => EnrollmentInstruction::Unrecognized,
+            },
         }
     }
 }
@@ -231,7 +245,6 @@ pub mod tests {
             "Set up two-factor authentication\nScan this QR code with your authenticator app",
             "Scan the QR code using Google Authenticator",
             "Connect your authenticator app\nScan QR code",
-            "Authenticator app\nEnter the setup key manually",
             "SCAN THIS QR CODE WITH YOUR AUTHENTICATOR APP",
             "Download an authenticator app, then scan this QR code with it",
         ] {
@@ -251,6 +264,139 @@ pub mod tests {
                 }
                 .classify()?,
                 AuthenticationAuthenticatorSetupObservation::Absent
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn setup_key_instructions_admit_manual_key_only_views()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "Enter this setup key in your authenticator app",
+            "Can't scan? Enter the setup key manually in Google Authenticator",
+            "Authenticator app\nEnter the setup key manually",
+            "Open your authenticator app and enter this secret key",
+        ] {
+            for media in [
+                AuthenticationQrMediaObservation::Absent,
+                AuthenticationQrMediaObservation::Present,
+            ] {
+                assert_eq!(
+                    SetupPage { copy, media }.classify()?,
+                    AuthenticationAuthenticatorSetupObservation::Present,
+                    "{copy}"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn setup_key_dialog_headings_admit_views_without_media()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "\nAuthenticator app\nEnter your setup key",
+            "\nAuthenticator app\nSet up with a setup key",
+            "\nEnter this key manually in your authenticator app",
+            "\nCan't scan the QR code? Enter the secret key in your authenticator app",
+            "\nSet up authenticator app\nEnter setup key manually",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Absent
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Present,
+                "{copy}"
+            );
+        }
+        for copy in [
+            "\nEnter your setup key",
+            "\nSet up with a setup key",
+            "\nSecure your account with an authenticator app\nLearn more",
+            "\nSign in with your authenticator app\nEnter this key manually",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Absent
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Absent,
+                "{copy}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn manual_key_only_views_keep_scan_marketing_and_sign_in_exclusions()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "Scan this QR code with your authenticator app",
+            "Protect your account with an authenticator app. Learn more",
+            "Sign in with your authenticator app\nEnter the setup key",
+            "Log in to enter the secret key in your authenticator app",
+            "Enter the setup key to pay with your authenticator app",
+            "Enter the setup key manually",
+            "Get the authenticator app. Scan to download, then enter the setup key",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Absent
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Absent,
+                "{copy}"
+            );
+        }
+        Ok(())
+    }
+
+    /// Content scripts prefix each visible heading and paragraph with `\n`.
+    pub const UPDATE_AUTHENTICATOR_DIALOG_COPY: &str = "\nUpdate authenticator app\nScan this QR code to set up your account using your preferred authenticator app. Popular choices include Google Authenticator, Microsoft Authenticator, and Authy.";
+
+    #[test]
+    fn update_authenticator_dialog_instructions_admit_inline_qr()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        assert_eq!(
+            SetupPage {
+                copy: UPDATE_AUTHENTICATOR_DIALOG_COPY,
+                media: AuthenticationQrMediaObservation::Present
+            }
+            .classify()?,
+            AuthenticationAuthenticatorSetupObservation::Present
+        );
+        assert_eq!(
+            SetupPage {
+                copy: UPDATE_AUTHENTICATOR_DIALOG_COPY,
+                media: AuthenticationQrMediaObservation::Absent
+            }
+            .classify()?,
+            AuthenticationAuthenticatorSetupObservation::Absent
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dialog_sign_in_download_and_payment_qr_copy_is_not_setup()
+    -> Result<(), AuthenticationAuthenticatorSetupCopyError> {
+        for copy in [
+            "\nSign in with your authenticator app\nScan this QR code using your preferred authenticator app",
+            "\nGet the authenticator app\nScan this QR code to download the authenticator app",
+            "\nPay with your authenticator app\nScan this QR code using your authenticator app to pay",
+        ] {
+            assert_eq!(
+                SetupPage {
+                    copy,
+                    media: AuthenticationQrMediaObservation::Present
+                }
+                .classify()?,
+                AuthenticationAuthenticatorSetupObservation::Absent,
+                "{copy}"
             );
         }
         Ok(())

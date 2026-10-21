@@ -19,7 +19,7 @@ import {
   openSimpleVaultConnection,
   readExtensionStorage,
   removeExtensionStorageKeys,
-  readPersistedAppLogs,
+  countIdentityAdoptions,
   registerWebsitePasskeyThroughExtension,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
@@ -29,6 +29,8 @@ import {
   leaveFirstRunReady,
   waitForExtensionPairingReady,
   waitForNewPage,
+  reuseNookTabForConnect,
+  reconnectVaultFromPairingLauncher,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
@@ -40,12 +42,12 @@ import {
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
 } from './helpers/paired-vault-companion-unlock'
-import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
+  flushNookLogPersistQueue,
 } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
@@ -296,15 +298,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
 
-    const [reconnectPage] = await Promise.all([
-      waitForNewPage(context, 'reopened Simple Vault connection page'),
-      pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(reconnectPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
-    )
-    await reconnectPage.close()
-    await pairingLauncher.close()
+    const reconnectRequest: Parameters<
+      typeof reconnectVaultFromPairingLauncher
+    >[0] = { context, simplePage, pairingLauncher }
+    await reconnectVaultFromPairingLauncher(reconnectRequest)
+    // Back to the vault: the paired, unlocked extension unlocks it again.
+    await simplePage.goto(simpleVaultBaseUrl)
 
     let websitePasskeyState: WebsitePasskeyState = {
       kind: WebsitePasskeyStateKind.NotCreated,
@@ -330,6 +329,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await leaveFirstRunReady(simplePage)
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    // Whether the reused tab's connect-route load adopts before the spec
+    // navigates it away is timing-dependent, so later counts are relative.
+    await flushNookLogPersistQueue(simplePage)
+    const adoptionsBeforeReopen = await countIdentityAdoptions({
+      page: simplePage,
+      label: 'read lifecycle logs before reopening the paired vault',
+    })
     await simplePage.close()
 
     const connectedPopupPage = await context.newPage()
@@ -378,20 +384,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
     // Reopening a paired vault completes the paired-vault handoff through the
     // strict Rust session payload. The stored grant above deliberately carries
-    // routing and display metadata that must not enter that payload.
+    // routing and display metadata that must not enter that payload. The
+    // reopened page adopts exactly once.
     await expect
-      .poll(async () => {
-        const entries = await withE2eDeadline(
-          readPersistedAppLogs(reopenedVaultPage),
-          'read lifecycle logs after reopening the paired vault',
-        )
-        return entries.filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted',
-        ).length
-      })
-      .toBe(2)
+      .poll(() =>
+        countIdentityAdoptions({
+          page: reopenedVaultPage,
+          label: 'read lifecycle logs after reopening the paired vault',
+        }),
+      )
+      .toBe(adoptionsBeforeReopen + 1)
 
     await test.step('present empty authenticator picker', async () => {
       await unlockExtensionThroughCompanion({ context, extensionId })
@@ -595,19 +597,15 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ),
       ).toBe(extensionDeviceId)
     }
+    // The companion unlock adopts exactly once more.
     await expect
-      .poll(async () => {
-        const entries = await withE2eDeadline(
-          readPersistedAppLogs(reopenedVaultPage),
-          'read lifecycle logs after unlocking the paired vault',
-        )
-        return entries.filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted',
-        ).length
-      })
-      .toBe(3)
+      .poll(() =>
+        countIdentityAdoptions({
+          page: reopenedVaultPage,
+          label: 'read lifecycle logs after unlocking the paired vault',
+        }),
+      )
+      .toBe(adoptionsBeforeReopen + 2)
     if (
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
@@ -668,7 +666,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const restartedContext = await chromium.launchPersistentContext(
       userDataDir,
       {
-        headless: false,
+        channel: 'chromium',
+        headless: true,
         ...(chromiumExecutablePath
           ? { executablePath: chromiumExecutablePath }
           : {}),
@@ -808,13 +807,13 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    const [connectPage] = await Promise.all([
-      waitForNewPage(context, 'existing-vault connection page'),
-      pairPopup.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(connectPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
-    )
+    // The auth tab shares the vault tab's window, so Connect reuses that
+    // Nook tab on the connect route instead of opening another.
+    const connectPage = await reuseNookTabForConnect({
+      context,
+      nookPage: simplePage,
+      connect: () => pairPopup.getByTestId('connect-simple-vault-btn').click(),
+    })
 
     const consent = connectPage.getByTestId('extension-connect-consent')
     const unlockStep = connectPage.getByTestId('identity-vault-row').first()
@@ -884,13 +883,12 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(
       repairPopup.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    const [reconnectPage] = await Promise.all([
-      waitForNewPage(context, 'repaired-vault connection page'),
-      repairPopup.getByTestId('connect-simple-vault-btn').click(),
-    ])
-    await expect(reconnectPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
-    )
+    const reconnectPage = await reuseNookTabForConnect({
+      context,
+      nookPage: simplePage,
+      connect: () =>
+        repairPopup.getByTestId('connect-simple-vault-btn').click(),
+    })
 
     const reconnectConsent = reconnectPage.getByTestId(
       'extension-connect-consent',

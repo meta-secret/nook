@@ -15,19 +15,15 @@ import {
   IdentitySyncKind,
   PopupInitializationPhase,
 } from '../src/popup/popup-app-state'
-import { SidePanelNookTabIntent } from '../src/side-panel/side-panel-runtime'
 import {
-  SidePanelAlertKind,
   SidePanelCeremonyKind,
   SidePanelChipKind,
   SidePanelChipState,
   SidePanelContinuity,
   SidePanelGateIcon,
-  SidePanelHandOffKind,
-  SidePanelHandOffTrigger,
-  SidePanelHandOffs,
   SidePanelIdentityRelation,
   SidePanelLockReasonKind,
+  SidePanelPageKind,
   SidePanelReadFreshness,
   SidePanelReadSequence,
   SidePanelSessionControls,
@@ -189,17 +185,63 @@ describe('side panel views', () => {
         SidePanelSessionControls.Hidden,
       )
     }
-    // The footer waits for the vault list to answer.
-    expect(SidePanelViews.footer(unlockedView())).toBe(
+    // All connections waits for connected identities to list.
+    const site = SidePanelPageKind.Site
+    expect(SidePanelViews.footer({ view: unlockedView(), page: site })).toBe(
       SidePanelSessionControls.Hidden,
     )
-    const paired: SidePanelView = {
+    const none: SidePanelView = {
       kind: SidePanelViewKind.Unlocked,
       device: activeDevice,
       vaults: { kind: SidePanelVaultsKind.NoVault },
       identitySync: { kind: IdentitySyncKind.Idle },
     }
-    expect(SidePanelViews.footer(paired)).toBe(SidePanelSessionControls.Shown)
+    expect(SidePanelViews.footer({ view: none, page: site })).toBe(
+      SidePanelSessionControls.Hidden,
+    )
+    const paired: SidePanelView = {
+      ...none,
+      vaults: { kind: SidePanelVaultsKind.Paired, groups: [] },
+    }
+    expect(SidePanelViews.footer({ view: paired, page: site })).toBe(
+      SidePanelSessionControls.Shown,
+    )
+    // All connections has its own Back, so the footer leaves.
+    expect(
+      SidePanelViews.footer({
+        view: paired,
+        page: SidePanelPageKind.Connections,
+      }),
+    ).toBe(SidePanelSessionControls.Hidden)
+  })
+
+  test('All connections shows only while connected identities are listed', () => {
+    const connections = SidePanelPageKind.Connections
+    const paired: SidePanelView = {
+      kind: SidePanelViewKind.Unlocked,
+      device: activeDevice,
+      vaults: { kind: SidePanelVaultsKind.Paired, groups: [] },
+      identitySync: { kind: IdentitySyncKind.Idle },
+    }
+    expect(SidePanelViews.page({ view: paired, page: connections })).toBe(
+      connections,
+    )
+    expect(
+      SidePanelViews.page({ view: paired, page: SidePanelPageKind.Site }),
+    ).toBe(SidePanelPageKind.Site)
+    // A reload that loses the list, or a lock, falls back to This site.
+    for (const view of [
+      { ...paired, vaults: { kind: SidePanelVaultsKind.Loading } },
+      { ...paired, vaults: { kind: SidePanelVaultsKind.Failed } },
+      {
+        kind: SidePanelViewKind.PinLocked,
+        reason: SidePanelLockReasonKind.None,
+      },
+    ] as const satisfies readonly SidePanelView[]) {
+      expect(SidePanelViews.page({ view, page: connections })).toBe(
+        SidePanelPageKind.Site,
+      )
+    }
   })
 })
 
@@ -394,34 +436,6 @@ describe('side panel vaults', () => {
     for (const { request, relation } of cases) {
       expect(SidePanelViews.sectionRelation(request)).toBe(relation)
     }
-  })
-})
-
-describe('side panel hand-offs to the Nook tab', () => {
-  test('connecting pairs in the Nook tab and says to continue there', () => {
-    const trigger = SidePanelHandOffTrigger.ConnectIdentity
-    expect(SidePanelHandOffs.intent(trigger)).toBe(SidePanelNookTabIntent.Pair)
-    expect(SidePanelHandOffs.opened(trigger)).toEqual({
-      kind: SidePanelHandOffKind.Continued,
-      trigger,
-    })
-    expect(SidePanelHandOffs.openFailedAlert(trigger)).toEqual({
-      kind: SidePanelAlertKind.None,
-    })
-  })
-
-  test('all connections opens the Nook tab and reports a failure on the page', () => {
-    const trigger = SidePanelHandOffTrigger.Manage
-    expect(SidePanelHandOffs.intent(trigger)).toBe(
-      SidePanelNookTabIntent.Manage,
-    )
-    expect(SidePanelHandOffs.opened(trigger)).toEqual({
-      kind: SidePanelHandOffKind.Idle,
-    })
-    expect(SidePanelHandOffs.openFailedAlert(trigger)).toEqual({
-      kind: SidePanelAlertKind.Shown,
-      key: I18N_KEYS.ExtensionActionOpenFailed,
-    })
   })
 })
 

@@ -48,11 +48,31 @@ describe('enrollment message guards', () => {
               vaultStoreId: 'store-1',
               otpauthUri:
                 'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+              reviewedIssuer: 'Example',
+              reviewedAccount: 'alice',
             },
           }),
         ),
       )._tag,
     ).toBe('Success')
+
+    // A stage request without the reviewed labels is a mixed-version
+    // payload; it fails closed rather than saving unreviewed labels.
+    expect(
+      Effect.runSync(
+        Effect.result(
+          WebsiteAuthenticatorEnrollStageMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-stage',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              otpauthUri:
+                'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Failure')
 
     expect(
       Effect.runSync(

@@ -19,7 +19,6 @@ export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'data-auto-submit',
   'data-autosubmit',
   'data-nook-manual-checkpoint',
-  'data-nook-otpauth-uri',
   'data-nook-passkey-control',
   'data-submit-on-input',
   'data-testid',
@@ -91,7 +90,6 @@ const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
   'svg',
   '[role="button"]',
   '[data-nook-manual-checkpoint]',
-  '[data-nook-otpauth-uri]',
   '[data-nook-passkey-control]',
 ].join(',')
 

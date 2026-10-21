@@ -18,10 +18,15 @@ pub use secret_presentation::{
     WebsiteHostError,
 };
 mod focused_login_fill;
+mod passkey_details;
 mod secret_record_presentation;
 pub use focused_login_fill::{
     CredentialKind, FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
     FocusedLoginFillProjection,
+};
+pub use passkey_details::{
+    PasskeyBackupStatus, PasskeyDetails, PasskeyDiscoverability, PasskeyKeyAlgorithm,
+    PasskeyPublicKeyFingerprint,
 };
 
 /// Number of words exposed by a seed-phrase list projection.

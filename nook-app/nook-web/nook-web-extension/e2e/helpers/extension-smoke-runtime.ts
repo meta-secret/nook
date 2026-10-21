@@ -83,6 +83,22 @@ export async function withE2eDeadline<Result>(
   })
 }
 
+/** Count the persisted vault-lifecycle extension identity adoptions. */
+export async function countIdentityAdoptions(read: {
+  page: Page
+  label: string
+}): Promise<number> {
+  const entries = await withE2eDeadline(
+    readPersistedAppLogs(read.page),
+    read.label,
+  )
+  return entries.filter(
+    (entry) =>
+      entry.scope === 'vault-lifecycle' &&
+      entry.message === 'extension identity adopted',
+  ).length
+}
+
 function pageAddress(page: Page): string {
   try {
     const url = new URL(page.url())
@@ -656,7 +672,9 @@ export async function getServiceWorker(context: BrowserContext) {
 export async function launchExtensionContext(userDataDir: string) {
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    channel: 'chromium',
+    // Automated contexts do not compete for desktop focus; demos remain headed.
+    headless: process.env.NOOK_UI_DEMO !== '1',
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }
       : {}),
@@ -695,6 +713,123 @@ export async function openSimpleVaultConnection(
     belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
   )
   return simplePage
+}
+
+type NookTabConnectReuse = {
+  readonly context: BrowserContext
+  /** The Simple Vault tab already open in the requesting page's window. */
+  readonly nookPage: Page
+  /** The click that starts the connect, as Connect in the auth tab. */
+  readonly connect: () => Promise<void>
+}
+
+/**
+ * Connecting from an extension page whose window already shows a Simple
+ * Vault tab reuses that tab: the service worker navigates it to the connect
+ * route, and no page opens. Pages Playwright opens share one window, so an
+ * auth tab opened with context.newPage() connects through the Nook tab
+ * already there.
+ */
+export async function reuseNookTabForConnect(
+  request: NookTabConnectReuse,
+): Promise<Page> {
+  const { context, nookPage, connect } = request
+  const opened: Page[] = []
+  const recordOpened = (page: Page) => {
+    opened.push(page)
+  }
+  context.on('page', recordOpened)
+  try {
+    await connect()
+    await expect(nookPage).toHaveURL(
+      (url) =>
+        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+        url.pathname.endsWith('/extension-connect'),
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
+  } finally {
+    context.off('page', recordOpened)
+  }
+  expect(opened.map((page) => page.url())).toEqual([])
+  return nookPage
+}
+
+type PairingLauncherReconnect = {
+  readonly context: BrowserContext
+  readonly simplePage: Page
+  readonly pairingLauncher: Page
+}
+
+/** Reconnect through the existing Nook tab and await the launcher's own close. */
+export async function reconnectVaultFromPairingLauncher(
+  request: PairingLauncherReconnect,
+): Promise<void> {
+  const { context, simplePage, pairingLauncher } = request
+  // The launcher opened in the Nook tab's window, so connecting reuses
+  // that one Nook tab on the connect route instead of opening another.
+  const pagesBeforeReconnect = context
+    .pages()
+    .filter((page) => page !== pairingLauncher)
+  const previousConnectId = new URL(simplePage.url()).searchParams.get(
+    'connect_id',
+  )
+  await Promise.all([
+    // Closing the launcher only acknowledges tabs.update. The old connect
+    // document can still be loaded until the new navigation commits.
+    simplePage.waitForURL(
+      (url) => {
+        const connectId = url.searchParams.get('connect_id')
+        return (
+          belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+          url.pathname.endsWith('/extension-connect') &&
+          typeof connectId === 'string' &&
+          connectId.length > 0 &&
+          connectId !== previousConnectId
+        )
+      },
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS, waitUntil: 'load' },
+    ),
+    pairingLauncher.waitForEvent('close', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    }),
+    pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
+  ])
+  await expect(simplePage).toHaveURL(
+    (url) =>
+      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+      url.pathname.endsWith('/extension-connect'),
+    { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+  )
+  // The successful pairing reply closes its launcher. Every other page is
+  // retained, and connecting must not create a replacement Nook tab.
+  expect(context.pages()).toHaveLength(pagesBeforeReconnect.length)
+  expect(context.pages()).toEqual(expect.arrayContaining(pagesBeforeReconnect))
+}
+
+type AuthTabWindowRequest = {
+  readonly context: BrowserContext
+  readonly extensionId: string
+}
+
+/**
+ * Opens the pairing auth tab in a normal window of its own. That window
+ * holds no Simple Vault tab, so its Connect opens a new connect tab there
+ * and leaves the Nook tabs of other windows as they are.
+ */
+export async function openPairingAuthTabInOwnWindow(
+  request: AuthTabWindowRequest,
+): Promise<Page> {
+  const { context, extensionId } = request
+  const worker = await getServiceWorker(context)
+  const url = `chrome-extension://${extensionId}/popup/index.html?intent=pair`
+  const [authTab] = await Promise.all([
+    waitForNewPage(context, 'pairing auth tab window'),
+    worker.evaluate(async (target) => {
+      await chrome.windows.create({ url: target, type: 'normal' })
+    }, url),
+  ])
+  await expect(authTab).toHaveURL(url)
+  return authTab
 }
 
 export async function readExtensionStorage(context: BrowserContext) {

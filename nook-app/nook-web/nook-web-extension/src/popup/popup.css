@@ -623,7 +623,7 @@ button:disabled {
   background: var(--secondary);
 }
 
-/* "No passkey yet? Create one": the other way in, as one quiet line. */
+/* "Already have one? Use it": the other way in, as one quiet line. */
 .alternative-line {
   margin: 0;
   color: var(--muted-foreground);
@@ -646,6 +646,27 @@ button:disabled {
 .link-button:hover:not(:disabled) {
   background: transparent;
   text-decoration-color: var(--foreground);
+}
+
+/* The saved-passkey picker. It is a field only because the browser anchors
+ * its passkey list to one; it reads and behaves as a choice, not a search. */
+.passkey-picker {
+  position: relative;
+}
+
+.passkey-picker input {
+  padding-right: 36px;
+  cursor: pointer;
+  caret-color: transparent;
+}
+
+.passkey-picker svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .setup-options {

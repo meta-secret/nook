@@ -447,8 +447,12 @@ test.describe('Browser 2FA enrollment', () => {
           name: /Review this authenticator before continuing/,
         }),
       ).toBeVisible({ timeout: 20_000 })
-      await expect(widget.getByText(/Service:/)).toBeVisible()
-      await expect(widget.getByText(/Account:/)).toBeVisible()
+      await expect(
+        widget.getByRole('textbox', { name: 'Service' }),
+      ).toHaveValue('Mock Auth')
+      await expect(
+        widget.getByRole('textbox', { name: 'Account' }),
+      ).toHaveValue('alice-2fa@nook.test')
       await expect(widget.getByText(mockAuth.origin)).toBeVisible()
       await expect(widget.getByText(/JBSWY3DPEHPK3PXP/)).toHaveCount(0)
 

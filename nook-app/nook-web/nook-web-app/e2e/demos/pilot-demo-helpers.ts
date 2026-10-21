@@ -44,6 +44,22 @@ export async function injectPilotAutofill(page: Page): Promise<void> {
   await page.route('**/content/nook_companion_wasm_bg.wasm', async (route) =>
     route.fulfill(companionWasmResponse),
   )
+  // 2FA enrollment demos decode QR pictures with the offscreen document's
+  // ZXing reader and resolve candidates with the vault WASM, as shipped.
+  const vaultWasmResponse: Parameters<Route['fulfill']>[0] = {
+    path: path.join(extensionDist, 'background/nook_wasm_bg.wasm'),
+    contentType: 'application/wasm',
+  }
+  await page.route('**/background/nook_wasm_bg.wasm', async (route) =>
+    route.fulfill(vaultWasmResponse),
+  )
+  const zxingReaderWasmResponse: Parameters<Route['fulfill']>[0] = {
+    path: path.join(extensionDist, 'offscreen/zxing_reader.wasm'),
+    contentType: 'application/wasm',
+  }
+  await page.route('**/offscreen/zxing_reader.wasm', async (route) =>
+    route.fulfill(zxingReaderWasmResponse),
+  )
   await page.addScriptTag({
     content: await Effect.runPromise(
       Effect.try(() =>

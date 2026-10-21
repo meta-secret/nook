@@ -549,9 +549,10 @@ pub mod tests {
         linkedin.semantic_submit_control_count = 0.into();
         assert!(linkedin.authentication_advance_control_is_safe());
 
+        // The same button inside the login form (Stripe) is accepted with or without a form identity.
         let mut owned_form = linkedin.clone();
         owned_form.ownership = PageControlOwnership::OwnedForm;
-        assert!(!owned_form.authentication_advance_control_is_safe());
+        assert!(owned_form.authentication_advance_control_is_safe());
         owned_form.form_identity = "login-form".to_owned();
         assert!(owned_form.authentication_advance_control_is_safe());
 

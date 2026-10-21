@@ -51,6 +51,14 @@ const sentinelViteConfig: UserConfig = {
         "./src/ExtensionRequestPanelDisabled.svelte",
         import.meta.url,
       ).pathname,
+      "$lib/extension/connect-progress": new URL(
+        "./src/extension-connect-progress-disabled.ts",
+        import.meta.url,
+      ).pathname,
+      "$lib/components/extension-connect-progress-steps": new URL(
+        "./src/extension-connect-progress-steps-disabled.ts",
+        import.meta.url,
+      ).pathname,
       ...vaultAppAliases(
         new URL(
           "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",

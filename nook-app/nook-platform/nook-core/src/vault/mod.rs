@@ -4,6 +4,7 @@ pub(crate) mod database;
 pub(crate) mod device_access;
 pub(crate) mod domain_numbers;
 pub(crate) mod identity_health;
+pub(crate) mod secret_history;
 pub(crate) mod vault_access_diagnostics;
 pub(crate) mod vault_architecture;
 pub(crate) mod vault_client_policy;

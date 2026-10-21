@@ -75,6 +75,8 @@ tasks:
           -f '{{.REPO_ROOT}}/nook-app/docker-bake.hcl' \
           -f '{{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl' \
           -f '{{.REPO_ROOT}}/.github/docker/rust-maintenance.hcl' \
+          --set '*.context={{.REPO_ROOT}}' \
+          --set 'rust-dependency-audit.contexts.repository-source={{.REPO_ROOT}}' \
           --set "rust-dependency-audit.output=type=local,dest=$output" \
           rust-dependency-audit
         grep -Ex 'outdated=(true|false)' "$output/result"

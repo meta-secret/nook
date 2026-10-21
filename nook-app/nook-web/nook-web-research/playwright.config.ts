@@ -1,10 +1,12 @@
 import { defineConfig } from '@playwright/test'
+import { availableParallelism } from 'node:os'
 
 const isCi = Boolean(process.env.CI)
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
 
 export default defineConfig({
   testDir: 'e2e',
+  workers: availableParallelism(),
   forbidOnly: isCi,
   retries: isCi ? 1 : 0,
   reporter: isCi ? 'line' : 'list',

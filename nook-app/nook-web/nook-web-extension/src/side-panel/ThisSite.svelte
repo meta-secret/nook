@@ -149,6 +149,14 @@ its address, the panel's visibility or the lock state changes.
     return SidePanelViews.sectionRelation(request)
   }
 
+  function groupRelation(group: PairedVaultGroup): SidePanelIdentityRelation {
+    const request: Parameters<typeof SidePanelViews.identityRelation>[0] = {
+      group,
+      device,
+    }
+    return SidePanelViews.identityRelation(request)
+  }
+
   /** Pending and success are announced from one persistent region. */
   function liveText(): string {
     const announcement = ThisSiteViews.liveAnnouncement(fill)
@@ -336,12 +344,38 @@ its address, the panel's visibility or the lock state changes.
     const followRequest: Parameters<typeof runtime.follow>[0] = {
       window: panelWindow,
       onchange: changed,
+      // This site re-reads on the change itself; which tab is not needed.
+      ontabactivated: () => {},
     }
     const release = runtime.follow(followRequest)
     untrack(() => void load())
     return release
   })
 </script>
+
+<!-- A page Nook does not fill still names every connected identity and
+vault, so an identity connected a moment ago shows at once. -->
+{#snippet connectedSections()}
+  {#each groups as group (`${group.deviceId}:${group.identityLabel}`)}
+    {#each group.vaults as vault (vault.vaultStoreId)}
+      <h2
+        class="side-panel-site-group is-connected"
+        data-testid="side-panel-connected-identity"
+      >
+        <span class="side-panel-site-group-name">
+          {group.identityLabel ||
+            translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)} · {vault.vaultName ||
+            translatePlain(I18N_KEYS.LoginVaultPickerUnnamed)}
+        </span>
+        {#if groupRelation(group) === SidePanelIdentityRelation.Other}
+          <span class="side-panel-tag">
+            {translatePlain(I18N_KEYS.ExtensionActionOtherIdentity)}
+          </span>
+        {/if}
+      </h2>
+    {/each}
+  {/each}
+{/snippet}
 
 <!-- One section per identity:vault, in Rust's order: "identity · vault",
 the other-identity tag, then its rows or Rust's muted empty line. -->
@@ -458,10 +492,12 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
     <div class="side-panel-site-status">
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteNotWebHint)}</p>
     </div>
+    {@render connectedSections()}
   {:else if view.body.kind === ThisSiteBodyKind.Restricted}
     <div class="side-panel-site-status">
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteRestricted)}</p>
     </div>
+    {@render connectedSections()}
   {:else if view.body.kind === ThisSiteBodyKind.NoFillingVault}
     <div
       class="side-panel-site-status"
@@ -469,6 +505,7 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
     >
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteNoFillingVault)}</p>
     </div>
+    {@render connectedSections()}
   {:else if view.body.kind === ThisSiteBodyKind.Locked}
     <div class="side-panel-site-status" data-testid="side-panel-site-locked">
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteLocked)}</p>

@@ -6,8 +6,12 @@ open across tab switches. The panel sets up and unlocks the extension device in
 place with a PIN or passkey, through the same ceremony as the authentication
 tab. It lists the current site's saved items in one section per connected
 identity and vault. Each login has an explicit Fill. The panel also offers Open
-vault and Lock. Connecting an identity and All connections open the extension-owned
-authentication component in a normal browser tab. A locked Pilot action opens
+vault and Lock. Connecting an identity opens, or reuses, one Nook tab on the
+Simple Vault connect route in the panel's window. Creating a first vault,
+joining with an existing identity, and choosing the identity to connect all
+happen on that page, and the panel shows its current step until the identity is
+approved or the tab closes. All connections is a page of the panel itself,
+with Make default and Use this identity. A locked Pilot action opens
 or focuses the matching Pilot auth tab in the initiating normal window. If
 another auth intent is already open, it is left untouched and the requested
 intent opens in a separate tab in that window. Pairing from that tab sends the
@@ -26,8 +30,8 @@ logging it. If the vault has none, the widget says so and offers to open Simple
 Vault to add 2FA.
 
 On authenticator setup pages, the Pilot can offer **Add 2FA from this page** and
-**Save backup codes**. Those actions run only after a trusted click: QR decode
-and recovery-code extraction stay local, Rust/WASM validates the payload, and
+**Save backup codes**. Those actions run only after a trusted click: QR decode,
+setup-key reading, and recovery-code extraction stay local, Rust/WASM validates the payload, and
 the user confirms before any vault write. Cancelling clears transient secrets
 and writes no event.
 

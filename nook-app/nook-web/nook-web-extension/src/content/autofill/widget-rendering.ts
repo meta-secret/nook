@@ -51,7 +51,11 @@ import { authenticationWidgetShell } from './widget-shell'
 import type { PilotVaultConnection } from './workflow-ui'
 
 import { WorkflowCopy, workflowUi } from './workflow-ui'
-import { WidgetVaultPresentationProjection } from './widget-presentation-state'
+import {
+  WidgetVaultPresentationKind,
+  WidgetVaultPresentationProjection,
+} from './widget-presentation-state'
+import { SiteSidePanel } from './site-side-panel'
 import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
 type RenderEnrollmentWidgetArgs = {
@@ -265,8 +269,13 @@ class AuthenticationWidgetRenderer {
       snapshot.action === AuthenticationWorkflowAction.GeneratePassword ||
       snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
       snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-    const continueMessageKey =
-      snapshot.action === AuthenticationWorkflowAction.FillTotp
+    // A locked vault has no logins to offer yet: the button unlocks Nook in the side panel.
+    const unlocksFirst =
+      vaultPresentation.kind === WidgetVaultPresentationKind.Locked &&
+      snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
+    const continueMessageKey = unlocksFirst
+      ? BROWSER_MESSAGE_KEYS.WidgetUnlock
+      : snapshot.action === AuthenticationWorkflowAction.FillTotp
         ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
         : snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
           ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
@@ -290,6 +299,10 @@ class AuthenticationWidgetRenderer {
 
     const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
+      if (unlocksFirst) {
+        SiteSidePanel.open()
+        return
+      }
       if (!canContinueWithNook) {
         authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
         loginPasskeyInteraction.cancelPendingLoginPickerRequest()

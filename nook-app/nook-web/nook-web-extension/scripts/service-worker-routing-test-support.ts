@@ -174,6 +174,8 @@ const completeAccountPickerAuthorizationCleanup = mock(() =>
 )
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
+/** The service worker opened or reused Nook tab 31. */
+const openExtensionPairing = mock(() => Promise.resolve(31))
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
@@ -216,7 +218,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   decodeOpenCompanionLauncherMessage:
     NormalizedOpenCompanionLauncherMessageSchema.decode,
   openCompanionLauncher,
-  openExtensionPairing: unusedAsyncDependency,
+  openExtensionPairing,
   openSimpleVault: mock(() => Promise.resolve()),
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
@@ -326,6 +328,7 @@ export {
   flushResponses,
   lifecycleDependencies,
   openCompanionLauncher,
+  openExtensionPairing,
   pendingCleanup,
   rejectedCleanup,
   refreshAuthenticationSurfaces,

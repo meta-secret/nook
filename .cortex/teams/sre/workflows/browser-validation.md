@@ -12,24 +12,41 @@ The projects are defined in
 `nook-app/nook-web/nook-web-app/playwright.config.ts`.
 
 - **`stable`**
-  - Specs: IndexedDB-only specs with three workers.
+  - Specs: IndexedDB-only specs.
   - CI: `main.yml`, `ci:full-e2e` pull requests, and manual or debug
     `e2e-pr.yml` runs. Manual `e2e-windows.yml` also runs this group in Edge.
 - **`unstable`**
-  - Specs: Local-provider and sync specs with two workers.
+  - Specs: Local-provider and sync specs.
   - CI: `main.yml`, `ci:full-e2e` pull requests, and manual `e2e-pr.yml`
     runs. Manual `e2e-windows.yml` also runs this group in Edge.
 - **`sync-live`**
   - Specs: `e2e/live/**/*.spec.ts`.
   - CI: Manual `e2e-pr.yml` runs.
 - **`ui-demo`**
-  - Specs: `e2e/demos/**/*.demo.spec.ts` with one worker.
+  - Specs: `e2e/demos/**/*.demo.spec.ts`.
   - CI: Implemented but temporarily disabled in PR and Main workflows.
   - Contract: UI-changing pull requests still require focused demo specs.
 
 The `test:e2e` script runs `stable` and then `unstable`.
 `test:e2e:local` runs `stable`.
 `test:e2e:sync-stub` runs both groups.
+
+## Worker capacity and dependent tests
+
+Apply the [CPU and E2E circuit breaker](../../../CIRCUIT-BREAKER.md#reducing-cpu-allocation-or-e2e-parallelism)
+to every browser entry point. Playwright worker counts use all available
+logical CPUs reported by Node's `availableParallelism()` in every environment.
+Demo, live-provider, debug and Windows runs follow the same capacity rule.
+
+Independent tests retain the full worker budget. A test that consumes state
+created by another may retain file ordering or a `describe.serial` group.
+Document the dependency beside those tests. A shared provider alone does not
+authorize globally capping the suite.
+
+- **Prohibited:** add `--workers=1` to a live-provider or demo command to hide a
+  failure or avoid investigating shared state.
+- **Required:** keep native worker capacity. Isolate independent tests' state,
+  or retain serial ordering only for a documented dependent test group.
 
 ## Native Windows entry point
 

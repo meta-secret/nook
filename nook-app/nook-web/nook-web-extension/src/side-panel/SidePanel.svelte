@@ -6,9 +6,9 @@ when its window's tabs change or it is shown again. Opening a page never
 closes it.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { Effect } from 'effect'
-  import { LoaderCircle, Plus, Settings2 } from '@lucide/svelte'
+  import { LoaderCircle, Settings2 } from '@lucide/svelte'
   import {
     I18N_KEYS,
     type I18nKey,
@@ -23,6 +23,7 @@ closes it.
   } from '../lib/nook-wasm'
   import { retryClosedExtensionSessionOnce } from '../lib/extension-runtime-retry'
   import { pairedVaultsClient } from '../lib/paired-vaults'
+  import ConnectChain from '../popup/ConnectChain.svelte'
   import ExtensionDeviceProtection from '../popup/ExtensionDeviceProtection.svelte'
   import {
     DeviceProtectionPurposeKind,
@@ -38,6 +39,8 @@ closes it.
   } from '../popup/popup-app-state'
   import SidePanelGate from './SidePanelGate.svelte'
   import SidePanelHeader from './SidePanelHeader.svelte'
+  import SidePanelAllConnections from './SidePanelAllConnections.svelte'
+  import SidePanelConnectCard from './SidePanelConnectCard.svelte'
   import SidePanelConnections from './SidePanelConnections.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
@@ -45,10 +48,9 @@ closes it.
     SidePanelAlertKind,
     SidePanelCeremonyKind,
     SidePanelContinuity,
-    SidePanelHandOffs,
     SidePanelGateIcon,
-    SidePanelHandOffKind,
-    SidePanelHandOffTrigger,
+    SidePanelManageKind,
+    SidePanelPageKind,
     SidePanelHeaderActionKind,
     SidePanelLockReasonKind,
     SidePanelReadFreshness,
@@ -58,9 +60,21 @@ closes it.
     SidePanelViewKind,
     SidePanelViews,
     type SidePanelAlert,
-    type SidePanelHandOff,
+    type SidePanelManage,
     type SidePanelView,
   } from './side-panel-state'
+  import {
+    SidePanelConnectCardPlacement,
+    SidePanelConnectKind,
+    SidePanelConnects,
+  } from './side-panel-connect-state'
+  import {
+    SidePanelConnectFlow,
+    SidePanelConnectingDeviceKind,
+    type SidePanelConnectFlowHost,
+    type SidePanelConnectFlowRequest,
+    type SidePanelConnectingDevice,
+  } from './side-panel-connect-flow.svelte'
   import {
     SidePanelChangeKind,
     SidePanelRuntime,
@@ -98,7 +112,9 @@ closes it.
     SidePanelHeaderActionKind.Idle,
   )
   let alert = $state<SidePanelAlert>({ kind: SidePanelAlertKind.None })
-  let handOff = $state<SidePanelHandOff>({ kind: SidePanelHandOffKind.Idle })
+  /** This site, or All connections; a new view starts on This site. */
+  let page = $state<SidePanelPageKind>(SidePanelPageKind.Site)
+  let manage = $state<SidePanelManage>({ kind: SidePanelManageKind.Idle })
   let panelWindow = $state<SidePanelWindow>({
     kind: SidePanelWindowKind.Resolving,
   })
@@ -107,8 +123,68 @@ closes it.
 
   const chip = $derived(SidePanelViews.chip(view.kind))
   const lockControl = $derived(SidePanelViews.sessionControls(view.kind))
-  const footer = $derived(SidePanelViews.footer(view))
+  const pageRequest = $derived<Parameters<typeof SidePanelViews.page>[0]>({
+    view,
+    page,
+  })
+  const footer = $derived(SidePanelViews.footer(pageRequest))
+  const shownPage = $derived(SidePanelViews.page(pageRequest))
   const ceremony = $derived(SidePanelViews.ceremony(view))
+  /** The connect card opened under This site, or leading the panel. */
+  const cardShown = $derived.by(() => {
+    switch (view.kind) {
+      case SidePanelViewKind.Unlocked: {
+        const request: Parameters<typeof SidePanelConnects.cardShown>[0] = {
+          vaults: view.vaults.kind,
+          connect: connectFlow.connect,
+        }
+        return SidePanelConnects.cardShown(request)
+      }
+      case SidePanelViewKind.Setup:
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.PasskeyLocked:
+      case SidePanelViewKind.Failure:
+        return false
+    }
+  })
+  const connectHost: SidePanelConnectFlowHost = {
+    connectingDevice: () => connectingDevice(),
+    panelWindow: () => panelWindow,
+    deviceLabel: () => connectLabel(),
+    restartCeremony: () => {
+      ceremonyEntry += 1
+    },
+    identityUnlocked: (device) => {
+      statusReads.invalidate()
+      clearMessages()
+      const active: ExtensionSessionDeviceState = {
+        kind: ExtensionSessionDeviceStateKind.Active,
+        device,
+      }
+      showUnlocked(active)
+    },
+    readVaults: () => void loadVaults(),
+    clearAlert: () => {
+      alert = { kind: SidePanelAlertKind.None }
+    },
+    focusFailed: () => {
+      alert = {
+        kind: SidePanelAlertKind.Shown,
+        key: I18N_KEYS.ExtensionActionOpenFailed,
+      }
+    },
+  }
+  const connectFlowRequest: SidePanelConnectFlowRequest = {
+    host: connectHost,
+    runtime,
+  }
+  /** Connecting an identity: the one Nook tab and the steps it reports. */
+  const connectFlow = new SidePanelConnectFlow(connectFlowRequest)
+  /** A new identity's key: set up in place, or dropped by its Cancel. */
+  const identityKey: DeviceProtectionPurpose = {
+    kind: DeviceProtectionPurposeKind.IdentityKey,
+    cancel: () => connectFlow.cancelIdentityKey(),
+  }
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -132,12 +208,18 @@ closes it.
 
   function clearMessages(): void {
     alert = { kind: SidePanelAlertKind.None }
-    handOff = { kind: SidePanelHandOffKind.Idle }
+    manage = { kind: SidePanelManageKind.Idle }
   }
 
   /** Re-read the extension's state: it may have changed in the Nook tab,
    * in Pilot, or by the session lease ending. */
   async function refresh(): Promise<void> {
+    switch (SidePanelConnects.holdsPanel(connectFlow.connect)) {
+      case true:
+        return
+      case false:
+        break
+    }
     switch (view.kind) {
       case SidePanelViewKind.Failure:
         // Reopening the panel runs startup again; nothing retries here.
@@ -226,6 +308,8 @@ closes it.
   async function enter(arrival: SidePanelArrival): Promise<void> {
     const { status, reason } = arrival
     clearMessages()
+    connectFlow.stop()
+    page = SidePanelPageKind.Site
     switch (SidePanelViews.kind(status)) {
       case SidePanelViewKind.Unlocked:
         await enterUnlocked()
@@ -282,9 +366,10 @@ closes it.
         break
     }
     switch (view.kind) {
-      case SidePanelViewKind.Unlocked:
+      case SidePanelViewKind.Unlocked: {
         view = { ...view, vaults: SidePanelViews.vaults(load) }
         return
+      }
       case SidePanelViewKind.Setup:
       case SidePanelViewKind.PinLocked:
       case SidePanelViewKind.PasskeyLocked:
@@ -426,29 +511,132 @@ closes it.
     }
   }
 
-  /** Connecting an identity and all connections continue in the Nook tab. */
-  async function openNookTab(trigger: SidePanelHandOffTrigger): Promise<void> {
-    switch (handOff.kind) {
-      case SidePanelHandOffKind.Opening:
+  /** All connections opens in the panel; Back returns to This site. */
+  function openConnections(): void {
+    manage = { kind: SidePanelManageKind.Idle }
+    page = SidePanelPageKind.Connections
+  }
+
+  function closeConnections(): void {
+    manage = { kind: SidePanelManageKind.Idle }
+    page = SidePanelPageKind.Site
+  }
+
+  function chooseDefault(vaultStoreId: string): void {
+    void makeDefault(vaultStoreId)
+  }
+
+  function chooseIdentity(deviceId: string): void {
+    void useIdentity(deviceId)
+  }
+
+  /** New logins are saved to the default vault. */
+  async function makeDefault(vaultStoreId: string): Promise<void> {
+    switch (manage.kind) {
+      case SidePanelManageKind.Busy:
         return
-      case SidePanelHandOffKind.Idle:
-      case SidePanelHandOffKind.Continued:
-      case SidePanelHandOffKind.Failed:
+      case SidePanelManageKind.Idle:
+      case SidePanelManageKind.Failed:
         break
     }
-    handOff = { kind: SidePanelHandOffKind.Opening, trigger }
-    alert = { kind: SidePanelAlertKind.None }
-    const opened = await Effect.runPromise(
-      Effect.result(runtime.openNookTab(SidePanelHandOffs.intent(trigger))),
-    )
-    switch (opened._tag) {
-      case 'Success':
-        handOff = SidePanelHandOffs.opened(trigger)
+    manage = { kind: SidePanelManageKind.Busy }
+    const changed = await pairedVaultsClient.makeDefault(vaultStoreId)
+    switch (changed) {
+      case false:
+        manage = {
+          kind: SidePanelManageKind.Failed,
+          key: I18N_KEYS.ExtensionCompanionMakeDefaultFailed,
+        }
         return
-      case 'Failure':
-        handOff = { kind: SidePanelHandOffKind.Failed, trigger }
-        alert = SidePanelHandOffs.openFailedAlert(trigger)
+      case true:
+        manage = { kind: SidePanelManageKind.Idle }
+        await loadVaults()
     }
+  }
+
+  /** Switch to another identity of this extension: this one locks and the
+   * panel shows that identity's own unlock. */
+  async function useIdentity(deviceId: string): Promise<void> {
+    switch (manage.kind) {
+      case SidePanelManageKind.Busy:
+        return
+      case SidePanelManageKind.Idle:
+      case SidePanelManageKind.Failed:
+        break
+    }
+    manage = { kind: SidePanelManageKind.Busy }
+    const activated = await Effect.runPromise(
+      Effect.result(
+        Effect.tryPromise(() =>
+          extensionWasmRuntime.activateIdentity(deviceId),
+        ),
+      ),
+    )
+    switch (activated._tag) {
+      case 'Failure':
+        manage = {
+          kind: SidePanelManageKind.Failed,
+          key: I18N_KEYS.ExtensionCompanionUseIdentityFailed,
+        }
+        return
+      case 'Success':
+        break
+    }
+    const read = statusReads.begin()
+    const status = await readStatus()
+    switch (read.freshness()) {
+      case SidePanelReadFreshness.Stale:
+        return
+      case SidePanelReadFreshness.Current:
+        break
+    }
+    switch (status._tag) {
+      case 'Failure':
+        failed(PopupInitializationPhase.DeviceProtectionStatus)
+        return
+      case 'Success': {
+        const arrival: SidePanelArrival = {
+          status: status.success,
+          reason: SidePanelLockReasonKind.None,
+        }
+        await enter(arrival)
+      }
+    }
+  }
+
+  function connectLabel(): string {
+    return translatePlain(I18N_KEYS.ExtensionSetupProfileTitle)
+  }
+
+  /** The key the unlocked view connects the next identity with. */
+  function connectingDevice(): SidePanelConnectingDevice {
+    switch (view.kind) {
+      case SidePanelViewKind.Unlocked:
+        break
+      case SidePanelViewKind.Setup:
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.PasskeyLocked:
+      case SidePanelViewKind.Failure:
+        return { kind: SidePanelConnectingDeviceKind.NotUnlocked }
+    }
+    switch (view.device.kind) {
+      case ExtensionSessionDeviceStateKind.Locked:
+        return { kind: SidePanelConnectingDeviceKind.Locked }
+      case ExtensionSessionDeviceStateKind.Active:
+        return {
+          kind: SidePanelConnectingDeviceKind.Active,
+          device: view.device.device,
+        }
+    }
+  }
+
+  /** The new identity's ceremony moved to PIN setup. */
+  function identityKeyStatus(next: DeviceProtectionStatus): void {
+    connectFlow.identityKeyStatus(next)
+  }
+
+  function identityKeyUnlocked(unlock: DeviceProtectionUnlock): void {
+    connectFlow.identityKeyUnlocked(unlock)
   }
 
   function changed(change: SidePanelChangeKind): void {
@@ -484,10 +672,14 @@ closes it.
     }
   })
 
+  // Closing the panel stops following the Nook tab.
+  onDestroy(() => connectFlow.stop())
+
   $effect(() => {
     const followRequest: Parameters<typeof runtime.follow>[0] = {
       window: panelWindow,
       onchange: changed,
+      ontabactivated: (tabId) => connectFlow.tabActivated(tabId),
     }
     const release = runtime.follow(followRequest)
     return release
@@ -515,8 +707,12 @@ closes it.
     {/if}
 
     {#if ceremony.kind === SidePanelCeremonyKind.Shown}
+      {@const gateStatus = ceremony.status}
       {#key ceremonyEntry}
         <SidePanelGate icon={ceremony.icon}>
+          {#snippet lead()}
+            <ConnectChain {i18n} status={gateStatus} />
+          {/snippet}
           <div class="side-panel-ceremony" data-testid="side-panel-ceremony">
             <ExtensionDeviceProtection
               {i18n}
@@ -537,6 +733,27 @@ closes it.
           {/if}
         </SidePanelGate>
       {/key}
+    {:else if view.kind === SidePanelViewKind.Unlocked && connectFlow.connect.kind === SidePanelConnectKind.IdentityKey}
+      {@const identityKeyStatusNow = connectFlow.connect.status}
+      {#key ceremonyEntry}
+        <SidePanelGate icon={SidePanelGateIcon.Setup}>
+          {#snippet lead()}
+            <ConnectChain {i18n} status={identityKeyStatusNow} />
+          {/snippet}
+          <div
+            class="side-panel-ceremony"
+            data-testid="side-panel-identity-key"
+          >
+            <ExtensionDeviceProtection
+              {i18n}
+              status={identityKeyStatusNow}
+              purpose={identityKey}
+              onstatus={identityKeyStatus}
+              onunlocked={identityKeyUnlocked}
+            />
+          </div>
+        </SidePanelGate>
+      {/key}
     {:else if view.kind === SidePanelViewKind.Unlocked}
       {#if view.vaults.kind === SidePanelVaultsKind.Loading}
         <div class="side-panel-gate">
@@ -549,6 +766,16 @@ closes it.
             {translatePlain(I18N_KEYS.CommonLoading)}
           </p>
         </div>
+      {:else if view.vaults.kind === SidePanelVaultsKind.Paired && shownPage === SidePanelPageKind.Connections}
+        <SidePanelAllConnections
+          {i18n}
+          groups={view.vaults.groups}
+          device={view.device}
+          {manage}
+          onmakedefault={chooseDefault}
+          onuseidentity={chooseIdentity}
+          onback={closeConnections}
+        />
       {:else if view.vaults.kind === SidePanelVaultsKind.Paired}
         <ThisSite
           {i18n}
@@ -561,50 +788,24 @@ closes it.
         <SidePanelConnections
           {i18n}
           identitySync={view.identitySync}
-          {handOff}
-          onconnect={() =>
-            void openNookTab(SidePanelHandOffTrigger.ConnectIdentity)}
+          connect={connectFlow.connect}
+          {cardShown}
+          onconnect={() => void connectFlow.start()}
+          onfocustab={() => void connectFlow.focusTab()}
+          onclose={() => connectFlow.close()}
         />
       {:else if view.vaults.kind === SidePanelVaultsKind.NoVault}
-        <SidePanelGate icon={SidePanelGateIcon.NoVault}>
-          <h1 class="side-panel-gate-title">
-            {translatePlain(I18N_KEYS.ExtensionCompanionNoVaultsTitle)}
-          </h1>
-          <p class="side-panel-gate-line">
-            {translatePlain(I18N_KEYS.ExtensionActionNoIdentityLine)}
-          </p>
-          <div class="side-panel-gate-actions">
-            <button
-              type="button"
-              aria-busy={handOff.kind === SidePanelHandOffKind.Opening}
-              aria-disabled={handOff.kind === SidePanelHandOffKind.Opening}
-              data-testid="side-panel-connect"
-              onclick={() =>
-                void openNookTab(SidePanelHandOffTrigger.ConnectIdentity)}
-            >
-              <Plus size={16} aria-hidden="true" />
-              {translatePlain(I18N_KEYS.ExtensionActionConnectIdentity)}
-            </button>
-            {#if handOff.kind === SidePanelHandOffKind.Continued && handOff.trigger === SidePanelHandOffTrigger.ConnectIdentity}
-              <p
-                class="side-panel-status-line"
-                role="status"
-                data-testid="side-panel-handoff"
-              >
-                {translatePlain(I18N_KEYS.ExtensionActionContinueInTab)}
-              </p>
-            {:else if handOff.kind === SidePanelHandOffKind.Failed && handOff.trigger === SidePanelHandOffTrigger.ConnectIdentity}
-              <p
-                class="error-message"
-                role="alert"
-                data-testid="side-panel-error"
-              >
-                {translatePlain(I18N_KEYS.ExtensionActionOpenFailed)}
-              </p>
-            {/if}
-            <SidePanelIdentitySync {i18n} identitySync={view.identitySync} />
-          </div>
-        </SidePanelGate>
+        <div class="side-panel-gate" data-gate={SidePanelGateIcon.NoVault}>
+          <SidePanelConnectCard
+            {i18n}
+            placement={SidePanelConnectCardPlacement.First}
+            connect={connectFlow.connect}
+            identitySync={view.identitySync}
+            onconnect={() => void connectFlow.start()}
+            onfocustab={() => void connectFlow.focusTab()}
+            onclose={() => connectFlow.close()}
+          />
+        </div>
       {:else}
         <SidePanelGate icon={SidePanelGateIcon.Failure}>
           <h1 class="side-panel-gate-title">
@@ -646,12 +847,9 @@ closes it.
     <footer class="side-panel-footer">
       <button
         type="button"
-        class="side-panel-text-button"
-        aria-busy={handOff.kind === SidePanelHandOffKind.Opening &&
-          handOff.trigger === SidePanelHandOffTrigger.Manage}
-        aria-disabled={handOff.kind === SidePanelHandOffKind.Opening}
+        class="side-panel-text-button side-panel-footer-action"
         data-testid="side-panel-manage"
-        onclick={() => void openNookTab(SidePanelHandOffTrigger.Manage)}
+        onclick={openConnections}
       >
         <Settings2 size={14} aria-hidden="true" />
         {translatePlain(I18N_KEYS.ExtensionActionManage)}

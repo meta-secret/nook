@@ -8,13 +8,12 @@ import {
   ExtensionSessionGeneration,
   ExtensionSessionLeaseFailure,
 } from './session-lease'
-import initNookWasm, {
-  configure_vault_application,
+import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
   NookCompanionExtensionEndpoint,
   type NookDiscoveredCompanionExtensionEndpoint,
   admit_extension_storage_providers,
   NookVaultManager,
-  VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   CompanionIdentityHandoffResponse,
@@ -30,6 +29,7 @@ import type {
   ExtensionSessionRequest,
 } from './session-request-adapter'
 import { ExtensionSessionLifecycleMessageType } from '../lib/extension-session-lifecycle-message-type'
+import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 import {
   handleSessionMessage,
   type DeviceResult,
@@ -37,6 +37,7 @@ import {
   type SessionOperationContext,
 } from './session-operations'
 import { GoogleLoginSessionContinuations } from './google-login-continuation'
+import { vaultWasmStartup } from './vault-wasm-startup'
 import {
   CompanionVaultDiscovery,
   freshCompanionDiscoveryEndpoint,
@@ -47,18 +48,6 @@ import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 import type { CompanionWasmSessionResponse } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
-
-enum WasmStartupKind {
-  NotStarted = 'not-started',
-  Initializing = 'initializing',
-}
-
-type WasmStartup =
-  | { kind: WasmStartupKind.NotStarted }
-  | {
-      kind: WasmStartupKind.Initializing
-      operation: ReturnType<typeof initNookWasm>
-    }
 
 enum VaultManagerAvailabilityKind {
   Locked = 'locked',
@@ -85,6 +74,10 @@ type ExtensionSessionExpiryMessage = {
   type: ExtensionSessionLifecycleMessageType.Expired
 }
 
+type AuthenticationSurfacesRefreshMessage = {
+  type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
 type SessionExpiryLeaseConfiguration = ConstructorParameters<
   typeof ActiveExtensionSessionLease
 >[0]
@@ -99,7 +92,6 @@ type CompanionIdentityDiscoverySessionResponse = {
   readonly status: CompanionIdentityStatus
 }
 
-let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
 }
@@ -179,20 +171,7 @@ function releaseCompanionEndpoint(): void {
 }
 
 function ensureWasm(): ReturnType<typeof initNookWasm> {
-  if (wasmStartup.kind === WasmStartupKind.Initializing) {
-    return wasmStartup.operation
-  }
-  // The offscreen document shares the background's copy of the vault WASM;
-  // one copy keeps the hosted extension ZIP under the Pages file limit.
-  const initArgs: Parameters<typeof initNookWasm>[0] = {
-    module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
-  }
-  const operation = initNookWasm(initArgs).then((value) => {
-    configure_vault_application(VaultApplication.Extension)
-    return value
-  })
-  wasmStartup = { kind: WasmStartupKind.Initializing, operation }
-  return operation
+  return vaultWasmStartup.ensure()
 }
 
 async function getManager(): Promise<NookVaultManager> {
@@ -240,6 +219,11 @@ async function activateSession(): Promise<DeviceResult> {
     }
     void chrome.runtime.sendMessage(expiryMessage)
   })
+  // Pilot widgets on open sites re-check Nook, so an Unlock button becomes Sign in.
+  const refreshMessage: AuthenticationSurfacesRefreshMessage = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  void chrome.runtime.sendMessage(refreshMessage)
   return deviceResult(activeManager)
 }
 

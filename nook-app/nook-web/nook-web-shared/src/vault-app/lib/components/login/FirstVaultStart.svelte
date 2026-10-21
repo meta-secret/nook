@@ -3,6 +3,8 @@ The first screen of a browser with no vault: one name, one button. The
 identity is created with the vault and introduced on the next step, where
 its passkey is made. Joining an identity from another device is the second
 path and stands apart; restoring from a sync provider is a quiet link.
+Opened from the extension, the connect route shows this same screen: the
+person creates or joins here, never in the extension.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";

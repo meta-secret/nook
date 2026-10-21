@@ -130,7 +130,6 @@ export type DemoChromeStubArgs = {
   authenticatorPickerFlow?: boolean
   /** Record runtime message types so demos can assert cross-domain sequencing. */
   recordRuntimeMessageTypes?: boolean
-  barcodeRawValue?: string
 }
 
 /** Self-contained init/evaluate helper shared by Pilot UI demos. */
@@ -179,7 +178,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     enrollPilotFlow = false,
     authenticatorPickerFlow = false,
     recordRuntimeMessageTypes = false,
-    barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
   enum StagedOfferKind {
@@ -713,8 +711,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         selectedFacts: { state: 'notApplicable' },
       }
     }
+    // Two saved logins match; website-login-options answers the first
+    // Sign in as locked, as when Nook locks between the scan and the click.
     const loginMatches = loginPilotFlow
-      ? { kind: 'locked' as const }
+      ? { kind: 'ready' as const, count: 2 }
       : savePilotFlow
         ? { kind: 'ready' as const, count: 1 }
         : { kind: 'unavailable' as const }
@@ -723,18 +723,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       loginMatches,
       selectedFacts: { state: 'selected', facts: selectedFacts },
     }
-  }
-
-  if (barcodeRawValue) {
-    class FakeBarcodeDetector {
-      async detect() {
-        return [{ rawValue: barcodeRawValue, format: 'qr_code' }]
-      }
-    }
-    Object.defineProperty(globalThis, 'BarcodeDetector', {
-      configurable: true,
-      value: FakeBarcodeDetector,
-    })
   }
 
   const chromeStub = {

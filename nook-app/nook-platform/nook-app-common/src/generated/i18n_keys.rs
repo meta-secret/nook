@@ -812,6 +812,21 @@ pub const EXTENSION_CONNECT_RETURN_TO_NOOK: &str = "extension.connect.return_to_
 pub const EXTENSION_CONNECT_START_FAILED: &str = "extension.connect.start_failed";
 pub const EXTENSION_CONNECT_STARTING: &str = "extension.connect.starting";
 pub const EXTENSION_CONNECT_TITLE: &str = "extension.connect.title";
+pub const EXTENSION_CONNECT_TAB_APPROVED: &str = "extension.connect_tab.approved";
+pub const EXTENSION_CONNECT_TAB_BODY: &str = "extension.connect_tab.body";
+pub const EXTENSION_CONNECT_TAB_CHOOSING: &str = "extension.connect_tab.choosing";
+pub const EXTENSION_CONNECT_TAB_CONSENT: &str = "extension.connect_tab.consent";
+pub const EXTENSION_CONNECT_TAB_CREATING: &str = "extension.connect_tab.creating";
+pub const EXTENSION_CONNECT_TAB_FAILED_AUTHORIZATION: &str =
+    "extension.connect_tab.failed_authorization";
+pub const EXTENSION_CONNECT_TAB_FAILED_DELIVERY: &str = "extension.connect_tab.failed_delivery";
+pub const EXTENSION_CONNECT_TAB_FAILED_GRANT: &str = "extension.connect_tab.failed_grant";
+pub const EXTENSION_CONNECT_TAB_INTERRUPTED: &str = "extension.connect_tab.interrupted";
+pub const EXTENSION_CONNECT_TAB_OPENED: &str = "extension.connect_tab.opened";
+pub const EXTENSION_CONNECT_TAB_SENDER_CHECK_FAILED: &str =
+    "extension.connect_tab.sender_check_failed";
+pub const EXTENSION_CONNECT_TAB_SHOW_TAB: &str = "extension.connect_tab.show_tab";
+pub const EXTENSION_CONNECT_TAB_UNLOCK: &str = "extension.connect_tab.unlock";
 pub const EXTENSION_CONSENT_APPROVAL_FAILED: &str = "extension.consent.approval_failed";
 pub const EXTENSION_CONSENT_APPROVE: &str = "extension.consent.approve";
 pub const EXTENSION_CONSENT_APPROVED: &str = "extension.consent.approved";
@@ -851,15 +866,27 @@ pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_DESCRIPTION: &str =
     "extension.device_setup.identity_key_description";
 pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_TITLE: &str =
     "extension.device_setup.identity_key_title";
-pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
 pub const EXTENSION_DEVICE_SETUP_NODE_IDENTITY: &str = "extension.device_setup.node_identity";
 pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_next";
 pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
+pub const EXTENSION_DEVICE_SETUP_NOT_FOUND_DESCRIPTION: &str =
+    "extension.device_setup.not_found_description";
+pub const EXTENSION_DEVICE_SETUP_NOT_FOUND_TITLE: &str = "extension.device_setup.not_found_title";
 pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_create_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_ELSEWHERE: &str =
+    "extension.device_setup.passkey_elsewhere";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_LABEL: &str =
+    "extension.device_setup.passkey_field_label";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_FIELD_PLACEHOLDER: &str =
+    "extension.device_setup.passkey_field_placeholder";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_OTHER_DEVICE: &str =
+    "extension.device_setup.passkey_other_device";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_PICKER_EMPTY: &str =
+    "extension.device_setup.passkey_picker_empty";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
     "extension.device_setup.passkey_unlock_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =
@@ -878,7 +905,6 @@ pub const EXTENSION_DEVICE_SETUP_UNLOCK_DESCRIPTION: &str =
     "extension.device_setup.unlock_description";
 pub const EXTENSION_DEVICE_SETUP_UNLOCK_TITLE: &str = "extension.device_setup.unlock_title";
 pub const EXTENSION_DEVICE_SETUP_USE_EXISTING: &str = "extension.device_setup.use_existing";
-pub const EXTENSION_DEVICE_SETUP_USE_PASSKEY: &str = "extension.device_setup.use_passkey";
 pub const EXTENSION_LOGIN_PICKER_DESCRIPTION: &str = "extension.login_picker.description";
 pub const EXTENSION_LOGIN_PICKER_DESTINATION: &str = "extension.login_picker.destination";
 pub const EXTENSION_LOGIN_PICKER_FAILED: &str = "extension.login_picker.failed";
@@ -896,8 +922,10 @@ pub const EXTENSION_MANIFEST_DESCRIPTION: &str = "extension.manifest.description
 pub const EXTENSION_MANIFEST_NAME: &str = "extension.manifest.name";
 pub const EXTENSION_PASSKEY_ACCOUNT_LABEL: &str = "extension.passkey.account_label";
 pub const EXTENSION_PASSKEY_CHECK_FAILED: &str = "extension.passkey.check_failed";
+pub const EXTENSION_PASSKEY_CHECKING: &str = "extension.passkey.checking";
 pub const EXTENSION_PASSKEY_CHOOSE_ACCOUNT: &str = "extension.passkey.choose_account";
 pub const EXTENSION_PASSKEY_CLOSE: &str = "extension.passkey.close";
+pub const EXTENSION_PASSKEY_CONTINUE_ACTION: &str = "extension.passkey.continue_action";
 pub const EXTENSION_PASSKEY_LABEL: &str = "extension.passkey.label";
 pub const EXTENSION_PASSKEY_LOCKED: &str = "extension.passkey.locked";
 pub const EXTENSION_PASSKEY_NO_MATCH: &str = "extension.passkey.no_match";
@@ -911,6 +939,8 @@ pub const EXTENSION_PASSKEY_SAVED_DETAIL: &str = "extension.passkey.saved_detail
 pub const EXTENSION_PASSKEY_SAVED_TITLE: &str = "extension.passkey.saved_title";
 pub const EXTENSION_PASSKEY_SAVING: &str = "extension.passkey.saving";
 pub const EXTENSION_PASSKEY_SIGNING_IN: &str = "extension.passkey.signing_in";
+pub const EXTENSION_PASSKEY_UNLOCK_ACTION: &str = "extension.passkey.unlock_action";
+pub const EXTENSION_PASSKEY_UNLOCK_WAITING: &str = "extension.passkey.unlock_waiting";
 pub const EXTENSION_PASSKEY_USE_ANOTHER: &str = "extension.passkey.use_another";
 pub const EXTENSION_PASSKEY_USE_BROWSER: &str = "extension.passkey.use_browser";
 pub const EXTENSION_PASSKEY_USE_FAILED: &str = "extension.passkey.use_failed";
@@ -1066,6 +1096,9 @@ pub const EXTENSION_WIDGET_ENROLL_ACCOUNT: &str = "extension.widget.enroll_accou
 pub const EXTENSION_WIDGET_ENROLL_ALGORITHM: &str = "extension.widget.enroll_algorithm";
 pub const EXTENSION_WIDGET_ENROLL_AMBIGUOUS: &str = "extension.widget.enroll_ambiguous";
 pub const EXTENSION_WIDGET_ENROLL_CANCEL: &str = "extension.widget.enroll_cancel";
+pub const EXTENSION_WIDGET_ENROLL_CANDIDATE_QR: &str = "extension.widget.enroll_candidate_qr";
+pub const EXTENSION_WIDGET_ENROLL_CANDIDATE_SETUP_KEY: &str =
+    "extension.widget.enroll_candidate_setup_key";
 pub const EXTENSION_WIDGET_ENROLL_CONFIRM: &str = "extension.widget.enroll_confirm";
 pub const EXTENSION_WIDGET_ENROLL_DESCRIPTION: &str = "extension.widget.enroll_description";
 pub const EXTENSION_WIDGET_ENROLL_DIGITS: &str = "extension.widget.enroll_digits";
@@ -1079,7 +1112,6 @@ pub const EXTENSION_WIDGET_ENROLL_SAVED: &str = "extension.widget.enroll_saved";
 pub const EXTENSION_WIDGET_ENROLL_STAGING: &str = "extension.widget.enroll_staging";
 pub const EXTENSION_WIDGET_ENROLL_TITLE: &str = "extension.widget.enroll_title";
 pub const EXTENSION_WIDGET_ENROLL_UNLOCK: &str = "extension.widget.enroll_unlock";
-pub const EXTENSION_WIDGET_ENROLL_UNSUPPORTED: &str = "extension.widget.enroll_unsupported";
 pub const EXTENSION_WIDGET_ENROLL_VERIFY_FILLED: &str = "extension.widget.enroll_verify_filled";
 pub const EXTENSION_WIDGET_ENROLL_VERIFY_PENDING: &str = "extension.widget.enroll_verify_pending";
 pub const EXTENSION_WIDGET_ENROLL_WORKING: &str = "extension.widget.enroll_working";
@@ -1142,6 +1174,7 @@ pub const EXTENSION_WIDGET_SUBMITTED: &str = "extension.widget.submitted";
 pub const EXTENSION_WIDGET_TAKE_OVER: &str = "extension.widget.take_over";
 pub const EXTENSION_WIDGET_TOTP_DESCRIPTION: &str = "extension.widget.totp_description";
 pub const EXTENSION_WIDGET_TOTP_TITLE: &str = "extension.widget.totp_title";
+pub const EXTENSION_WIDGET_UNLOCK: &str = "extension.widget.unlock";
 pub const EXTENSION_WIDGET_UNLOCK_THEN_CONTINUE: &str = "extension.widget.unlock_then_continue";
 pub const EXTENSION_WIDGET_UPDATE_LOGIN: &str = "extension.widget.update_login";
 pub const EXTENSION_WIDGET_UPDATE_LOGIN_DESCRIPTION: &str =
@@ -2263,11 +2296,13 @@ pub const VAULT_COPY_AUTHENTICATOR_SECRET: &str = "vault.copy_authenticator_secr
 pub const VAULT_COPY_BACKUP_CODE: &str = "vault.copy_backup_code";
 pub const VAULT_COPY_CARD_NUMBER: &str = "vault.copy_card_number";
 pub const VAULT_COPY_CARDHOLDER_NAME: &str = "vault.copy_cardholder_name";
+pub const VAULT_COPY_CREDENTIAL_ID: &str = "vault.copy_credential_id";
 pub const VAULT_COPY_CURRENT_CODE: &str = "vault.copy_current_code";
 pub const VAULT_COPY_CVV: &str = "vault.copy_cvv";
 pub const VAULT_COPY_EXPIRATION: &str = "vault.copy_expiration";
 pub const VAULT_COPY_EXPIRATION_DATE: &str = "vault.copy_expiration_date";
 pub const VAULT_COPY_NOTE: &str = "vault.copy_note";
+pub const VAULT_COPY_PUBLIC_KEY_FINGERPRINT: &str = "vault.copy_public_key_fingerprint";
 pub const VAULT_COPY_SECRET: &str = "vault.copy_secret";
 pub const VAULT_COPY_USERNAME: &str = "vault.copy_username";
 pub const VAULT_COPY_WEBSITE_URL: &str = "vault.copy_website_url";
@@ -2298,6 +2333,19 @@ pub const VAULT_FIELDS_EXPIRES_AT_LABEL: &str = "vault.fields.expires_at_label";
 pub const VAULT_FIELDS_FILE: &str = "vault.fields.file";
 pub const VAULT_FIELDS_FILE_NAME: &str = "vault.fields.file_name";
 pub const VAULT_FIELDS_FILE_SIZE: &str = "vault.fields.file_size";
+pub const VAULT_FIELDS_HISTORY_CREATED: &str = "vault.fields.history_created";
+pub const VAULT_FIELDS_HISTORY_DEVICE: &str = "vault.fields.history_device";
+pub const VAULT_FIELDS_HISTORY_DEVICE_NAMED: &str = "vault.fields.history_device_named";
+pub const VAULT_FIELDS_HISTORY_DEVICE_REMOVED: &str = "vault.fields.history_device_removed";
+pub const VAULT_FIELDS_HISTORY_DEVICE_THIS: &str = "vault.fields.history_device_this";
+pub const VAULT_FIELDS_HISTORY_DEVICE_UNNAMED: &str = "vault.fields.history_device_unnamed";
+pub const VAULT_FIELDS_HISTORY_DEVICE_UNRECORDED: &str = "vault.fields.history_device_unrecorded";
+pub const VAULT_FIELDS_HISTORY_IMPORTED: &str = "vault.fields.history_imported";
+pub const VAULT_FIELDS_HISTORY_IN_VAULT_SINCE: &str = "vault.fields.history_in_vault_since";
+pub const VAULT_FIELDS_HISTORY_LOADING: &str = "vault.fields.history_loading";
+pub const VAULT_FIELDS_HISTORY_MODIFIED: &str = "vault.fields.history_modified";
+pub const VAULT_FIELDS_HISTORY_MODIFIED_DEVICE: &str = "vault.fields.history_modified_device";
+pub const VAULT_FIELDS_HISTORY_UNAVAILABLE: &str = "vault.fields.history_unavailable";
 pub const VAULT_FIELDS_ISSUER: &str = "vault.fields.issuer";
 pub const VAULT_FIELDS_KEY: &str = "vault.fields.key";
 pub const VAULT_FIELDS_LAST4: &str = "vault.fields.last4";
@@ -2310,7 +2358,26 @@ pub const VAULT_FIELDS_NO_WEBSITE: &str = "vault.fields.no_website";
 pub const VAULT_FIELDS_NO_WEBSITE_GROUP: &str = "vault.fields.no_website_group";
 pub const VAULT_FIELDS_NOTE: &str = "vault.fields.note";
 pub const VAULT_FIELDS_NOTES: &str = "vault.fields.notes";
+pub const VAULT_FIELDS_PASSKEY_ALGORITHM: &str = "vault.fields.passkey_algorithm";
+pub const VAULT_FIELDS_PASSKEY_ALGORITHM_ES256: &str = "vault.fields.passkey_algorithm_es256";
+pub const VAULT_FIELDS_PASSKEY_BACKUP: &str = "vault.fields.passkey_backup";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_BACKED_UP: &str = "vault.fields.passkey_backup_backed_up";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_NOT_BACKED_UP: &str =
+    "vault.fields.passkey_backup_not_backed_up";
+pub const VAULT_FIELDS_PASSKEY_BACKUP_NOT_ELIGIBLE: &str =
+    "vault.fields.passkey_backup_not_eligible";
+pub const VAULT_FIELDS_PASSKEY_CREDENTIAL_ID: &str = "vault.fields.passkey_credential_id";
+pub const VAULT_FIELDS_PASSKEY_DETAILS_LOADING: &str = "vault.fields.passkey_details_loading";
+pub const VAULT_FIELDS_PASSKEY_DETAILS_UNAVAILABLE: &str =
+    "vault.fields.passkey_details_unavailable";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE: &str = "vault.fields.passkey_discoverable";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE_NO: &str = "vault.fields.passkey_discoverable_no";
+pub const VAULT_FIELDS_PASSKEY_DISCOVERABLE_YES: &str = "vault.fields.passkey_discoverable_yes";
 pub const VAULT_FIELDS_PASSKEY_MANAGED_HINT: &str = "vault.fields.passkey_managed_hint";
+pub const VAULT_FIELDS_PASSKEY_PUBLIC_KEY_FINGERPRINT: &str =
+    "vault.fields.passkey_public_key_fingerprint";
+pub const VAULT_FIELDS_PASSKEY_RELYING_PARTY_NAME: &str = "vault.fields.passkey_relying_party_name";
+pub const VAULT_FIELDS_PASSKEY_SIGNATURE_COUNT: &str = "vault.fields.passkey_signature_count";
 pub const VAULT_FIELDS_PASSWORD: &str = "vault.fields.password";
 pub const VAULT_FIELDS_RELYING_PARTY: &str = "vault.fields.relying_party";
 pub const VAULT_FIELDS_TITLE: &str = "vault.fields.title";

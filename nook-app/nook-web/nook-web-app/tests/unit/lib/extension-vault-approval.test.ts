@@ -1,4 +1,5 @@
 import { err, ok, type Result } from 'neverthrow'
+import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-connect-progress'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { admit_extension_pairing_vault_type } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
@@ -57,6 +58,7 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const request: ExtensionConnectRequest = {
   source: ExtensionIdentityRequestSource.ExtensionConnect,
+  follow: { kind: ExtensionConnectFollowKind.Unnamed },
   deviceId: 'device-1',
   devicePublicKey: 'age1device',
   deviceSigningPublicKey: 'signing-key',

@@ -3,10 +3,9 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Effect } from 'effect'
 import {
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
-} from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
@@ -15,7 +14,6 @@ import {
 } from '../src/offscreen/session-sender-policy'
 import {
   SidePanelChangeKind,
-  SidePanelNookTabIntent,
   SidePanelRuntime,
   SidePanelWindowKind,
   type SidePanelWindow,
@@ -43,6 +41,8 @@ type TabPlacement = {
 
 enum FixtureReplyKind {
   Acknowledged = 'acknowledged',
+  /** The service worker opened or reused the Nook tab. */
+  TabOpened = 'tab-opened',
   Refused = 'refused',
   /** No listener answered: Chrome sets lastError. */
   Unanswered = 'unanswered',
@@ -88,8 +88,19 @@ class SidePanelBrowserFixture {
     },
   }
 
+  readonly focusedTabs: number[] = []
+
   private readonly tabs = {
     sendMessage: () => this.tabMessages.push('sendMessage'),
+    update: (tabId: number, update: chrome.tabs.UpdateProperties) => {
+      switch (update.active === true) {
+        case true:
+          this.focusedTabs.push(tabId)
+          return Promise.resolve(browserTab('https://simple.nokey.sh/', tabId))
+        case false:
+          return Promise.reject(new Error('unexpected tab update'))
+      }
+    },
     onActivated: {
       addListener: (listener: ActivatedListener) =>
         this.activated.push(listener),
@@ -145,6 +156,9 @@ class SidePanelBrowserFixture {
     switch (this.reply) {
       case FixtureReplyKind.Acknowledged:
         callback({ ok: true })
+        return
+      case FixtureReplyKind.TabOpened:
+        callback({ ok: true, tabId: 31 })
         return
       case FixtureReplyKind.Refused:
         callback({ ok: false, reason: 'forbidden-sender' })
@@ -217,9 +231,11 @@ function tabIn(request: TabPlacement): chrome.tabs.Tab {
 describe('side panel browser runtime', () => {
   test('follows its own window without runtime broadcasts or tab messages', () => {
     const changes: SidePanelChangeKind[] = []
+    const activatedTabs: number[] = []
     const release = new SidePanelRuntime().follow({
       window: panelWindow,
       onchange: (change) => changes.push(change),
+      ontabactivated: (tabId) => activatedTabs.push(tabId),
     })
 
     fixture.fireActivated(7)
@@ -256,6 +272,8 @@ describe('side panel browser runtime', () => {
       SidePanelChangeKind.PanelShown,
       SidePanelChangeKind.PanelFocused,
     ])
+    // Only the activation in the panel's window names its tab.
+    expect(activatedTabs).toEqual([3])
     expect(fixture.runtimeListeners).toEqual([])
     expect(fixture.tabMessages).toEqual([])
 
@@ -272,6 +290,7 @@ describe('side panel browser runtime', () => {
     const release = new SidePanelRuntime().follow({
       window: { kind: SidePanelWindowKind.Unknown },
       onchange: (change) => changes.push(change),
+      ontabactivated: () => {},
     })
     expect(fixture.activated).toHaveLength(0)
     fixture.fireVisibility(FixtureVisibility.Visible)
@@ -282,21 +301,69 @@ describe('side panel browser runtime', () => {
   test('sends only its own requests to the service worker', async () => {
     const runtime = new SidePanelRuntime()
     await Effect.runPromise(runtime.openVault())
-    await Effect.runPromise(runtime.openNookTab(SidePanelNookTabIntent.Pair))
-    await Effect.runPromise(runtime.openNookTab(SidePanelNookTabIntent.Manage))
+    fixture.reply = FixtureReplyKind.TabOpened
+    const tabId = await Effect.runPromise(
+      runtime.beginPairing({
+        device: {
+          deviceId: 'device-1',
+          devicePublicKey: 'public-1',
+          deviceSigningPublicKey: 'signing-1',
+        },
+        deviceLabel: 'Nook Extension',
+        windowId: 7,
+        connectId: 'connect-1',
+      }),
+    )
+    expect(tabId).toBe(31)
+    fixture.reply = FixtureReplyKind.Acknowledged
     await Effect.runPromise(runtime.lock())
 
     expect(fixture.sent).toEqual([
       { type: OpenSimpleVaultMessageType.NookOpenSimpleVault },
+      // Connecting opens Nook's connect page directly, never the launcher.
       {
-        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-        payload: { intent: OpenCompanionLauncherIntent.Pair },
+        type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+        payload: {
+          deviceId: 'device-1',
+          devicePublicKey: 'public-1',
+          deviceSigningPublicKey: 'signing-1',
+          deviceLabel: 'Nook Extension',
+          // The panel names its own window and its connect; no choice
+          // rides along.
+          windowId: 7,
+          connectId: 'connect-1',
+        },
       },
-      { type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher },
       { type: ExtensionSessionMessageType.Lock },
     ])
     expect(fixture.runtimeListeners).toEqual([])
     expect(fixture.tabMessages).toEqual([])
+  })
+
+  test('begin-pairing fails visibly without the Nook tab id', async () => {
+    const runtime = new SidePanelRuntime()
+    const pairing = {
+      device: {
+        deviceId: 'device-1',
+        devicePublicKey: 'public-1',
+        deviceSigningPublicKey: 'signing-1',
+      },
+      deviceLabel: 'Nook Extension',
+      windowId: 7,
+      connectId: 'connect-1',
+    }
+    // An acknowledgement without a tab id leaves nothing to follow.
+    const missing = await Effect.runPromise(
+      Effect.result(runtime.beginPairing(pairing)),
+    )
+    expect(missing._tag).toBe('Failure')
+  })
+
+  test('brings the Nook tab to the front', async () => {
+    const runtime = new SidePanelRuntime()
+    await Effect.runPromise(runtime.focusTab(31))
+    expect(fixture.focusedTabs).toEqual([31])
+    expect(fixture.sent).toEqual([])
   })
 
   test('a refused or unanswered request fails visibly', async () => {
@@ -349,6 +416,8 @@ class SidePanelSources {
     extensionDeviceProtectionStatus: [ExtensionSessionMessageType.Status],
     extensionSessionDevice: [ExtensionSessionMessageType.Status],
     recoverExtensionPasskey: [ExtensionSessionMessageType.RecoverPasskey],
+    // Asks the browser whether it offers passkey autofill; sends nothing.
+    passkeyAutofillAvailable: [],
     createExtensionPasskey: [
       ExtensionSessionMessageType.BeginPasskeySetup,
       ExtensionSessionMessageType.FinishPasskeySetup,
@@ -359,6 +428,15 @@ class SidePanelSources {
     ],
     createExtensionPin: [ExtensionSessionMessageType.CreatePin],
     unlockExtensionPin: [ExtensionSessionMessageType.UnlockPin],
+    // Use this identity: that identity then opens with its own unlock.
+    activateIdentity: [ExtensionSessionMessageType.ActivateIdentity],
+    // Connecting an identity: Rust picks the key, or stages one to drop.
+    beginIdentityConnection: [
+      ExtensionSessionMessageType.BeginIdentityConnection,
+    ],
+    cancelIdentityConnection: [
+      ExtensionSessionMessageType.CancelIdentityConnection,
+    ],
   }
 
   async panelSources(): Promise<readonly string[]> {
@@ -401,7 +479,9 @@ describe('side panel sources', () => {
     const loaded = await sources.loadedSources()
     expect(loaded.length).toBeGreaterThan(8)
     for (const source of loaded) {
-      expect(source).not.toMatch(/\bonMessage\b/)
+      // Runtime broadcasts stay unheard; the only messages the panel takes
+      // arrive on the connect page's admitted port.
+      expect(source).not.toMatch(/\bruntime\.onMessage\b/)
       expect(source).not.toContain('tabs.sendMessage')
       expect(source).not.toContain('chrome.scripting')
       expect(source).not.toContain('chrome.storage')

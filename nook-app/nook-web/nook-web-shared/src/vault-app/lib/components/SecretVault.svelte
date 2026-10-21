@@ -115,6 +115,7 @@
     type SecretEditor,
     type SecretReveal,
   } from './secret-vault-state'
+  import { PasskeyDetailSelection } from './passkey-detail-selection.svelte'
 
   let {
     vault,
@@ -176,6 +177,7 @@
   let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
+  const passkeySelection = new PasskeyDetailSelection(() => vault)
 
   class SecretVaultOrdering {
     static byType(...[left, right]: SecretListItemComparison): number {
@@ -608,6 +610,14 @@
       ? { kind: SecretSelectionKind.None }
       : { kind: SecretSelectionKind.Selected, id }
     if (
+      selection.kind === SecretSelectionKind.Selected &&
+      filteredItems.find((item) => item.id === id)?.type === SecretType.Passkey
+    ) {
+      passkeySelection.select(id)
+    } else {
+      passkeySelection.clear()
+    }
+    if (
       previous.kind === SecretSelectionKind.Selected &&
       previous.id in decryptedSecrets
     ) {
@@ -837,6 +847,8 @@
                   authenticatorCode={authenticatorCodePresentation(
                     entry.item.id,
                   )}
+                  passkeyDetails={passkeySelection.detailsFor(entry.item.id)}
+                  secretHistory={passkeySelection.historyFor(entry.item.id)}
                   copiedNotice={copiedKey}
                   onToggleExpand={toggleExpand}
                   onToggleReveal={toggleReveal}

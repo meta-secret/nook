@@ -23,13 +23,18 @@
   import {
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
+    PasskeyDetailsPresentationKind,
+    SecretHistoryPresentationKind,
     SecretPageInteractionKind,
     SecretRevealKind,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
+    type PasskeyDetailsPresentation,
+    type SecretHistoryPresentation,
     type SecretReveal,
   } from "../secret-vault-state";
   import SecretSlot from "./SecretSlot.svelte";
+  import PasskeyDetailSlots from "./PasskeyDetailSlots.svelte";
   import SecretStrengthMeter from "./SecretStrengthMeter.svelte";
   import {
     SecretItemView,
@@ -53,6 +58,8 @@
     pageInteraction,
     reveal = { kind: SecretRevealKind.Hidden },
     authenticatorCode = { kind: AuthenticatorCodePresentationKind.Hidden },
+    passkeyDetails = { kind: PasskeyDetailsPresentationKind.Hidden },
+    secretHistory = { kind: SecretHistoryPresentationKind.Hidden },
     copiedNotice = { kind: ClipboardNoticeKind.Hidden },
     editRestriction = { decision: VaultEditDecision.Allowed },
     onToggleReveal,
@@ -66,6 +73,8 @@
     pageInteraction: SecretPageInteractionKind;
     reveal?: SecretReveal;
     authenticatorCode?: AuthenticatorCodePresentation;
+    passkeyDetails?: PasskeyDetailsPresentation;
+    secretHistory?: SecretHistoryPresentation;
     copiedNotice?: ClipboardNotice;
     editRestriction?: VaultEditRestriction;
     onToggleReveal: (id: string) => Promise<void>;
@@ -126,6 +135,14 @@
         [CopyField.CurrentCode]:
           authenticatorCode.kind === AuthenticatorCodePresentationKind.Visible
             ? authenticatorCode.code.code
+            : "",
+        [CopyField.CredentialId]:
+          passkeyDetails.kind === PasskeyDetailsPresentationKind.Loaded
+            ? passkeyDetails.details.credentialId
+            : "",
+        [CopyField.PublicKeyFingerprint]:
+          passkeyDetails.kind === PasskeyDetailsPresentationKind.Loaded
+            ? passkeyDetails.details.publicKeyFingerprint
             : "",
       },
       backupCodes:
@@ -476,11 +493,12 @@
           item.passkeyUserName ||
           vault.t(I18N_KEYS.CommonNone)}
       </SecretSlot>
-      {#if item.passkeyUserDisplayName && item.passkeyUserName}
-        <SecretSlot label={vault.t(I18N_KEYS.VaultFieldsUsername)}>
-          {item.passkeyUserName}
-        </SecretSlot>
-      {/if}
+      <PasskeyDetailSlots
+        presentation={passkeyDetails}
+        history={secretHistory}
+        {copies}
+        {vault}
+      />
     {:else if item.type === SecretType.CreditCard}
       <SecretSlot label={vault.t(I18N_KEYS.VaultFieldsTitle)}>
         {item.title.trim() || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)}

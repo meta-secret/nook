@@ -280,7 +280,7 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun test scripts/extension-e2e-taskfile.test.ts ../docker/e2e-taskfile-contract.test.ts
 
   _extension:test:e2e:shard:
-    desc: Run one isolated Main extension browser shard with one worker.
+    desc: Run one isolated Main extension browser shard using all available logical CPUs.
     preconditions:
       - sh: test -n "${E2E_SHARD:-}"
         msg: E2E_SHARD is required.

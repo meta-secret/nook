@@ -56,7 +56,7 @@ tasks:
         helm get values nook-k0s --namespace arc-runners --output json |
           jq -e '.template.spec | select(.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | length == 3) |
             select(.nodeSelector["nook.nokey.sh/arc-workload"] == "build") |
-            {template: {spec: {nodeSelector: .nodeSelector, affinity: .affinity, topologySpreadConstraints: []}}}' > "$placement"
+            {template: {spec: {nodeSelector: .nodeSelector, affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints}}}' > "$placement"
         helm upgrade nook-k0s-hive "{{.ARC_RUNNER_CHART}}" \
           --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
           --reuse-values --values "$placement" --wait --timeout 10m

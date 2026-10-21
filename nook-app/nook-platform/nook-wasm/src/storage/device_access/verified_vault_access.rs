@@ -75,7 +75,12 @@ mod tests {
         first?;
         second?;
 
-        let profile = DeviceAccessProfileKey::selected().await?.load().await?;
+        // Read the profile both updates wrote to, not whichever identity another
+        // test left selected in the shared database.
+        let profile = DeviceAccessProfileKey::for_verified_app_id(device_a.as_str())
+            .await?
+            .load()
+            .await?;
         assert!(
             profile
                 .verified_vaults

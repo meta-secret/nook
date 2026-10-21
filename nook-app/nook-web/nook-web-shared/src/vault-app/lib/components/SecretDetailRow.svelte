@@ -13,10 +13,14 @@
   import {
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
+    PasskeyDetailsPresentationKind,
+    SecretHistoryPresentationKind,
     SecretRevealKind,
     SecretPageInteractionKind,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
+    type PasskeyDetailsPresentation,
+    type SecretHistoryPresentation,
     type SecretReveal,
   } from "./secret-vault-state";
 
@@ -28,6 +32,8 @@
     pageInteraction,
     reveal = { kind: SecretRevealKind.Hidden },
     authenticatorCode = { kind: AuthenticatorCodePresentationKind.Hidden },
+    passkeyDetails = { kind: PasskeyDetailsPresentationKind.Hidden },
+    secretHistory = { kind: SecretHistoryPresentationKind.Hidden },
     copiedNotice = { kind: ClipboardNoticeKind.Hidden },
     onToggleExpand,
     onToggleReveal,
@@ -47,6 +53,8 @@
     pageInteraction: SecretPageInteractionKind;
     reveal?: SecretReveal;
     authenticatorCode?: AuthenticatorCodePresentation;
+    passkeyDetails?: PasskeyDetailsPresentation;
+    secretHistory?: SecretHistoryPresentation;
     copiedNotice?: ClipboardNotice;
     onToggleExpand: (id: string) => void;
     onToggleReveal: (id: string) => Promise<void>;
@@ -102,6 +110,8 @@
         {pageInteraction}
         {reveal}
         {authenticatorCode}
+        {passkeyDetails}
+        {secretHistory}
         {copiedNotice}
         {editRestriction}
         {onToggleReveal}

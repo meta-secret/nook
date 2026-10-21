@@ -1,11 +1,11 @@
 import { Effect, Schema } from 'effect'
 import {
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
-} from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
+import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
 
 /**
  * The side panel's own use of the browser: its requests to the service
@@ -15,12 +15,14 @@ import { ExtensionSessionMessageType } from '../lib/extension-session-message-ty
  * own visibility change.
  */
 
-/** Where Open in the Nook tab lands. */
-export enum SidePanelNookTabIntent {
-  /** All connections: the tab's companion home. */
-  Manage = 'manage',
-  /** Connect an identity: the tab starts pairing. */
-  Pair = 'pair',
+/** The key that connects the next identity, named for the connect page,
+ * the panel's own window, where the Nook tab opens or is reused, and the
+ * connect's id, the name of the page's port to the panel. */
+export type SidePanelPairing = {
+  readonly device: ExtensionSessionDeviceWire
+  readonly deviceLabel: string
+  readonly windowId: number
+  readonly connectId: string
 }
 
 /** The panel's requests to the service worker: a closed set. */
@@ -28,12 +30,11 @@ type SidePanelServiceWorkerMessage =
   | { readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault }
   | { readonly type: typeof ExtensionSessionMessageType.Lock }
   | {
-      readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-    }
-  | {
-      readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-      readonly payload: {
-        readonly intent: OpenCompanionLauncherIntent.Pair
+      readonly type: BeginExtensionPairingMessageType.NookBeginExtensionPairing
+      readonly payload: ExtensionSessionDeviceWire & {
+        readonly deviceLabel: string
+        readonly windowId: number
+        readonly connectId: string
       }
     }
 
@@ -48,6 +49,16 @@ export class SidePanelRequestFailure extends Schema.TaggedError<SidePanelRequest
 type SidePanelAcknowledgement = { readonly ok: true }
 type SidePanelAcknowledgementFields = {
   readonly ok: Schema.Codec<true>
+}
+type SidePanelTabFocusAttempt = {
+  readonly try: () => Promise<void>
+  readonly catch: () => SidePanelRequestFailure
+}
+
+/** The service worker opened or reused the Nook tab. */
+type SidePanelTabOpened = { readonly ok: true; readonly tabId: number }
+type SidePanelTabOpenedFields = SidePanelAcknowledgementFields & {
+  readonly tabId: Schema.Codec<number>
 }
 
 export enum SidePanelWindowKind {
@@ -87,6 +98,8 @@ export type SidePanelRelease = () => void
 type SidePanelFollowRequest = {
   readonly window: SidePanelWindow
   readonly onchange: SidePanelChangeListener
+  /** The tab that became active in the panel's window. */
+  readonly ontabactivated: (tabId: number) => void
 }
 
 type TabUpdatedListener = Parameters<
@@ -130,6 +143,7 @@ class SidePanelFollower {
   private readonly activated = (info: chrome.tabs.OnActivatedInfo): void => {
     switch (this.windowMatch(info.windowId)) {
       case SidePanelWindowMatch.Same:
+        this.request.ontabactivated(info.tabId)
         this.request.onchange(SidePanelChangeKind.TabActivated)
         return
       case SidePanelWindowMatch.Other:
@@ -252,11 +266,51 @@ export class SidePanelRuntime {
     return this.send(message)
   }
 
-  /** Open or focus the Nook tab, for pairing or for all connections. */
-  openNookTab(
-    intent: SidePanelNookTabIntent,
-  ): Effect.Effect<void, SidePanelRequestFailure> {
-    return this.send(SidePanelRuntime.nookTabMessage(intent))
+  private static readonly TAB_OPENED_FIELDS: SidePanelTabOpenedFields = {
+    ok: Schema.Literal(true),
+    tabId: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  }
+
+  /** The service worker's reply to a begin-pairing request. */
+  private static readonly TAB_OPENED = Schema.Struct(
+    SidePanelRuntime.TAB_OPENED_FIELDS,
+  ) satisfies Schema.Codec<SidePanelTabOpened>
+
+  /** Open Nook's connect route in the one Nook tab of the panel's window,
+   * reused when one is open; answers that tab's id. The panel stays. */
+  beginPairing(
+    pairing: SidePanelPairing,
+  ): Effect.Effect<number, SidePanelRequestFailure> {
+    const message: SidePanelServiceWorkerMessage = {
+      type: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+      payload: {
+        deviceId: pairing.device.deviceId,
+        devicePublicKey: pairing.device.devicePublicKey,
+        deviceSigningPublicKey: pairing.device.deviceSigningPublicKey,
+        deviceLabel: pairing.deviceLabel,
+        windowId: pairing.windowId,
+        connectId: pairing.connectId,
+      },
+    }
+    return this.deliver(message).pipe(
+      Effect.flatMap((reply) =>
+        Schema.decodeUnknownEffect(SidePanelRuntime.TAB_OPENED)(reply),
+      ),
+      Effect.mapError(() => new SidePanelRequestFailure()),
+      Effect.map((opened) => opened.tabId),
+    )
+  }
+
+  /** Bring the Nook tab of the running connect to the front. */
+  focusTab(tabId: number): Effect.Effect<void, SidePanelRequestFailure> {
+    const active: chrome.tabs.UpdateProperties = { active: true }
+    const focus: SidePanelTabFocusAttempt = {
+      try: async () => {
+        await chrome.tabs.update(tabId, active)
+      },
+      catch: () => new SidePanelRequestFailure(),
+    }
+    return Effect.tryPromise(focus)
   }
 
   lock(): Effect.Effect<void, SidePanelRequestFailure> {
@@ -282,14 +336,18 @@ export class SidePanelRuntime {
   private send(
     message: SidePanelServiceWorkerMessage,
   ): Effect.Effect<void, SidePanelRequestFailure> {
-    const delivery = Effect.callback<
-      BrowserRuntimeMessageValue,
-      SidePanelRequestFailure
-    >((resume) => {
-      chrome.runtime.sendMessage(message, new SidePanelReply(resume).receive)
-    })
-    return delivery.pipe(
+    return this.deliver(message).pipe(
       Effect.flatMap((reply) => SidePanelRuntime.acknowledged(reply)),
+    )
+  }
+
+  private deliver(
+    message: SidePanelServiceWorkerMessage,
+  ): Effect.Effect<BrowserRuntimeMessageValue, SidePanelRequestFailure> {
+    return Effect.callback<BrowserRuntimeMessageValue, SidePanelRequestFailure>(
+      (resume) => {
+        chrome.runtime.sendMessage(message, new SidePanelReply(resume).receive)
+      },
     )
   }
 
@@ -302,22 +360,6 @@ export class SidePanelRuntime {
       Effect.mapError(() => new SidePanelRequestFailure()),
       Effect.asVoid,
     )
-  }
-
-  private static nookTabMessage(
-    intent: SidePanelNookTabIntent,
-  ): SidePanelServiceWorkerMessage {
-    switch (intent) {
-      case SidePanelNookTabIntent.Manage:
-        return {
-          type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-        }
-      case SidePanelNookTabIntent.Pair:
-        return {
-          type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-          payload: { intent: OpenCompanionLauncherIntent.Pair },
-        }
-    }
   }
 
   private static panelWindow(current: chrome.windows.Window): SidePanelWindow {

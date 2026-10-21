@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
-import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import {
+  BeginExtensionPairingMessageType,
+  OpenSimpleVaultMessageType,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionRuntimeRequestType } from '../../../nook-web-extension/src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../../../nook-web-extension/src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../../nook-web-extension/src/lib/paired-vaults'
@@ -62,6 +65,8 @@ const sidePanelDemoProtocol = {
   refreshIdentity: PairedVaultsMessageType.RefreshIdentity,
   openVault: OpenSimpleVaultMessageType.NookOpenSimpleVault,
   openLauncher: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  beginIdentityConnection: ExtensionSessionMessageType.BeginIdentityConnection,
+  beginPairing: BeginExtensionPairingMessageType.NookBeginExtensionPairing,
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   pairedVaultList: SidePanelDemoVaults.Paired,
@@ -284,6 +289,11 @@ function installSidePanelDemoRuntime(
       case protocol.openVault:
       case protocol.openLauncher:
         return { ok: true }
+      case protocol.beginPairing:
+        // The Nook tab the service worker opened or reused.
+        return { ok: true, tabId: 42 }
+      case protocol.beginIdentityConnection:
+        return { ok: true, start: 'current-key' }
       default:
         return { ok: false, reason: 'demo-unhandled' }
     }
@@ -297,6 +307,7 @@ function installSidePanelDemoRuntime(
     runtime: {
       getURL: (resource: string) =>
         `${globalThis.location.origin}/__extension-side-panel/${resource}`,
+      onConnectExternal: listeners,
       sendMessage: (
         message: { readonly type: string },
         callback: (response: unknown) => void,
@@ -304,7 +315,12 @@ function installSidePanelDemoRuntime(
         callback(answer(message.type))
       },
     },
-    tabs: { onActivated: listeners, onUpdated: listeners },
+    tabs: {
+      onActivated: listeners,
+      onUpdated: listeners,
+      onRemoved: listeners,
+      update: (tabId: number) => Promise.resolve({ id: tabId }),
+    },
     windows: {
       getCurrent: () =>
         Promise.resolve({
@@ -345,9 +361,34 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('sets up in place, starting from the passkey the person already has', async ({
+/** A browser with no Nook passkey: autofill has nothing to suggest and
+ * waits, and its picker closes without one. */
+function refusePasskeyLookups(): void {
+  Object.defineProperty(navigator.credentials, 'get', {
+    configurable: true,
+    value: async (options: CredentialRequestOptions) => {
+      const mediation: unknown = Reflect.get(options, 'mediation')
+      if (mediation !== 'conditional') {
+        throw new DOMException(
+          'No passkey for this request.',
+          'NotAllowedError',
+        )
+      }
+      const signal: unknown = Reflect.get(options, 'signal')
+      return new Promise((...[, reject]) => {
+        if (!(signal instanceof AbortSignal)) return
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('Stopped.', 'AbortError'))
+        })
+      })
+    },
+  })
+}
+
+test('sets up in place: an existing passkey or a new one, side by side', async ({
   page,
 }) => {
+  await page.addInitScript(refusePasskeyLookups)
   await openSidePanel({
     page,
     session: {
@@ -357,14 +398,32 @@ test('sets up in place, starting from the passkey the person already has', async
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Not set up')
-  await expect(
-    page.getByTestId('device-protection-use-existing-choice'),
-  ).toHaveText('Use my passkey')
+  // The picker opens the browser's list of saved passkeys; there is no
+  // dialog. This browser has none, so the card says what to do instead.
+  const picker = page.getByTestId('device-protection-passkey-field')
+  await expect(picker).toBeFocused()
+  await picker.click()
+  await expect(page.getByTestId('device-protection-passkey-empty')).toHaveText(
+    'No list showed up? This browser has no Nook passkey saved yet: create one below.',
+  )
   await expect(page.getByTestId('side-panel-lock')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
+  await expect(
+    page.getByTestId('device-protection-create-new-choice'),
+  ).toHaveText('Create a new passkey')
   await demoBeat(page)
-  // Creating a passkey is the explicit alternative.
-  await page.getByTestId('device-protection-create-new-choice').click()
+  // A passkey on a phone or security key goes through the browser's picker;
+  // when it closes without one, the card offers what to do next.
+  await page.getByTestId('device-protection-use-existing-choice').click()
+  await expect(page.getByTestId('device-protection-title')).toHaveText(
+    "Didn't find your passkey?",
+  )
+  const create = page.getByTestId('device-protection-create-new-choice')
+  await expect(create).toHaveText('Create passkey')
+  await expect(create).toBeFocused()
+  await demoBeat(page)
+  // Creating a passkey stays an explicit step.
+  await create.click()
   await expect(page.getByTestId('device-protection-setup-btn')).toHaveText(
     'Create passkey',
   )
@@ -395,11 +454,23 @@ test('unlocks a PIN in place, shows identity · vault sections, and locks again'
   await expect(page.getByTestId('side-panel-connections')).toBeVisible()
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
   await demoBeat(page)
-  // Connecting another identity continues in the Nook tab; the panel stays.
+  // All connections opens in the panel: each identity's vaults, the
+  // default one marked; Back returns to This site.
+  await page.getByTestId('side-panel-manage').click()
+  await expect(page.getByTestId('side-panel-all-connections')).toBeVisible()
+  await expect(page.getByTestId('side-panel-default-vault')).toHaveCount(1)
+  await demoBeat(page)
+  await page.getByTestId('side-panel-connections-back').click()
+  await expect(page.getByTestId('side-panel-site-section')).toHaveCount(3)
+  // Connecting another identity opens the one Nook tab; the card follows
+  // that tab, where the identity is created, joined or chosen.
   await page.getByTestId('side-panel-connect').click()
-  await expect(page.getByTestId('side-panel-handoff')).toHaveText(
+  await expect(page.getByTestId('side-panel-connect-card')).toBeVisible()
+  await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
     'Continue in the Nook tab.',
   )
+  // The Nook tab opened in front, so the card offers no Show Nook tab.
+  await expect(page.getByTestId('side-panel-connect-focus-tab')).toHaveCount(0)
   await demoBeat(page)
   await page.getByTestId('side-panel-lock').click()
   await expect(page.getByTestId('side-panel-state')).toHaveText('Locked')
@@ -433,10 +504,15 @@ test('leads with connecting an identity when none is connected', async ({
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Unlocked')
-  await expect(page.getByTestId('side-panel-connect')).toHaveText(
+  await expect(
+    page.getByTestId('side-panel-connect-card').getByRole('heading'),
+  ).toHaveText('No identity connected yet')
+  await expect(page.getByTestId('side-panel-connect-start')).toHaveText(
     'Connect an identity',
   )
-  await expect(page.getByTestId('side-panel-manage')).toBeVisible()
+  await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
+  // Nothing to manage yet: All connections waits for an identity.
+  await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
   await demoBeat(page)
 })
 

@@ -15,6 +15,11 @@ import { FocusedLoginMessageRoute } from './service-worker/focused-login-message
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
+import { SiteSidePanelOpening } from './service-worker/site-side-panel-opening'
+import {
+  SiteSidePanelOpenKind,
+  SiteSidePanelOpenMessage as SiteSidePanelOpenMessageSchema,
+} from '../lib/site-side-panel-messages'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
@@ -303,6 +308,7 @@ const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
 const pilotAttemptRuntimeSchema: RuntimeMessageSchema<PilotAttemptMessage> = {
   decode: PilotAttemptCodec.decodeMessage,
 }
+const siteSidePanelOpening = new SiteSidePanelOpening(chrome.sidePanel)
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(pilotAttemptRuntimeSchema)
     .respondWith(PilotAttempts.handle)
@@ -310,6 +316,9 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SidePanelSiteRoutes.listing(),
   SidePanelSiteRoutes.fill(),
   SidePanelSiteRoutes.codeFill(),
+  SchemaRuntimeMessageRoute.matching(SiteSidePanelOpenMessageSchema)
+    .respondWith(siteSidePanelOpening.open.bind(siteSidePanelOpening))
+    .onRejected(() => ({ kind: SiteSidePanelOpenKind.Failed })),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
     .respondWith((request) => {
       const operation: ConstructorParameters<

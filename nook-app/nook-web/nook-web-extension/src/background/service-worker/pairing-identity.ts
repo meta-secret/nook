@@ -37,6 +37,7 @@ import {
   RuntimeMessageDecodeFailureKind,
 } from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
 import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
+import { ExtensionConnectTabs } from './extension-connect-tab'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
   COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
@@ -61,7 +62,6 @@ import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
-  ExtensionSessionLifecycle,
 } from './session-lifecycle'
 import type { CompanionLauncherSource } from './session-lifecycle'
 import { identityHandoffSessionRequest } from './session-request-projections'
@@ -220,13 +220,14 @@ type WebsiteGrantAccess =
     }
 
 type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
-  openLockedCompanion: boolean
+  interactive: boolean
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionPairingIdentity {
   private pendingIdentityHandoffConsumptions = new Set<string>()
   private readonly pairingStorage = new ExtensionPairingStorage()
+  private readonly connectTabs = new ExtensionConnectTabs(simpleVaultRuntime)
   randomNonce(): string {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
     const bytes = new Uint8Array(16)
@@ -252,9 +253,11 @@ class ExtensionPairingIdentity {
     return this.pairingStorage.removeSessionStorage(key)
   }
 
+  /** Opens Nook's connect route in the one Nook tab of the requesting
+   * window and returns that tab's id; a failure rejects. */
   async openExtensionPairing(
     device: BeginExtensionPairingMessage['payload'],
-  ): Promise<void> {
+  ): Promise<number> {
     await companionWasmReady
     const nonce = this.randomNonce()
     const nookTypedArgs0_1: Parameters<
@@ -281,6 +284,9 @@ class ExtensionPairingIdentity {
     url.searchParams.set('extension_id', chrome.runtime.id)
     url.searchParams.set('device_label', device.deviceLabel)
     url.searchParams.set('nonce', nonce)
+    // Separate from the single-use handoff nonce: it only names the page's
+    // progress port for the side panel that started this connect.
+    url.searchParams.set('connect_id', device.connectId)
     url.searchParams.set(
       'scopes',
       [
@@ -290,10 +296,11 @@ class ExtensionPairingIdentity {
         ExtensionConnectScope.SyncProviderCredentials,
       ].join(','),
     )
-    const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
+    const connectTab: Parameters<typeof this.connectTabs.open>[0] = {
+      windowId: device.windowId,
       url: url.toString(),
     }
-    void chrome.tabs.create(nookTypedArgs0_2)
+    return Effect.runPromise(this.connectTabs.open(connectTab))
   }
 
   sendSessionMessage(
@@ -845,7 +852,7 @@ class ExtensionPairingIdentity {
       origin,
       sender,
       forbiddenReason,
-      openLockedCompanion: true,
+      interactive: true,
     }
     return this.websiteGrants(request)
   }
@@ -859,7 +866,7 @@ class ExtensionPairingIdentity {
       origin,
       sender,
       forbiddenReason,
-      openLockedCompanion: false,
+      interactive: false,
     }
     return this.websiteGrants(request)
   }
@@ -868,7 +875,7 @@ class ExtensionPairingIdentity {
     origin,
     sender,
     forbiddenReason,
-    openLockedCompanion,
+    interactive,
   }: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
     const nookTypedArgs0_8: Parameters<
       typeof this.isAuthorizedWebsiteSender
@@ -890,7 +897,7 @@ class ExtensionPairingIdentity {
     }
 
     const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-    const queue = openLockedCompanion
+    const queue = interactive
       ? extensionSessionInteractiveDeadline(queueExpiresAt)
       : extensionSessionProbeDeadline(queueExpiresAt)
     const nookTypedArgs0_9: Parameters<typeof this.sendSessionMessage>[0] = {
@@ -903,17 +910,9 @@ class ExtensionPairingIdentity {
     const status = statusDelivery.value
     await companionWasmReady
     const sessionStatus = this.websiteSessionStatusTransport(status)
-    if (openLockedCompanion) {
+    if (interactive) {
+      // The site page opens the Nook side panel to unlock; Sign in is its gesture.
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
-        const launcherRequest: Parameters<
-          typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
-        >[0] = {
-          intent: OpenCompanionLauncherIntent.PilotAuth,
-          source: ExtensionSessionLifecycle.sourceFromSender(sender),
-        }
-        extensionSessionLifecycle.openCompanionLauncherBestEffort(
-          launcherRequest,
-        )
         return {
           response: {
             ok: true,

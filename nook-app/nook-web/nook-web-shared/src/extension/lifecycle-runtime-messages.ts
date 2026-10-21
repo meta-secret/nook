@@ -79,17 +79,27 @@ const beginExtensionPairingDeviceSigningPublicKeySchema = Schema.String.pipe(
 const beginExtensionPairingDeviceLabelSchema = Schema.String.pipe(
   Schema.check(Schema.isMinLength(1)),
 );
+const beginExtensionPairingWindowIdSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+);
+const beginExtensionPairingConnectIdSchema = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1)),
+);
 type BeginExtensionPairingPayloadFields = {
   readonly deviceId: typeof beginExtensionPairingDeviceIdSchema;
   readonly devicePublicKey: typeof beginExtensionPairingDevicePublicKeySchema;
   readonly deviceSigningPublicKey: typeof beginExtensionPairingDeviceSigningPublicKeySchema;
   readonly deviceLabel: typeof beginExtensionPairingDeviceLabelSchema;
+  readonly windowId: typeof beginExtensionPairingWindowIdSchema;
+  readonly connectId: typeof beginExtensionPairingConnectIdSchema;
 };
 const beginExtensionPairingPayloadFields: BeginExtensionPairingPayloadFields = {
   deviceId: beginExtensionPairingDeviceIdSchema,
   devicePublicKey: beginExtensionPairingDevicePublicKeySchema,
   deviceSigningPublicKey: beginExtensionPairingDeviceSigningPublicKeySchema,
   deviceLabel: beginExtensionPairingDeviceLabelSchema,
+  windowId: beginExtensionPairingWindowIdSchema,
+  connectId: beginExtensionPairingConnectIdSchema,
 };
 const beginExtensionPairingPayloadSchema = Schema.Struct(
   beginExtensionPairingPayloadFields,
@@ -108,6 +118,13 @@ export class BeginExtensionPairingMessage {
     devicePublicKey: string;
     deviceSigningPublicKey: string;
     deviceLabel: string;
+    /** The requesting extension page's own window. It only selects where
+     * the Nook tab opens or is reused and grants no authority. */
+    windowId: number;
+    /** The requesting page's connect id; the connect page names its
+     * progress port with it. It only matches that port to the side panel
+     * that started the connect and grants no authority. */
+    connectId: string;
   };
   static decode<WireMessage>(
     message: WireMessage,

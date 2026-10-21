@@ -407,6 +407,30 @@ describe('authentication surface mutation filtering', () => {
     }
   })
 
+  test('rescans when a portaled authenticator setup dialog with an inline SVG QR opens or closes', () => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    dialog.innerHTML = `
+      <div>Update authenticator app</div>
+      <div>Scan this QR code to set up your account using your preferred authenticator app.</div>
+      <svg viewBox="0 0 29 29"><path d="M0 0h7v7H0z"/></svg>
+    `
+    document.body.append(dialog)
+    for (const record of [
+      childListMutation(document.body, [dialog]),
+      childListMutation(document.body, [], [dialog]),
+    ]) {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = { records: [record], mountedHost: false, renderedWorkflow: false }
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
+    }
+  })
+
   test('rescans dynamically inserted and updated CAPTCHA frames', () => {
     const insertedFrame = document.createElement('iframe')
     insertedFrame.src = 'about:blank#recaptcha'

@@ -79,11 +79,12 @@ pub use types::{
     NookIdentityProtectionStep, NookIdentityProtectionTask, NookIdentityProtectionTaskState,
     NookImportResult, NookJoinRequest, NookLocalFolderHealth, NookLocalFolderHealthState,
     NookLoginAccount, NookLoginFillCredential, NookManualProviderSync, NookManualProviderSyncState,
-    NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
-    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
-    NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
-    NookRuntimeConfig, NookSecretFormFields, NookSecretPage, NookSecurityConflict,
-    NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
+    NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyDetails,
+    NookPasskeyNameState, NookPasskeyRegistration, NookPasskeySetup, NookPasskeyUnlockOptions,
+    NookPasswordEntrySummary, NookPendingSyncConflict, NookProviderReplicationCapability,
+    NookReplacementCandidate, NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields,
+    NookSecretHistory, NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState,
+    NookSecurityConflict, NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
     NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
@@ -177,6 +178,8 @@ pub enum NookError {
     LoginFillOrigin(#[from] WebsiteHostError),
     #[error(transparent)]
     AuthenticatorIssuerHosts(#[from] nook_core::AuthenticatorIssuerHostsError),
+    #[error(transparent)]
+    AuthenticatorEnrollment(#[from] nook_core::AuthenticatorEnrollmentError),
 
     #[error("App protection is unavailable")]
     AppProtectionUnavailable,

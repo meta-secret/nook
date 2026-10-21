@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { ExtensionConnectStepKind } from '../../nook-web-shared/src/extension/extension-connect-progress'
 import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
   beginAddSyncProvider,
@@ -15,6 +16,7 @@ import {
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
   waitForVaultOperationsIdle,
+  waitForVaultInitialized,
   waitForVaultSyncIdle,
   openManagePage,
   ManagePage,
@@ -26,6 +28,7 @@ test.describe('vault connect flow', () => {
   }) => {
     await page.goto('/app/')
 
+    await waitForVaultInitialized(page)
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await createLocalVaultOnLogin(page)
 
@@ -95,6 +98,7 @@ test.describe('vault connect flow', () => {
   }) => {
     await page.goto('/app/')
 
+    await waitForVaultInitialized(page)
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
     await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
@@ -115,6 +119,66 @@ test.describe('vault connect flow', () => {
       'href',
       'https://github.com/meta-secret/nook',
     )
+  })
+
+  test('the connect route owns create and join and reports its steps to the extension', async ({
+    page,
+  }) => {
+    // The extension opens its connect route with no start choice; the page
+    // opens one runtime port to the extension id in the URL, named with the
+    // side panel's connect id, and reports where it is. This browser has no
+    // vault, so it offers create or join.
+    await page.addInitScript(() => {
+      const steps: unknown[] = []
+      const connected: string[] = []
+      const port = {
+        postMessage: (step: unknown) => steps.push(step),
+        disconnect: () => connected.push('disconnected'),
+        onDisconnect: { addListener: () => {} },
+      }
+      Object.assign(window, {
+        __nookConnectSteps: steps,
+        __nookConnectedTo: connected,
+        chrome: {
+          runtime: {
+            connect: (extensionId: string, info: { readonly name: string }) => {
+              connected.push(`${extensionId}/${info.name}`)
+              return port
+            },
+          },
+        },
+      })
+    })
+    const connect = new URLSearchParams({
+      device_id: 'side-panel-device',
+      device_public_key: 'age1sidepanel',
+      device_signing_public_key: 'side-panel-signing-key',
+      extension_id: 'side-panel-extension',
+      device_label: 'Nook Extension',
+      nonce: 'side-panel-nonce',
+      connect_id: 'side-panel-connect',
+      scopes: 'vault-access,password-filling',
+    })
+    await page.goto(`/extension-connect?${connect}`)
+    await waitForVaultInitialized(page)
+    await expect(page.getByTestId('first-vault-start')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-vault-name-input')).toHaveValue('')
+    await expect(page.getByTestId('login-join-identity-btn')).toBeVisible()
+    await expect
+      .poll(() =>
+        page.evaluate((): unknown => Reflect.get(window, '__nookConnectSteps')),
+      )
+      .toEqual([
+        { kind: ExtensionConnectStepKind.Opened },
+        { kind: ExtensionConnectStepKind.Choosing },
+      ])
+    expect(
+      await page.evaluate((): unknown =>
+        Reflect.get(window, '__nookConnectedTo'),
+      ),
+    ).toEqual(['side-panel-extension/side-panel-connect'])
   })
 
   test('does not create a new vault when open existing finds an empty provider', async ({

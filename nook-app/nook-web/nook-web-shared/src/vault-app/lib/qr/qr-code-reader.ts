@@ -1,15 +1,11 @@
 import { Data, Effect } from "effect";
-import type {
-  ReaderOptions,
-  ReadResult,
-  ZXingModuleOverrides,
-} from "zxing-wasm/reader";
-import zxingReaderWasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url";
+import type { ReaderOptions, ReadResult } from "zxing-wasm/reader";
+import type { QrCodeReaderWasm } from "./qr-code-reader-wasm";
 
 /** Texts of the valid QR symbols found in one picture, in reader order. */
 export type QrCodeTexts = readonly string[];
 
-enum QrCodeReadFailureKind {
+export enum QrCodeReadFailureKind {
   ReaderUnavailable = "reader-unavailable",
   PictureUnreadable = "picture-unreadable",
 }
@@ -26,12 +22,6 @@ export class QrCodeReadFailure extends Data.TaggedError(
     const reason: QrCodeReadFailureReason = { kind };
     return new QrCodeReadFailure(reason);
   }
-}
-
-/** Eager ZXing module preparation; the same overrides object reuses one WASM instance. */
-interface QrCodeReaderModuleLoad {
-  readonly overrides: ZXingModuleOverrides;
-  readonly fireImmediately: true;
 }
 
 /** A drawable picture at its native pixel size. */
@@ -54,15 +44,10 @@ interface QrCodeReadAttempt<Read> {
 /**
  * Reads QR symbols from whole pictures with the locally bundled ZXing reader.
  *
- * The reader module and its WASM load on first use. Emscripten requests only
- * `zxing_reader.wasm`, so every lookup resolves to this build's own asset and
- * the package's default CDN is never contacted.
+ * The reader module and its WASM load on first use, from the location the
+ * owning build supplies.
  */
 export class QrCodeReader {
-  private static readonly MODULE_LOAD: QrCodeReaderModuleLoad = {
-    overrides: { locateFile: () => zxingReaderWasmUrl },
-    fireImmediately: true,
-  };
   private static readonly READER_OPTIONS: ReaderOptions = {
     formats: ["QRCode"],
   };
@@ -71,6 +56,8 @@ export class QrCodeReader {
   };
 
   private readonly canvas = document.createElement("canvas");
+
+  constructor(private readonly wasm: QrCodeReaderWasm) {}
 
   readImage(image: Blob): Effect.Effect<QrCodeTexts, QrCodeReadFailure> {
     const decoding: QrCodeReadAttempt<ImageBitmap> = {
@@ -145,7 +132,7 @@ export class QrCodeReader {
 
   private async symbols(pixels: ImageData): Promise<ReadResult[]> {
     const zxing = await import("zxing-wasm/reader");
-    await zxing.prepareZXingModule(QrCodeReader.MODULE_LOAD);
+    await zxing.prepareZXingModule(this.wasm.moduleLoad);
     return zxing.readBarcodes(pixels, QrCodeReader.READER_OPTIONS);
   }
 }

@@ -134,6 +134,34 @@ export class DeviceProtectionStageMap {
     }
   }
 
+  /** Passkey autofill listens while extension setup offers an existing
+   * passkey: the browser suggests only passkeys it holds, without a dialog.
+   * A further identity's key is always new, so it has none. */
+  static offersAutofill(request: DeviceProtectionCopyRequest): boolean {
+    const { stage, purpose, workflow } = request
+    switch (stage) {
+      case DeviceProtectionStage.Setup:
+        break
+      case DeviceProtectionStage.PinSetup:
+      case DeviceProtectionStage.PinUnlock:
+      case DeviceProtectionStage.PasskeyUnlock:
+        return false
+    }
+    switch (purpose) {
+      case DeviceProtectionPurposeKind.ExtensionKey:
+        break
+      case DeviceProtectionPurposeKind.IdentityKey:
+        return false
+    }
+    switch (workflow) {
+      case DeviceProtectionSetupWorkflow.Authenticate:
+        return true
+      case DeviceProtectionSetupWorkflow.Create:
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return false
+    }
+  }
+
   /** Setup starts by authenticating with an existing passkey; a further
    * identity's key is always a new one. */
   static initialWorkflow(
@@ -203,6 +231,8 @@ export class DeviceProtectionCopy {
         return I18N_KEYS.ExtensionDeviceSetupSetupTitle
       case DeviceProtectionSetupWorkflow.Create:
         return I18N_KEYS.ExtensionDeviceSetupCreateTitle
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return I18N_KEYS.ExtensionDeviceSetupNotFoundTitle
     }
   }
 
@@ -214,6 +244,8 @@ export class DeviceProtectionCopy {
         return I18N_KEYS.ExtensionDeviceSetupSetupDescription
       case DeviceProtectionSetupWorkflow.Create:
         return I18N_KEYS.ExtensionDeviceSetupCreateDescription
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return I18N_KEYS.ExtensionDeviceSetupNotFoundDescription
     }
   }
 }
@@ -235,6 +267,9 @@ export enum DeviceProtectionFailureKind {
   PinFallback = 'pin-fallback',
   /** Stay on the stage and say why. */
   Message = 'message',
+  /** The browser closed the passkey prompt or found nothing to offer:
+   * the step decides what follows. */
+  NotAllowed = 'not-allowed',
 }
 
 export type DeviceProtectionFailure =
@@ -243,9 +278,62 @@ export type DeviceProtectionFailure =
       readonly notice: I18nKey
     }
   | {
-      readonly kind: DeviceProtectionFailureKind.Message
+      readonly kind:
+        | DeviceProtectionFailureKind.Message
+        | DeviceProtectionFailureKind.NotAllowed
       readonly message: I18nKey
     }
+
+/** What a passkey step does when the browser did not let it finish. */
+export enum PasskeyNotAllowedReaction {
+  /** Stay on the stage and say why. */
+  Notice = 'notice',
+  /** Looking for an existing passkey ended without one: offer creating one
+   * or looking again, instead of the same button. */
+  OfferChoice = 'offer-choice',
+  /** Passkey autofill ended without a pick, which a browser holding no
+   * passkey does at once: nothing to say, the field and Create stay. */
+  Quiet = 'quiet',
+}
+
+export enum PasskeyNotAllowedOutcome {
+  /** Show the not-found choice; its own words explain what happened. */
+  ShowChoice = 'show-choice',
+  /** Stay where the person is and say why. */
+  ShowNotice = 'show-notice',
+  /** Stay where the person is without a message. */
+  Stay = 'stay',
+}
+
+export type PasskeyNotAllowedRequest = {
+  readonly reaction: PasskeyNotAllowedReaction
+  readonly workflow: DeviceProtectionSetupWorkflow
+}
+
+/** Where a not-allowed passkey step leads. A closed picker never proves that
+ * no passkey exists, so it never starts creating one: the person chooses. */
+export class PasskeyNotAllowedMap {
+  private constructor() {}
+
+  static outcome(request: PasskeyNotAllowedRequest): PasskeyNotAllowedOutcome {
+    const { reaction, workflow } = request
+    switch (reaction) {
+      case PasskeyNotAllowedReaction.Notice:
+        return PasskeyNotAllowedOutcome.ShowNotice
+      case PasskeyNotAllowedReaction.Quiet:
+        return PasskeyNotAllowedOutcome.Stay
+      case PasskeyNotAllowedReaction.OfferChoice:
+        break
+    }
+    switch (workflow) {
+      case DeviceProtectionSetupWorkflow.NotFound:
+        return PasskeyNotAllowedOutcome.ShowNotice
+      case DeviceProtectionSetupWorkflow.Authenticate:
+      case DeviceProtectionSetupWorkflow.Create:
+        return PasskeyNotAllowedOutcome.ShowChoice
+    }
+  }
+}
 
 /** Whether a ceremony step is running; a running step keeps its control
  * focused and refuses a second start. */
@@ -331,6 +419,10 @@ export class DeviceProtectionFailureMap {
           message: I18N_KEYS.ExtensionSetupSessionBusyRetry,
         }
       case DeviceProtectionFailureMarker.CeremonyNotAllowed:
+        return {
+          kind: DeviceProtectionFailureKind.NotAllowed,
+          message: fallbackKey,
+        }
       case DeviceProtectionFailureMarker.Unrecognized:
         return {
           kind: DeviceProtectionFailureKind.Message,

@@ -85,16 +85,26 @@ unavailable, or call the configured ceiling a measured speedup.
 **Required:** report the queue and node condition. Measure full hosted runs
 after an authorized rollout before claiming improved latency.
 
-### Shared workload preferences
+### Shared execution spread
 
-Build-pool execution Pods share preferred pod anti-affinity. Its selector counts
-`arc-spread-group` values `general`, `hive`, and `container` together within
-their eligible nodes.
-Container-runner managers and BuildKit daemons are excluded. General runners
-include lightweight orchestration jobs; a Pod count is a placement proxy, not a
-measurement of actual CPU use or active BuildKit solves.
+Build-pool execution Pods use native topology spread on `kubernetes.io/hostname`
+with `maxSkew: 1` and `whenUnsatisfiable: DoNotSchedule`.
+General and Hive selectors count `arc-spread-group` values `general`, `hive`,
+and `container` together. The mixed container hook's spread selector counts
+only `container`, excluding general/Hive runners from mixed-job spread counts.
+Both count within the Pod's namespace, currently `arc-runners`.
+Container-runner managers, listeners and BuildKit daemons are excluded.
+General runners include lightweight orchestration jobs; the rule does not
+measure actual CPU use or active BuildKit solves.
 
-The native scheduler applies these marginal penalties per matching Pod:
+Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
+only hosts eligible for the incoming Pod, preserving each pool's placement
+constraints. No `minDomains` or `matchLabelKeys` override is configured.
+General and Hive runners count three eligible build hosts. Mixed container
+jobs count Rise-S-1 and the OVH control/storage host. Browser-only jobs remain
+on Rise-S-2 outside these build-pool spread constraints.
+
+The existing preferred terms retain these marginal penalties per matching Pod:
 
 - Home: 25 from the hostname term.
 - Rise-S-1: 50, combining hostname (25) and standard-host (25).
@@ -111,21 +121,42 @@ one job on Rise-S-1. The scheduler also scores existing Pods' preferences,
 normalizes the scores, and combines them with its other plugins; these numbers
 are neither guaranteed allocation ratios nor concurrency limits.
 
-There is no `maxSkew` rule on execution Pods. Preferences remain soft within
-each required eligibility pool when nodes are busy or unavailable. They never
-require an equal number of jobs on the weak control/storage node. Scheduler preferences do not
-guarantee that a busy node will be avoided; observe real placement and node use
-with `task infra:arc:placement:status`.
+Multiple execution Pods may share a host. Scheduling keeps the incoming Pod's
+matching count within one of the minimum across its eligible hosts.
+The rule applies during scheduling; it does not evict existing Pods.
+
+Hard spread can still queue a Pod when a least-loaded eligible host cannot
+accept it because of resources or other scheduling constraints. The unchanged
+container hook fails a job Pod that remains Pending for ten minutes.
+Scale-set ceilings bound allocated runners, including Pending Pods, rather
+than simultaneous execution slots. Observe real placement and node use with
+`task infra:arc:placement:status`.
+
+- **Prohibited:** impose one execution Pod per host to enforce balanced placement.
+- **Required:** allow another Pod on an occupied host when the eligible-host
+  counts satisfy `maxSkew: 1`.
+  Compare queue time and execution time after rollout before claiming a speedup.
+
+The Remote `ci:pr:e2e` matrix retains `max-parallel: 2`. GitHub queues additional
+matrix jobs before runner assignment. Its sealed browser jobs use the single
+Rise-S-2 browser host. Each admitted job uses all available logical CPUs for
+Playwright workers. The matrix limit does not reserve the host or guarantee
+isolation from other workflows.
 
 ### Deployment and resource policy
 
 Full platform deployment keeps all build nodes quarantined until listeners are ready, exposes
 both Rise nodes together, then home, then overflow. The existing Hive Helm
 release keeps ownership of its image, credentials and security settings.
-`infra:arc:placement:hive` updates its build-pool node selector and affinity.
-It removes its old separate spread constraint using the general runner's
-deployed policy. Hive must already be installed by its owner; a missing release
-is a deployment error.
+`infra:arc:placement:hive` updates its build-pool node selector, affinity and
+topology spread constraints using the general runner's deployed policy.
+Hive must already be installed by its owner; a missing release is a deployment error.
+
+Before an authorized rollout, inspect Hive's live Helm execution template and
+its `arc-spread-group: hive` label. Confirm the shared policy reaches its actual
+execution Pods, not a manager template, before using `infra:arc:placement:hive`.
+The separately owned release is not defined by the checked-in general template.
+Committing this policy does not deploy it or establish a measured improvement.
 
 The browser ceiling replaces four slots from the mixed scale set.
 Runner, job and BuildKit containers have no CPU or memory requests or limits.
@@ -243,7 +274,9 @@ The resource envelopes are:
 
 - General runner, container-scale-set coordinator, and container-job containers
   declare no resource requests or limits.
-- Concurrent Pods share all CPU available on their node.
+- A selected execution Pod shares node CPU with BuildKit and other infrastructure.
+- Hostname topology spread balances selected execution Pods across eligible
+  nodes while allowing multiple jobs per host.
 - Scale-set ceilings bound aggregate runner count.
 - Support init containers retain their role-specific memory envelopes.
 - Empty-directory size limits continue to bound disposable storage.

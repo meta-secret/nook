@@ -12,8 +12,8 @@ for the locked Pilot action and for pairing, in the initiating normal window.
 Both surfaces use the same device-protection component. A launcher reuses only
 a tab whose intent matches the requested action. It leaves an open tab with
 another intent untouched and opens the requested intent in a separate tab in
-that window. When the user connects an identity, the authentication tab sends
-the extension's public keys directly to the configured Simple Vault deployment.
+that window. When the user connects an identity, the extension sends its public
+keys directly to the configured Simple Vault deployment.
 That deployment remains the only surface for creating, importing, unlocking,
 browsing, editing, recovering, and administering vaults.
 
@@ -55,12 +55,15 @@ application capability checks enforce the vault-type boundary.
     beside the page. It stays open across tab switches in its window. Each
     state has at most one primary action, such as Use my passkey, Unlock,
     Connect an identity, or the Fill of a single listed login. PIN and passkey
-    setup and unlock run in place. The panel also offers Open vault, Lock, and
-    Connect another identity. It groups This site's items by connected
-    identity and vault.
+    setup and unlock run in place. The connect card stays in place too: it
+    follows the one Nook tab where the identity is connected. The panel
+    also offers Open vault, Lock, and Connect another identity. It groups This
+    site's items by connected identity and vault. Its gates and connect card
+    are the companion's keytag cards: a cut corner, monospace labels, and a
+    square action bar.
 - **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
-    tab for the locked Pilot action, identity connection, and All connections.
+    tab for the locked Pilot action.
     It creates or unlocks the extension device with the device-protection
     component it shares with the side panel. It shows localized return guidance
     for Pilot and starts pairing.
@@ -78,17 +81,24 @@ It shows issuer/account labels only inside the extension document.
 It returns the selected opaque item identity to the origin-bound content script.
 An empty result stays in the picker.
 Vault metadata is not exposed to the website DOM.
-Page QR and backup code enrollment uses explicit Pilot actions
+Page QR, setup-key, and backup code enrollment uses explicit Pilot actions
 (**Add 2FA from this page** / **Save backup codes**).
 It uses local decode/extract, WASM validation, and confirmation before any vault
 write.
 It is never silent page scraping or background scanning.
 **Add 2FA from this page** follows the
 [authenticator enrollment eligibility contract](../../../../../nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md#browser-enrollment-capture).
-The content script supplies visible media and nearby visible setup instructions
+The content script supplies visible QR media with nearby setup instructions,
+or, without QR media, setup-key instructions in a dialog title or heading,
 to the `nook-companion-core` classifier through `nook-companion-wasm`.
 Square media or QR labels alone do not enable the action.
-QR decoding begins only after the trusted action click.
+QR decoding and setup-key text reading begin only after the trusted action click.
+The extension-origin offscreen document decodes QR pictures with the bundled
+ZXing reader from PNG data URLs.
+Setup-key text comes from the single nearest setup scope.
+Rust/WASM resolves the QR and setup-key candidates.
+The preview validates the editable Service and Account through Rust/WASM and
+keeps Continue disabled until both are valid.
 
 "No vault UI in the extension" means no second vault-management UI. The side
 panel and the shared authentication tab contain the standard device-protection
@@ -109,12 +119,23 @@ administer vault items.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. When the user explicitly chooses Connect / pair in the authentication tab,
-   the extension opens the configured Simple Vault `/extension-connect` route.
-   The route receives the extension's runtime id and public device request.
-   The side panel's Connect an identity action opens that tab for pairing.
+3. When the user explicitly chooses Connect an identity in the side panel, or
+   Connect / pair in the authentication tab, the extension opens the configured
+   Simple Vault `/extension-connect` route. The route receives the extension's
+   runtime id and public device request. It opens in one Nook tab of the
+   requesting window, under the [connect tab](#connect-tab) rule. The side
+   panel opens that route directly, never the authentication tab.
+   - The route carries no start choice. The page owns create, join, and the
+     identity choice.
+   - A browser with no vault shows its first-vault screen. There the person
+     creates the first vault or joins with Add this device.
+   - A browser that already holds a vault shows its usual unlock. There the
+     person chooses the identity to connect.
+   - The page reports its [connect steps](#connect-steps) to the side panel.
+
    There is no website-first enable screen, floating companion window, or
    toolbar popup.
+
 4. The user creates, imports, or unlocks the full Simple vault on the website.
    When creating a vault from this route, the unlocked extension sends its age
    identity and matching event-signing seed in a one-time, nonce-bound age
@@ -130,6 +151,149 @@ administer vault items.
 
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
+
+### Live connect tab
+
+Accepted requirement: one connect runs in one Nook tab. The service worker
+opens or reuses that tab and returns its id. The side panel then follows the
+page's steps over a runtime port. Steps are UI progress only. The grant and
+event-log import keep their Rust/WASM validation.
+
+#### Connect tab
+
+The begin-pairing request carries the public device request, the requester's
+own `windowId`, and a `connectId`. The window value selects a window and grants
+no authority, as on the [active-tab target](#active-tab-target) route.
+
+- The requester creates `connectId` with `crypto.randomUUID()` for each connect,
+  before it sends the request. It names the connect page's port; see
+  [connect port admission](#connect-port-admission). It only matches that port
+  and grants no authority.
+- The service worker adds it to the connect URL as `connect_id`. It stays
+  separate from the handoff nonce, which is single-use handoff material.
+- The authentication tab sends its own random id. No panel follows that connect,
+  so the id matches nothing.
+
+1. The service worker reads the selected window itself. The window must exist,
+   be a normal window, and match the extension's incognito context.
+   - Otherwise the request fails, and the requester shows its start failure.
+     A companion popup window left by an older version is not a normal window,
+     so a connect from it fails visibly.
+2. It queries that window's tabs. A candidate is a tab with an id whose URL
+   Rust/WASM classifies as the runtime Simple Vault origin. A tab without an
+   id or a readable URL is no candidate.
+3. When candidates exist, it reuses one:
+   - the window's active tab, when it is a candidate;
+   - otherwise the first candidate in tab-strip order, the lowest tab index.
+4. It navigates the reused tab to the fresh connect URL, with a new handoff
+   nonce, and makes it active.
+   - Without a candidate, it opens the connect URL in a new active tab of that
+     window.
+5. It focuses the window and returns the tab id.
+   - A failed browser call rejects the request, and the requester shows its
+     start failure.
+
+The side panel follows the returned tab. The authentication tab ignores the id
+and closes, as before. Nothing else opens a page during the connect.
+
+- **Prohibited:** open another connect tab while a Simple Vault tab is open in
+  the panel's window, or reuse a Simple Vault tab of another window.
+- **Required:** navigate the panel window's active Simple Vault tab to the new
+  connect URL and return its id to the panel.
+
+#### Connect steps
+
+On the connect route with a valid request, the page opens one long-lived port
+to the extension id named in its URL. It uses `chrome.runtime.connect` over the
+existing `externally_connectable` channel, with the URL's `connect_id` as the
+port name. Leaving the route closes the port.
+
+- A connect URL without `connect_id` still connects. The page opens no port,
+  because no panel could tell that port apart.
+
+- **`opened`:** the page loaded and opened the port.
+- **`unlock`:** the browser holds a vault. The person unlocks it and chooses
+  the identity to connect.
+- **`choosing`:** the browser holds no vault. The person creates a first vault
+  or joins.
+- **`creating`:** an actual creation is under way. That is a first-vault setup
+  in its Protect or Backup stage, a creation waiting for this device, or the
+  new-identity flow.
+  - Starting the app is not creating. While the app initializes with no
+    creation under way, the page reports nothing after `opened`.
+  - A join in progress stays on `choosing`.
+- **`consent`:** the page shows the extension consent, through authorization,
+  grant preparation, and delivery.
+- **`approved`:** the extension accepted the grant and event log.
+- **`failed`:** the page could not finish, with `reason`:
+  - `authorization`: the vault did not authorize the extension device;
+  - `grant`: the page could not prepare or confirm the grant;
+  - `delivery`: the extension did not take the grant.
+
+The protocol rules:
+
+- `ExtensionConnectSteps` decodes each message strictly. An unknown kind,
+  reason, or field is a protocol failure.
+- A step carries no identity data and grants nothing.
+- The page sends `approved` only after the grant and event-log
+  `onMessageExternal` delivery returned success. The panel's re-read therefore
+  sees the imported identity.
+- The page skips a step equal to the one it just sent: the same kind, and for
+  `failed` the same reason. The panel shows the latest step.
+- The page opens one port per page. It never reconnects, retries, or polls
+  after a disconnect.
+- With no panel listening, the port closes. The page's own create, join, and
+  consent flow is unaffected.
+
+- **Prohibited:** send `approved` once the vault approved the device but before
+  the extension took the grant, or add the identity's label to a step.
+- **Required:** derive `approved` from the consent workflow's delivered
+  outcome alone. Keep every step free of identity data.
+
+#### Connect port admission
+
+Chrome hands an external `runtime.connect` to every listening extension
+document. Each open side panel, one per window, therefore sees each page's port.
+
+- The side panel document listens on `chrome.runtime.onConnectExternal` only
+  while its connect is pending. The service worker registers no
+  `onConnectExternal` listener.
+- The panel knows its `connectId` before the connect tab opens. A port can
+  therefore be matched whenever it arrives, before or after the tab id.
+- A panel admits a port only when every condition holds:
+  - the port name equals the pending connect's `connectId`;
+  - `sender.tab` exists, with a `windowId` equal to the panel's window;
+  - `ExternalSenderTrustPolicy`, the Simple Vault origin rule of external
+    messages, admits the sender;
+  - no port is admitted yet for this connect.
+- A port with another name is disconnected at once, without the sender check.
+- The sender check has two failure results:
+  - A `false` result rejects only that port.
+  - An evaluation that errors ends the connect. For example, the companion
+    WASM failed to load in the panel. The card returns with the localized
+    sender-check failure.
+- A port that closes during its sender check is not admitted. A reloaded page
+  connects again under the same name.
+- The panel reads steps as they arrive. The connect card applies them once it
+  knows the tab id, so the arriving tab id re-reports the admitted page's
+  latest step.
+- Once the tab id is known, `chrome.tabs.onRemoved` for that tab ends the
+  connect, also before its page connected. The card returns.
+- The panel disconnects every other port at once.
+- An undecodable message on the admitted port disconnects it. The card returns
+  with an alert.
+- A disconnect of the admitted port ends the connect, and so does closing the
+  connect tab. The card returns, and nothing reconnects.
+- After `approved`, the panel closes the port.
+- A status change that moves the panel to another view also closes the port,
+  for example Use this identity or a lock. The
+  [Toolbar Behavior](#toolbar-behavior) connecting state describes the result.
+
+- **Prohibited:** a panel follows the first trusted port that arrives, from
+  another Simple Vault tab of its window or from a page in another window.
+- **Required:** the panel follows only the port named with its own
+  `connectId`. It rejects that name from another window, because
+  `sender.tab.windowId` names that window.
 
 ### Current Primary Device-Key And Authentication UX
 
@@ -178,8 +342,8 @@ private identity.
 - The panel docks at full height beside the page and stays open while the user
   switches tabs in its window. Opening Simple Vault, the authentication tab, or
   any other page never closes it.
-- The header carries the Nook mark, the brand label, a state chip, Open vault
-  as a secondary link, and Lock while the device is unlocked.
+- The header carries the Nook mark, the Browser companion label, a state chip,
+  Open vault as a secondary link, and Lock while the device is unlocked.
 - Each panel state has at most one primary action:
   - **Not set up:** the shared device-protection ceremony runs in place under
     the title "Connect your passkey". Its primary action, "Use my passkey",
@@ -191,15 +355,59 @@ private identity.
   - **Passkey locked:** Unlock with passkey, run in place.
   - **Unlocked with a paired vault:** This site leads, with one section for
     each connected identity and vault. The identity sync status and Connect
-    another identity follow those sections. The panel has no separate list of
-    identities. The footer offers All connections.
-  - **Unlocked with no paired vault:** Connect an identity.
+    another identity follow those sections. Connect another identity starts
+    a connect at once and shows the connect card in place while it runs. This
+    site has no separate list of identities; All connections lists them.
+    The footer offers All connections only on This site, and only while the
+    unlocked panel has paired vaults.
+  - **All connections:** a page of the panel, with Back to This site. Each
+    connected identity is a keytag card listing its vaults: what each vault
+    does, the default one marked, and Make default on the others. The
+    unlocked identity is tagged Unlocked; another identity is tagged Locked
+    and offers Use this identity, which locks this one and shows that
+    identity's own unlock in place. The footer leaves while it shows, and a
+    lock or a vault list that is no longer paired returns to This site.
+  - **Unlocked with no paired vault:** the connect card leads with one action,
+    Connect an identity.
+  - **Next identity's key:** when Rust stages a new identity, its passkey or
+    PIN setup runs in place with Cancel. The ceremony replaces the page
+    content; the footer keeps its own rule. Status re-reads leave that
+    ceremony in place until it ends.
+    - Cancel ends the connect. The panel then shows its current page.
+    - While no identity is connected, that page is the connect card.
+    - With paired vaults, it is This site with Connect another identity. It
+      is All connections when the footer opened that page during the
+      ceremony.
+  - **Connecting in the Nook tab:** the service worker opened or reused the
+    [connect tab](#connect-tab), and the card follows its
+    [steps](#connect-steps).
+    - A live status line shows the page's current step.
+    - The tab opens or is reused in front, and the card then has no action.
+      Show Nook tab appears only after another tab of the panel's window
+      becomes active; it brings the Nook tab back to the front and leaves.
+    - "Continue in the Nook tab." shows only while the panel waits for the
+      page's first step.
+    - A `failed` step shows the page's failure line. The person retries in the
+      tab.
+    - `approved` ends the connect. The panel reads its vaults again, so the
+      new identity appears at once.
+    - A closed, reloaded, or navigated tab returns the card.
+    - Each of these returns the card with an alert:
+      - a protocol failure;
+      - a sender check that could not be evaluated;
+      - a tab that could not open.
+    - Closing the panel ends the connect.
+    - Use this identity on All connections ends the connect too. It locks
+      this identity, and the status change that moves the panel to another
+      view stops a running connect: the panel closes the page's port, and the
+      connect state resets. A lock or lease expiry elsewhere does the same.
+      - The Nook tab stays open, and its page flow is unaffected. A grant that
+        page delivers later shows on the panel's next vault read.
   - **Failure:** a device-status error or an initialization failure shows a
     failure view, never the setup ceremony. A paired-vault load failure shows
     its own failure view rather than the no-vault state.
-- Connect an identity, Connect another identity, and All connections open the
-  authentication tab through the existing launcher intents. Use this identity
-  and Make default remain in that tab.
+- Neither connecting an identity nor All connections opens the
+  authentication tab.
 - The panel follows device state that changes elsewhere, such as an unlock in
   the authentication tab or by Pilot, or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
@@ -224,10 +432,14 @@ private identity.
     Several rows each get a secondary action.
   - A tab without a website shows "No website in this tab". A Nook vault app
     shows "Nook can't fill on this page". Neither shows a Fill button.
+  - Those pages, and a page no connected vault fills, still list each
+    connected identity and vault as an "identity · vault" header, so an
+    identity connected a moment ago shows at once. The panel re-reads its
+    vaults when the connect page reports `approved`, so no refresh is needed.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
-- The Pilot lock entry and the side panel's connection actions use the same
-  extension-owned authentication tab per initiating normal window. The service
+- The Pilot lock entry uses the extension-owned authentication tab per
+  initiating normal window. The service
   worker focuses an existing tab only when its intent matches the requested
   action. It leaves a different-intent auth tab untouched and opens the
   requested intent in another tab in the source window. It does not focus an
@@ -268,8 +480,9 @@ private identity.
   menu.
 - The companion tab can start pairing another vault while a grant already
   exists.
-- Never put vault browsing or management in the launcher or the side
-  panel.
+- Never put vault item browsing or editing in the launcher or the side
+  panel. Connection settings (the default vault, which identity is
+  unlocked) are not vault management and may appear in both.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.
 - Authentication-tab controls use the same neutral primary tokens as nook-web dark
@@ -613,10 +826,20 @@ Fill code runs the Fill gates above with these differences:
     extension pages may request it.
 - The panel registers no `chrome.runtime.onMessage` listener, because runtime
   broadcasts can carry plaintext.
+  - Its only runtime listener is `onConnectExternal`, for the connect page's
+    port, registered only while a connect is pending. It admits a port only
+    under the [connect port admission](#connect-port-admission) rule and reads
+    only strictly decoded steps.
 - The panel's outgoing messages form a closed set. The set holds the three
-  side-panel requests, lock, open vault, open tab, and paired-vault queries. It
-  also holds the status, setup, and unlock requests of the shared
-  device-protection component.
+  side-panel requests and these others:
+  - **Service worker:** lock, open vault, and begin pairing for the
+    [connect tab](#connect-tab).
+  - **Paired vaults:** the vault query, the identity refresh, and select
+    default for Make default.
+  - **Session:** the status, setup, and unlock requests of the shared
+    device-protection component. It also holds the begin and cancel
+    identity-connection requests, and activate identity for Use this identity.
+  - The panel sends no companion-launcher request.
   - None of them lists logins, reveals a credential, or returns a vault secret.
 
 - **Prohibited:** the side panel reveals a login through the offscreen session,
@@ -681,8 +904,8 @@ Generated values fill only `new-password` fields.
 They stay in page memory until an evidence-gated Save / Update.
 CAPTCHA, terms acceptance, and email-verification style checkpoints force Take
 over.
-Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
-consent.
+Pilot-guided 2FA enrollment stages an otpauth setup (from a QR or a visible
+setup key) in extension memory after consent.
 It fills the verification code via Rust/WASM.
 It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows.
@@ -1158,10 +1381,10 @@ phone or computer is.
   key that already belongs to another identity, and an identity another local
   key already holds, instead of merging identities.
 - **Switching:** One identity is unlocked at a time. Grants keep their key's app
-  id, so the authentication tab groups vaults by key and offers Use this
-  identity for the others, which selects that identity and locks the current
-  one. The side panel shows no identity groups. Its This site sections name
-  each identity and vault and offer no per-identity actions.
+  id, so the authentication tab and the side panel's All connections group
+  vaults by key and offer Use this identity for the others, which selects
+  that identity and locks the current one. The side panel's This site
+  sections name each identity and vault and offer no per-identity actions.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.
@@ -1306,6 +1529,10 @@ re-sealed for the extension device before leaving the approving vault session.
 - Closing the vault approval route leaves the extension paired or unpaired
   according to its persisted grant state. The side panel and the authentication
   tab reflect that state on their next status query.
+- A closed, reloaded, or navigated connect tab returns the side panel's
+  connect card. A protocol failure on its port returns the card with an alert.
+  Nothing reconnects or retries. The grant import and its Rust/WASM validation
+  are unchanged by the step port.
 - A denied or malformed request adds no device and transfers no vault state.
 - Pairing grant import must not persist quarantined/unauthorized event bytes.
   A rejected import (`event-log-access-not-granted`) rolls back that vault's

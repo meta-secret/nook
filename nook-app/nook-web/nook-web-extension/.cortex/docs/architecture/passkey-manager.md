@@ -130,9 +130,15 @@ share that corner.
   preselected. **Save passkey** is the consent.
 - **Assertion:** one row per matching account with its vault. Choosing a row is
   the consent.
-- **Nothing to offer:** when no vault passkey is one the site asked for, Nook is
-  locked, no vault keeps passkeys, or the lookup failed, the card says which and
-  offers **Use another passkey**. It lists no account.
+- **Locked:** the card says Nook is locked and offers **Unlock Nook**, which
+  opens the Nook side panel beside the site from that click (Chrome requires
+  the gesture). The card then waits with **Continue**; pressing Continue (or
+  returning to a hidden page) asks Nook again and
+  shows the save or sign-in choices once Nook is unlocked. It never offers the
+  browser's own passkey while Nook is merely locked, and lists no account.
+- **Nothing to offer:** when no vault passkey is one the site asked for, no
+  vault keeps passkeys, or the lookup failed, the card says which and offers
+  **Use another passkey**. It lists no account.
 - **Progress and result:** after consent the card shows Saving or Signing in.
   A saved passkey shows its vault for three seconds. A failure stays until the
   user closes it. The website still receives only `NotAllowedError`.
