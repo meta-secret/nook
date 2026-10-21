@@ -41,9 +41,9 @@ Does not apply to:
 ## Validation
 
 Author meaningful tests and finish the assigned worker branch. Report the branch
-and focused evidence to Team Gizmo. Team Gizmo routes local integration through
+and focused evidence to Prime. Prime routes local integration through
 the upstream integration agent and waits for its feature branch, integration
-outcome, and checks. The feature Gizmo then requests required PR-check evidence.
+outcome, and checks. The feature Prime then requests required PR-check evidence.
 Required tests and mechanical Cortex checks execute in the feature pull
 request's required-check stage. Local test, check, or E2E diagnostics follow the
 root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation);

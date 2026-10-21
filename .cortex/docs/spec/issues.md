@@ -18,7 +18,7 @@ out of scope, a follow-up, unimplemented, future work, or blocked. Also apply
 it when implementation, review, or tests discover work that the current PR
 will not finish.
 
-1. Ask Team Gizmo (Delivery Pipeline context) to route an issue-search packet through the
+1. Ask Prime (Delivery Pipeline context) to route an issue-search packet through the
    active harness to the PR Lifecycle Agent.
 2. The PR Lifecycle Agent clones or updates the Workbench outside the Nook
    working tree.
@@ -76,7 +76,7 @@ Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
 
 The `gizmo_id` field is optional:
 
-- The owning Gizmo assigns it when issue routing needs that metadata.
+- The owning Prime assigns it when issue routing needs that metadata.
 - When present, it is canonical lowercase-hyphenated routing metadata with
   valid syntax.
 - Do not change it to create a fresh identity.
@@ -121,9 +121,9 @@ Features may proceed concurrently when their scopes and dependencies allow.
 
 ### Publish issue changes
 
-1. The owning Gizmo authors the issue content and lifecycle state.
+1. The owning Prime authors the issue content and lifecycle state.
 2. Route the single-issue publication packet through the active harness.
-   - Team Gizmo (Delivery Pipeline context) sends it to the PR Lifecycle Agent.
+   - Prime (Delivery Pipeline context) sends it to the PR Lifecycle Agent.
    - The PR Lifecycle Agent executes the checked-in helper without changing
      the authored content.
 3. When updating an existing issue, protect the edit against concurrent
@@ -168,7 +168,7 @@ PR Lifecycle Agent.
     history.
   - Mark acceptance criteria done only with validation evidence.
   - Use `blocked` for a concrete external blocker.
-  - The owning Gizmo decides issue status and `related_prs`.
+  - The owning Prime decides issue status and `related_prs`.
 - **Final handoff:**
   - Link the canonical focused issue when deferred work remains.
   - State remaining work only when the work is incomplete.

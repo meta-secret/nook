@@ -10,6 +10,10 @@ import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionSignal,
+} from '../../lib/vault-revision-signal'
+import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
@@ -55,6 +59,9 @@ type AuthenticationSurfaceDeliveryRequest = {
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
   private readonly launcher = new CompanionLauncher()
+  private readonly vaultRevision = new VaultRevisionSignal(
+    new BroadcastChannel(VAULT_REVISION_CHANNEL),
+  )
 
   static directEntrySource(): CompanionLauncherSource {
     return CompanionLauncher.directEntrySource()
@@ -172,7 +179,10 @@ export class ExtensionSessionLifecycle {
     }
   }
 
+  /** Tell what shows Nook state that it changed: the side panel on the
+   * vault revision channel, and site widgets through their tabs. */
   refreshAuthenticationSurfaces(): Promise<void> {
+    this.vaultRevision.raise()
     const args: AuthenticationSurfaceNotification = {
       type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
     }

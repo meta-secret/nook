@@ -34,6 +34,32 @@ describe('identity UI primitives', () => {
     expect(hotRuns.length).toBeLessThanOrEqual(1)
   })
 
+  test('a crawling cipher block moves its lit run one column at a time along one row', () => {
+    const block = new CipherBlock({ rows: 5, columns: 64 })
+    const litRun = () => {
+      for (const [row, line] of block.segments.entries()) {
+        const before = line.findIndex((segment) => segment.hot)
+        if (before < 0) continue
+        const start = line
+          .slice(0, before)
+          .reduce((length, segment) => length + segment.text.length, 0)
+        return { row, start, text: line[before]?.text ?? '' }
+      }
+      throw new Error('no lit run')
+    }
+    block.crawl(1)
+    const first = litRun()
+    expect(first.row).toBeGreaterThan(0)
+    expect(first.start).toBe(0)
+    for (let tick = 1; tick <= 20; tick += 1) {
+      block.crawl(1)
+      const next = litRun()
+      expect(next.row).toBe(first.row)
+      expect(next.start).toBe(tick)
+      expect(next.text).toHaveLength(6)
+    }
+  })
+
   test('cipher strip drifts without changing length or alphabet', () => {
     const strip = new CipherStripText(32)
     const before = strip.text

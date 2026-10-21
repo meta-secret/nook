@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Use Meta-Cortex Prime and the single Team Gizmo directly.
+Use Meta-Cortex Prime and its directly assigned specialists.
 The upstream roles own coordination behavior. This document owns Nook's
 functional boundaries and shared-file integration constraints.
 
@@ -13,7 +13,7 @@ functional boundaries and shared-file integration constraints.
 
 **Prohibited:** create another coordinator when work crosses from Rust to web.
 
-**Preferred:** the existing Team Gizmo assigns Rust and TypeScript developers
+**Preferred:** the existing Prime assigns Rust and TypeScript developers
 separate provider and consumer scopes, then integrates their results.
 
 ## Nook contexts
@@ -80,7 +80,7 @@ Its normal scope includes:
 
 ### Delivery Pipeline
 
-PR Lifecycle executes authorized GitHub mechanics under the single Team Gizmo.
+PR Lifecycle executes authorized GitHub mechanics under the single Prime.
 Prime owns readiness and the feature's delivery outcome. The Delivery Pipeline
 context supplies Nook's operation contracts, not an additional coordinator.
 
@@ -89,7 +89,7 @@ context supplies Nook's operation contracts, not an additional coordinator.
 Root manifests, lockfiles, generated bindings, registries, and shared command
 outputs have one assigned writer. Sequence overlapping scopes and dependencies.
 Attribute pre-existing edits before assigning a scope. Supply shared-file
-dependencies to Team Gizmo and the upstream integration agent for ordered work.
+dependencies to Prime and the upstream integration agent for ordered work.
 
 **Prohibited:** give two simultaneous writers the same generated binding output.
 

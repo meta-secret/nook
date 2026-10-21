@@ -23,7 +23,7 @@ The resulting refactor has no clear behavior boundary or owning evidence.
    product-changing, or deterministic.
 5. Return exact evidence and the smallest proposed edit groups.
 6. Require boundary-expert evidence before accepting a contract change.
-7. Let Gizmo assign and validate accepted corrections.
+7. Let Prime assign and validate accepted corrections.
 
 ## Scope
 
@@ -35,7 +35,7 @@ mutate lifecycle state.
 Follow the canonical
 [structural expert registry](../docs/architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
-Internal Team Gizmo and Team Agent handoffs follow the root
+Internal Prime and specialist handoffs follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Examples

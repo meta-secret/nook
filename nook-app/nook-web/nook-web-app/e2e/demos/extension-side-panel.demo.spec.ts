@@ -361,26 +361,12 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-/** A browser with no Nook passkey: autofill has nothing to suggest and
- * waits, and its picker closes without one. */
+/** A browser with no Nook passkey: its picker closes without one. */
 function refusePasskeyLookups(): void {
   Object.defineProperty(navigator.credentials, 'get', {
     configurable: true,
-    value: async (options: CredentialRequestOptions) => {
-      const mediation: unknown = Reflect.get(options, 'mediation')
-      if (mediation !== 'conditional') {
-        throw new DOMException(
-          'No passkey for this request.',
-          'NotAllowedError',
-        )
-      }
-      const signal: unknown = Reflect.get(options, 'signal')
-      return new Promise((...[, reject]) => {
-        if (!(signal instanceof AbortSignal)) return
-        signal.addEventListener('abort', () => {
-          reject(new DOMException('Stopped.', 'AbortError'))
-        })
-      })
+    value: async () => {
+      throw new DOMException('No passkey for this request.', 'NotAllowedError')
     },
   })
 }
@@ -398,22 +384,17 @@ test('sets up in place: an existing passkey or a new one, side by side', async (
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Not set up')
-  // The picker opens the browser's list of saved passkeys; there is no
-  // dialog. This browser has none, so the card says what to do instead.
-  const picker = page.getByTestId('device-protection-passkey-field')
-  await expect(picker).toBeFocused()
-  await picker.click()
-  await expect(page.getByTestId('device-protection-passkey-empty')).toHaveText(
-    'No list showed up? This browser has no Nook passkey saved yet: create one below.',
-  )
+  await expect(
+    page.getByTestId('device-protection-use-existing-choice'),
+  ).toHaveText('Use my passkey')
   await expect(page.getByTestId('side-panel-lock')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-manage')).toHaveCount(0)
   await expect(
     page.getByTestId('device-protection-create-new-choice'),
   ).toHaveText('Create a new passkey')
   await demoBeat(page)
-  // A passkey on a phone or security key goes through the browser's picker;
-  // when it closes without one, the card offers what to do next.
+  // This browser holds no Nook passkey: when its picker closes without one,
+  // the card offers what to do next instead of the same button again.
   await page.getByTestId('device-protection-use-existing-choice').click()
   await expect(page.getByTestId('device-protection-title')).toHaveText(
     "Didn't find your passkey?",

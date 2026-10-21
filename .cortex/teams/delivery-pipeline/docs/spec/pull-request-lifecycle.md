@@ -13,11 +13,11 @@ feature branch is deleted after merge.
    [Pull Request Delivery](../../../../../.meta-cortex/teams/delivery-team/agents/pr-agent/skills/pull-request-delivery/SKILL.md)
    for publication, check observation, authorized merge, and remote cleanup.
 3. Use the Nook event subscriber below for live observation. Route workflow
-   execution or rerun needs through Team Gizmo to upstream CI/CD with SRE context.
+   execution or rerun needs through Prime to upstream CI/CD with SRE context.
 4. Return the complete required-check inventory and the authorized operation's
    actual result. Report merge and cleanup results separately.
 
-Reviews and approvals are optional. The owning Feature Gizmo may merge its own
+Reviews and approvals are optional. The owning Prime may merge its own
 pull request. Required checks and unresolved known defects remain mandatory.
 
 **Prohibited:** substitute an upstream example's merge strategy for Nook's
@@ -49,7 +49,7 @@ repair wave, and merge only under Nook's unchanged-head delivery requirements.
    - If the feature head advances, discard head-bound evidence.
    - Start a fresh observation iteration for the new head.
 
-The subscriber does not decide readiness or merge authority. The Feature Gizmo
+The subscriber does not decide readiness or merge authority. The Prime
 retains the full delivery decision.
 
 ## Failure handling

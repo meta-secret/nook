@@ -103,7 +103,7 @@ Before:
 
 - User explains in chat that secure notes must support search by custom tags.
 - Agent adds the tag search in code and tests, then returns the exact feature
-  branch to Gizmo for remote compilation and feature pull-request delivery.
+  branch to Prime for remote compilation and feature pull-request delivery.
 - `nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
@@ -148,9 +148,9 @@ After:
 - For implementation tasks, apply only permitted scoped formatting or
   inexpensive diagnostics and finish the coherent worker branch. Include every
   formatter mutation in allowed source or Cortex paths. Return the branch and
-  evidence to Gizmo. Do not run a local pre-push or broad validation gate.
-  Gizmo routes local integration through the upstream integration agent and
-  waits for its feature branch, integration outcome, and checks. Gizmo then
-  dispatches the relevant required PR-check task through Team Gizmo (Delivery
-  Pipeline context) and PR Lifecycle Agent. The Feature Gizmo owns complete
+  evidence to Prime. Do not run a local pre-push or broad validation gate.
+  Prime routes local integration through the upstream integration agent and
+  waits for its feature branch, integration outcome, and checks. Prime then
+  dispatches the relevant required PR-check task through Prime (Delivery
+  Pipeline context) and PR Lifecycle Agent. The Prime owns complete
   exact-head CI validation when the snapshot is ready.

@@ -15,7 +15,10 @@ import { FocusedLoginMessageRoute } from './service-worker/focused-login-message
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
-import { SiteSidePanelOpening } from './service-worker/site-side-panel-opening'
+import {
+  ExternalSidePanelSignal,
+  SiteSidePanelOpening,
+} from './service-worker/site-side-panel-opening'
 import {
   SiteSidePanelOpenKind,
   SiteSidePanelOpenMessage as SiteSidePanelOpenMessageSchema,
@@ -32,6 +35,7 @@ import {
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  DismissAuthSidePanelMessage,
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
   OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
 } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
@@ -105,6 +109,10 @@ import {
 } from './service-worker/login-operations'
 import { extensionPairingIdentity } from './service-worker/pairing-identity'
 import {
+  dismissAuthSidePanelFromSender,
+  type AuthSidePanelDismissalRequest,
+} from './service-worker/auth-side-panel-dismissal'
+import {
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
@@ -127,6 +135,7 @@ import {
   type ExternalCompanionMessage,
   type ExternalCompanionRoutingRequest,
 } from './service-worker/external-companion-routing'
+import { ExternalSenderTrustPolicy } from './service-worker/routing-trust'
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
@@ -279,6 +288,8 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ExtensionPairedVaultUnlockRequestMessageSchema.decode,
     decodeOpenCompanionLauncherMessage:
       NormalizedOpenCompanionLauncherMessageSchema.decode,
+    admitsUnlockSenderSynchronously:
+      ExternalSenderTrustPolicy.admitsSynchronouslyIfReady,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
@@ -309,6 +320,9 @@ const pilotAttemptRuntimeSchema: RuntimeMessageSchema<PilotAttemptMessage> = {
   decode: PilotAttemptCodec.decodeMessage,
 }
 const siteSidePanelOpening = new SiteSidePanelOpening(chrome.sidePanel)
+const externalSidePanelSignal = new ExternalSidePanelSignal(
+  siteSidePanelOpening,
+)
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(pilotAttemptRuntimeSchema)
     .respondWith(PilotAttempts.handle)
@@ -555,6 +569,19 @@ class BackgroundRuntimeMessageRouter {
       return lifecycleResult
     }
 
+    const authSidePanelDismissal = Effect.runSync(
+      Effect.result(DismissAuthSidePanelMessage.decode(message)),
+    )
+    if (Result.isSuccess(authSidePanelDismissal)) {
+      const dismissalRequest: AuthSidePanelDismissalRequest = { sender }
+      void dismissAuthSidePanelFromSender(dismissalRequest)
+        .then(sendResponse)
+        .catch(() =>
+          sendResponse({ ok: false, reason: 'side-panel-dismiss-failed' }),
+        )
+      return true
+    }
+
     const schemaRoutingRequest: AdmittedRuntimeMessageRoutingRequest = {
       message,
       sender,
@@ -790,6 +817,10 @@ const externalRuntimeMessageListener: ExternalRuntimeMessageListener = (
   ...listenerArguments: ExternalRuntimeMessageListenerArguments
 ) => {
   const [externalMessage, sender, sendResponse] = listenerArguments
+  // Before the router's first await: the panel opens only during the click.
+  const sidePanelSignal: Parameters<typeof externalSidePanelSignal.handled>[0] =
+    { message: externalMessage, sender, respond: sendResponse }
+  if (externalSidePanelSignal.handled(sidePanelSignal)) return true
   const externalRoutingArgs: ExternalCompanionRoutingRequest = {
     dependencies: externalCompanionRoutingDependencies,
     message: externalMessage,
