@@ -55,9 +55,7 @@ export class NamecheapOtpScenario {
   private exerciseSidePanel = Effect.fn(
     this.generatorContext,
     function* (paired: NamecheapOtpEnvironment) {
-      yield* Effect.tryPromise(() =>
-        NamecheapSidePanelFill.saveAuthenticator(paired.vaultPage),
-      )
+      yield* this.saveSidePanelAuthenticator(paired.vaultPage)
       yield* Effect.tryPromise(() =>
         unlockExtensionPopupPin(paired.context, paired.extensionId),
       )
@@ -123,6 +121,41 @@ export class NamecheapOtpScenario {
       expect(this.navigationRequests).toBe(2)
     },
   )
+
+  private saveSidePanelAuthenticator = Effect.fn(function* (vaultPage: Page) {
+    yield* Effect.tryPromise(() =>
+      vaultPage.getByTestId('add-secret-btn').click(),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage.getByTestId('item-type-authenticator').click(),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage.getByTestId('authenticator-issuer').fill('Namecheap'),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage
+        .getByTestId('authenticator-account')
+        .fill('manual-fill@nook.test'),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage
+        .getByTestId('authenticator-website')
+        .fill('https://namecheap.com'),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage.getByTestId('authenticator-secret').fill('JBSWY3DPEHPK3PXP'),
+    )
+    yield* Effect.tryPromise(() =>
+      vaultPage.getByTestId('save-secret-btn').click(),
+    )
+    yield* Effect.tryPromise(() =>
+      expect(
+        vaultPage
+          .getByTestId('vault-group-authenticator')
+          .getByTestId('secret-row'),
+      ).toBeVisible(),
+    )
+  })
 
   private fulfill(route: Route): Promise<void> {
     switch (route.request().isNavigationRequest()) {
