@@ -65,6 +65,43 @@
     filter: brightness(1.05);
   }
 
+  /* Action shape by kind: a commit action (nk-steel) is cut at the top like
+   * a blade tip; an action that navigates or chooses (outline and secondary
+   * buttons, plates) is cut at its foot, the cut open to the background with
+   * a lit edge. Square again while focused so the ring shows. */
+  .nk-cut-foot {
+    position: relative;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 8px),
+      calc(100% - 8px) 100%,
+      0 100%
+    );
+  }
+  .nk-cut-foot::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
+  .nk-cut-foot:focus-visible {
+    clip-path: none;
+  }
+  .nk-cut-foot:focus-visible::after {
+    content: none;
+  }
+
   /* Plate: an action tile set apart by tone, not by a border: a raised
    * steel face lit along its top, its foot cut like a tanto tip that stays
    * open to the background, its cut edge lit. Hover lifts the face. */
