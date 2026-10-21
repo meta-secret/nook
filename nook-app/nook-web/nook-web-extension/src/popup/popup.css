@@ -1,20 +1,20 @@
 :root {
   /* Mirrored from nook-web-shared vault-app dark tokens (app.css .dark). */
-  --background: oklch(0.13 0.007 260);
-  --foreground: oklch(0.965 0.004 250);
-  --card: oklch(0.178 0.008 260);
-  --muted-foreground: oklch(0.69 0.016 255);
+  --background: oklch(0.14 0.014 262);
+  --foreground: oklch(0.955 0.008 255);
+  --card: oklch(0.185 0.018 262);
+  --muted-foreground: oklch(0.7 0.024 258);
   --primary: oklch(0.91 0.006 250);
-  --primary-foreground: oklch(0.178 0.008 260);
-  --secondary: oklch(0.245 0.009 260);
-  --secondary-foreground: oklch(0.965 0.004 250);
-  --border: rgb(196 206 228 / 11%);
+  --primary-foreground: oklch(0.185 0.018 262);
+  --secondary: oklch(0.255 0.022 262);
+  --secondary-foreground: oklch(0.955 0.008 255);
+  --border: rgb(150 172 214 / 14%);
   --input: rgb(255 255 255 / 14%);
   --ring: oklch(0.68 0.17 275 / 70%);
   --destructive-border: oklch(0.45 0.12 25);
   --destructive-bg: oklch(0.22 0.05 25);
   --destructive-fg: oklch(0.85 0.08 30);
-  --accent: oklch(0.245 0.009 260);
+  --accent: oklch(0.255 0.022 262);
   --success: oklch(0.765 0.177 163.223);
   --radius: 0.1875rem;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

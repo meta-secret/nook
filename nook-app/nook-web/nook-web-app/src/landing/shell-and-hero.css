@@ -20,13 +20,13 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  background: #0d1013;
+  background: #0b0f17;
   color: #f2f4f5;
-  --muted-text: #9ca6af;
-  --page-background: #0d1013;
-  --line: #292f34;
-  --control-border: #394148;
-  --section-line: #343b41;
+  --muted-text: #9ca6b4;
+  --page-background: #0b0f17;
+  --line: #252d3b;
+  --control-border: #353f52;
+  --section-line: #313a4b;
   --titanium: oklch(0.66 0.18 275);
 }
 
@@ -397,19 +397,21 @@ h1 {
   background: white;
 }
 
-/* Dark: ground steel, a hard bevel line across a mirror face. */
+/* Dark: a blued matte blade, flat and bevel split by a hard line, the
+ * cutting edge lit along the foot. */
 :root[data-theme='dark'] .button.primary {
-  border-color: #f2f4f5;
+  border-color: oklch(0.33 0.055 263);
   background: linear-gradient(
-    102deg,
-    #9aa1a9 0,
-    #f4f6f8 34%,
-    #c3c8ce 34.5%,
-    #f4f6f8 78%,
-    #9aa1a9 100%
+    180deg,
+    oklch(0.47 0.05 258),
+    oklch(0.44 0.051 259) 52%,
+    oklch(0.33 0.055 263) 52%,
+    oklch(0.29 0.048 263) 100%
   );
-  box-shadow: inset 0 1px 0 white;
-  color: #111417;
+  box-shadow:
+    inset 0 -1px 0 oklch(0.88 0.03 245),
+    inset 0 1px 0 oklch(0.88 0.03 245 / 22%);
+  color: #f2f4f5;
 }
 
 :root[data-theme='dark'] .button.secondary:hover {

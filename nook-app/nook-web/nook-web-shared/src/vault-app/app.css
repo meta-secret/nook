@@ -10,8 +10,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Palette after a black-oxide blade: light is satin steel, dark is black
- * oxide and G10. Neutrals lean cool; anodised titanium (screw heads) is the
+/* Palette after a blackened blade: light is satin steel, dark is blued
+ * gunmetal and G10. Neutrals lean cool; anodised titanium (screw heads) is the
  * one hue, kept for focus and fasteners. */
 :root {
   --radius: 0.1875rem;
@@ -21,7 +21,7 @@
   --card-foreground: oklch(0.16 0.008 260);
   --popover: oklch(0.995 0.001 255);
   --popover-foreground: oklch(0.16 0.008 260);
-  --primary: oklch(0.19 0.009 260);
+  --primary: oklch(0.21 0.022 262);
   --primary-foreground: oklch(0.975 0.003 255);
   --secondary: oklch(0.948 0.004 255);
   --secondary-foreground: oklch(0.19 0.009 260);
@@ -43,7 +43,7 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.975 0.003 255);
   --sidebar-foreground: oklch(0.16 0.008 260);
-  --sidebar-primary: oklch(0.19 0.009 260);
+  --sidebar-primary: oklch(0.21 0.022 262);
   --sidebar-primary-foreground: oklch(0.975 0.003 255);
   --sidebar-accent: oklch(0.955 0.004 255);
   --sidebar-accent-foreground: oklch(0.19 0.009 260);
@@ -54,39 +54,42 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.007 260);
-  --foreground: oklch(0.965 0.004 250);
-  --card: oklch(0.178 0.008 260);
-  --card-foreground: oklch(0.965 0.004 250);
-  --popover: oklch(0.178 0.008 260);
-  --popover-foreground: oklch(0.965 0.004 250);
+  --background: oklch(0.14 0.014 262);
+  --foreground: oklch(0.955 0.008 255);
+  --card: oklch(0.185 0.018 262);
+  --card-foreground: oklch(0.955 0.008 255);
+  --popover: oklch(0.185 0.018 262);
+  --popover-foreground: oklch(0.955 0.008 255);
   --primary: oklch(0.91 0.006 250);
-  --primary-foreground: oklch(0.17 0.008 260);
-  --secondary: oklch(0.245 0.009 260);
-  --secondary-foreground: oklch(0.965 0.004 250);
-  --muted: oklch(0.245 0.009 260);
-  --muted-foreground: oklch(0.69 0.016 255);
-  --accent: oklch(0.245 0.009 260);
-  --accent-foreground: oklch(0.965 0.004 250);
+  --primary-foreground: oklch(0.18 0.018 262);
+  --secondary: oklch(0.255 0.022 262);
+  --secondary-foreground: oklch(0.955 0.008 255);
+  --muted: oklch(0.255 0.022 262);
+  --muted-foreground: oklch(0.7 0.024 258);
+  --accent: oklch(0.255 0.022 262);
+  --accent-foreground: oklch(0.955 0.008 255);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: rgb(196 206 228 / 11%);
-  --input: rgb(196 206 228 / 16%);
+  --border: rgb(150 172 214 / 14%);
+  --input: rgb(150 172 214 / 20%);
   --ring: oklch(0.68 0.17 275 / 70%);
   --titanium: oklch(0.66 0.18 275);
   --steel-hi: oklch(0.98 0.004 250);
   --steel-lo: oklch(0.62 0.01 255);
+  --blade-hi: oklch(0.47 0.05 258);
+  --blade-lo: oklch(0.33 0.055 263);
+  --blade-edge: oklch(0.88 0.03 245);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.178 0.008 260);
-  --sidebar-foreground: oklch(0.965 0.004 250);
+  --sidebar: oklch(0.185 0.018 262);
+  --sidebar-foreground: oklch(0.955 0.008 255);
   --sidebar-primary: oklch(0.66 0.18 275);
-  --sidebar-primary-foreground: oklch(0.965 0.004 250);
-  --sidebar-accent: oklch(0.245 0.009 260);
-  --sidebar-accent-foreground: oklch(0.965 0.004 250);
-  --sidebar-border: rgb(196 206 228 / 11%);
+  --sidebar-primary-foreground: oklch(0.955 0.008 255);
+  --sidebar-accent: oklch(0.255 0.022 262);
+  --sidebar-accent-foreground: oklch(0.955 0.008 255);
+  --sidebar-border: rgb(150 172 214 / 14%);
   --sidebar-ring: oklch(0.68 0.17 275 / 70%);
   --success: oklch(0.765 0.177 163.223);
   --warning: oklch(0.879 0.169 91.605);

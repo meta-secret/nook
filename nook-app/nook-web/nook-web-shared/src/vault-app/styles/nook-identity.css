@@ -730,8 +730,8 @@
     box-shadow: inset 2px 0 0 var(--success);
   }
 
-  /* Primary fill: ground steel in the dark theme (a hard bevel line across
-   * a mirror face), black oxide with a lit top edge in the light theme. */
+  /* Primary fill: black oxide with a lit top edge (light theme); the dark
+   * theme's blued blade is defined unlayered at the end of this file. */
   .nk-steel {
     background-image: linear-gradient(
       180deg,
@@ -739,17 +739,6 @@
       transparent 45%
     );
     box-shadow: inset 0 1px 0 color-mix(in oklch, white 22%, transparent);
-  }
-  .dark .nk-steel {
-    background-image: linear-gradient(
-      102deg,
-      var(--steel-lo) 0,
-      var(--steel-hi) 34%,
-      color-mix(in oklch, var(--steel-lo) 60%, var(--steel-hi)) 34.5%,
-      var(--steel-hi) 78%,
-      var(--steel-lo) 100%
-    );
-    box-shadow: inset 0 1px 0 white;
   }
   .nk-steel:hover:not(:disabled) {
     filter: brightness(1.06);
@@ -794,4 +783,21 @@
       rgb(120 130 150 / 5%) 0 1px,
       transparent 1px 4px
     );
+}
+
+/* Dark primary: a blued matte blade, its flat and its bevel split by a hard
+ * line, with the cutting edge lit along the foot. Unlayered so its light
+ * text outranks the button's text utility. */
+.dark .nk-steel {
+  background-image: linear-gradient(
+    180deg,
+    var(--blade-hi),
+    color-mix(in oklch, var(--blade-hi) 82%, var(--blade-lo)) 52%,
+    var(--blade-lo) 52%,
+    color-mix(in oklch, var(--blade-lo) 85%, black) 100%
+  );
+  box-shadow:
+    inset 0 -1px 0 var(--blade-edge),
+    inset 0 1px 0 color-mix(in oklch, var(--blade-edge) 22%, transparent);
+  color: var(--steel-hi);
 }
