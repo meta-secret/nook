@@ -197,6 +197,7 @@ impl PasskeyDetailRead<'_> {
 mod tests {
     use crate::*;
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use std::{mem::take, slice::from_ref};
 
     struct PasskeyReadFixture {
         store_id: StoreId,
@@ -305,7 +306,7 @@ mod tests {
             let bytes = VaultEvent::serialize_event_storage_yaml(&event)?;
             let imported = VaultEvent::parse_event_storage_bytes(&bytes)?;
             self.head = imported.id()?;
-            self.graph = std::mem::take(&mut self.graph)
+            self.graph = take(&mut self.graph)
                 .insert(EventGraphInsert {
                     event: imported,
                     expected_store_id: self.store_id.as_str(),
@@ -323,9 +324,7 @@ mod tests {
                 allow_credentials: Vec::new(),
                 user_verification: PasskeyUserVerification::Required,
             };
-            let result = request
-                .prepare(std::slice::from_ref(&self.credential))?
-                .sign()?;
+            let result = request.prepare(from_ref(&self.credential))?.sign()?;
             self.credential.zeroize_plaintext();
             self.credential = result.updated_credential;
             let new_id = SecretId::generate()?;
@@ -367,7 +366,7 @@ mod tests {
                 user_verification: PasskeyUserVerification::Required,
             };
             let signed = if let SecretValue::Passkey(passkey) = &value {
-                request.prepare(std::slice::from_ref(passkey))?.sign()
+                request.prepare(from_ref(passkey))?.sign()
             } else {
                 anyhow::bail!("fixture registration is not a passkey");
             };
