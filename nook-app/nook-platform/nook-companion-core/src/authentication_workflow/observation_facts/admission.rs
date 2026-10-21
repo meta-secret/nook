@@ -3,18 +3,16 @@ use super::{AuthenticationPageObservation, AuthenticationPageObservationFacts};
 impl AuthenticationPageObservationFacts {
     /// Fill eligibility does not grant permission to advance or submit the page.
     pub(super) fn into_workflow_observation(self) -> AuthenticationPageObservation {
-        match self.is_bounded() {
-            false => return AuthenticationPageObservation::default(),
-            true => {}
-        }
-        match self.has_progression()
-            || self
-                .ceremony
-                .authentication_context
-                .is_authenticated(self.fields)
-        {
-            true => AuthenticationPageObservation::from(self),
-            false => AuthenticationPageObservation::default(),
+        match (
+            self.is_bounded(),
+            self.has_progression()
+                || self
+                    .ceremony
+                    .authentication_context
+                    .is_authenticated(self.fields),
+        ) {
+            (true, true) => AuthenticationPageObservation::from(self),
+            (false, _) | (true, false) => AuthenticationPageObservation::default(),
         }
     }
 }
