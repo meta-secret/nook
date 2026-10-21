@@ -60,18 +60,20 @@ impl MainProducerCacheContract<'_> {
             );
         }
         for scope in [
-            "dylint-v4",
-            "fuzz-v4",
-            "policy-tools-v5",
-            "deterministic-v2",
-            "kani-v2",
+            "ecosystem-dylint-v4",
+            "ecosystem-fuzz-v4",
+            "ecosystem-policy-tools-v5",
+            "ecosystem-deterministic-v2",
+            "ecosystem-kani-v2",
+            "native-source-v4",
+            "wasm-source-v3",
         ] {
             let exporter = format!(
-                "nook-rust-ecosystem-{scope}${{GHA_CACHE_SCOPE_SUFFIX}}:buildcache,mode=${{GHA_CACHE_EXPORT_MODE}},compression=zstd,timeout=10m"
+                "nook-rust-{scope}${{GHA_CACHE_SCOPE_SUFFIX}}:buildcache,mode=${{GHA_CACHE_EXPORT_MODE}},compression=zstd,timeout=10m"
             );
             assert!(
                 rust_toolchain_bake.contains(&exporter),
-                "ecosystem export must retain its scope, mode, zstd, and timeout without forcing inherited-layer recompression: {scope}"
+                "ecosystem and source exports must retain their scope, mode, zstd, and timeout without forcing inherited-layer recompression: {scope}"
             );
         }
         assert!(

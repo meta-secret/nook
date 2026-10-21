@@ -10,7 +10,7 @@
 // stay after the shared tool stage. rust-base remains the only linked context.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
-// Registry writers use zstd for newly compressed blobs. Ecosystem exporters
+// Registry writers use zstd for newly compressed blobs. Ecosystem and source exporters
 // retain inherited compression; the other writers still force zstd.
 // Empty cache-from= and cache-to= overrides are prohibited.
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
@@ -143,7 +143,7 @@ rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // WASM source layers restore their own scope plus wasm-deps. Do not import
@@ -157,7 +157,7 @@ rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,timeout=10m",
 ] : []
 
 // -----------------------------------------------------------------------------
