@@ -145,6 +145,22 @@
   .nk-plate:focus-visible {
     background-color: color-mix(in oklch, var(--card) 15%, var(--secondary));
   }
+  /* The lead plate commits (opens the vault): cut at the top like the
+   * primary actions, not at the foot. */
+  .nk-plate.nk-identity-menu-lead {
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  }
+  .nk-plate.nk-identity-menu-lead::after {
+    top: 0;
+    bottom: auto;
+    background: linear-gradient(
+      to top right,
+      transparent calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% - 0.75px),
+      color-mix(in oklch, var(--foreground) 20%, transparent) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+  }
 
   /* Facets: the blade's ground planes and broken lines laid faintly over a
    * large face so it is never one flat tone. The overlay sits above the face
