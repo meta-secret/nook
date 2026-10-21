@@ -41,11 +41,12 @@ describe('identity UI primitives', () => {
     const litRun = () => {
       for (const [row, line] of block.segments.entries()) {
         const before = line.findIndex((segment) => segment.hot)
-        if (before < 0) continue
+        const segment = line[before]
+        if (!segment) continue
         const start = line
           .slice(0, before)
-          .reduce((length, segment) => length + segment.text.length, 0)
-        return { row, start, text: line[before]?.text ?? '' }
+          .reduce((length, part) => length + part.text.length, 0)
+        return { row, start, text: segment.text }
       }
       throw new Error('no lit run')
     }
