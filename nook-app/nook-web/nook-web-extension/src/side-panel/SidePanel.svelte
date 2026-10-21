@@ -439,6 +439,7 @@ closes it.
   }
 
   function unlocked(unlock: DeviceProtectionUnlock): void {
+    connectFlow.unlockedInPanel()
     statusReads.invalidate()
     clearMessages()
     const device: ExtensionSessionDeviceState = {
@@ -705,8 +706,8 @@ closes it.
   // Closing the panel stops following the Nook tab.
   onDestroy(() => connectFlow.stop())
 
-  // No identity connected: connecting is the only next step, so the panel
-  // starts it instead of waiting for the card's button.
+  // Unlocked here with no identity connected: connecting is the only next
+  // step, so the panel starts it instead of waiting for the card's button.
   $effect(() => {
     if (
       view.kind === SidePanelViewKind.Unlocked &&

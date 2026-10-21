@@ -1,9 +1,9 @@
 <!--
 Connecting an identity, as a companion keytag card. One action opens (or
 reuses) the Nook tab on the connect route; creating, joining and choosing
-the identity happen there. With no identity connected the panel takes that
-action itself, once, so the card's button returns only after the tab closes
-or the connect fails. While that tab is open the card follows the step
+the identity happen there. When the person unlocks or sets up the extension
+in the panel with no identity connected, the panel takes that action itself,
+once; the card's button returns after the tab closes or the connect fails. While that tab is open the card follows the step
 the page reports and, once another tab covers it, offers to bring it back
 to the front. The card leads
 the panel while no identity is connected and opens under This site from
