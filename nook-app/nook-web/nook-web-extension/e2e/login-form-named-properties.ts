@@ -70,12 +70,14 @@ export class NamedLoginScenario {
       expect(namedProperties).toEqual(['object', 'object'])
       const widget = page.locator('#nook-auth-widget')
       yield* Effect.tryPromise(() =>
-        expect(widget.getByText('Ready to sign in')).toBeVisible(),
+        expect(widget.getByText('No saved login for this site')).toBeVisible(),
       )
       for (const selector of ['#username', '#password']) {
         yield* Effect.tryPromise(() => page.locator(selector).click())
         yield* Effect.tryPromise(() =>
-          expect(widget.getByText('Ready to sign in')).toBeVisible(),
+          expect(
+            widget.getByText('No saved login for this site'),
+          ).toBeVisible(),
         )
         yield* Effect.tryPromise(() =>
           expect(page.locator(selector)).toHaveValue(''),
