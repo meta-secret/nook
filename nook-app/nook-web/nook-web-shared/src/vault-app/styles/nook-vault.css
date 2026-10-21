@@ -139,14 +139,6 @@
     background: var(--primary);
     color: var(--primary-foreground);
   }
-  /* Dark: the pressed filter is a blued blade with a lit edge. */
-  .dark .nk-chip[aria-pressed="true"],
-  .dark .nk-chip[aria-checked="true"] {
-    border-color: var(--blade-lo);
-    background: linear-gradient(180deg, var(--blade-hi), var(--blade-lo));
-    box-shadow: inset 0 -1px 0 var(--blade-edge);
-    color: var(--steel-hi);
-  }
   .nk-chip:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;

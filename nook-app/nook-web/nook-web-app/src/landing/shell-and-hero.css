@@ -15,19 +15,19 @@
   --line: #dfe1df;
   --control-border: #cdd0d3;
   --section-line: #cfd2d2;
-  --titanium: oklch(0.52 0.2 272);
+  --titanium: oklch(0.5 0.13 272);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  background: #0b0f17;
+  background: #0d0f12;
   color: #f2f4f5;
-  --muted-text: #9ca6b4;
-  --page-background: #0b0f17;
-  --line: #252d3b;
-  --control-border: #353f52;
-  --section-line: #313a4b;
-  --titanium: oklch(0.66 0.18 275);
+  --muted-text: #9ca3ad;
+  --page-background: #0d0f12;
+  --line: #262a31;
+  --control-border: #363b44;
+  --section-line: #32373f;
+  --titanium: oklch(0.64 0.11 275);
 }
 
 * {
@@ -59,12 +59,12 @@ body {
     color 220ms ease;
 }
 
-/* Dark: one blued spotlight over the hero object; the rest stays a void. */
+/* Dark: one soft spotlight over the hero object; the rest stays a void. */
 :root[data-theme='dark'] body {
   background:
     radial-gradient(
       ellipse 52rem 40rem at 72% 26%,
-      rgb(110 132 176 / 0.2),
+      rgb(150 158 176 / 0.13),
       transparent 70%
     ),
     var(--page-background);
@@ -302,8 +302,8 @@ nav a {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: oklch(0.72 0.11 222);
-  box-shadow: 0 0 0 4px oklch(0.72 0.11 222 / 0.14);
+  background: oklch(0.76 0.05 222);
+  box-shadow: 0 0 0 4px oklch(0.76 0.05 222 / 0.12);
 }
 
 main {
@@ -428,21 +428,19 @@ h1 {
   background: white;
 }
 
-/* Dark: a blued matte blade, flat and bevel split by a hard line, the
- * cutting edge lit along the foot. */
+/* Dark: ground steel, a hard bevel line across a mirror face. */
 :root[data-theme='dark'] .button.primary {
-  border-color: oklch(0.33 0.055 263);
+  border-color: #f2f4f5;
   background: linear-gradient(
-    180deg,
-    oklch(0.47 0.05 258),
-    oklch(0.44 0.051 259) 52%,
-    oklch(0.33 0.055 263) 52%,
-    oklch(0.29 0.048 263) 100%
+    102deg,
+    #9aa1a9 0,
+    #f4f6f8 34%,
+    #c3c8ce 34.5%,
+    #f4f6f8 78%,
+    #9aa1a9 100%
   );
-  box-shadow:
-    inset 0 -1px 0 oklch(0.88 0.03 245),
-    inset 0 1px 0 oklch(0.88 0.03 245 / 22%);
-  color: #f2f4f5;
+  box-shadow: inset 0 1px 0 white;
+  color: #111417;
 }
 
 :root[data-theme='dark'] .button.secondary:hover {

@@ -7,16 +7,16 @@ export const WIDGET_HOST_ID = 'nook-auth-widget'
  * places them inside its `:host` rule. */
 export const IN_PAGE_SURFACE_TOKENS = `
       color-scheme: dark;
-      --nk-bg: oklch(0.14 0.014 262);
-      --nk-card: oklch(0.185 0.018 262);
-      --nk-raised: oklch(0.255 0.022 262);
-      --nk-fg: oklch(0.955 0.008 255);
-      --nk-muted: oklch(0.7 0.024 258);
+      --nk-bg: oklch(0.14 0.005 260);
+      --nk-card: oklch(0.18 0.006 260);
+      --nk-raised: oklch(0.25 0.007 260);
+      --nk-fg: oklch(0.955 0.003 255);
+      --nk-muted: oklch(0.7 0.01 258);
       --nk-primary: oklch(0.91 0.006 250);
-      --nk-primary-fg: oklch(0.185 0.018 262);
-      --nk-border: rgb(150 172 214 / 14%);
+      --nk-primary-fg: oklch(0.18 0.006 260);
+      --nk-border: rgb(180 186 200 / 12%);
       --nk-input: rgb(255 255 255 / 16%);
-      --nk-success: oklch(0.8 0.1 218);
+      --nk-success: oklch(0.8 0.05 220);
       --nk-warning: oklch(0.8 0.13 75);
       --nk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --nk-cut: 18px;

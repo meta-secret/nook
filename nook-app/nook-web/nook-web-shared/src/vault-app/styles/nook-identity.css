@@ -24,7 +24,7 @@
     );
     --nk-face: linear-gradient(
       180deg,
-      color-mix(in oklch, var(--card) 93%, var(--steel-hi)) 0,
+      color-mix(in oklch, var(--card) 96%, var(--steel-hi)) 0,
       var(--card) 5rem
     );
     --nk-shape: polygon(
@@ -147,7 +147,7 @@
     background: var(--card)
       linear-gradient(
         180deg,
-        color-mix(in oklch, var(--card) 93%, var(--steel-hi)),
+        color-mix(in oklch, var(--card) 96%, var(--steel-hi)),
         var(--card) 4rem
       );
     box-shadow: inset 2px 0 0
@@ -286,7 +286,7 @@
     --nk-face:
       radial-gradient(
         ellipse 60% 140% at 88% -10%,
-        color-mix(in oklch, var(--steel-hi) 7%, transparent),
+        color-mix(in oklch, var(--steel-hi) 4%, transparent),
         transparent 70%
       ),
       var(--nk-g10), var(--card);
@@ -377,20 +377,20 @@
     );
     background: linear-gradient(
       160deg,
-      oklch(0.96 0.025 var(--nk-hue, 250)),
-      oklch(0.85 0.04 var(--nk-hue, 250))
+      oklch(0.96 0.012 var(--nk-hue, 250)),
+      oklch(0.85 0.02 var(--nk-hue, 250))
     );
     box-shadow: inset 0 1px 0 white;
-    color: oklch(0.38 0.08 var(--nk-hue, 250));
+    color: oklch(0.36 0.04 var(--nk-hue, 250));
   }
   .dark .nk-monogram {
     background: linear-gradient(
       160deg,
-      oklch(0.44 0.045 var(--nk-hue, 250)),
-      oklch(0.25 0.035 var(--nk-hue, 250))
+      oklch(0.42 0.02 var(--nk-hue, 250)),
+      oklch(0.24 0.015 var(--nk-hue, 250))
     );
     box-shadow: inset 0 1px 0 oklch(1 0 0 / 18%);
-    color: oklch(0.92 0.035 var(--nk-hue, 250));
+    color: oklch(0.92 0.015 var(--nk-hue, 250));
   }
   .nk-monogram-sm {
     width: 2rem;
@@ -621,7 +621,7 @@
     position: relative;
     background-image: linear-gradient(
       180deg,
-      color-mix(in oklch, var(--card) 90%, var(--steel-hi)),
+      color-mix(in oklch, var(--card) 95%, var(--steel-hi)),
       var(--card) 70%
     );
     box-shadow: inset 0 1px 0
@@ -833,7 +833,7 @@
     background: var(--card)
       linear-gradient(
         180deg,
-        color-mix(in oklch, var(--card) 93%, var(--steel-hi)),
+        color-mix(in oklch, var(--card) 96%, var(--steel-hi)),
         var(--card) 6rem
       );
   }
@@ -959,7 +959,8 @@
   }
 
   /* Primary fill: black oxide with a lit top edge (light theme); the dark
-   * theme's blued blade is defined unlayered at the end of this file. */
+   * theme's ground steel is defined unlayered at the end of this file. The
+   * tip is cut like a tanto, square again while focused so the ring shows. */
   .nk-steel {
     background-image: linear-gradient(
       180deg,
@@ -967,6 +968,10 @@
       transparent 45%
     );
     box-shadow: inset 0 1px 0 color-mix(in oklch, white 22%, transparent);
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  }
+  .nk-steel:focus-visible {
+    clip-path: none;
   }
   .nk-steel:hover:not(:disabled) {
     filter: brightness(1.06);
@@ -1013,21 +1018,17 @@
     );
 }
 
-/* Dark primary: a blued matte blade, its flat and its bevel split by a hard
- * line, with the cutting edge lit along the foot. Unlayered so its light
- * text outranks the button's text utility. */
+/* Dark primary: ground steel, a hard bevel line across a mirror face. */
 .dark .nk-steel {
   background-image: linear-gradient(
-    180deg,
-    var(--blade-hi),
-    color-mix(in oklch, var(--blade-hi) 82%, var(--blade-lo)) 52%,
-    var(--blade-lo) 52%,
-    color-mix(in oklch, var(--blade-lo) 85%, black) 100%
+    102deg,
+    var(--steel-lo) 0,
+    var(--steel-hi) 34%,
+    color-mix(in oklch, var(--steel-lo) 60%, var(--steel-hi)) 34.5%,
+    var(--steel-hi) 78%,
+    var(--steel-lo) 100%
   );
-  box-shadow:
-    inset 0 -1px 0 var(--blade-edge),
-    inset 0 1px 0 color-mix(in oklch, var(--blade-edge) 22%, transparent);
-  color: var(--steel-hi);
+  box-shadow: inset 0 1px 0 white;
 }
 
 /* Stepped-rule geometry: thick until --nk-step-at, a 45 degree step, then a
@@ -1041,7 +1042,7 @@
   .app-header::after,
   .nk-hero::after,
   .nk-plate::before {
-    --nk-step-ink: color-mix(in oklch, var(--foreground) 52%, transparent);
+    --nk-step-ink: color-mix(in oklch, var(--foreground) 38%, transparent);
     --nk-step-foot: polygon(
       0 0,
       var(--nk-step-at, 3rem) 0,
