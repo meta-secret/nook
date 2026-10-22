@@ -137,27 +137,14 @@ tasks:
         export KUBECONFIG="$kubeconfig"
         kubectl() { sudo -n k0s kubectl "$@"; }
         # A stale zero-replica runner set could still admit old pending work.
-        # Require every retained template to carry its pool's placement before any
+        # Require every retained template to carry build placement before any
         # ceiling is restored; fail once and leave admission stopped otherwise.
         kubectl get ephemeralrunnersets --namespace arc-runners -o json |
           jq -e '.items | length >= 4 and all(.[];
-            ([.metadata.ownerReferences[]? | select(.kind == "AutoscalingRunnerSet") | .name] | first) as $pool |
-            .spec.ephemeralRunnerSpec.spec |
-            .nodeSelector["nook.nokey.sh/arc-workload"] == "build" and
-            (.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution // {}) ==
-              (if $pool == "nook-k0s" or $pool == "nook-k0s-hive" then
-                {nodeSelectorTerms: [{matchExpressions: [{key: "nook.nokey.sh/arc-tier", operator: "In",
-                  values: (if $pool == "nook-k0s" then ["primary", "secondary"] else ["primary", "secondary", "overflow"] end)}]}]}
-              else {} end))' >/dev/null
+            .spec.ephemeralRunnerSpec.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build")' >/dev/null
         for pool in nook-k0s nook-k0s-container nook-k0s-browser nook-k0s-hive; do
           kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
-            jq -e --arg pool "$pool" '.spec.template.spec |
-              .nodeSelector["nook.nokey.sh/arc-workload"] == "build" and
-              (.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution // {}) ==
-                (if $pool == "nook-k0s" or $pool == "nook-k0s-hive" then
-                  {nodeSelectorTerms: [{matchExpressions: [{key: "nook.nokey.sh/arc-tier", operator: "In",
-                    values: (if $pool == "nook-k0s" then ["primary", "secondary"] else ["primary", "secondary", "overflow"] end)}]}]}
-                else {} end)' >/dev/null
+            jq -e '.spec.template.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build"' >/dev/null
         done
         for pair in nook-k0s:35 nook-k0s-container:16 nook-k0s-browser:4 nook-k0s-hive:10; do
           helm upgrade "${pair%%:*}" "{{.ARC_RUNNER_CHART}}" \
@@ -183,14 +170,8 @@ tasks:
           pool="${pair%%:*}"
           ceiling="${pair#*:}"
           kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
-            jq -e --arg pool "$pool" --argjson ceiling "$ceiling" '.spec.maxRunners == $ceiling and
-              (.spec.template.spec |
-                .nodeSelector["nook.nokey.sh/arc-workload"] == "build" and
-                (.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution // {}) ==
-                  (if $pool == "nook-k0s" or $pool == "nook-k0s-hive" then
-                    {nodeSelectorTerms: [{matchExpressions: [{key: "nook.nokey.sh/arc-tier", operator: "In",
-                      values: (if $pool == "nook-k0s" then ["primary", "secondary"] else ["primary", "secondary", "overflow"] end)}]}]}
-                  else {} end))' >/dev/null
+            jq -e --argjson ceiling "$ceiling" '.spec.maxRunners == $ceiling and
+              .spec.template.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build"' >/dev/null
           kubectl get autoscalinglisteners --namespace arc-systems -o json |
             jq -e --arg pool "$pool" --argjson ceiling "$ceiling" '[.items[] | select(
               .spec.autoscalingRunnerSetNamespace == "arc-runners" and .spec.autoscalingRunnerSetName == $pool

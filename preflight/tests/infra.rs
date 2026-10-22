@@ -363,8 +363,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "values: [primary]",
         "values: [secondary]",
         "values: [overflow]",
-        "nodeAffinity:\n        requiredDuringSchedulingIgnoredDuringExecution:",
-        "values: [primary, secondary]",
         "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ] {
         assert!(
@@ -397,14 +395,11 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             spread.contains(&format!("values: {groups}")),
             "execution spread must count its intended groups: {groups}"
         );
-        let (_, pod_anti_affinity) = execution
-            .split_once("podAntiAffinity:")
-            .expect("execution must retain preferred pod anti-affinity");
-        assert!(
-            !pod_anti_affinity.contains("requiredDuringSchedulingIgnoredDuringExecution:"),
-            "ARC pod anti-affinity must allow colocation across its eligible hosts"
-        );
-        for forbidden in ["minDomains:", "matchLabelKeys:"] {
+        for forbidden in [
+            "requiredDuringSchedulingIgnoredDuringExecution:",
+            "minDomains:",
+            "matchLabelKeys:",
+        ] {
             assert!(
                 !execution.contains(forbidden),
                 "ARC execution spread must allow colocation across its eligible hosts: {forbidden}"
@@ -413,7 +408,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     }
     for contract in [
         "affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints",
-        "values: [\"primary\", \"secondary\", \"overflow\"]",
         "--reuse-values",
     ] {
         assert!(
