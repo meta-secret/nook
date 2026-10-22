@@ -78,6 +78,9 @@ import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   ExtensionPairedVaultIdentityHandoffRequestMessageType,
   ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultLockRequestMessageType,
+  ExtensionPairedVaultLockResponse,
+  ExtensionSessionLockedNotice,
   ExtensionPairedVaultUnlockRequestMessageType,
   ExtensionIdentityHandoffRequestMessageType,
   OpenCompanionLauncherIntent,
@@ -85,6 +88,7 @@ import {
   type ExtensionIdentityHandoffRequestMessage,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
+  type ExtensionPairedVaultLockRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
@@ -611,6 +615,55 @@ class ExtensionConnectionBrowser {
       decoded.success.requestId === unlockRequestId &&
       decoded.success.vaultStoreId === vaultStoreId
     );
+  }
+
+  /** Asks the paired extension to lock with this page; true once it says it
+   * locked for this request. */
+  async requestPairedExtensionLock(): Promise<boolean> {
+    const installedExtension = this.readInstalledExtensionRuntimeId();
+    if (
+      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
+    ) {
+      return false;
+    }
+    const lockRequestId = this.requestId();
+    const message: ExtensionPairedVaultLockRequestMessage = {
+      type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
+      payload: { requestId: lockRequestId },
+    };
+    const lockMessage: Parameters<ExtensionMessageChannel["send"]>[0] = {
+      extensionId: installedExtension.extensionRuntimeId,
+      message,
+      responseWait: {
+        kind: ExtensionMessageResponseWaitKind.Bounded,
+        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+      },
+    };
+    const delivery = await this.messageChannel.send(lockMessage);
+    if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
+    const decoded = Effect.runSync(
+      Effect.result(ExtensionPairedVaultLockResponse.decode(delivery.response)),
+    );
+    return (
+      decoded._tag === "Success" && decoded.success.requestId === lockRequestId
+    );
+  }
+
+  /** Hears the extension's lock notice, which its vault bridge posts to this
+   * page on its own origin; a forged notice can only lock the page. Returns
+   * the teardown. */
+  followPairedExtensionLock(onlocked: () => void): () => void {
+    const page = this.browser.window;
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== page || event.origin !== page.location.origin)
+        return;
+      const notice = Effect.runSync(
+        Effect.result(ExtensionSessionLockedNotice.decode(event.data)),
+      );
+      if (notice._tag === "Success") onlocked();
+    };
+    page.addEventListener("message", onMessage);
+    return () => page.removeEventListener("message", onMessage);
   }
 
   private requestIdentityEnvelope({

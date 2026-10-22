@@ -58,6 +58,9 @@ controls, messages and Rust/WASM calls live here once.
     readonly purpose: DeviceProtectionPurpose
     readonly onstatus: (status: DeviceProtectionStatus) => void
     readonly onunlocked: (unlock: DeviceProtectionUnlock) => void
+    /** Someone is waiting on this unlock (a paired vault page): its Unlock
+     * control carries the guide that points the person at it. */
+    readonly guided?: boolean
   }
 
   type CeremonyStep = {
@@ -87,6 +90,7 @@ controls, messages and Rust/WASM calls live here once.
     purpose,
     onstatus,
     onunlocked,
+    guided = false,
   }: ExtensionDeviceProtectionProps = $props()
 
   function initialWorkflow(): DeviceProtectionSetupWorkflow {
@@ -433,16 +437,9 @@ controls, messages and Rust/WASM calls live here once.
     {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
   </button>
 {:else if stage === DeviceProtectionStage.Setup && setupWorkflow === DeviceProtectionSetupWorkflow.NotFound}
-  <button
-    type="button"
-    aria-disabled={pending}
-    data-testid="device-protection-create-new-choice"
-    onclick={() => chooseWorkflow(DeviceProtectionSetupWorkflow.Create)}
-    {@attach focus.enter}
-  >
-    <KeyRound size={16} aria-hidden="true" />
-    {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
-  </button>
+  <!-- No passkey came back: creating one is the way on, so its controls
+       are here at once instead of behind another choice. -->
+  {@render createControls(true)}
   <p class="alternative-line">
     {translatePlain(I18N_KEYS.ExtensionDeviceSetupPasskeyElsewhere)}
     <button
@@ -457,12 +454,75 @@ controls, messages and Rust/WASM calls live here once.
     </button>
   </p>
 {:else if stage === DeviceProtectionStage.Setup}
+  {@render createControls(false)}
+  {#if purpose.kind === DeviceProtectionPurposeKind.ExtensionKey}
+    <p class="alternative-line">
+      {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
+      <button
+        type="button"
+        class="link-button"
+        aria-disabled={pending}
+        data-testid="device-protection-use-existing-choice"
+        onclick={useExistingPasskey}
+      >
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
+      </button>
+    </p>
+  {/if}
+{:else if stage === DeviceProtectionStage.PinUnlock}
+  <form class="device-protection-form" onsubmit={unlockPin}>
+    <div class="field-group">
+      <label for="device-protection-pin">
+        {translatePlain(I18N_KEYS.DeviceProtectionPinLabel)}
+      </label>
+      <input
+        id="device-protection-pin"
+        type="password"
+        inputmode="numeric"
+        autocomplete="current-password"
+        bind:value={pin}
+        oninput={clearNotice}
+        readonly={pending}
+        aria-invalid={notice.kind === DeviceProtectionNoticeKind.Shown}
+        aria-describedby="device-protection-notice"
+        data-testid="device-protection-pin-unlock-input"
+        {@attach focus.enter}
+      />
+    </div>
+    {@render noticeBlock()}
+    <button
+      type="submit"
+      class:guided-action={guided}
+      aria-disabled={pending || pin.length === 0}
+      aria-busy={pending}
+      data-testid="device-protection-pin-unlock-btn"
+    >
+      {pinUnlockLabel()}
+    </button>
+  </form>
+{:else}
+  <button
+    type="button"
+    class:guided-action={guided}
+    aria-disabled={pending}
+    aria-busy={pending}
+    data-testid="device-protection-unlock-btn"
+    onclick={unlockPasskey}
+    {@attach focus.enter}
+  >
+    <Fingerprint size={16} aria-hidden="true" />
+    {actionLabel(I18N_KEYS.ExtensionDeviceSetupUnlockAction)}
+  </button>
+{/if}
+
+{#snippet createControls(focusOnEnter: boolean)}
   <button
     type="button"
     aria-disabled={pending}
     aria-busy={pending}
     data-testid="device-protection-setup-btn"
     onclick={createPasskey}
+    {@attach focusOnEnter && focus.enter}
   >
     <KeyRound size={16} aria-hidden="true" />
     {actionLabel(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
@@ -511,63 +571,7 @@ controls, messages and Rust/WASM calls live here once.
       />
     </div>
   </details>
-  {#if purpose.kind === DeviceProtectionPurposeKind.ExtensionKey}
-    <p class="alternative-line">
-      {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
-      <button
-        type="button"
-        class="link-button"
-        aria-disabled={pending}
-        data-testid="device-protection-use-existing-choice"
-        onclick={useExistingPasskey}
-      >
-        {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
-      </button>
-    </p>
-  {/if}
-{:else if stage === DeviceProtectionStage.PinUnlock}
-  <form class="device-protection-form" onsubmit={unlockPin}>
-    <div class="field-group">
-      <label for="device-protection-pin">
-        {translatePlain(I18N_KEYS.DeviceProtectionPinLabel)}
-      </label>
-      <input
-        id="device-protection-pin"
-        type="password"
-        inputmode="numeric"
-        autocomplete="current-password"
-        bind:value={pin}
-        oninput={clearNotice}
-        readonly={pending}
-        aria-invalid={notice.kind === DeviceProtectionNoticeKind.Shown}
-        aria-describedby="device-protection-notice"
-        data-testid="device-protection-pin-unlock-input"
-        {@attach focus.enter}
-      />
-    </div>
-    {@render noticeBlock()}
-    <button
-      type="submit"
-      aria-disabled={pending || pin.length === 0}
-      aria-busy={pending}
-      data-testid="device-protection-pin-unlock-btn"
-    >
-      {pinUnlockLabel()}
-    </button>
-  </form>
-{:else}
-  <button
-    type="button"
-    aria-disabled={pending}
-    aria-busy={pending}
-    data-testid="device-protection-unlock-btn"
-    onclick={unlockPasskey}
-    {@attach focus.enter}
-  >
-    <Fingerprint size={16} aria-hidden="true" />
-    {actionLabel(I18N_KEYS.ExtensionDeviceSetupUnlockAction)}
-  </button>
-{/if}
+{/snippet}
 
 {#if purpose.kind === DeviceProtectionPurposeKind.IdentityKey}
   <button

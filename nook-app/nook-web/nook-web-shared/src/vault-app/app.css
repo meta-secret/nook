@@ -12,8 +12,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Palette after a blackened blade: light is satin steel, dark is graphite
- * and G10. Neutrals lean cool; anodised titanium (screw heads) is
- * kept for focus and fasteners. Live state is the lit cutting edge (ice
+ * and G10. Neutrals lean cool; anodised titanium is kept for focus and
+ * the card's edge glint. Live state is the lit cutting edge (ice
  * blue) and warning is engraving gold. */
 :root {
   --radius: 0.1875rem;

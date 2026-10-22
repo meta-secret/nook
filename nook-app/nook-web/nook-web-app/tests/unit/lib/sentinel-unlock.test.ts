@@ -307,6 +307,7 @@ class SentinelFinalizationFixture {
       isInitializing: false,
       onUnlock: this.openVault,
       onUnlockOnCard: this.openVault,
+      onUnlockPairedIdentity: vi.fn(),
       onUnlockWithPassword: vi.fn(),
       appKind: VaultApplication.UnifiedDevelopment,
       extensionConnectPairingStatusEntries: [],

@@ -43,6 +43,7 @@ import {
   ExtensionIdentityHandoffRequestMessage,
   ExtensionPairedVaultIdentityDiscoveryMessage,
   ExtensionPairedVaultIdentityHandoffRequestMessage,
+  ExtensionPairedVaultLockRequestMessage,
   ExtensionPairedVaultUnlockRequestMessage,
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
@@ -175,11 +176,13 @@ const completeAccountPickerAuthorizationCleanup = mock(() =>
 )
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
+const announceExtensionSessionLocked = mock(() => Promise.resolve())
 /** The service worker opened or reused Nook tab 31. */
 const openExtensionPairing = mock(() => Promise.resolve(31))
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
+  announceExtensionSessionLocked,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
@@ -243,6 +246,8 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
     ExtensionPairedVaultIdentityHandoffRequestMessage.decode,
   decodeExtensionPairedVaultUnlockRequestMessage:
     ExtensionPairedVaultUnlockRequestMessage.decode,
+  decodeExtensionPairedVaultLockRequestMessage:
+    ExtensionPairedVaultLockRequestMessage.decode,
   decodeOpenCompanionLauncherMessage:
     NormalizedOpenCompanionLauncherMessageSchema.decode,
   admitsUnlockSenderSynchronously:
@@ -250,6 +255,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
+  lockExtensionSession: mock(() => Promise.resolve(true)),
 }
 
 async function flushResponses(): Promise<void> {
@@ -324,6 +330,7 @@ async function routeDecodedLocalUpdate(
 
 export {
   AccountPickerCleanupMarkerStatus,
+  announceExtensionSessionLocked,
   completedCleanup,
   externalDependencies,
   externalPairingMessage,

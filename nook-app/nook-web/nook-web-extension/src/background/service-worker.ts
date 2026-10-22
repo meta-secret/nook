@@ -5,6 +5,10 @@ import {
   type PilotAttemptMessage,
 } from '../lib/pilot-attempt-messages'
 import { PilotAttempts } from './service-worker/pilot-attempts'
+import {
+  announceExtensionSessionLocked,
+  chromeLockNoticeBrowser,
+} from './service-worker/extension-session-lock-notice'
 import { ExtensionVaultEventLogExport } from './service-worker/vault-event-log-export'
 import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
@@ -31,6 +35,7 @@ import {
   ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
   ExtensionPairedVaultIdentityHandoffRequestMessage as ExtensionPairedVaultIdentityHandoffRequestMessageSchema,
   ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
+  ExtensionPairedVaultLockRequestMessage as ExtensionPairedVaultLockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
@@ -127,6 +132,7 @@ import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageS
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
+  lockExtensionSession,
   recoverInterruptedAuthorizationCleanup,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
@@ -177,6 +183,8 @@ const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
+  announceExtensionSessionLocked: () =>
+    announceExtensionSessionLocked(chromeLockNoticeBrowser),
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers:
     accountPickerSessions.clearPendingAccountPickers.bind(
@@ -286,6 +294,10 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ExtensionPairedVaultIdentityHandoffRequestMessageSchema.decode,
     decodeExtensionPairedVaultUnlockRequestMessage:
       ExtensionPairedVaultUnlockRequestMessageSchema.decode,
+    decodeExtensionPairedVaultLockRequestMessage:
+      ExtensionPairedVaultLockRequestMessageSchema.decode,
+    lockExtensionSession: () =>
+      lockExtensionSession(extensionLifecycleRoutingDependencies),
     decodeOpenCompanionLauncherMessage:
       NormalizedOpenCompanionLauncherMessageSchema.decode,
     admitsUnlockSenderSynchronously:

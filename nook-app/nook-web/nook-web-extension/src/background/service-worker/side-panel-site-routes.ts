@@ -38,15 +38,44 @@ import {
   SidePanelTabTargetResolver,
 } from './side-panel-tab-target'
 
+/** The tab's top frame received the message, but no content script there
+ * answered it. */
+export class SidePanelPageUnanswered extends Error {
+  constructor() {
+    super('No content script answered in the top frame.')
+  }
+}
+
 /** Delivers the Fill trigger to the top frame of the resolved tab only. */
-class SidePanelTopFrame {
+export class SidePanelTopFrame {
   private readonly options: chrome.tabs.MessageSendOptions = { frameId: 0 }
 
-  send(delivery: SidePanelPageDelivery): Promise<BrowserRuntimeMessageValue> {
-    return chrome.tabs.sendMessage<
+  /**
+   * Fails when no content script answers, as when none is there. A frame
+   * whose listeners all leave the message alone (the vault bridge hears only
+   * the extension's lock notice) resolves with no reply: nothing answered.
+   */
+  async send(
+    delivery: SidePanelPageDelivery,
+  ): Promise<BrowserRuntimeMessageValue> {
+    const reply = await chrome.tabs.sendMessage<
       SidePanelPageDelivery['message'],
       BrowserRuntimeMessageValue
     >(delivery.tabId, delivery.message, this.options)
+    if (!SidePanelTopFrame.answered(reply)) throw new SidePanelPageUnanswered()
+    return reply
+  }
+
+  /** Chrome resolves with nothing, whatever the declared reply type, when no
+   * listener answered. */
+  private static answered(reply: BrowserRuntimeMessageValue): boolean {
+    const kind = typeof reply
+    return (
+      kind === 'string' ||
+      kind === 'number' ||
+      kind === 'boolean' ||
+      kind === 'object'
+    )
   }
 }
 

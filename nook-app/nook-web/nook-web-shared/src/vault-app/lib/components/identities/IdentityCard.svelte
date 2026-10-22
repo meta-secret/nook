@@ -66,6 +66,7 @@ panel sits inside the card, which then spans the full row.
     onSelectVault,
     onClosePanels = () => {},
     onUnlockVault,
+    onUnlockElsewhere,
     onManageVault,
     onLock = () => {},
     onUnlock = () => {},
@@ -102,12 +103,14 @@ panel sits inside the card, which then spans the full row.
     /** Unlock a vault from its panel and stay on the card; Open vault in
      * the panel then goes in. */
     onUnlockVault?: (storeId: string) => void
+    /** Unlock an identity whose key the paired extension holds. */
+    onUnlockElsewhere?: () => void | Promise<void>
     /** One of a vault's own pages (its passphrases, imports); a locked
      * vault unlocks first. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onLock?: () => void
     /** Unlock the identity with this device's passkey. */
-    onUnlock?: (identityId: string) => void
+    onUnlock?: (identityId: string) => void | Promise<void>
     onUseIdentity?: (identityId: string) => void
     /** How the unlocked identity is protected against loss; until both
      * protections are done, the card offers its checklist. */
@@ -137,9 +140,30 @@ panel sits inside the card, which then spans the full row.
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
-  const managesHere = $derived(
-    Boolean(onManageSection) && !preview && (live || card.current),
+  /** An identity whose key another installation holds unlocks here when it
+   * holds the vault this page has selected: the paired extension has it. */
+  const unlocksElsewhere = $derived(
+    card.status === IdentityCardStatus.Elsewhere &&
+      Boolean(onUnlockElsewhere) &&
+      card.vaults.some((row) => row.storeId === selectedStoreId),
   )
+
+  /** Unlock at the foot of a locked card: the identity unlocks alone. With a
+   * vault's panel open beside the card, that vault then opens in place, as a
+   * click on its row would, so the panel offers its actions. The call runs
+   * within the click, before any wait: a paired extension needs the gesture. */
+  async function unlockIdentity(): Promise<void> {
+    await (unlocksElsewhere
+      ? onUnlockElsewhere?.()
+      : onUnlock(card.identityId))
+    const row = vaultOpenRow
+    if (live && row?.state === IdentityVaultRowState.Available)
+      onUnlockVault?.(row.storeId)
+  }
+  // Overview, Manage and New vault need the unlocked identity: a locked
+  // card keeps only its header and vaults.
+  const managesHere = $derived(Boolean(onManageSection) && !preview && live)
+  const addsVault = $derived(canAddVault && live)
   let menuOpen = $state(false)
   let protectionOpen = $state(false)
   /** The checklist row shows while the unlocked identity is at risk, and
@@ -227,8 +251,12 @@ panel sits inside the card, which then spans the full row.
     closeOthers()
     vault.vaultPanelStoreId = storeId
     const row = card.vaults.find((candidate) => candidate.storeId === storeId)
-    if (row?.state !== IdentityVaultRowState.Unavailable)
-      onSelectVault?.(storeId)
+    if (row?.state === IdentityVaultRowState.Unavailable) return
+    // An unlocked identity opens its vault in place with no prompt, so the
+    // panel offers the vault's own actions straight away.
+    if (live && row?.state === IdentityVaultRowState.Available && onUnlockVault)
+      onUnlockVault(storeId)
+    else onSelectVault?.(storeId)
   }
 
   function closeMenuOnEscape(event: KeyboardEvent): void {
@@ -290,18 +318,13 @@ panel sits inside the card, which then spans the full row.
   icon: Snippet,
   onclick: () => void,
 )}
-  <!-- A locked identity shows them inactive: they open once it is
-       unlocked, rather than asking for the passkey on the way. -->
   <button
     type="button"
     class="nk-vault-row disabled:opacity-45"
     data-testid={testId}
     aria-expanded={open}
     {...open ? { 'aria-current': 'true' } : {}}
-    {...live
-      ? {}
-      : { title: vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked) }}
-    disabled={busy || !live}
+    disabled={busy}
     {onclick}
   >
     <span class="nk-vault-icon" aria-hidden="true">{@render icon()}</span>
@@ -309,17 +332,10 @@ panel sits inside the card, which then spans the full row.
       <span class="truncate text-[0.9375rem] font-medium">{title}</span>
       <span class="truncate text-xs text-muted-foreground">{hint}</span>
     </span>
-    {#if live}
-      <ChevronRight
-        class="size-4 flex-none text-muted-foreground opacity-60"
-        aria-hidden="true"
-      />
-    {:else}
-      <Lock
-        class="size-3.5 flex-none text-muted-foreground"
-        aria-hidden="true"
-      />
-    {/if}
+    <ChevronRight
+      class="size-4 flex-none text-muted-foreground opacity-60"
+      aria-hidden="true"
+    />
   </button>
 {/snippet}
 
@@ -342,7 +358,13 @@ panel sits inside the card, which then spans the full row.
   data-status={card.status}
   data-unlocking={unlockPanel ? 'true' : 'false'}
 >
-  <span class="nk-eyelet" aria-hidden="true"></span>
+  <span class="nk-edge-glint" aria-hidden="true"></span>
+  {#if !preview && (card.status === IdentityCardStatus.Locked || card.status === IdentityCardStatus.Elsewhere)}
+    <!-- Locking folds what only an unlocked identity offers back into the
+         card: its header and vaults stay. -->
+    <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
+    ></span>
+  {/if}
   <div class="relative flex min-w-0 flex-1 flex-col">
     <header class="flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
       <span class="relative inline-flex flex-none">
@@ -549,7 +571,7 @@ panel sits inside the card, which then spans the full row.
             </button>
           </li>
         {/each}
-        {#if card.vaults.length === 0 && !canAddVault}
+        {#if card.vaults.length === 0 && !addsVault}
           <li
             class="px-2.5 py-2.5 text-sm text-muted-foreground"
             data-testid="identity-card-no-vaults"
@@ -557,7 +579,7 @@ panel sits inside the card, which then spans the full row.
             {vault.t(I18N_KEYS.WorkspaceCardNoVaults)}
           </li>
         {/if}
-        {#if canAddVault}
+        {#if addsVault}
           <li>
             <button
               type="button"
@@ -603,13 +625,13 @@ panel sits inside the card, which then spans the full row.
 
     {#if !preview}
       <div class="nk-card-actions">
-        {#if card.status === IdentityCardStatus.Locked}
+        {#if card.status === IdentityCardStatus.Locked || unlocksElsewhere}
           <button
             type="button"
             data-testid="identity-unlock"
             title={vault.t(I18N_KEYS.WorkspaceUnlockIdentityTitle)}
             disabled={busy}
-            onclick={() => onUnlock(card.identityId)}
+            onclick={() => void unlockIdentity()}
           >
             <LockOpen class="size-4 text-muted-foreground" aria-hidden="true" />
             {vault.t(I18N_KEYS.WorkspaceUnlock)}
@@ -658,11 +680,9 @@ panel sits inside the card, which then spans the full row.
         {vault}
         row={vaultOpenRow}
         identityName={card.label}
-        unlockLabel={live
-          ? vault.t(I18N_KEYS.WorkspaceVaultPanelOpen)
-          : card.keyKind === IdentityKeyKind.Pin
-            ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
-            : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
+        unlockLabel={card.keyKind === IdentityKeyKind.Pin
+          ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
+          : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
         identityOpen={live}
         {busy}
         passphraseOffered={!live && Boolean(onSelectVault)}

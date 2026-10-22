@@ -1,4 +1,9 @@
 import type { Result } from "neverthrow";
+import {
+  is_vault_session_locked,
+  VaultCompanionAutoResumeDecision,
+  type NookVaultClientPolicy,
+} from "$app-wasm";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { PairedExtensionDiscoveryFailure } from "$lib/extension/connect";
 import type { PairedExtensionResumeStatus } from "./app-interaction-types";
@@ -35,6 +40,18 @@ export type PairedExtensionUnlockPollRequest = {
   >;
 };
 
+/** A locked page waits for the person after an explicit lock in this
+ * session (the Lock button, an idle lock): a paired extension that is still
+ * unlocked never reopens the vault on its own. Their own unlock still uses it. */
+export function pairedExtensionAutoResumeHeld(
+  policy: NookVaultClientPolicy,
+): boolean {
+  return (
+    policy.companion_auto_resume_decision(is_vault_session_locked()) ===
+    VaultCompanionAutoResumeDecision.HoldForUser
+  );
+}
+
 /** What a paired extension reports while another flow owns this vault: an
  * extension holding a different vault counts as unavailable here. */
 export function pairedResumeStatusWhileBusy(
@@ -56,8 +73,10 @@ export function pairedResumeStatusWhileRetrying(
     : ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable;
 }
 
-const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000;
-const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350;
+/** How long a page waits for the paired extension to unlock, and how often
+ * it asks again meanwhile. */
+export const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000;
+export const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350;
 
 export function requestPairedExtensionUnlockIfEligible(
   request: PairedExtensionUnlockDeliveryRequest,

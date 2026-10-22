@@ -46,6 +46,7 @@ import * as secretsActions from "$lib/vault/secrets";
 import * as passwordUnlockActions from "$lib/vault/password-unlock";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
+import { PairedExtensionLockActions } from "$lib/vault/paired-extension-lock";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
@@ -752,14 +753,18 @@ export class VaultState extends VaultRuntimeState {
     return this.uiActions.handleRemoteLocalBrowserDataDeletion();
   }
 
-  /**
-   * Lock from the UI. The current page is kept so unlocking resumes it; the
-   * identities hub instead resumes into the vault that gets unlocked.
-   */
+  /** The person's lock: the page is kept so unlocking resumes it (the hub
+   * resumes into the vault unlocked), and a paired extension locks with it. */
   lockIdentity() {
     if (this.workspaceSection === WorkspaceSection.Identities)
       this.openSection(WorkspaceSection.Vault);
-    return this.lockVault();
+    this.lockVault();
+    PairedExtensionLockActions.forPage(this).lockPairedExtension();
+  }
+
+  /** The person locks only the identity key, from its card. */
+  lockIdentityKey() {
+    PairedExtensionLockActions.forPage(this).lockIdentityKey();
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */

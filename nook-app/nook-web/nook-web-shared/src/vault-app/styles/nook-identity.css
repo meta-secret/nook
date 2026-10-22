@@ -166,6 +166,10 @@
     border-left-color: var(--warning);
     background: color-mix(in srgb, var(--warning) 9%, var(--card));
   }
+  .nk-banner-destructive {
+    border-left-color: var(--destructive);
+    background: color-mix(in srgb, var(--destructive) 9%, var(--card));
+  }
 
   /* Monospace label, status tag, spec line. */
   .nk-label {
@@ -218,6 +222,45 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted-foreground);
+  }
+
+  /* Points at the one action that resolves a failed step: a titanium cue
+   * above it and a titanium edge beside it, answering the banner's red edge.
+   * Both pulse a few times on arrival, then hold. After the label rules so
+   * the cue's colour wins over nk-label. */
+  .nk-guide {
+    position: relative;
+  }
+  .nk-guide::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -10px;
+    width: 2px;
+    background: var(--titanium);
+    animation: nk-guide-pulse 1.4s ease-in-out 3;
+  }
+  .nk-guide-cue {
+    color: var(--titanium);
+    animation: nk-guide-nudge 1.4s ease-in-out 3;
+  }
+
+  /* A card that turns locked folds its unlocked-only panels away: a slab of
+   * card face with a titanium leading edge retracts into the right side
+   * once, leaving the header and vaults. */
+  .nk-card-fold {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    width: 60%;
+    pointer-events: none;
+    background: var(--card);
+    border-left: 2px solid var(--titanium);
+    transform-origin: right center;
+    animation: nk-card-fold 0.52s cubic-bezier(0.65, 0, 0.35, 1) both;
   }
 
   /* Field slot: a sealed (hidden) secret gets a faint hatch. */
@@ -500,26 +543,21 @@
     background: var(--card);
     color: var(--muted-foreground);
   }
-  .nk-eyelet {
+  /* Status glint: a short hard line just inside the keytag's 45 degree cut,
+   * like the blade's ground edge catching light. Titanium at rest, success
+   * while the identity is unlocked. */
+  .nk-edge-glint {
     position: absolute;
-    top: 0.8125rem;
-    right: 0.8125rem;
+    top: 0.84375rem;
+    right: 0.40625rem;
     z-index: 1;
-    width: 0.5625rem;
-    height: 0.5625rem;
-    border: 1px solid
-      color-mix(in oklch, var(--titanium) 55%, var(--background));
-    border-radius: 9999px;
-    background: radial-gradient(
-      circle at 35% 30%,
-      color-mix(in oklch, var(--titanium) 30%, white) 0,
-      var(--titanium) 45%,
-      color-mix(in oklch, var(--titanium) 55%, black) 100%
-    );
+    width: 1rem;
+    height: 2px;
+    background: color-mix(in oklch, var(--titanium) 75%, white);
+    transform: rotate(45deg);
   }
-  .nk-frame-live .nk-eyelet {
-    border-color: var(--success);
-    background: color-mix(in srgb, var(--success) 25%, var(--background));
+  .nk-frame-live .nk-edge-glint {
+    background: var(--success);
   }
   .nk-fingerprint {
     font-family: var(--font-mono);
@@ -919,9 +957,36 @@
   }
 }
 
+@keyframes nk-guide-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes nk-guide-nudge {
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes nk-card-fold {
+  80% {
+    opacity: 1;
+  }
+  to {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nk-caret,
-  .nk-terminal-live::after {
+  .nk-terminal-live::after,
+  .nk-guide::before,
+  .nk-guide-cue {
     animation: none;
+  }
+  .nk-card-fold {
+    display: none;
   }
 }

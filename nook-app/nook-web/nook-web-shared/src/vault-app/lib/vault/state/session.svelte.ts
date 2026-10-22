@@ -12,6 +12,7 @@ import {
   DeviceProtectionStatus,
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
+  VaultIdentityKeySource,
   type NookPasswordEntrySummary,
   type NookVaultManager,
   type PasswordEntryId,
@@ -73,6 +74,11 @@ export class VaultSessionState {
   }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
+  );
+  /** Where this page's identity key lives: on this browser, or in the
+   * paired extension that handed it over (the two then lock together). */
+  identityKeySource = $state<VaultIdentityKeySource>(
+    VaultIdentityKeySource.ThisBrowser,
   );
   deviceProtectionLockedStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Passkey,

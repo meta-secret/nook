@@ -4,8 +4,10 @@ use super::runtime_policy::NookVaultClientPolicy;
 use crate::ConfiguredVaultApplication;
 use nook_companion_core::CompanionIdentityStatus;
 use nook_core::{
-    CompanionProviderPresence, LocalVaultPresence, VaultClientPolicy, VaultCompanionUnlockDecision,
-    VaultExistingImportUnlockRequest, VaultStartupUnlockDecision, VaultStartupUnlockRequest,
+    CompanionProviderPresence, LocalVaultPresence, VaultClientPolicy,
+    VaultCompanionAutoResumeDecision, VaultCompanionLockDecision, VaultCompanionUnlockDecision,
+    VaultExistingImportUnlockRequest, VaultIdentityKeySource, VaultStartupUnlockDecision,
+    VaultStartupUnlockRequest,
 };
 use serde::Deserialize;
 use tsify::Tsify;
@@ -61,6 +63,25 @@ impl NookVaultClientPolicy {
         let result = { VaultClientPolicy::companion_unlock_decision(&status) };
         Ok(result)
     }
+
+    /// Whether a locked page may reopen its vault from a paired companion on
+    /// its own; an explicit lock in this session holds it for the person.
+    #[must_use]
+    pub fn companion_auto_resume_decision(
+        &self,
+        session_explicitly_locked: bool,
+    ) -> VaultCompanionAutoResumeDecision {
+        VaultClientPolicy::companion_auto_resume_decision(session_explicitly_locked.into())
+    }
+
+    /// Whether a lock on this page or on the paired companion reaches the other.
+    #[must_use]
+    pub fn companion_lock_decision(
+        &self,
+        key_source: VaultIdentityKeySource,
+    ) -> VaultCompanionLockDecision {
+        VaultClientPolicy::companion_lock_decision(key_source)
+    }
 }
 
 #[cfg(test)]
@@ -111,6 +132,34 @@ pub mod tests {
                 vault_store_id: "store_startup".to_owned(),
             }),
             VaultCompanionUnlockDecision::WebsiteDevice
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn lock_bridge_locks_a_companion_held_identity_together() {
+        let policy = NookVaultClientPolicy::new();
+        assert_eq!(
+            policy.companion_lock_decision(VaultIdentityKeySource::PairedCompanion),
+            VaultCompanionLockDecision::LockTogether
+        );
+        assert_eq!(
+            policy.companion_lock_decision(VaultIdentityKeySource::ThisBrowser),
+            VaultCompanionLockDecision::LockAlone
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn auto_resume_bridge_holds_an_explicitly_locked_page() {
+        let policy = NookVaultClientPolicy::new();
+        assert_eq!(
+            policy.companion_auto_resume_decision(true),
+            VaultCompanionAutoResumeDecision::HoldForUser
+        );
+        assert_eq!(
+            policy.companion_auto_resume_decision(false),
+            VaultCompanionAutoResumeDecision::Resume
         );
     }
 

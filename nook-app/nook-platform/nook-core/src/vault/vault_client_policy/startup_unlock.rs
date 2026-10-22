@@ -57,6 +57,32 @@ pub enum VaultCompanionUnlockDecision {
     WebsiteDevice,
 }
 
+/// Whether a locked page reopens its vault from a paired companion on its own.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultCompanionAutoResumeDecision {
+    Resume,
+    HoldForUser,
+}
+
+/// Where the page's unlocked identity took its key from.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultIdentityKeySource {
+    /// This browser's own passkey or PIN.
+    ThisBrowser,
+    /// The paired companion handed its identity over: it holds the key.
+    PairedCompanion,
+}
+
+/// Whether a lock on the page or on the paired companion reaches the other.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultCompanionLockDecision {
+    LockTogether,
+    LockAlone,
+}
+
 impl VaultClientPolicy {
     #[must_use]
     pub const fn startup_unlock_decision(
@@ -78,6 +104,40 @@ impl VaultClientPolicy {
                     VaultStartupUnlockDecision::WebsiteDevice
                 }
             },
+        }
+    }
+}
+
+/// An explicit lock in this session (the Lock button, an idle lock) keeps the
+/// page locked until the person unlocks it: an unlocked companion never reopens
+/// the vault on its own. The person's own unlock still asks the companion.
+impl VaultClientPolicy {
+    #[must_use]
+    pub const fn companion_auto_resume_decision(
+        session: crate::VaultSessionLockIntent,
+    ) -> VaultCompanionAutoResumeDecision {
+        match session {
+            crate::VaultSessionLockIntent::Automatic => VaultCompanionAutoResumeDecision::Resume,
+            crate::VaultSessionLockIntent::ExplicitlyLocked => {
+                VaultCompanionAutoResumeDecision::HoldForUser
+            }
+        }
+    }
+}
+
+/// A page whose identity the paired companion holds locks with it, both ways:
+/// otherwise a lock on either side leaves the key open on the other, and the
+/// page's Unlock would come back without asking for anything. An identity
+/// keyed on this browser stays independent of the companion, which remains a
+/// separately revocable device.
+impl VaultClientPolicy {
+    #[must_use]
+    pub const fn companion_lock_decision(
+        key_source: VaultIdentityKeySource,
+    ) -> VaultCompanionLockDecision {
+        match key_source {
+            VaultIdentityKeySource::PairedCompanion => VaultCompanionLockDecision::LockTogether,
+            VaultIdentityKeySource::ThisBrowser => VaultCompanionLockDecision::LockAlone,
         }
     }
 }
@@ -279,6 +339,42 @@ pub mod tests {
         assert_eq!(
             VaultClientPolicy::companion_unlock_decision(&different),
             VaultCompanionUnlockDecision::WebsiteDevice
+        );
+    }
+
+    #[test]
+    fn identity_held_by_the_companion_locks_with_it() {
+        assert_eq!(
+            VaultClientPolicy::companion_lock_decision(VaultIdentityKeySource::PairedCompanion),
+            VaultCompanionLockDecision::LockTogether
+        );
+    }
+
+    #[test]
+    fn identity_keyed_on_this_browser_locks_alone() {
+        assert_eq!(
+            VaultClientPolicy::companion_lock_decision(VaultIdentityKeySource::ThisBrowser),
+            VaultCompanionLockDecision::LockAlone
+        );
+    }
+
+    #[test]
+    fn explicit_lock_holds_the_page_until_the_person_unlocks() {
+        assert_eq!(
+            VaultClientPolicy::companion_auto_resume_decision(
+                crate::VaultSessionLockIntent::ExplicitlyLocked
+            ),
+            VaultCompanionAutoResumeDecision::HoldForUser
+        );
+    }
+
+    #[test]
+    fn unlocked_companion_resumes_a_page_never_locked_by_hand() {
+        assert_eq!(
+            VaultClientPolicy::companion_auto_resume_decision(
+                crate::VaultSessionLockIntent::Automatic
+            ),
+            VaultCompanionAutoResumeDecision::Resume
         );
     }
 

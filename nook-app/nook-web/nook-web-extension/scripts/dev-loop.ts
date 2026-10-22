@@ -16,8 +16,6 @@ const repoRoot = resolve(platformRoot, '..', '..')
 const distDir = join(extensionRoot, 'dist')
 
 const vaultUrl = 'https://localhost:5173/'
-const httpsDir =
-  process.env.LOCAL_HTTPS_DIR?.trim() || join(homedir(), '.nook', 'https')
 const cdpPort = Number(process.env.NOOK_DEV_CDP_PORT?.trim() || '9333')
 const profileDir =
   process.env.NOOK_DEV_PROFILE_DIR?.trim() ||
@@ -48,14 +46,8 @@ const wasmOutputDirs = [
   join('extension', 'nook-companion-wasm'),
 ]
 
-// The WASM and extension builds and Vite inherit their settings from this
-// process: a dev WASM build, the local channel against the HTTPS dev vault.
-process.env.WASM_BUILD_MODE = 'dev'
-process.env.NOOK_SIMPLE_VAULT_URL = vaultUrl
-process.env.NOOK_EXTENSION_CHANNEL = 'local'
-process.env.NOOK_LOCAL_HTTPS = '1'
-process.env.NOOK_LOCAL_HTTPS_CERT_PATH = join(httpsDir, 'localhost.pem')
-process.env.NOOK_LOCAL_HTTPS_KEY_PATH = join(httpsDir, 'localhost-key.pem')
+// The WASM and extension builds and Vite inherit their settings (a dev WASM
+// build, the local channel against the HTTPS dev vault) from extension:dev.
 
 const startedAt = performance.now()
 const log = (message: string): void => {

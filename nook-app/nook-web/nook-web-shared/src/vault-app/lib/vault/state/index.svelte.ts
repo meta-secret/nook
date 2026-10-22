@@ -107,6 +107,7 @@ const sessionKeys = [
   "openManager",
   "deviceProtectionStatus",
   "deviceProtectionLockedStatus",
+  "identityKeySource",
   "isAuthenticated",
   "sessionEpoch",
   "sessionExpiredByIdle",
@@ -270,6 +271,7 @@ class VaultStateSlicesImplementation {
   declare openManager: VaultSessionState["openManager"];
   declare deviceProtectionStatus: VaultSessionState["deviceProtectionStatus"];
   declare deviceProtectionLockedStatus: VaultSessionState["deviceProtectionLockedStatus"];
+  declare identityKeySource: VaultSessionState["identityKeySource"];
   declare isAuthenticated: VaultSessionState["isAuthenticated"];
   declare sessionEpoch: VaultSessionState["sessionEpoch"];
   declare sessionExpiredByIdle: VaultSessionState["sessionExpiredByIdle"];

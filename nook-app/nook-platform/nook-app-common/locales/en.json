@@ -26,7 +26,8 @@
   },
   "session": {
     "expired_idle": "Session expired — unlock again to continue.",
-    "idle_warning": "Locking in 30 seconds due to inactivity…"
+    "idle_warning": "Locking in 30 seconds due to inactivity…",
+    "paired_extension_lock_failed": "The Nook extension didn't lock. Lock it from its side panel."
   },
   "nav": {
     "devices_access": "Access"
@@ -866,6 +867,11 @@
     "new_passkey_alternative_action": "Create passkey",
     "existing_passkey_action": "Authenticate",
     "existing_passkey_hint": "Your browser or operating system will show saved Nook passkeys if any are available.",
+    "not_found_title": "Your passkey wasn't used",
+    "not_found_description": "The browser didn't return a Nook passkey. Create a new passkey for this browser to continue.",
+    "next_step": "Next step",
+    "passkey_elsewhere": "Saved on another device or in another password manager?",
+    "use_existing": "Use it",
     "mode_group_label": "Device protection mode",
     "mode_standard_title": "Standard",
     "mode_standard_description": "Standard requires a passkey that supports WebAuthn PRF. It can recreate this browser's device identity if local browser storage is cleared.",
@@ -1704,6 +1710,7 @@
       "device_protection": "The extension remains a separately revocable Nook device. The Nook tab protects its device key with a passkey; it does not contain a second vault interface.",
       "messaging_unavailable": "The Nook extension could not be reached from this browser.",
       "identity_handoff_failed": "The extension device could not be unlocked for this vault. Reopen Nook from the unlocked extension and try again.",
+      "paired_unlock_timed_out": "The Nook extension is still locked. Unlock it in its side panel, then press Unlock here again.",
       "start_failed": "The extension could not start browser access setup.",
       "protection_opened": "Finish passkey protection in the Nook tab, then return here for vault approval.",
       "starting": "Opening protection…",
@@ -1768,6 +1775,9 @@
       "fill_no_form": "No login form on this page. Open the sign-in form, then fill again.",
       "fill_site_changed": "This tab moved to another site. Choose a login again.",
       "fill_locked": "Nook locked before filling. Unlock it, then fill again.",
+      "vault_page_waiting_cue": "Next step",
+      "vault_page_waiting_title": "Your vault page is waiting",
+      "vault_page_waiting": "Unlock Nook here and the vault page continues on its own.",
       "fill_failed": "Nook could not fill this login. Try again.",
       "site_no_filling_vault": "None of your connected vaults fills passwords yet.",
       "site_locked": "Nook locked while loading this site's saved items. Try again.",

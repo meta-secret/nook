@@ -58,10 +58,10 @@ once it is open.
     vault: VaultState
     row: IdentityVaultRow
     identityName: string
-    /** "Unlock with passkey" or "Unlock with PIN", as this device signs in;
-     * "Open vault" once the identity is unlocked. */
+    /** "Unlock with passkey" or "Unlock with PIN", as this device signs in. */
     unlockLabel: string
-    /** The identity is unlocked: opening the vault asks for no key. */
+    /** The identity is unlocked: its vault opens as the panel opens, with no
+     * key asked for, so the panel offers the vault's own actions. */
     identityOpen?: boolean
     busy?: boolean
     /** The vault's passphrase unlock, once its passphrases are read. */
@@ -341,20 +341,20 @@ once it is open.
           {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
         </Button>
       {:else}
-        <Button
-          type="button"
-          class="h-11 w-full"
-          data-testid="vault-panel-unlock"
-          disabled={busy}
-          onclick={onUnlock}
-        >
-          {#if identityOpen}
-            <FolderOpen class="size-4" />
-          {:else}
+        <!-- An unlocked identity opens its vault as the panel opens, with no
+             prompt; only a locked one asks for its key here. -->
+        {#if !identityOpen}
+          <Button
+            type="button"
+            class="h-11 w-full"
+            data-testid="vault-panel-unlock"
+            disabled={busy}
+            onclick={onUnlock}
+          >
             <Fingerprint class="size-4" />
-          {/if}
-          {unlockLabel}
-        </Button>
+            {unlockLabel}
+          </Button>
+        {/if}
         {#if unlockError}
           <p
             class="text-sm text-pretty text-destructive"

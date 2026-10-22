@@ -112,8 +112,11 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // Overview and Manage wait for the identity to be unlocked.
-    await expect(current.getByTestId('identity-overview-toggle')).toBeDisabled()
+    // A locked card keeps only its header and vaults: Overview, Manage and
+    // New vault return once the identity is unlocked.
+    await expect(current.getByTestId('identity-overview-toggle')).toHaveCount(0)
+    await expect(current.getByTestId('identity-manage')).toHaveCount(0)
+    await expect(current.getByTestId('identity-new-vault')).toHaveCount(0)
     await current.getByTestId('identity-unlock').click()
     await expect(current).toHaveAttribute('data-status', 'unlocked', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

@@ -217,6 +217,14 @@ describe('service worker routing', () => {
         events.push(`authorization-restored-${authorizationGeneration}`)
         return Promise.resolve(completedCleanup)
       },
+      refreshAuthenticationSurfaces: () => {
+        events.push('surfaces-refreshed')
+        return Promise.resolve()
+      },
+      announceExtensionSessionLocked: () => {
+        events.push('vault-tabs-told')
+        return Promise.resolve()
+      },
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -245,6 +253,8 @@ describe('service worker routing', () => {
       'pickers-cleared-2',
       'enrollments-cleared',
       'authorization-restored-epoch-4',
+      'surfaces-refreshed',
+      'vault-tabs-told',
     ])
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
@@ -295,12 +305,14 @@ describe('service worker routing', () => {
         await import('../src/background/service-worker/extension-lifecycle-routing')
       const sendResponse = mock(() => {})
       const completeCleanup = mock(() => Promise.resolve(completedCleanup))
+      const announce = mock(() => Promise.resolve())
       const dependencies: ExtensionLifecycleRoutingDependencies = {
         ...lifecycleDependencies,
         clearPendingAccountPickers: () => Promise.resolve(),
         closeExtensionSessionDocument: () =>
           Promise.resolve(err(new ExtensionSessionTransportFailure(kind))),
         completeAccountPickerAuthorizationCleanup: completeCleanup,
+        announceExtensionSessionLocked: announce,
       }
       expect(
         routeExtensionLifecycleMessage({
@@ -318,6 +330,7 @@ describe('service worker routing', () => {
         reason: 'session-lock-failed',
       })
       expect(completeCleanup).not.toHaveBeenCalled()
+      expect(announce).not.toHaveBeenCalled()
     },
   )
 

@@ -4,6 +4,7 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 const createPasskeyProtection = vi.hoisted(() => vi.fn())
 const authorizePasskeyProtection = vi.hoisted(() => vi.fn())
+const recoverPasskeyProtection = vi.hoisted(() => vi.fn())
 
 vi.mock('$lib/auth/passkey-device-protection', async (importOriginal) => {
   const actual =
@@ -12,6 +13,7 @@ vi.mock('$lib/auth/passkey-device-protection', async (importOriginal) => {
     ...actual,
     setupDeviceProtection: createPasskeyProtection,
     unlockDeviceProtection: authorizePasskeyProtection,
+    recoverDeviceProtectionWithPasskey: recoverPasskeyProtection,
   }
 })
 
@@ -231,6 +233,51 @@ describe('device protection actions', () => {
     ).toBe(DeviceProtectionActionOutcome.Incomplete)
     expect(state.lockDeviceProtection).toHaveBeenCalledOnce()
   })
+
+  test('reports a passkey lookup the browser did not finish so the host can offer a choice', async () => {
+    const state = DeviceProtectionTestState.create()
+    state.deviceProtectionStatus = DeviceProtectionStatus.Missing
+    recoverPasskeyProtection.mockResolvedValue(
+      err(
+        new PasskeyCeremonyFailure({
+          action: PasskeyCeremonyAction.Recover,
+          diagnostic: sanitizedPasskeyCeremonyData(
+            new Error('PASSKEY_CEREMONY_NOT_ALLOWED: NotAllowedError'),
+          ),
+        }),
+      ),
+    )
+
+    expect(
+      await new DeviceProtectionActions(
+        state,
+      ).recoverDeviceProtectionWithPasskey(),
+    ).toBe(DeviceProtectionActionOutcome.PasskeyNotAllowed)
+    expect(state.errorMsg).toBe(
+      I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
+    )
+    expect(state.continueInitializationAfterDeviceUnlock).not.toHaveBeenCalled()
+  })
+
+  test('keeps other passkey lookup failures incomplete', async () => {
+    const state = DeviceProtectionTestState.create()
+    state.deviceProtectionStatus = DeviceProtectionStatus.Missing
+    recoverPasskeyProtection.mockResolvedValue(
+      err(
+        new PasskeyCeremonyFailure({
+          action: PasskeyCeremonyAction.Recover,
+          diagnostic: sanitizedPasskeyCeremonyData(new Error('engine failed')),
+        }),
+      ),
+    )
+
+    expect(
+      await new DeviceProtectionActions(
+        state,
+      ).recoverDeviceProtectionWithPasskey(),
+    ).toBe(DeviceProtectionActionOutcome.Incomplete)
+    expect(state.errorMsg).toBe(I18N_KEYS.DeviceProtectionRecoveryFailed)
+  })
 })
 
 describe('locking the device identity', () => {
@@ -254,5 +301,14 @@ describe('locking the device identity', () => {
     expect(settled).toHaveBeenCalledOnce()
     expect(attempts).toBe(2)
     expect(locked.isOk()).toBe(true)
+  })
+
+  test('closes the vault panel beside the card: Unlock starts from the card', async () => {
+    const state = VaultStateTestFixture.create()
+    state.vaultPanelStoreId = 'store-qwe'
+
+    await new DeviceProtectionActions(state).lockDeviceProtection()
+
+    expect(state.vaultPanelStoreId).toBe('')
   })
 })

@@ -45,6 +45,7 @@
     vault,
     showAccessGate,
     existingVaultNeedsDeviceUnlock,
+    identityKeyInExtension,
     usesExtensionDeviceIdentity,
     showPasskeyOverlay,
     sentinelInvitationRequest,
@@ -53,6 +54,7 @@
     sentinelOnboardingPackage,
     onUnlock,
     onUnlockOnCard,
+    onUnlockPairedIdentity,
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
     onUnlockWithPassword,
@@ -69,6 +71,9 @@
     vault: VaultState
     showAccessGate: boolean
     existingVaultNeedsDeviceUnlock: boolean
+    /** This page adopted its identity from the paired extension, which holds
+     * its key: unlocking it goes there, not to a passkey on this browser. */
+    identityKeyInExtension: boolean
     usesExtensionDeviceIdentity: boolean
     showPasskeyOverlay: boolean
     sentinelInvitationRequest: string
@@ -78,6 +83,8 @@
     onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
     /** Unlock a vault from its identity card; its device key unlocks there. */
     onUnlockOnCard: () => Promise<void>
+    /** Unlock only the identity whose key the paired extension holds. */
+    onUnlockPairedIdentity: () => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
@@ -140,9 +147,11 @@
         isVerifying={vault.isVerifying}
         isInitializing={vault.isInitializing}
         deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
+        {identityKeyInExtension}
         {usesExtensionDeviceIdentity}
         {onUnlock}
         {onUnlockOnCard}
+        {onUnlockPairedIdentity}
         {...identityHealth ? { identityHealth } : {}}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}

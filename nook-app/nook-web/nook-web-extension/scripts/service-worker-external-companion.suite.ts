@@ -4,7 +4,10 @@ import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { ExtensionPairedVaultUnlockRequestMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionPairedVaultLockRequestMessageType,
+  ExtensionPairedVaultUnlockRequestMessageType,
+} from '../../nook-web-shared/src/extension/runtime-messages'
 import {
   ExternalSenderTrustDecision,
   ExternalSenderTrustPolicy,
@@ -288,6 +291,55 @@ describe('external companion routing', () => {
       ok: true,
       envelope: 'sealed',
       nextNonce: 'next',
+    })
+  })
+
+  test.each([
+    { locked: true, response: { ok: true, requestId: 'lock-1' } },
+    { locked: false, response: { ok: false, reason: 'session-lock-failed' } },
+  ])(
+    'locks the extension for its trusted paired vault page (locked: $locked)',
+    async ({ locked, response }) => {
+      const lockExtensionSession = mock(() => Promise.resolve(locked))
+      const { ExternalCompanionRouter } =
+        await import('../src/background/service-worker/external-companion-routing')
+      const sendResponse = mock(() => {})
+      const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] =
+        {
+          dependencies: { ...externalDependencies, lockExtensionSession },
+          message: {
+            type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
+            payload: { requestId: 'lock-1' },
+          },
+          sender: { url: 'https://simple.example.test/' },
+          sendResponse,
+        }
+      expect(await new ExternalCompanionRouter(request).route()).toBe(true)
+      await flushResponses()
+      expect(lockExtensionSession).toHaveBeenCalledTimes(1)
+      expect(sendResponse).toHaveBeenCalledWith(response)
+    },
+  )
+
+  test('ignores a lock request from a foreign origin', async () => {
+    const lockExtensionSession = mock(() => Promise.resolve(true))
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] = {
+      dependencies: { ...externalDependencies, lockExtensionSession },
+      message: {
+        type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
+        payload: { requestId: 'lock-1' },
+      },
+      sender: { url: 'https://foreign.example/' },
+      sendResponse,
+    }
+    expect(await new ExternalCompanionRouter(request).route()).toBe(false)
+    expect(lockExtensionSession).not.toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'forbidden-sender',
     })
   })
 

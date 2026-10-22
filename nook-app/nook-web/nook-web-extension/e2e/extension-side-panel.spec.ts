@@ -121,9 +121,14 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     const title = panel.getByTestId('device-protection-title')
     await expect(title).toHaveText("Didn't find your passkey?")
     await expect(prompts).toHaveAttribute('data-nook-passkey-prompts', 'picker')
-    const create = panel.getByTestId('device-protection-create-new-choice')
+    // Creating is the way on, so its button is here at once, not behind
+    // another choice.
+    const create = panel.getByTestId('device-protection-setup-btn')
     await expect(create).toHaveText('Create passkey')
     await expect(create).toBeFocused()
+    await expect(
+      panel.getByTestId('device-protection-create-new-choice'),
+    ).toHaveCount(0)
     await expect(panel.getByTestId('device-protection-error')).toHaveCount(0)
 
     // Looking again opens the same picker; closing it stays and says so.
@@ -137,12 +142,12 @@ test('a passkey lookup without result offers creating one or looking elsewhere',
     )
     await expect(title).toHaveText("Didn't find your passkey?")
 
-    // Creating stays an explicit step with its own options.
-    await create.click()
-    await expect(title).toHaveText('Create a passkey')
-    await expect(panel.getByTestId('device-protection-setup-btn')).toHaveText(
-      'Create passkey',
-    )
+    // The passkey's options sit beside the button on the same step.
+    await panel.locator('summary', { hasText: 'Options' }).click()
+    await expect(
+      panel.getByTestId('device-mode-select').locator('option:checked'),
+    ).toHaveText('Standard')
+    await expect(title).toHaveText("Didn't find your passkey?")
   } finally {
     await context.close()
   }

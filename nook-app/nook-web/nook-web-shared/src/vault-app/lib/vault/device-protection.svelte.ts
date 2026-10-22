@@ -8,6 +8,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Device-protection actions that snapshot reactive state for persistence. */
 import {
   PasskeyCeremonyFailure,
+  PasskeyCeremonyOutcome,
   PasskeyFallback,
   isPasskeyCeremonyNotAllowedError,
   isPasskeyPrfUnavailableError,
@@ -29,6 +30,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   DeviceProtectionStatus,
+  VaultIdentityKeySource,
   providers_visible_while_device_locked,
   set_vault_session_locked,
 } from "$app-wasm";
@@ -116,6 +118,19 @@ type PersistedProtectionStatusRequest = {
 export enum DeviceProtectionActionOutcome {
   Ready = "ready",
   Incomplete = "incomplete",
+  /** Looking for an existing passkey ended without one: the browser closed
+   * its prompt or had nothing to offer. WebAuthn never proves that no
+   * passkey exists, so the host decides what follows. */
+  PasskeyNotAllowed = "passkey-not-allowed",
+}
+
+function recoveryFailureOutcome(
+  failure: PasskeyCeremonyFailure | StorageOperationFailure,
+): DeviceProtectionActionOutcome {
+  return failure instanceof PasskeyCeremonyFailure &&
+    failure.diagnostic.outcome === PasskeyCeremonyOutcome.CeremonyNotAllowed
+    ? DeviceProtectionActionOutcome.PasskeyNotAllowed
+    : DeviceProtectionActionOutcome.Incomplete;
 }
 
 export enum DeviceProtectionLockOutcome {
@@ -146,6 +161,9 @@ export class DeviceProtectionActions {
   > {
     const state = this.state;
     state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
+    // A locked card folds down to its header and vaults: no vault panel stays
+    // open beside it, and Unlock starts again from the card.
+    state.vaultPanelStoreId = "";
     state.deviceAuthorizationInProgress = false;
     state.deviceId = "";
     state.devicePublicKey = "";
@@ -226,6 +244,7 @@ export class DeviceProtectionActions {
       }
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
+    state.identityKeySource = VaultIdentityKeySource.ThisBrowser;
     // The identity is open again, so an idle expiry no longer applies.
     state.sessionExpiredByIdle = false;
     return storageOk(AuthorizedDeviceInitializationOutcome.Initialized);
@@ -417,7 +436,7 @@ export class DeviceProtectionActions {
       );
       if (ceremony.isErr()) {
         this.presentCeremonyFailure(ceremony.error);
-        return DeviceProtectionActionOutcome.Incomplete;
+        return recoveryFailureOutcome(ceremony.error);
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs2: Parameters<
@@ -450,7 +469,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
         );
-        return DeviceProtectionActionOutcome.Incomplete;
+        return DeviceProtectionActionOutcome.PasskeyNotAllowed;
       }
       if (isPasskeyUnavailableError(error)) {
         const logPasskeyCeremonyArgs6: Parameters<

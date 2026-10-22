@@ -25,7 +25,7 @@ first key are made together with that vault.
   aria-label={vault.t(I18N_KEYS.WorkspaceFirstIdentityTitle)}
   data-testid="identity-draft-card"
 >
-  <span class="nk-eyelet" aria-hidden="true"></span>
+  <span class="nk-edge-glint" aria-hidden="true"></span>
   <div class="flex min-w-0 flex-col gap-4 px-4 pb-5 pt-5 sm:px-5">
     <header class="flex items-start gap-3.5">
       <span

@@ -44,6 +44,8 @@ closes it.
   import SidePanelConnections from './SidePanelConnections.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
+  import { SidePanelVaultPageWait } from './vault-page-wait.svelte'
+  import { VaultPageUnlockWait } from '../lib/vault-page-unlock-wait'
   import {
     SidePanelAlertKind,
     SidePanelCeremonyKind,
@@ -103,6 +105,8 @@ closes it.
   }
 
   const runtime = new SidePanelRuntime()
+  /** A paired vault page waiting for this panel's Unlock. */
+  const vaultPageWait = new SidePanelVaultPageWait(VaultPageUnlockWait)
   const statusReads = new SidePanelReadSequence()
   const vaultReads = new SidePanelReadSequence()
   const extensionKey: DeviceProtectionPurpose = {
@@ -439,6 +443,7 @@ closes it.
   }
 
   function unlocked(unlock: DeviceProtectionUnlock): void {
+    vaultPageWait.unlocked()
     connectFlow.unlockedInPanel()
     statusReads.invalidate()
     clearMessages()
@@ -703,6 +708,8 @@ closes it.
     }
   })
 
+  onMount(() => vaultPageWait.start())
+
   // Closing the panel stops following the Nook tab.
   onDestroy(() => connectFlow.stop())
 
@@ -757,10 +764,30 @@ closes it.
             <ConnectChain {i18n} status={gateStatus} />
           {/snippet}
           <div class="side-panel-ceremony" data-testid="side-panel-ceremony">
+            {#if vaultPageWait.waiting}
+              <div
+                class="side-panel-vault-wait"
+                role="status"
+                data-testid="side-panel-vault-page-waiting"
+              >
+                <span class="side-panel-vault-wait-cue">
+                  {translatePlain(I18N_KEYS.ExtensionActionVaultPageWaitingCue)}
+                </span>
+                <p class="side-panel-vault-wait-title">
+                  {translatePlain(
+                    I18N_KEYS.ExtensionActionVaultPageWaitingTitle,
+                  )}
+                </p>
+                <p class="side-panel-vault-wait-text">
+                  {translatePlain(I18N_KEYS.ExtensionActionVaultPageWaiting)}
+                </p>
+              </div>
+            {/if}
             <ExtensionDeviceProtection
               {i18n}
               status={ceremony.status}
               purpose={extensionKey}
+              guided={vaultPageWait.waiting}
               onstatus={ceremonyStatus}
               onunlocked={unlocked}
             />

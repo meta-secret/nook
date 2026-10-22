@@ -65,6 +65,7 @@ import {
 } from './session-lifecycle'
 import type { CompanionLauncherSource } from './session-lifecycle'
 import { identityHandoffSessionRequest } from './session-request-projections'
+import { VaultPageUnlockWait } from '../../lib/vault-page-unlock-wait'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -748,10 +749,10 @@ class ExtensionPairingIdentity {
       if (statusDelivery.isErr())
         return { ...statusDelivery.error.response, requestId, vaultStoreId }
       const statusResponse = statusDelivery.value
-      if (
-        extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse) &&
-        source.kind === CompanionLauncherSourceKind.SourceWindow
-      ) {
+      if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
+        // Locked: the panel points the person at Unlock while the page waits.
+        await VaultPageUnlockWait.begin(Date.now())
+      } else if (source.kind === CompanionLauncherSourceKind.SourceWindow) {
         const sidePanelCloseOptions: chrome.sidePanel.CloseOptions = {
           windowId: source.windowId,
         }

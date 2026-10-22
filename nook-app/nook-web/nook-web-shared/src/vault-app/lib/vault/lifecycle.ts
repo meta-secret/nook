@@ -24,6 +24,7 @@ import { extensionConnectionBrowser } from "$lib/extension/connect";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   DeviceMode,
+  VaultIdentityKeySource,
   VaultStartupUnlockDecision,
   DeviceIdentityInitializationMode,
   DeviceProtectionDeviceModeState,
@@ -379,7 +380,11 @@ export class VaultInitializationActions {
     }
   }
 
-  async continueInitializationAfterDeviceUnlock(): Promise<
+  /** Finish initializing after the device identity unlocked. Only the website
+   * route may open a local vault by itself on completion. */
+  async continueInitializationAfterDeviceUnlock(
+    startupDecision: VaultStartupUnlockDecision = VaultStartupUnlockDecision.WebsiteDevice,
+  ): Promise<
     Result<
       DeviceIdentityInitializationSnapshot,
       StorageOperationFailure | OAuthFailure
@@ -390,7 +395,7 @@ export class VaultInitializationActions {
     const initialized = await continuation.value.continue();
     if (initialized.isErr()) return storageErr(initialized.error);
     if (!this.state.isInitializing) {
-      const completed = await continuation.value.complete();
+      const completed = await continuation.value.complete(startupDecision);
       if (completed.isErr()) return storageErr(completed.error);
     }
     return initialized;
@@ -459,30 +464,50 @@ export class VaultInitializationActions {
         kind: BrowserIdentityHandoffKind.Adopted,
         adoption,
       };
-      if (
-        mode === ExternalDeviceIdentityAuthorizationMode.DeferInitialization
-      ) {
-        const marked = await state.enqueueStorage(() =>
-          adoption.markExistingVaultImport(manager.value),
-        );
-        if (marked.isErr()) {
-          state.errorMsg = state.t(marked.error.translationKey);
-          return false;
-        }
+      switch (mode) {
+        case ExternalDeviceIdentityAuthorizationMode.DeferInitialization: {
+          const marked = await state.enqueueStorage(() =>
+            adoption.markExistingVaultImport(manager.value),
+          );
+          if (marked.isErr()) {
+            state.errorMsg = state.t(marked.error.translationKey);
+            return false;
+          }
 
-        const initialization: DeviceIdentityInitialization = {
-          mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
-        };
-        const initialized = await this.initDeviceIdentity(initialization);
-        if (initialized.isErr()) {
-          state.errorMsg = state.t(initialized.error.translationKey);
-          return false;
+          const initialization: DeviceIdentityInitialization = {
+            mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
+          };
+          const initialized = await this.initDeviceIdentity(initialization);
+          if (initialized.isErr()) {
+            state.errorMsg = state.t(initialized.error.translationKey);
+            return false;
+          }
+          break;
         }
-      } else {
-        const continued = await this.continueInitializationAfterDeviceUnlock();
-        if (continued.isErr()) {
-          state.errorMsg = state.t(continued.error.translationKey);
-          return false;
+        case ExternalDeviceIdentityAuthorizationMode.IdentityOnly: {
+          // The identity opens alone, as a passkey on this browser opens its
+          // own: no vault session starts, so no vault opens with it.
+          const initialization: DeviceIdentityInitialization = {
+            mode: DeviceIdentityInitializationMode.RequireCompletedAuthorization,
+          };
+          const initialized = await this.initDeviceIdentity(initialization);
+          if (initialized.isErr()) {
+            state.errorMsg = state.t(initialized.error.translationKey);
+            return false;
+          }
+          break;
+        }
+        case ExternalDeviceIdentityAuthorizationMode.ContinueInitialization: {
+          // An identity the extension hands over opens no vault by itself:
+          // the caller opens the one it was asked for, exactly once.
+          const continued = await this.continueInitializationAfterDeviceUnlock(
+            VaultStartupUnlockDecision.DiscoverCompanion,
+          );
+          if (continued.isErr()) {
+            state.errorMsg = state.t(continued.error.translationKey);
+            return false;
+          }
+          break;
         }
       }
       const handoff = state.externalIdentityHandoff;
@@ -506,6 +531,7 @@ export class VaultInitializationActions {
         }
       }
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
+      state.identityKeySource = VaultIdentityKeySource.PairedCompanion;
       completed = true;
       log.info("extension identity adopted");
       return true;

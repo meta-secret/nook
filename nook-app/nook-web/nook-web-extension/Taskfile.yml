@@ -238,6 +238,14 @@ tasks:
     interactive: true
     env:
       NOOK_DEV_FRESH_PROFILE: '{{default "" .FRESH}}'
+      # The loop's WASM build, extension build and Vite inherit these from the
+      # start: a dev WASM build, the local channel against the HTTPS dev vault.
+      WASM_BUILD_MODE: dev
+      NOOK_SIMPLE_VAULT_URL: https://localhost:5173/
+      NOOK_EXTENSION_CHANNEL: local
+      NOOK_LOCAL_HTTPS: '1'
+      NOOK_LOCAL_HTTPS_CERT_PATH: '{{.LOCAL_HTTPS_DIR}}/localhost.pem'
+      NOOK_LOCAL_HTTPS_KEY_PATH: '{{.LOCAL_HTTPS_DIR}}/localhost-key.pem'
     deps:
       - extension:dev:bun
     vars:

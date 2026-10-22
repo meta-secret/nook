@@ -56,6 +56,8 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import {
+    identityUnlockRoute,
+    IdentityUnlockRoute,
     LoginVaultEntryKind,
     type LoginVaultEntry,
   } from '$lib/components/login/login-unlock-state'
@@ -119,6 +121,7 @@
     addProviderOpen = false,
     onUnlock,
     onUnlockOnCard,
+    onUnlockPairedIdentity,
     identityHealth,
     onBeginAddProvider,
     onCancelAddProvider,
@@ -135,6 +138,7 @@
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
+    identityKeyInExtension = false,
     usesExtensionDeviceIdentity = false,
     sentinelInvitationRequest = '',
     sentinelParticipantResponsePending = false,
@@ -157,6 +161,7 @@
     /** Unlock the selected vault from its identity card: this browser's key
      * unlocks on the card, never in the page-level sheet. */
     onUnlockOnCard: () => void | Promise<void>
+    onUnlockPairedIdentity: () => void | Promise<void>
     /** How the identity is protected; its unlocked card offers the
      * checklist before any vault is open. */
     identityHealth?: NookIdentityHealth
@@ -179,6 +184,7 @@
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
+    identityKeyInExtension?: boolean
     usesExtensionDeviceIdentity?: boolean
     sentinelInvitationRequest?: string
     sentinelParticipantResponsePending?: boolean
@@ -333,14 +339,23 @@
     deviceKeySetupNeeded(vault.deviceProtectionStatus),
   )
 
-  /** Unlock on a locked card unlocks the identity: this device's passkey
-   * (or PIN) opens its key, and no vault is opened. A vault opens from its
-   * row. */
+  /** Unlock on a locked card unlocks the identity, and no vault is opened:
+   * a vault opens from its row. */
   async function unlockIdentity(): Promise<void> {
     if (vault.deviceProtectionReady || isVerifying) return
-    if (pinProtected) {
-      pinPrompt = { kind: PinPromptKind.Identity }
-      return
+    const routeRequest: Parameters<typeof identityUnlockRoute>[0] = {
+      identityKeyInExtension,
+      pinProtected,
+    }
+    switch (identityUnlockRoute(routeRequest)) {
+      case IdentityUnlockRoute.PairedExtension:
+        await onUnlockPairedIdentity()
+        return
+      case IdentityUnlockRoute.Pin:
+        pinPrompt = { kind: PinPromptKind.Identity }
+        return
+      case IdentityUnlockRoute.Passkey:
+        break
     }
     const identityOnly: Parameters<
       DeviceProtectionActions['unlockDeviceProtection']
@@ -385,9 +400,7 @@
   }
 
   /** Lock on a card whose identity is unlocked without an open vault. */
-  function lockIdentity(): void {
-    void vault.lockDeviceProtection()
-  }
+  const lockIdentity = (): void => vault.lockIdentityKey()
 
   /** A vault row on a locked card unlocks that vault. Locking keeps the
    * page the URL names, so a management page resumes; otherwise the vault
@@ -917,10 +930,11 @@
     onNewVault={openNewVault}
     onSelectVault={(storeId: string) => void selectVault(storeId)}
     onUnlockVault={unlockVaultInPlace}
+    onUnlockElsewhere={() => onUnlockPairedIdentity()}
     onManageVault={manageSection}
     onManageSection={manageSection}
     {...identityHealth ? { currentHealth: identityHealth } : {}}
-    onUnlock={() => void unlockIdentity()}
+    onUnlock={() => unlockIdentity()}
     onLock={lockIdentity}
     onNewIdentity={newIdentity}
     onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
