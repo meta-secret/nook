@@ -456,9 +456,13 @@ pub const DEVICE_PROTECTION_NEW_PASSKEY_ALTERNATIVE: &str =
     "device_protection.new_passkey_alternative";
 pub const DEVICE_PROTECTION_NEW_PASSKEY_ALTERNATIVE_ACTION: &str =
     "device_protection.new_passkey_alternative_action";
+pub const DEVICE_PROTECTION_NEXT_STEP: &str = "device_protection.next_step";
+pub const DEVICE_PROTECTION_NOT_FOUND_DESCRIPTION: &str = "device_protection.not_found_description";
+pub const DEVICE_PROTECTION_NOT_FOUND_TITLE: &str = "device_protection.not_found_title";
 pub const DEVICE_PROTECTION_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "device_protection.passkey_create_not_allowed";
 pub const DEVICE_PROTECTION_PASSKEY_DEFAULT_LABEL: &str = "device_protection.passkey_default_label";
+pub const DEVICE_PROTECTION_PASSKEY_ELSEWHERE: &str = "device_protection.passkey_elsewhere";
 pub const DEVICE_PROTECTION_PASSKEY_LABEL: &str = "device_protection.passkey_label";
 pub const DEVICE_PROTECTION_PASSKEY_LABEL_PLACEHOLDER: &str =
     "device_protection.passkey_label_placeholder";
@@ -505,6 +509,7 @@ pub const DEVICE_PROTECTION_UNAVAILABLE_RECOVERY_WARNING: &str =
     "device_protection.unavailable_recovery_warning";
 pub const DEVICE_PROTECTION_UNLOCK_ACTION: &str = "device_protection.unlock_action";
 pub const DEVICE_PROTECTION_UNLOCK_DESCRIPTION: &str = "device_protection.unlock_description";
+pub const DEVICE_PROTECTION_USE_EXISTING: &str = "device_protection.use_existing";
 pub const DEVICES_ACCESS_APP_LINKED_TO_IDENTITY: &str = "devices_access.app_linked_to_identity";
 pub const DEVICES_ACCESS_APP_PROTECTED_BY: &str = "devices_access.app_protected_by";
 pub const DEVICES_ACCESS_APPS_FOR_IDENTITY: &str = "devices_access.apps_for_identity";
@@ -754,6 +759,10 @@ pub const EXTENSION_ACTION_STATE_LOCKED: &str = "extension.action.state_locked";
 pub const EXTENSION_ACTION_STATE_SETUP: &str = "extension.action.state_setup";
 pub const EXTENSION_ACTION_STATE_UNLOCKED: &str = "extension.action.state_unlocked";
 pub const EXTENSION_ACTION_TRY_AGAIN: &str = "extension.action.try_again";
+pub const EXTENSION_ACTION_VAULT_PAGE_WAITING: &str = "extension.action.vault_page_waiting";
+pub const EXTENSION_ACTION_VAULT_PAGE_WAITING_CUE: &str = "extension.action.vault_page_waiting_cue";
+pub const EXTENSION_ACTION_VAULT_PAGE_WAITING_TITLE: &str =
+    "extension.action.vault_page_waiting_title";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESCRIPTION: &str =
     "extension.authenticator_picker.description";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESTINATION: &str =
@@ -808,6 +817,8 @@ pub const EXTENSION_CONNECT_IDENTITY_HANDOFF_FAILED: &str =
 pub const EXTENSION_CONNECT_INVALID_DESCRIPTION: &str = "extension.connect.invalid_description";
 pub const EXTENSION_CONNECT_INVALID_TITLE: &str = "extension.connect.invalid_title";
 pub const EXTENSION_CONNECT_MESSAGING_UNAVAILABLE: &str = "extension.connect.messaging_unavailable";
+pub const EXTENSION_CONNECT_PAIRED_UNLOCK_TIMED_OUT: &str =
+    "extension.connect.paired_unlock_timed_out";
 pub const EXTENSION_CONNECT_PROTECTION_OPENED: &str = "extension.connect.protection_opened";
 pub const EXTENSION_CONNECT_RETURN_TO_NOOK: &str = "extension.connect.return_to_nook";
 pub const EXTENSION_CONNECT_START_FAILED: &str = "extension.connect.start_failed";
@@ -2169,6 +2180,7 @@ pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_wit
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";
 pub const SESSION_EXPIRED_IDLE: &str = "session.expired_idle";
 pub const SESSION_IDLE_WARNING: &str = "session.idle_warning";
+pub const SESSION_PAIRED_EXTENSION_LOCK_FAILED: &str = "session.paired_extension_lock_failed";
 pub const SETTINGS_ACTIVE_PROVIDER: &str = "settings.active_provider";
 pub const SETTINGS_ADD_PROVIDER: &str = "settings.add_provider";
 pub const SETTINGS_ADD_SYNC_PROVIDER: &str = "settings.add_sync_provider";

@@ -64,11 +64,15 @@ export type ExternalCompanionRoutingDependencies = {
   decodeExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityDiscoveryMessage.decode
   decodeExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityHandoffRequestMessage.decode
   decodeExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage.decode
+  decodeExtensionPairedVaultLockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultLockRequestMessage.decode
   decodeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.decode
   admitsUnlockSenderSynchronously: typeof ExternalSenderTrustPolicy.admitsSynchronouslyIfReady
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
+  /** Locks the extension session and tells its vault tabs; false when the
+   * cleanup did not complete. */
+  lockExtensionSession: () => Promise<boolean>
 }
 
 type MessageResponse = { ok: boolean; reason?: string }
@@ -99,6 +103,10 @@ const launcherFailureResponse: MessageResponse = {
 const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
+}
+const sessionLockFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'session-lock-failed',
 }
 const eventLogImportFailureResponse: MessageResponse = {
   ok: false,
@@ -221,7 +229,9 @@ export class ExternalCompanionRouter {
       decodeExtensionPairedVaultIdentityDiscoveryMessage,
       decodeExtensionPairedVaultIdentityHandoffRequestMessage,
       decodeExtensionPairedVaultUnlockRequestMessage,
+      decodeExtensionPairedVaultLockRequestMessage,
       decodeOpenCompanionLauncherMessage,
+      lockExtensionSession,
       openCompanionLauncher,
       refreshAuthenticationSurfaces,
       requestPairedVaultUnlock,
@@ -261,6 +271,20 @@ export class ExternalCompanionRouter {
       void discoverPairedVaultIdentity(identityDiscovery.value).then(
         sendResponse,
       )
+      return true
+    }
+
+    const pairedVaultLock = runConcreteDecoder(
+      decodeExtensionPairedVaultLockRequestMessage,
+      message,
+    )
+    if (pairedVaultLock.kind === ConcreteDecoderResultKind.Decoded) {
+      const { requestId } = pairedVaultLock.value.payload
+      void lockExtensionSession().then((locked) => {
+        const lockedResponse: RuntimeMessages.ExtensionPairedVaultLockResponse =
+          { ok: true, requestId }
+        sendResponse(locked ? lockedResponse : sessionLockFailureResponse)
+      })
       return true
     }
 

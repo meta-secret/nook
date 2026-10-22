@@ -13,7 +13,8 @@ mod startup_unlock;
 mod sync_policy;
 
 pub use startup_unlock::{
-    CompanionProviderPresence, VaultCompanionUnlockDecision, VaultExistingImportUnlockRequest,
+    CompanionProviderPresence, VaultCompanionAutoResumeDecision, VaultCompanionLockDecision,
+    VaultCompanionUnlockDecision, VaultExistingImportUnlockRequest, VaultIdentityKeySource,
     VaultStartupUnlockDecision, VaultStartupUnlockRequest,
 };
 
@@ -54,6 +55,9 @@ pub enum DeviceIdentityInitializationMode {
 pub enum ExternalDeviceIdentityAuthorizationMode {
     ContinueInitialization,
     DeferInitialization,
+    /// Unlock the identity alone: no vault session starts, so no vault
+    /// opens until the person opens one.
+    IdentityOnly,
 }
 
 #[wasm_bindgen]

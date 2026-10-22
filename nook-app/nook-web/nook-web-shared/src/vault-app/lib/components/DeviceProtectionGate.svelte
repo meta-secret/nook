@@ -1,6 +1,11 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { KeyRound, ShieldCheck } from '@lucide/svelte'
+  import {
+    ArrowDown,
+    KeyRound,
+    ShieldCheck,
+    TriangleAlert,
+  } from '@lucide/svelte'
   import { untrack } from 'svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
@@ -70,6 +75,16 @@
           onProtectionReady()
           break
         case deviceProtectionActions.DeviceProtectionActionOutcome.Incomplete:
+          break
+        case deviceProtectionActions.DeviceProtectionActionOutcome
+          .PasskeyNotAllowed:
+          // A closed picker never proves that no passkey exists, so it never
+          // starts creating one: the not-found step offers the choice in its
+          // own words. Looking again from there keeps the notice instead.
+          if (setupWorkflow !== DeviceProtectionSetupWorkflow.NotFound) {
+            setupWorkflow = DeviceProtectionSetupWorkflow.NotFound
+            vault.dismissError()
+          }
           break
       }
     } finally {
@@ -240,6 +255,76 @@
             <KeyRound class="size-4" />
             {vault.t(I18N_KEYS.DeviceProtectionNewPasskeyAlternativeAction)}
           </Button>
+        </div>
+      {:else if setupWorkflow === DeviceProtectionSetupWorkflow.NotFound}
+        <div
+          class="space-y-4"
+          data-testid="device-protection-not-found-workflow"
+        >
+          <div
+            class="nk-banner nk-banner-destructive flex gap-3 px-4 py-3"
+            role="alert"
+            data-testid="device-protection-not-found-alert"
+          >
+            <TriangleAlert
+              class="mt-0.5 size-4 shrink-0 text-destructive"
+              aria-hidden="true"
+            />
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-destructive">
+                {vault.t(I18N_KEYS.DeviceProtectionNotFoundTitle)}
+              </p>
+              <p class="text-sm text-foreground/80">
+                {vault.t(I18N_KEYS.DeviceProtectionNotFoundDescription)}
+              </p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <p
+              class="nk-label nk-guide-cue flex items-center gap-1.5"
+              data-testid="device-protection-next-step"
+            >
+              <ArrowDown class="size-3.5" aria-hidden="true" />
+              {vault.t(I18N_KEYS.DeviceProtectionNextStep)}
+            </p>
+            <div class="nk-guide">
+              <Button
+                class="w-full"
+                disabled={vault.isVerifying}
+                data-testid="device-protection-create-new-choice"
+                onclick={() => {
+                  setupWorkflow = DeviceProtectionSetupWorkflow.Create
+                  vault.dismissError()
+                }}
+                {@attach (button: HTMLButtonElement) => button.focus()}
+              >
+                <KeyRound class="size-4" />
+                {vault.t(
+                  I18N_KEYS.DeviceProtectionNewPasskeyAlternativeAction,
+                )}
+              </Button>
+            </div>
+          </div>
+          <p class="text-center text-xs text-muted-foreground">
+            {vault.t(I18N_KEYS.DeviceProtectionPasskeyElsewhere)}
+            <Button
+              class="h-auto px-1 py-0 text-xs text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+              variant="ghost"
+              size="sm"
+              disabled={vault.isVerifying}
+              data-testid="device-protection-use-existing-choice"
+              onclick={() =>
+                void completeProtectionAction(() =>
+                  new deviceProtectionActions.DeviceProtectionActions(
+                    vault,
+                  ).recoverDeviceProtectionWithPasskey(),
+                )}
+            >
+              {vault.isVerifying
+                ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+                : vault.t(I18N_KEYS.DeviceProtectionUseExisting)}
+            </Button>
+          </p>
         </div>
       {:else}
         <div class="space-y-4" data-testid="device-protection-create-workflow">

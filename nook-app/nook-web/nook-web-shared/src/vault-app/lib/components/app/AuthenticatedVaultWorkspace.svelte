@@ -296,7 +296,7 @@ band, the scrolling page and the status line.
 
   function lockIdentity(): void {
     vault.openSection(WorkspaceSection.Vault)
-    vault.lockVault()
+    vault.lockIdentity()
   }
 
   /** "Import from sync provider" under New vault. Bringing a vault in from

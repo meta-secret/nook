@@ -404,6 +404,55 @@ html:has(.side-panel-body) {
   white-space: nowrap;
 }
 
+/* A paired vault page waits for this Unlock: a notice with a lit leading
+ * edge, and a ring on the Unlock control it points at. */
+.side-panel-vault-wait {
+  position: relative;
+  width: 100%;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--success) 45%, transparent);
+  background: color-mix(in oklab, var(--success) 8%, var(--card));
+  text-align: left;
+  animation: side-panel-enter 140ms ease-out;
+}
+
+.side-panel-vault-wait::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 2px;
+  background: var(--success);
+  animation: side-panel-guide-pulse 1.4s ease-in-out infinite;
+}
+
+.side-panel-vault-wait-cue {
+  color: var(--success);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.side-panel-vault-wait-title {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.side-panel-vault-wait-text {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.side-panel-ceremony button.guided-action {
+  outline: 2px solid var(--success);
+  outline-offset: 3px;
+  animation: side-panel-guide-ring 1.4s ease-in-out infinite;
+}
+
 .side-panel-ceremony .device-protection-form {
   gap: 10px;
 }
@@ -760,6 +809,18 @@ html:has(.side-panel-body) {
   }
 }
 
+@keyframes side-panel-guide-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes side-panel-guide-ring {
+  50% {
+    outline-color: color-mix(in oklab, var(--success) 25%, transparent);
+  }
+}
+
 @keyframes side-panel-enter {
   from {
     opacity: 0;
@@ -771,7 +832,10 @@ html:has(.side-panel-body) {
   .side-panel-spin,
   .side-panel-login-result,
   .side-panel-status-line,
-  .side-panel-ceremony .error-message {
+  .side-panel-ceremony .error-message,
+  .side-panel-vault-wait,
+  .side-panel-vault-wait::before,
+  .side-panel-ceremony button.guided-action {
     animation: none;
   }
 

@@ -2,6 +2,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { set_vault_session_locked } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
+import { PairedExtensionLockActions } from "$lib/vault/paired-extension-lock";
 import {
   VaultIdleSessionTracker,
   VaultIdleWarningKind,
@@ -53,6 +54,7 @@ export class VaultIdleSessionActions {
     if (!state.isAuthenticated) return;
     state.sessionExpiredByIdle = true;
     state.lockVault();
+    PairedExtensionLockActions.forPage(state).lockPairedExtension();
   }
 
   startIdleSessionTracking() {

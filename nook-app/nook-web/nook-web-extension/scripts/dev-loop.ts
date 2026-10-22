@@ -48,14 +48,18 @@ const wasmOutputDirs = [
   join('extension', 'nook-companion-wasm'),
 ]
 
-// The WASM and extension builds and Vite inherit their settings from this
-// process: a dev WASM build, the local channel against the HTTPS dev vault.
-process.env.WASM_BUILD_MODE = 'dev'
-process.env.NOOK_SIMPLE_VAULT_URL = vaultUrl
-process.env.NOOK_EXTENSION_CHANNEL = 'local'
-process.env.NOOK_LOCAL_HTTPS = '1'
-process.env.NOOK_LOCAL_HTTPS_CERT_PATH = join(httpsDir, 'localhost.pem')
-process.env.NOOK_LOCAL_HTTPS_KEY_PATH = join(httpsDir, 'localhost-key.pem')
+// The WASM and extension builds and Vite receive these settings explicitly:
+// Bun.spawn does not pass later process.env assignments to its children.
+// A dev WASM build, the local channel against the HTTPS dev vault.
+const devEnv = {
+  ...process.env,
+  WASM_BUILD_MODE: 'dev',
+  NOOK_SIMPLE_VAULT_URL: vaultUrl,
+  NOOK_EXTENSION_CHANNEL: 'local',
+  NOOK_LOCAL_HTTPS: '1',
+  NOOK_LOCAL_HTTPS_CERT_PATH: join(httpsDir, 'localhost.pem'),
+  NOOK_LOCAL_HTTPS_KEY_PATH: join(httpsDir, 'localhost-key.pem'),
+}
 
 const startedAt = performance.now()
 const log = (message: string): void => {
@@ -86,6 +90,7 @@ const runStep = async (
 const buildWasm = (): Promise<boolean> =>
   runStep('WASM (dev, no wasm-opt)', () =>
     Bun.spawn(['task', '--dir', repoRoot, '--silent', '_wasm:build'], {
+      env: devEnv,
       stdout: 'inherit',
       stderr: 'inherit',
     }),
@@ -94,6 +99,7 @@ const buildWasm = (): Promise<boolean> =>
 const buildExtension = (): Promise<boolean> =>
   runStep('Extension build', () =>
     Bun.spawn(['bun', 'scripts/build.ts'], {
+      env: devEnv,
       stdout: 'inherit',
       stderr: 'inherit',
     }),
@@ -112,6 +118,7 @@ const startVite = (): Subprocess =>
       '--strictPort',
     ],
     {
+      env: devEnv,
       stdout: 'inherit',
       stderr: 'inherit',
     },

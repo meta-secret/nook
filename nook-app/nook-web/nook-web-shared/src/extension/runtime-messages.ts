@@ -629,6 +629,112 @@ export class ExtensionPairedVaultUnlockRequestMessage {
   }
 }
 
+export enum ExtensionPairedVaultLockRequestMessageType {
+  NookExtensionPairedVaultLockRequest = "nook:extension-paired-vault-lock-request",
+}
+
+/** A paired vault page asks the extension to lock with it: the page's
+ * identity was handed over by this extension, which holds its key. */
+export class ExtensionPairedVaultLockRequestMessage {
+  private constructor() {}
+  declare readonly type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest;
+  declare readonly payload: { requestId: string };
+  static decode(
+    message: unknown,
+  ): Effect.Effect<
+    ExtensionPairedVaultLockRequestMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    const requestIdSchema = Schema.String.pipe(
+      Schema.check(Schema.isMinLength(1)),
+    );
+    const payloadFields: { readonly requestId: typeof requestIdSchema } = {
+      requestId: requestIdSchema,
+    };
+    const typeSchema = Schema.Literal(
+      ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
+    );
+    const messageFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: Schema.Struct<typeof payloadFields>;
+    } = { type: typeSchema, payload: Schema.Struct(payloadFields) };
+    const messageSchema = Schema.Struct(messageFields);
+    const lockRequest: RuntimeMessageDecodeRequest<
+      Schema.Schema.Type<typeof messageSchema>,
+      typeof message
+    > = {
+      schema: messageSchema,
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultLockRequest,
+    };
+    return decodeRuntimeMessage(lockRequest);
+  }
+}
+
+/** The extension's answer to a lock request: locked, for that request. */
+export class ExtensionPairedVaultLockResponse {
+  private constructor() {}
+  declare readonly ok: true;
+  declare readonly requestId: string;
+  static decode(
+    response: unknown,
+  ): Effect.Effect<
+    ExtensionPairedVaultLockResponse,
+    RuntimeMessageDecodeFailure
+  > {
+    const responseFields: {
+      readonly ok: Schema.Literal<true>;
+      readonly requestId: Schema.String;
+    } = { ok: Schema.Literal(true), requestId: Schema.String };
+    const responseSchema = Schema.Struct(responseFields);
+    const lockResponse: RuntimeMessageDecodeRequest<
+      Schema.Schema.Type<typeof responseSchema>,
+      typeof response
+    > = {
+      schema: responseSchema,
+      value: response,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultLockResponse,
+    };
+    return decodeRuntimeMessage(lockResponse);
+  }
+}
+
+export enum ExtensionSessionLockedNoticeType {
+  NookExtensionSessionLocked = "nook:extension-session-locked",
+}
+
+/** The extension locked (its panel, its idle expiry, or a paired page's
+ * request). Vault pages hear it through the vault bridge content script; a
+ * forged notice can only lock a page, never unlock one. */
+export class ExtensionSessionLockedNotice {
+  private constructor() {}
+  declare readonly type: ExtensionSessionLockedNoticeType.NookExtensionSessionLocked;
+  static readonly locked: ExtensionSessionLockedNotice = {
+    type: ExtensionSessionLockedNoticeType.NookExtensionSessionLocked,
+  };
+  static decode(
+    message: unknown,
+  ): Effect.Effect<ExtensionSessionLockedNotice, RuntimeMessageDecodeFailure> {
+    const noticeFields: {
+      readonly type: Schema.Literal<ExtensionSessionLockedNoticeType.NookExtensionSessionLocked>;
+    } = {
+      type: Schema.Literal(
+        ExtensionSessionLockedNoticeType.NookExtensionSessionLocked,
+      ),
+    };
+    const noticeSchema = Schema.Struct(noticeFields);
+    const notice: RuntimeMessageDecodeRequest<
+      Schema.Schema.Type<typeof noticeSchema>,
+      typeof message
+    > = {
+      schema: noticeSchema,
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionSessionLockedNotice,
+    };
+    return decodeRuntimeMessage(notice);
+  }
+}
+
 export enum ExtensionPairedVaultIdentityHandoffRequestMessageType {
   NookExtensionPairedVaultIdentityHandoffRequest = "nook:extension-paired-vault-identity-handoff-request",
 }
@@ -696,6 +802,7 @@ export type RuntimeMessage =
   | ExtensionIdentityHandoffRequestMessage
   | ExtensionPairedVaultIdentityDiscoveryMessage
   | ExtensionPairedVaultUnlockRequestMessage
+  | ExtensionPairedVaultLockRequestMessage
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage

@@ -7,6 +7,7 @@ import {
 import { LegalRouteKind, LegalRouteProjection } from "$lib/app/route-state";
 import {
   ExtensionConnectRequestStateKind,
+  ExtensionIdentityRequestSource,
   extensionConnectionBrowser as connectionBrowser,
   type ExtensionConnectRequestState,
 } from "$lib/extension/connect";
@@ -154,6 +155,22 @@ export class VaultAppRouteCoordinator {
 
   navigateHome = (): void => {
     this.navigateToVault();
+  };
+
+  /** A paired extension's request for another vault no longer applies once
+   * this page unlocks `storeId`. */
+  forgetPairedRequestForOtherVault = (storeId: string): void => {
+    const state = this.extensionIdentityRequestState;
+    if (
+      state.kind === ExtensionConnectIntentKind.Requested &&
+      state.request.source === ExtensionIdentityRequestSource.PairedVault &&
+      storeId &&
+      state.request.vaultStoreId !== storeId
+    ) {
+      this.extensionIdentityRequestState = {
+        kind: ExtensionConnectIntentKind.Absent,
+      };
+    }
   };
 
   finishExtensionConnect = (outcome: ExtensionConsentCloseOutcome): void => {

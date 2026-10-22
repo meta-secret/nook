@@ -24,6 +24,7 @@ import {
   NookClientRunModeUtil,
   NookRuntimeConfig,
   NookVaultManager,
+  VaultIdentityKeySource,
   type NookAdoptedExtensionIdentityHandoff,
   type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
@@ -123,10 +124,12 @@ class IdentityHandoffFixture {
     })
   }
 
-  authorize(): Promise<boolean> {
+  authorize(
+    mode = ExternalDeviceIdentityAuthorizationMode.DeferInitialization,
+  ): Promise<boolean> {
     return this.lifecycle.authorizeWithExternalDeviceIdentity({
       adopt: async () => ok(this.adopted),
-      mode: ExternalDeviceIdentityAuthorizationMode.DeferInitialization,
+      mode,
     })
   }
 
@@ -543,6 +546,9 @@ describe('external browser identity handoff commit ownership', () => {
       try {
         fixture.denyCommitAdmission(kind)
         expect(await fixture.authorize()).toBe(false)
+        expect(fixture.state.identityKeySource).toBe(
+          VaultIdentityKeySource.ThisBrowser,
+        )
         expect(fixture.adopted.mark_existing_vault_import).toHaveBeenCalledWith(
           fixture.manager,
         )
@@ -560,6 +566,60 @@ describe('external browser identity handoff commit ownership', () => {
       }
     },
   )
+
+  test('an identity the extension hands over opens no vault by itself: its caller opens one', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      const continued = vi
+        .spyOn(fixture.lifecycle, 'continueInitializationAfterDeviceUnlock')
+        .mockResolvedValue(
+          ok({ deviceId: 'adopted-device', devicePublicKey: 'key' }),
+        )
+
+      expect(
+        await fixture.authorize(
+          ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
+        ),
+      ).toBe(true)
+
+      expect(continued).toHaveBeenCalledExactlyOnceWith(
+        VaultStartupUnlockDecision.DiscoverCompanion,
+      )
+    } finally {
+      fixture.dispose()
+    }
+  })
+
+  test('unlocks only the identity in identity-only mode: no vault session starts', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      const continued = vi.spyOn(
+        fixture.lifecycle,
+        'continueInitializationAfterDeviceUnlock',
+      )
+      const loadDb = vi.spyOn(fixture.state, 'loadDb')
+
+      expect(
+        await fixture.authorize(
+          ExternalDeviceIdentityAuthorizationMode.IdentityOnly,
+        ),
+      ).toBe(true)
+
+      expect(fixture.state.deviceProtectionStatus).toBe(
+        DeviceProtectionStatus.Unlocked,
+      )
+      expect(fixture.state.deviceId).toBe('adopted-device')
+      // The extension holds the key now, so the two lock together.
+      expect(fixture.state.identityKeySource).toBe(
+        VaultIdentityKeySource.PairedCompanion,
+      )
+      expect(continued).not.toHaveBeenCalled()
+      expect(loadDb).not.toHaveBeenCalled()
+      expect(fixture.state.isAuthenticated).toBe(false)
+    } finally {
+      fixture.dispose()
+    }
+  })
 
   test('confirms a successful commit without rolling back the consumed handle', async () => {
     const fixture = new IdentityHandoffFixture()

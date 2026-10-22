@@ -1,7 +1,12 @@
 import { SentinelVaultUnlockState } from '$app-wasm'
 import type { VaultState } from '$lib/vault.svelte'
 import { expect, test } from '../fixtures'
-import { clearBrowserVault, connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
+import {
+  clearBrowserVault,
+  connectLocalVault,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  UI_TIMEOUT_MS,
+} from '../helpers'
 
 declare global {
   interface Window {
@@ -28,6 +33,12 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
   })
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
+  })
+  // New vault waits for the identity to be unlocked; no vault opens.
+  const card = page.getByTestId('identity-card').first()
+  await card.getByTestId('identity-unlock').click()
+  await expect(card).toHaveAttribute('data-status', 'unlocked', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
   await page.evaluate(

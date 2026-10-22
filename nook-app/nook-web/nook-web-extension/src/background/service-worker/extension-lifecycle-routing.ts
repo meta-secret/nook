@@ -76,7 +76,22 @@ export type ExtensionLifecycleRoutingDependencies = {
   openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
+  /** Tell open vault pages the extension locked. */
+  announceExtensionSessionLocked: () => Promise<void>
 }
+
+/** What locking the extension session needs. */
+export type ExtensionSessionLockDependencies = Pick<
+  ExtensionLifecycleRoutingDependencies,
+  | 'announceExtensionSessionLocked'
+  | 'beginAccountPickerAuthorizationCleanup'
+  | 'clearPendingAccountPickers'
+  | 'clearStagedAuthenticatorEnrollments'
+  | 'closeExtensionSessionDocument'
+  | 'completeAccountPickerAuthorizationCleanup'
+  | 'refreshAuthenticationSurfaces'
+  | 'releaseAccountPickerAuthorizationCleanup'
+>
 
 export type InterruptedAuthorizationCleanupRecoveryDependencies = Pick<
   ExtensionLifecycleRoutingDependencies,
@@ -346,6 +361,46 @@ class AuthorizationCleanupLifecycle {
   }
 }
 
+/**
+ * Locks the extension session, whatever asked: its own panel, its idle expiry
+ * or a paired vault page. The extension's own surfaces re-read their state
+ * (a panel locked from a page shows it), and open vault pages hear it, so a
+ * page whose identity this extension holds locks with it. True once locked.
+ */
+export async function lockExtensionSession(
+  dependencies: ExtensionSessionLockDependencies,
+): Promise<boolean> {
+  const cleanupArgs: ClearAuthorizationStateArgs = {
+    beginAccountPickerAuthorizationCleanup:
+      dependencies.beginAccountPickerAuthorizationCleanup,
+    clearPendingAccountPickers: dependencies.clearPendingAccountPickers,
+    clearStagedAuthenticatorEnrollments:
+      dependencies.clearStagedAuthenticatorEnrollments,
+    closeExtensionSessionDocument: dependencies.closeExtensionSessionDocument,
+    completeAccountPickerAuthorizationCleanup:
+      dependencies.completeAccountPickerAuthorizationCleanup,
+    releaseAccountPickerAuthorizationCleanup:
+      dependencies.releaseAccountPickerAuthorizationCleanup,
+    sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
+    cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
+  }
+  try {
+    const cleanup = await Effect.runPromise(
+      Effect.result(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    )
+    if (Result.isFailure(cleanup)) return false
+  } catch {
+    return false
+  }
+  try {
+    await dependencies.refreshAuthenticationSurfaces()
+  } catch {
+    // The session is already locked; a surface that missed this re-reads on focus.
+  }
+  await dependencies.announceExtensionSessionLocked()
+  return true
+}
+
 export function recoverInterruptedAuthorizationCleanup(
   dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
 ): AuthorizationCleanupEffect {
@@ -590,27 +645,9 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    const cleanupArgs: ClearAuthorizationStateArgs = {
-      beginAccountPickerAuthorizationCleanup,
-      clearPendingAccountPickers,
-      clearStagedAuthenticatorEnrollments,
-      closeExtensionSessionDocument,
-      completeAccountPickerAuthorizationCleanup,
-      releaseAccountPickerAuthorizationCleanup,
-      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
-      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
-    }
-    void Effect.runPromise(
-      Effect.result(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    void lockExtensionSession(dependencies).then((locked) =>
+      sendResponse(locked ? successResponse : sessionLockFailureResponse),
     )
-      .then((cleanup) =>
-        sendResponse(
-          Result.isSuccess(cleanup)
-            ? successResponse
-            : sessionLockFailureResponse,
-        ),
-      )
-      .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
@@ -626,27 +663,9 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    const cleanupArgs: ClearAuthorizationStateArgs = {
-      beginAccountPickerAuthorizationCleanup,
-      clearPendingAccountPickers,
-      clearStagedAuthenticatorEnrollments,
-      closeExtensionSessionDocument,
-      completeAccountPickerAuthorizationCleanup,
-      releaseAccountPickerAuthorizationCleanup,
-      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
-      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
-    }
-    void Effect.runPromise(
-      Effect.result(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    void lockExtensionSession(dependencies).then((locked) =>
+      sendResponse(locked ? successResponse : sessionLockFailureResponse),
     )
-      .then((cleanup) =>
-        sendResponse(
-          Result.isSuccess(cleanup)
-            ? successResponse
-            : sessionLockFailureResponse,
-        ),
-      )
-      .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 

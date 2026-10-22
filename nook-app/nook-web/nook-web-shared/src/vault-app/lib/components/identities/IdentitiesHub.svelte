@@ -54,6 +54,7 @@ join) sit between the hero and the cards.
     onNewVault = () => {},
     onSelectVault,
     onUnlockVault,
+    onUnlockElsewhere,
     onManageVault,
     onNewIdentity,
     onUseIdentity,
@@ -93,6 +94,8 @@ join) sit between the hero and the cards.
     onSelectVault?: (storeId: string) => void
     /** Unlock a vault from its panel without going into it. */
     onUnlockVault?: (storeId: string) => void
+    /** Unlock an identity whose key the paired extension holds. */
+    onUnlockElsewhere?: () => void | Promise<void>
     /** One of a vault's own pages, from its panel beside the card. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
@@ -115,7 +118,7 @@ join) sit between the hero and the cards.
     overviewOpen?: boolean
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
-    onUnlock?: (target: IdentityVaultTarget) => void
+    onUnlock?: (target: IdentityVaultTarget) => void | Promise<void>
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** A running Sentinel quorum ceremony for `selectedStoreId`: on the
      * card that lists that vault, or on its own when no card does. */
@@ -497,6 +500,7 @@ join) sit between the hero and the cards.
             {pairingStatusFor}
             {...onSelectVault ? { onSelectVault } : {}}
             {...onUnlockVault ? { onUnlockVault } : {}}
+            {...onUnlockElsewhere ? { onUnlockElsewhere } : {}}
             {...onManageVault ? { onManageVault } : {}}
             onClosePanels={() => {
               setupOpen = false

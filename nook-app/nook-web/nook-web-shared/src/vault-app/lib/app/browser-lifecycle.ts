@@ -22,6 +22,7 @@ import {
 import { LegalPageSelection } from "$lib/content/legal";
 
 import type { VaultState } from "$lib/vault.svelte";
+import { PairedExtensionLockActions } from "$lib/vault/paired-extension-lock";
 
 export const THEME_STORAGE_KEY = "nook_color_mode";
 
@@ -106,6 +107,9 @@ class VaultBrowserLifecycle {
         unsubscribeLocalDataDeletion.error.translationKey,
       );
     }
+    const stopFollowingPairedExtensionLock = PairedExtensionLockActions.forPage(
+      vault,
+    ).listen(this.browser.window);
     void vault.init();
 
     if (vault.runtimeConfig.expose_debug_hooks()) {
@@ -153,6 +157,7 @@ class VaultBrowserLifecycle {
     this.browser.window.addEventListener("hashchange", syncRoute);
 
     return () => {
+      stopFollowingPairedExtensionLock();
       vault.stopVaultSync();
       vault.stopIdleSessionTracking();
       void vault.lockDeviceProtection().then((locked) => {
