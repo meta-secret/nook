@@ -48,8 +48,10 @@ permission.
 ARC keeps no warm runner Pod. It creates one Pod for each queued job and removes
 that Pod after completion.
 
-Browser-only jobs use Rise-S-2. General jobs, Hive, and mixed container jobs
-use Rise-S-1, the home worker, and the OVH control/storage worker.
+Browser-only jobs use Rise-S-2. General execution requires `arc-workload: build`
+and `arc-tier` in `[primary, secondary]`, admitting Rise-S-1 and the home worker.
+Hive retains Rise-S-1, home, and OVH. Mixed container jobs retain Rise-S-1 and
+OVH because they also require `arc-container-job: true`; home lacks that label.
 Required node eligibility separates these workloads before soft preferences
 choose a node within the build pool.
 
@@ -63,6 +65,17 @@ Build nodes retain tier preferences: Rise-S-1 scores 100, the home 7950X3D
 scores 90, and the control/storage worker scores 1. Home's 250 Mbps link
 requires at least 32 seconds per decimal GB before protocol or storage overhead.
 New placements may need cold imports despite retained caches.
+
+This general-only restriction is a bounded placement experiment. It reduces
+eligible capacity from 80 to 48 logical CPUs and approximately 371.5 to 245.8 GiB
+allocatable memory. These totals are
+not reservations: execution Pods and BuildKit have no CPU or memory requests
+or limits. The unchanged 35-runner ceiling can therefore increase contention
+or queue time on the two eligible hosts, with 40% fewer eligible CPUs.
+Equal-count spread is not CPU-weighted, and each job retains all-CPU parallelism.
+General jobs have no OVH fallback; mixed PR work can still run on OVH, so its
+latency remains placement-dependent.
+The existing scale set has no per-job placement control for preflight alone.
 
 ### Browser capacity and availability
 
@@ -100,7 +113,7 @@ measure actual CPU use or active BuildKit solves.
 Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
 only hosts eligible for the incoming Pod, preserving each pool's placement
 constraints. No `minDomains` or `matchLabelKeys` override is configured.
-General and Hive runners count three eligible build hosts. Mixed container
+General runners count two eligible build hosts; Hive retains three. Mixed container
 jobs count Rise-S-1 and the OVH control/storage host. Browser-only jobs remain
 on Rise-S-2 outside these build-pool spread constraints.
 
@@ -149,7 +162,8 @@ Full platform deployment keeps all build nodes quarantined until listeners are r
 both Rise nodes together, then home, then overflow. The existing Hive Helm
 release keeps ownership of its image, credentials and security settings.
 `infra:arc:placement:hive` updates its build-pool node selector, affinity and
-topology spread constraints using the general runner's deployed policy.
+topology spread constraints using the general runner's deployed policy, with
+required tier affinity explicitly restored to `[primary, secondary, overflow]`.
 Hive must already be installed by its owner; a missing release is a deployment error.
 
 Before an authorized rollout, inspect Hive's live Helm execution template and
@@ -345,11 +359,32 @@ perform broad platform deployment.
   failure before rerunning the relevant ordinary phase. There is no automatic recovery.
 - Apply keeps admission at zero after its idle check succeeds.
 
-**Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
-old runner Pods to bypass the drain, or claim a speedup from registration alone.
+For a general-only fast-tier rollout, use the same approved drain, apply,
+resume, and status sequence. The existing browser registration does not need
+another `activate` step. Resume and status check general fast-tier affinity,
+Hive's three-tier affinity, and unchanged manager eligibility. Before rollout,
+the pools remain running at their existing ceilings; they are not already paused.
+Only after a successful drain is admission disabled for all pools; a failed apply or
+pre-resume check leaves admission stopped. A partial resume can instead leave
+some pools running, as described above.
 
-**Required:** use the approved scoped sequence, inspect a failure before any
-further mutation, and report measured hosted results separately from configuration.
+Decide whether to retain or manually roll back the experiment using observed
+queue and execution times. Retain it only when comparable hosted runs improve
+end-to-end latency without new scheduling failures. If queue or execution
+regressions offset the preflight gain, or general work cannot schedule on the
+remaining hosts, request manual rollback. Rollback requires approval too. With admission
+drained and idle, check out the previous reviewed placement source, run its
+same sync/apply sequence, verify
+the previous templates, and resume the original 35/16/4/10 ceilings. Inspect
+native Helm and ARC status after any failure before retrying the relevant phase.
+There is no automatic rollback, job cancellation, controller restart, or cache/PV
+mutation. Source review and unchanged ceilings do not establish a speedup;
+compare hosted queue time, placement, and execution time after an approved rollout.
+
+- **Prohibited:** run `infra:arc:deploy` to apply only workload separation, delete
+  old runner Pods to bypass the drain, or claim a speedup from registration alone.
+- **Required:** use the approved scoped sequence, inspect a failure before any
+  further mutation, and report measured hosted results separately from configuration.
 
 ### Full platform operations
 

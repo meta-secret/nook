@@ -60,6 +60,12 @@ template:
               values: [general, hive, container]
     affinity:
       nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [primary, secondary]
         preferredDuringSchedulingIgnoredDuringExecution:
           - weight: 100
             preference:

@@ -83,10 +83,7 @@ export class ArcSeparationContract {
       },
       {
         path: "infra/k0s/manifests/arc/container-hook.yaml",
-        required: [
-          "nook.nokey.sh/arc-workload: build",
-          "NOOK_BUILDKIT_ADDR",
-        ],
+        required: ["nook.nokey.sh/arc-workload: build", "NOOK_BUILDKIT_ADDR"],
         forbidden: [],
       },
       {
@@ -198,17 +195,22 @@ export class ArcSeparationContract {
       second: 'kubectl patch ephemeralrunnerset "$runner_set"',
     });
     if (drainOrder.isErr()) return err(drainOrder.error);
-    return new ArcSeparationDrainContract(source).assert();
+    const placement = await new OperationalContractSource(
+      resolve(this.root, "infra/tasks/arc-placement.yml"),
+    ).read();
+    if (placement.isErr()) return err(placement.error);
+    return new ArcSeparationDrainContract(source, placement.value).assert();
   }
 }
 
 class ArcSeparationDrainContract {
-  constructor(private readonly source: string) {}
+  constructor(
+    private readonly source: string,
+    private readonly placement: string,
+  ) {}
 
   assert(): Result<void, OperationalContractFailure> {
-    const podGuard = this.source.match(
-      /remaining=.*?\| jq '([^']+)'/s,
-    )?.[1];
+    const podGuard = this.source.match(/remaining=.*?\| jq '([^']+)'/s)?.[1];
     const templateGuard = this.source.match(
       /jq -e '(\.items \| length >= 4[^']+)'/,
     )?.[1];
@@ -218,19 +220,63 @@ class ArcSeparationDrainContract {
     const listenerGuard = this.source.match(
       /jq -e --arg pool "\$pool" '([^']+)'/,
     )?.[1];
-    if (!podGuard || !templateGuard || !replicaGuard || !listenerGuard) {
+    const runnerGuard = this.source.match(
+      /jq -e --arg pool "\$pool" '(\.spec\.template\.spec[^']+)'/,
+    )?.[1];
+    const statusGuard = this.source.match(
+      /jq -e --arg pool "\$pool" --argjson ceiling "\$ceiling" '([^']+)'/,
+    )?.[1];
+    const hivePlacement = this.placement.match(
+      /jq -e '(\.template\.spec[^']+)'/,
+    )?.[1];
+    if (
+      !podGuard ||
+      !templateGuard ||
+      !replicaGuard ||
+      !listenerGuard ||
+      !runnerGuard ||
+      !statusGuard ||
+      !hivePlacement
+    ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
         message: "ARC separation drain guards are missing",
       });
     }
-    const currentTemplate = {
+    const tiers = (values: string[]) => ({
+      nodeSelectorTerms: [
+        {
+          matchExpressions: [
+            { key: "nook.nokey.sh/arc-tier", operator: "In", values },
+          ],
+        },
+      ],
+    });
+    const generalAffinity = tiers(["primary", "secondary"]);
+    const hiveAffinity = tiers(["primary", "secondary", "overflow"]);
+    const template = (pool: string, required: object) => ({
+      metadata: {
+        ownerReferences: [{ kind: "AutoscalingRunnerSet", name: pool }],
+      },
       spec: {
         ephemeralRunnerSpec: {
-          spec: { nodeSelector: { "nook.nokey.sh/arc-workload": "build" } },
+          spec: {
+            nodeSelector: { "nook.nokey.sh/arc-workload": "build" },
+            affinity: {
+              nodeAffinity: {
+                requiredDuringSchedulingIgnoredDuringExecution: required,
+              },
+            },
+          },
         },
       },
-    };
+    });
+    const currentTemplates = [
+      template("nook-k0s", generalAffinity),
+      template("nook-k0s-hive", hiveAffinity),
+      template("nook-k0s-container", {}),
+      template("nook-k0s-browser", {}),
+    ];
     const fixtures: { guard: string; input: object; expected: string }[] = [
       { guard: listenerGuard, input: { items: [] }, expected: "true" },
       {
@@ -287,16 +333,14 @@ class ArcSeparationDrainContract {
       },
       {
         guard: templateGuard,
-        input: { items: Array.from({ length: 4 }, () => currentTemplate) },
+        input: { items: currentTemplates },
         expected: "true",
       },
       {
         guard: templateGuard,
         input: {
           items: [
-            currentTemplate,
-            currentTemplate,
-            currentTemplate,
+            ...currentTemplates.slice(0, 3),
             { spec: { ephemeralRunnerSpec: { spec: {} } } },
           ],
         },
@@ -305,32 +349,78 @@ class ArcSeparationDrainContract {
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 0 }, status: { currentReplicas: 0 } },
-          ],
+          items: [{ spec: { replicas: 0 }, status: { currentReplicas: 0 } }],
         },
         expected: "true",
       },
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 1 }, status: { currentReplicas: 0 } },
-          ],
+          items: [{ spec: { replicas: 1 }, status: { currentReplicas: 0 } }],
         },
         expected: "false",
       },
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 0 }, status: { currentReplicas: 1 } },
-          ],
+          items: [{ spec: { replicas: 0 }, status: { currentReplicas: 1 } }],
         },
         expected: "false",
       },
       { guard: podGuard, input: { items: [] }, expected: "0" },
     ];
+    for (const [pool, required, expected] of [
+      ["nook-k0s", generalAffinity, "true"],
+      ["nook-k0s", {}, "false"],
+      ["nook-k0s", hiveAffinity, "false"],
+      ["nook-k0s-hive", hiveAffinity, "true"],
+      ["nook-k0s-hive", generalAffinity, "false"],
+      ["nook-k0s-container", {}, "true"],
+      ["nook-k0s-container", generalAffinity, "false"],
+      ["nook-k0s-browser", {}, "true"],
+    ] as const) {
+      const candidate = template(pool, required);
+      fixtures.push({
+        guard: templateGuard,
+        input: {
+          items: currentTemplates.map((item) =>
+            item.metadata.ownerReferences[0]?.name === pool ? candidate : item,
+          ),
+        },
+        expected,
+      });
+      for (const guard of [runnerGuard, statusGuard]) {
+        fixtures.push({
+          guard: `${JSON.stringify(pool)} as $pool | 35 as $ceiling | (${guard})`,
+          input: {
+            spec: {
+              maxRunners: 35,
+              template: candidate.spec.ephemeralRunnerSpec,
+            },
+          },
+          expected,
+        });
+      }
+    }
+    fixtures.push({
+      guard: `(${hivePlacement}) | .template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution == ${JSON.stringify(hiveAffinity)}`,
+      input: {
+        template: {
+          spec: {
+            nodeSelector: { "nook.nokey.sh/arc-workload": "build" },
+            affinity: {
+              nodeAffinity: {
+                requiredDuringSchedulingIgnoredDuringExecution: generalAffinity,
+              },
+              podAntiAffinity: {
+                preferredDuringSchedulingIgnoredDuringExecution: [{}, {}, {}],
+              },
+            },
+          },
+        },
+      },
+      expected: "true",
+    });
     for (const role of ["arc-job-container", "arc-browser-job"]) {
       for (const phase of ["Pending", "Running"]) {
         fixtures.push({

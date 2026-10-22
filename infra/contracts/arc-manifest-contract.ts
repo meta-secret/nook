@@ -238,12 +238,17 @@ class ArcManifestContract {
       "values: [primary]",
       "values: [secondary]",
       "values: [overflow]",
+      `        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [primary, secondary]`,
       "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
     const admittedContract2 = runners.forbidAll([
-      "requiredDuringSchedulingIgnoredDuringExecution:",
       "minDomains:",
       "matchLabelKeys:",
     ]);
