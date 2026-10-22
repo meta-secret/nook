@@ -191,8 +191,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     boolean
   >();
   private readonly companionLabels = new Map<string, boolean>();
-  /** Rust's username evidence order, strongest first; empty until the
-   * companion has classified this page. */
+  /** Rust's username evidence order, strongest first, once classified. */
   private companionUsernameEvidenceOrder: readonly AuthenticationUsernameEvidence[] =
     [];
 
@@ -731,15 +730,13 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const query: PasswordFieldQuery = {};
     if (observation.root) query.root = observation.root;
     if (observation.formScope) query.formScope = observation.formScope;
-    // Only the queried scope's rendered username fields count: a hidden
-    // header login form must not lend its username to an OTP form.
+    // Only this scope's rendered username fields count, never a hidden form's.
     const scoped = this.findUsernameFields(query).map(
       this.authenticationUsernameEvidence.bind(this),
     );
-    const order = this.companionUsernameEvidenceOrder;
-    if (order.length > 0) {
-      const [strongest = "absent"] = order.filter((evidence) =>
-        scoped.includes(evidence),
+    if (this.companionUsernameEvidenceOrder.length > 0) {
+      const [strongest = "absent"] = this.companionUsernameEvidenceOrder.filter(
+        (evidence) => scoped.includes(evidence),
       );
       return strongest;
     }
