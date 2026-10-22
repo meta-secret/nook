@@ -215,6 +215,9 @@ export class VaultLoginActions {
         state.errorMsg = state.t(locked.error.translationKey);
         return;
       }
+      // Locking folds the card; a switch lands on the target vault's panel,
+      // which offers its unlock.
+      state.vaultPanelStoreId = target;
       log.info("vault switch completed");
     } catch (error) {
       state.errorMsg =
