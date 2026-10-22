@@ -113,10 +113,12 @@ and manual ecosystem execution in one Actions run named `CI`.
   ecosystem job. Task starts the check groups concurrently on one BuildKit
   shard and records every group result before failing the aggregate.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
-- After preflight, native Rust runs beside the combined WASM/web producer.
-  The latter exports its immutable `wasm-handoff` before starting Node tests
-  and web artifact verification concurrently on the same BuildKit shard.
-  WASM cache publication starts only after Node tests pass.
+- Native Rust and the combined WASM/web producer each run read-only preflight
+  before building. The web producer exports its immutable `wasm-handoff`
+  before starting Node tests, web artifact verification, and verified preflight
+  cache publication concurrently on the same BuildKit shard.
+  WASM cache publication starts only after Node tests pass. Every started
+  child is joined, including when product verification fails.
   Browser-image publication requires successful Node tests and web verification.
 - Cache-publication assertions run inside their verified producers. Explicit
   verification outputs let successful product checks feed later tests even
@@ -700,10 +702,11 @@ coverage solve and package floors in the verified Rust graph.
   synchronizer attempt to create that root-level path and fail with `EACCES`,
   while leaving the workspace action tree absent makes its post-step copy
   exhaust its retries after otherwise passing browser suites.
-- Main exports the immutable WASM handoff before overlapping Node tests and
-  web artifact verification. It starts cache export only after Node succeeds.
-  The producer collects every child result before returning. Its cache assertion
-  makes an export failure visible while verified browser consumers can continue.
+- Main exports the immutable WASM handoff before overlapping Node tests,
+  web artifact verification, and verified preflight cache publication. It starts
+  WASM cache export only after Node succeeds. The producer collects every child
+  result before returning. Separate preflight and WASM cache assertions after
+  artifact upload fail the producer while verified browser consumers can continue.
   Development deployment remains gated by successful cache publication.
 - Main's portable WASM cache writer uses an ARC solve. Static
   contracts require the release and clippy dependency vertices in its

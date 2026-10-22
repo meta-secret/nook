@@ -14,7 +14,7 @@ tasks:
         vars: { BUILD_TASK: _ci:pr:rust:host }
 
   ci:main:rust:
-    desc: Main native Rust verification after the authoritative preflight job succeeds.
+    desc: Main native Rust verification after its producer's authoritative preflight succeeds.
     cmds:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:main:rust:host }

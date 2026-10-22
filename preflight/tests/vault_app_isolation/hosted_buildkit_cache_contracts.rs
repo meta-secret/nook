@@ -306,11 +306,10 @@ impl MainProducerCacheContract<'_> {
     fn assert(&self) -> anyhow::Result<()> {
         let root = self.root;
         let main = (root).read(".github/workflows/main.yml");
-        let preflight = section(&main, "  preflight:\n", "\n  rust:\n");
         let preflight_cache_publish = section(
             &main,
             "      - name: Require successful preflight cache publication\n",
-            "\n  rust:\n",
+            "      - name: Require successful WASM cache publication\n",
         );
         let rust = section(&main, "  rust:\n", "\n  web:\n");
         let native_cache_publish = section(
@@ -330,15 +329,15 @@ impl MainProducerCacheContract<'_> {
         let rust_verify = rust
             .find("task ci:main:rust")
             .context("Main Rust job must verify")?;
-        let preflight_verify = preflight
+        let preflight_verify = web
             .find("task preflight")
-            .context("Main preflight job must verify")?;
-        let preflight_publish_id = preflight
-            .find("id: publish_preflight_cache")
-            .context("Main preflight producer must expose its cache publication outcome")?;
-        let preflight_publish = preflight
+            .context("Main web producer must verify preflight before building")?;
+        let native_preflight_verify = rust
+            .find("task preflight")
+            .context("Main native producer must verify preflight before building")?;
+        let preflight_publish = web
             .find("task ci:main:publish-preflight-cache")
-            .context("Main preflight producer must export its verified cache")?;
+            .context("Main web producer must export its verified preflight cache")?;
         let rust_publish_id = rust
             .find("id: publish_native_cache")
             .context("Main Rust producer must expose its cache publication outcome")?;
@@ -369,12 +368,6 @@ impl MainProducerCacheContract<'_> {
         let ui_demo_step = ui_demo
             .find("- name: Headless UI demos")
             .context("Main UI demo job must declare its verification step")?;
-        let preflight_publish_step = preflight
-            .get(preflight_publish_id..preflight_publish)
-            .context("Main preflight publication-step section must have valid boundaries")?;
-        let preflight_publish_section = preflight
-            .get(preflight_publish..)
-            .context("Main preflight publication section must have a valid boundary")?;
         let rust_verification_to_publish = rust
             .get(rust_verify..rust_publish)
             .context("Main Rust verification-to-publication section must have valid boundaries")?;
@@ -403,18 +396,18 @@ impl MainProducerCacheContract<'_> {
             .get(ui_demo_step..)
             .context("Main UI demo verification section must have a valid boundary")?;
         assert!(
-        preflight.contains("task preflight")
-            && !preflight.contains("cache-selection:")
-            && preflight_verify < preflight_publish_id
-            && preflight_publish_id < preflight_publish
-            && preflight.contains(
-                "verification_outcome: ${{ steps.verify_preflight.outcome }}"
-            )
-            && preflight_publish_step.contains("continue-on-error: true")
-            && preflight_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+        !main.contains("\n  preflight:\n")
+            && main.matches("run: task preflight").count() == 2
+            && native_preflight_verify < rust_verify
+            && preflight_verify < wasm_verify
+            && wasm_publish_id < preflight_publish
+            && preflight_publish < web_verify
+            && web.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache")
+            && web.contains("wait \"$preflight_cache_pid\" || preflight_cache_outcome=failure")
+            && web.contains("echo \"preflight_cache_publication_outcome=$preflight_cache_outcome\" >> \"$GITHUB_OUTPUT\"")
             && preflight_cache_publish.contains("if: ${{ !cancelled() }}")
             && preflight_cache_publish.contains(
-                "CACHE_PUBLICATION_OUTCOME: ${{ steps.publish_preflight_cache.outcome }}"
+                "CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}"
             )
             && preflight_cache_publish
                 .contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
@@ -422,7 +415,9 @@ impl MainProducerCacheContract<'_> {
             && !preflight_cache_publish.contains("nook-docker-setup")
             && !preflight_cache_publish.contains("actions/checkout")
             && !preflight_cache_publish.contains("continue-on-error")
-            && rust.contains("needs: [preflight]") && rust.contains("!cancelled() && inputs.product_changed && needs.preflight.outputs.verification_outcome == 'success'")
+            && !rust.contains("needs:")
+            && rust.contains("if: ${{ !cancelled() && inputs.product_changed }}")
+            && !rust.contains("task ci:main:publish-preflight-cache")
             && rust_verify < rust_publish_id
             && rust_publish_id < rust_publish
             && rust_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -443,7 +438,7 @@ impl MainProducerCacheContract<'_> {
             && !native_cache_publish.contains("actions/checkout")
             && main.matches("task ci:main:publish-native-cache").count() == 1
             && main.matches("task ci:main:publish-preflight-cache").count() == 1
-            && wasm.contains("needs: [preflight]")
+            && !wasm.contains("needs:")
             && !wasm.contains("native-cache-publish")
             && !wasm.contains("preflight-cache-publish")
             && !wasm.contains("cache-selection:")
@@ -470,7 +465,7 @@ impl MainProducerCacheContract<'_> {
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [web]")
             && !wasm_cache_proof.contains("cache-selection:")
-            && web.contains("needs: [preflight]")
+            && web.contains("if: ${{ !cancelled() && inputs.product_changed }}")
             && !web.contains("cache-selection:")
             && !web.contains("wasm-cache-publish")
             && !web.contains("uses: actions/download-artifact@v8")
@@ -494,7 +489,7 @@ impl MainProducerCacheContract<'_> {
         !main.contains("\n  preflight-cache-publish:\n")
             && !main.contains("\n  native-cache-publish:\n")
             && !main.contains("\n  wasm-cache-publish:\n")
-            && web.contains("!cancelled() && needs.preflight.outputs.verification_outcome == 'success'")
+            && web.contains("!cancelled() && inputs.product_changed")
             && web.contains("verification_outcome: ${{ steps.upload_web.outcome }}")
             && wasm_cache_proof.contains("!cancelled() && needs.web.outputs.verification_outcome == 'success' && needs.web.outputs.cache_publication_outcome == 'success'")
             && main.matches("if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}").count() == 2,
@@ -673,7 +668,7 @@ impl MainProducerCacheContract<'_> {
             .context("Main must define the development deployment job")?;
         assert!(
         main.contains("\n  rust:\n")
-            && main.contains("\n  preflight:\n")
+            && !main.contains("\n  preflight:\n")
             && main.contains("\n  web:\n")
             && !main.contains("\n  wasm:\n")
             && main.contains("\n  web-e2e:\n")
@@ -688,7 +683,7 @@ impl MainProducerCacheContract<'_> {
             && !main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
-            && web.contains("needs: [preflight]")
+            && web.contains("if: ${{ !cancelled() && inputs.product_changed }}")
             && wasm.contains("task ci:main:publish-wasm-cache")
             && wasm.contains("wait \"$cache_pid\" || cache_outcome=failure")
             && wasm_publish.contains("if: ${{ !cancelled() }}")
@@ -697,7 +692,7 @@ impl MainProducerCacheContract<'_> {
             )
             && !wasm_publish.contains("task ci:main:publish-wasm-cache")
             && wasm_proof.contains("needs: [web]")
-            && main.contains("needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"),
+            && main.contains("needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
         assert!(
@@ -707,7 +702,7 @@ impl MainProducerCacheContract<'_> {
         );
         assert!(
         deploy.starts_with(
-            "    name: Deploy development\n    if: github.ref == 'refs/heads/main'\n    needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"
+            "    name: Deploy development\n    if: github.ref == 'refs/heads/main'\n    needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"
         ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
         "the development deployment lane must use the general ARC scale set"
     );

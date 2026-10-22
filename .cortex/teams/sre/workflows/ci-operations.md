@@ -145,13 +145,15 @@ Native command context is documented in
 
 ## Registry transport performance
 
-Main finishes repository preflight before native Rust verification begins.
-Preflight and native cache exports stay in their verified jobs on the same
-node-local shards that solved them.
-Each explicit outcome feeds a required assertion inside its producer job.
-Publication failures fail the producer job. Consumers use explicit validation
-outcomes so successful Rust evidence can still feed WASM, web, and browser
-tests. Deployment requires successful producers as well as all test consumers.
+Main starts native and WASM/web producers independently. Each finishes read-only
+repository preflight before building. Only the web producer publishes preflight
+cache, overlapping that export with Node tests and web artifact verification on
+the same node-local shard that verified it. Native publishes only its verified
+native graph. The web producer joins every started child even on verification
+or image-publication failure. Separate preflight and WASM outcomes feed required
+assertions after artifact upload. Publication failures fail the producer job;
+explicit verification outputs still allow tests of its verified browser image.
+Deployment requires successful producers as well as all test consumers.
 Each publisher exports only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds
@@ -162,6 +164,11 @@ Main does not serially export overlapping native dependency or rust-base graphs;
 those exports made BuildKit prepare and recompress the same complete lineage.
 WASM dependency publication remains a distinct verified ref owned by its
 dedicated proof path; native publication never owns or overwrites it.
+
+This overlap duplicates preflight on independent shards and can increase export
+I/O contention. Each producer's existing 15-minute budget includes preflight.
+Runtime improvements require hosted measurements; concurrency alone does not
+guarantee a speedup.
 
 Docker setup selects probes by the graph consumed by that job (`native`,
 `wasm`, `preflight`, or `web-e2e`). Use `general` only for a caller that can
