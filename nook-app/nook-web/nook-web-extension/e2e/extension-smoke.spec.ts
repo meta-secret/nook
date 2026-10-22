@@ -11,6 +11,7 @@ import {
   e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
   openPairingAuthTabInOwnWindow,
+  EXTENSION_UNLOCK_TIMEOUT_MS,
   pairingGrantStorageKey,
   readExtensionPersistenceSnapshot,
   readExtensionStorage,
@@ -571,23 +572,26 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await leaveFirstRunReady(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
-    // Independent local creation requires a locked companion: an unlocked
-    // paired identity automatically reopens its vault after the website locks.
+    // Independent local creation requires a locked companion. Locking the
+    // extension locks this page too: the extension holds its identity key.
     await lockExtensionSession(context)
-    await simplePage.getByTestId('header-lock-vault-btn').click()
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeHidden()
     // Reload releases the transient extension handoff before authorizing
     // the website device for independent local creation.
     await simplePage.reload()
-    await expect(
-      simplePage.getByTestId('identity-vault-row').first(),
-    ).toBeVisible()
-    await simplePage.getByTestId('identity-new-vault').click()
+    // New vault waits for the identity: Unlock opens it with this website's
+    // own device protection, independently of the locked extension.
+    const lockedCard = simplePage.getByTestId('identity-card').first()
+    await expect(lockedCard).toHaveAttribute('data-status', 'locked')
+    await lockedCard.getByTestId('identity-unlock').click()
+    await expect(lockedCard).toHaveAttribute('data-status', 'unlocked', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    await lockedCard.getByTestId('identity-new-vault').click()
     await simplePage
       .getByTestId('login-vault-name-input')
       .fill('Second local vault')
     await simplePage.getByTestId('login-create-additional-vault-btn').click()
-    await expect(simplePage.getByTestId('passkey-auth-overlay')).toBeVisible()
-    await authorizeDeviceProtection(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     const companionUnlock: Parameters<

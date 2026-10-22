@@ -926,6 +926,12 @@ export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
   const row = vaultChoiceOption(page, storeId)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const closedRow = row.and(page.locator(':not([aria-expanded="true"])'))
+  // On an unlocked identity the row opens its vault: the click is the request.
+  const liveClosedRow = closedRow.and(
+    page.locator(
+      '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"]',
+    ),
+  )
   // Automatic unlock may replace a disabled row or panel between observations.
   // Re-read the current state instead of waiting for a retired control.
   await expect
@@ -944,6 +950,12 @@ export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
             break
         }
         await dismissSyncConflictIfVisible(page)
+        switch (await pressIfReady(liveClosedRow)) {
+          case true:
+            return VaultPanelUnlockProgress.Requested
+          case false:
+            break
+        }
         await pressIfReady(closedRow)
         return VaultPanelUnlockProgress.Waiting
       },
