@@ -191,8 +191,10 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     boolean
   >();
   private readonly companionLabels = new Map<string, boolean>();
-  private companionStrongestUsernameEvidence:
-    AuthenticationUsernameEvidence | false = false;
+  /** Rust's username evidence order, strongest first; empty until the
+   * companion has classified this page. */
+  private companionUsernameEvidenceOrder: readonly AuthenticationUsernameEvidence[] =
+    [];
 
   /** Captures field metadata without a value or a whole-page authentication assumption. */
   focusedFieldObservation(
@@ -262,9 +264,8 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         looksLikeOneTimeCodeField: field.looksLikeOneTimeCodeField,
       });
     }
-    if ("strongestAuthenticationUsernameEvidence" in response) {
-      this.companionStrongestUsernameEvidence =
-        response.strongestAuthenticationUsernameEvidence;
+    if ("usernameEvidenceByStrength" in response) {
+      this.companionUsernameEvidenceOrder = response.usernameEvidenceByStrength;
     }
     for (const label of response.labels) {
       this.companionLabels.set(`${label.kind}:${label.value}`, label.matches);
@@ -730,16 +731,22 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const query: PasswordFieldQuery = {};
     if (observation.root) query.root = observation.root;
     if (observation.formScope) query.formScope = observation.formScope;
-    const evidence = this.companionStrongestUsernameEvidence;
-    if (evidence) return evidence;
+    // Only the queried scope's rendered username fields count: a hidden
+    // header login form must not lend its username to an OTP form.
+    const scoped = this.findUsernameFields(query).map(
+      this.authenticationUsernameEvidence.bind(this),
+    );
+    const order = this.companionUsernameEvidenceOrder;
+    if (order.length > 0) {
+      const [strongest = "absent"] = order.filter((evidence) =>
+        scoped.includes(evidence),
+      );
+      return strongest;
+    }
     if (!this.directClassificationAvailable()) {
       throw new Error();
     }
-    return this.directClassification.strongestUsernameEvidence(
-      this.findUsernameFields(query).map(
-        this.authenticationUsernameEvidence.bind(this),
-      ),
-    );
+    return this.directClassification.strongestUsernameEvidence(scoped);
   }
 
   authenticationUsernameEvidence(

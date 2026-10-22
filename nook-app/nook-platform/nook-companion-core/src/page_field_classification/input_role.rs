@@ -131,6 +131,22 @@ mod tests {
     }
 
     #[test]
+    fn strongest_username_evidence_follows_the_published_order() {
+        let order = AuthenticationUsernameEvidence::BY_STRENGTH;
+        for (rank, expected) in order.iter().enumerate() {
+            let weaker = order.get(rank..).unwrap_or_default();
+            assert_eq!(
+                AuthenticationUsernameEvidence::strongest_authentication_username_evidence(weaker),
+                *expected
+            );
+        }
+        assert_eq!(
+            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&[]),
+            AuthenticationUsernameEvidence::Absent
+        );
+    }
+
+    #[test]
     fn exact_mixed_phone_or_email_identity_has_distinct_evidence() {
         assert_eq!(
             PageInputFieldObservation::airbnb_mixed_identity().authentication_username_evidence(),
