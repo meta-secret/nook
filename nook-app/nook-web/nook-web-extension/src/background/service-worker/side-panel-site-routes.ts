@@ -69,15 +69,13 @@ export class SidePanelTopFrame {
   /** Chrome resolves with nothing, whatever the declared reply type, when no
    * listener answered. */
   private static answered(reply: BrowserRuntimeMessageValue): boolean {
-    switch (typeof reply) {
-      case 'string':
-      case 'number':
-      case 'boolean':
-      case 'object':
-        return true
-      default:
-        return false
-    }
+    const kind = typeof reply
+    return (
+      kind === 'string' ||
+      kind === 'number' ||
+      kind === 'boolean' ||
+      kind === 'object'
+    )
   }
 }
 
