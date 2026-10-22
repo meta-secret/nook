@@ -29,6 +29,41 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
+test('leads to Create passkey when no saved passkey comes back', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+  })
+  await page.goto('/app/')
+  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('login-vault-name-input').fill('Passkey demo vault')
+  await page.getByTestId('login-create-device-vault-btn').click()
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await demoBeat(page)
+
+  // Authenticate finds no Nook passkey: the step says so in red and points
+  // at Create passkey as the next step.
+  await page.getByTestId('device-protection-use-existing-choice').click()
+  await expect(
+    page.getByTestId('device-protection-not-found-alert'),
+  ).toContainText("Your passkey wasn't used")
+  await expect(page.getByTestId('device-protection-next-step')).toBeVisible()
+  await expect(
+    page.getByTestId('device-protection-create-new-choice'),
+  ).toBeFocused()
+  await demoBeat(page)
+
+  await page.getByTestId('device-protection-create-new-choice').click()
+  await expect(page.getByTestId('device-protection-setup-btn')).toBeVisible()
+  await demoBeat(page)
+})
+
 test('offer PIN device protection when passkeys are unavailable', async ({
   page,
 }) => {

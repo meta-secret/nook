@@ -923,13 +923,14 @@ test.describe('passkey device-key protection', () => {
     await openPasskeyOverlayForSimpleCreate(page)
     await page.getByTestId('device-protection-use-existing-choice').click()
 
-    await expect(page.getByTestId('device-protection-error')).toContainText(
-      "We couldn't use a Nook passkey",
-    )
+    // No passkey came back: the step says so and leads to creating one.
+    await expect(
+      page.getByTestId('device-protection-not-found-alert'),
+    ).toContainText("Your passkey wasn't used")
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     await expect(
       page.getByTestId('device-protection-create-new-choice'),
-    ).toBeEnabled()
+    ).toBeFocused()
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),
     ).toBeHidden()
