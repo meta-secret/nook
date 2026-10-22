@@ -39,7 +39,7 @@ tasks:
         REMOTE
 
   arc:placement:hive:
-    desc: Preserve all three build tiers for the existing Hive scale set.
+    desc: Share general-runner placement with the existing Hive scale set.
     silent: true
     cmds:
       - |
@@ -53,14 +53,9 @@ tasks:
         export KUBECONFIG="$kubeconfig"
         # Only placement is owned here. Keep Hive's image, identity, credentials,
         # security settings and queue ceiling in its existing Helm release.
-        # Hive retains overflow eligibility; only general execution uses fast tiers.
         helm get values nook-k0s --namespace arc-runners --output json |
           jq -e '.template.spec | select(.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | length == 3) |
             select(.nodeSelector["nook.nokey.sh/arc-workload"] == "build") |
-            .affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution = {
-              nodeSelectorTerms: [{matchExpressions: [{key: "nook.nokey.sh/arc-tier",
-                operator: "In", values: ["primary", "secondary", "overflow"]}]}]
-            } |
             {template: {spec: {nodeSelector: .nodeSelector, affinity: .affinity, topologySpreadConstraints: .topologySpreadConstraints}}}' > "$placement"
         helm upgrade nook-k0s-hive "{{.ARC_RUNNER_CHART}}" \
           --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \

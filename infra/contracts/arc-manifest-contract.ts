@@ -238,17 +238,12 @@ class ArcManifestContract {
       "values: [primary]",
       "values: [secondary]",
       "values: [overflow]",
-      `        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: nook.nokey.sh/arc-tier
-                  operator: In
-                  values: [primary, secondary]`,
       "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
     const admittedContract2 = runners.forbidAll([
+      "requiredDuringSchedulingIgnoredDuringExecution:",
       "minDomains:",
       "matchLabelKeys:",
     ]);
@@ -560,7 +555,9 @@ class ArcManifestContract {
     if (centralRouting.isErr()) return err(centralRouting.error);
     const admittedContract28 = mainWorkflow.requireAll([
       "workflow_call:",
-      "if: inputs.product_changed",
+      "if: ${{ !cancelled() && inputs.product_changed }}",
+      "name: Require successful preflight cache publication",
+      "CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}",
       "name: Require successful WASM cache publication",
       "needs: [web]",
       "cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}",
@@ -585,7 +582,7 @@ class ArcManifestContract {
       "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
       "task web:e2e:kubernetes-image:artifacts",
       "name: WASM and web verification",
-      "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
+      "needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
       "task _ci:main:web:e2e-only",
       "task _extension:test:e2e",
       "task _web:test:ui-demo",
