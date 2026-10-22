@@ -454,6 +454,8 @@ export type CompanionWasmSessionResponse =
         readonly looksLikeOneTimeCodeField: boolean;
       }[];
       readonly strongestAuthenticationUsernameEvidence: AuthenticationUsernameEvidence;
+      /** Rust's evidence order, strongest first, for any scoped subset. */
+      readonly usernameEvidenceByStrength: readonly AuthenticationUsernameEvidence[];
       readonly labels: readonly {
         readonly kind: CompanionWasmLabelRequest["kind"];
         readonly value: string;

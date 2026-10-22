@@ -168,14 +168,19 @@ export class VaultLoginActions {
     state.resetVaultSessionState();
   }
 
-  async chooseLoginVault({ storeId }: LoginVaultActionRequest): Promise<void> {
+  /** Selects a vault for its login unlock; false when it could not be
+   * selected, with the reason shown. */
+  async chooseLoginVault({
+    storeId,
+  }: LoginVaultActionRequest): Promise<boolean> {
     const state = this.state;
     const selected = await state.selectVaultForUnlock(storeId);
     if (selected.isErr()) {
       state.errorMsg = state.t(selected.error.translationKey);
-      return;
+      return false;
     }
     state.selectLoginVault(storeId);
+    return true;
   }
 
   async switchToVault({ storeId }: LoginVaultActionRequest): Promise<void> {
@@ -208,13 +213,18 @@ export class VaultLoginActions {
       >[0] = {
         storeId: target,
       };
-      await this.chooseLoginVault(chooseLoginVaultArgs);
+      const selected = await this.chooseLoginVault(chooseLoginVaultArgs);
       state.isVerifying = true;
       const locked = await state.lockDeviceProtection();
       if (locked.isErr()) {
         state.errorMsg = state.t(locked.error.translationKey);
         return;
       }
+      // A vault that could not be selected keeps its error, and no panel.
+      if (!selected) return;
+      // Locking folds the card; a switch lands on the target vault's panel,
+      // which offers its unlock.
+      state.vaultPanelStoreId = target;
       log.info("vault switch completed");
     } catch (error) {
       state.errorMsg =

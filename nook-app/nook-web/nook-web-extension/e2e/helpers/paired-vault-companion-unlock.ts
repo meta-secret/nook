@@ -279,6 +279,12 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
     .or(vaultPage.getByTestId('passkey-auth-overlay'))
     .first()
   const closedRow = row.and(vaultPage.locator(':not([aria-expanded="true"])'))
+  // On an unlocked identity the row opens its vault: the click is the request.
+  const liveClosedRow = closedRow.and(
+    vaultPage.locator(
+      '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"]',
+    ),
+  )
   // The restored identity may unlock itself while its old button disappears.
   await expect
     .poll(
@@ -290,6 +296,12 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
             break
         }
         switch (await pressIfReady(unlock)) {
+          case true:
+            return VaultPanelUnlockProgress.Requested
+          case false:
+            break
+        }
+        switch (await pressIfReady(liveClosedRow)) {
           case true:
             return VaultPanelUnlockProgress.Requested
           case false:

@@ -69,6 +69,7 @@ import {
   project_password_workflow_activity,
   revalidate_approved_authentication_workflow,
   strongest_authentication_username_evidence,
+  authentication_username_evidence_by_strength,
   can_activate_authentication_route_control,
   second_factor_route,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -162,6 +163,7 @@ function classifyPageInputs(
     fields: classified,
     strongestAuthenticationUsernameEvidence:
       strongest_authentication_username_evidence(evidence),
+    usernameEvidenceByStrength: authentication_username_evidence_by_strength(),
     labels: labelResults,
   }
 }

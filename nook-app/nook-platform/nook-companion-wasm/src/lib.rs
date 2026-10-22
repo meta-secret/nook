@@ -135,6 +135,24 @@ pub fn strongest_authentication_username_evidence(
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
+/// Username evidence strongest first, so a host picks the strongest of any
+/// field subset without keeping its own order.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authentication_username_evidence_by_strength() -> Result<
+    Vec<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>>,
+    wasm_bindgen::JsError,
+> {
+    AuthenticationUsernameEvidence::BY_STRENGTH
+        .iter()
+        .map(Tsify::into_ts)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+}
+
 #[wasm_bindgen]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",

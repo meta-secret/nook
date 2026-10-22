@@ -15,7 +15,6 @@ import {
   installMockPasskeyRuntime,
   isHostedSmoke,
   launchExtensionContext,
-  lockExtensionSession,
   openSimpleVaultConnection,
   readExtensionStorage,
   removeExtensionStorageKeys,
@@ -581,10 +580,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       reopenedVaultPage.getByTestId('identity-vault-row').first(),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
+    // The page's Lock locked the extension with it: it holds this identity's
+    // key, so the vault reopens only once the companion is unlocked again.
     const firstUnlock: PairedVaultCompanionUnlock = {
       context,
       vaultPage: reopenedVaultPage,
-      companionUnlock: PairedVaultCompanionUnlockKind.Optional,
+      companionUnlock: PairedVaultCompanionUnlockKind.Required,
       extensionId,
     }
     await test.step('unlock paired vault through companion', () =>
@@ -754,7 +755,10 @@ test('accepts the pairing grant after the extension session was locked', async (
 
     // Close the offscreen session before Approve. The grant handoff must still
     // import the event log without requiring an unlocked save_auth_providers_snapshot path.
-    await lockExtensionSession(context)
+    // Only the document closes: an explicit extension Lock would also lock
+    // this page's extension-held identity, and with it the consent.
+    const sessionWorker = await getServiceWorker(context)
+    await sessionWorker.evaluate(() => chrome.offscreen.closeDocument())
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(

@@ -173,7 +173,16 @@ export class NamecheapOtpScenario {
     const response: NamecheapOtpDocumentResponse = {
       contentType: 'text/html',
       body: `<!doctype html><html><body data-submissions="0">
-        <fragment><fragment-app-test><div><form>
+        <!-- The site header carries a closed Sign in dropdown with its own
+             username and password: hidden, it lends nothing to the OTP form. -->
+        <header><div class="gb-dropdown__holder" style="display:none">
+          <form class="gb-login-form" method="post" action="/myaccount/login/">
+            <input type="text" name="LoginUserName" autocomplete="off" placeholder="Username">
+            <input type="password" name="LoginPassword" autocomplete="off" placeholder="Password">
+            <button type="submit">Sign In</button>
+          </form>
+        </div></header>
+        <fragment><fragment-app-test><div><form class="gb-totp-form">
           <div><div style="display:flex"><div class="gb-scope twofa"><div class="gb-panel">
             <header class="gb-panel__header"><h1>Enter OTP Code</h1></header>
             <div class="gb-panel__body">
@@ -185,7 +194,7 @@ export class NamecheapOtpScenario {
           </div></div></div></div>
         </form></div></fragment-app-test></fragment>
         <script>
-          document.querySelector('form').addEventListener('submit', () => {
+          document.querySelector('form.gb-totp-form').addEventListener('submit', () => {
             document.body.dataset.submissions = String(Number(document.body.dataset.submissions) + 1)
           })
           document.querySelector('[data-ncid="verification-otp"]').focus()
@@ -196,7 +205,7 @@ export class NamecheapOtpScenario {
   }
 
   private removeAuthenticationSemantics(page: Page): Promise<void> {
-    return page.locator('form').evaluate((form) => {
+    return page.locator('form.gb-totp-form').evaluate((form) => {
       form.querySelector('input')?.setAttribute('placeholder', 'Coupon code')
       form.querySelector('input')?.setAttribute('name', 'coupon')
       form.querySelector('input')?.removeAttribute('inputmode')

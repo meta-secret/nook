@@ -572,25 +572,25 @@ impl PageInputFieldObservation {
 
 /// Select the strongest username evidence without duplicating its ordering in hosts.
 impl AuthenticationUsernameEvidence {
+    /// Every kind of evidence, strongest first; hosts read this order.
+    pub const BY_STRENGTH: [Self; 7] = [
+        Self::Explicit,
+        Self::WebAuthnEmail,
+        Self::MixedPhoneOrEmail,
+        Self::Strong,
+        Self::StandardsBasedEmail,
+        Self::Generic,
+        Self::Absent,
+    ];
+
     #[must_use]
     pub fn strongest_authentication_username_evidence(
         evidence: &[AuthenticationUsernameEvidence],
     ) -> AuthenticationUsernameEvidence {
-        if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
-            AuthenticationUsernameEvidence::Explicit
-        } else if evidence.contains(&AuthenticationUsernameEvidence::WebAuthnEmail) {
-            AuthenticationUsernameEvidence::WebAuthnEmail
-        } else if evidence.contains(&AuthenticationUsernameEvidence::MixedPhoneOrEmail) {
-            AuthenticationUsernameEvidence::MixedPhoneOrEmail
-        } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
-            AuthenticationUsernameEvidence::Strong
-        } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
-            AuthenticationUsernameEvidence::StandardsBasedEmail
-        } else if evidence.contains(&AuthenticationUsernameEvidence::Generic) {
-            AuthenticationUsernameEvidence::Generic
-        } else {
-            AuthenticationUsernameEvidence::Absent
-        }
+        Self::BY_STRENGTH
+            .into_iter()
+            .find(|candidate| evidence.contains(candidate))
+            .unwrap_or(Self::Absent)
     }
 }
 
