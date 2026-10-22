@@ -15,7 +15,12 @@ import { z } from "zod";
 const workflow = z
   .object({
     jobs: z.object({
+      rust: z.object({
+        if: z.string(),
+        steps: z.array(z.record(z.string(), z.unknown())),
+      }),
       web: z.object({
+        if: z.string(),
         steps: z.array(z.record(z.string(), z.unknown())),
       }),
     }),
@@ -35,6 +40,7 @@ enum FailureStage {
   None = "none",
   Node = "node",
   Cache = "cache",
+  PreflightCache = "preflight-cache",
   Web = "web",
   Image = "image",
 }
@@ -65,6 +71,12 @@ const scenarios = [
     cacheOutcome: CacheOutcome.Failure,
   },
   {
+    failure: FailureStage.PreflightCache,
+    exitStatus: 0,
+    publishes: true,
+    cacheOutcome: CacheOutcome.Success,
+  },
+  {
     failure: FailureStage.Web,
     exitStatus: 8,
     publishes: false,
@@ -89,6 +101,9 @@ for (const scenario of scenarios) {
         `#!/bin/bash
 set -eu
 case "$1" in
+  ci:main:publish-preflight-cache)
+    kind=preflight-cache; other=web
+    test "$GHA_CACHE_WRITE_ENABLED" = 1 ;;
   ci:main:wasm-node-test) kind=node; other=web; test -z "$GHA_CACHE_WRITE_ENABLED" ;;
   ci:main:publish-wasm-cache)
     kind=cache; other=web
@@ -126,9 +141,19 @@ if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ]; then
   done
   test -f "$PROBE_DIR/image.finished"
 fi
+if [ "$kind" = preflight-cache ]; then
+  for attempt in $(seq 1 100); do
+    if [ -f "$PROBE_DIR/node.finished" ] && [ -f "$PROBE_DIR/web.finished" ]; then break; fi
+    sleep 0.01
+  done
+  test -f "$PROBE_DIR/node.finished"
+  test -f "$PROBE_DIR/web.finished"
+  sleep 0.05
+fi
 touch "$PROBE_DIR/$kind.finished"
+echo "$kind joined log"
 if [ "$FAIL_STAGE" = "$kind" ]; then
-  case "$kind" in node) exit 7 ;; web) exit 8 ;; cache) exit 10 ;; esac
+  case "$kind" in node) exit 7 ;; web) exit 8 ;; cache) exit 10 ;; preflight-cache) exit 11 ;; esac
 fi
 `,
         { mode: 0o755 },
@@ -159,14 +184,77 @@ fi
       expect(readFileSync(join(root, "node.finished"), "utf8")).toBe("");
       expect(readFileSync(join(root, "web.finished"), "utf8")).toBe("");
       expect(existsSync(join(root, "image.finished"))).toBe(scenario.publishes);
+      expect(existsSync(join(root, "preflight-cache.finished"))).toBe(true);
+      expect(result.stdout).toContain("preflight-cache joined log");
       expect(readFileSync(output, "utf8")).toBe(
-        `cache_publication_outcome=${scenario.cacheOutcome}\n`,
+        `preflight_cache_publication_outcome=${scenario.failure === FailureStage.PreflightCache ? CacheOutcome.Failure : CacheOutcome.Success}\ncache_publication_outcome=${scenario.cacheOutcome}\n`,
       );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 }
+
+test("both Main producers fail fast on read-only preflight before building", () => {
+  for (const [job, build] of [
+    [workflow.jobs.rust, "task ci:main:rust"],
+    [workflow.jobs.web, "task ci:pr:wasm"],
+  ] as const) {
+    expect(job.if).toBe("${{ !cancelled() && inputs.product_changed }}");
+    const preflightIndex = job.steps.findIndex(
+      (item) => item.run === "task preflight",
+    );
+    const buildIndex = job.steps.findIndex(
+      (item) => typeof item.run === "string" && item.run.startsWith(build),
+    );
+    expect(preflightIndex).toBeGreaterThanOrEqual(0);
+    expect(buildIndex).toBeGreaterThan(preflightIndex);
+    const preflight = z
+      .object({
+        env: z.object({
+          CI: z.literal(true),
+          GHA_CACHE_WRITE_ENABLED: z.literal(""),
+        }),
+      })
+      .parse(job.steps[preflightIndex]);
+    expect(preflight.env.CI).toBe(true);
+    expect(job.steps[preflightIndex]).not.toHaveProperty("continue-on-error");
+    expect(job.steps[preflightIndex]).not.toHaveProperty("if");
+  }
+});
+
+test("preflight cache failure remains terminal after verified artifact upload", () => {
+  const steps = workflow.jobs.web.steps;
+  const assertion = steps.findIndex(
+    (item) => item.name === "Require successful preflight cache publication",
+  );
+  expect(assertion).toBeGreaterThan(
+    steps.findIndex((item) => item.id === "upload_web"),
+  );
+  const gate = z
+    .object({
+      if: z.string(),
+      run: z.string(),
+      env: z.object({ CACHE_PUBLICATION_OUTCOME: z.string() }),
+    })
+    .parse(steps[assertion]);
+  expect(gate.if).toBe("${{ !cancelled() }}");
+  expect(gate.env.CACHE_PUBLICATION_OUTCOME).toBe(
+    "${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}",
+  );
+  expect(steps[assertion]).not.toHaveProperty("continue-on-error");
+  for (const [outcome, status] of [
+    [CacheOutcome.Success, 0],
+    [CacheOutcome.Failure, 1],
+    [CacheOutcome.Skipped, 1],
+  ] as const) {
+    const result = spawnSync("/bin/bash", ["-e", "-c", gate.run], {
+      encoding: "utf8",
+      env: { ...process.env, CACHE_PUBLICATION_OUTCOME: outcome },
+    });
+    expect(result.status).toBe(status);
+  }
+});
 
 test("research image publication keeps its imports but exports no compiler cache", () => {
   const research = z

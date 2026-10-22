@@ -1,4 +1,4 @@
-# Main runs native and WASM/web verification concurrently after preflight.
+# Main runs native and WASM/web producers concurrently, each checking preflight before building.
 # The WASM/web producer overlaps Node and web checks, then verified WASM cache publication with image publication
 # on its own builder. Web and two isolated extension shards consume one verified image.
 # All validation and cache gates join before development deployment.
@@ -65,64 +65,9 @@ jobs:
       fuzz_seconds: "20"
       isolated_cache_write: "false"
 
-  preflight:
-    name: Repository preflight
-    if: inputs.product_changed
-    outputs:
-      verification_outcome: ${{ steps.verify_preflight.outcome }}
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          require-sccache: "true"
-
-      - name: Repository invariant validation
-        id: verify_preflight
-        run: task preflight
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: Publish verified preflight BuildKit cache
-        id: publish_preflight_cache
-        continue-on-error: true
-        run: task ci:main:publish-preflight-cache
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-
-      - name: Require successful preflight cache publication
-        if: ${{ !cancelled() }}
-        env:
-          CACHE_PUBLICATION_OUTCOME: ${{ steps.publish_preflight_cache.outcome }}
-        run: |
-          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
-            echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
-            exit 1
-          fi
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
   rust:
     name: Native Rust verification
-    needs: [preflight]
-    if: ${{ !cancelled() && inputs.product_changed && needs.preflight.outputs.verification_outcome == 'success' }}
+    if: ${{ !cancelled() && inputs.product_changed }}
     # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 15
@@ -145,6 +90,12 @@ jobs:
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           require-sccache: "true"
+      - name: Repository invariant validation
+        run: task preflight
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
+
       - name: Native Rust format, tests, and coverage
         run: task ci:main:rust
         env:
@@ -183,8 +134,7 @@ jobs:
 
   web:
     name: WASM and web verification
-    needs: [preflight]
-    if: ${{ !cancelled() && needs.preflight.outputs.verification_outcome == 'success' }}
+    if: ${{ !cancelled() && inputs.product_changed }}
     outputs:
       cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}
       verification_outcome: ${{ steps.upload_web.outcome }}
@@ -212,6 +162,12 @@ jobs:
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           require-sccache: "true"
+      - name: Repository invariant validation
+        run: task preflight
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
+
       - name: WASM clippy, build, and package export
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
@@ -241,8 +197,11 @@ jobs:
         id: prepare_web
         shell: bash
         run: |
+          preflight_cache_log="$RUNNER_TEMP/main-preflight-cache.log"
           cache_log="$RUNNER_TEMP/main-wasm-cache.log"
           web_log="$RUNNER_TEMP/main-web-artifacts.log"
+          GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache >"$preflight_cache_log" 2>&1 &
+          preflight_cache_pid=$!
           task ci:main:web:artifacts \
             CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
             VITE_BASE="$CI_MAIN_VITE_BASE" \
@@ -270,7 +229,11 @@ jobs:
             wait "$cache_pid" || cache_outcome=failure
             cat "$cache_log"
           fi
+          preflight_cache_outcome=success
+          wait "$preflight_cache_pid" || preflight_cache_outcome=failure
+          cat "$preflight_cache_log"
           cat "$web_log"
+          echo "preflight_cache_publication_outcome=$preflight_cache_outcome" >> "$GITHUB_OUTPUT"
           echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
           if [ "$node_status" -ne 0 ]; then exit "$node_status"; fi
           exit "$web_status"
@@ -309,6 +272,16 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+
+      - name: Require successful preflight cache publication
+        if: ${{ !cancelled() }}
+        env:
+          CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
 
       - name: Require successful WASM cache publication
         if: ${{ !cancelled() }}
@@ -528,7 +501,7 @@ jobs:
   deploy:
     name: Deploy development
     if: github.ref == 'refs/heads/main'
-    needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]
+    needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     environment:

@@ -71,7 +71,7 @@ impl WorkflowRuntimeContract<'_> {
                 && main
                     .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                     .count()
-                    >= 5
+                    == 4 // Native, WASM/web, portable proof, and deployment.
                 && main
                     .matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}")
                     .count()

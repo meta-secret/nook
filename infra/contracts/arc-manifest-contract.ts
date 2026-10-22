@@ -555,7 +555,9 @@ class ArcManifestContract {
     if (centralRouting.isErr()) return err(centralRouting.error);
     const admittedContract28 = mainWorkflow.requireAll([
       "workflow_call:",
-      "if: inputs.product_changed",
+      "if: ${{ !cancelled() && inputs.product_changed }}",
+      "name: Require successful preflight cache publication",
+      "CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.preflight_cache_publication_outcome }}",
       "name: Require successful WASM cache publication",
       "needs: [web]",
       "cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}",
@@ -580,7 +582,7 @@ class ArcManifestContract {
       "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
       "task web:e2e:kubernetes-image:artifacts",
       "name: WASM and web verification",
-      "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
+      "needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
       "task _ci:main:web:e2e-only",
       "task _extension:test:e2e",
       "task _web:test:ui-demo",

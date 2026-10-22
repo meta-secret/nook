@@ -280,10 +280,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
 
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(
-        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 4
-            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 4
+        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 3
+            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 3
             && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
-        "trusted Main validators and their cache publishers must populate SeaweedFS compiler objects"
+        "Main native, WASM/web, and portable-proof compiler jobs must populate SeaweedFS compiler objects"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 

@@ -255,7 +255,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(fixture.entry.contains("branches: [main]"));
     assert!(
         fixture.main.contains("workflow_call:")
-            && fixture.main.contains("if: inputs.product_changed")
+            && fixture
+                .main
+                .matches("if: ${{ !cancelled() && inputs.product_changed }}")
+                .count()
+                == 2,
+        "Main native and WASM/web producers must both require a product change and reject cancellation"
     );
     assert!(
         fixture
