@@ -9,12 +9,16 @@ export type ExtensionSessionLockNoticeBrowser = {
 }
 
 export const chromeLockNoticeBrowser: ExtensionSessionLockNoticeBrowser = {
-  vaultOrigins: () =>
-    chrome.runtime.getManifest().externally_connectable?.matches ?? [],
+  vaultOrigins: () => {
+    const { externally_connectable: connectable = {} } =
+      chrome.runtime.getManifest()
+    const { matches = [] } = connectable
+    return matches
+  },
   vaultTabIds: async (origins) => {
     const query: chrome.tabs.QueryInfo = { url: [...origins] }
     const tabs = await chrome.tabs.query(query)
-    return tabs.flatMap((tab) => (tab.id === undefined ? [] : [tab.id]))
+    return tabs.flatMap((tab) => (typeof tab.id === 'number' ? [tab.id] : []))
   },
   notifyTab: async (tabId) => {
     await chrome.tabs.sendMessage(tabId, ExtensionSessionLockedNotice.locked)
@@ -34,6 +38,12 @@ export async function announceExtensionSessionLocked(
   if (origins.length === 0) return
   const tabIds = await browser.vaultTabIds(origins)
   await Promise.all(
-    tabIds.map((tabId) => browser.notifyTab(tabId).catch(() => undefined)),
+    // A tab that cannot hear it reads the locked state when it next asks.
+    tabIds.map((tabId) =>
+      browser.notifyTab(tabId).then(
+        () => true,
+        () => false,
+      ),
+    ),
   )
 }

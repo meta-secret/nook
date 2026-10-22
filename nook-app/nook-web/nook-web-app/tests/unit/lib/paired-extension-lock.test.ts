@@ -14,6 +14,7 @@ import { DeviceProtectionStatus, VaultIdentityKeySource } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { ExtensionSessionLockedNotice } from '$web-shared/extension/runtime-messages'
 import { DeviceProtectionLockOutcome } from '$lib/vault/device-protection.svelte'
+import { extensionConnectionBrowser } from '$lib/extension/connect'
 import {
   PairedExtensionLockActions,
   type PairedExtensionLockRequest,
@@ -49,6 +50,9 @@ function lockScene(
   vault.lockDeviceProtection = lockDeviceProtection
   const extension = {
     requestPairedExtensionLock: vi.fn(() => Promise.resolve(extensionLocks)),
+    // The page's own connection hears the notices the bridge posts.
+    followPairedExtensionLock: (onlocked: () => void) =>
+      extensionConnectionBrowser.followPairedExtensionLock(onlocked),
   }
   const request: PairedExtensionLockRequest = { vault, companion: extension }
   const actions = new PairedExtensionLockActions(request)
@@ -147,7 +151,7 @@ describe('following the paired extension lock', () => {
     const scene = lockScene(VaultIdentityKeySource.PairedCompanion)
     scene.vault.isAuthenticated = true
     scene.vault.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
-    const stop = scene.actions.listen(window)
+    const stop = scene.actions.listen()
 
     postToPage(ExtensionSessionLockedNotice.locked, 'https://foreign.example')
     postToPage({ type: 'nook:something-else' })

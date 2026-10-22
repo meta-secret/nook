@@ -80,6 +80,7 @@ import {
   ExtensionPairedVaultIdentityStatusMessageStatus,
   ExtensionPairedVaultLockRequestMessageType,
   ExtensionPairedVaultLockResponse,
+  ExtensionSessionLockedNotice,
   ExtensionPairedVaultUnlockRequestMessageType,
   ExtensionIdentityHandoffRequestMessageType,
   OpenCompanionLauncherIntent,
@@ -646,6 +647,23 @@ class ExtensionConnectionBrowser {
     return (
       decoded._tag === "Success" && decoded.success.requestId === lockRequestId
     );
+  }
+
+  /** Hears the extension's lock notice, which its vault bridge posts to this
+   * page on its own origin; a forged notice can only lock the page. Returns
+   * the teardown. */
+  followPairedExtensionLock(onlocked: () => void): () => void {
+    const page = this.browser.window;
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== page || event.origin !== page.location.origin)
+        return;
+      const notice = Effect.runSync(
+        Effect.result(ExtensionSessionLockedNotice.decode(event.data)),
+      );
+      if (notice._tag === "Success") onlocked();
+    };
+    page.addEventListener("message", onMessage);
+    return () => page.removeEventListener("message", onMessage);
   }
 
   private requestIdentityEnvelope({

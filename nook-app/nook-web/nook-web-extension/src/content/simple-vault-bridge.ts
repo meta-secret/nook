@@ -21,7 +21,7 @@ type LockNoticeListenerArguments = [
 ]
 chrome.runtime.onMessage.addListener((...args: LockNoticeListenerArguments) => {
   const [message, sender] = args
-  if (sender.id !== chrome.runtime.id || sender.tab !== undefined) return
+  if (sender.id !== chrome.runtime.id || Boolean(sender.tab)) return
   const notice = runConcreteDecoder(
     ExtensionSessionLockedNotice.decode,
     message,

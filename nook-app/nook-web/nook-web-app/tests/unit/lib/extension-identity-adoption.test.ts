@@ -185,9 +185,9 @@ describe('unlocking an identity whose key the paired extension holds', () => {
     }).unlock()
 
     expect(requestUnlock).toHaveBeenCalledExactlyOnceWith('store-qwe')
-    expect(requestUnlock.mock.invocationCallOrder[0]).toBeLessThan(
-      discover.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-    )
+    const [requestedAt] = requestUnlock.mock.invocationCallOrder
+    const [discoveredAt] = discover.mock.invocationCallOrder
+    expect(requestedAt).toBeLessThan(Number(discoveredAt))
   })
 
   test('asks a locked extension to unlock once, then adopts once it has', async () => {

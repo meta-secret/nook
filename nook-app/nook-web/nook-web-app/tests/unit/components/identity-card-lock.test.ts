@@ -48,7 +48,7 @@ describe('identity card on lock', () => {
     (status) => {
       const view = renderCard(status)
 
-      expect(view.queryByTestId('identity-card-fold')).not.toBeNull()
+      expect(view.queryByTestId('identity-card-fold')).toBeTruthy()
       expect(view.getByTestId('identity-vault-row').textContent).toContain(
         'qwe',
       )
@@ -58,13 +58,13 @@ describe('identity card on lock', () => {
   test('an unlocked card has nothing to fold', () => {
     const view = renderCard(IdentityCardStatus.Unlocked)
 
-    expect(view.queryByTestId('identity-card-fold')).toBeNull()
+    expect(view.queryByTestId('identity-card-fold')).not.toBeTruthy()
   })
 
   test('the first-run preview stays still', () => {
     const view = renderCard(IdentityCardStatus.Locked, true)
 
-    expect(view.queryByTestId('identity-card-fold')).toBeNull()
+    expect(view.queryByTestId('identity-card-fold')).not.toBeTruthy()
   })
 })
 
@@ -83,9 +83,9 @@ describe('identity card rows that need the unlocked identity', () => {
   test('a locked card keeps only its header and vaults', () => {
     const view = renderCurrent(IdentityCardStatus.Locked)
 
-    expect(view.queryByTestId('identity-overview-toggle')).toBeNull()
-    expect(view.queryByTestId('identity-manage')).toBeNull()
-    expect(view.queryByTestId('identity-new-vault')).toBeNull()
+    expect(view.queryByTestId('identity-overview-toggle')).not.toBeTruthy()
+    expect(view.queryByTestId('identity-manage')).not.toBeTruthy()
+    expect(view.queryByTestId('identity-new-vault')).not.toBeTruthy()
     expect(view.getByTestId('identity-vault-row')).toBeTruthy()
   })
 
@@ -124,7 +124,7 @@ describe('vault panel beside the identity card', () => {
     expect(vault.vaultPanelStoreId).toBe('store-qwe')
     expect(onUnlockVault).toHaveBeenCalledExactlyOnceWith('store-qwe')
     expect(onSelectVault).not.toHaveBeenCalled()
-    expect(view.queryByTestId('vault-panel-unlock')).toBeNull()
+    expect(view.queryByTestId('vault-panel-unlock')).not.toBeTruthy()
   })
 
   test('Unlock on the card with a vault panel open opens that vault once the identity is unlocked', async () => {
@@ -215,6 +215,6 @@ describe('identity card unlock', () => {
   test('an identity of another installation this page has no vault of offers no unlock', () => {
     const { view } = renderLocked(IdentityCardStatus.Elsewhere, '')
 
-    expect(view.queryByTestId('identity-unlock')).toBeNull()
+    expect(view.queryByTestId('identity-unlock')).not.toBeTruthy()
   })
 })

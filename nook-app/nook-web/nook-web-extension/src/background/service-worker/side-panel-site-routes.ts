@@ -60,10 +60,24 @@ export class SidePanelTopFrame {
   ): Promise<BrowserRuntimeMessageValue> {
     const reply = await chrome.tabs.sendMessage<
       SidePanelPageDelivery['message'],
-      BrowserRuntimeMessageValue | undefined
+      BrowserRuntimeMessageValue
     >(delivery.tabId, delivery.message, this.options)
-    if (reply === undefined) throw new SidePanelPageUnanswered()
+    if (!SidePanelTopFrame.answered(reply)) throw new SidePanelPageUnanswered()
     return reply
+  }
+
+  /** Chrome resolves with nothing, whatever the declared reply type, when no
+   * listener answered. */
+  private static answered(reply: BrowserRuntimeMessageValue): boolean {
+    switch (typeof reply) {
+      case 'string':
+      case 'number':
+      case 'boolean':
+      case 'object':
+        return true
+      default:
+        return false
+    }
   }
 }
 

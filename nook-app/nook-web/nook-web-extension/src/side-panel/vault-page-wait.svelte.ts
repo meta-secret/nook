@@ -14,7 +14,7 @@ export type VaultPageWaitSource = Pick<
  */
 export class SidePanelVaultPageWait {
   private until = $state(0)
-  private expiry: ReturnType<typeof setTimeout> | undefined
+  private expiry = 0
 
   constructor(private readonly source: VaultPageWaitSource) {}
 
@@ -28,7 +28,7 @@ export class SidePanelVaultPageWait {
     const stopFollowing = this.source.follow(() => void this.read())
     return () => {
       stopFollowing()
-      clearTimeout(this.expiry)
+      window.clearTimeout(this.expiry)
     }
   }
 
@@ -43,14 +43,14 @@ export class SidePanelVaultPageWait {
   }
 
   private show(until: number): void {
-    clearTimeout(this.expiry)
+    window.clearTimeout(this.expiry)
     const remaining = until - Date.now()
     if (remaining <= 0) {
       this.until = 0
       return
     }
     this.until = until
-    this.expiry = setTimeout(() => {
+    this.expiry = window.setTimeout(() => {
       this.until = 0
     }, remaining)
   }

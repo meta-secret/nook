@@ -1,10 +1,8 @@
-import { Effect } from "effect";
 import {
   DeviceProtectionStatus,
   VaultCompanionLockDecision,
   set_vault_session_locked,
 } from "$app-wasm";
-import { ExtensionSessionLockedNotice } from "$web-shared/extension/runtime-messages";
 import { extensionConnectionBrowser } from "$lib/extension/connect";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
@@ -14,18 +12,13 @@ const log = browserLogRuntime.createLogger("vault-paired-extension-lock");
 
 export type PairedExtensionLockRequester = Pick<
   typeof extensionConnectionBrowser,
-  "requestPairedExtensionLock"
+  "requestPairedExtensionLock" | "followPairedExtensionLock"
 >;
 
 export type PairedExtensionLockRequest = {
   readonly vault: VaultState;
   readonly companion: PairedExtensionLockRequester;
 };
-
-export type PairedExtensionLockNoticeTarget = Pick<
-  Window,
-  "addEventListener" | "removeEventListener" | "location"
->;
 
 /**
  * Keeps this page and the paired extension locked together while the
@@ -97,18 +90,10 @@ export class PairedExtensionLockActions {
     });
   }
 
-  /** Hears the extension's lock notice, which its vault bridge posts to this
-   * page; a forged notice can only lock the page. Returns the teardown. */
-  listen(target: PairedExtensionLockNoticeTarget): () => void {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== target || event.origin !== target.location.origin)
-        return;
-      const notice = Effect.runSync(
-        Effect.result(ExtensionSessionLockedNotice.decode(event.data)),
-      );
-      if (notice._tag === "Success") this.followPairedExtensionLock();
-    };
-    target.addEventListener("message", onMessage);
-    return () => target.removeEventListener("message", onMessage);
+  /** Follows the extension's lock notices; returns the teardown. */
+  listen(): () => void {
+    return this.companion.followPairedExtensionLock(() =>
+      this.followPairedExtensionLock(),
+    );
   }
 }

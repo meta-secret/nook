@@ -8,11 +8,20 @@ import { extensionTestBrowserHost } from './extension-test-browser-host'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 
 /** The browser's tab messaging, answering every message with `reply`. */
-function tabsAnswering(
-  reply: Promise<BrowserRuntimeMessageValue | undefined>,
-): void {
+function tabsAnswering(reply: Promise<BrowserRuntimeMessageValue>): void {
   Object.assign(globalThis, {
     chrome: { ...extensionTestBrowserHost, tabs: { sendMessage: () => reply } },
+  })
+}
+
+/** A tab whose listeners all leave the message alone: Chrome resolves with
+ * nothing. */
+function tabsSilent(): void {
+  Object.assign(globalThis, {
+    chrome: {
+      ...extensionTestBrowserHost,
+      tabs: { sendMessage: async () => {} },
+    },
   })
 }
 
@@ -37,7 +46,7 @@ describe('side panel top frame', () => {
   })
 
   test('a frame whose listeners leave the message alone answered nothing', async () => {
-    tabsAnswering(Promise.resolve(undefined))
+    tabsSilent()
 
     const failure = await new SidePanelTopFrame()
       .send(delivery)

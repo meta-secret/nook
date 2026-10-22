@@ -107,9 +107,8 @@ class VaultBrowserLifecycle {
         unsubscribeLocalDataDeletion.error.translationKey,
       );
     }
-    const stopFollowingPairedExtensionLock = PairedExtensionLockActions.forPage(
-      vault,
-    ).listen(this.browser.window);
+    const stopFollowingPairedExtensionLock =
+      PairedExtensionLockActions.forPage(vault).listen();
     void vault.init();
 
     if (vault.runtimeConfig.expose_debug_hooks()) {

@@ -51,6 +51,14 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
+export type PairedExtensionIdentityDiscoveryResult = Result<
+  {
+    readonly discovery: PairedExtensionIdentityDiscovery;
+    readonly canonicalStatus: CompanionIdentityStatus;
+  },
+  PairedExtensionDiscoveryFailure
+>;
+
 export type ExtensionIdentityAdoption = {
   manager: NookVaultManager;
   request: ExtensionConnectRequest;
@@ -136,6 +144,16 @@ export async function requestPairedExtensionUnlock(
   return false;
 }
 
+export async function requestPairedExtensionLock(): Promise<boolean> {
+  return false;
+}
+
+/** Sentinel pairs with no extension, so no lock notice ever arrives. */
+export function followPairedExtensionLock(onlocked: () => void): () => void {
+  void onlocked;
+  return () => {};
+}
+
 export async function adoptExtensionIdentity(
   args: ExtensionIdentityAdoption,
 ): Promise<Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>> {
@@ -163,6 +181,8 @@ export const extensionConnectionBrowser = {
   discoverPairedExtensionIdentity,
   discoverAdmittedPairedExtensionIdentity,
   requestPairedExtensionUnlock,
+  requestPairedExtensionLock,
+  followPairedExtensionLock,
   adoptExtensionIdentity,
   async deliverExtensionPairingApproval(
     _request: ExtensionPairingApprovalDelivery,
