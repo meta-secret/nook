@@ -83,10 +83,7 @@ export class ArcSeparationContract {
       },
       {
         path: "infra/k0s/manifests/arc/container-hook.yaml",
-        required: [
-          "nook.nokey.sh/arc-workload: build",
-          "NOOK_BUILDKIT_ADDR",
-        ],
+        required: ["nook.nokey.sh/arc-workload: build", "NOOK_BUILDKIT_ADDR"],
         forbidden: [],
       },
       {
@@ -206,9 +203,7 @@ class ArcSeparationDrainContract {
   constructor(private readonly source: string) {}
 
   assert(): Result<void, OperationalContractFailure> {
-    const podGuard = this.source.match(
-      /remaining=.*?\| jq '([^']+)'/s,
-    )?.[1];
+    const podGuard = this.source.match(/remaining=.*?\| jq '([^']+)'/s)?.[1];
     const templateGuard = this.source.match(
       /jq -e '(\.items \| length >= 4[^']+)'/,
     )?.[1];
@@ -305,27 +300,21 @@ class ArcSeparationDrainContract {
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 0 }, status: { currentReplicas: 0 } },
-          ],
+          items: [{ spec: { replicas: 0 }, status: { currentReplicas: 0 } }],
         },
         expected: "true",
       },
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 1 }, status: { currentReplicas: 0 } },
-          ],
+          items: [{ spec: { replicas: 1 }, status: { currentReplicas: 0 } }],
         },
         expected: "false",
       },
       {
         guard: replicaGuard,
         input: {
-          items: [
-            { spec: { replicas: 0 }, status: { currentReplicas: 1 } },
-          ],
+          items: [{ spec: { replicas: 0 }, status: { currentReplicas: 1 } }],
         },
         expected: "false",
       },
