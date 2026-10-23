@@ -4,6 +4,8 @@ import {
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
 import type { ExtensionSessionTransportFailure } from './session-document'
+import { SidePanelSender, SidePanelSenderAdmission } from './side-panel-sender'
+import { AUTHENTICATOR_PICKER_STORAGE_PREFIX } from '../../lib/side-panel-authenticator-picker'
 import {
   accountPickerSessionCodec,
   type PendingAuthenticatorPicker,
@@ -56,9 +58,6 @@ export type {
 export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
 export const LOGIN_PICKER_TTL_MS = 5 * 60 * 1000
-
-const AUTHENTICATOR_PICKER_STORAGE_PREFIX =
-  'nook.extension.authenticator-picker.'
 
 const LOGIN_PICKER_STORAGE_PREFIX = 'nook.extension.login-picker.'
 
@@ -386,9 +385,7 @@ class AccountPickerSessions {
         return []
       }
       const intent = new URL(tab.url).searchParams.get('intent')
-      return intent === 'login-picker' || intent === 'authenticator-picker'
-        ? [tab.id]
-        : []
+      return intent === 'login-picker' ? [tab.id] : []
     })
     const removals = await Promise.allSettled(
       pickerSurfaceTabIds.map((tabId) => {
@@ -490,6 +487,14 @@ class AccountPickerSessions {
     )
   }
 
+  /** Every Fill 2FA code request kept for this browser session. */
+  async storedAuthenticatorPickerIds(): Promise<string[]> {
+    const stored = await extensionPairingIdentity.getAllSessionStorage()
+    return Object.keys(stored)
+      .filter((key) => key.startsWith(AUTHENTICATOR_PICKER_STORAGE_PREFIX))
+      .map((key) => key.slice(AUTHENTICATOR_PICKER_STORAGE_PREFIX.length))
+  }
+
   async loadAuthenticatorPicker(
     requestId: string,
   ): Promise<AuthenticatorPickerLoad> {
@@ -550,17 +555,12 @@ class AccountPickerSessions {
     }
   }
 
+  /** The 2FA picker lives in the side panel, beside the page it fills. */
   isAuthenticatorPickerSender(sender: chrome.runtime.MessageSender): boolean {
-    if (sender.id !== chrome.runtime.id || !sender.url) return false
-    try {
-      const senderUrl = new URL(sender.url)
-      return (
-        senderUrl.origin === new URL(chrome.runtime.getURL('/')).origin &&
-        senderUrl.pathname === '/popup/index.html'
-      )
-    } catch {
-      return false
-    }
+    return (
+      new SidePanelSender(sender).admission() ===
+      SidePanelSenderAdmission.Admitted
+    )
   }
 
   async authenticatorAccounts({

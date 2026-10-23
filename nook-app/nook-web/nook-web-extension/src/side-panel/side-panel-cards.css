@@ -371,3 +371,43 @@
   position: absolute;
   inset: -8px -4px;
 }
+
+/* The Nook Pilot's 2FA picker: This site's rows under a search field, with
+ * the same gutters, hairlines and Fill buttons. */
+.side-panel-authenticator-destination {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.side-panel-authenticator-search {
+  padding: 0 var(--side-panel-gutter) 12px;
+}
+
+.side-panel-authenticator-search-field {
+  position: relative;
+  display: block;
+}
+
+.side-panel-authenticator-search-field > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.side-panel-authenticator-search-field input {
+  width: 100%;
+  padding-left: 34px;
+}
+
+.side-panel-authenticator-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px var(--side-panel-gutter);
+  border-top: 1px solid var(--border);
+}

@@ -12,7 +12,6 @@ import { retryClosedExtensionSessionOnce } from '../lib/extension-runtime-retry'
 import PopupApp from './PopupApp.svelte'
 import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import { PopupInitializationPhase } from './popup-app-state'
-import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import './popup.css'
 
 async function main() {
@@ -21,19 +20,6 @@ async function main() {
 
   const searchParams = new URLSearchParams(window.location.search)
   const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
-  if (searchParams.get('intent') === 'authenticator-picker') {
-    const nookTypedArgs0_0: MountOptions<
-      ComponentProps<typeof AuthenticatorPicker>
-    > = {
-      target,
-      props: {
-        i18n,
-        requestId: ((v) => (v ? v : ''))(searchParams.get('request')),
-      },
-    }
-    mount(AuthenticatorPicker, nookTypedArgs0_0)
-    return
-  }
 
   const [launcherIntentValue = ''] = searchParams.getAll('intent')
   let launcherIntent: OpenCompanionLauncherIntent

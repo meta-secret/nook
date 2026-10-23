@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use super::PageSecondFactorRoute;
 use super::form_identity::AuthenticationRouteIdentity;
 use crate::AuthenticationAdvanceControlObservation;
 
@@ -93,10 +94,19 @@ impl AuthenticationControlIdentity<'_> {
                 .eq(["appleauth", "auth", "authorize", "signin"]);
         let has_unknown_login_route_segment =
             segments.iter().enumerate().any(|(index, segment)| {
-                let mut tails = segments.iter().skip(index + 1).map(String::as_str);
-                let has_local_tail = match (tails.next(), tails.next()) {
-                    (None, None) => true,
-                    (Some(tail), None) => is_local_tail(tail),
+                let tails = segments
+                    .iter()
+                    .skip(index + 1)
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                // A second-factor step stays on the site's own login route, directly
+                // or behind a local step such as Google's `/signin/challenge/totp`.
+                let has_local_tail = match tails.as_slice() {
+                    [] => true,
+                    [tail] => is_local_tail(tail) || PageSecondFactorRoute::names_segment(tail),
+                    [step, factor] => {
+                        is_local_tail(step) && PageSecondFactorRoute::names_segment(factor)
+                    }
                     _ => false,
                 };
                 AuthenticationRouteIdentity::new(segment).indicates_login()
@@ -262,6 +272,14 @@ mod tests {
             ("/auth/login/custom", true),
             ("/auth/login?connection=local", true),
             ("/auth/login#provider=unknown", true),
+            ("/signin/totp", false),
+            ("/login/2fa", false),
+            ("/auth/login/two-factor", false),
+            ("/v3/signin/challenge/totp", false),
+            ("/login/verify/otp", false),
+            ("/signin/challenge/custom", true),
+            ("/signin/custom/totp", true),
+            ("/signin/challenge/totp/custom", true),
         ] {
             assert_eq!(
                 AuthenticationControlIdentity::new(route).route_names_provider(),

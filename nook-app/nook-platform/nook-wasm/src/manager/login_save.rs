@@ -191,19 +191,16 @@ impl NookVaultManager {
                 ));
             };
             let new_id = nook_core::SecretId::generate()?.to_string();
-            let records = self
-                .replace_secret(old_id.to_string(), new_id, secret_type, data)
+            self.replace_secret(old_id.to_string(), new_id, secret_type, data)
                 .await
                 .map_err(|_| {
                     NookError::Database("Failed to replace the website login.".to_owned())
                 })?;
-            drop(records);
         } else {
             let id = nook_core::SecretId::generate()?.to_string();
-            let records = self.add_secret(id, secret_type, data).await.map_err(|_| {
+            self.add_secret(id, secret_type, data).await.map_err(|_| {
                 NookError::Database("Failed to create the website login.".to_owned())
             })?;
-            drop(records);
         }
         Ok(())
     }

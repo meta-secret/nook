@@ -63,9 +63,22 @@ test('the vault panel names its passphrases and keeps a failed unlock and its re
     })
   }
 
-  // Trying again unlocks in place.
+  // Trying again unlocks in place; while access is set up, the panel says
+  // so with its progress rather than staying silently locked.
   await page.evaluate(() => {
     localStorage.removeItem('nook_e2e_passkey_mode')
+    const seen = document.createElement('meta')
+    seen.id = 'nook-demo-access-progress-seen'
+    document.head.append(seen)
+    const observer = new MutationObserver(() => {
+      if (
+        document.querySelector('[data-testid="vault-panel-getting-access"]')
+      ) {
+        seen.dataset.seen = 'true'
+        observer.disconnect()
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
   })
   await unlock.click()
   await expect(page.getByTestId('vault-panel-beside')).toHaveAttribute(
@@ -73,6 +86,11 @@ test('the vault panel names its passphrases and keeps a failed unlock and its re
     'open',
     { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
   )
+  await expect(page.locator('#nook-demo-access-progress-seen')).toHaveAttribute(
+    'data-seen',
+    'true',
+  )
+  await expect(page.getByTestId('vault-panel-getting-access')).toHaveCount(0)
   await expect(page.getByTestId('vault-panel-unlock-error')).toHaveCount(0)
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)

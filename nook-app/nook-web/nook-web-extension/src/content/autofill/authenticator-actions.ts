@@ -280,6 +280,10 @@ class AuthenticatorInteraction {
       return
     }
     if (!authenticationActivityProgress.prepare()) return
+    // The 2FA picker lives in the side panel. Chrome opens it only within
+    // this click, so it opens before anything is awaited; when Nook is
+    // locked the panel is where it unlocks.
+    SiteSidePanel.open()
     this.ui.widgetState.busy = true
     continueButton.disabled = true
     const nookTypedArgs0_8: Parameters<typeof workflowUi.setFlightProgress>[0] =
@@ -345,7 +349,6 @@ class AuthenticatorInteraction {
       }
       const { response } = delivery
       if (response.kind === AuthenticatorPickerOpenResponseKind.Locked) {
-        SiteSidePanel.open()
         const nookTypedArgs0_12: Parameters<
           typeof workflowUi.setFlightProgress
         >[0] = {

@@ -5,12 +5,13 @@ import {
   type VaultStorageFailure,
 } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 import { VaultRecoveryErrorKind } from "$app-wasm";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import { VaultAccessStatus, type NookSecretRecord } from "$lib/nook";
+import { VaultAccessStatus } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
@@ -42,12 +43,11 @@ type StorageConnection =
 
 const log = browserLogRuntime.createLogger("connect");
 
-type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
 type VaultDiscoveryTimeoutConfiguration = ConstructorParameters<
   typeof VaultDiscoveryTimeout
 >[0];
 type VaultDiscoveryTimeoutRequest = DiscoveryCompletion<
-  SecretRecordCollection,
+  VaultChangeOutcome,
   VaultStorageFailure
 >;
 type SentinelCeremonyRequest = Parameters<
@@ -57,10 +57,6 @@ type SentinelCeremonyRequest = Parameters<
 /** Owns browser orchestration for one connection context. */
 export class VaultConnectionActions {
   constructor(private readonly state: VaultState) {}
-
-  private freeSecretRecords(records: SecretRecordCollection) {
-    for (const record of records) record.free();
-  }
 
   async loadDb() {
     const state = this.state;
@@ -226,8 +222,10 @@ export class VaultConnectionActions {
           break;
       }
 
-      const loadSecretRecords = async (): Promise<
-        Result<SecretRecordCollection, VaultStorageFailure>
+      // Connecting opens the vault without decrypting its records; the first
+      // page is read below.
+      const connectVault = async (): Promise<
+        Result<VaultChangeOutcome, VaultStorageFailure>
       > => {
         const connectArgs =
           storageConnection.kind === StorageConnectionKind.RemoteRecovery
@@ -239,26 +237,26 @@ export class VaultConnectionActions {
         state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
         const operation = (async () => {
           try {
-            const records =
-              recovery === RemoteVaultRecoveryState.ConnectFresh
-                ? await admitted.value.connect_fresh(
-                    connectArgs.mode,
-                    connectArgs.pat,
-                    connectArgs.repo,
-                  )
-                : await admitted.value.connect(
-                    connectArgs.mode,
-                    connectArgs.pat,
-                    connectArgs.repo,
-                  );
-            return storageOk(records);
+            if (recovery === RemoteVaultRecoveryState.ConnectFresh)
+              await admitted.value.connect_fresh(
+                connectArgs.mode,
+                connectArgs.pat,
+                connectArgs.repo,
+              );
+            else
+              await admitted.value.connect(
+                connectArgs.mode,
+                connectArgs.pat,
+                connectArgs.repo,
+              );
+            return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
         const timeoutRequest: VaultDiscoveryTimeoutRequest = {
           operation,
-          releaseLateValue: (records) => this.freeSecretRecords(records),
+          releaseLateValue: () => {},
         };
         const timeoutConfiguration: VaultDiscoveryTimeoutConfiguration = {
           timeoutMs: 30_000,
@@ -267,20 +265,18 @@ export class VaultConnectionActions {
           timeoutRequest,
         );
       };
-      const rawRecords = await state.enqueueStorage(loadSecretRecords);
-      if (rawRecords.isErr()) {
+      const connected = await state.enqueueStorage(connectVault);
+      if (connected.isErr()) {
         state.isAuthenticated = false;
         const ceremonyRequest: SentinelCeremonyRequest = {
-          recoveryKind: rawRecords.error.recoveryKind,
+          recoveryKind: connected.error.recoveryKind,
         };
         const surfaced = await new SentinelUnlockActions(
           state,
         ).surfaceSentinelCeremonyIfNeeded(ceremonyRequest);
-        if (!surfaced)
-          state.errorMsg = state.t(rawRecords.error.translationKey);
+        if (!surfaced) state.errorMsg = state.t(connected.error.translationKey);
         return;
       }
-      this.freeSecretRecords(rawRecords.value);
       const loadSecretPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",
         requestedOffset: 0,

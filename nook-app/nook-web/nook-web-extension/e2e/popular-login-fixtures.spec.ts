@@ -16,6 +16,7 @@ import {
   ShellTemplatePilotExpectation,
   siteShellCount,
 } from './mock-auth/fixtures/resolve-site-fixture.mjs'
+import { RealSidePanel } from './helpers/real-side-panel'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const catalogPath = path.resolve(
@@ -862,16 +863,22 @@ test.describe('popular login fixture coverage', () => {
         passwordThenOtpWidget.getByText('Fill your 2FA code'),
       ).toBeVisible()
 
-      const pickerPromise = paired.context.waitForEvent('page')
       await passwordThenOtpWidget
         .getByRole('button', { name: 'Fill 2FA code' })
         .click()
-      const picker = await pickerPromise
-      await picker.waitForURL(/intent=authenticator-picker/)
-      await picker.getByRole('button', { name: /Password then OTP/ }).click()
-      await expect(
-        passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
-      ).toHaveValue(/^\d{6}$/)
+      // The click opens the real side panel, where the 2FA item is chosen.
+      const sidePanel = await RealSidePanel.attach(paired.userDataDir)
+      try {
+        await sidePanel.page
+          .getByTestId('authenticator-picker')
+          .getByRole('button', { name: /Password then OTP/ })
+          .click()
+        await expect(
+          passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
+        ).toHaveValue(/^\d{6}$/)
+      } finally {
+        await sidePanel.detach()
+      }
       await passwordThenOtpPage.getByRole('button', { name: 'Verify' }).click()
       await expect(
         passwordThenOtpPage.getByTestId('mock-auth-success'),

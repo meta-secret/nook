@@ -9,10 +9,8 @@ import {
 import { WebsiteAuthenticatorCanceledMessageType } from '../../lib/authenticator-picker-messages'
 import type { AccountPickerPageMessage } from './account-picker-page-target'
 import {
-  AccountPickerSurfaceKind,
   AccountPickerPageTarget,
   AuthenticatorPickerLoadKind,
-  type AccountPickerSurface,
   accountPickerAuthorizationGeneration,
   accountPickerAuthorizationCleanupPending,
   accountPickerAuthorizationIsCurrent,
@@ -327,56 +325,9 @@ class AuthenticatorEnrollmentOperations {
       request,
       authorizationGeneration,
     }
+    // The page opened the side panel with the same click; the panel finds
+    // this request for its window and shows the picker there.
     if (!(await accountPickerSessions.storeAuthenticatorPicker(storeArgs))) {
-      return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
-    }
-    const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
-    pickerUrl.searchParams.set('intent', 'authenticator-picker')
-    pickerUrl.searchParams.set('request', requestId)
-    let createdSurface: AccountPickerSurface =
-      accountPickerSessions.emptyAccountPickerSurface()
-    try {
-      if (chrome.windows?.create) {
-        const nookTypedArgs0_2: Parameters<typeof chrome.windows.create>[0] = {
-          url: pickerUrl.toString(),
-          type: 'popup',
-          width: 460,
-          height: 620,
-          focused: true,
-        }
-        const createdWindow = await chrome.windows.create(nookTypedArgs0_2)
-        if (
-          createdWindow &&
-          typeof createdWindow === 'object' &&
-          'id' in createdWindow &&
-          typeof createdWindow.id === 'number'
-        ) {
-          createdSurface = {
-            kind: AccountPickerSurfaceKind.Window,
-            id: createdWindow.id,
-          }
-        }
-      } else {
-        const nookTypedArgs0_3: Parameters<typeof chrome.tabs.create>[0] = {
-          url: pickerUrl.toString(),
-        }
-        const createdTab = await chrome.tabs.create(nookTypedArgs0_3)
-        if ('id' in createdTab && typeof createdTab.id === 'number') {
-          createdSurface = {
-            kind: AccountPickerSurfaceKind.Tab,
-            id: createdTab.id,
-          }
-        }
-      }
-    } catch {
-      await accountPickerSessions.removeAuthenticatorPicker(requestId)
-      return { ok: false, reason: 'authenticator-picker-open-failed' }
-    }
-    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-      await Promise.allSettled([
-        accountPickerSessions.removeAuthenticatorPicker(requestId),
-        accountPickerSessions.closeAccountPickerSurface(createdSurface),
-      ])
       return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
     }
     return {

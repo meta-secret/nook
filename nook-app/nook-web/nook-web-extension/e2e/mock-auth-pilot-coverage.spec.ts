@@ -9,6 +9,7 @@ import { MOCK_AUTH_SECOND_TOTP_SECRET, startMockAuthServer } from './mock-auth'
 import { MockAuthProviderScenarios } from './mock-auth-provider-scenarios'
 import { NamedLoginScenario } from './login-form-named-properties'
 import { NamecheapOtpScenario } from './namecheap-otp-challenge'
+import { RealSidePanel } from './helpers/real-side-panel'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
   test('fills the observed Namecheap GET challenge through the side-panel content receiver without submitting', ({
@@ -85,17 +86,22 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const otpPage = await paired.context.newPage()
       await otpPage.goto(`${mockAuth.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
-      const emptyPickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const emptyPicker = await emptyPickerPromise
-      await emptyPicker.waitForURL(/intent=authenticator-picker/)
-      await expect(
-        emptyPicker.getByRole('heading', { name: 'Choose a 2FA code' }),
-      ).toBeVisible()
-      await expect(
-        emptyPicker.getByText('No matching 2FA items.'),
-      ).toBeVisible()
-      await emptyPicker.close()
+      // The click opens the real side panel, which has no 2FA item to offer.
+      const sidePanel = await RealSidePanel.attach(paired.userDataDir)
+      try {
+        const emptyPicker = sidePanel.page.getByTestId('authenticator-picker')
+        await expect(
+          emptyPicker.getByRole('heading', { name: /Choose a 2FA code/ }),
+        ).toBeVisible()
+        await expect(
+          emptyPicker.getByText('No matching 2FA items.'),
+        ).toBeVisible()
+        await emptyPicker.getByTestId('authenticator-cancel').click()
+        await expect(emptyPicker).toHaveCount(0)
+      } finally {
+        await sidePanel.detach()
+      }
     } finally {
       await paired.context.close()
       await mockAuth.close()
@@ -780,29 +786,41 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await otpPage.goto(`${mockAuth.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
-      const pickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const picker = await pickerPromise
-      await picker.waitForURL(/intent=authenticator-picker/)
-      await expect(
-        otpWidget.getByText(
-          'Choose a saved 2FA item in the Nook window. You can search all 2FA items in your vault.',
-        ),
-      ).toBeVisible()
-      await expect(
-        picker.getByTestId('authenticator-destination'),
-      ).toContainText(`Code will be filled on ${mockAuth.origin}.`)
-      await expect(otpWidget.getByText('alice-2fa@nook.test')).toHaveCount(0)
-      await expect(otpWidget.getByText('bob-2fa@nook.test')).toHaveCount(0)
-      await expect(picker.getByText('Mock Auth Primary')).toBeVisible()
-      await expect(picker.getByText('Mock Auth Secondary')).toBeVisible()
-      await picker.getByTestId('authenticator-search').fill('bob-2fa')
-      await expect(picker.getByText('Mock Auth Primary')).toHaveCount(0)
-      await picker.getByRole('button', { name: /Mock Auth Secondary/ }).click()
-      await expect(
-        otpPage.locator('[autocomplete="one-time-code"]'),
-      ).toHaveValue(/^\d{6}$/)
-      await expect.poll(() => picker.isClosed()).toBe(true)
+      // The click opens the real side panel, where the 2FA item is chosen;
+      // no other window opens and the page never lists the items.
+      const sidePanel = await RealSidePanel.attach(paired.userDataDir)
+      try {
+        const picker = sidePanel.page.getByTestId('authenticator-picker')
+        await expect(
+          otpWidget.getByText(
+            'Choose a 2FA item in the Nook side panel. You can search all 2FA items in your vault.',
+          ),
+        ).toBeVisible()
+        await expect(
+          picker.getByTestId('authenticator-destination'),
+        ).toContainText(`Code will be filled on ${mockAuth.origin}.`)
+        await expect(otpWidget.getByText('alice-2fa@nook.test')).toHaveCount(0)
+        await expect(otpWidget.getByText('bob-2fa@nook.test')).toHaveCount(0)
+        await expect(picker.getByText('Mock Auth Primary')).toBeVisible()
+        await expect(picker.getByText('Mock Auth Secondary')).toBeVisible()
+        await picker.getByTestId('authenticator-search').fill('bob-2fa')
+        await expect(picker.getByText('Mock Auth Primary')).toHaveCount(0)
+        await picker
+          .getByRole('button', { name: /Mock Auth Secondary/ })
+          .click()
+        await expect(
+          otpPage.locator('[autocomplete="one-time-code"]'),
+        ).toHaveValue(/^\d{6}$/)
+        await expect(picker).toHaveCount(0)
+        expect(
+          paired.context
+            .pages()
+            .some((page) => page.url().includes('intent=authenticator-picker')),
+        ).toBe(false)
+      } finally {
+        await sidePanel.detach()
+      }
     } finally {
       await paired.context.close()
       await mockAuth.close()

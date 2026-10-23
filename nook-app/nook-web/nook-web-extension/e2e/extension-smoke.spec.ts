@@ -568,7 +568,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
     await expect(simplePage.getByTestId('app-success')).toBeVisible()
-    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await expect(simplePage).toHaveURL((url) =>
+      url.pathname.endsWith('/identities'),
+    )
     await leaveFirstRunReady(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 

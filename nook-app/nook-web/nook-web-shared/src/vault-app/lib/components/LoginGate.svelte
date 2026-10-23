@@ -1,5 +1,9 @@
 <script lang="ts">
   import {
+    PairedIdentityUnlockScope,
+    type PairedIdentityUnlockTarget,
+  } from '$lib/app/extension-identity-adoption'
+  import {
     WorkspaceLocation,
     WorkspacePath,
     WorkspaceRouteLookupKind,
@@ -82,10 +86,7 @@
     type UnlockDestination,
     type UnlockPage,
   } from '$lib/components/identities/card-unlock'
-  import {
-    IdentitySwitch,
-    IdentitySwitchOutcome,
-  } from '$lib/components/identities/identity-switch'
+  import { LockedIdentitySwitch } from '$lib/components/identities/identity-switch'
   import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
   import { deviceKeySetupNeeded } from '$lib/vault/device-key-unlock'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -161,7 +162,9 @@
     /** Unlock the selected vault from its identity card: this browser's key
      * unlocks on the card, never in the page-level sheet. */
     onUnlockOnCard: () => void | Promise<void>
-    onUnlockPairedIdentity: () => void | Promise<void>
+    onUnlockPairedIdentity: (
+      target: PairedIdentityUnlockTarget,
+    ) => void | Promise<void>
     /** How the identity is protected; its unlocked card offers the
      * checklist before any vault is open. */
     identityHealth?: NookIdentityHealth
@@ -339,6 +342,11 @@
     deviceKeySetupNeeded(vault.deviceProtectionStatus),
   )
 
+  /** The paired extension unlocks for the vault this page has selected. */
+  const pageVaultUnlock: PairedIdentityUnlockTarget = {
+    scope: PairedIdentityUnlockScope.PageVault,
+  }
+
   /** Unlock on a locked card unlocks the identity, and no vault is opened:
    * a vault opens from its row. */
   async function unlockIdentity(): Promise<void> {
@@ -349,7 +357,7 @@
     }
     switch (identityUnlockRoute(routeRequest)) {
       case IdentityUnlockRoute.PairedExtension:
-        await onUnlockPairedIdentity()
+        await onUnlockPairedIdentity(pageVaultUnlock)
         return
       case IdentityUnlockRoute.Pin:
         pinPrompt = { kind: PinPromptKind.Identity }
@@ -366,22 +374,9 @@
     await loadUnlockedIdentityProviders()
   }
 
-  /** "Use identity" left the identity locked (a PIN, or a dismissed
-   * passkey prompt), so its providers are still unread. */
-  let providersAwaitUnlock = false
-
-  async function useIdentity(target: IdentityVaultTarget): Promise<void> {
-    const outcome = await new IdentitySwitch(vault).to(target.identityId)
-    providersAwaitUnlock = outcome === IdentitySwitchOutcome.Locked
-  }
-
-  /** Read the providers of an identity switched to while locked, now that
-   * its key is unlocked. */
-  async function loadUnlockedIdentityProviders(): Promise<void> {
-    if (!providersAwaitUnlock || !vault.deviceProtectionReady) return
-    providersAwaitUnlock = false
-    await new IdentitySwitch(vault).loadProviders()
-  }
+  const identitySwitch = new LockedIdentitySwitch(untrack(() => vault))
+  const loadUnlockedIdentityProviders = () =>
+    identitySwitch.loadProvidersOnceUnlocked()
 
   async function unlockWithPin(pin: string): Promise<void> {
     const prompt = pinPrompt
@@ -930,14 +925,16 @@
     onNewVault={openNewVault}
     onSelectVault={(storeId: string) => void selectVault(storeId)}
     onUnlockVault={unlockVaultInPlace}
-    onUnlockElsewhere={() => onUnlockPairedIdentity()}
+    onUnlockElsewhere={(target: PairedIdentityUnlockTarget) =>
+      onUnlockPairedIdentity(target)}
     onManageVault={manageSection}
     onManageSection={manageSection}
     {...identityHealth ? { currentHealth: identityHealth } : {}}
     onUnlock={() => unlockIdentity()}
     onLock={lockIdentity}
     onNewIdentity={newIdentity}
-    onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
+    onUseIdentity={(target: IdentityVaultTarget) =>
+      void identitySwitch.use(target.identityId)}
     onCardsShown={(shown: boolean) => (identityCardsShown = shown)}
     onClosePanels={closeSidePanels}
     {...accessBesideCard ? { accessPanel: accessSheetBeside } : {}}

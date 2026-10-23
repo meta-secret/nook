@@ -6,6 +6,7 @@ passwords, settings) adds its rail. Every page is one framed sheet: a page
 band, the scrolling page and the status line.
 -->
 <script lang="ts">
+  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
   import { WorkspaceLocation, WorkspaceRoute } from '$lib/app/workspace-route'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   type SecretAddModeChange = {
@@ -96,6 +97,7 @@ band, the scrolling page and the status line.
     onExtensionOpenPanel,
     onSettingsReconnect,
     onEditorOpenChange,
+    onUnlockPairedIdentity,
   }: {
     vault: VaultState
     extensionSetupState: ExtensionSetupOffer
@@ -106,6 +108,9 @@ band, the scrolling page and the status line.
     onExtensionOpenPanel: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
+    /** Use an identity whose key the paired extension holds, leaving the
+     * one in use. */
+    onUnlockPairedIdentity: (target: PairedIdentityUnlockTarget) => Promise<void>
   } = $props()
 
   const appVersion = '0.1.0'
@@ -566,6 +571,7 @@ band, the scrolling page and the status line.
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
+      {...SUPPORTS_EXTENSION ? { onUnlockElsewhere: onUnlockPairedIdentity } : {}}
       currentHealth={identityHealth}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}

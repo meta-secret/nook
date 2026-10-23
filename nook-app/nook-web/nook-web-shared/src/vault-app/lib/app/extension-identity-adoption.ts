@@ -60,6 +60,25 @@ export type PairedExtensionIdentityUnlockRequest = {
   readonly source: PairedExtensionIdentitySource;
 };
 
+/** Which vault a paired extension unlock asks for. */
+export enum PairedIdentityUnlockScope {
+  /** The vault this page has open or selected. */
+  PageVault = "page-vault",
+  /** A vault of the card the unlock came from. */
+  CardVault = "card-vault",
+}
+
+/** An unlock of the identity whose key the paired extension holds. From a
+ * card while another identity is in use, that identity is left first, as
+ * switching to an identity stored on this browser does. */
+export type PairedIdentityUnlockTarget =
+  | { readonly scope: PairedIdentityUnlockScope.PageVault }
+  | {
+      readonly scope: PairedIdentityUnlockScope.CardVault;
+      readonly storeId: string;
+      readonly leavesCurrentIdentity: boolean;
+    };
+
 /**
  * Unlock on a card whose key the paired extension holds: the identity
  * unlocks alone, as a passkey on this browser unlocks its own card, and no

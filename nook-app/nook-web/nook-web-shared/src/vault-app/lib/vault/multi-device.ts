@@ -7,6 +7,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { JoinEnrollmentState, ProviderSyncFreshness } from "$app-wasm";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 const log = browserLogRuntime.createLogger("vault-devices");
 
@@ -45,28 +46,26 @@ export class VaultDeviceActions {
     state.isVerifying = true;
     try {
       const storageArgs = state.wasmStorageArgs();
-      const rawRecords = await state.enqueueStorage(async () => {
+      const enrolled = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.enroll_and_connect(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
-              secretsKey,
-              membersKey,
-            ),
+          await admittedManager.value.enroll_and_connect(
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
+            secretsKey,
+            membersKey,
           );
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       });
-      if (rawRecords.isErr()) {
-        state.errorMsg = state.t(rawRecords.error.translationKey);
+      if (enrolled.isErr()) {
+        state.errorMsg = state.t(enrolled.error.translationKey);
         return;
       }
-      for (const record of rawRecords.value) record.free();
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",
         requestedOffset: 0,

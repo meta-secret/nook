@@ -101,9 +101,12 @@
   import {
     adoptExtensionIdentity,
     PairedExtensionIdentityUnlock,
+    PairedIdentityUnlockScope,
     type ExtensionIdentityAdoptionRequest,
     type PairedExtensionIdentityUnlockRequest,
+    type PairedIdentityUnlockTarget,
   } from '$lib/app/extension-identity-adoption'
+  import { IdentitySessionTransition } from '$lib/components/devices-access/identity-session-transition'
 
   const IS_SIMPLE_APP = configured_vault_application_is_simple()
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
@@ -283,11 +286,20 @@
   }
 
   /** Unlock on a card whose key the paired extension holds: the identity
-   * unlocks alone and no vault opens; one opens from its row. */
-  async function unlockPairedIdentity(): Promise<void> {
+   * unlocks alone and no vault opens; one opens from its row. Used while
+   * another identity is in use, that one is left first. */
+  async function unlockPairedIdentity(
+    target: PairedIdentityUnlockTarget,
+  ): Promise<void> {
+    let storeId = existingVaultImportLifecycle.unlockStoreId
+    if (target.scope === PairedIdentityUnlockScope.CardVault) {
+      storeId = target.storeId
+      if (target.leavesCurrentIdentity)
+        new IdentitySessionTransition(vault).clearPriorIdentity()
+    }
     const unlock: PairedExtensionIdentityUnlockRequest = {
       vault,
-      storeId: existingVaultImportLifecycle.unlockStoreId,
+      storeId,
       source: connectionBrowser,
     }
     await new PairedExtensionIdentityUnlock(unlock).unlock()
@@ -971,6 +983,7 @@
     onExtensionOpenPanel: () => void extensionSetupOffer.openSidePanel(),
     onSettingsReconnect: handleSettingsReconnect,
     onEditorOpenChange: setSecretsAddOpen,
+    onUnlockPairedIdentity: unlockPairedIdentity,
   }}
   onNavigateHome={routeCoordinator.navigateHome}
   onToggleColorMode={toggleColorMode}

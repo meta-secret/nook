@@ -6,6 +6,7 @@ join) sit between the hero and the cards.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
+  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
   import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -95,7 +96,9 @@ join) sit between the hero and the cards.
     /** Unlock a vault from its panel without going into it. */
     onUnlockVault?: (storeId: string) => void
     /** Unlock an identity whose key the paired extension holds. */
-    onUnlockElsewhere?: () => void | Promise<void>
+    onUnlockElsewhere?: (
+      target: PairedIdentityUnlockTarget,
+    ) => void | Promise<void>
     /** One of a vault's own pages, from its panel beside the card. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
@@ -445,8 +448,11 @@ join) sit between the hero and the cards.
         {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryFailed)}
       </p>
     {:else if loader.state.kind === IdentityDirectoryLoadKind.Ready}
+      <!-- Cards keep one regular width; as many sit in a row as the page's
+           own space holds, so a browser side panel narrows the row, not the
+           cards. A card with a panel open spans the whole row. -->
       <section
-        class="grid min-w-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3"
+        class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),22rem))] items-stretch gap-4"
         aria-label={vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         data-testid="identity-cards"
       >

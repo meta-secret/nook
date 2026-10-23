@@ -8,6 +8,7 @@ import {
   IdentityVaultRowState,
   type IdentityCardView,
 } from '$lib/components/identities/identity-card-model'
+import { PairedIdentityUnlockScope } from '$lib/app/extension-identity-adoption'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 function card(status: IdentityCardStatus): IdentityCardView {
@@ -177,6 +178,7 @@ describe('identity card unlock', () => {
   function renderLocked(status: IdentityCardStatus, selectedStoreId: string) {
     const onUnlock = vi.fn()
     const onUnlockElsewhere = vi.fn()
+    const onUseIdentity = vi.fn()
     const props: ComponentProps<typeof IdentityCard> = {
       vault: VaultStateTestFixture.create(),
       card: card(status),
@@ -184,8 +186,14 @@ describe('identity card unlock', () => {
       onOpenVault: () => {},
       onUnlock,
       onUnlockElsewhere,
+      onUseIdentity,
     }
-    return { view: render(IdentityCard, props), onUnlock, onUnlockElsewhere }
+    return {
+      view: render(IdentityCard, props),
+      onUnlock,
+      onUnlockElsewhere,
+      onUseIdentity,
+    }
   }
 
   test('a card keyed on this browser unlocks the identity with its key', async () => {
@@ -212,9 +220,53 @@ describe('identity card unlock', () => {
     expect(onUnlock).not.toHaveBeenCalled()
   })
 
-  test('an identity of another installation this page has no vault of offers no unlock', () => {
-    const { view } = renderLocked(IdentityCardStatus.Elsewhere, '')
+  test('an identity of another installation not in use here is used through the extension, leaving the one in use', async () => {
+    const onUseIdentity = vi.fn()
+    const onUnlockElsewhere = vi.fn()
+    const dormant: IdentityCardView = {
+      ...card(IdentityCardStatus.Elsewhere),
+      current: false,
+      vaults: [
+        {
+          storeId: 'store-qwe',
+          label: 'qwe',
+          state: IdentityVaultRowState.Dormant,
+        },
+      ],
+    }
+    const props: ComponentProps<typeof IdentityCard> = {
+      vault: VaultStateTestFixture.create(),
+      card: dormant,
+      selectedStoreId: '',
+      onOpenVault: () => {},
+      onUnlockElsewhere,
+      onUseIdentity,
+    }
+    const view = render(IdentityCard, props)
 
+    // Its key is not on this browser, so switching to it locally cannot
+    // work: the paired extension hands it over for its own vault.
     expect(view.queryByTestId('identity-unlock')).not.toBeTruthy()
+    await fireEvent.click(view.getByTestId('identity-use'))
+    expect(onUseIdentity).not.toHaveBeenCalled()
+    expect(onUnlockElsewhere).toHaveBeenCalledWith({
+      scope: PairedIdentityUnlockScope.CardVault,
+      storeId: 'store-qwe',
+      leavesCurrentIdentity: true,
+    })
+  })
+
+  test('with no identity in use, an identity of another installation unlocks for its own vault even with none selected', async () => {
+    const { view, onUnlockElsewhere } = renderLocked(
+      IdentityCardStatus.Elsewhere,
+      '',
+    )
+
+    await fireEvent.click(view.getByTestId('identity-unlock'))
+    expect(onUnlockElsewhere).toHaveBeenCalledWith({
+      scope: PairedIdentityUnlockScope.CardVault,
+      storeId: 'store-qwe',
+      leavesCurrentIdentity: false,
+    })
   })
 })

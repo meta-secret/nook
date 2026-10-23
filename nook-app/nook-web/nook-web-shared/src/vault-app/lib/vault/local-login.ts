@@ -36,6 +36,7 @@ import {
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 const log = browserLogRuntime.createLogger("vault-local");
 
@@ -494,23 +495,22 @@ export class VaultLoginActions {
         state.errorMsg = state.t(architecture.error.translationKey);
         return;
       }
-      const rawRecords = await state.enqueueStorage(async () => {
+      const connected = await state.enqueueStorage(async () => {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
         try {
-          const records = creatingAdditionalVault
-            ? await manager.value.connect_fresh("local", "", "")
-            : await manager.value.connect("local", "", "");
-          return storageOk(records);
+          if (creatingAdditionalVault)
+            await manager.value.connect_fresh("local", "", "");
+          else await manager.value.connect("local", "", "");
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       });
-      if (rawRecords.isErr()) {
-        state.errorMsg = state.t(rawRecords.error.translationKey);
+      if (connected.isErr()) {
+        state.errorMsg = state.t(connected.error.translationKey);
         return;
       }
-      for (const record of rawRecords.value) record.free();
       if (handoffAwaitingVaultCreation) {
         const manager = state.admitManager();
         if (manager.isErr()) {

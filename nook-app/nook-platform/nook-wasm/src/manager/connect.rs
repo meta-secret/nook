@@ -32,8 +32,8 @@ use nook_core::MemberLabelState;
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
+use crate::NookError;
 use crate::storage::identity_record;
-use crate::{NookError, NookSecretRecord};
 use js_sys::Error as JsNativeError;
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
@@ -463,10 +463,10 @@ mod tests {
         manager.device.id = identity.device_id().as_str().to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
 
-        let records = manager
+        manager
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;
-        assert!(records.is_empty());
+        assert!(manager.vault.meta.secrets.is_empty());
         assert!(!manager.vault.store_id.is_empty());
         assert!(manager.event_log.enabled);
         assert_eq!(manager.vault.unlock, VaultUnlock::Keys);
@@ -530,8 +530,8 @@ mod tests {
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;
 
-        let records = manager.initialize_empty().await?;
-        assert!(records.is_empty());
+        manager.initialize_empty().await?;
+        assert!(manager.vault.meta.secrets.is_empty());
         assert!(!manager.vault.store_id.is_empty());
         assert!(manager.event_log.enabled);
         assert!(!manager.vault.last_synced_content.is_empty());
@@ -658,14 +658,15 @@ impl NookVaultManager {
         Ok(())
     }
 
-    // Connects to storage (loads, decrypts, and updates session state)
-    // Returns js_sys::Array of NookSecretRecord on success
+    // Connects to storage (loads, decrypts, and updates session state).
+    // Secrets are read afterwards through paged queries, so opening never
+    // decrypts every record.
     pub async fn connect(
         &mut self,
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         self.connect_internal(
             storage_mode,
             github_pat,
@@ -681,7 +682,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         self.connect_internal(
             storage_mode,
             github_pat,
@@ -709,7 +710,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
         genesis_intent: nook_core::VaultGenesisIntent,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         tracing::info!(
             scope = "wasm-connect",
@@ -761,12 +762,8 @@ impl NookVaultManager {
             self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
-        let records = VerifiedVaultAccessFlow::Connect
-            .complete(
-                self.get_records(),
-                identity.device_id(),
-                &self.vault.store_id,
-            )
+        VerifiedVaultAccessFlow::Connect
+            .complete(Ok(()), identity.device_id(), &self.vault.store_id)
             .await?;
         let pending_cleanup = match match completed_genesis {
             SimpleGenesisProgress::Pending(completed) => {
@@ -794,10 +791,10 @@ impl NookVaultManager {
             scope = "wasm-connect",
             storage = %storage_mode,
             genesis = use_genesis,
-            secrets = records.len(),
+            secrets = self.vault.meta.secrets.len(),
             "connect complete"
         );
-        Ok(records)
+        Ok(())
     }
 
     async fn connect_existing_content(

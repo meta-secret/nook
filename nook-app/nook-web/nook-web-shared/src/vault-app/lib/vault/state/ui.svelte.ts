@@ -6,6 +6,10 @@
  */
 
 import { UnlockReturn } from "$lib/app/unlock-return";
+import {
+  IdentityDirectoryLoadKind,
+  type IdentityDirectoryLoadState,
+} from "$lib/components/devices-access/identity-directory-view";
 
 export enum WorkspaceSection {
   Vault = "vault",
@@ -97,4 +101,10 @@ export class VaultUiState {
    * under New vault). The unlocked workspace sets it before locking, so
    * the locked identities page continues the import on the card. */
   vaultImportOpen = $state(false);
+  /** The identity directory as last read, shared by every identities hub:
+   * the workspace that replaces the login screen as a vault opens shows the
+   * same cards at once and reads them again behind them. */
+  identityDirectory = $state<IdentityDirectoryLoadState>({
+    kind: IdentityDirectoryLoadKind.Loading,
+  });
 }

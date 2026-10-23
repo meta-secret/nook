@@ -4,6 +4,7 @@ import {
   VaultStorageFailure as StorageOperationFailure,
 } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
@@ -160,12 +161,11 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.resolve_projection_conflict(
-              oldSecretId,
-              chosenSecretId,
-            ),
+          await admittedManager.value.resolve_projection_conflict(
+            oldSecretId,
+            chosenSecretId,
           );
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -174,7 +174,6 @@ export class SyncConflictActions {
         state.errorMsg = state.t(raw.error.translationKey);
         return;
       }
-      for (const record of raw.value) record.free();
       const secretRefresh1 = await state.refreshSecretsFromSession();
       if (secretRefresh1.isErr()) {
         state.errorMsg = state.t(secretRefresh1.error.translationKey);

@@ -146,7 +146,7 @@ function connectionScenario(
   state.dismissSuccess = vi.fn()
   state.showSuccess = vi.fn()
   state.resolveErrorMessage = (message: string) => message
-  manager.connect = vi.fn(async () => [])
+  manager.connect = vi.fn(async () => {})
 
   const scenario = {
     manager,
