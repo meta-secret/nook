@@ -343,9 +343,10 @@ fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> any
     let cleanup = "&& rm -rf target/llvm-cov-target";
     assert_eq!(product.matches(cleanup).count(), 1);
     assert!(terminal.ends_with(cleanup));
-    assert!(terminal.ends_with(
-        "&& nook-sccache-report native-core-coverage \\n&& rm -rf target/llvm-cov-target"
-    ));
+    assert_eq!(
+        terminal.lines().rev().nth(1),
+        Some("&& nook-sccache-report native-core-coverage \\")
+    );
     for required in [
         "&& cargo llvm-cov nextest --no-clean --profile ci -p nook-core",
         "&& test \"$coverage_status\" -eq 0",
