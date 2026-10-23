@@ -32,7 +32,7 @@ impl WorkflowRuntimeContract<'_> {
         assert!(
             pr.matches("(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'")
                 .count()
-                == 2
+                == 4
                 && pr
                     .matches("(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest'")
                     .count()
@@ -112,8 +112,8 @@ impl WorkflowRuntimeContract<'_> {
     fn assert_native_build_envelope(&self) {
         let root = self.root;
         let pr = root.read(".github/workflows/pr.yml");
-        assert_eq!(pr.matches("    runs-on:").count(), 3);
-        assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 1);
+        assert_eq!(pr.matches("    runs-on:").count(), 5);
+        assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 2);
         assert!(pr.contains("timeout-minutes: 240"));
     }
 

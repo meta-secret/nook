@@ -64,28 +64,51 @@ class DockerizedRustContract {
       uses: z.string().optional(),
       if: z.string().optional(),
       "continue-on-error": z.boolean().optional(),
+      env: z.record(z.string(), z.string()).optional(),
     });
-    const jobContract = z.object({ steps: z.array(stepContract) });
+    const jobContract = z.object({
+      steps: z.array(stepContract),
+      needs: z.array(z.string()).optional(),
+      permissions: z.record(z.string(), z.string()).optional(),
+    });
     const workflow = z
       .object({
         jobs: z.record(z.string(), jobContract),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
     expect(Object.keys(workflow.jobs)).toEqual([
+      "scope",
       "prepare",
+      "verify",
       "browser",
       "validation",
     ]);
-    const steps = jobContract.parse(workflow.jobs.prepare).steps;
-    let previous = -1;
-    for (const command of ["task --silent ci:pr:validate"]) {
-      const index = steps.findIndex((step) => step.run === command);
-      expect(index).toBeGreaterThan(previous);
-      const step = stepContract.parse(steps[index]);
-      expect(step.if).not.toContain("always()");
+    for (const branch of [
+      { job: "prepare", command: "task --silent ci:pr:browser" },
+      { job: "verify", command: "task --silent ci:pr:verification" },
+    ]) {
+      const job = jobContract.parse(workflow.jobs[branch.job]);
+      expect(job.needs).toEqual(["scope"]);
+      const step = stepContract.parse(
+        job.steps.find((entry) => entry.run === branch.command),
+      );
+      expect(step.if).toBe("needs.scope.outputs.validation == 'true'");
       expect(step["continue-on-error"]).not.toBe(true);
-      previous = index;
     }
+    expect(jobContract.parse(workflow.jobs.browser).needs).toEqual([
+      "scope",
+      "prepare",
+    ]);
+    expect(jobContract.parse(workflow.jobs.validation).needs).toEqual([
+      "scope",
+      "prepare",
+      "verify",
+      "browser",
+    ]);
+    expect(jobContract.parse(workflow.jobs.scope).permissions).toEqual({
+      contents: "read",
+      packages: "read",
+    });
     const finalSteps = jobContract.parse(workflow.jobs.validation).steps;
     const checkoutStep = stepContract.parse(finalSteps[0]);
     expect(checkoutStep.uses).toBe("actions/checkout@v7");
@@ -101,6 +124,62 @@ class DockerizedRustContract {
     expect(guardStep.run).toContain('test "$PREPARE_RESULT" = success');
     expect(guardStep.run).toContain('test "$BROWSER_RESULT" = success');
     expect(guardStep.run).toContain('test "$BROWSER_RESULT" = skipped');
+    expect(guardStep.run).toContain('test "$SCOPE_RESULT" = success');
+    expect(guardStep.run).toContain('test "$VERIFY_RESULT" = success');
+    expect(guardStep.run).toContain('test "$PREPARE_RESULT" = skipped');
+    expect(guardStep.env).toEqual({
+      SCOPE_RESULT: "${{ needs.scope.result }}",
+      VERIFY_RESULT: "${{ needs.verify.result }}",
+      PREPARE_REQUIRED: "${{ needs.scope.outputs.validation == 'true' }}",
+      PREPARE_RESULT: "${{ needs.prepare.result }}",
+      BROWSER_RESULT: "${{ needs.browser.result }}",
+      BROWSER_REQUIRED:
+        "${{ inputs.full_e2e_requested && needs.scope.outputs.validation == 'true' }}",
+    });
+    const guardCommand = z.string().parse(guardStep.run);
+    for (const selected of [
+      {
+        PREPARE_REQUIRED: "false",
+        BROWSER_REQUIRED: "false",
+        PREPARE_RESULT: "skipped",
+        BROWSER_RESULT: "skipped",
+      },
+      {
+        PREPARE_REQUIRED: "true",
+        BROWSER_REQUIRED: "false",
+        PREPARE_RESULT: "success",
+        BROWSER_RESULT: "skipped",
+      },
+      {
+        PREPARE_REQUIRED: "true",
+        BROWSER_REQUIRED: "true",
+        PREPARE_RESULT: "success",
+        BROWSER_RESULT: "success",
+      },
+    ]) {
+      const successful = {
+        SCOPE_RESULT: "success",
+        VERIFY_RESULT: "success",
+        ...selected,
+      };
+      const accepted = spawnSync("bash", ["-c", guardCommand], {
+        env: { ...process.env, ...successful },
+      });
+      expect(accepted.status).toBe(0);
+      for (const result of [
+        "SCOPE_RESULT",
+        "VERIFY_RESULT",
+        "PREPARE_RESULT",
+        "BROWSER_RESULT",
+      ] as const) {
+        for (const status of ["success", "failure", "cancelled", "skipped"]) {
+          const outcome = spawnSync("bash", ["-c", guardCommand], {
+            env: { ...process.env, ...successful, [result]: status },
+          });
+          expect(outcome.status === 0).toBe(status === successful[result]);
+        }
+      }
+    }
     expect(guardStep).not.toHaveProperty("if");
     expect(guardStep["continue-on-error"]).not.toBe(true);
     const restore = finalSteps.findIndex(
@@ -117,7 +196,26 @@ class DockerizedRustContract {
       "github.event.pull_request.head.repo.full_name == github.repository",
     );
     const prTasks = this.read("nook-app/ci/pr.yml");
-    expect(prTasks).toContain("- ci:pr:browser");
+    const taskGraph = z
+      .object({
+        tasks: z.record(
+          z.string(),
+          z.object({ deps: z.array(z.string()).optional() }),
+        ),
+      })
+      .parse(Bun.YAML.parse(prTasks));
+    expect(taskGraph.tasks["ci:pr:validate"]?.deps).toEqual([
+      "ci:pr:verification",
+      "ci:pr:browser",
+    ]);
+    expect(taskGraph.tasks["ci:pr:verification"]?.deps).toEqual([
+      "ci:pr:verification:format",
+      "ci:pr:verification:tooling",
+      "docker:ecosystem:dependency-policy",
+      "ci:pr:checks",
+      "ci:pr:tests:policy",
+      "ci:pr:delivery-helpers",
+    ]);
     expect(prTasks).toContain("coverage-export.output=type=cacheonly");
     expect(prTasks).not.toContain("coverage-export.output=type=local");
     expect(this.read(".github/workflows/pr.yml")).not.toContain(

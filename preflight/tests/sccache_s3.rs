@@ -343,17 +343,38 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         !e2e_pr.contains("NOOK_SCCACHE_") && !e2e_pr.contains("sccache-access-key:"),
         "arbitrary-ref e2e must remain secret-free"
     );
-    assert_eq!(pr_docker_setups, 1, "one PR job owns all compiler work");
+    for (job, next) in [
+        ("scope", "prepare"),
+        ("browser", "validation"),
+        ("validation", "end"),
+    ] {
+        let body = pr
+            .split_once(&format!("  {job}:\n"))
+            .expect("non-compiler PR job must exist")
+            .1;
+        let boundary = format!("\n  {next}:\n");
+        let body = body.split(&boundary).next().expect("job body must exist");
+        for credential in compiler_credentials {
+            assert!(
+                !body.contains(credential),
+                "{job} must not receive {credential}"
+            );
+        }
+    }
+    assert_eq!(
+        pr_docker_setups, 2,
+        "artifact and verification jobs own compiler work"
+    );
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            1,
-            "only the trusted PR validation job may receive {credential}"
+            2,
+            "only the trusted PR artifact and verification jobs may receive {credential}"
         );
     }
     assert_eq!(
         pr.matches("require-sccache: \"true\"").count(),
-        1,
+        2,
         "every trusted PR compiler job must require writable sccache"
     );
     assert_eq!(

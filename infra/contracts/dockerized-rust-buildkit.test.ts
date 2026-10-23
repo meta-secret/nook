@@ -44,7 +44,9 @@ class DockerizedRustBuildKitContract {
     expect(dockerSetup).toContain("--password-stdin");
     expect(dockerSetup).not.toContain("docker/login-action");
     expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
-    expect(workflow).toContain("task --silent ci:pr:validate");
+    expect(workflow).toContain("task --silent ci:pr:verification");
+    expect(workflow).toContain("task --silent ci:pr:browser");
+    expect(workflow).toContain("needs: [scope, prepare]");
     expect(workflow).not.toContain("nook-cache-telemetry");
     const workflowStep = (name: string): string => {
       const stepStart = workflow.indexOf(`      - name: ${name}\n`);
@@ -59,11 +61,9 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && needs\.scope\.outputs\.auth == 'true'$/m,
     );
-    expect(diagnosticsStep).toMatch(
-      /^ {8}uses: actions\/upload-artifact@v7$/m,
-    );
+    expect(diagnosticsStep).toMatch(/^ {8}uses: actions\/upload-artifact@v7$/m);
     const diagnosticPaths = diagnosticsStep.match(
       / {10}path: \|\n((?: {12}[^\n]+\n)+) {10}if-no-files-found: warn\n {10}retention-days: 15(?:\n|$)/,
     );
@@ -77,12 +77,16 @@ class DockerizedRustBuildKitContract {
       "uses: actions/upload-artifact@v7",
       "uses: actions/upload-artifact@v7",
     ]);
-    expect(workflow).toContain("needs: [prepare, browser]");
+    expect(workflow).toContain("needs: [scope, prepare, verify, browser]");
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
-    expect(workflow).toContain("suite: [web, extension-1, extension-2, extension-3]");
+    expect(workflow).toContain(
+      "suite: [web, extension-1, extension-2, extension-3]",
+    );
     expect(
-      workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g),
+      workflow.match(
+        /name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g,
+      ),
     ).toHaveLength(2);
     expect(workflow).toContain('test "$PREPARE_RESULT" = success');
     expect(workflow).toContain('test "$BROWSER_RESULT" = success');
@@ -99,9 +103,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain(
       "E2E_SHARD=3/3 task --silent _extension:test:e2e:shard",
     );
-    const validationStep = workflowStep(
-      "Parallel validation and browser tests",
-    );
+    const validationStep = workflowStep("Verify product source and coverage");
     expect(validationStep).not.toMatch(/^ {8}continue-on-error:/m);
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
@@ -537,25 +539,35 @@ class DockerizedRustBuildKitContract {
     };
     const nodeCompilerStageRange: DockerfileStageRange = {
       content: product,
-      startMarker: "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
-      endMarker: "FROM builder-wasm-handoff AS builder-wasm",
+      startMarker:
+        "FROM builder-wasm-handoff AS builder-nook-wasm-browser-input",
+      endMarker:
+        "FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-manager",
     };
     const nodeCompilerStage = stage(nodeCompilerStageRange);
     expect(nodeCompilerStage).toContain(
-      "nook-sccache-report wasm-node-compiler",
+      "bash /opt/nook/wasm-nook-verify.sh prepare",
     );
-    expect(nodeCompilerStage).toContain(
+    const nookCommands = this.read(
+      "nook-app/nook-platform/docker/rust/base/wasm-nook-verify.sh",
+    );
+    expect(nookCommands).toContain("nook-sccache-report wasm-node-compiler");
+    const companionCommands = this.read(
+      "nook-app/nook-platform/docker/rust/base/wasm-companion-verify.sh",
+    );
+    expect(companionCommands).toContain("set -euo pipefail");
+    expect(companionCommands).toContain(
       "llvm-cov test --no-clean --release -p nook-companion-wasm",
     );
-    expect(nodeCompilerStage).not.toContain(
+    expect(companionCommands).not.toContain(
       "llvm-cov test --no-clean --release -p nook-companion-wasm --no-report",
     );
     expect(
-      nodeCompilerStage.indexOf(
+      companionCommands.indexOf(
         "llvm-cov test --no-clean --release -p nook-companion-wasm",
       ),
     ).toBeLessThan(
-      nodeCompilerStage.indexOf(
+      companionCommands.indexOf(
         "--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines",
       ),
     );
@@ -563,11 +575,59 @@ class DockerizedRustBuildKitContract {
     expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     const handoffStageRange: DockerfileStageRange = {
       content: product,
-      startMarker: "FROM builder-wasm-node-deps AS builder-wasm-handoff",
-      endMarker: "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
+      startMarker: "FROM builder-wasm-test-base AS builder-wasm-handoff",
+      endMarker:
+        "FROM builder-wasm-test-base AS builder-companion-wasm-node-compiler",
     };
     const handoffStage = stage(handoffStageRange);
-    for (const descendant of [handoffStage, nodeCompilerStage]) {
+    const companionStage = stage({
+      content: product,
+      startMarker:
+        "FROM builder-wasm-test-base AS builder-companion-wasm-node-compiler",
+      endMarker: "FROM builder-wasm-handoff AS builder-nook-wasm-browser-input",
+    });
+    expect(companionStage).toContain("bash /opt/nook/wasm-companion-verify.sh");
+    expect(companionStage).not.toContain("--mount=type=cache");
+    expect(nodeCompilerStage).not.toContain("--mount=type=cache");
+    const browserPartitions = stage({
+      content: product,
+      startMarker:
+        "FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-manager",
+      endMarker:
+        "FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler",
+    });
+    expect(browserPartitions).not.toContain("--mount=");
+    for (const partition of ["manager", "rest"]) {
+      expect(browserPartitions).toContain(
+        `RUN bash /opt/nook/wasm-nook-verify.sh ${partition}`,
+      );
+      expect(browserPartitions).toContain(
+        `COPY --from=builder-nook-wasm-browser-${partition} /opt/nook/wasm-browser-profiles/${partition}-*.profraw ./target/llvm-cov-target/`,
+      );
+    }
+    expect(browserPartitions).toContain(
+      "RUN bash /opt/nook/wasm-nook-verify.sh report",
+    );
+    expect(nookCommands).toContain('cmp "$inventory/all" "$inventory/union"');
+    expect(nookCommands).toContain('test ! -s "$inventory/overlap"');
+    expect(nookCommands).toContain(
+      'LLVM_PROFILE_FILE="/opt/nook/wasm-browser-profiles/$partition-%p-%m.profraw"',
+    );
+    expect(nookCommands).toContain("export WASM_BINDGEN_TEST_TIMEOUT=60");
+    const joinedCompiler = stage({
+      content: product,
+      startMarker:
+        "FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler",
+      endMarker: "FROM builder-wasm-handoff AS builder-wasm",
+    });
+    expect(joinedCompiler).toContain(
+      "COPY --from=builder-companion-wasm-node-compiler /opt/nook/wasm-companion-verified /opt/nook/wasm-companion-verified",
+    );
+    for (const descendant of [
+      handoffStage,
+      nodeCompilerStage,
+      companionStage,
+    ]) {
       const descendantMounts: CompilerMountExpectation = {
         stage: descendant,
         runCount: 1,

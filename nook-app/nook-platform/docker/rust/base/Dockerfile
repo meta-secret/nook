@@ -761,7 +761,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
-FROM builder-wasm-node-deps AS builder-wasm-handoff
+FROM builder-wasm-node-deps AS builder-wasm-test-base
 
 # Join the real source and normal release-test artifacts only after every Node-specific dependency.
 COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/ /meta-secret/nook/nook-app/nook-platform/
@@ -774,37 +774,33 @@ COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
 COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
-
+FROM builder-wasm-test-base AS builder-wasm-handoff
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
-# wasm-pack's Node tests are compiler-bearing. Keep their sccache authority in
-# an isolated source-derived stage; the browser/runtime stage below consumes
-# only the result stamp and never receives cache credentials.
-FROM builder-wasm-handoff AS builder-wasm-node-compiler
-# cargo-llvm-cov rejects --no-report together with --no-clean. Let the native
-# companion run emit its interim report so its profiles remain available when
-# the following WASM run enforces the unchanged package floor.
+# Package siblings keep private Cargo/coverage snapshots and compiler-only secrets.
+FROM builder-wasm-test-base AS builder-companion-wasm-node-compiler
+COPY nook-app/nook-platform/docker/rust/base/wasm-companion-verify.sh /opt/nook/wasm-companion-verify.sh
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    wasm-pack test --node --release nook-wasm \
-    && wasm-pack test --node --release nook-companion-wasm \
-    && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
-    && test -x "$runner" \
-    && install -D -m 0755 "$runner" /opt/nook/wasm-bindgen-test-runner \
-    && touch /opt/nook/wasm-node-tests-passed \
-    && echo "nook-wasm declared coverage tests: native=82 browser=147" \
-    && runner=/opt/nook/wasm-bindgen-test-runner \
-    && test -x "$runner" \
-    && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
-    && nook_wasm_floor="$(jq -r '.package_lines_percent["nook-wasm"]' nook-core/coverage-floor.json)" \
-    && cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-companion-wasm \
-    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
-    && WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
-    && touch /opt/nook/wasm-coverage-passed \
-    && nook-sccache-report wasm-node-compiler
+    bash /opt/nook/wasm-companion-verify.sh
+FROM builder-wasm-handoff AS builder-nook-wasm-browser-input
+COPY nook-app/nook-platform/docker/rust/base/wasm-nook-verify.sh /opt/nook/wasm-nook-verify.sh
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    bash /opt/nook/wasm-nook-verify.sh prepare
+FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-manager
+RUN bash /opt/nook/wasm-nook-verify.sh manager
+FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-rest
+RUN bash /opt/nook/wasm-nook-verify.sh rest
+FROM builder-nook-wasm-browser-input AS builder-nook-wasm-node-compiler
+COPY --from=builder-nook-wasm-browser-manager /opt/nook/wasm-browser-profiles/manager-*.profraw ./target/llvm-cov-target/
+COPY --from=builder-nook-wasm-browser-rest /opt/nook/wasm-browser-profiles/rest-*.profraw ./target/llvm-cov-target/
+RUN bash /opt/nook/wasm-nook-verify.sh report
+FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler
+COPY --from=builder-companion-wasm-node-compiler /opt/nook/wasm-companion-verified /opt/nook/wasm-companion-verified
 FROM builder-wasm-handoff AS builder-wasm
 COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed
 COPY --from=builder-wasm-node-compiler /opt/nook/wasm-bindgen-test-runner /opt/nook/wasm-bindgen-test-runner

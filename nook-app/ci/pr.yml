@@ -1,6 +1,6 @@
 version: "3"
 
-# One job joins independent validation branches before publishing previews.
+# Native workflow dependencies join validation and browser branches before preview.
 # BuildKit owns preparation dependencies and reuses the persistent local cache.
 tasks:
   ci:pr:runner:publish:
@@ -34,13 +34,18 @@ tasks:
   ci:pr:validate:
     desc: Join every required check and browser branch before preview deployment.
     deps:
+      - ci:pr:verification
+      - ci:pr:browser
+
+  ci:pr:verification:
+    desc: Join source verification, tests, coverage and policy independently of browser artifacts.
+    deps:
       - ci:pr:verification:format
       - ci:pr:verification:tooling
       - docker:ecosystem:dependency-policy
       - ci:pr:checks
       - ci:pr:tests:policy
       - ci:pr:delivery-helpers
-      - ci:pr:browser
 
   ci:pr:checks:
     desc: Run independent checks from their prepared BuildKit stages.

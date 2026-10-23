@@ -14,7 +14,7 @@ impl PrDeliveryScenario<'_> {
         let pr = self.root.read(".github/workflows/pr.yml");
         let mut previous = 0;
         for phase in [
-            "run: task --silent ci:pr:validate\n",
+            "run: task --silent ci:pr:verification\n",
             "name: Import production artifacts after all validation succeeds",
             "uses: ./.github/actions/nook-pr-preview",
         ] {
@@ -27,16 +27,19 @@ impl PrDeliveryScenario<'_> {
             );
             previous = position;
         }
-        assert_eq!(pr.matches("    runs-on:").count(), 3);
-        assert!(pr.contains("needs: [prepare, browser]"));
+        assert_eq!(pr.matches("    runs-on:").count(), 5);
+        assert!(pr.contains("needs: [scope, prepare, verify, browser]"));
         assert!(pr.contains("if: ${{ always() }}"));
+        assert!(pr.contains("test \"$SCOPE_RESULT\" = success"));
+        assert!(pr.contains("test \"$VERIFY_RESULT\" = success"));
+        assert!(pr.contains("test \"$PREPARE_RESULT\" = skipped"));
         assert!(pr.contains("test \"$PREPARE_RESULT\" = success"));
         assert!(pr.contains("test \"$BROWSER_RESULT\" = success"));
         assert!(pr.contains("test \"$BROWSER_RESULT\" = skipped"));
         assert!(!pr.contains("continue-on-error:"));
         assert!(!pr.contains("type=registry"));
-        assert!(pr.contains("PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}"));
-        assert!(pr.contains("PR_RESEARCH: ${{ steps.browser-scope.outputs.research }}"));
+        assert!(pr.contains("PR_AUTH_E2E: ${{ needs.scope.outputs.auth }}"));
+        assert!(pr.contains("PR_RESEARCH: ${{ needs.scope.outputs.research }}"));
         assert!(!pr.contains("nook-pr-coverage"));
         assert!(pr.contains("require-sccache: \"true\""));
         assert!(!pr.contains("Preserve cache telemetry"));
@@ -50,7 +53,7 @@ impl PrDeliveryScenario<'_> {
         let pr_tasks = self.root.read("nook-app/ci/pr.yml");
         let join = section(&pr_tasks, "  ci:pr:validate:\n", "\n  ci:pr:checks:");
         assert!(
-            pr.contains("run: task --silent ci:pr:validate")
+            pr.contains("run: task --silent ci:pr:verification")
                 && join.contains("deps:")
                 && join.contains("- ci:pr:browser")
                 && join.contains("- ci:pr:checks")

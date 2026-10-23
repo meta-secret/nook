@@ -57,11 +57,14 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`pr.yml`**
 
-- One producer owns verification, tests/coverage, heavy gates and artifact preparation.
+- A read-only scope job selects validation, authentication and research work.
+- Independent jobs prepare browser artifacts and verify source, tests, coverage
+  and heavy gates. Browser jobs wait only for the artifact producer.
 - Full browser validation uses independent web and three extension-shard jobs.
-- The final `PR validation / Verify and preview` job joins their results before preview.
+- The final `PR validation / Verify and preview` job joins scope, both producers
+  and every selected browser result before preview.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
-- Verification completes before test compilation; failure stops later phases.
+- Each verification target retains its own preparation and failure boundaries.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
 - Product-path and research changes request product validation automatically.
 - Feature PRs with only policy paths require the authorized `ci:validate` or
@@ -75,7 +78,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`repository-policy.yml`**
 
-- Runs preflight and Loom policy for Main pushes; PR policy runs in its producer.
+- Runs preflight and Loom policy for Main pushes; PR policy runs in verification.
 - Validates the checked-out tree without fetching or comparing a base SHA and
   without classifying changed paths.
 - Delegates repository-owned commands to the repository-policy Task surfaces;
@@ -392,9 +395,10 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
 
 **PR validation and artifact handoff:**
 
-- `ci:pr:validate` in `nook-app/ci/pr.yml` joins independent Task dependencies:
-  formatting, tooling, dependency policy, product checks, repository policy,
-  delivery helpers and the browser branch.
+- Local `ci:pr:validate` in `nook-app/ci/pr.yml` joins `ci:pr:verification`
+  and `ci:pr:browser`. Hosted jobs run those branches independently. Verification
+  joins formatting, tooling, dependency policy, product checks, repository policy
+  and delivery helpers.
 - The `pr-checks` Bake group runs Rust/WASM/web checks and tests, coverage,
   Dylint, deterministic ecosystem tests, fuzz and Kani concurrently.
   Each target waits for its own Docker preparation stages.
@@ -415,16 +419,20 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   `fail-fast: false` retains every result.
 - The producer uploads `browser.tar` once, including requested research output.
   Each browser job and the final preview job restore that immutable artifact.
-- The final job rejects a failed or cancelled producer or required browser job.
-  A skipped browser matrix is accepted only when full validation was not selected.
+- The final job requires successful scope and verification. Artifact preparation
+  must succeed when product validation is selected and be skipped otherwise.
+  The browser matrix must succeed for full product validation and be skipped
+  otherwise. Failed or cancelled branches block preview.
 - Artifact import and preview deployment follow the complete validation join.
   For example, a failed static check blocks preview even if browser tests pass.
 - Product and requested research uploads run concurrently after validation.
   Both must succeed before publishing their outputs. GitHub comments and
   deployment records remain ordered after that upload join.
-- Job metadata, local-cache settings, scope detection and the UI demo contract
-  share one setup step after BuildKit and Node setup.
-- Policy-only PRs retain producer checks and the final gate without browser jobs.
+- Scope detection and the UI demo contract run before either producer, without
+  compiler or deployment credentials. Each producer initializes its own metadata
+  and local-cache settings after BuildKit and Node setup.
+- Policy-only PRs retain verification and the final gate; artifact preparation
+  and browser jobs are skipped.
 - BuildKit remains the cache authority. Browser consumers do not rebuild output
   or transfer registry cache.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
@@ -648,8 +656,21 @@ authenticator-domain to 90 percent.
 - A report for each portable package enforces its registry floor; the combined
   report is artifact-only and cannot mask a package failure. Artifacts are
   written to `/opt/nook/coverage/nook-core` in the image.
-- The WASM lane gates companion separately, executes Chromium without cache
-  credentials, and combines native and browser profiles for one `nook-wasm` report.
+- WASM validation branches from one immutable test base into separate nook and
+  companion compiler stages. Each keeps its own native and WASM coverage profiles
+  and enforces the unchanged package floor. The public compiler target joins both
+  successful branches before runtime consumers can import their result stamps;
+  compiler credentials remain confined to the compiler `RUN` mounts.
+- Nook browser coverage compiles one instrumented artifact, then uses native
+  `manager::` and complementary `--skip manager::` selections in two immutable
+  browser leaves. The native `--list` inventories must form a disjoint complete
+  union, including future test names, with unchanged ignored-test behavior.
+  Each harness retains its 60-second deadline and native workers. Distinct raw
+  profiles join the retained native profiles before one unchanged package-floor
+  report; neither browser branch alone can publish the coverage stamp.
+- The shared test base still contains both package sources. This overlap removes
+  a serial verification dependency; it does not isolate package cache inputs or
+  establish a measured runtime improvement.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;
@@ -657,11 +678,14 @@ authenticator-domain to 90 percent.
 
 **PR CI locality and reruns:**
 
-- The producer retains one checkout and one persistent BuildKit connection.
-- Rust/WASM/web verification precedes tests; after tests, heavy gates and artifact
-  preparation run as a joined concurrent fan-out before browsers.
+- Each producer retains one checkout and one BuildKit connection.
+- Browser preparation overlaps source verification, tests and heavy gates.
+  Its upload waits for selected focused authentication and research checks.
+- Producers can land on different node-local builders and repeat shared build
+  dependencies. Native BuildKit decides reuse; no cross-node deduplication or
+  timing improvement is guaranteed.
 - Generated files cross jobs in the immutable browser artifact.
-- Failed-job reruns retain the same producer/browser dependencies.
+- Failed-job reruns retain the scope, producer and browser dependencies.
   Consumers use the producer's artifact-name output, including its original attempt.
   BuildKit decides which producer layers reuse cache.
 - There is no artifact-promotion bypass or sibling-job polling.

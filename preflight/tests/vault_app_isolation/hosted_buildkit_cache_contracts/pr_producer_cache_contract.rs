@@ -17,15 +17,16 @@ impl<'a> PrProducerCacheContract<'a> {
         let pr = self.root.read(".github/workflows/pr.yml");
         let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
         let tasks = self.root.read("nook-app/ci/pr.yml");
-        assert_eq!(pr.matches("    runs-on:").count(), 3);
-        assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 1);
+        assert_eq!(pr.matches("    runs-on:").count(), 5);
+        assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 2);
         for marker in [
             "GHA_CACHE_ENABLED=",
             "GHA_CACHE_WRITE_ENABLED=",
             "NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0",
         ] {
-            assert!(
-                pr.contains(marker),
+            assert_eq!(
+                pr.matches(marker).count(),
+                2,
                 "PR cache transfers must be disabled: {marker}"
             );
         }
@@ -40,7 +41,7 @@ impl<'a> PrProducerCacheContract<'a> {
                 "PR browser fanout must retain read-only BuildKit: {forbidden}"
             );
         }
-        assert!(pr.contains("needs: [prepare, browser]"));
+        assert!(pr.contains("needs: [scope, prepare, verify, browser]"));
         assert!(pr.contains("if: ${{ always() }}"));
         assert!(pr.contains("fail-fast: false"));
         assert!(pr.contains("suite: [web, extension-1, extension-2, extension-3]"));
@@ -51,11 +52,14 @@ impl<'a> PrProducerCacheContract<'a> {
             2,
             "rerun consumers must use the successful producer's artifact identity"
         );
+        assert!(pr.contains("test \"$SCOPE_RESULT\" = success"));
+        assert!(pr.contains("test \"$VERIFY_RESULT\" = success"));
+        assert!(pr.contains("test \"$PREPARE_RESULT\" = skipped"));
         assert!(pr.contains("test \"$PREPARE_RESULT\" = success"));
         assert!(pr.contains("test \"$BROWSER_RESULT\" = success"));
         assert!(pr.contains("test \"$BROWSER_RESULT\" = skipped"));
         let validation = pr
-            .find("run: task --silent ci:pr:validate\n")
+            .find("run: task --silent ci:pr:verification\n")
             .context("missing validation join")?;
         let publish = pr
             .find("uses: ./.github/actions/nook-pr-preview")
