@@ -742,15 +742,22 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
     "infra/k0s/manifests/arc/container-hook.yaml",
     "utf8",
   );
-  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 5);
+  const scopeStart = workflow.indexOf("\n  scope:\n");
+  const prepareStart = workflow.indexOf("\n  prepare:\n", scopeStart);
+  const verifyStart = workflow.indexOf("\n  verify:\n", prepareStart);
+  assert.ok(scopeStart >= 0 && prepareStart > scopeStart && verifyStart > prepareStart);
   const browserStart = workflow.indexOf("\n  browser:\n");
   assert.notEqual(browserStart, -1);
   const validationStart = workflow.indexOf("\n  validation:\n", browserStart);
   assert.notEqual(validationStart, -1);
-  const prepare = workflow.slice(0, browserStart);
+  assert.ok(browserStart > verifyStart);
+  const scope = workflow.slice(scopeStart, prepareStart);
+  const prepare = workflow.slice(prepareStart, verifyStart);
+  const verify = workflow.slice(verifyStart, browserStart);
   const browser = workflow.slice(browserStart, validationStart);
   const validation = workflow.slice(validationStart);
-  assert.match(validation, /needs: \[prepare, browser\]\n {4}if: \$\{\{ always\(\) \}\}/);
+  assert.match(validation, /needs: \[scope, prepare, verify, browser\]\n {4}if: \$\{\{ always\(\) \}\}/);
   assert.match(
     validation,
     / {4}steps:\n {6}- uses: actions\/checkout@v7\n {8}with:\n {10}ref: \$\{\{ inputs\.source_sha \|\| github\.event\.pull_request\.head\.sha \}\}\n {10}persist-credentials: false\n {6}- name: Require every selected validation branch\n/,
@@ -760,24 +767,26 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
   const previewStart = validation.indexOf("      - name: Deploy and report preview\n");
   assert.ok(guardStart >= 0 && restoreStart > guardStart && previewStart > restoreStart);
   const trustedRoute = "runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && ";
-  for (const mixedJob of [prepare, validation]) {
+  for (const mixedJob of [scope, prepare, verify, validation]) {
     assert.ok(mixedJob.includes(`${trustedRoute}(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}`));
     assert.doesNotMatch(mixedJob, /NOOK_BROWSER_RUNS_ON/);
   }
   assert.ok(browser.includes(`${trustedRoute}(vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}`));
   assert.doesNotMatch(browser, /NOOK_CONTAINER_RUNS_ON|NOOK_BUILDKIT_ADDR|nook-docker-setup/);
-  assert.equal(
-    prepare.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
-    1,
-  );
+  for (const producer of [prepare, verify]) {
+    assert.equal(producer.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length, 1);
+    assert.equal(producer.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
+    assert.match(producer, /cache-write: "false"/);
+    assert.match(producer, /main-cache-only: "true"/);
+  }
+  for (const consumer of [scope, browser, validation]) {
+    assert.doesNotMatch(consumer, /nook-docker-setup|setup-buildx-action|NOOK_SCCACHE_/);
+  }
   assert.equal(
     workflow.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
-    1,
+    2,
   );
-  assert.equal(prepare.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
-  assert.equal(workflow.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
-  assert.match(prepare, /cache-write: "false"/);
-  assert.match(prepare, /main-cache-only: "true"/);
+  assert.equal(workflow.match(/uses: docker\/setup-buildx-action@/g)?.length, 2);
   assert.equal(
     workflow.match(/uses: actions\/download-artifact@v8/g)?.length,
     2,
