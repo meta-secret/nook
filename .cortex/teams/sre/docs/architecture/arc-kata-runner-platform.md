@@ -172,11 +172,32 @@ one replica on each qualified node.
 
 Each replica uses:
 
-- rootless BuildKit `v0.32.2`;
+- rootless BuildKit `v0.34.1`, pinned to the multi-platform image index digest;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
 - garbage collection through the shared policy below; and
 - no CPU or memory requests or limits.
+
+**Staged daemon updates**
+
+The StatefulSet uses `OnDelete`. Applying a new template does not restart its
+four existing workers; an incidental Pod recreation can still adopt that
+template. Broad deployment prepares the existing ConfigMap checksum in the
+template before its first apply. It requires all four Pods to be Ready with
+the desired image and revision, and the controller to have observed the current
+generation, before activating hosts. Existing Ready workers on an older
+revision leave that deployment blocked for reviewed manual replacement.
+
+- After a separately approved rollout, replace one naturally drained worker
+  first; verify its original PVC/PV, native worker, registry imports/exports,
+  and a real build before considering the remaining workers. Do not delete
+  active workers or use broad deployment as the mixed-version canary path.
+- Forward state compatibility retains the existing bbolt schema and paths.
+  An old-image downgrade after the new daemon has written state is unproven.
+  On failure, hold new intake and investigate; do not automatically downgrade,
+  prune cache, or replace storage. Source rollback alone is not state rollback.
+- The isolated Kubernetes cache simulation explicitly retains `RollingUpdate`
+  for its existing lifecycle proof. It does not validate this staged live rollout.
 
 The shared four-node ConfigMap retains its preceding age-filtered GC policies.
 The ordinary layer policy keeps configured `112GB` maximum use, `16GB` free
