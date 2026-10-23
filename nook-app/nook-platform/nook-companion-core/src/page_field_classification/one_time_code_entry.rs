@@ -27,6 +27,11 @@ impl PageSecondFactorRoute {
         "otp", "totp", "2 fa", "twofa", "two factor", "twofactor", "mfa", "2 sv", "two step",
         "twostep", "2 step", "one time code", "verification code", "authenticator",
     ];
+
+    /// Whether one expanded path segment names a second-factor challenge.
+    pub(super) fn names_segment(segment: &str) -> bool {
+        Self::ROUTE_WORDS.contains(&segment)
+    }
 }
 
 impl LoginContextObservation {
