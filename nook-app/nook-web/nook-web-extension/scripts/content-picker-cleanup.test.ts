@@ -1,4 +1,4 @@
-import { expect, mock, test } from 'bun:test'
+import { expect, mock, spyOn, test } from 'bun:test'
 import { Schema } from 'effect'
 import { Window } from 'happy-dom'
 import {
@@ -802,4 +802,104 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     clearInterval: originalClearInterval,
   })
   native.restore()
+})
+
+test('registers an authenticator selection before post-open validation yields', async () => {
+  const { authenticatorInteraction } =
+    await import('../src/content/autofill/authenticator-actions')
+  const { authenticationWorkflowUi, authenticationRuntimeTransport } =
+    await import('../src/content/autofill/login-passkey-actions')
+  const { workflowUi } = await import('../src/content/autofill/workflow-ui')
+  const { routeAutofillMessage } =
+    await import('../src/content/autofill/message-router')
+  const { pickerState, widgetState } =
+    await import('../src/content/autofill/state')
+  const { LiveAuthenticationWorkflowDisposition } =
+    await import('../../nook-web-shared/src/extension/password-form-classified-observations')
+  const { RuntimeMessageDeliveryKind } =
+    await import('../src/content/autofill/runtime-message-adapter')
+  const { AuthenticatorPickerOpenResponseKind } =
+    await import('../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js')
+  const native = new NativeSaveCaptureFixture()
+  native.install()
+  pickerState.clearPendingAuthenticator()
+  widgetState.busy = false
+  widgetState.dismissed = false
+  const validationEntered = Promise.withResolvers<void>()
+  const validation = Promise.withResolvers<LiveAuthenticationWorkflowDisposition>()
+  const validate = spyOn(authenticationWorkflowUi, 'approvedWorkflowDisposition')
+    .mockImplementation(() => {
+      validationEntered.resolve()
+      return validation.promise
+    })
+  const open = spyOn(authenticationRuntimeTransport, 'sendAuthenticatorPickerOpenRuntimeMessage')
+    .mockResolvedValue({
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: {
+        kind: AuthenticatorPickerOpenResponseKind.Ready,
+        requestId: 'authenticator-order-request',
+        expiresAt: Date.now() + 60_000,
+      },
+    })
+  const notify = spyOn(authenticationRuntimeTransport, 'sendRuntimeMessageWithoutResponse')
+    .mockImplementation(() => {})
+  const progress = spyOn(workflowUi, 'setFlightProgress').mockImplementation(() => {})
+  const status = spyOn(authenticationWorkflowUi, 'setStatus').mockImplementation(() => {})
+  const fill = spyOn(authenticatorInteraction, 'fillAuthenticatorCode').mockResolvedValue(true)
+  const continueButton = document.createElement('button')
+  document.body.append(continueButton)
+  const request: Parameters<typeof authenticatorInteraction.continueWithAuthenticator>[0] = {
+    workflow: {
+      root: document,
+      formScope: { kind: PasswordFormScopeKind.Unowned },
+      summary: {
+        passwordFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        usernameFieldCount: 0,
+        oneTimeCodeFieldCount: 1,
+        manualCheckpointPresent: false,
+        passkeyControlPresent: false,
+        formCount: 1,
+        observedAt: 1,
+      },
+    },
+    approval: pickerApproval(),
+    step: document.createElement('p'),
+    title: document.createElement('h2'),
+    description: document.createElement('p'),
+    continueButton,
+  }
+  const opening = authenticatorInteraction.continueWithAuthenticator(request)
+  try {
+    await validationEntered.promise
+    const acknowledged = mock(() => {})
+    routeAutofillMessage(
+      {
+        type: 'nook:website-authenticator-selected',
+        payload: {
+          origin: location.origin,
+          requestId: 'authenticator-order-request',
+          account: { vaultStoreId: 'vault-1', secretId: 'secret-1' },
+        },
+      },
+      { id: 'nook-extension' },
+      acknowledged,
+    )
+    expect(acknowledged).toHaveBeenCalledWith({ ok: true })
+    expect(fill).toHaveBeenCalledTimes(1)
+  } finally {
+    validation.resolve(LiveAuthenticationWorkflowDisposition.Current)
+    await opening
+    authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
+    validate.mockRestore()
+    open.mockRestore()
+    notify.mockRestore()
+    progress.mockRestore()
+    status.mockRestore()
+    fill.mockRestore()
+    widgetState.busy = false
+    native.restore()
+  }
 })
