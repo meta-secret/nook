@@ -6,7 +6,10 @@ import {
 import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
-import { VAULT_REVISION_CHANNEL } from '../lib/vault-revision-signal'
+import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionAnnouncement,
+} from '../lib/vault-revision-signal'
 import { SidePanelSide } from './side-panel-connect-state'
 
 /**
@@ -93,6 +96,9 @@ export enum SidePanelChangeKind {
   /** The extension took a vault update or pairing, or a session unlocked:
    * re-read state and the site's logins, keeping what is shown meanwhile. */
   VaultChanged = 'vault-changed',
+  /** A site page started or stopped showing an authenticator setup: list
+   * the active tab's site again, keeping what is shown meanwhile. */
+  PageChanged = 'page-changed',
 }
 
 export type SidePanelChangeListener = (change: SidePanelChangeKind) => void
@@ -197,8 +203,14 @@ class SidePanelFollower {
    * panel reads nothing from it and re-reads its own state instead. */
   private readonly vaultRevision = new BroadcastChannel(VAULT_REVISION_CHANNEL)
 
-  private readonly announced = (): void => {
-    this.request.onchange(SidePanelChangeKind.VaultChanged)
+  private readonly announced = (event: MessageEvent): void => {
+    switch (event.data === VaultRevisionAnnouncement.PageChanged) {
+      case true:
+        this.request.onchange(SidePanelChangeKind.PageChanged)
+        return
+      case false:
+        this.request.onchange(SidePanelChangeKind.VaultChanged)
+    }
   }
 
   start(): SidePanelRelease {

@@ -428,7 +428,9 @@ private identity.
   filtered by what the page needs. Each row shows a type icon and label, title,
   and account with saved host. Logins offer an explicit Fill, authenticators
   Fill code; passkeys and API keys are view-only.
-  - It follows tab activation and URL changes in the panel's window.
+  - It follows tab activation and URL changes in the panel's window. It also
+    lists again when a site page starts or stops showing an authenticator
+    setup, which the worker announces on the vault revision channel.
   - It shows one section for each paired identity and vault that a
     password-filling grant covers. The header names both, as in
     "Personal · test". Rust supplies "Other vaults" for a missing identity
@@ -644,7 +646,9 @@ resolves it again at Fill time.
    content script classifies its forms with Rust when asked, and Rust maps the
    workflow: a one-time-code challenge needs authenticators, a login, sign-up
    or password-change form needs logins, and any other page needs every
-   site-bound kind. Nothing caches the need.
+   site-bound kind. A page that shows an authenticator setup, including a
+   formless setup dialog that Rust matches as enrollment, needs every
+   site-bound kind and the setup offer. Nothing caches the need.
    - No content script answering returns `page-unavailable`; an unusable answer
      returns `list-failed`.
 7. Each password-filling grant's worker-only `ListSiteSecrets` session request
@@ -707,6 +711,27 @@ The listing obeys these rules:
 - **Required:** show a section for every password-filling grant, with
   "Nothing for this site" in an empty one. Show the page's empty state above
   the sections only when no section lists a row.
+
+#### Add 2FA from this page
+
+Rust's listing carries a page offer. For the authenticator setup need it is
+**Add 2FA from this page**, with Rust's label key; otherwise it is absent.
+
+1. The panel sends only its window. The service worker admits the panel
+   document and resolves the [active-tab target](#active-tab-target).
+2. Frame 0 receives a trigger with the derived origin and nothing else. A
+   changed origin answers `tab-changed`.
+3. The content script starts the enrollment that its Pilot widget offers,
+   with the same revalidation and preview. Only that ceremony decodes the QR
+   code or reads the setup key, and it writes to the vault only after the
+   user confirms in the widget.
+4. Without such an offer, the page answers `no-setup`. The panel shows the
+   outcome in English and Russian catalog text and never shows a secret.
+
+- **Prohibited:** read the QR payload or setup key for the offer, or send
+  either through the panel or the worker.
+- **Required:** start the page widget's consented ceremony and report only
+  its start or the reason nothing started.
 
 #### Fill
 

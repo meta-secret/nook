@@ -25,6 +25,7 @@ import type {
   SidePanelPageCodeFillMessage,
   SidePanelPageFillMessage,
 } from '../../lib/side-panel-page-fill'
+import type { SidePanelPageAddAuthenticatorMessage } from '../../lib/side-panel-authenticator-setup'
 import {
   SidePanelPageNeedMessageType,
   SidePanelPageNeedMessages,
@@ -53,11 +54,12 @@ type LoginAvailability = Awaited<
   ReturnType<typeof accountPickerSessions.loginAccountAvailabilityForOrigin>
 >
 
-/** What the worker sends frame 0 of the tab it resolved: a Fill or Fill code
- * trigger without credentials, or the page-need query. */
+/** What the worker sends frame 0 of the tab it resolved: a Fill, Fill code
+ * or Add 2FA trigger without credentials, or the page-need query. */
 export type SidePanelPageMessage =
   | SidePanelPageFillMessage
   | SidePanelPageCodeFillMessage
+  | SidePanelPageAddAuthenticatorMessage
   | SidePanelPageNeedMessage
 
 /** One page message for frame 0 of the tab the worker resolved. */

@@ -36,7 +36,11 @@ import {
 } from './widget-presentation-state'
 
 import { workflowUi } from './workflow-ui'
-import { IN_PAGE_SURFACE_TOKENS, WIDGET_HOST_ID } from '../in-page-surface'
+import {
+  IN_PAGE_SURFACE_TOKENS,
+  WIDGET_HOST_ID,
+  inPageSurfaceMount,
+} from '../in-page-surface'
 
 /* The Pilot speaks the shared in-page surface language. */
 const WIDGET_PANEL_STYLES = `
@@ -742,7 +746,7 @@ class AuthenticationWidgetShell {
       mode: 'open',
     }
     host.attachShadow(nookTypedArgs0_1).append(style, panel)
-    document.documentElement.append(host)
+    inPageSurfaceMount.parent().append(host)
     this.ui.widgetState.attachHost(host)
     this.ui.widgetState.assignWorkflowKey(workflowKey)
     this.ui.widgetState.setRenderedWorkflowRoot(workflowRoot)

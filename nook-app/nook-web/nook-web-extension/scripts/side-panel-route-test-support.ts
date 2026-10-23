@@ -21,6 +21,11 @@ import {
   SidePanelSiteListingOperation,
 } from '../src/background/service-worker/side-panel-site-operations'
 import { SidePanelCodeFillOperation } from '../src/background/service-worker/side-panel-code-fill-operation'
+import { SidePanelAddAuthenticatorOperation } from '../src/background/service-worker/side-panel-add-authenticator-operation'
+import {
+  SidePanelAuthenticatorSetupMessageType,
+  SidePanelPageAddAuthenticatorReplyKind,
+} from '../src/lib/side-panel-authenticator-setup'
 import {
   CompanionSidePanelTabClassifier,
   SidePanelTabTargetResolver,
@@ -324,6 +329,10 @@ export class SidePanelRouteFixture {
   codeReply: PageReply = RouteData.answered({
     kind: SidePanelPageCodeFillReplyKind.Filled,
   })
+  /** What the tab's content script answers the Add 2FA trigger with. */
+  addReply: PageReply = RouteData.answered({
+    kind: SidePanelPageAddAuthenticatorReplyKind.Started,
+  })
 
   install(): void {
     Object.assign(globalThis, {
@@ -450,6 +459,8 @@ export class SidePanelRouteFixture {
         return this.codeReply
       case SidePanelPageFillMessageType.Fill:
         return this.pageReply
+      case SidePanelAuthenticatorSetupMessageType.PageAdd:
+        return this.addReply
     }
   }
 
@@ -501,6 +512,20 @@ export class SidePanelRouteFixture {
       payload,
     })
     return operation.run({ message, sender: RouteData.panelSender })
+  }
+
+  async addAuthenticator(
+    sender: chrome.runtime.MessageSender = RouteData.panelSender,
+    payload: BrowserRuntimeMessageValue = { windowId: 7 },
+  ) {
+    const operation = new SidePanelAddAuthenticatorOperation(
+      await this.dependencies(),
+    )
+    const message = RouteData.message({
+      type: SidePanelAuthenticatorSetupMessageType.Add,
+      payload,
+    })
+    return operation.run({ message, sender })
   }
 
   expectNoSideEffects(): void {

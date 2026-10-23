@@ -42,9 +42,11 @@ import {
 } from '../src/lib/side-panel-page-need'
 import {
   CompanionSidePanelPageNeed,
+  CompanionSidePanelPageSetup,
   SidePanelPageNeedReception,
   SidePanelPageNeedReceiver,
   type SidePanelPageNeedCollaborators,
+  type SidePanelPageSetupSource,
 } from '../src/content/autofill/side-panel-page-need'
 import { SidePanelPageWorkflowDiscovery } from '../src/content/autofill/side-panel-page-workflow'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
@@ -135,6 +137,9 @@ class ContentPageHarness {
     return new SidePanelLoginWorkflowDiscovery().loginWorkflow()
   }
 
+  /** Without a selected form, the page asks this source for a setup match. */
+  setups: SidePanelPageSetupSource = new CompanionSidePanelPageSetup()
+
   /** Sends the worker's page-need query to this top document. */
   async need(
     origin = 'https://login.example.test',
@@ -143,6 +148,7 @@ class ContentPageHarness {
     const collaborators: SidePanelPageNeedCollaborators = {
       pages: new SidePanelPageWorkflowDiscovery(),
       needs: new CompanionSidePanelPageNeed(),
+      setups: this.setups,
     }
     const receiver = new SidePanelPageNeedReceiver(collaborators)
     const replies = Promise.withResolvers<SidePanelPageNeedReply>()
@@ -239,6 +245,19 @@ const passwordChangeForm =
   '<form method="post" action="/password"><label for="o">Current password</label><input id="o" type="password" autocomplete="current-password"><label for="n">New password</label><input id="n" type="password" autocomplete="new-password"><label for="c">Confirm new password</label><input id="c" type="password" autocomplete="new-password"><button type="submit">Change password</button></form>'
 
 class WorkflowSnapshots {
+  static authenticatorSetup(): AuthenticationWorkflowSnapshot {
+    return {
+      kind: AuthenticationWorkflowKind.TotpEnrollment,
+      stage: AuthenticationWorkflowStage.Setup,
+      action: AuthenticationWorkflowAction.EnrollAuthenticator,
+      currentStep: 1,
+      totalSteps: 3,
+      approvalRequirement: 'explicit-user-approval',
+      savedLoginCapability: 'unavailable',
+      observationIndex: 0,
+    }
+  }
+
   static totpChallenge(): AuthenticationWorkflowSnapshot {
     return {
       kind: AuthenticationWorkflowKind.TotpChallenge,
@@ -427,6 +446,33 @@ describe('side-panel page need (real Rust classification)', () => {
       need: SitePageNeed.AnySiteSecret,
     })
     expect(page.snapshotRequests).toEqual([])
+  })
+
+  test('a formless authenticator setup dialog needs the setup offer', async () => {
+    const page = new ContentPageHarness(
+      '<div role="dialog" aria-modal="true"><h2>Update authenticator app</h2></div>',
+    )
+    page.setups = {
+      setupWorkflow: async () => ({
+        kind: 'matched',
+        snapshot: WorkflowSnapshots.authenticatorSetup(),
+      }),
+    }
+    expect((await page.need()).reply).toEqual({
+      kind: SidePanelPageNeedReplyKind.Needed,
+      need: SitePageNeed.AuthenticatorSetup,
+    })
+    expect(page.snapshotRequests).toEqual([])
+  })
+
+  test('a setup match that cannot complete is unavailable, not an ordinary page', async () => {
+    const page = new ContentPageHarness('<main><p>Welcome back</p></main>')
+    page.setups = {
+      setupWorkflow: () => Promise.reject(new Error('runtime unavailable')),
+    }
+    expect((await page.need()).reply).toEqual({
+      kind: SidePanelPageNeedReplyKind.Unavailable,
+    })
   })
 
   test('an unavailable snapshot transport is unavailable, not unrecognized', async () => {

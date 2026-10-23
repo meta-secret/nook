@@ -157,9 +157,44 @@ type EnrollmentHintsObservationRequest = {
   readonly authenticatorSetupObservation: EnrollmentPageHints['qr']
 }
 
+enum SidePanelEnrollmentEntryKind {
+  Absent = 'absent',
+  Offered = 'offered',
+}
+
+/** The page widget's current Add 2FA offer, which the side panel can start. */
+type SidePanelEnrollmentEntry =
+  | { readonly kind: SidePanelEnrollmentEntryKind.Absent }
+  | {
+      readonly kind: SidePanelEnrollmentEntryKind.Offered
+      readonly host: EnrollmentFlowHost
+      readonly start: () => Promise<boolean>
+    }
+
 /** Owns the browser runtime resources shared by these interactions. */
 class AuthenticatorEnrollmentInteraction {
   private holdEnrollmentWidgetAfterSave = false
+  private sidePanelEntry: SidePanelEnrollmentEntry = {
+    kind: SidePanelEnrollmentEntryKind.Absent,
+  }
+
+  /**
+   * The side panel's "Add 2FA from this page": a trusted click in Nook's own
+   * panel starts the QR enrollment the page widget currently offers, with the
+   * same revalidation. Without a connected, idle offer nothing starts.
+   */
+  async startFromSidePanel(): Promise<boolean> {
+    const entry = this.sidePanelEntry
+    switch (entry.kind) {
+      case SidePanelEnrollmentEntryKind.Absent:
+        return false
+      case SidePanelEnrollmentEntryKind.Offered:
+        break
+    }
+    if (!entry.host.panel.isConnected || entry.host.isBusy()) return false
+    return entry.start()
+  }
+
   private enrollmentSavePending = false
   detectEnrollmentHints(
     snapshot: AuthenticationAuthenticatorSetupSnapshot,
@@ -846,6 +881,7 @@ class AuthenticatorEnrollmentInteraction {
   }
 
   renderEnrollmentActions({ host, hints }: RenderEnrollmentActionsArgs): void {
+    this.sidePanelEntry = { kind: SidePanelEnrollmentEntryKind.Absent }
     if (
       !host.panel.isConnected ||
       !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
@@ -863,6 +899,28 @@ class AuthenticatorEnrollmentInteraction {
     const buttons: HTMLButtonElement[] = []
 
     if (hints.qr === 'present') {
+      const enrollmentRequest: ConstructorParameters<
+        typeof RevalidatedEnrollmentAction
+      >[0] = {
+        host,
+        action: AuthenticationWorkflowAction.EnrollAuthenticator,
+        start: (approval) => {
+          const startRequest: Parameters<typeof this.startQrEnrollment>[0] = {
+            approval,
+            host,
+            section,
+          }
+          void this.startQrEnrollment(startRequest)
+        },
+      }
+      const start = () =>
+        new RevalidatedEnrollmentAction(enrollmentRequest).execute()
+      // The side panel's Add starts this same consented ceremony.
+      this.sidePanelEntry = {
+        kind: SidePanelEnrollmentEntryKind.Offered,
+        host,
+        start,
+      }
       const nookTypedArgs1_10: Parameters<
         typeof enrollmentFlowRenderer.createSecondaryButton
       >[0] = {
@@ -870,22 +928,7 @@ class AuthenticatorEnrollmentInteraction {
         labelKey: BROWSER_MESSAGE_KEYS.WidgetAddFromPage,
         onClick: (event) => {
           if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
-          const enrollmentRequest: ConstructorParameters<
-            typeof RevalidatedEnrollmentAction
-          >[0] = {
-            host,
-            action: AuthenticationWorkflowAction.EnrollAuthenticator,
-            start: (approval) => {
-              const startRequest: Parameters<typeof this.startQrEnrollment>[0] =
-                {
-                  approval,
-                  host,
-                  section,
-                }
-              void this.startQrEnrollment(startRequest)
-            },
-          }
-          void new RevalidatedEnrollmentAction(enrollmentRequest).execute()
+          void start()
         },
       }
       buttons.push(

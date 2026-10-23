@@ -176,7 +176,11 @@ describe('This site listing', () => {
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'accounts.example.com',
-      listing: { summary: { kind: 'Listed' }, sections },
+      listing: {
+        summary: { kind: 'Listed' },
+        sections,
+        page_offer: { kind: 'Absent' },
+      },
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
@@ -204,7 +208,11 @@ describe('This site listing', () => {
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.namecheap.com',
-      listing: { summary: empty, sections: vaults },
+      listing: {
+        summary: empty,
+        sections: vaults,
+        page_offer: { kind: 'Absent' },
+      },
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
       view: {
@@ -230,7 +238,11 @@ describe('This site listing', () => {
     const listing: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'news.example.org',
-      listing: { summary: empty, sections: [] },
+      listing: {
+        summary: empty,
+        sections: [],
+        page_offer: { kind: 'Absent' },
+      },
     }
     expect(ThisSiteViews.listing(listing).view.body).toEqual({
       kind: ThisSiteBodyKind.Empty,
@@ -611,6 +623,18 @@ describe('This site memory', () => {
       memory: ThisSiteMemoryKind.Kept,
       state,
       reload: ThisSiteReload.None,
+    })
+  })
+  test('a page that starts or stops showing an authenticator setup lists the site again while the list stays shown', () => {
+    const state = shownState()
+    const request: Parameters<typeof ThisSiteMemory.changed>[0] = {
+      state,
+      change: SidePanelChangeKind.PageChanged,
+    }
+    expect(ThisSiteMemory.changed(request)).toEqual({
+      memory: ThisSiteMemoryKind.Kept,
+      state,
+      reload: ThisSiteReload.List,
     })
   })
   test('a vault change lists the site again while the current list stays shown', () => {

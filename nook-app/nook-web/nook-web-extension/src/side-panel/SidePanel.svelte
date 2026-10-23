@@ -698,6 +698,9 @@ closes it.
         // A hidden panel keeps no typed PIN: the ceremony starts afresh.
         ceremonyEntry += 1
         return
+      case SidePanelChangeKind.PageChanged:
+        // Only This site depends on what the page shows.
+        return
     }
   }
 

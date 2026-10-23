@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountSecuritySettings from './pages/AccountSecuritySettings.svelte'
   import DetectionCombined from './pages/DetectionCombined.svelte'
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
@@ -31,6 +32,7 @@
   import TotpEnrollVerify from './pages/TotpEnrollVerify.svelte'
   import TotpLogin from './pages/TotpLogin.svelte'
   import TotpVerify from './pages/TotpVerify.svelte'
+  import TwoFactorChallenge from './pages/TwoFactorChallenge.svelte'
 
   let pathname = $state(location.pathname)
 
@@ -89,6 +91,10 @@
   <TotpEnrollVerify />
 {:else if pathname === '/totp/enroll/success'}
   <TotpEnrollSuccess />
+{:else if pathname === '/2fa/verify'}
+  <TwoFactorChallenge />
+{:else if pathname === '/settings/user'}
+  <AccountSecuritySettings />
 {:else if pathname === '/totp/backup-codes'}
   <TotpBackupCodes />
 {:else if pathname === '/login/'}

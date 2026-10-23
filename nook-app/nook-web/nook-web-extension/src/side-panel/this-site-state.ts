@@ -741,7 +741,9 @@ export class ThisSiteMemory {
           reload: ThisSiteReload.None,
         }
       case SidePanelChangeKind.VaultChanged:
-        // The vault changed: list again, showing the current list meanwhile.
+      case SidePanelChangeKind.PageChanged:
+        // The vault or what the page offers changed: list again, showing
+        // the current list meanwhile.
         return {
           memory: ThisSiteMemoryKind.Kept,
           state,
@@ -759,6 +761,7 @@ export class ThisSiteMemory {
       case SidePanelChangeKind.PanelShown:
       case SidePanelChangeKind.PanelFocused:
       case SidePanelChangeKind.VaultChanged:
+      case SidePanelChangeKind.PageChanged:
         return ThisSiteReload.List
     }
   }

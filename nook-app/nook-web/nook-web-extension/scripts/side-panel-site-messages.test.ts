@@ -201,7 +201,11 @@ describe('side-panel This-site wire', () => {
     const ready = {
       kind: SidePanelSiteListingKind.Ready,
       display_host: 'www.example.com',
-      listing: { summary: { kind: 'Listed' }, sections: [section] },
+      listing: {
+        summary: { kind: 'Listed' },
+        sections: [section],
+        page_offer: { kind: 'Absent' },
+      },
     }
     const empty = {
       kind: SidePanelSiteListingKind.Ready,
@@ -224,9 +228,21 @@ describe('side-panel This-site wire', () => {
             },
           },
         ],
+        page_offer: { kind: 'Absent' },
       },
     }
-    for (const admitted of [ready, empty]) {
+    // An authenticator setup page: Rust offers to add it, naming only its label.
+    const setup = {
+      ...ready,
+      listing: {
+        ...ready.listing,
+        page_offer: {
+          kind: 'AddAuthenticator',
+          label_key: I18N_KEYS.ExtensionActionSiteAddAuthenticator,
+        },
+      },
+    }
+    for (const admitted of [ready, empty, setup]) {
       expect(
         WireFixture.decodes(SidePanelSiteMessages.decodeListing(admitted)),
       ).toBe(true)
@@ -257,6 +273,22 @@ describe('side-panel This-site wire', () => {
         },
       },
       { ...empty, listing: { ...empty.listing, host: 'www.example.com' } },
+      // The offer never carries page content such as a setup key.
+      {
+        ...setup,
+        listing: {
+          ...setup.listing,
+          page_offer: { ...setup.listing.page_offer, secret: 'JBSWY3DP' },
+        },
+      },
+      {
+        ...ready,
+        listing: { ...ready.listing, page_offer: { kind: 'Reveal' } },
+      },
+      {
+        ...ready,
+        listing: { summary: { kind: 'Listed' }, sections: [section] },
+      },
       { kind: SidePanelSiteListingKind.Locked, reason: 'login-locked' },
       { kind: 'empty' },
     ]
@@ -355,6 +387,7 @@ describe('side-panel This-site client', () => {
   const listed = {
     summary: { kind: 'Listed' },
     sections: [section, emptySection],
+    page_offer: { kind: 'Absent' },
   } satisfies SiteSecretListing
 
   test('lists through one runtime request and never listens for broadcasts', async () => {
@@ -390,6 +423,7 @@ describe('side-panel This-site client', () => {
         },
       },
       sections: [emptySection],
+      page_offer: { kind: 'Absent' },
     } satisfies SiteSecretListing
     const expected: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Ready,

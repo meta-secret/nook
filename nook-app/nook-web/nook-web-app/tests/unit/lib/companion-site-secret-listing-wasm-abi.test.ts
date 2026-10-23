@@ -191,7 +191,31 @@ describe('companion site-secret listing WASM ABI', () => {
           },
         },
       ],
+      page_offer: { kind: 'Absent' },
     })
+  })
+
+  test('present_site_secret_listing offers to add the authenticator only for a setup page', () => {
+    const setup = present_site_secret_listing(
+      SitePageNeed.AuthenticatorSetup,
+      SiteListingInputs.vaults(),
+    )
+    expect(setup.page_offer).toEqual({
+      kind: 'AddAuthenticator',
+      label_key: I18N_KEYS.ExtensionActionSiteAddAuthenticator,
+    })
+    // Replacing an authenticator keeps every saved site item listed.
+    expect(setup.summary).toEqual({ kind: 'Listed' })
+    for (const need of [
+      SitePageNeed.AnySiteSecret,
+      SitePageNeed.OneTimeCode,
+      SitePageNeed.Credentials,
+    ]) {
+      expect(
+        present_site_secret_listing(need, SiteListingInputs.vaults())
+          .page_offer,
+      ).toEqual({ kind: 'Absent' })
+    }
   })
 
   test('present_site_secret_listing rejects an invalid store id as a JavaScript error', () => {
