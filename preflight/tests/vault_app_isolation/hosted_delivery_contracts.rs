@@ -477,7 +477,7 @@ impl PrDeliveryScenario<'_> {
             "e2e_image_attempt: ${{ github.run_attempt }}",
             "main-wasm-${{ github.run_id }}",
             "task web:e2e:kubernetes-image:artifacts",
-            "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
+            "CI_ARTIFACT_DIR=\"${{ runner.temp }}/nook-ci-artifacts/joined\"",
         ] {
             assert!(
                 main.contains(required),
