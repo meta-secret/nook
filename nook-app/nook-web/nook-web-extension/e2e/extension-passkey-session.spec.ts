@@ -855,7 +855,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(connectPage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )
-    await expect(connectPage.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(connectPage.getByTestId('identities-hub')).toBeVisible()
 
     const pairedStorage = await readExtensionStorage(context)
     const grantKeys = Object.keys(pairedStorage).filter((key) =>

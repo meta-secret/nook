@@ -109,6 +109,12 @@ export class NamecheapOtpScenario {
       // form itself; picker authorization is not a substitute for discovery.
       yield* Effect.tryPromise(() => page.reload())
       yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
+      // The reloaded page offers its code fill once it has found the field.
+      yield* Effect.tryPromise(() =>
+        expect(
+          page.locator('#nook-auth-widget').getByRole('button', fillButton),
+        ).toBeVisible(),
+      )
       const request: Parameters<NamecheapSidePanelFill['fill']>[0] = {
         account,
         url: challengeUrl,
