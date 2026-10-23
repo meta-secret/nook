@@ -198,7 +198,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
-    '5a2c6e4011c5364ab9343a5959f8c439c31d7bfb772c8265d2f74b1e98415daf',
+    '91ca75fe6515c332b71fe4b88a13b4ece8b0075ddec13527b9e5901ecbff971f',
   ],
   [
     '.github/scripts/with-healthy-buildkit.sh',
