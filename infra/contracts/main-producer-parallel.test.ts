@@ -248,7 +248,7 @@ exit "$status"`,
         if (existsSync(pidFile)) {
           const pid = readFileSync(pidFile, "utf8").trim();
           const observed = spawnSync("ps", ["-o", "stat=", "-p", pid]);
-          expect(observed.error).toBeUndefined();
+          expect(observed.error).toBeFalsy();
           expect(observed.stderr.toString().trim()).toBe("");
           const state = observed.stdout.toString().trim();
           if (state.length === 0) {
