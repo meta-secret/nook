@@ -131,8 +131,9 @@ and manual ecosystem execution in one Actions run named `CI`.
   and web export owns a separate deployment directory. Cleanup never removes
   those directories while a child uses them.
 - Cache-publication assertions remain inside the verified producers. A failed
-  publisher fails its producer; successful publication exposes the unchanged
-  handoffs and outputs to downstream tests. Native and PR ordering is unchanged.
+  cache publisher fails its producer, while a verified browser image and
+  uploaded handoffs still allow downstream tests. Private verification or image
+  publication failure blocks those consumers. Native and PR ordering is unchanged.
 - Local-provider web e2e and two extension shards consume the verified browser
   image in separate pods. Each extension shard uses native available CPU capacity.
   For example, `E2E_SHARD=1/2 task _extension:test:e2e:shard` runs one half.

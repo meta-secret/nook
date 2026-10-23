@@ -15,6 +15,9 @@ import { z } from "zod";
 const workflow = z
   .object({
     jobs: z.object({
+      "extension-e2e": z.object({
+        steps: z.array(z.record(z.string(), z.unknown())),
+      }),
       rust: z.object({
         if: z.string(),
         steps: z.array(z.record(z.string(), z.unknown())),
@@ -395,4 +398,30 @@ test("research image publication keeps its imports but exports no compiler cache
   expect(setup.with["isolated-cache-write"]).toBe(
     "${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
   );
+});
+
+test("Main retains only existing extension failure context after a failed shard", () => {
+  const retention = z
+    .object({
+      if: z.literal("failure()"),
+      uses: z.literal("actions/upload-artifact@v7"),
+      with: z.object({
+        name: z.string(),
+        path: z.string(),
+        "retention-days": z.literal(1),
+        "if-no-files-found": z.literal("ignore"),
+      }),
+    })
+    .parse(
+      workflow.jobs["extension-e2e"].steps.find(
+        (item) => item.name === "Preserve existing extension failure context",
+      ),
+    );
+  expect(retention.with.name).toBe(
+    "main-extension-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}",
+  );
+  expect(retention.with.path.trim().split("\n")).toEqual([
+    "/meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
+    "/meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/test-failed-*.png",
+  ]);
 });

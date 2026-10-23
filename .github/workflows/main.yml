@@ -443,6 +443,17 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
 
+      - name: Preserve existing extension failure context
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-extension-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: |
+            /meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md
+            /meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results/**/test-failed-*.png
+          retention-days: 1
+          if-no-files-found: ignore
+
   ui-demos:
     name: UI demos
     if: ${{ false }}
