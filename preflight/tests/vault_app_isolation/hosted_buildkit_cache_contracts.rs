@@ -331,10 +331,13 @@ impl MainProducerCacheContract<'_> {
             .context("Main Rust job must verify")?;
         let preflight_verify = web
             .find("task preflight")
-            .context("Main web producer must verify preflight before building")?;
+            .context("Main web producer must run preflight inside its private gate")?;
         let native_preflight_verify = rust
             .find("task preflight")
             .context("Main native producer must verify preflight before building")?;
+        let private_join = web
+            .find("wait \"$private_pid\"")
+            .context("Main web producer must join all private verification before publication")?;
         let preflight_publish = web
             .find("task ci:main:publish-preflight-cache")
             .context("Main web producer must export its verified preflight cache")?;
@@ -397,12 +400,17 @@ impl MainProducerCacheContract<'_> {
             .context("Main UI demo verification section must have a valid boundary")?;
         assert!(
         !main.contains("\n  preflight:\n")
-            && main.matches("run: task preflight").count() == 2
+            && main.matches("task preflight").count() == 2
             && native_preflight_verify < rust_verify
             && preflight_verify < wasm_verify
             && wasm_publish_id < preflight_publish
-            && preflight_publish < web_verify
-            && web.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache")
+            && web_verify < private_join
+            && private_join < preflight_publish
+            && wasm_node < private_join
+            && web.contains("wait \"$preflight_pid\"")
+            && web.contains("trap cleanup_private EXIT")
+            && web.contains("trap cleanup EXIT")
+            && web.contains("env GHA_CACHE_WRITE_ENABLED=1")
             && web.contains("wait \"$preflight_cache_pid\" || preflight_cache_outcome=failure")
             && web.contains("echo \"preflight_cache_publication_outcome=$preflight_cache_outcome\" >> \"$GITHUB_OUTPUT\"")
             && preflight_cache_publish.contains("if: ${{ !cancelled() }}")
@@ -446,12 +454,13 @@ impl MainProducerCacheContract<'_> {
             && wasm_publish_id < web_verify
             && web_verify < wasm_node
             && wasm_node < wasm_publish
-            && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm_verification_to_publish.contains("wait \"$private_pid\"")
+            && wasm.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm.contains("cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}")
             && wasm_publish_step.contains("shell: bash")
-            && wasm.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache")
+            && wasm.contains("env GHA_CACHE_WRITE_ENABLED=1")
             && wasm_publish_section.contains("wait \"$cache_pid\" || cache_outcome=failure")
-            && wasm_publish_section.contains("exit \"$web_status\"")
+            && wasm_publish_section.contains("exit \"$image_status\"")
             && wasm_cache_publish.contains("if: ${{ !cancelled() }}")
             && wasm_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.cache_publication_outcome }}"

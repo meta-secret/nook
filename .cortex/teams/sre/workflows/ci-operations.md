@@ -145,19 +145,25 @@ Native command context is documented in
 
 ## Registry transport performance
 
-Main starts native and WASM/web producers independently. Each finishes read-only
-repository preflight before building. Only the web producer publishes preflight
-cache, overlapping that export with Node tests and web artifact verification on
-the same node-local shard that verified it. Native publishes only its verified
-native graph. The web producer joins every started child even on verification
-or image-publication failure. Its three background tasks forward output live
-through `tee` while retaining their existing runner-temporary logs. Each join
-waits for both the task and logger; a task failure retains its original exit
-status, and a logger failure also fails an otherwise successful child.
-Separate preflight and WASM outcomes feed required
-assertions after artifact upload. Publication failures fail the producer job;
-explicit verification outputs still allow tests of its verified browser image.
-Deployment requires successful producers as well as all test consumers.
+Main starts native and WASM/web producers independently. Native finishes
+preflight before building. The Main web exception overlaps preflight with
+private WASM preparation, then starts Node, web verification, and cache-only
+browser construction after WASM export finishes. All private tasks and their
+loggers must succeed before any registry cache, image, or GitHub handoff
+publication, including preflight cache. Failed private work terminates and joins
+owned children; no failed private branch can publish.
+
+Each background task forwards output through `tee` to its runner-temporary log.
+A task failure retains its original exit status, and a logger failure fails an
+otherwise successful child. Publisher failures also fail the producer.
+Existing sccache READ_WRITE and zero-hit health policy remain unchanged.
+Preflight's Cargo target stays inside its Docker stage; WASM owns the joined
+export directory and finishes before its consumers, while web deploy export
+owns a different directory. BuildKit owns shared native solver state.
+Deployment requires successful producers and all test consumers.
+
+### Graph exports and telemetry
+
 Each publisher exports only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds

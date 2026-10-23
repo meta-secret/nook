@@ -124,8 +124,10 @@ impl WorkflowRuntimeContract<'_> {
             "  wasm-cache-proof:\n",
             [
                 "name: WASM and web verification",
-                "Verify Node and web concurrently, then publish verified artifacts",
-                "Stamp WASM run attempt",
+                "Verify preflight and private web producer, then publish verified artifacts",
+                "echo \"$GITHUB_RUN_ATTEMPT\" > \"${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt\"",
+                "wait \"$preflight_pid\"",
+                "wait \"$private_pid\"",
                 "Upload WASM handoff",
                 "uses: ./.github/actions/nook-cache-telemetry",
             ],

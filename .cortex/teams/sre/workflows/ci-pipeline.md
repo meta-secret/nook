@@ -118,21 +118,22 @@ and manual ecosystem execution in one Actions run named `CI`.
   ecosystem job. Task starts the check groups concurrently on one BuildKit
   shard and records every group result before failing the aggregate.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
-- Native Rust and the combined WASM/web producer each run read-only preflight
-  before building. The web producer exports its immutable `wasm-handoff`
-  before starting Node tests, web artifact verification, private browser-image
-  construction, and verified preflight cache publication concurrently on the
-  same BuildKit shard. Browser construction uses the existing `type=cacheonly`
-  output and cannot publish an image or shared cache.
-  WASM cache publication starts only after Node tests pass. Every started
-  child is joined, including when product verification fails.
-  Browser-image publication requires successful Node tests, web verification,
-  and browser construction; it uses the same inputs and builder afterward.
-- Cache-publication assertions run inside their verified producers. Explicit
-  verification outputs let successful product checks feed later tests even
-  when cache publication fails. For example, a failed WASM cache export fails
-  the web producer but does not suppress tests of its verified browser image.
-  A failed web check blocks image publication and browser consumers.
+- Native Rust finishes preflight before its build. Main web alone overlaps
+  preflight with private WASM preparation in one owning producer. WASM export
+  and its run-attempt stamp finish before Node tests, web artifact verification,
+  and private browser construction start. Browser construction uses the existing
+  `type=cacheonly` output on the same builder and inputs.
+- Every private task and logger must succeed before any registry cache, browser
+  image, or GitHub handoff publication starts, including preflight cache export.
+  A failure terminates and joins owned work. Existing compiler-cache writes and
+  sccache health policy remain unchanged; they are not shared publication gates.
+  Preflight has no host output, WASM alone recreates its joined output directory,
+  and web export owns a separate deployment directory. Cleanup never removes
+  those directories while a child uses them.
+- Cache-publication assertions remain inside the verified producers. A failed
+  cache publisher fails its producer, while a verified browser image and
+  uploaded handoffs still allow downstream tests. Private verification or image
+  publication failure blocks those consumers. Native and PR ordering is unchanged.
 - Local-provider web e2e and two extension shards consume the verified browser
   image in separate pods. Each extension shard uses native available CPU capacity.
   For example, `E2E_SHARD=1/2 task _extension:test:e2e:shard` runs one half.
@@ -478,7 +479,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-    and Dependabot code alone uses GitHub-hosted isolation.
+  and Dependabot code alone uses GitHub-hosted isolation.
   - Purpose: Elastic delivery with persistent node-local BuildKit and private Zot recovery.
   - Runner: ARC for trusted sources; GitHub-hosted only for untrusted sources.
   - Purpose: Independent architecture and package verification
@@ -718,9 +719,9 @@ authenticator-domain to 90 percent.
   and additional CPU, memory and disk space on the first export. This mitigation
   does not establish the cause of the observed OOM or a measured speedup; imports,
   cache modes, publication gates and proofs remain unchanged.
-Main no longer stages or uploads a commit-keyed coverage artifact for PR
-comparison. Repository coverage remains enforced by the Docker/BuildKit
-coverage solve and package floors in the verified Rust graph.
+  Main no longer stages or uploads a commit-keyed coverage artifact for PR
+  comparison. Repository coverage remains enforced by the Docker/BuildKit
+  coverage solve and package floors in the verified Rust graph.
 
 ## Agent host vs GitHub-hosted execution
 
@@ -747,12 +748,10 @@ coverage solve and package floors in the verified Rust graph.
   synchronizer attempt to create that root-level path and fail with `EACCES`,
   while leaving the workspace action tree absent makes its post-step copy
   exhaust its retries after otherwise passing browser suites.
-- Main exports the immutable WASM handoff before overlapping Node tests,
-  web artifact verification, and verified preflight cache publication. It starts
-  WASM cache export only after Node succeeds. The producer collects every child
-  result before returning. Separate preflight and WASM cache assertions after
-  artifact upload fail the producer while verified browser consumers can continue.
-  Development deployment remains gated by successful cache publication.
+- Main web overlaps preflight and private WASM preparation under the complete
+  private-success gate described above. Registry caches, the browser image, and
+  immutable GitHub handoffs publish only afterward. Development deployment
+  remains gated by successful cache publication and all test consumers.
 - Main's portable WASM cache writer uses an ARC solve. Static
   contracts require the release and clippy dependency vertices in its
   exact Dockerfile lineage. Zot then proves child manifest digest/size plus
