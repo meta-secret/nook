@@ -2,6 +2,67 @@ version: '3'
 
 # host-services infrastructure operations.
 tasks:
+  services:journal:configure:
+    desc: Persist bounded host journals on one explicitly selected worker without reconciling ARC.
+    silent: true
+    vars:
+      INFRA_JOURNAL_HOSTNAME: '{{default "" .INFRA_JOURNAL_HOSTNAME}}'
+    preconditions:
+      - sh: test -n "{{.INFRA_WORKER_SSH_TARGET}}"
+        msg: INFRA_WORKER_SSH_TARGET must select the existing authenticated worker connection.
+      - sh: printf '%s\n' "{{.INFRA_JOURNAL_HOSTNAME}}" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        msg: INFRA_JOURNAL_HOSTNAME must identify the intended worker.
+    cmds:
+      - |
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          "{{.INFRA_WORKER_SSH_TARGET}}" bash -s -- "{{.INFRA_JOURNAL_HOSTNAME}}" <<'REMOTE'
+        set -euo pipefail
+        test "$(hostname -s)" = "$1"
+        available="$(df -B1 --output=avail /var/log | awk 'NR == 2 { print $1 }')"
+        # Reserve the 1 GiB journal budget above its 4 GiB free-space floor.
+        if test "$available" -lt 5368709120; then
+          echo "Insufficient free space for the bounded persistent journal: $available bytes" >&2
+          exit 1
+        fi
+        config="$(mktemp)"
+        trap 'rm -f "$config"' EXIT
+        cat > "$config" <<'JOURNAL'
+        [Journal]
+        Storage=persistent
+        SystemMaxUse=1G
+        SystemKeepFree=4G
+        MaxRetentionSec=14day
+        JOURNAL
+        sudo -n install -d -m 0755 /etc/systemd/journald.conf.d
+        if ! sudo -n cmp -s "$config" /etc/systemd/journald.conf.d/60-nook-persistent.conf; then
+          sudo -n install -m 0644 "$config" /etc/systemd/journald.conf.d/60-nook-persistent.conf
+        fi
+        # Reject a later local override instead of silently claiming persistence.
+        sudo -n systemd-analyze cat-config systemd/journald.conf | awk '
+          /^\[/ { journal = ($0 == "[Journal]") }
+          journal && /^[[:space:]]*(Storage|SystemMaxUse|SystemKeepFree|MaxRetentionSec)[[:space:]]*=/ {
+            split($0, setting, "=")
+            gsub(/[[:space:]]/, "", setting[1])
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", setting[2])
+            values[setting[1]] = setting[2]
+          }
+          END {
+            if (values["Storage"] != "persistent" || values["SystemMaxUse"] != "1G" ||
+                values["SystemKeepFree"] != "4G" || values["MaxRetentionSec"] != "14day") exit 1
+          }'
+        sudo -n install -d -m 2755 -o root -g systemd-journal /var/log/journal
+        sudo -n systemd-tmpfiles --create --prefix /var/log/journal
+        sudo -n systemctl restart systemd-journald.service
+        sudo -n journalctl --flush
+        sudo -n journalctl --sync
+        sudo -n systemctl is-active --quiet systemd-journald.service
+        journal_dir="/var/log/journal/$(cat /etc/machine-id)"
+        sudo -n test -s "$journal_dir/system.journal"
+        sudo -n journalctl --directory="$journal_dir" --list-boots --no-pager
+        sudo -n journalctl --directory="$journal_dir" --disk-usage
+        echo "Persistent journal configured on $1; ARC placement and workloads were not changed"
+        REMOTE
+
   services:ensure-edge-firewall:
     desc: Ensure host nftables accepts Traefik HTTPS on the public edge.
     silent: true

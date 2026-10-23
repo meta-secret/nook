@@ -237,6 +237,9 @@ tasks:
         sudo -n test -f /var/lib/nook-bootstrap/taskfile-complete
         REMOTE
 
+        task --taskfile infra/Taskfile.yml services:journal:configure \
+          INFRA_WORKER_SSH_TARGET="$ssh_target" \
+          INFRA_JOURNAL_HOSTNAME="$node"
         task --taskfile infra/Taskfile.yml k0s:worker:deploy \
           INFRA_WORKER_SSH_TARGET="$ssh_target" \
           INFRA_WORKER_MESH_ADDRESS="$mesh_address" \
