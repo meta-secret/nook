@@ -161,6 +161,9 @@ Preflight's Cargo target stays inside its Docker stage; WASM owns the joined
 export directory and finishes before its consumers, while web deploy export
 owns a different directory. BuildKit owns shared native solver state.
 Deployment requires successful producers and all test consumers.
+
+### Graph exports and telemetry
+
 Each publisher exports only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds
