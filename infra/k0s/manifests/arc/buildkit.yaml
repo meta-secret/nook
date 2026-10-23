@@ -184,6 +184,7 @@ spec:
   replicas: 4
   updateStrategy:
     type: OnDelete
+    rollingUpdate: null
   selector:
     matchLabels:
       app.kubernetes.io/name: nook-buildkit

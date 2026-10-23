@@ -177,7 +177,7 @@ export class ArcBuildkitUpdateContract {
         expected: "false",
       },
       {
-        guard: `$pods | (${annotation}) | .items[0] == $pods.items[0] and .items[1].spec.template.metadata.annotations["nook.nokey.sh/buildkit-config-sha256"] == $hash`,
+        guard: `$pods | (${annotation}) | .items[0] == $pods.items[0] and .items[1].spec.template.metadata.annotations["nook.nokey.sh/buildkit-config-sha256"] == $hash and (.items[1].spec.updateStrategy | has("rollingUpdate")) and .items[1].spec.updateStrategy.rollingUpdate == null`,
         state,
         input: { items: [config, workload] },
         expected: "true",

@@ -682,6 +682,7 @@ tasks:
         printf '%s\n' "$buildkit_manifest" | jq --arg hash "$config_hash" '
           .items |= map(if .kind == "StatefulSet" and .metadata.name == "nook-buildkit" and .metadata.namespace == "arc-runners"
             then .spec.template.metadata.annotations["nook.nokey.sh/buildkit-config-sha256"] = $hash
+              | .spec.updateStrategy.rollingUpdate = null
             else . end)
         ' | kubectl apply -f -
         kubectl wait statefulset/nook-buildkit --namespace arc-runners \
