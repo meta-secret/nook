@@ -1,6 +1,6 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-FROM --platform=$BUILDPLATFORM golang:1.26.8-bookworm@sha256:dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107 AS source
+FROM --platform=$BUILDPLATFORM registry.dev.nokey.sh/library/golang:1.26.8-bookworm@sha256:dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107 AS source
 
 ADD --checksum=sha256:0f7d4a765b273359d0752aa1c8a309606578fd0db42e71f0fc5de845d3b1139b \
   https://codeload.github.com/moby/buildkit/tar.gz/refs/tags/v0.34.1 /tmp/buildkit.tar.gz
@@ -25,5 +25,5 @@ RUN --network=none go test -c -o /usr/local/bin/cache.test ./cache
 ENTRYPOINT ["timeout", "--signal=TERM", "--kill-after=10s", "900", "/usr/local/bin/cache.test"]
 CMD ["-test.v", "-test.run", "TestEnsureCompression|TestLinkBlobMatchingLabelsNoop|TestLoopLeaseContent|TestSharingCompressionVariant|TestGetRemotes"]
 
-FROM moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 AS buildkit
+FROM registry.dev.nokey.sh/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 AS buildkit
 COPY --from=daemon /out/buildkitd /usr/bin/buildkitd
