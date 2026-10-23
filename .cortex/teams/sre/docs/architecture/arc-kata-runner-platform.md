@@ -64,6 +64,28 @@ scores 90, and the control/storage worker scores 1. Home's 250 Mbps link
 requires at least 32 seconds per decimal GB before protocol or storage overhead.
 New placements may need cold imports despite retained caches.
 
+### Home container-job eligibility
+
+The container-job inventory includes the home worker, `bynull-servo`.
+The mixed hook still requires both container-job eligibility and
+`arc-workload=build`. Browser job Pods still require `arc-workload=browser`
+on Rise-S-2. Home uses its existing node-local BuildKit shard; the hook requires
+neither a host Docker daemon nor shared workspace storage.
+
+- The October 23, 2026 assessment observed 32 allocatable logical CPUs and
+  approximately 183.5 GiB allocatable memory on home.
+- General jobs, Hive, mixed jobs and BuildKit share these resources without
+  execution resource reservations. Existing ceilings do not guarantee capacity.
+- Home also hosts a JetStream replica and cluster services. Additional mixed
+  jobs can compete with those workloads even though their placement is unchanged.
+- An incident-quarantined node remains excluded while its workload label is
+  absent. Adding home eligibility does not authorize removing that quarantine.
+- Validate actual home job placement, BuildKit worker identity and end-to-end
+  runtime after an approved scoped rollout. A general-runner smoke does not
+  establish mixed container-hook behavior.
+- If scheduling or runtime regresses, a reviewed rollback removes only home's
+  container-job eligibility. Already-bound jobs finish naturally.
+
 ### Browser capacity and availability
 
 The selected Rise-S-2 host has 16 logical CPUs and approximately 62 GiB memory.
@@ -100,9 +122,10 @@ measure actual CPU use or active BuildKit solves.
 Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
 only hosts eligible for the incoming Pod, preserving each pool's placement
 constraints. No `minDomains` or `matchLabelKeys` override is configured.
-General and Hive runners count three eligible build hosts. Mixed container
-jobs count Rise-S-1 and the OVH control/storage host. Browser-only jobs remain
-on Rise-S-2 outside these build-pool spread constraints.
+General, Hive and mixed container jobs count Rise-S-1, home and the OVH
+control/storage host when eligible. A node without the required workload label
+is excluded. Browser-only jobs remain on Rise-S-2 outside these build-pool
+spread constraints.
 
 The existing preferred terms retain these marginal penalties per matching Pod:
 
