@@ -197,25 +197,44 @@ jobs:
         id: prepare_web
         shell: bash
         run: |
+          set -o pipefail
           preflight_cache_log="$RUNNER_TEMP/main-preflight-cache.log"
           cache_log="$RUNNER_TEMP/main-wasm-cache.log"
           web_log="$RUNNER_TEMP/main-web-artifacts.log"
-          GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache >"$preflight_cache_log" 2>&1 &
+          (
+            set +e
+            GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache 2>&1 | tee "$preflight_cache_log"
+            statuses=("${PIPESTATUS[@]}")
+            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+            exit "${statuses[1]}"
+          ) &
           preflight_cache_pid=$!
-          task ci:main:web:artifacts \
-            CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
-            VITE_BASE="$CI_MAIN_VITE_BASE" \
-            VITE_SITE_URL="$CI_MAIN_DEV_URL" \
-            VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
-            VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
-            VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
-            WASM_BUILD_MODE=dev >"$web_log" 2>&1 &
+          (
+            set +e
+            task ci:main:web:artifacts \
+              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
+              VITE_BASE="$CI_MAIN_VITE_BASE" \
+              VITE_SITE_URL="$CI_MAIN_DEV_URL" \
+              VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
+              VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
+              VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
+              WASM_BUILD_MODE=dev 2>&1 | tee "$web_log"
+            statuses=("${PIPESTATUS[@]}")
+            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+            exit "${statuses[1]}"
+          ) &
           web_pid=$!
           node_status=0
           task ci:main:wasm-node-test || node_status=$?
           cache_outcome=skipped
           if [ "$node_status" -eq 0 ]; then
-            GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache >"$cache_log" 2>&1 &
+            (
+              set +e
+              GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache 2>&1 | tee "$cache_log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            ) &
             cache_pid=$!
           fi
           web_status=0
@@ -227,12 +246,9 @@ jobs:
           if [ "$node_status" -eq 0 ]; then
             cache_outcome=success
             wait "$cache_pid" || cache_outcome=failure
-            cat "$cache_log"
           fi
           preflight_cache_outcome=success
           wait "$preflight_cache_pid" || preflight_cache_outcome=failure
-          cat "$preflight_cache_log"
-          cat "$web_log"
           echo "preflight_cache_publication_outcome=$preflight_cache_outcome" >> "$GITHUB_OUTPUT"
           echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
           if [ "$node_status" -ne 0 ]; then exit "$node_status"; fi

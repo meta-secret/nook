@@ -6,6 +6,7 @@ import {
 } from "./operational-contract";
 import { ArcSeparationContract } from "./arc-separation-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
+import { ArcBuildkitUpdateContract } from "./arc-buildkit-update-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 
 import { resolve } from "node:path";
@@ -386,9 +387,10 @@ class ArcManifestContract {
       "internalTrafficPolicy: Local",
       "kind: StatefulSet",
       "replicas: 4",
+      "updateStrategy:\n    type: OnDelete\n    rollingUpdate: null",
       "requiredDuringSchedulingIgnoredDuringExecution:",
       'nook.nokey.sh/arc-build: "true"',
-      "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
+      "v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89",
       "--oci-worker-no-process-sandbox",
       "storage: 128Gi",
       "type: Unconfined",
@@ -486,7 +488,9 @@ class ArcManifestContract {
       "arc:buildkit:storage:prepare:",
       "install -d -o 1000 -g 1000 -m 0700",
       "infra/k0s/manifests/arc/buildkit.yaml",
-      "rollout status statefulset/nook-buildkit",
+      "wait statefulset/nook-buildkit",
+      "--for=jsonpath='{.status.readyReplicas}'=4",
+      "BuildKit OnDelete update is pending reviewed manual replacements",
       "one persistent rootless BuildKit shard per build node",
       "for scale_set in nook-k0s nook-k0s-container",
       "helm uninstall nook-k0s-cache",
@@ -799,6 +803,8 @@ class ArcManifestContract {
     if (admittedContract53.isErr()) return err(admittedContract53.error);
     const separation = await new ArcSeparationContract(root).assert();
     if (separation.isErr()) return err(separation.error);
+    const buildkitUpdate = await new ArcBuildkitUpdateContract(root).assert();
+    if (buildkitUpdate.isErr()) return err(buildkitUpdate.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();
     if (worker.isErr()) return err(worker.error);
     const frontend = await new DockerfileFrontendContract(root).assert();

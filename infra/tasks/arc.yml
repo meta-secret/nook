@@ -671,14 +671,39 @@ tasks:
           kubectl delete statefulset nook-buildkit \
             --namespace arc-runners --cascade=orphan --wait=true
         fi
-        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
-        config_hash="$(kubectl get configmap nook-buildkit \
-          --namespace arc-runners -o json | jq -cS '.data' | sha256sum | awk '{ print $1 }')"
-        kubectl patch statefulset/nook-buildkit --namespace arc-runners \
-          --type merge \
-          -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"nook.nokey.sh/buildkit-config-sha256\":\"$config_hash\"}}}}}"
-        kubectl rollout status statefulset/nook-buildkit \
-          --namespace arc-runners --timeout=10m
+        buildkit_manifest="$(kubectl create --dry-run=client \
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" -o json \
+          | jq -s '{apiVersion: "v1", kind: "List", items: .}')"
+        printf '%s\n' "$buildkit_manifest" | jq -e '
+          ([.items[] | select(.kind == "ConfigMap" and .metadata.name == "nook-buildkit" and .metadata.namespace == "arc-runners")] | length) == 1 and
+          ([.items[] | select(.kind == "StatefulSet" and .metadata.name == "nook-buildkit" and .metadata.namespace == "arc-runners")] | length) == 1
+        ' >/dev/null
+        config_hash="$(printf '%s\n' "$buildkit_manifest" | jq -cS '.items[] | select(.kind == "ConfigMap" and .metadata.name == "nook-buildkit" and .metadata.namespace == "arc-runners") | .data' | sha256sum | awk '{ print $1 }')"
+        printf '%s\n' "$buildkit_manifest" | jq --arg hash "$config_hash" '
+          .items |= map(if .kind == "StatefulSet" and .metadata.name == "nook-buildkit" and .metadata.namespace == "arc-runners"
+            then .spec.template.metadata.annotations["nook.nokey.sh/buildkit-config-sha256"] = $hash
+              | .spec.updateStrategy.rollingUpdate = null
+            else . end)
+        ' | kubectl apply -f -
+        kubectl wait statefulset/nook-buildkit --namespace arc-runners \
+          --for=jsonpath='{.status.readyReplicas}'=4 --timeout=10m
+        buildkit_state="$(kubectl get statefulset nook-buildkit --namespace arc-runners -o json)"
+        buildkit_pods="$(kubectl get pods --namespace arc-runners \
+          -l app.kubernetes.io/name=nook-buildkit -o json)"
+        printf '%s\n' "$buildkit_state" | jq '{generation: .metadata.generation, observedGeneration: .status.observedGeneration, currentRevision: .status.currentRevision, updateRevision: .status.updateRevision, image: .spec.template.spec.containers[0].image}'
+        printf '%s\n' "$buildkit_pods" | jq '.items[] | {name: .metadata.name, node: .spec.nodeName, revision: .metadata.labels["controller-revision-hash"], image: .spec.containers[0].image}'
+        if ! jq -en --argjson state "$buildkit_state" --argjson pods "$buildkit_pods" '
+          $state.status.observedGeneration == $state.metadata.generation and
+          ($state.status.updateRevision | type) == "string" and
+          ($pods.items | length) == $state.spec.replicas and
+          all($pods.items[];
+            .metadata.labels["controller-revision-hash"] == $state.status.updateRevision and
+            any(.status.conditions[]?; .type == "Ready" and .status == "True") and
+            any(.spec.containers[]; .name == "buildkitd" and .image == $state.spec.template.spec.containers[0].image))
+        ' >/dev/null; then
+          echo "BuildKit OnDelete update is pending reviewed manual replacements; broad deployment cannot activate hosts." >&2
+          exit 1
+        fi
         ready_nodes="$(kubectl get pods --namespace arc-runners \
           -l app.kubernetes.io/name=nook-buildkit \
           -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.spec.nodeName}{"\n"}{end}' | sort -u)"

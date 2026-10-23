@@ -51,51 +51,79 @@ enum CacheOutcome {
   Skipped = "skipped",
 }
 
+enum LogCapture {
+  File = "file",
+  Directory = "directory",
+}
+
 const scenarios = [
   {
     failure: FailureStage.None,
     exitStatus: 0,
     publishes: true,
     cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.File,
   },
   {
     failure: FailureStage.Node,
     exitStatus: 7,
     publishes: false,
     cacheOutcome: CacheOutcome.Skipped,
+    logCapture: LogCapture.File,
   },
   {
     failure: FailureStage.Cache,
     exitStatus: 0,
     publishes: true,
     cacheOutcome: CacheOutcome.Failure,
+    logCapture: LogCapture.File,
   },
   {
     failure: FailureStage.PreflightCache,
     exitStatus: 0,
     publishes: true,
     cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.File,
   },
   {
     failure: FailureStage.Web,
     exitStatus: 8,
     publishes: false,
     cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.File,
   },
   {
     failure: FailureStage.Image,
     exitStatus: 9,
     publishes: true,
     cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.File,
+  },
+  {
+    failure: FailureStage.None,
+    exitStatus: 1,
+    publishes: false,
+    cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.Directory,
+  },
+  {
+    failure: FailureStage.Web,
+    exitStatus: 8,
+    publishes: false,
+    cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.Directory,
   },
 ];
 
 for (const scenario of scenarios) {
-  test(`Main overlaps Node and web checks and joins every result: ${scenario.failure}`, () => {
+  test(`Main overlaps Node and web checks and joins every result: ${scenario.failure}, log ${scenario.logCapture}`, () => {
     const root = mkdtempSync(join(tmpdir(), "nook-main-join-"));
     try {
       const bin = join(root, "bin");
       mkdirSync(bin);
+      if (scenario.logCapture === LogCapture.Directory) {
+        mkdirSync(join(root, "main-web-artifacts.log"));
+      }
       writeFileSync(
         join(bin, "task"),
         `#!/bin/bash
@@ -122,6 +150,8 @@ case "$1" in
   *) exit 9 ;;
 esac
 touch "$PROBE_DIR/$kind.started"
+echo "$kind started log"
+echo "$kind diagnostic" >&2
 for attempt in $(seq 1 100); do
   if [ -f "$PROBE_DIR/$other.started" ]; then break; fi
   sleep 0.01
@@ -134,7 +164,7 @@ if [ "$kind" = web ] && [ "$FAIL_STAGE" != node ]; then
   done
   test -f "$PROBE_DIR/cache.started"
 fi
-if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ]; then
+if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ] && [ "$LOG_CAPTURE" != directory ]; then
   for attempt in $(seq 1 100); do
     if [ -f "$PROBE_DIR/image.finished" ]; then break; fi
     sleep 0.01
@@ -150,6 +180,14 @@ if [ "$kind" = preflight-cache ]; then
   test -f "$PROBE_DIR/web.finished"
   sleep 0.05
 fi
+if [ "$kind" = node ]; then
+  for attempt in $(seq 1 100); do
+    if grep -q 'web started log' "$PROBE_DIR/live.out" && grep -q 'preflight-cache started log' "$PROBE_DIR/live.out"; then break; fi
+    sleep 0.01
+  done
+  grep -q 'web started log' "$PROBE_DIR/live.out"
+  grep -q 'preflight-cache started log' "$PROBE_DIR/live.out"
+fi
 touch "$PROBE_DIR/$kind.finished"
 echo "$kind joined log"
 if [ "$FAIL_STAGE" = "$kind" ]; then
@@ -160,9 +198,20 @@ fi
       );
       const output = join(root, "outputs");
       writeFileSync(output, "");
+      writeFileSync(
+        join(root, "producer.sh"),
+        command.replaceAll("${{ runner.temp }}", root),
+      );
       const result = spawnSync(
         "/bin/bash",
-        ["-e", "-c", command.replaceAll("${{ runner.temp }}", root)],
+        [
+          "-e",
+          "-c",
+          `status=0
+/bin/bash -e -o pipefail "$PROBE_DIR/producer.sh" > "$PROBE_DIR/live.out" 2>&1 || status=$?
+cat "$PROBE_DIR/live.out"
+exit "$status"`,
+        ],
         {
           encoding: "utf8",
           timeout: 5000,
@@ -171,6 +220,7 @@ fi
             PATH: `${bin}:${process.env.PATH}`,
             PROBE_DIR: root,
             FAIL_STAGE: scenario.failure,
+            LOG_CAPTURE: scenario.logCapture,
             RUNNER_TEMP: root,
             GITHUB_OUTPUT: output,
             GHA_CACHE_WRITE_ENABLED: "",
@@ -186,6 +236,34 @@ fi
       expect(existsSync(join(root, "image.finished"))).toBe(scenario.publishes);
       expect(existsSync(join(root, "preflight-cache.finished"))).toBe(true);
       expect(result.stdout).toContain("preflight-cache joined log");
+      for (const [kind, log] of [
+        ["preflight-cache", "main-preflight-cache.log"],
+        ["web", "main-web-artifacts.log"],
+        ["cache", "main-wasm-cache.log"],
+      ] as const) {
+        if (kind === "cache" && scenario.failure === FailureStage.Node) {
+          expect(existsSync(join(root, log))).toBe(false);
+          continue;
+        }
+        expect(
+          result.stdout
+            .split("\n")
+            .filter((line) => line === `${kind} started log`),
+        ).toHaveLength(1);
+        expect(
+          result.stdout
+            .split("\n")
+            .filter((line) => line === `${kind} diagnostic`),
+        ).toHaveLength(1);
+        if (
+          log !== "main-web-artifacts.log" ||
+          scenario.logCapture === LogCapture.File
+        ) {
+          expect(readFileSync(join(root, log), "utf8")).toContain(
+            `${kind} diagnostic`,
+          );
+        }
+      }
       expect(readFileSync(output, "utf8")).toBe(
         `preflight_cache_publication_outcome=${scenario.failure === FailureStage.PreflightCache ? CacheOutcome.Failure : CacheOutcome.Success}\ncache_publication_outcome=${scenario.cacheOutcome}\n`,
       );

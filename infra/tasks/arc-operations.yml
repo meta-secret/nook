@@ -39,7 +39,7 @@ tasks:
         set -euo pipefail
         kubectl() { sudo -n k0s kubectl "$@"; }
         namespace=arc-runners
-        image='registry.dev.nokey.sh/moby/buildkit:v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9'
+        image='registry.dev.nokey.sh/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89'
         service=tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
         cleanup() {
           kubectl delete pod --namespace "$namespace" \

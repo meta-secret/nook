@@ -484,6 +484,11 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(tasks.contains("--cascade=orphan --wait=true"));
     assert!(tasks.contains("- task: arc:auth:sync"));
     assert!(tasks.contains("nook.nokey.sh/buildkit-config-sha256"));
+    assert!(buildkit.contains("updateStrategy:\n    type: OnDelete"));
+    assert!(tasks.contains("$state.status.observedGeneration == $state.metadata.generation"));
+    assert!(tasks.contains(
+        ".metadata.labels[\"controller-revision-hash\"] == $state.status.updateRevision"
+    ));
     assert!(tasks.contains("ARC requires exactly $expected_count build hosts"));
     assert!(tasks.contains("expected_build_nodes"));
     assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
@@ -508,7 +513,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "nook.nokey.sh/arc-build=preparing:NoSchedule",
         "nook.nokey.sh/arc-tier=overflow",
         "arc:buildkit:storage:prepare:",
-        "rollout status statefulset/nook-buildkit",
+        "wait statefulset/nook-buildkit",
         "autoscalingrunnerset/nook-k0s",
         "arc:build-hosts:activate:",
         "arc:container-hosts:reconcile:",
@@ -536,7 +541,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         .find("- task: arc:container-hosts:reconcile")
         .unwrap_or_else(|| panic!("ARC deployment must reconcile container-job eligibility"));
     let rollout = tasks
-        .find("rollout status statefulset/nook-buildkit")
+        .find("wait statefulset/nook-buildkit")
         .unwrap_or_else(|| panic!("ARC deployment must wait for BuildKit"));
     let activate = tasks
         .rfind("- task: arc:build-hosts:activate")
