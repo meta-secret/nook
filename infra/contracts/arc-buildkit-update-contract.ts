@@ -58,7 +58,18 @@ export class ArcBuildkitUpdateContract {
       spec: { template: { metadata: {} } },
     };
     const rendered = new OperationalCommandProbe({
-      cmd: ["jq", "-cs", bundle],
+      cmd: [
+        "jq",
+        "-cs",
+        "--argjson",
+        "expected",
+        JSON.stringify({
+          apiVersion: "v1",
+          kind: "List",
+          items: [config, workload],
+        }),
+        `(${bundle}) == $expected`,
+      ],
       stdin: new Blob([JSON.stringify(config), "\n", JSON.stringify(workload)]),
       stdout: OperationalProbeStream.Pipe,
       stderr: OperationalProbeStream.Pipe,
@@ -66,12 +77,7 @@ export class ArcBuildkitUpdateContract {
     if (rendered.isErr()) return err(rendered.error);
     if (
       rendered.value.exitCode !== 0 ||
-      rendered.value.stdout.trim() !==
-        JSON.stringify({
-          apiVersion: "v1",
-          kind: "List",
-          items: [config, workload],
-        })
+      rendered.value.stdout.trim() !== "true"
     ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
@@ -188,16 +194,14 @@ export class ArcBuildkitUpdateContract {
         cmd: [
           "jq",
           "-cn",
-          "--arg",
-          "hash",
-          "checksum",
           "--argjson",
-          "state",
-          JSON.stringify(fixture.state),
-          "--argjson",
-          "pods",
-          JSON.stringify(fixture.input),
-          fixture.guard,
+          "input",
+          JSON.stringify({
+            state: fixture.state,
+            pods: fixture.input,
+            hash: "checksum",
+          }),
+          `$input.state as $state | $input.pods as $pods | $input.hash as $hash | (${fixture.guard})`,
         ],
         stdout: OperationalProbeStream.Pipe,
         stderr: OperationalProbeStream.Pipe,
