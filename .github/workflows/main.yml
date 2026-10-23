@@ -179,20 +179,17 @@ jobs:
           trap cleanup EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
-          logged_task() (
-            set +m
-            trap - EXIT INT TERM
-            log=$1
-            shift
-            set +e
-            "$@" 2>&1 | tee "$log"
-            statuses=("${PIPESTATUS[@]}")
-            if [ "${statuses[0]}" -ne 0 ]; then return "${statuses[0]}"; fi
-            return "${statuses[1]}"
-          )
           (
             set +m
-            logged_task "$RUNNER_TEMP/main-preflight.log" task preflight
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              task preflight 2>&1 | tee "$RUNNER_TEMP/main-preflight.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            )
           ) &
           preflight_pid=$!
           owned_pids+=("$preflight_pid")
@@ -209,29 +206,61 @@ jobs:
             trap cleanup_private EXIT
             trap 'exit 130' INT
             trap 'exit 143' TERM
-            logged_task "$RUNNER_TEMP/main-wasm-build.log" task ci:pr:wasm \
-              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" &
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              task ci:pr:wasm \
+                CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" 2>&1 | tee "$RUNNER_TEMP/main-wasm-build.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            ) &
             wasm_pid=$!
             private_pids+=("$wasm_pid")
             wait "$wasm_pid" || exit $?
             private_pids=()
             echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
-            logged_task "$RUNNER_TEMP/main-web-artifacts.log" task ci:main:web:artifacts \
-              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
-              VITE_BASE="$CI_MAIN_VITE_BASE" \
-              VITE_SITE_URL="$CI_MAIN_DEV_URL" \
-              VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
-              VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
-              VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
-              WASM_BUILD_MODE=dev &
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              task ci:main:web:artifacts \
+                CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
+                VITE_BASE="$CI_MAIN_VITE_BASE" \
+                VITE_SITE_URL="$CI_MAIN_DEV_URL" \
+                VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
+                VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
+                VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
+                WASM_BUILD_MODE=dev 2>&1 | tee "$RUNNER_TEMP/main-web-artifacts.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            ) &
             web_pid=$!
             private_pids+=("$web_pid")
-            logged_task "$RUNNER_TEMP/main-browser-construction.log" env E2E_OUTPUT=type=cacheonly \
-              task web:e2e:kubernetes-image:artifacts \
-              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" &
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              env E2E_OUTPUT=type=cacheonly \
+                task web:e2e:kubernetes-image:artifacts \
+                CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" 2>&1 | tee "$RUNNER_TEMP/main-browser-construction.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            ) &
             browser_pid=$!
             private_pids+=("$browser_pid")
-            logged_task "$RUNNER_TEMP/main-node.log" task ci:main:wasm-node-test &
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              task ci:main:wasm-node-test 2>&1 | tee "$RUNNER_TEMP/main-node.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            ) &
             node_pid=$!
             private_pids+=("$node_pid")
             wait "$node_pid" || exit $?
@@ -246,15 +275,31 @@ jobs:
           owned_pids=()
           (
             set +m
-            logged_task "$RUNNER_TEMP/main-preflight-cache.log" env GHA_CACHE_WRITE_ENABLED=1 \
-              task ci:main:publish-preflight-cache
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              env GHA_CACHE_WRITE_ENABLED=1 \
+                task ci:main:publish-preflight-cache 2>&1 | tee "$RUNNER_TEMP/main-preflight-cache.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            )
           ) &
           preflight_cache_pid=$!
           owned_pids+=("$preflight_cache_pid")
           (
             set +m
-            logged_task "$RUNNER_TEMP/main-wasm-cache.log" env GHA_CACHE_WRITE_ENABLED=1 \
-              task ci:main:publish-wasm-cache
+            (
+              set +m
+              trap - EXIT INT TERM
+              set +e
+              env GHA_CACHE_WRITE_ENABLED=1 \
+                task ci:main:publish-wasm-cache 2>&1 | tee "$RUNNER_TEMP/main-wasm-cache.log"
+              statuses=("${PIPESTATUS[@]}")
+              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+              exit "${statuses[1]}"
+            )
           ) &
           cache_pid=$!
           owned_pids+=("$cache_pid")
