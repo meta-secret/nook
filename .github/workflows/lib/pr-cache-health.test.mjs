@@ -757,6 +757,11 @@ void test("PR browser fanout preserves read-only cache boundaries", () => {
   const verify = workflow.slice(verifyStart, browserStart);
   const browser = workflow.slice(browserStart, validationStart);
   const validation = workflow.slice(validationStart);
+  assert.match(
+    prepare,
+    /name: Upload browser and preview handoff\n {8}if: needs\.scope\.outputs\.validation == 'true'\n {8}uses: actions\/upload-artifact@v7\n {8}with:\n {10}name: pr-browser-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}\n {10}path: \$\{\{ runner\.temp \}\}\/nook-pr-artifacts\/browser\.tar\n {10}if-no-files-found: error\n {10}compression-level: 1\n {10}retention-days: 1\n/,
+  );
+  assert.equal(workflow.match(/compression-level:/g)?.length, 1);
   assert.match(validation, /needs: \[scope, prepare, verify, browser\]\n {4}if: \$\{\{ always\(\) \}\}/);
   assert.match(
     validation,
