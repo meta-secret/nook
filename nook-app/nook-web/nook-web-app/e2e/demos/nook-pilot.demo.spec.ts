@@ -774,6 +774,7 @@ test('fill the standalone Namecheap OTP route through Nook Pilot', async ({
   ).toBeVisible()
   await demoBeat(page)
   await expect(codeInput).toHaveValue('482913')
+  await expect(widget.getByRole('button', fillButton)).toBeHidden()
   await expect(page).toHaveURL(challengeUrl)
   await expect(
     widget.getByText(
