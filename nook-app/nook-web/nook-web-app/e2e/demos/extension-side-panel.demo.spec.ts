@@ -17,6 +17,10 @@ import {
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
 } from '../../../nook-web-extension/src/lib/side-panel-site'
+import {
+  SidePanelAddAuthenticatorKind,
+  SidePanelAuthenticatorSetupMessageType,
+} from '../../../nook-web-extension/src/lib/side-panel-authenticator-setup'
 import type {
   SiteSecretRow,
   SiteSecretSectionContent,
@@ -38,6 +42,8 @@ enum SidePanelDemoSite {
   Matches = 'matches',
   Empty = 'empty',
   NonWeb = 'non-web',
+  /** A settings page showing an "Update authenticator app" QR dialog. */
+  AuthenticatorSetup = 'authenticator-setup',
 }
 
 type SidePanelDemoSession = {
@@ -90,6 +96,10 @@ const sidePanelDemoProtocol = {
   siteMatches: SidePanelDemoSite.Matches,
   siteEmpty: SidePanelDemoSite.Empty,
   siteNonWeb: SidePanelDemoSite.NonWeb,
+  siteAuthenticatorSetup: SidePanelDemoSite.AuthenticatorSetup,
+  addAuthenticator: SidePanelAuthenticatorSetupMessageType.Add,
+  addAuthenticatorLabel: I18N_KEYS.ExtensionActionSiteAddAuthenticator,
+  addAuthenticatorStarted: SidePanelAddAuthenticatorKind.Started,
 } as const
 
 type SidePanelDemoRuntimeArgument = SidePanelDemoSession & {
@@ -241,7 +251,24 @@ function installSidePanelDemoRuntime(
         return {
           kind: protocol.ready,
           display_host: 'accounts.example.com',
-          listing: { summary: { kind: 'Listed' }, sections: siteSections },
+          listing: {
+            summary: { kind: 'Listed' },
+            sections: siteSections,
+            page_offer: { kind: 'Absent' },
+          },
+        }
+      case protocol.siteAuthenticatorSetup:
+        return {
+          kind: protocol.ready,
+          display_host: 'dashboard.example.com',
+          listing: {
+            summary: { kind: 'Listed' },
+            sections: siteSections,
+            page_offer: {
+              kind: 'AddAuthenticator',
+              label_key: protocol.addAuthenticatorLabel,
+            },
+          },
         }
       case protocol.siteEmpty:
         return {
@@ -254,6 +281,7 @@ function installSidePanelDemoRuntime(
               hint: { kind: 'Shown', message_key: protocol.emptyHint },
             },
             sections: emptySections,
+            page_offer: { kind: 'Absent' },
           },
         }
       case protocol.siteNonWeb:
@@ -270,6 +298,8 @@ function installSidePanelDemoRuntime(
         return { kind: protocol.filled }
       case protocol.fillCode:
         return { kind: protocol.codeFilled }
+      case protocol.addAuthenticator:
+        return { kind: protocol.addAuthenticatorStarted }
       case protocol.status:
         return { ok: true, status, device }
       case protocol.unlockPin:
@@ -399,15 +429,10 @@ test('sets up in place: an existing passkey or a new one, side by side', async (
   await expect(page.getByTestId('device-protection-title')).toHaveText(
     "Didn't find your passkey?",
   )
-  const create = page.getByTestId('device-protection-create-new-choice')
+  // Creating one is the way on, offered at once and still an explicit step.
+  const create = page.getByTestId('device-protection-setup-btn')
   await expect(create).toHaveText('Create passkey')
   await expect(create).toBeFocused()
-  await demoBeat(page)
-  // Creating a passkey stays an explicit step.
-  await create.click()
-  await expect(page.getByTestId('device-protection-setup-btn')).toHaveText(
-    'Create passkey',
-  )
   await demoBeat(page)
 })
 
@@ -576,5 +601,31 @@ test('offers no Fill in a tab without a website', async ({ page }) => {
     'No website in this tab',
   )
   await expect(page.getByTestId('side-panel-fill')).toHaveCount(0)
+  await demoBeat(page)
+})
+
+test('offers to add the authenticator a settings page is setting up', async ({
+  page,
+}) => {
+  await openSidePanel({
+    page,
+    session: {
+      initialStatus: DeviceProtectionStatus.Unlocked,
+      vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.AuthenticatorSetup,
+    },
+  })
+  await expect(page.getByTestId('side-panel-site-host')).toHaveText(
+    'dashboard.example.com',
+  )
+  // The saved authenticator stays listed while the page replaces it.
+  await expect(page.getByTestId('side-panel-item')).toHaveCount(3)
+  const offer = page.getByTestId('side-panel-add-authenticator')
+  await expect(offer).toHaveText('Add 2FA from this page')
+  await demoBeat(page)
+  await offer.click()
+  await expect(
+    page.getByTestId('side-panel-add-authenticator-status'),
+  ).toHaveText('Review the authenticator in the Nook box on the page.')
   await demoBeat(page)
 })
