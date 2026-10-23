@@ -26,6 +26,18 @@ test('the vault panel names its passphrases and keeps a failed unlock and its re
   const hint = page.getByTestId('vault-panel-passphrases-hint')
   await expect(count).toHaveText('0')
 
+  // The card with its panel open spreads across the whole row of cards,
+  // so the panel beside it keeps its full width.
+  const cards = page.getByTestId('identity-cards')
+  const spreadCard = cards.locator(
+    '[data-testid="identity-card"][data-spread="true"]',
+  )
+  await expect(spreadCard).toHaveCount(1)
+  const row = await cards.boundingBox()
+  const openCard = await spreadCard.boundingBox()
+  if (!row || !openCard) throw new Error('expected the card row on screen')
+  expect(openCard.width).toBeCloseTo(row.width, 0)
+
   // A passphrase added on its page shows in the panel on the way back.
   await addVaultPassword(page, 'Paper copy', 'paper-copy-pass-42')
   await expectVaultPasswordStatus(page, 1, {
@@ -41,7 +53,12 @@ test('the vault panel names its passphrases and keeps a failed unlock and its re
 
   // Locked, a cancelled passkey stays on the card: its reason and this
   // browser's key recovery sit under the unlock, with no page-level sheet.
+  // Locking folds the card down; its vault row opens the panel again.
   await page.getByTestId('identity-lock').click()
+  await expect(spreadCard).toHaveCount(0, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('identity-vault-row').first().click()
   const unlock = page.getByTestId('vault-panel-unlock')
   await expect(unlock).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await page.evaluate(() => {
