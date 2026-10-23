@@ -722,6 +722,8 @@ impl MainProducerCacheContract<'_> {
 
 fn assert_release_wasm_cache_contract(root: &Path) {
     let wasm_dockerfile = (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+    let nook_verification =
+        (root).read("nook-app/nook-platform/docker/rust/base/wasm-nook-verify.sh");
     assert!(
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source-base")
             && wasm_dockerfile.contains("FROM builder-wasm-source-base AS builder-wasm-source")
@@ -753,7 +755,9 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains(
                 "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm",
             )
-            && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
+            && wasm_dockerfile.contains("FROM builder-wasm-handoff AS builder-nook-wasm-browser-input")
+            && wasm_dockerfile.contains("bash /opt/nook/wasm-nook-verify.sh prepare")
+            && nook_verification.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")

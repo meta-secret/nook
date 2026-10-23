@@ -285,8 +285,10 @@ fn wasm_browser_partitions_preserve_the_complete_instrumented_coverage_join() ->
     assert!(nook.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
     assert!(nook.contains("test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run --message-format=json"));
     assert_eq!(nook.matches("--no-run").count(), 1);
-    assert!(nook.contains(".reason == \"compiler-artifact\" and .target.name == \"nook_wasm\" and .profile.test == true"));
-    assert!(nook.contains("if length == 1 then .[0] else error("));
+    assert!(nook.contains(
+        ".reason == \"compiler-artifact\" and .profile.test == true and .executable != null"
+    ));
+    assert!(nook.contains("unique_by(.executable) | if length == 1 and .[0].target.name == \"nook_wasm\" then .[0].executable else error("));
     for selection in ["--list", "manager:: --list", "--skip manager:: --list"] {
         assert!(nook.contains(&format!("\"$runner\" \"$wasm\" {selection} >")));
     }
