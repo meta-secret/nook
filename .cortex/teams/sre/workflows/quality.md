@@ -99,7 +99,11 @@ Use this workflow for quality, CI, and deployment changes.
    - `prettier --check`
    - `vitest run`
    - `vite build`
-   - `task preflight` — repository-wide Rust invariant tests, before app setup
+   - `task preflight` — repository-wide Rust invariant tests, before app setup.
+     Main web alone may overlap it with private WASM and web preparation under
+     the [Main publication gate](ci-pipeline.md#workflow-map). All private
+     tasks and loggers must pass before any registry cache, image, or handoff
+     publication. Native, PR, compiler, unit, and lint ordering stays unchanged.
    - `Rust ecosystem: Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
      `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
@@ -413,7 +417,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-
     - One `PR validation / Verify and preview` job owns the complete PR gate.
     - Trusted PRs use one ARC job Pod and node-local persistent BuildKit;
       fork/Dependabot PRs remain hosted and secret-free.

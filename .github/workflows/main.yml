@@ -162,113 +162,116 @@ jobs:
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           require-sccache: "true"
-      - name: Repository invariant validation
-        run: task preflight
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: WASM clippy, build, and package export
-        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          CI: true
-          # Node verification below must succeed before this builder may publish shared scopes.
-          GHA_CACHE_WRITE_ENABLED: ""
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-          WASM_BUILD_MODE: dev
-
-      - name: Stamp WASM run attempt
-        run: echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
-
-      - name: Upload WASM handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
-
-      - name: Verify Node and web concurrently, then publish verified artifacts
+      - name: Verify preflight and private web producer, then publish verified artifacts
         id: prepare_web
         shell: bash
         run: |
-          set -o pipefail
-          preflight_cache_log="$RUNNER_TEMP/main-preflight-cache.log"
-          cache_log="$RUNNER_TEMP/main-wasm-cache.log"
-          web_log="$RUNNER_TEMP/main-web-artifacts.log"
-          browser_log="$RUNNER_TEMP/main-browser-construction.log"
-          (
+          set -eo pipefail
+          set -m
+          owned_pids=()
+          cleanup() {
+            status=$?
+            trap - EXIT INT TERM
+            for pid in "${owned_pids[@]}"; do kill -- "-$pid" 2>/dev/null || true; done
+            for pid in "${owned_pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+            exit "$status"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          logged_task() (
+            set +m
+            trap - EXIT INT TERM
+            log=$1
+            shift
             set +e
-            GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache 2>&1 | tee "$preflight_cache_log"
+            "$@" 2>&1 | tee "$log"
             statuses=("${PIPESTATUS[@]}")
-            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
-            exit "${statuses[1]}"
-          ) &
-          preflight_cache_pid=$!
+            if [ "${statuses[0]}" -ne 0 ]; then return "${statuses[0]}"; fi
+            return "${statuses[1]}"
+          )
           (
-            set +e
-            task ci:main:web:artifacts \
+            set +m
+            logged_task "$RUNNER_TEMP/main-preflight.log" task preflight
+          ) &
+          preflight_pid=$!
+          owned_pids+=("$preflight_pid")
+          (
+            set -m
+            private_pids=()
+            cleanup_private() {
+              status=$?
+              trap - EXIT INT TERM
+              for pid in "${private_pids[@]}"; do kill -- "-$pid" 2>/dev/null || true; done
+              for pid in "${private_pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+              exit "$status"
+            }
+            trap cleanup_private EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+            logged_task "$RUNNER_TEMP/main-wasm-build.log" task ci:pr:wasm \
+              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" &
+            wasm_pid=$!
+            private_pids+=("$wasm_pid")
+            wait "$wasm_pid" || exit $?
+            private_pids=()
+            echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
+            logged_task "$RUNNER_TEMP/main-web-artifacts.log" task ci:main:web:artifacts \
               CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
               VITE_BASE="$CI_MAIN_VITE_BASE" \
               VITE_SITE_URL="$CI_MAIN_DEV_URL" \
               VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
               VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
               VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
-              WASM_BUILD_MODE=dev 2>&1 | tee "$web_log"
-            statuses=("${PIPESTATUS[@]}")
-            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
-            exit "${statuses[1]}"
+              WASM_BUILD_MODE=dev &
+            web_pid=$!
+            private_pids+=("$web_pid")
+            logged_task "$RUNNER_TEMP/main-browser-construction.log" env E2E_OUTPUT=type=cacheonly \
+              task web:e2e:kubernetes-image:artifacts \
+              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" &
+            browser_pid=$!
+            private_pids+=("$browser_pid")
+            logged_task "$RUNNER_TEMP/main-node.log" task ci:main:wasm-node-test &
+            node_pid=$!
+            private_pids+=("$node_pid")
+            wait "$node_pid" || exit $?
+            wait "$web_pid" || exit $?
+            wait "$browser_pid" || exit $?
+            private_pids=()
           ) &
-          web_pid=$!
+          private_pid=$!
+          owned_pids+=("$private_pid")
+          wait "$preflight_pid"
+          wait "$private_pid"
+          owned_pids=()
           (
-            set +e
-            E2E_OUTPUT=type=cacheonly task web:e2e:kubernetes-image:artifacts \
-              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" 2>&1 | tee "$browser_log"
-            statuses=("${PIPESTATUS[@]}")
-            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
-            exit "${statuses[1]}"
+            set +m
+            logged_task "$RUNNER_TEMP/main-preflight-cache.log" env GHA_CACHE_WRITE_ENABLED=1 \
+              task ci:main:publish-preflight-cache
           ) &
-          browser_pid=$!
-          node_status=0
-          task ci:main:wasm-node-test || node_status=$?
-          cache_outcome=skipped
-          if [ "$node_status" -eq 0 ]; then
-            (
-              set +e
-              GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache 2>&1 | tee "$cache_log"
-              statuses=("${PIPESTATUS[@]}")
-              if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
-              exit "${statuses[1]}"
-            ) &
-            cache_pid=$!
-          fi
-          web_status=0
-          wait "$web_pid" || web_status=$?
-          browser_status=0
-          wait "$browser_pid" || browser_status=$?
-          if [ "$node_status" -eq 0 ] && [ "$web_status" -eq 0 ] && [ "$browser_status" -eq 0 ]; then
-            task web:e2e:kubernetes-image:artifacts \
-              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" || web_status=$?
-          fi
-          if [ "$node_status" -eq 0 ]; then
-            cache_outcome=success
-            wait "$cache_pid" || cache_outcome=failure
-          fi
+          preflight_cache_pid=$!
+          owned_pids+=("$preflight_cache_pid")
+          (
+            set +m
+            logged_task "$RUNNER_TEMP/main-wasm-cache.log" env GHA_CACHE_WRITE_ENABLED=1 \
+              task ci:main:publish-wasm-cache
+          ) &
+          cache_pid=$!
+          owned_pids+=("$cache_pid")
+          image_status=0
+          task web:e2e:kubernetes-image:artifacts \
+            CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" || image_status=$?
           preflight_cache_outcome=success
           wait "$preflight_cache_pid" || preflight_cache_outcome=failure
+          cache_outcome=success
+          wait "$cache_pid" || cache_outcome=failure
+          owned_pids=()
           echo "preflight_cache_publication_outcome=$preflight_cache_outcome" >> "$GITHUB_OUTPUT"
           echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
-          if [ "$node_status" -ne 0 ]; then exit "$node_status"; fi
-          if [ "$web_status" -ne 0 ]; then exit "$web_status"; fi
-          exit "$browser_status"
+          exit "$image_status"
         env:
           CI: true
-          # Keep verification read-only; publish the already-solved dependency graph afterward.
+          # Shared publication starts only after every private task and logger succeeds.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -284,6 +287,15 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
           WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
+
+      - name: Upload WASM handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
 
       - name: Upload verified development deployment handoff
         id: upload_web

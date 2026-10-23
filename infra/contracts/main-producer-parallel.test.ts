@@ -38,12 +38,14 @@ const command = z.object({ run: z.string() }).parse(step).run;
 
 enum FailureStage {
   None = "none",
+  Preflight = "preflight",
+  Wasm = "wasm",
   Node = "node",
+  Web = "web",
+  Construction = "construction",
   Cache = "cache",
   PreflightCache = "preflight-cache",
-  Web = "web",
   Image = "image",
-  Construction = "construction",
 }
 
 enum CacheOutcome {
@@ -52,179 +54,140 @@ enum CacheOutcome {
   Skipped = "skipped",
 }
 
-enum LogCapture {
-  File = "file",
-  Directory = "directory",
-  BrowserDirectory = "browser-directory",
-}
-
 const scenarios = [
+  { failure: FailureStage.None, status: 0, logFailure: "", publishes: true },
   {
-    failure: FailureStage.None,
-    exitStatus: 0,
-    publishes: true,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.File,
-  },
-  {
-    failure: FailureStage.Node,
-    exitStatus: 7,
+    failure: FailureStage.Preflight,
+    status: 6,
+    logFailure: "",
     publishes: false,
-    cacheOutcome: CacheOutcome.Skipped,
-    logCapture: LogCapture.File,
   },
-  {
-    failure: FailureStage.Cache,
-    exitStatus: 0,
-    publishes: true,
-    cacheOutcome: CacheOutcome.Failure,
-    logCapture: LogCapture.File,
-  },
-  {
-    failure: FailureStage.PreflightCache,
-    exitStatus: 0,
-    publishes: true,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.File,
-  },
-  {
-    failure: FailureStage.Web,
-    exitStatus: 8,
-    publishes: false,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.File,
-  },
-  {
-    failure: FailureStage.Image,
-    exitStatus: 9,
-    publishes: true,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.File,
-  },
+  { failure: FailureStage.Wasm, status: 5, logFailure: "", publishes: false },
+  { failure: FailureStage.Node, status: 7, logFailure: "", publishes: false },
+  { failure: FailureStage.Web, status: 8, logFailure: "", publishes: false },
   {
     failure: FailureStage.Construction,
-    exitStatus: 12,
+    status: 12,
+    logFailure: "",
     publishes: false,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.File,
   },
+  { failure: FailureStage.Cache, status: 0, logFailure: "", publishes: true },
   {
-    failure: FailureStage.None,
-    exitStatus: 1,
-    publishes: false,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.BrowserDirectory,
+    failure: FailureStage.PreflightCache,
+    status: 0,
+    logFailure: "",
+    publishes: true,
   },
-  {
+  { failure: FailureStage.Image, status: 9, logFailure: "", publishes: true },
+  ...[
+    "preflight",
+    "wasm-build",
+    "node",
+    "web-artifacts",
+    "browser-construction",
+  ].map((logFailure) => ({
     failure: FailureStage.None,
-    exitStatus: 1,
+    status: 1,
+    logFailure,
     publishes: false,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.Directory,
-  },
+  })),
   {
     failure: FailureStage.Web,
-    exitStatus: 8,
+    status: 8,
+    logFailure: "web-artifacts",
     publishes: false,
-    cacheOutcome: CacheOutcome.Success,
-    logCapture: LogCapture.Directory,
   },
 ];
 
 for (const scenario of scenarios) {
-  test(`Main overlaps Node and web checks and joins every result: ${scenario.failure}, log ${scenario.logCapture}`, () => {
+  test(`Main gates every publisher on all private tasks and loggers: ${scenario.failure}, log ${scenario.logFailure}`, () => {
     const root = mkdtempSync(join(tmpdir(), "nook-main-join-"));
     try {
       const bin = join(root, "bin");
       mkdirSync(bin);
-      if (scenario.logCapture === LogCapture.Directory) {
-        mkdirSync(join(root, "main-web-artifacts.log"));
-      }
-      if (scenario.logCapture === LogCapture.BrowserDirectory) {
-        mkdirSync(join(root, "main-browser-construction.log"));
+      if (scenario.logFailure !== "") {
+        mkdirSync(join(root, `main-${scenario.logFailure}.log`));
       }
       writeFileSync(
         join(bin, "task"),
         `#!/bin/bash
 set -eu
 case "$1" in
-  ci:main:publish-preflight-cache)
-    kind=preflight-cache; other=web
-    test "$GHA_CACHE_WRITE_ENABLED" = 1 ;;
-  ci:main:wasm-node-test) kind=node; other=web; test -z "$GHA_CACHE_WRITE_ENABLED" ;;
-  ci:main:publish-wasm-cache)
-    kind=cache; other=web
-    test -f "$PROBE_DIR/node.finished"
-    test "$FAIL_STAGE" != node
-    test "$GHA_CACHE_WRITE_ENABLED" = 1 ;;
-  ci:main:web:artifacts) kind=web; other=node; test -z "$GHA_CACHE_WRITE_ENABLED" ;;
+  preflight) kind=preflight ;;
+  ci:pr:wasm) kind=wasm ;;
+  ci:main:wasm-node-test) kind=node ;;
+  ci:main:web:artifacts) kind=web ;;
+  ci:main:publish-preflight-cache) kind=preflight-cache ;;
+  ci:main:publish-wasm-cache) kind=cache ;;
   web:e2e:kubernetes-image:artifacts)
-    if [ "\${E2E_OUTPUT:-}" = type=cacheonly ]; then
-      kind=construction; other=node
-      test -z "$GHA_CACHE_WRITE_ENABLED"
-    else
-    test -z "\${E2E_OUTPUT:-}"
-    test -f "$PROBE_DIR/node.finished"
-    test "$FAIL_STAGE" != node
-    test -f "$PROBE_DIR/web.finished"
-    test -f "$PROBE_DIR/construction.finished"
-    test "$FAIL_STAGE" != construction
-    test ! -f "$PROBE_DIR/cache.finished"
-    touch "$PROBE_DIR/image.finished"
-    if [ "$FAIL_STAGE" = image ]; then exit 9; fi
-    exit 0
-    fi ;;
-  *) exit 9 ;;
+    if [ "\${E2E_OUTPUT:-}" = type=cacheonly ]; then kind=construction; else kind=image; fi ;;
+  *) exit 90 ;;
+esac
+echo $$ > "$PROBE_DIR/$kind.pid"
+trap 'touch "$PROBE_DIR/$kind.stopped"; exit 143' TERM
+case "$kind" in
+  preflight-cache|cache|image)
+    for required in preflight wasm node web construction; do
+      test -f "$PROBE_DIR/$required.finished"
+      test "$FAIL_STAGE" != "$required"
+    done
+    test -z "$LOG_FAILURE"
+    case "$kind" in image) test -z "\${E2E_OUTPUT:-}" ;; *) test "$GHA_CACHE_WRITE_ENABLED" = 1 ;; esac ;;
+  *) test -z "$GHA_CACHE_WRITE_ENABLED" ;;
+esac
+case "$kind" in
+  node|web|construction)
+    test -f "$PROBE_DIR/wasm.finished"
+    test "$(cat "$PROBE_DIR/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt")" = 4 ;;
 esac
 touch "$PROBE_DIR/$kind.started"
 echo "$kind started log"
 echo "$kind diagnostic" >&2
+case "$kind" in
+  preflight) other=wasm ;;
+  wasm) other=preflight ;;
+  node) other=construction ;;
+  web|construction) other=node ;;
+  *) other=$kind ;;
+esac
 for attempt in $(seq 1 100); do
   if [ -f "$PROBE_DIR/$other.started" ]; then break; fi
   sleep 0.01
 done
 test -f "$PROBE_DIR/$other.started"
-if [ "$kind" = web ] && [ "$FAIL_STAGE" != node ]; then
+if [ "$kind" = wasm ]; then mkdir -p "$PROBE_DIR/nook-ci-artifacts/joined/nook-wasm"; fi
+if [ "$kind" = preflight ] && [ "$FAIL_STAGE" = preflight ]; then
   for attempt in $(seq 1 100); do
-    if [ -f "$PROBE_DIR/cache.started" ]; then break; fi
+    if [ -f "$PROBE_DIR/node.started" ]; then break; fi
     sleep 0.01
   done
-  test -f "$PROBE_DIR/cache.started"
+  test -f "$PROBE_DIR/node.started"
 fi
-if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ] && [ "$FAIL_STAGE" != construction ] && [ "$LOG_CAPTURE" = file ]; then
+if [ "$kind" = node ] && [ "$FAIL_STAGE" = preflight ]; then
+  sleep 3
+fi
+if [ "$kind" = web ] && [ "$FAIL_STAGE" = node ]; then
+  sleep 3
+fi
+if [ "$kind" = node ] && [ "$FAIL_STAGE" = node ]; then
   for attempt in $(seq 1 100); do
-    if [ -f "$PROBE_DIR/image.finished" ]; then break; fi
+    if [ -f "$PROBE_DIR/web.started" ]; then break; fi
     sleep 0.01
   done
-  test -f "$PROBE_DIR/image.finished"
+  test -f "$PROBE_DIR/web.started"
 fi
-if [ "$kind" = preflight-cache ]; then
+if [ "$kind" = node ] && [ "$FAIL_STAGE" = none ] && [ -z "$LOG_FAILURE" ]; then
   for attempt in $(seq 1 100); do
-    if [ -f "$PROBE_DIR/node.finished" ] && [ -f "$PROBE_DIR/web.finished" ] && [ -f "$PROBE_DIR/construction.finished" ]; then break; fi
-    sleep 0.01
-  done
-  test -f "$PROBE_DIR/node.finished"
-  test -f "$PROBE_DIR/web.finished"
-  test -f "$PROBE_DIR/construction.finished"
-  sleep 0.05
-fi
-if [ "$kind" = node ]; then
-  for attempt in $(seq 1 100); do
-    if grep -q 'web started log' "$PROBE_DIR/live.out" && grep -q 'preflight-cache started log' "$PROBE_DIR/live.out"; then break; fi
+    if grep -q 'web started log' "$PROBE_DIR/live.out" && grep -q 'construction started log' "$PROBE_DIR/live.out"; then break; fi
     sleep 0.01
   done
   grep -q 'web started log' "$PROBE_DIR/live.out"
-  grep -q 'preflight-cache started log' "$PROBE_DIR/live.out"
-  for attempt in $(seq 1 100); do
-    if grep -q 'construction started log' "$PROBE_DIR/live.out"; then break; fi
-    sleep 0.01
-  done
   grep -q 'construction started log' "$PROBE_DIR/live.out"
 fi
 touch "$PROBE_DIR/$kind.finished"
 echo "$kind joined log"
 if [ "$FAIL_STAGE" = "$kind" ]; then
-  case "$kind" in node) exit 7 ;; web) exit 8 ;; cache) exit 10 ;; preflight-cache) exit 11 ;; construction) exit 12 ;; esac
+  case "$kind" in preflight) exit 6 ;; wasm) exit 5 ;; node) exit 7 ;; web) exit 8 ;; construction) exit 12 ;; image) exit 9 ;; cache) exit 10 ;; preflight-cache) exit 11 ;; esac
 fi
 `,
         { mode: 0o755 },
@@ -253,95 +216,106 @@ exit "$status"`,
             PATH: `${bin}:${process.env.PATH}`,
             PROBE_DIR: root,
             FAIL_STAGE: scenario.failure,
-            LOG_CAPTURE: scenario.logCapture,
+            LOG_FAILURE: scenario.logFailure,
             RUNNER_TEMP: root,
             GITHUB_OUTPUT: output,
+            GITHUB_RUN_ATTEMPT: "4",
             GHA_CACHE_WRITE_ENABLED: "",
           },
         },
       );
-      expect(result.status, result.stderr).toBe(scenario.exitStatus);
-      expect(existsSync(join(root, "cache.finished"))).toBe(
-        scenario.failure !== FailureStage.Node,
+      expect(result.status, result.stdout + result.stderr).toBe(
+        scenario.status,
       );
-      expect(readFileSync(join(root, "node.finished"), "utf8")).toBe("");
-      expect(readFileSync(join(root, "web.finished"), "utf8")).toBe("");
-      expect(readFileSync(join(root, "construction.finished"), "utf8")).toBe(
-        "",
-      );
-      expect(existsSync(join(root, "image.finished"))).toBe(scenario.publishes);
-      expect(existsSync(join(root, "preflight-cache.finished"))).toBe(true);
-      expect(result.stdout).toContain("preflight-cache joined log");
-      for (const [kind, log] of [
-        ["preflight-cache", "main-preflight-cache.log"],
-        ["web", "main-web-artifacts.log"],
-        ["construction", "main-browser-construction.log"],
-        ["cache", "main-wasm-cache.log"],
-      ] as const) {
-        if (kind === "cache" && scenario.failure === FailureStage.Node) {
-          expect(existsSync(join(root, log))).toBe(false);
-          continue;
-        }
-        expect(
-          result.stdout
-            .split("\n")
-            .filter((line) => line === `${kind} started log`),
-        ).toHaveLength(1);
-        expect(
-          result.stdout
-            .split("\n")
-            .filter((line) => line === `${kind} diagnostic`),
-        ).toHaveLength(1);
-        if (
-          !(
-            log === "main-web-artifacts.log" &&
-            scenario.logCapture === LogCapture.Directory
-          ) &&
-          !(
-            log === "main-browser-construction.log" &&
-            scenario.logCapture === LogCapture.BrowserDirectory
-          )
-        ) {
-          expect(readFileSync(join(root, log), "utf8")).toContain(
-            `${kind} diagnostic`,
-          );
+      for (const kind of ["image", "cache", "preflight-cache"]) {
+        expect(existsSync(join(root, `${kind}.started`))).toBe(
+          scenario.publishes,
+        );
+      }
+      for (const kind of [
+        "preflight",
+        "wasm",
+        "node",
+        "web",
+        "construction",
+        "cache",
+        "preflight-cache",
+      ]) {
+        const pidFile = join(root, `${kind}.pid`);
+        if (existsSync(pidFile)) {
+          const pid = readFileSync(pidFile, "utf8").trim();
+          const alive = spawnSync("/bin/bash", [
+            "-c",
+            'kill -0 "$1" 2>/dev/null',
+            "check-child",
+            pid,
+          ]);
+          expect(alive.status, `${kind} remains alive`).not.toBe(0);
         }
       }
-      expect(readFileSync(output, "utf8")).toBe(
-        `preflight_cache_publication_outcome=${scenario.failure === FailureStage.PreflightCache ? CacheOutcome.Failure : CacheOutcome.Success}\ncache_publication_outcome=${scenario.cacheOutcome}\n`,
-      );
+      if (scenario.failure === FailureStage.Preflight) {
+        expect(existsSync(join(root, "node.stopped"))).toBe(true);
+        expect(existsSync(join(root, "node.finished"))).toBe(false);
+      }
+      if (scenario.failure === FailureStage.Node) {
+        expect(existsSync(join(root, "web.stopped"))).toBe(true);
+        expect(existsSync(join(root, "web.finished"))).toBe(false);
+      }
+      if (scenario.publishes) {
+        for (const kind of [
+          "preflight",
+          "wasm",
+          "node",
+          "web",
+          "construction",
+          "cache",
+          "preflight-cache",
+        ]) {
+          expect(
+            result.stdout
+              .split("\n")
+              .filter((line) => line === `${kind} diagnostic`),
+          ).toHaveLength(1);
+          expect(existsSync(join(root, `${kind}.finished`))).toBe(true);
+        }
+        expect(readFileSync(output, "utf8")).toBe(
+          `preflight_cache_publication_outcome=${scenario.failure === FailureStage.PreflightCache ? CacheOutcome.Failure : CacheOutcome.Success}\ncache_publication_outcome=${scenario.failure === FailureStage.Cache ? CacheOutcome.Failure : CacheOutcome.Success}\n`,
+        );
+      } else {
+        expect(readFileSync(output, "utf8")).toBe("");
+      }
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 }
 
-test("both Main producers fail fast on read-only preflight before building", () => {
-  for (const [job, build] of [
-    [workflow.jobs.rust, "task ci:main:rust"],
-    [workflow.jobs.web, "task ci:pr:wasm"],
-  ] as const) {
-    expect(job.if).toBe("${{ !cancelled() && inputs.product_changed }}");
-    const preflightIndex = job.steps.findIndex(
-      (item) => item.run === "task preflight",
-    );
-    const buildIndex = job.steps.findIndex(
-      (item) => typeof item.run === "string" && item.run.startsWith(build),
-    );
-    expect(preflightIndex).toBeGreaterThanOrEqual(0);
-    expect(buildIndex).toBeGreaterThan(preflightIndex);
-    const preflight = z
-      .object({
-        env: z.object({
-          CI: z.literal(true),
-          GHA_CACHE_WRITE_ENABLED: z.literal(""),
-        }),
-      })
-      .parse(job.steps[preflightIndex]);
-    expect(preflight.env.CI).toBe(true);
-    expect(job.steps[preflightIndex]).not.toHaveProperty("continue-on-error");
-    expect(job.steps[preflightIndex]).not.toHaveProperty("if");
+test("Main native retains preflight ordering; web handoffs follow the complete private gate", () => {
+  const native = workflow.jobs.rust.steps;
+  const preflight = native.findIndex((item) => item.run === "task preflight");
+  const build = native.findIndex(
+    (item) =>
+      typeof item.run === "string" && item.run.startsWith("task ci:main:rust"),
+  );
+  expect(preflight).toBeGreaterThanOrEqual(0);
+  expect(build).toBeGreaterThan(preflight);
+  expect(native[preflight]).not.toHaveProperty("continue-on-error");
+  const producerIndex = workflow.jobs.web.steps.findIndex(
+    (item) => item.id === "prepare_web",
+  );
+  for (const [index, item] of workflow.jobs.web.steps.entries()) {
+    if (
+      typeof item.uses === "string" &&
+      item.uses.startsWith("actions/upload-artifact@")
+    ) {
+      expect(index).toBeGreaterThan(producerIndex);
+      expect(item).not.toHaveProperty("if");
+    }
   }
+  const producer = z
+    .object({ env: z.object({ GHA_CACHE_WRITE_ENABLED: z.literal("") }) })
+    .parse(step);
+  expect(producer.env.GHA_CACHE_WRITE_ENABLED).toBe("");
 });
 
 test("preflight cache failure remains terminal after verified artifact upload", () => {
