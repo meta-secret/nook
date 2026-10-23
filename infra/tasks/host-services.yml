@@ -7,7 +7,7 @@ tasks:
     silent: true
     vars:
       INFRA_JOURNAL_HOSTNAME: '{{default "" .INFRA_JOURNAL_HOSTNAME}}'
-      INFRA_JOURNAL_SSH_CONFIG: '{{default "" .INFRA_JOURNAL_SSH_CONFIG}}'
+      INFRA_JOURNAL_HOST_KEY_ALIAS: '{{default "" .INFRA_JOURNAL_HOST_KEY_ALIAS}}'
     preconditions:
       - sh: test -n "{{.INFRA_WORKER_SSH_TARGET}}"
         msg: INFRA_WORKER_SSH_TARGET must select the existing authenticated worker connection.
@@ -17,10 +17,9 @@ tasks:
       - |
         set -euo pipefail
         ssh_args=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
-        ssh_config="{{.INFRA_JOURNAL_SSH_CONFIG}}"
-        if test -n "$ssh_config"; then
-          test -r "$ssh_config"
-          ssh_args+=(-F "$ssh_config")
+        host_key_alias="{{.INFRA_JOURNAL_HOST_KEY_ALIAS}}"
+        if test -n "$host_key_alias"; then
+          ssh_args+=(-o "HostKeyAlias=$host_key_alias")
         fi
         ssh "${ssh_args[@]}" \
           "{{.INFRA_WORKER_SSH_TARGET}}" bash -s -- "{{.INFRA_JOURNAL_HOSTNAME}}" <<'REMOTE'

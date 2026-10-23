@@ -424,9 +424,9 @@ This task checks host identity, free space and effective journal settings, then
 flushes and verifies the persistent journal. It does not reconcile ARC labels,
 rejoin the node, restart workloads or clear an incident quarantine. Use this
 scoped path for an existing host; full provisioning remains a separate operation.
-When the established route needs a jump host, pass
-`INFRA_JOURNAL_SSH_CONFIG=<existing-ssh-config>` to retain its existing identity,
-proxy route and known-host trust; strict host-key checking remains enabled.
+When the established route uses a different address for the same verified host,
+pass `INFRA_JOURNAL_HOST_KEY_ALIAS=<existing-known-host-name>` to use its existing
+trusted key; strict host-key checking remains enabled and no new trust is added.
 
 For an incident quarantine, record the incident identifier in the native Node
 annotation `nook.nokey.sh/arc-quarantine` while removing its `arc-workload` label.
