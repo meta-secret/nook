@@ -12,12 +12,13 @@ selects this image automatically.
 | Official BuildKit 0.34.1 source archive | SHA256 `0f7d4a765b273359d0752aa1c8a309606578fd0db42e71f0fc5de845d3b1139b` |
 | Go 1.26.8 Bookworm image index          | SHA256 `dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107` |
 | Official rootless runtime image index   | SHA256 `f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89` |
-| Two-file production patch               | SHA256 `4eff5ddf943d69143a96a852cbd9f6aeddd0d06ef10078c4164d80e23b0111de` |
+| Three-file production patch             | SHA256 `06f395c676539fc545deb3d5fe7af146af1de2346d23191e6a9637f793082985` |
 
 The source archive comes from the official release tag and is verified by its
 checksum. It contains no Git checkout; the binary reports the patch checksum
 as its revision, without claiming an upstream commit. Version
-`v0.34.1-nook.1` distinguishes it from the official daemon.
+`v0.34.1-nook.2` distinguishes it from the official daemon and the earlier
+`nook.1` derivative.
 
 ## Native behavior
 
@@ -26,10 +27,18 @@ Matching materialized blobs still repair persistent leases, resources, and both
 directions of GC links. Targeted content-label updates are skipped only when
 their existing values match. Unrelated labels remain intact.
 
-Persistent `AddResource` calls and size metadata commits remain unchanged.
-Force, codecs, export modes, durability, fsync, and containerd are unchanged.
-This source change alone does not establish a production performance gain or
-prove the cause of an earlier timeout or OOM.
+The vendored containerd `AddResource` implementation checks for an existing
+empty resource entry inside the same writable transaction. A duplicate rolls
+back a transaction it owns, avoiding durable writes and mutation callbacks.
+Caller-owned transactions keep their other writes, commit/rollback behavior,
+and callbacks. Missing resources still commit normally; invalid resources and
+nonempty values retain their prior error or normalization behavior.
+
+Size metadata commits, Force, codecs, export modes, durability, and fsync remain
+unchanged. A local 64-layer imported matching-Zstd comparison against `nook.1`
+reduced measured daemon write bytes by 42.34%, with identical cache records and
+OCI output. This bounded result does not establish a production performance
+gain or prove the cause of an earlier timeout or OOM.
 
 ## Local build and validation
 
@@ -41,12 +50,12 @@ container cleanup. This task is unavailable inside ARC or GitHub Actions.
 
 Run `task infra:buildkit:build` to load the derivative image locally. Both paths
 use vendored Go dependencies and the pinned toolchain. The daemon uses the
-upstream BuildKit build tags; tests compile the native cache package. Neither
+upstream BuildKit build tags; tests compile the native metadata and cache packages. Neither
 task pushes an image, modifies an existing daemon, or selects a
 production deployment.
 
 After the owning release decision, publish with `task infra:buildkit:publish
-BUILDKIT_IMAGE=registry.dev.nokey.sh/nook/buildkit:v0.34.1-nook.1-<full-source-commit>`.
+BUILDKIT_IMAGE=registry.dev.nokey.sh/nook/buildkit:v0.34.1-nook.2-<full-source-commit>`.
 This builds the same daemon target for `linux/amd64`, uses existing Docker
 registry authentication, and retains native Buildx digest metadata in a private
 temporary directory. Use a new source-commit tag for each derivative release;

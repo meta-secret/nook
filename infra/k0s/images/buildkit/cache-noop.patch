@@ -92,3 +92,47 @@
  	info.Labels = map[string]string{
  		blobVariantGCLabel + desc.Digest.String(): desc.Digest.String(),
  	}
+--- a/vendor/github.com/containerd/containerd/v2/core/metadata/leases.go
++++ b/vendor/github.com/containerd/containerd/v2/core/metadata/leases.go
+@@ -17,6 +17,7 @@
+ package metadata
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"errors"
+ 	"fmt"
+@@ -189,7 +190,11 @@
+ 		return err
+ 	}
+ 
+-	return update(ctx, lm.db, func(tx *bolt.Tx) error {
++	// Roll back an owned transaction when the resource is already recorded.
++	// A caller-owned transaction must retain its other mutations and commit.
++	errUnchanged := errors.New("lease resource unchanged")
++	_, callerTransaction := boltutil.Transaction(ctx)
++	err = update(ctx, lm.db, func(tx *bolt.Tx) error {
+ 		topbkt := getBucket(tx, bucketKeyVersion, []byte(namespace), bucketKeyObjectLeases, []byte(lease.ID))
+ 		if topbkt == nil {
+ 			return fmt.Errorf("lease %q: %w", lease.ID, errdefs.ErrNotFound)
+@@ -207,8 +212,20 @@
+ 				return err
+ 			}
+ 		}
++		key := []byte(ref)
++		found, value := bkt.Cursor().Seek(key)
++		if found != nil && bytes.Equal(found, key) && len(value) == 0 && bkt.Bucket(key) == nil {
++			if callerTransaction {
++				return nil
++			}
++			return errUnchanged
++		}
+ 		return bkt.Put([]byte(ref), nil)
+ 	})
++	if err == errUnchanged {
++		return nil
++	}
++	return err
+ }
+ 
+ // DeleteResource dereferences the resource by the provided lease.
