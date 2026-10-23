@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 vi.hoisted(() => {
   vi.stubGlobal("chrome", {
-    runtime: { id: "nook-extension", onMessage: { addListener: () => {} } },
+    runtime: { id: "", onMessage: { addListener: () => {} } },
   });
   vi.stubGlobal("__NOOK_EXTENSION_DIAGNOSTICS_ENABLED__", false);
 });
