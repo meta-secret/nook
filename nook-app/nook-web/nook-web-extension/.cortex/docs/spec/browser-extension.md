@@ -925,7 +925,9 @@ A filled-only login or TOTP remains at the current checkpoint for manual review
 and submission.
 After a submitted login, Nook Pilot stages credentials in extension memory for
 the [submitted-login save opportunity](#submitted-login-save-opportunity).
-Signup saves retain their existing Rust-classified outcome requirement.
+A submitted sign-up uses the same opportunity and eligibility; see
+[capture a submitted sign-up](#capture-a-submitted-sign-up).
+Password-change saves retain their Rust-classified outcome requirement.
 Their durable writes through the unlocked extension WASM session
 (`add_secret` / `replace_secret`) require a Sufficient verdict from
 `AuthenticationOutcomeDecision`; navigation alone never counts for that flow.
@@ -958,7 +960,7 @@ Accepted requirement: a submitted login may produce **Save this login?** after
 Rust classifies bounded evidence as eligible. This is an opportunity to save
 the submitted credential, not proof that an arbitrary server authenticated it.
 `LoginSaveOutcomeDecision` is separate from `AuthenticationOutcomeDecision`.
-The existing signup and 2FA outcome requirements remain unchanged.
+The existing password-change and 2FA outcome requirements remain unchanged.
 
 - **Prohibited:** label a generic login transition “confirmed login success,”
   or use unrelated signup or 2FA success to offer a login save.
@@ -983,7 +985,8 @@ The existing signup and 2FA outcome requirements remain unchanged.
   visibility toggle changes their input type.
 - Typing, focus, or filling alone does not capture a submitted login.
 - Exclude newsletter, search, registration, password-change, and multiple-password
-  confirmation structures from generic login capture.
+  confirmation structures from generic login capture. Registration follows the
+  sign-up capture below.
 - Capture scoped candidate values and raw intent, field/history metadata, time,
   URL, auth presence, and bounded control labels synchronously in the trusted
   event handler.
@@ -1006,8 +1009,36 @@ The existing signup and 2FA outcome requirements remain unchanged.
   advance observation and Rust's Login classification after the vetoes.
   Send scoped values and that moment's raw facts in the first Plan message
   before unload. Background/offscreen retains ownership while Rust classifies
-  and selects before staging; registration with password confirmation remains
-  excluded.
+  and selects before staging; registration is never captured as a Login.
+
+#### Capture a submitted sign-up
+
+- Rust classifies a trusted native submission, Enter in a selected field, or a
+  scoped control click as a sign-up when the scope has no current-password or
+  one-time-code field and holds either:
+  - one new password: an `autocomplete="new-password"` field, or a single
+    password field submitted with registration wording (`Sign up`,
+    `Create account`, `Register`) on the control, form identity, or route; or
+  - a password and a confirmation whose captured values are byte-identical and
+    nonempty.
+- Rust compares the first-Plan captured values only to pair the confirmation.
+  It returns indices, keeps no value bytes, and the WASM edge wipes its copy.
+- The account identifier is the sole `autocomplete="username"` field, or else
+  the nearest writable username-shaped field before the password. Without one,
+  nothing is captured.
+- A sign-up click admits registration wording and keeps the provider, reveal,
+  recovery, cancel, and destructive vetoes.
+- The capture stages as a `SubmittedLogin` source with `captured_workflow`
+  Signup and follows the submitted-login outcome, consent, scope, and lifetime
+  rules below. Explicit authentication no longer carries sign-up.
+
+- **Prohibited:** stage a sign-up whose confirmation differs, offer Save on the
+  sign-up page before a qualifying outcome, or treat `Sign up with Google` as
+  the submitting control.
+- **Required:** an email, password, and identical confirmation submitted with
+  `Create account` (including a scripted button outside a `<form>`) produce
+  **Save this login?** once the page leaves the sign-up form under the same
+  evidence a submitted login needs.
 
 #### Classify fresh outcome evidence
 
@@ -1029,8 +1060,9 @@ The existing signup and 2FA outcome requirements remain unchanged.
   explicit-marker login path through its Rust classifier.
 - Reclassify fresh page evidence before showing a prompt and again at explicit
   Save. A stale eligible observation does not authorize a later write.
-- Preserve the captured workflow in outcome classification. Signup, password
-  change, OTP, and manual-checkpoint evidence does not qualify a generic login.
+- Preserve the captured workflow in outcome classification. A captured Login or
+  Signup may qualify; password change, OTP, and manual-checkpoint evidence does
+  not.
 - Keep the original capture baseline unchanged after offering Save. The existing
   two-minute offer TTL governs consent and Save lifetime; the waiting budget
   does not expire an otherwise eligible offer while the user reads it.
