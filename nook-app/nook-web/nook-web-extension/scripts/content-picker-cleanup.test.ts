@@ -14,7 +14,10 @@ import {
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
-import { PasswordFormScopeKind, passwordFormInteraction } from '../../nook-web-shared/src/extension/password-forms'
+import {
+  PasswordFormScopeKind,
+  passwordFormInteraction,
+} from '../../nook-web-shared/src/extension/password-forms'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type {
   WebsiteLoginSaveActionResponse,
@@ -23,7 +26,10 @@ import type {
   WebsiteLoginSaveOfferResponse,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowActivity, authentication_workflow_activity_progress } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowActivity,
+  authentication_workflow_activity_progress,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval,
   AuthenticationWorkflowSnapshotIngress,
@@ -826,33 +832,56 @@ test('validates before publishing an authenticator picker and accepts its select
   widgetState.busy = false
   widgetState.dismissed = false
   const validationEntered = Promise.withResolvers<void>()
-  const validation = Promise.withResolvers<Awaited<ReturnType<typeof authenticationWorkflowUi.approvedWorkflowDisposition>>>()
+  const validation =
+    Promise.withResolvers<
+      Awaited<
+        ReturnType<typeof authenticationWorkflowUi.approvedWorkflowDisposition>
+      >
+    >()
   // The production scan preloads these native presentation projections before
   // showing a control. This isolated handler fixture supplies that same policy.
-  const activity = spyOn(passwordFormInteraction, 'authenticationActivityProgress')
-    .mockImplementation(authentication_workflow_activity_progress)
-  const validate = spyOn(authenticationWorkflowUi, 'approvedWorkflowDisposition')
-    .mockImplementation(() => {
-      validationEntered.resolve()
-      return validation.promise
-    })
-  const open = spyOn(authenticationRuntimeTransport, 'sendAuthenticatorPickerOpenRuntimeMessage')
-    .mockResolvedValue({
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: {
-        kind: AuthenticatorPickerOpenResponseKind.Ready,
-        requestId: 'authenticator-order-request',
-        expiresAt: Date.now() + 60_000,
-      },
-    })
-  const notify = spyOn(authenticationRuntimeTransport, 'sendRuntimeMessageWithoutResponse')
-    .mockImplementation(() => {})
-  const progress = spyOn(workflowUi, 'setFlightProgress').mockImplementation(() => {})
-  const status = spyOn(authenticationWorkflowUi, 'setStatus').mockImplementation(() => {})
-  const fill = spyOn(authenticatorInteraction, 'fillAuthenticatorCode').mockResolvedValue(true)
+  const activity = spyOn(
+    passwordFormInteraction,
+    'authenticationActivityProgress',
+  ).mockImplementation(authentication_workflow_activity_progress)
+  const validate = spyOn(
+    authenticationWorkflowUi,
+    'approvedWorkflowDisposition',
+  ).mockImplementation(() => {
+    validationEntered.resolve()
+    return validation.promise
+  })
+  const open = spyOn(
+    authenticationRuntimeTransport,
+    'sendAuthenticatorPickerOpenRuntimeMessage',
+  ).mockResolvedValue({
+    kind: RuntimeMessageDeliveryKind.Delivered,
+    response: {
+      kind: AuthenticatorPickerOpenResponseKind.Ready,
+      requestId: 'authenticator-order-request',
+      expiresAt: Date.now() + 60_000,
+    },
+  })
+  const notify = spyOn(
+    authenticationRuntimeTransport,
+    'sendRuntimeMessageWithoutResponse',
+  ).mockImplementation(() => {})
+  const progress = spyOn(workflowUi, 'setFlightProgress').mockImplementation(
+    () => {},
+  )
+  const status = spyOn(
+    authenticationWorkflowUi,
+    'setStatus',
+  ).mockImplementation(() => {})
+  const fill = spyOn(
+    authenticatorInteraction,
+    'fillAuthenticatorCode',
+  ).mockResolvedValue(true)
   const continueButton = document.createElement('button')
   document.body.append(continueButton)
-  const request: Parameters<typeof authenticatorInteraction.continueWithAuthenticator>[0] = {
+  const request: Parameters<
+    typeof authenticatorInteraction.continueWithAuthenticator
+  >[0] = {
     workflow: {
       root: document,
       formScope: { kind: PasswordFormScopeKind.Unowned },
