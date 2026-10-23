@@ -540,14 +540,18 @@ class DockerizedRustBuildKitContract {
     const nodeCompilerStageRange: DockerfileStageRange = {
       content: product,
       startMarker:
-        "FROM builder-wasm-handoff AS builder-nook-wasm-node-compiler",
+        "FROM builder-wasm-handoff AS builder-nook-wasm-browser-input",
       endMarker:
-        "FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler",
+        "FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-manager",
     };
     const nodeCompilerStage = stage(nodeCompilerStageRange);
     expect(nodeCompilerStage).toContain(
-      "nook-sccache-report wasm-node-compiler",
+      "bash /opt/nook/wasm-nook-verify.sh prepare",
     );
+    const nookCommands = this.read(
+      "nook-app/nook-platform/docker/rust/base/wasm-nook-verify.sh",
+    );
+    expect(nookCommands).toContain("nook-sccache-report wasm-node-compiler");
     const companionCommands = this.read(
       "nook-app/nook-platform/docker/rust/base/wasm-companion-verify.sh",
     );
@@ -580,11 +584,36 @@ class DockerizedRustBuildKitContract {
       content: product,
       startMarker:
         "FROM builder-wasm-test-base AS builder-companion-wasm-node-compiler",
-      endMarker: "FROM builder-wasm-handoff AS builder-nook-wasm-node-compiler",
+      endMarker: "FROM builder-wasm-handoff AS builder-nook-wasm-browser-input",
     });
     expect(companionStage).toContain("bash /opt/nook/wasm-companion-verify.sh");
     expect(companionStage).not.toContain("--mount=type=cache");
     expect(nodeCompilerStage).not.toContain("--mount=type=cache");
+    const browserPartitions = stage({
+      content: product,
+      startMarker:
+        "FROM builder-nook-wasm-browser-input AS builder-nook-wasm-browser-manager",
+      endMarker:
+        "FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler",
+    });
+    expect(browserPartitions).not.toContain("--mount=");
+    for (const partition of ["manager", "rest"]) {
+      expect(browserPartitions).toContain(
+        `RUN bash /opt/nook/wasm-nook-verify.sh ${partition}`,
+      );
+      expect(browserPartitions).toContain(
+        `COPY --from=builder-nook-wasm-browser-${partition} /opt/nook/wasm-browser-profiles/${partition}-*.profraw ./target/llvm-cov-target/`,
+      );
+    }
+    expect(browserPartitions).toContain(
+      "RUN bash /opt/nook/wasm-nook-verify.sh report",
+    );
+    expect(nookCommands).toContain('cmp "$inventory/all" "$inventory/union"');
+    expect(nookCommands).toContain('test ! -s "$inventory/overlap"');
+    expect(nookCommands).toContain(
+      'LLVM_PROFILE_FILE="/opt/nook/wasm-browser-profiles/$partition-%p-%m.profraw"',
+    );
+    expect(nookCommands).toContain("export WASM_BINDGEN_TEST_TIMEOUT=60");
     const joinedCompiler = stage({
       content: product,
       startMarker:

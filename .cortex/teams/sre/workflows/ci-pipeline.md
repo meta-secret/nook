@@ -661,6 +661,13 @@ authenticator-domain to 90 percent.
   and enforces the unchanged package floor. The public compiler target joins both
   successful branches before runtime consumers can import their result stamps;
   compiler credentials remain confined to the compiler `RUN` mounts.
+- Nook browser coverage compiles one instrumented artifact, then uses native
+  `manager::` and complementary `--skip manager::` selections in two immutable
+  browser leaves. The native `--list` inventories must form a disjoint complete
+  union, including future test names, with unchanged ignored-test behavior.
+  Each harness retains its 60-second deadline and native workers. Distinct raw
+  profiles join the retained native profiles before one unchanged package-floor
+  report; neither browser branch alone can publish the coverage stamp.
 - The shared test base still contains both package sources. This overlap removes
   a serial verification dependency; it does not isolate package cache inputs or
   establish a measured runtime improvement.
