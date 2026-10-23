@@ -40,7 +40,8 @@ disposable local container, which has a 15-minute test deadline and owned
 container cleanup. This task is unavailable inside ARC or GitHub Actions.
 
 Run `task infra:buildkit:build` to load the derivative image locally. Both paths
-use vendored Go dependencies, the pinned toolchain, and native BuildKit build
-tags. Neither task pushes an image, modifies an existing daemon, or selects a
+use vendored Go dependencies and the pinned toolchain. The daemon uses the
+upstream BuildKit build tags; tests compile the native cache package. Neither
+task pushes an image, modifies an existing daemon, or selects a
 production deployment. Publication and an original-volume canary require the
 owning reviewed release decision; image downgrade after new writes is unproven.
