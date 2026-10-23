@@ -283,7 +283,7 @@ fn wasm_browser_partitions_preserve_the_complete_instrumented_coverage_join() ->
     let nook = read(&root.join("nook-app/nook-platform/docker/rust/base/wasm-nook-verify.sh"))?;
     assert!(nook.contains("set -euo pipefail"));
     assert!(nook.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
-    assert!(nook.contains("test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run --message-format=json"));
+    assert!(nook.contains("test --tests --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run --message-format=json-render-diagnostics"));
     assert_eq!(nook.matches("--no-run").count(), 1);
     assert!(nook.contains(
         ".reason == \"compiler-artifact\" and .profile.test == true and .executable != null"

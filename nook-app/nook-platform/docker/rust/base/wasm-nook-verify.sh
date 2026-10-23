@@ -16,7 +16,7 @@ case "${1:?verification phase required}" in
     # Match the handoff instrumentation without executing a browser or cleaning native profiles.
     coverage_env="$(CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov show-env --sh --target wasm32-unknown-unknown)"
     eval "$coverage_env"
-    CARGO_TARGET_DIR=target/llvm-cov-target CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run --message-format=json >"$inventory/compile.json"
+    CARGO_TARGET_DIR=target/llvm-cov-target CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" test --tests --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run --message-format=json-render-diagnostics >"$inventory/compile.json"
     jq -ser '[.[] | select(.reason == "compiler-artifact" and .profile.test == true and .executable != null)] | unique_by(.executable) | if length == 1 and .[0].target.name == "nook_wasm" then .[0].executable else error("expected exactly one nook-wasm test harness") end' "$inventory/compile.json" >"$inventory/artifact"
     wasm="$(cat "$inventory/artifact")"
     test -f "$wasm"
