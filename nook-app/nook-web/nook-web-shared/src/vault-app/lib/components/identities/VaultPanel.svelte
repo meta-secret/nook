@@ -89,6 +89,11 @@ once it is open.
   const open = $derived(row.state === IdentityVaultRowState.Open)
   const dormant = $derived(row.state === IdentityVaultRowState.Dormant)
   const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable)
+  /** Access to the vault is being set up: its key is read and the vault
+   * decrypted with it, which takes a few seconds for a large vault. */
+  const gettingAccess = $derived(
+    !open && reachable && !dormant && vault.isVerifying,
+  )
   /** Why the last unlock did not finish (a cancelled passkey, a wrong PIN),
    * beside the button that retries it. */
   const unlockError = $derived(
@@ -282,7 +287,9 @@ once it is open.
         tone={open ? StatusTone.Success : StatusTone.Neutral}
         label={open
           ? vault.t(I18N_KEYS.WorkspaceVaultOpen)
-          : reachable
+          : gettingAccess
+            ? vault.t(I18N_KEYS.WorkspaceVaultGettingAccess)
+            : reachable
             ? vault.t(I18N_KEYS.WorkspaceStatusLocked)
             : vault.t(I18N_KEYS.WorkspaceVaultUnavailable)}
       />
@@ -354,6 +361,26 @@ once it is open.
             <Fingerprint class="size-4" />
             {unlockLabel}
           </Button>
+        {/if}
+        {#if gettingAccess}
+          <div
+            class="grid gap-2"
+            role="status"
+            aria-live="polite"
+            data-testid="vault-panel-getting-access"
+          >
+            <p class="flex items-center gap-2 text-sm text-foreground">
+              <RefreshCw
+                class="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              {vault.t(I18N_KEYS.WorkspaceVaultPanelGettingAccess)}
+            </p>
+            <span class="nk-progress-sweep" aria-hidden="true"></span>
+            <p class="text-xs text-pretty text-muted-foreground">
+              {vault.t(I18N_KEYS.WorkspaceVaultPanelGettingAccessHint)}
+            </p>
+          </div>
         {/if}
         {#if unlockError}
           <p
@@ -472,7 +499,9 @@ once it is open.
         </h3>
         {#if !open}
           <span class="text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked)}
+            {gettingAccess
+              ? vault.t(I18N_KEYS.WorkspaceVaultPanelManageSoon)
+              : vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked)}
           </span>
         {/if}
       </header>

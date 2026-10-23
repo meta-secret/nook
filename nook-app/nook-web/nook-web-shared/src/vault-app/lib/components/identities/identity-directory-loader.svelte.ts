@@ -13,15 +13,21 @@ export const IDENTITY_DIRECTORY_RETRY_DELAYS_MS: readonly number[] = [
 
 /**
  * Reads the identity directory for the identities hub. A re-read keeps the
- * current cards on screen so a refresh never blanks the page.
+ * current cards on screen so a refresh never blanks the page; the last read
+ * lives on the vault state, so a hub mounted later starts from it too.
  */
 export class IdentityDirectoryLoader {
-  state = $state<IdentityDirectoryLoadState>({
-    kind: IdentityDirectoryLoadKind.Loading,
-  });
   private generation = 0;
 
   constructor(private readonly vault: VaultState) {}
+
+  get state(): IdentityDirectoryLoadState {
+    return this.vault.identityDirectory;
+  }
+
+  private set state(state: IdentityDirectoryLoadState) {
+    this.vault.identityDirectory = state;
+  }
 
   async reload(): Promise<void> {
     const generation = ++this.generation;

@@ -35,7 +35,6 @@ import {
   prepare_new_local_vault_slot,
   set_active_vault,
   set_vault_session_locked,
-  type NookSecretRecord,
   type NookVaultManager,
 } from "$app-wasm";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
@@ -61,6 +60,7 @@ import {
   type DiscoveryCompletion,
 } from "$lib/vault/vault-discovery-timeout";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 const log = browserLogRuntime.createLogger("vault-lifecycle");
 
@@ -599,20 +599,19 @@ export class VaultInitializationActions {
       if (creatingAdditionalVault) {
         await prepare_new_local_vault_slot();
       }
-      const rawRecords = await state.enqueueStorage(async () => {
+      const created = await state.enqueueStorage(async () => {
         const storageArgs = state.wasmStorageArgs();
         const admitted = state.admitManager();
         if (admitted.isErr()) return storageErr(admitted.error);
         const operation = (async () => {
           try {
             if (creatingAdditionalVault) admitted.value.reset_vault_session();
-            return storageOk(
-              await admitted.value.connect_fresh(
-                storageArgs.mode,
-                storageArgs.pat,
-                storageArgs.repo,
-              ),
+            await admitted.value.connect_fresh(
+              storageArgs.mode,
+              storageArgs.pat,
+              storageArgs.repo,
             );
+            return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -622,21 +621,18 @@ export class VaultInitializationActions {
           typeof VaultDiscoveryTimeout
         >[0] = { timeoutMs: 30_000 };
         const completion: DiscoveryCompletion<
-          NookSecretRecord[],
+          VaultChangeOutcome,
           StorageOperationFailure
         > = {
           operation,
-          releaseLateValue: (records) => {
-            for (const record of records) record.free();
-          },
+          releaseLateValue: () => {},
         };
         return new VaultDiscoveryTimeout(deadlineRequest).waitFor(completion);
       });
-      if (rawRecords.isErr()) {
-        state.errorMsg = state.t(rawRecords.error.translationKey);
+      if (created.isErr()) {
+        state.errorMsg = state.t(created.error.translationKey);
         return;
       }
-      for (const record of rawRecords.value) record.free();
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",
         requestedOffset: 0,

@@ -37,7 +37,7 @@ impl NookVaultManager {
     pub(super) async fn replace_secret_with_projection_verification(
         &mut self,
         input: SecretReplacementInput,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         drop(self.status.tx.send("REPLACE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
@@ -111,7 +111,7 @@ impl NookVaultManager {
         }])
         .await?;
         drop(self.status.tx.send("READY".to_owned()));
-        Ok(self.get_records()?)
+        Ok(())
     }
 }
 
@@ -268,7 +268,7 @@ impl NookVaultManager {
         id: String,
         secret_type: nook_core::SecretType,
         data: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         drop(self.status.tx.send("ADD_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
@@ -311,16 +311,15 @@ impl NookVaultManager {
         }])
         .await?;
         drop(self.status.tx.send("READY".to_owned()));
-        let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
             action = "add",
             id = %id,
             secret_type = ?secret_type,
-            count = records.len(),
+            count = self.vault.meta.secrets.len(),
             "secret added"
         );
-        Ok(records)
+        Ok(())
     }
 
     // Replace a secret (new id + payload, single save)
@@ -330,7 +329,7 @@ impl NookVaultManager {
         new_id: String,
         secret_type: nook_core::SecretType,
         data: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         self.replace_secret_with_projection_verification(SecretReplacementInput {
             old_id,
             new_id,
@@ -427,7 +426,7 @@ impl NookVaultManager {
     }
 
     // Delete a secret
-    pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn delete_secret(&mut self, id: String) -> Result<(), JsError> {
         drop(self.status.tx.send("DELETE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::SecretId::parse(&id)?;
@@ -438,15 +437,14 @@ impl NookVaultManager {
         }])
         .await?;
         drop(self.status.tx.send("READY".to_owned()));
-        let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
             action = "delete",
             id = %id,
-            count = records.len(),
+            count = self.vault.meta.secrets.len(),
             "secret deleted"
         );
-        Ok(records)
+        Ok(())
     }
 
     #[wasm_bindgen]
@@ -454,7 +452,7 @@ impl NookVaultManager {
         &mut self,
         old_secret_id: String,
         chosen_secret_id: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         let old_id = nook_core::SecretId::parse(&old_secret_id)?;
         let chosen_id = nook_core::SecretId::parse(&chosen_secret_id)?;
         let projection = self.load_projection_conflicts().await?;
@@ -486,7 +484,7 @@ impl NookVaultManager {
             rejected_secret_ids,
         }])
         .await?;
-        Ok(self.get_records()?)
+        Ok(())
     }
 }
 

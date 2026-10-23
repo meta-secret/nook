@@ -5,10 +5,10 @@ use super::identity_handoff::VaultCreationHandoff;
 use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
+use crate::NookError;
 use crate::storage::identity_record;
 use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::storage::identity_record::StoredIdentityRecord;
-use crate::{NookError, NookSecretRecord};
 use nook_core::{DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
 use nook_core::{
     GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
@@ -169,7 +169,7 @@ impl NookVaultManager {
     }
 
     // Initialize an empty database
-    pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn initialize_empty(&mut self) -> Result<(), JsError> {
         drop(self.status.tx.send("INITIALIZE_START".to_owned()));
         self.vault.meta.secrets.clear();
         if self.needs_genesis_persist()? {
@@ -202,6 +202,6 @@ impl NookVaultManager {
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
         drop(self.status.tx.send("READY".to_owned()));
-        Ok(self.get_records()?)
+        Ok(())
     }
 }

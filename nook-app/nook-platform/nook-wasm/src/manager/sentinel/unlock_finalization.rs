@@ -6,7 +6,7 @@ use super::super::{CeremonyState, NookVaultManager};
 use crate::EventDbSaveEventBytes;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::NookDatabase;
-use crate::{NookError, NookSecretRecord};
+use crate::NookError;
 use nook_core::{
     DeviceIdentity, MultiDeviceError, SentinelUnlockPolicy, SentinelUnlockQuorum,
     SentinelUnlockSession, StoreId, VaultMetaState, VaultType,
@@ -19,7 +19,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 #[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen]
-    pub async fn finalize_sentinel_unlock(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn finalize_sentinel_unlock(&mut self) -> Result<(), JsError> {
         let identity = self.ensure_device_identity()?;
         let session = self.take_sentinel_unlock()?;
         let quorum = match session.into_quorum(&identity) {
@@ -71,7 +71,7 @@ impl<'a> PendingUnlockCompletion<'a> {
         mut self,
         quorum: SentinelUnlockQuorum<'_>,
         identity: &DeviceIdentity,
-    ) -> Result<Vec<NookSecretRecord>, NookError> {
+    ) -> Result<(), NookError> {
         if self.manager.vault.architecture.vault_type != VaultType::Sentinel {
             return Err(MultiDeviceError::InvalidSentinelUnlockSession.into());
         }
@@ -115,15 +115,11 @@ impl<'a> PendingUnlockCompletion<'a> {
         self.checkpoint
             .before(self.manager, CompletionStep::AccessResult)
             .await?;
-        let records = VerifiedVaultAccessFlow::SentinelUnlock
-            .complete(
-                self.manager.get_records(),
-                identity.device_id(),
-                &self.manager.vault.store_id,
-            )
+        VerifiedVaultAccessFlow::SentinelUnlock
+            .complete(Ok(()), identity.device_id(), &self.manager.vault.store_id)
             .await?;
         self.state = CompletionState::Committed;
-        Ok(records)
+        Ok(())
     }
 }
 

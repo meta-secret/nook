@@ -46,6 +46,7 @@ import {
   VaultOperationStale,
   VaultOperationStaleKind,
 } from "$lib/runtime/vault-operation-stale";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 export { VaultConnectionActions } from "$lib/vault/connection";
 
@@ -59,9 +60,9 @@ type VaultSecretAllocationCollection = ReadonlyArray<VaultSecretAllocation>;
 
 interface SecretMutationTimeoutRequest {
   readonly promise: Promise<
-    Result<VaultSecretAllocationCollection, StorageOperationFailure>
+    Result<VaultChangeOutcome, StorageOperationFailure>
   >;
-  readonly releaseLateValue: (records: VaultSecretAllocationCollection) => void;
+  readonly releaseLateValue: () => void;
 }
 
 interface PasswordManagerImportExecution {
@@ -251,21 +252,21 @@ export class VaultSecretActions {
         if (manager.isErr()) return storageErr(manager.error);
         const operation = (async () => {
           try {
-            return storageOk(await manager.value.add_secret(id, type, data));
+            await manager.value.add_secret(id, type, data);
+            return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
         const timeoutRequest: SecretMutationTimeoutRequest = {
           promise: operation,
-          releaseLateValue: (records) => this.freeSecretRecords(records),
+          releaseLateValue: () => {},
         };
         return state.raceStorageTimeout(timeoutRequest);
       });
       if (added.isErr()) {
         return storageErr(added.error);
       }
-      this.freeSecretRecords(added.value);
       const refreshed = await state.refreshSecretsFromSession();
       if (refreshed.isErr()) return storageErr(refreshed.error);
       log.info("secret added");
@@ -509,13 +510,13 @@ export class VaultSecretActions {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
         try {
-          return storageOk(await manager.value.delete_secret(id));
+          await manager.value.delete_secret(id);
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
       });
       if (deleted.isErr()) return storageErr(deleted.error);
-      this.freeSecretRecords(deleted.value);
       committed = true;
       deletedRecord?.free();
       const refreshed = await state.refreshSecretsFromSession();
@@ -548,20 +549,18 @@ export class VaultSecretActions {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
         try {
-          return storageOk(
-            await manager.value.replace_secret(
-              oldId,
-              generate_secret_id(),
-              type,
-              data,
-            ),
+          await manager.value.replace_secret(
+            oldId,
+            generate_secret_id(),
+            type,
+            data,
           );
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
       });
       if (replaced.isErr()) return storageErr(replaced.error);
-      this.freeSecretRecords(replaced.value);
       const refreshed = await state.refreshSecretsFromSession();
       if (refreshed.isErr()) return storageErr(refreshed.error);
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();

@@ -11,7 +11,7 @@ use crate::BrowserTimestamp;
 use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
 use crate::conversion::LoadedVault;
-use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
+use crate::{NookJoinRequest, NookVaultMember};
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
     RosterAddMemberRequest, VaultMember,
@@ -114,7 +114,7 @@ impl NookVaultManager {
         github_repo: String,
         secrets_key: String,
         members_key: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity()?;
@@ -171,14 +171,10 @@ impl NookVaultManager {
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
         self.vault.meta = meta;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = VerifiedVaultAccessFlow::EnrollAndConnect
-            .complete(
-                self.get_records(),
-                identity.device_id(),
-                &self.vault.store_id,
-            )
+        VerifiedVaultAccessFlow::EnrollAndConnect
+            .complete(Ok(()), identity.device_id(), &self.vault.store_id)
             .await?;
-        Ok(records)
+        Ok(())
     }
 
     /// Device B publishes a join request record with its public key.
@@ -202,10 +198,7 @@ impl NookVaultManager {
     }
 
     /// Device A approves a pending join by encrypting DEC for the requester.
-    pub async fn approve_join_request(
-        &mut self,
-        join_device_id: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn approve_join_request(&mut self, join_device_id: String) -> Result<(), JsError> {
         self.application
             .validate_session_access(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
@@ -290,7 +283,7 @@ impl NookVaultManager {
             }
         }
         self.persist_vault_change(operations).await?;
-        Ok(self.get_records()?)
+        Ok(())
     }
 
     #[cfg(test)]
@@ -383,7 +376,7 @@ impl NookVaultManager {
         join_public_key: String,
         join_signing_public_key: String,
         label: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         self.application
             .validate_extension_approval(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
@@ -421,7 +414,7 @@ impl NookVaultManager {
             members_key_ciphertext: envelopes.members_key,
         }];
         self.persist_vault_change(operations).await?;
-        Ok(self.get_records()?)
+        Ok(())
     }
 }
 
@@ -433,10 +426,7 @@ impl NookVaultManager {
         Ok(hex::encode(signing.verifying_key().as_bytes()))
     }
 
-    pub async fn deny_join_request(
-        &mut self,
-        join_device_id: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn deny_join_request(&mut self, join_device_id: String) -> Result<(), JsError> {
         let records = self.stored_records_snapshot();
         let join_device = DeviceId::parse(&join_device_id)?;
         if !records.iter().any(|record| {
@@ -451,7 +441,7 @@ impl NookVaultManager {
             device_id: join_device,
         }])
         .await?;
-        Ok(self.get_records()?)
+        Ok(())
     }
 
     /// Device B self-enrolls when it already holds `secrets_key` and `members_key` out-of-band.
@@ -459,7 +449,7 @@ impl NookVaultManager {
         &mut self,
         secrets_key: String,
         members_key: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    ) -> Result<(), JsError> {
         if self.vault.architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
@@ -480,18 +470,14 @@ impl NookVaultManager {
         }
         self.persist_vault_change(Vec::new()).await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = VerifiedVaultAccessFlow::EnrollWithKeys
-            .complete(
-                self.get_records(),
-                identity.device_id(),
-                &self.vault.store_id,
-            )
+        VerifiedVaultAccessFlow::EnrollWithKeys
+            .complete(Ok(()), identity.device_id(), &self.vault.store_id)
             .await?;
-        Ok(records)
+        Ok(())
     }
 
     /// Back-compat alias — `members_key` must equal `secrets_key` (legacy test path only).
-    pub async fn enroll_with_dec(&mut self, dec: String) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn enroll_with_dec(&mut self, dec: String) -> Result<(), JsError> {
         self.enroll_with_keys(dec.clone(), dec).await
     }
 }
