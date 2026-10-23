@@ -19,6 +19,7 @@ import { FocusedLoginMessageRoute } from './service-worker/focused-login-message
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
+import { SidePanelAuthenticatorPickerRoute } from './service-worker/side-panel-authenticator-picker'
 import {
   ExternalSidePanelSignal,
   SiteSidePanelOpening,
@@ -342,6 +343,7 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SidePanelSiteRoutes.listing(),
   SidePanelSiteRoutes.fill(),
   SidePanelSiteRoutes.codeFill(),
+  SidePanelAuthenticatorPickerRoute.route(),
   SchemaRuntimeMessageRoute.matching(SiteSidePanelOpenMessageSchema)
     .respondWith(siteSidePanelOpening.open.bind(siteSidePanelOpening))
     .onRejected(() => ({ kind: SiteSidePanelOpenKind.Failed })),

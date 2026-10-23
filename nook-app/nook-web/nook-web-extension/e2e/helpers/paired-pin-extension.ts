@@ -24,6 +24,7 @@ import {
 } from './extension-approval'
 import { readExtensionPairingStorage } from './extension-pairing-storage'
 import { reportExtensionBrowserErrors } from './browser-errors'
+import { REAL_SIDE_PANEL_BROWSER_ARG } from './real-side-panel'
 
 /** Local Simple Vault from playwright webServer / test-e2e.sh. */
 const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
@@ -54,6 +55,8 @@ type SessionLockResponse = {
 
 export type PairedPinExtension = {
   context: BrowserContext
+  /** The browser profile; the real side panel is reached through it. */
+  userDataDir: string
   extensionId: string
   popupPage: Page
   vaultPage: Page
@@ -156,6 +159,7 @@ export async function launchPairedPinExtension(
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
+      REAL_SIDE_PANEL_BROWSER_ARG,
     ],
   })
   reportExtensionBrowserErrors(context)
@@ -212,6 +216,7 @@ export async function launchPairedPinExtension(
   })
   return {
     context,
+    userDataDir,
     extensionId,
     popupPage,
     vaultPage: simplePage,

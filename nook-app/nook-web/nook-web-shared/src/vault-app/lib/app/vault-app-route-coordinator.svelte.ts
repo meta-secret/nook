@@ -154,7 +154,7 @@ export class VaultAppRouteCoordinator {
   };
 
   navigateHome = (): void => {
-    this.navigateToVault();
+    this.navigateTo(WorkspaceRoute.Vault);
   };
 
   /** A paired extension's request for another vault no longer applies once
@@ -179,24 +179,20 @@ export class VaultAppRouteCoordinator {
         kind: ExtensionConnectIntentKind.Absent,
       };
     }
-    this.navigateToVault();
+    // Approving or declining a connection returns to the identities, where
+    // the connected identity and its vaults are; no vault opens by itself.
+    this.navigateTo(WorkspaceRoute.Identities);
   };
 
-  private navigateToVault(): void {
-    const vaultWorkspaceRouteRequest: Parameters<
+  private navigateTo(route: WorkspaceRoute): void {
+    const workspaceRouteRequest: Parameters<
       VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = {
-      route: WorkspaceRoute.Vault,
-    };
+    >[0] = { route };
     new VaultWorkspaceActions(this.request.vault).applyWorkspaceRoute(
-      vaultWorkspaceRouteRequest,
+      workspaceRouteRequest,
     );
     const emptyHistoryState: Record<PropertyKey, never> = {};
-    history.pushState(
-      emptyHistoryState,
-      "",
-      new WorkspaceLocation(WorkspaceRoute.Vault).path,
-    );
+    history.pushState(emptyHistoryState, "", new WorkspaceLocation(route).path);
     this.legalPageState = { kind: LegalRouteKind.Application };
     this.logsPage = false;
     this.appLogsPage = false;

@@ -20,6 +20,7 @@ import {
   pilotProjectionDeliveryState,
   releasePilotProjection,
 } from './helpers/pilot-checklist-delivery'
+import { RealSidePanel } from './helpers/real-side-panel'
 
 type PilotPanelEvidenceRequest = {
   page: Page
@@ -534,17 +535,19 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
         timeout: 15_000,
       })
-      const authenticatorPickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const authenticatorPicker = await authenticatorPickerPromise
-      await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
-      await authenticatorPicker
-        .getByRole('button', { name: /Mock Auth/ })
-        .click()
-      await expect(loginPage.getByTestId('mock-auth-otp-input')).toHaveValue(
-        /^\d{6}$/,
-      )
-      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
+      // The click opens the real side panel, where the 2FA item is chosen.
+      const sidePanel = await RealSidePanel.attach(paired.userDataDir)
+      try {
+        const picker = sidePanel.page.getByTestId('authenticator-picker')
+        await picker.getByRole('button', { name: /Mock Auth/ }).click()
+        await expect(loginPage.getByTestId('mock-auth-otp-input')).toHaveValue(
+          /^\d{6}$/,
+        )
+        await expect(picker).toHaveCount(0)
+      } finally {
+        await sidePanel.detach()
+      }
 
       await loginPage.getByRole('button', { name: 'Submit' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

@@ -12,6 +12,7 @@ import {
   unlockExtensionPopupPin,
 } from './helpers/paired-pin-extension'
 import { NamecheapSidePanelFill } from './namecheap-side-panel-fill'
+import { RealSidePanel } from './helpers/real-side-panel'
 
 type NamecheapOtpEnvironment = Awaited<
   ReturnType<typeof launchPairedPinExtension>
@@ -81,7 +82,6 @@ export class NamecheapOtpScenario {
       const selectedAccount = manualFill.observeSelectedAccount(
         'https://namecheap.com',
       )
-      const pickerPromise = paired.context.waitForEvent('page')
       const fillButton: NamecheapOtpButtonOptions = { name: 'Fill 2FA code' }
       yield* Effect.tryPromise(() =>
         page
@@ -89,16 +89,18 @@ export class NamecheapOtpScenario {
           .getByRole('button', fillButton)
           .click(),
       )
-      const picker = yield* Effect.tryPromise(() => pickerPromise)
-      yield* Effect.tryPromise(() =>
-        picker.waitForURL(/intent=authenticator-picker/),
+      // The click opens the real side panel, where the item is chosen.
+      const sidePanel = yield* Effect.tryPromise(() =>
+        RealSidePanel.attach(paired.userDataDir),
       )
+      const picker = sidePanel.page.getByTestId('authenticator-picker')
       const accountButton: NamecheapOtpButtonOptions = { name: /Namecheap/ }
       yield* Effect.tryPromise(() =>
         picker.getByRole('button', accountButton).click(),
       )
       const account = yield* Effect.tryPromise(() => selectedAccount)
       yield* Effect.tryPromise(() => expect(input).toHaveValue(/^\d{6}$/))
+      yield* Effect.tryPromise(() => sidePanel.detach())
       yield* Effect.tryPromise(() =>
         expect(page.locator('body')).toHaveAttribute('data-submissions', '0'),
       )
@@ -261,15 +263,15 @@ export class NamecheapOtpScenario {
         expect(widget.getByText('Fill your 2FA code')).toBeVisible(),
       )
       yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
-      const pickerPromise = page.context().waitForEvent('page')
       const fillButton: NamecheapOtpButtonOptions = { name: 'Fill 2FA code' }
       yield* Effect.tryPromise(() =>
         widget.getByRole('button', fillButton).click(),
       )
-      const picker = yield* Effect.tryPromise(() => pickerPromise)
-      yield* Effect.tryPromise(() =>
-        picker.waitForURL(/intent=authenticator-picker/),
+      // The click opens the real side panel, where the item is chosen.
+      const sidePanel = yield* Effect.tryPromise(() =>
+        RealSidePanel.attach(paired.userDataDir),
       )
+      const picker = sidePanel.page.getByTestId('authenticator-picker')
       yield* Effect.tryPromise(() => expect(input).toHaveValue(''))
       yield* Effect.tryPromise(() =>
         expect(picker.getByText('Unrelated issuer')).toBeVisible(),
@@ -289,6 +291,8 @@ export class NamecheapOtpScenario {
         picker.getByRole('button', authenticatorButton).click(),
       )
       yield* Effect.tryPromise(() => expect(input).toHaveValue(/^\d{6}$/))
+      yield* Effect.tryPromise(() => expect(picker).toHaveCount(0))
+      yield* Effect.tryPromise(() => sidePanel.detach())
       yield* Effect.tryPromise(() => expect(page).toHaveURL(challengeUrl))
       expect(this.submissions).toBe(0)
       expect(this.navigationRequests).toBe(1)

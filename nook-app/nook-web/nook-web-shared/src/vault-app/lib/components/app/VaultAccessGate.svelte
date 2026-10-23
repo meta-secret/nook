@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
     readonly code: string
@@ -84,7 +85,7 @@
     /** Unlock a vault from its identity card; its device key unlocks there. */
     onUnlockOnCard: () => Promise<void>
     /** Unlock only the identity whose key the paired extension holds. */
-    onUnlockPairedIdentity: () => Promise<void>
+    onUnlockPairedIdentity: (target: PairedIdentityUnlockTarget) => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>

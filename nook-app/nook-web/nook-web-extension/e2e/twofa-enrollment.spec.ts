@@ -9,6 +9,7 @@ import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/exten
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
+import { RealSidePanel } from './helpers/real-side-panel'
 
 type ExtensionPairingSessionGrant = {
   vaultStoreId: string
@@ -529,17 +530,19 @@ test.describe('Browser 2FA enrollment', () => {
       const otpPage = await paired.context.newPage()
       await otpPage.goto(`${mockAuth.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
-      const authenticatorPickerPromise = paired.context.waitForEvent('page')
       await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const authenticatorPicker = await authenticatorPickerPromise
-      await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
-      await authenticatorPicker
-        .getByRole('button', { name: /Mock Auth/ })
-        .click()
-      await expect(
-        otpPage.locator('[autocomplete="one-time-code"]'),
-      ).toHaveValue(/^\d{6}$/)
-      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
+      // The click opens the real side panel, where the 2FA item is chosen.
+      const sidePanel = await RealSidePanel.attach(paired.userDataDir)
+      try {
+        const picker = sidePanel.page.getByTestId('authenticator-picker')
+        await picker.getByRole('button', { name: /Mock Auth/ }).click()
+        await expect(
+          otpPage.locator('[autocomplete="one-time-code"]'),
+        ).toHaveValue(/^\d{6}$/)
+        await expect(picker).toHaveCount(0)
+      } finally {
+        await sidePanel.detach()
+      }
     } finally {
       await paired.context.close()
       await mockAuth.close()

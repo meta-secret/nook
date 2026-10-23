@@ -11,5 +11,7 @@ export class IdentitySessionTransition {
     this.vault.clearIdentityProviderSession();
     this.vault.localVaultPresent = false;
     this.vault.providersLoaded = false;
+    // A vault panel left open beside the prior identity's card closes too.
+    this.vault.vaultPanelStoreId = "";
   }
 }

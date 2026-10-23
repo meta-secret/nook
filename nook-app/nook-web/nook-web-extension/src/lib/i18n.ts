@@ -50,7 +50,9 @@ export type ExtensionTranslationRequest =
     }
   | {
       kind: ExtensionTranslationRequestKind.WithReplacements
-      key: typeof I18N_KEYS.ExtensionActionFillLogin
+      key:
+        | typeof I18N_KEYS.ExtensionActionFillLogin
+        | typeof I18N_KEYS.ExtensionActionFillCodeFor
       replacements: { login: string; vault: string }
     }
   | {
