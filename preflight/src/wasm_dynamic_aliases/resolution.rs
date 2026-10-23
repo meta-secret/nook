@@ -140,8 +140,8 @@ pub(super) fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str,
         {
             return Ok(wasm_type);
         }
-        if ScopedBinding::root_binding_is_visible(value, name, source)
-            && let Some(wasm_type) = wasm_instance_bindings.get(name)
+        if let Some(wasm_type) = wasm_instance_bindings.get(name)
+            && ScopedBinding::root_binding_is_visible(value, name, source)
         {
             return Ok(wasm_type.clone());
         }
@@ -172,9 +172,9 @@ pub(super) fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str,
         {
             return Ok(wasm_type.clone());
         }
-        if DynamicWasmAliases::callable_binding_is_visible(function, source)
-            && let Ok(full_name) = function.utf8_text(source.as_bytes())
+        if let Ok(full_name) = function.utf8_text(source.as_bytes())
             && let Some(wasm_type) = wasm_instance_factories.get(full_name)
+            && DynamicWasmAliases::callable_binding_is_visible(function, source)
         {
             return Ok(wasm_type.clone());
         }
@@ -192,8 +192,8 @@ pub(super) fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str,
         {
             return Ok(wasm_type);
         }
-        if ScopedBinding::root_binding_is_visible(function, &name, source)
-            && let Some(wasm_type) = wasm_instance_factories.get(&name)
+        if let Some(wasm_type) = wasm_instance_factories.get(&name)
+            && ScopedBinding::root_binding_is_visible(function, &name, source)
         {
             return Ok(wasm_type.clone());
         }
@@ -219,8 +219,8 @@ impl DynamicWasmAliases<'_> {
             let name = constructor
                 .utf8_text(source.as_bytes())
                 .map_err(|_| AliasResolutionFailure::InvalidSource)?;
-            if ScopedBinding::root_binding_is_visible(constructor, name, source)
-                && let Some(wasm_type) = wasm_class_bindings.get(name)
+            if let Some(wasm_type) = wasm_class_bindings.get(name)
+                && ScopedBinding::root_binding_is_visible(constructor, name, source)
             {
                 return Ok(wasm_type.clone());
             }
@@ -302,8 +302,8 @@ pub(super) fn copied_wasm_class(node: tree_sitter::Node<'_>, reference: tree_sit
         )
         && (JavaScriptLiteral { node: binding, source }).semantic_javascript_name().ok().as_deref() == Some(name)
         && let Ok(source_name) = (JavaScriptLiteral { node: value, source }).semantic_javascript_name()
-        && ScopedBinding::root_binding_is_visible(value, &source_name, source)
         && let Some(wasm_type) = classes.get(&source_name)
+        && ScopedBinding::root_binding_is_visible(value, &source_name, source)
         && let Ok(mut scoped) = ScopedBinding::from_declaration(binding, source, BindingProvenance::Class(wasm_type.clone()))
         && {
             scoped.declaration_end = node.end_byte();
@@ -338,8 +338,8 @@ impl DynamicWasmAliases<'_> {
         let name = value
             .utf8_text(source.as_bytes())
             .map_err(|_| AliasResolutionFailure::InvalidSource)?;
-        if ScopedBinding::root_binding_is_visible(value, name, source)
-            && let Some(module) = wasm_namespace_bindings.get(name)
+        if let Some(module) = wasm_namespace_bindings.get(name)
+            && ScopedBinding::root_binding_is_visible(value, name, source)
         {
             return Ok(module.clone());
         }

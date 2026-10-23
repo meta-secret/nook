@@ -393,7 +393,7 @@ fn collect_factory_result_member_alias(mut self, binding: tree_sitter::Node<'_>,
     let Ok(factory_name) = (JavaScriptLiteral { node: function, source }).callable_expression_name() else {
         return (self, AliasDescent::Descend);
     };
-    let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories).ok());
+    let wasm_type = function.utf8_text(source.as_bytes()).ok().and_then(|name| factories.get(name)).filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).cloned().or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories).ok());
     let Some(callable) = wasm_type
         .and_then(|owner| wasm_types.methods.get(&owner))
         .and_then(|methods| {
