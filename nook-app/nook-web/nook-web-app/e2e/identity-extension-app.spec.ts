@@ -128,7 +128,10 @@ class VaultAppsInventoryScenario {
       page.getByTestId('approve-extension-device-btn').click(),
     )
     yield* Effect.promise(() =>
-      expect(page).toHaveURL(/\/vault\/?$/, { timeout: UI_TIMEOUT_MS }),
+      expect(page).toHaveURL(/\/identities\/?$/, { timeout: UI_TIMEOUT_MS }),
+    )
+    yield* Effect.promise(() =>
+      expect(page.getByTestId('identities-hub')).toBeVisible(),
     )
     yield* Effect.promise(() => openKeysPage(page))
     const keys = page.getByTestId('identity-keys')

@@ -44,6 +44,12 @@ closes it.
   import SidePanelConnections from './SidePanelConnections.svelte'
   import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
+  import SidePanelAuthenticatorPicker from './SidePanelAuthenticatorPicker.svelte'
+  import {
+    SidePanelAuthenticatorPickerState,
+    SidePanelPickerKind,
+    chromeAuthenticatorPickerRuntime,
+  } from './side-panel-authenticator-picker.svelte'
   import { SidePanelVaultPageWait } from './vault-page-wait.svelte'
   import { VaultPageUnlockWait } from '../lib/vault-page-unlock-wait'
   import {
@@ -123,6 +129,24 @@ closes it.
   let manage = $state<SidePanelManage>({ kind: SidePanelManageKind.Idle })
   let panelWindow = $state<SidePanelWindow>({
     kind: SidePanelWindowKind.Resolving,
+  })
+  /** A page in this window waiting for a 2FA code, from the Nook Pilot's
+   * Fill 2FA code: its picker shows in place of This site. */
+  const authenticatorPickerRequest: ConstructorParameters<
+    typeof SidePanelAuthenticatorPickerState
+  >[0] = {
+    panelWindow: () => panelWindow,
+    runtime: chromeAuthenticatorPickerRuntime,
+  }
+  const authenticatorPicker = new SidePanelAuthenticatorPickerState(
+    authenticatorPickerRequest,
+  )
+  $effect(() => {
+    if (
+      panelWindow.kind === SidePanelWindowKind.Known &&
+      view.kind === SidePanelViewKind.Unlocked
+    )
+      void authenticatorPicker.refresh()
   })
   /** The window edge the panel is docked on: the tab guide points from it
    * toward the Nook tab. */
@@ -709,6 +733,7 @@ closes it.
   })
 
   onMount(() => vaultPageWait.start())
+  onMount(() => authenticatorPicker.listen())
 
   // Closing the panel stops following the Nook tab.
   onDestroy(() => connectFlow.stop())
@@ -846,6 +871,14 @@ closes it.
           onuseidentity={chooseIdentity}
           onback={closeConnections}
         />
+      {:else if view.vaults.kind === SidePanelVaultsKind.Paired && authenticatorPicker.picker.kind === SidePanelPickerKind.Pending}
+        {#key authenticatorPicker.picker.requestId}
+          <SidePanelAuthenticatorPicker
+            {i18n}
+            requestId={authenticatorPicker.picker.requestId}
+            ondone={() => authenticatorPicker.close()}
+          />
+        {/key}
       {:else if view.vaults.kind === SidePanelVaultsKind.Paired}
         <ThisSite
           {i18n}

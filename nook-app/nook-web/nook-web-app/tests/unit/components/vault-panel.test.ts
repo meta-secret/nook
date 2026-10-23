@@ -224,4 +224,31 @@ describe('vault panel', () => {
       0,
     )
   })
+
+  test('shows access being set up, with progress, until the vault is open', () => {
+    const panelOptions: PanelOptions = {
+      state: IdentityVaultRowState.Available,
+    }
+    const { vault, view } = VaultPanelScenario.render(panelOptions)
+    const panel = () => view.getByTestId('vault-panel-beside').textContent
+
+    expect(view.queryAllByTestId('vault-panel-getting-access')).toHaveLength(0)
+    expect(panel()).toContain(I18N_KEYS.WorkspaceStatusLocked)
+
+    // Getting access to a large vault takes seconds: the panel says so.
+    vault.isVerifying = true
+    flushSync()
+    const progress = view.getByTestId('vault-panel-getting-access')
+    expect(progress.getAttribute('role')).toBe('status')
+    expect(progress.textContent).toContain(
+      I18N_KEYS.WorkspaceVaultPanelGettingAccess,
+    )
+    expect(panel()).toContain(I18N_KEYS.WorkspaceVaultGettingAccess)
+
+    // A failed attempt ends the progress and leaves the unlock in place.
+    vault.isVerifying = false
+    flushSync()
+    expect(view.queryAllByTestId('vault-panel-getting-access')).toHaveLength(0)
+    expect(view.getByTestId('vault-panel-unlock')).toBeTruthy()
+  })
 })

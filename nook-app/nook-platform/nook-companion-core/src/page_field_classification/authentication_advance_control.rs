@@ -950,4 +950,36 @@ pub mod tests {
             );
         }
     }
+
+    #[test]
+    fn google_two_step_code_next_advances_on_its_signin_challenge_route() {
+        let mut next = AuthenticationAdvanceControlObservation::login_control();
+        next.ownership = PageControlOwnership::LocallyScoped;
+        next.semantics = PageControlSemantics::Activation;
+        next.authentication_username = AuthenticationUsernameEvidence::Absent;
+        next.password_field_count = 0.into();
+        next.one_time_code_field_count = 1.into();
+        next.semantic_submit_control_count = 0.into();
+        next.source_origin = "https://accounts.google.com".to_owned();
+        next.form_identity.clear();
+        next.label = "Next".to_owned();
+        next.submission_destination_source = PageControlSubmissionDestinationSource::Omitted;
+        for (route, expected) in [
+            (
+                "/v3/signin/challenge/totp",
+                AuthenticationAdvanceControlDecision::AdvancesAuthentication,
+            ),
+            (
+                "/signin/totp",
+                AuthenticationAdvanceControlDecision::AdvancesAuthentication,
+            ),
+            (
+                "/signin/custom/totp",
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+            ),
+        ] {
+            next.destination_identity = format!("https://accounts.google.com{route}");
+            assert_eq!(next.classify(), expected, "{route}");
+        }
+    }
 }

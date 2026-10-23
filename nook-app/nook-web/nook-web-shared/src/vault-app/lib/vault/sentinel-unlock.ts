@@ -17,9 +17,9 @@ import {
   ProviderSyncFreshness,
   SentinelVaultUnlockState,
   VaultRecoveryErrorKind,
-  type NookSecretRecord,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from "$app-wasm";
+import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 export enum SentinelCeremonyVisibility {
   Hidden = "hidden",
@@ -258,9 +258,8 @@ export class SentinelUnlockActions {
       if (manager.isErr()) return storageErr(manager.error);
       const args = state.connectStorageArgs();
       try {
-        return storageOk(
-          await manager.value.connect(args.mode, args.pat, args.repo),
-        );
+        await manager.value.connect(args.mode, args.pat, args.repo);
+        return storageOk(VaultChangeOutcome.Completed);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -277,7 +276,6 @@ export class SentinelUnlockActions {
       state.loginPasswordPrompt = false;
       return storageOk(SentinelCeremonyHydrationOutcome.CeremonyRestored);
     }
-    for (const record of connected.value) record.free();
     return storageOk(SentinelCeremonyHydrationOutcome.StorageConnected);
   }
 
@@ -472,23 +470,21 @@ export class SentinelUnlockActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
-      const rawRecords = await state.enqueueStorage<
-        NookSecretRecord[],
+      const finalized = await state.enqueueStorage<
+        VaultChangeOutcome,
         StorageOperationFailure
       >(async () => {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.finalize_sentinel_unlock(),
-          );
+          await admittedManager.value.finalize_sentinel_unlock();
+          return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       });
-      if (rawRecords.isErr())
-        return this.restoreFinalizationFailure(rawRecords.error);
-      for (const record of rawRecords.value) record.free();
+      if (finalized.isErr())
+        return this.restoreFinalizationFailure(finalized.error);
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",
         requestedOffset: 0,

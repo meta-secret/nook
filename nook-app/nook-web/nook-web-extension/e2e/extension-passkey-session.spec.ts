@@ -48,6 +48,7 @@ import {
   createLocalVaultOnLogin,
   flushNookLogPersistQueue,
 } from '../../nook-web-app/e2e/helpers'
+import { RealSidePanel } from './helpers/real-side-panel'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -403,23 +404,27 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const emptyOtpPage = await context.newPage()
       await emptyOtpPage.goto(`${loginServer.origin}/otp`)
       const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
-      const [emptyAuthenticatorPicker] = await Promise.all([
-        waitForNewPage(context, 'empty authenticator picker'),
-        emptyOtpWidget.getByRole('button', { name: 'Fill 2FA code' }).click(),
-      ])
-      await emptyAuthenticatorPicker.waitForURL(/intent=authenticator-picker/)
-      await expect(
-        emptyAuthenticatorPicker.getByRole('heading', {
-          name: 'Choose a 2FA code',
-        }),
-      ).toBeVisible()
-      await expect(
-        emptyAuthenticatorPicker.getByTestId('authenticator-destination'),
-      ).toContainText(`Code will be filled on ${loginServer.origin}.`)
-      await expect(
-        emptyAuthenticatorPicker.getByText('No matching 2FA items.'),
-      ).toBeVisible()
-      await emptyAuthenticatorPicker.close()
+      await emptyOtpWidget
+        .getByRole('button', { name: 'Fill 2FA code' })
+        .click()
+      // The click opens the real side panel, with nothing to offer yet.
+      const sidePanel = await RealSidePanel.attach(userDataDir)
+      try {
+        const emptyPicker = sidePanel.page.getByTestId('authenticator-picker')
+        await expect(
+          emptyPicker.getByRole('heading', { name: /Choose a 2FA code/ }),
+        ).toBeVisible()
+        await expect(
+          emptyPicker.getByTestId('authenticator-destination'),
+        ).toContainText(`Code will be filled on ${loginServer.origin}.`)
+        await expect(
+          emptyPicker.getByText('No matching 2FA items.'),
+        ).toBeVisible()
+        await emptyPicker.getByTestId('authenticator-cancel').click()
+        await expect(emptyPicker).toHaveCount(0)
+      } finally {
+        await sidePanel.detach()
+      }
       await emptyOtpPage.close()
     })
 
@@ -549,23 +554,24 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await otpPage.goto(`${loginServer.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
-      const [authenticatorPicker] = await Promise.all([
-        waitForNewPage(context, 'authenticator picker'),
-        otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click(),
-      ])
+      await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
       await expect(otpWidget.getByText('Nook extension e2e')).toHaveCount(0)
       await expect(otpWidget.getByText('alice@nook.test')).toHaveCount(0)
-      await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
-      await expect(
-        authenticatorPicker.getByText('Nook extension e2e'),
-      ).toBeVisible({ timeout: 20_000 })
-      await authenticatorPicker
-        .getByRole('button', { name: /Nook extension e2e/ })
-        .click()
-      await expect(
-        otpPage.locator('[autocomplete="one-time-code"]'),
-      ).toHaveValue(/^\d{6}$/)
-      await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
+      // The click opens the real side panel, where the item is chosen.
+      const sidePanel = await RealSidePanel.attach(userDataDir)
+      try {
+        const picker = sidePanel.page.getByTestId('authenticator-picker')
+        await expect(picker.getByText('Nook extension e2e')).toBeVisible({
+          timeout: 20_000,
+        })
+        await picker.getByRole('button', { name: /Nook extension e2e/ }).click()
+        await expect(
+          otpPage.locator('[autocomplete="one-time-code"]'),
+        ).toHaveValue(/^\d{6}$/)
+        await expect(picker).toHaveCount(0)
+      } finally {
+        await sidePanel.detach()
+      }
       await expect(otpWidget.getByText('Nook Pilot · 2/3')).toBeVisible()
       await expect(
         otpWidget.getByText(
@@ -847,9 +853,9 @@ test('re-approves an existing local vault after reload without event-log-access-
     ).toBeVisible()
     await expect(connectPage.getByTestId('app-success')).toBeVisible()
     await expect(connectPage).toHaveURL((url) =>
-      url.pathname.endsWith('/vault'),
+      url.pathname.endsWith('/identities'),
     )
-    await expect(connectPage.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(connectPage.getByTestId('identities-hub')).toBeVisible()
 
     const pairedStorage = await readExtensionStorage(context)
     const grantKeys = Object.keys(pairedStorage).filter((key) =>

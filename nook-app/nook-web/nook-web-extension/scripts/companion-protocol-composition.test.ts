@@ -97,30 +97,27 @@ class GeneralLoginCompositionScenario {
       '',
     )
     try {
-      const firstRecords = yield* Effect.tryPromise(() =>
+      yield* Effect.tryPromise(() =>
         this.manager.add_secret(
           'secret_General0001',
           SecretType.Login,
           build_secret_yaml(first),
         ),
       )
-      for (const record of firstRecords) record.free()
-      const selectedRecords = yield* Effect.tryPromise(() =>
+      yield* Effect.tryPromise(() =>
         this.manager.add_secret(
           'secret_General0002',
           SecretType.Login,
           build_secret_yaml(selected),
         ),
       )
-      for (const record of selectedRecords) record.free()
-      const tenantRecords = yield* Effect.tryPromise(() =>
+      yield* Effect.tryPromise(() =>
         this.manager.add_secret(
           'secret_General0003',
           SecretType.Login,
           build_secret_yaml(tenant),
         ),
       )
-      for (const record of tenantRecords) record.free()
     } finally {
       first.free()
       selected.free()
@@ -495,8 +492,7 @@ beforeAll(() => {
     } finally {
       setup.free()
     }
-    const records = await extension.connect_fresh('local', '', '')
-    for (const record of records) record.free()
+    await extension.connect_fresh('local', '', '')
     await extension.set_vault_name('Composition Vault')
 
     unlockedAppKey = {
@@ -643,12 +639,7 @@ describe('generated companion protocol composition', () => {
     ]
     try {
       for (const [secretId, type, fields] of added) {
-        const records = await extension.add_secret(
-          secretId,
-          type,
-          build_secret_yaml(fields),
-        )
-        for (const record of records) record.free()
+        await extension.add_secret(secretId, type, build_secret_yaml(fields))
       }
     } finally {
       for (const [, , fields] of added) fields.free()
@@ -797,8 +788,7 @@ describe('generated companion protocol composition', () => {
       website,
       structuredClone(admission.response),
     )
-    const records = await website.connect('local', '', '')
-    for (const record of records) record.free()
+    await website.connect('local', '', '')
     const committed = adopted.after_verified_connect(website)
     committed.confirm(website)
 

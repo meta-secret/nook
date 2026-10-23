@@ -21,7 +21,6 @@ import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnloc
 import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
-import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
 import { VaultSessionUnlockOutcome } from '$lib/vault/session'
@@ -152,9 +151,7 @@ class SentinelFinalizationFixture {
   }
   readonly manager = new NookVaultManager()
   readonly state: VaultState = VaultStateTestFixture.create()
-  readonly finalizeSentinelUnlock = vi.fn(
-    async (): Promise<NookSecretRecord[]> => [],
-  )
+  readonly finalizeSentinelUnlock = vi.fn(async () => {})
   readonly sentinelUnlockSessionStatus = vi.fn(() => this.current)
   readonly sentinelUnlockStatus = vi.fn(
     () => SentinelVaultUnlockState.AwaitingShares,

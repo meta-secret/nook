@@ -2,7 +2,6 @@
 
 use super::event_log::SecurityEpochRotationFailure;
 use super::{NookVaultManager, VaultCryptoState};
-use crate::NookSecretRecord;
 use nook_core::{
     AuthKeyId, DeviceId, MemberLabel, MultiDeviceError, RenameVaultMemberRequest,
     ResolveMemberRosterRequest, RevokeVaultMemberRequest, SymmetricKey, VaultMember,
@@ -45,10 +44,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub async fn revoke_vault_member(
-        &mut self,
-        auth_id: String,
-    ) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn revoke_vault_member(&mut self, auth_id: String) -> Result<(), JsError> {
         if self.vault.architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelRevocationUnsupported.into());
         }
@@ -88,7 +84,7 @@ impl NookVaultManager {
             self.vault.secrets_key.clear();
             self.vault.members_key.clear();
             self.vault.crypto = VaultCryptoState::Locked;
-            return Ok(Vec::new());
+            return Ok(());
         }
 
         let revoked_device_id = revoked_device_id.ok_or_else(|| {
@@ -114,6 +110,6 @@ impl NookVaultManager {
             return Err(error.into());
         }
 
-        Ok(self.get_records()?)
+        Ok(())
     }
 }

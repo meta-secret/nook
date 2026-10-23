@@ -35,6 +35,7 @@ import {
 } from './extension-pairing-storage'
 import { lockExtensionSession } from './paired-pin-extension'
 import { reportExtensionBrowserErrors } from './browser-errors'
+import { REAL_SIDE_PANEL_BROWSER_ARG } from './real-side-panel'
 
 export {
   attachNookLogsForTest,
@@ -51,13 +52,7 @@ export type { ExtensionPairingApprovedMessage }
 export const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 const EXTENSION_RUNTIME_MESSAGE_TIMEOUT_MS = 15_000
 const E2E_OPERATION_TIMEOUT_MS = 15_000
-const SAFE_PAGE_INTENTS = [
-  'default',
-  'pair',
-  'pilot-auth',
-  'login-picker',
-  'authenticator-picker',
-]
+const SAFE_PAGE_INTENTS = ['default', 'pair', 'pilot-auth', 'login-picker']
 
 export async function withE2eDeadline<Result>(
   operation: Promise<Result>,
@@ -681,6 +676,7 @@ export async function launchExtensionContext(userDataDir: string) {
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
+      REAL_SIDE_PANEL_BROWSER_ARG,
     ],
   })
   reportExtensionBrowserErrors(context)
