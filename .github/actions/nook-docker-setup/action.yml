@@ -2,6 +2,10 @@ name: Nook Docker setup
 description: Task, Buildx, and authenticated registry BuildKit cache setup.
 
 inputs:
+  arc-buildkit-backend:
+    description: Fixed ARC backend, local or home-worker-0; home is restricted to trusted PR preparation.
+    required: false
+    default: local
   preinstalled-tooling:
     description: Reuse the pinned Node.js and Task binaries already present in the job image.
     required: false
@@ -68,6 +72,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate fixed ARC BuildKit backend
+      shell: bash
+      env:
+        REQUESTED_BACKEND: ${{ inputs.arc-buildkit-backend }}
+        HOME_BACKEND_ALLOWED: ${{ startsWith(runner.name, 'nook-k0s-') && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+      run: |
+        set -euo pipefail
+        case "$REQUESTED_BACKEND" in
+          local) ;;
+          home-worker-0) test "$HOME_BACKEND_ALLOWED" = true ;;
+          *) echo 'Unsupported ARC BuildKit backend' >&2; exit 2 ;;
+        esac
     - name: Provision Node.js for cache telemetry
       if: ${{ inputs.preinstalled-tooling != 'true' }}
       uses: actions/setup-node@v7
@@ -132,16 +148,23 @@ runs:
         version: v0.37.2
         driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
 
-    - name: Connect ARC Buildx to the node-local BuildKit shard
+    - name: Connect ARC Buildx to the selected BuildKit backend
       id: arc-buildx
       if: ${{ startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
+      env:
+        NOOK_BUILDKIT_BACKEND: ${{ inputs.arc-buildkit-backend }}
       run: |
         set -euo pipefail
-        case "${NOOK_BUILDKIT_ADDR:-}" in
-          tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+        case "$NOOK_BUILDKIT_BACKEND" in
+          local)
+            test "${NOOK_BUILDKIT_ADDR:-}" = tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
+            ;;
+          home-worker-0)
+            NOOK_BUILDKIT_ADDR=tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234
+            ;;
           *)
-            echo "ARC BuildKit must use the node-local Kubernetes service" >&2
+            echo "Unsupported ARC BuildKit backend" >&2
             exit 2
             ;;
         esac
@@ -152,9 +175,18 @@ runs:
           --driver remote \
           --use \
           "$NOOK_BUILDKIT_ADDR"
-        docker buildx inspect "$builder" --bootstrap
+        inspection="$(docker buildx inspect "$builder" --bootstrap)"
+        printf '%s\n' "$inspection"
+        if [ "$NOOK_BUILDKIT_BACKEND" = home-worker-0 ]; then
+          printf '%s\n' "$inspection" | awk '
+            $1 == "org.mobyproject.buildkit.worker.hostname:" { count++; if ($2 != "nook-buildkit-0" || NF != 2) bad = 1 }
+            END { exit (count != 1 || bad) }
+          ' || { echo 'Home BuildKit must expose exactly worker nook-buildkit-0' >&2; exit 2; }
+        fi
         echo "name=$builder" >> "$GITHUB_OUTPUT"
         echo "NOOK_BUILDKIT_REMOTE=1" >> "$GITHUB_ENV"
+        echo "NOOK_BUILDKIT_BACKEND=$NOOK_BUILDKIT_BACKEND" >> "$GITHUB_ENV"
+        echo "NOOK_BUILDKIT_ADDR=$NOOK_BUILDKIT_ADDR" >> "$GITHUB_ENV"
 
     - name: Connect SeaweedFS compiler cache
       uses: ./.github/actions/nook-cache-connect

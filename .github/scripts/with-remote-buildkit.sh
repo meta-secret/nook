@@ -99,10 +99,11 @@ case "$health_timeout" in
     ;;
 esac
 
-case "${NOOK_BUILDKIT_ADDR:-}" in
-  tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+case "${NOOK_BUILDKIT_BACKEND:-local}:${NOOK_BUILDKIT_ADDR:-}" in
+  local:tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+  home-worker-0:tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234) ;;
   *)
-    echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+    echo "ARC BuildKit backend and fixed service address must match" >&2
     exit 2
     ;;
 esac
@@ -147,8 +148,15 @@ run_with_timeout() {
 }
 
 probe_remote_builder() {
-  "$docker_cli" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 \
-    && "$docker_cli" buildx build \
+  local inspection
+  inspection="$("$docker_cli" buildx inspect "$builder" --bootstrap)" || return $?
+  if [ "${NOOK_BUILDKIT_BACKEND:-local}" = home-worker-0 ]; then
+    printf '%s\n' "$inspection" | awk '
+      $1 == "org.mobyproject.buildkit.worker.hostname:" { count++; if ($2 != "nook-buildkit-0" || NF != 2) bad = 1 }
+      END { exit (count != 1 || bad) }
+    ' || { echo 'Home BuildKit must expose exactly worker nook-buildkit-0' >&2; return 2; }
+  fi
+  "$docker_cli" buildx build \
       --builder "$builder" \
       --file "$probe_context/Dockerfile" \
       --output type=cacheonly \

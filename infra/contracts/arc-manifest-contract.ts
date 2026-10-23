@@ -448,7 +448,7 @@ class ArcManifestContract {
     if (admittedContract19.isErr()) return err(admittedContract19.error);
     const admittedContract20 = dockerSetup.requireAll([
       "driver remote",
-      "node-local BuildKit shard",
+      "Connect ARC Buildx to the selected BuildKit backend",
       "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ]);
     if (admittedContract20.isErr()) return err(admittedContract20.error);
