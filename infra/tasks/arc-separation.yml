@@ -95,6 +95,7 @@ tasks:
   arc:separation:apply:
     desc: Apply only drained ARC placement, hooks and scale sets; keep admission stopped.
     cmds:
+      - task: arc:placement:quarantine:check
       - task: arc:separation:idle
       - task: k0s:sync
       - task: arc:render:check

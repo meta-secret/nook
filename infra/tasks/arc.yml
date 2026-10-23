@@ -598,6 +598,7 @@ tasks:
     desc: Install ARC runners and one persistent rootless BuildKit shard per build node.
     silent: true
     cmds:
+      - task: arc:placement:quarantine:check
       - task: arc:auth:sync
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve

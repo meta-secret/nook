@@ -408,6 +408,37 @@ Recovery preserves these boundaries:
 - Ironic is not part of this boundary. OVH already owns PXE, BMC, and physical
   installation lifecycle.
 
+OVH host provisioning configures persistent systemd journals with a 1 GiB disk
+budget, a 4 GiB free-space floor, and a maximum age of 14 days. Size pressure
+can shorten that history; this does not recover evidence lost before persistence
+was enabled or guarantee that a stalled host flushes its final messages.
+The existing host-services task also provides a narrow application path:
+
+```bash
+task infra:services:journal:configure \
+  INFRA_WORKER_SSH_TARGET=<existing-worker-ssh-target> \
+  INFRA_JOURNAL_HOSTNAME=<expected-hostname>
+```
+
+This task checks host identity, free space and effective journal settings, then
+flushes and verifies the persistent journal. It does not reconcile ARC labels,
+rejoin the node, restart workloads or clear an incident quarantine. Use this
+scoped path for an existing host; full provisioning remains a separate operation.
+When the established route uses a different address for the same verified host,
+pass `INFRA_JOURNAL_HOST_KEY_ALIAS=<existing-known-host-name>` to use its existing
+trusted key; strict host-key checking remains enabled and no new trust is added.
+
+For an incident quarantine, record the incident identifier in the native Node
+annotation `nook.nokey.sh/arc-quarantine` while removing its `arc-workload` label.
+The annotation's presence, even with an empty value, blocks placement-label
+reconciliation, separation apply and full ARC deployment. Label writes also
+check the observed Node resource version so a concurrent quarantine fails the
+stale write. This marker does not evict workloads or change BuildKit/JetStream
+storage. Remove the marker and restore the reviewed workload label only after
+host and stateful-service recovery and an explicit CI readmission decision;
+transient NodeReady alone is insufficient. The journal-only task remains usable
+while this hold is active.
+
 Inspect the live state with:
 
 ```bash
