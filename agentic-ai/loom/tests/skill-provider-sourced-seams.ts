@@ -150,7 +150,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
-    'f35ea7995f8a71605fab3d3c0064ff505d92ef3d40176b397d7bcf9ce4621543',
+    '47503151f6a118e0989837a32225732d366560bfd230a1b4bbf1307f3738e9a5',
   ],
   [
     'infra/contracts/main-producer-parallel.test.ts',

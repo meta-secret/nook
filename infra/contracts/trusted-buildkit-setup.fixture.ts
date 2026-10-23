@@ -24,9 +24,12 @@ const setup = z
 /** Exercises the production setup shell boundaries without contacting services. */
 export class TrustedBuildkitSetupContract {
   private command(name: string): string {
-    const step = setup.runs.steps.find((candidate) => candidate.name === name);
-    expect(step?.["continue-on-error"]).toBeUndefined();
-    return z.object({ run: z.string() }).parse(step).run;
+    const step = z
+      .object({ run: z.string() })
+      .passthrough()
+      .parse(setup.runs.steps.find((candidate) => candidate.name === name));
+    expect(Object.hasOwn(step, "continue-on-error")).toBe(false);
+    return step.run;
   }
 
   credentialsAndBackend(): void {
