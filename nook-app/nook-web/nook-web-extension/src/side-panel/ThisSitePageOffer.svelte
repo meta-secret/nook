@@ -71,7 +71,7 @@ whether the review started on the page. No secret reaches the panel.
   }
 </script>
 
-{#if offer.kind === 'AddAuthenticator'}
+{#if 'label_key' in offer}
   <div class="side-panel-site-status" data-testid="side-panel-page-offer">
     <button
       type="button"
