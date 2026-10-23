@@ -122,9 +122,10 @@ measure actual CPU use or active BuildKit solves.
 Both `nodeAffinityPolicy` and `nodeTaintsPolicy` are `Honor`. Counts include
 only hosts eligible for the incoming Pod, preserving each pool's placement
 constraints. No `minDomains` or `matchLabelKeys` override is configured.
-General and Hive runners count three eligible build hosts. Mixed container
-jobs count Rise-S-1 and the OVH control/storage host. Browser-only jobs remain
-on Rise-S-2 outside these build-pool spread constraints.
+General, Hive and mixed container jobs count Rise-S-1, home and the OVH
+control/storage host when eligible. A node without the required workload label
+is excluded. Browser-only jobs remain on Rise-S-2 outside these build-pool
+spread constraints.
 
 The existing preferred terms retain these marginal penalties per matching Pod:
 
