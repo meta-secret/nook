@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 vi.hoisted(() => {
   vi.stubGlobal("chrome", {
-    runtime: { id: "", onMessage: { addListener: () => {} } },
+    runtime: { id: "", getURL: (path: string) => `chrome-extension://fixture/${path}`, onMessage: { addListener: () => {} } },
   });
   vi.stubGlobal("__NOOK_EXTENSION_DIAGNOSTICS_ENABLED__", false);
 });
@@ -47,7 +47,7 @@ import {
   CompanionWasmSessionMessageType,
   type CompanionWasmSessionMessage,
 } from "../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages";
-import { FocusedCredentialOpportunity } from "../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js";
+import { classify_companion_authentication_workflow_facts, companion_authentication_workflow_match_kind, CompanionAuthenticationWorkflowMatchKind, AuthenticationWorkflowSnapshotResponseKind, FocusedCredentialOpportunity } from "../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js";
 import { FocusedFieldRecognitionOperation } from "../../../../nook-web-extension/src/offscreen/session-focused-field-recognition";
 import {
   passwordFieldDiscovery,
@@ -161,10 +161,27 @@ class FocusedFormTransitionFixture {
     vi.spyOn(workflowUi, "translatedMessage").mockReturnValue(
       "Translated fixture",
     );
+    vi.spyOn(workflowUi, "translatedMessageWithSubstitution").mockReturnValue("Translated fixture");
+    vi.spyOn(authenticationRuntimeTransport, "sendRuntimeMessageWithoutResponse").mockImplementation(() => {});
+    vi.spyOn(authenticationRuntimeTransport, "sendAuthenticationWorkflowSnapshotRuntimeMessage").mockImplementation(this.snapshot.bind(this));
     vi.spyOn(
       authenticationRuntimeTransport,
       "sendCompanionWasmRuntimeMessage",
     ).mockImplementation(this.deliver.bind(this));
+  }
+
+  private snapshot(message: Parameters<typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage>[0]) {
+    const verdict = classify_companion_authentication_workflow_facts(message.payload);
+    expect(companion_authentication_workflow_match_kind(verdict)).toBe(CompanionAuthenticationWorkflowMatchKind.NoMatch);
+    const delivery: Awaited<ReturnType<typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage>> = {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: {
+        verdict: { kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch },
+        loginMatches: { kind: 'ready', count: 0 },
+        selectedFacts: { state: 'notApplicable' },
+      },
+    };
+    return Effect.runPromise(Effect.succeed(delivery));
   }
 
   private recognition(message: CompanionWasmSessionMessage) {
