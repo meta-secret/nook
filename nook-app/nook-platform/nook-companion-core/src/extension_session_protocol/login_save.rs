@@ -154,6 +154,7 @@ mod tests {
     use crate::AuthenticationPageObservationFacts;
     use crate::AuthenticationWorkflowKind;
     use crate::LoginCapturedFieldIndex;
+    use crate::LoginCapturedValueMatches;
     use crate::LoginControlLabel;
     use crate::LoginExplicitCandidatePresence;
     use crate::LoginPasswordFieldHistory;
@@ -312,7 +313,9 @@ mod tests {
             " password "
         );
         assert!(
-            matches!(payload.capture.clone().classify()?, LoginSaveCaptureDecision::SubmittedLogin { username_field_index, password_field_index, baseline }
+            matches!(payload.capture.clone().classify(&LoginCapturedValueMatches::from_values(
+                &payload.captured_values.iter().map(SessionSecretText::as_str).collect::<Vec<_>>(),
+            ))?, LoginSaveCaptureDecision::SubmittedLogin { username_field_index, password_field_index, baseline }
             if username_field_index == LoginCapturedFieldIndex::from(Index::ZERO)
                 && password_field_index == LoginCapturedFieldIndex::from(Index::ONE)
                 && baseline.source == LoginSaveCaptureSource::SubmittedLogin)
@@ -365,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_signup_requires_genuine_explicit_candidate_and_manual_is_ignored()
+    fn signup_capture_selects_submitted_fields_with_or_without_explicit_candidate()
     -> anyhow::Result<()> {
         let mut capture = Fixture::capture()?;
         capture
@@ -373,18 +376,48 @@ mod tests {
             .get_mut(1)
             .ok_or_else(|| anyhow::anyhow!("password fixture"))?
             .autocomplete_tokens = vec!["new-password".to_owned()];
+        let values = LoginCapturedValueMatches::from_values(&["user", "password"]);
+        for candidate in [
+            LoginExplicitCandidatePresence::Absent,
+            LoginExplicitCandidatePresence::Present,
+        ] {
+            capture.explicit_candidate = candidate;
+            assert!(
+                matches!(capture.clone().classify(&values)?, LoginSaveCaptureDecision::SubmittedLogin { username_field_index, password_field_index, baseline }
+                if username_field_index == LoginCapturedFieldIndex::from(Index::ZERO)
+                    && password_field_index == LoginCapturedFieldIndex::from(Index::ONE)
+                    && baseline.source == LoginSaveCaptureSource::SubmittedLogin
+                    && baseline.captured_workflow == AuthenticationWorkflowKind::Signup)
+            );
+        }
+        let LoginSaveCaptureDecision::SubmittedLogin { baseline, .. } =
+            capture.clone().classify(&values)?
+        else {
+            anyhow::bail!("signup baseline fixture");
+        };
+        let mut wire = serde_json::to_value(&baseline)?;
         assert_eq!(
-            capture.clone().classify()?,
+            serde_json::from_value::<crate::LoginSaveCaptureBaseline>(wire.clone())?,
+            baseline
+        );
+        wire.as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("baseline wire"))?
+            .insert(
+                "source".to_owned(),
+                serde_json::json!("ExplicitAuthentication"),
+            );
+        assert!(serde_json::from_value::<crate::LoginSaveCaptureBaseline>(wire).is_err());
+        assert!(matches!(
+            capture
+                .clone()
+                .classify(&LoginCapturedValueMatches::from_values(&["user"])),
+            Err(crate::LoginCaptureError::MismatchedValues)
+        ));
+        capture.intent.trust = LoginSubmissionTrust::Untrusted;
+        assert_eq!(
+            capture.classify(&values)?,
             LoginSaveCaptureDecision::Ignored
         );
-        capture.explicit_candidate = LoginExplicitCandidatePresence::Present;
-        assert!(
-            matches!(capture.clone().classify()?, LoginSaveCaptureDecision::ExplicitAuthentication { baseline }
-            if baseline.source == LoginSaveCaptureSource::ExplicitAuthentication
-                && baseline.captured_workflow == AuthenticationWorkflowKind::Signup)
-        );
-        capture.intent.trust = LoginSubmissionTrust::Untrusted;
-        assert_eq!(capture.classify()?, LoginSaveCaptureDecision::Ignored);
         Ok(())
     }
 

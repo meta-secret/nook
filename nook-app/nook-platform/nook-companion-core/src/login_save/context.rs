@@ -183,9 +183,8 @@ impl TryFrom<LoginSaveCaptureBaselineWire> for LoginSaveCaptureBaseline {
             .map_err(|_| LoginSaveContextError::InvalidBaseline)?;
         match wire.source {
             LoginSaveCaptureSource::SubmittedLogin => match wire.captured_workflow {
-                AuthenticationWorkflowKind::Login => {}
-                AuthenticationWorkflowKind::Signup
-                | AuthenticationWorkflowKind::PasswordChange
+                AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::Signup => {}
+                AuthenticationWorkflowKind::PasswordChange
                 | AuthenticationWorkflowKind::TotpChallenge
                 | AuthenticationWorkflowKind::TotpEnrollment
                 | AuthenticationWorkflowKind::Manual => {
@@ -193,10 +192,9 @@ impl TryFrom<LoginSaveCaptureBaselineWire> for LoginSaveCaptureBaseline {
                 }
             },
             LoginSaveCaptureSource::ExplicitAuthentication => match wire.captured_workflow {
-                AuthenticationWorkflowKind::Login
-                | AuthenticationWorkflowKind::Signup
-                | AuthenticationWorkflowKind::PasswordChange => {}
-                AuthenticationWorkflowKind::TotpChallenge
+                AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::PasswordChange => {}
+                AuthenticationWorkflowKind::Signup
+                | AuthenticationWorkflowKind::TotpChallenge
                 | AuthenticationWorkflowKind::TotpEnrollment
                 | AuthenticationWorkflowKind::Manual => {
                     return Err(LoginSaveContextError::InvalidBaseline);

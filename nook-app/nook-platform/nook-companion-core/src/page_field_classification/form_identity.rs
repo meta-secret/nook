@@ -296,14 +296,18 @@ impl AuthenticationRouteIdentity<'_> {
                 && !passkey_authentication_route)
     }
     pub(super) fn has_control_veto(&self) -> bool {
+        self.has_signup_control_veto()
+            || AuthenticationControlIdentity::new(self.identity).is_registration()
+    }
+    /// Sign-up submission expects registration wording, so only the remaining vetoes apply.
+    pub(super) fn has_signup_control_veto(&self) -> bool {
         let identity = self.identity;
         AuthenticationRouteIdentity::new(identity).has_disallowed_action_or_provider(
             DestinationPolicy {
                 credential: CredentialDestination::Authentication,
                 provider: OAuthAuthorization::Disallowed,
             },
-        ) || AuthenticationControlIdentity::new(identity).is_registration()
-            || AuthenticationControlIdentity::new(identity).is_password_recovery()
+        ) || AuthenticationControlIdentity::new(identity).is_password_recovery()
             || AuthenticationControlIdentity::new(identity).is_auxiliary()
     }
     pub(super) fn indicates_one_time_code_authentication(&self) -> bool {
