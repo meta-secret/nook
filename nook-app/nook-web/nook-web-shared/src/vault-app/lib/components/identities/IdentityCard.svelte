@@ -285,6 +285,17 @@ panel sits inside the card, which then spans the full row.
   const vaultOpenRow = $derived(
     card.vaults.find((row) => row.storeId === vaultOpenId),
   )
+  /** A panel beside the card: the card spreads across its whole row. */
+  const spread = $derived(
+    Boolean(
+      unlockPanel ||
+        overviewPanel ||
+        requestPanel ||
+        (managesHere && menuOpen) ||
+        (protection && protectionOpen) ||
+        vaultOpenRow,
+    ),
+  )
 
   function toggleVault(storeId: string): void {
     if (vaultOpenId === storeId) {
@@ -386,17 +397,13 @@ panel sits inside the card, which then spans the full row.
 {#snippet manageIcon()}<Settings2 class="size-4" />{/snippet}
 
 <article
-  class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel ||
-  overviewPanel ||
-  requestPanel ||
-  (managesHere && menuOpen) ||
-  (protection && protectionOpen) ||
-  vaultOpenRow
+  class="nk-frame-keytag nk-frame-interactive min-w-0 {spread
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
     : 'flex flex-col'}"
   class:nk-frame-live={live}
   aria-label={card.label}
   data-testid="identity-card"
+  data-spread={spread ? 'true' : 'false'}
   data-identity-id={card.identityId}
   data-status={card.status}
   data-unlocking={unlockPanel ? 'true' : 'false'}
