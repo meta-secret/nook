@@ -677,18 +677,18 @@ export async function stopExtensionServiceWorker(
   const { worker, cdp } = request
   const { targetInfos } = await cdp.send('Target.getTargets')
   const workerTargets = targetInfos.filter(
-    (target) => target.type === 'service_worker' && target.url === worker.url(),
+    (target) => target.type === 'service_worker',
   )
-  expect(workerTargets).toHaveLength(1)
-  const [workerTarget] = workerTargets
-  // Closing the target acknowledges the stop request before the worker exits.
-  // Observe its termination before the popup can start the replacement worker.
-  await Promise.all([
-    worker.waitForEvent('close'),
-    expect(
-      cdp.send('Target.closeTarget', { targetId: workerTarget.targetId }),
-    ).resolves.toEqual({ success: true }),
-  ])
+  expect(workerTargets.map((target) => target.url)).toEqual([worker.url()])
+  // This fresh profile has only the extension worker. The popup's storage
+  // partition owns the stop, whose reply waits for native worker termination;
+  // a stopped worker's retained DevTools target need not emit Worker.close.
+  await cdp.send('ServiceWorker.enable')
+  try {
+    await expect(cdp.send('ServiceWorker.stopAllWorkers')).resolves.toEqual({})
+  } finally {
+    await cdp.send('ServiceWorker.disable')
+  }
 }
 
 export async function launchExtensionContext(userDataDir: string) {
