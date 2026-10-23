@@ -450,9 +450,9 @@ join) sit between the hero and the cards.
     {:else if loader.state.kind === IdentityDirectoryLoadKind.Ready}
       <!-- Cards keep one regular width; as many sit in a row as the page's
            own space holds, so a browser side panel narrows the row, not the
-           cards. A card with a panel open spans the whole row. -->
+           cards. A card with a panel open spreads across the whole row. -->
       <section
-        class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),22rem))] items-stretch gap-4"
+        class="flex min-w-0 flex-wrap items-stretch gap-4 [&>*]:w-[min(100%,22rem)] [&>[data-spread=true]]:w-full"
         aria-label={vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         data-testid="identity-cards"
       >
