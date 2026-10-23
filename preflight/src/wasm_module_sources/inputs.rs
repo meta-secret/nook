@@ -29,9 +29,14 @@ impl Deref for ModuleSource<'_> {
     }
 }
 
-pub(super) struct ParsedModule {
-    pub(super) source: String,
-    pub(super) tree: tree_sitter::Tree,
+pub(crate) enum TopLevelModule<'scan> {
+    Parsed(&'scan ParsedModule),
+    ReadRequired,
+}
+
+pub(crate) struct ParsedModule {
+    pub(crate) source: String,
+    pub(crate) tree: tree_sitter::Tree,
     pub(super) imports: HashMap<String, (String, String)>,
     pub(super) exports: Vec<ForwardedExport>,
 }
@@ -68,6 +73,18 @@ impl ParsedModule {
 }
 
 impl ModuleInputs {
+    /// Reuse complete script roots only; Svelte blocks retain their own parser and offsets.
+    /// Failed or unlisted preloads keep the caller's original fresh-read path.
+    pub(crate) fn top_level_module(&self, path: &Path) -> TopLevelModule<'_> {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("svelte") => TopLevelModule::ReadRequired,
+            Some(_) | None => match self.modules.get(path) {
+                Some(module) => TopLevelModule::Parsed(module),
+                None => TopLevelModule::ReadRequired,
+            },
+        }
+    }
+
     pub(crate) fn collect(files: &[PathBuf]) -> Self {
         let directories = files
             .iter()
@@ -145,7 +162,7 @@ impl ModuleInputs {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleInputs, ModuleSource};
+    use super::{ModuleInputs, ModuleSource, TopLevelModule};
     use crate::wasm_module_sources::WasmModuleSources;
     use crate::wasm_module_sources::local_resolution::ModuleResolutionFailure;
     use std::collections::BTreeMap;
@@ -167,6 +184,29 @@ mod tests {
     #[derive(serde::Serialize)]
     struct AliasPaths {
         paths: BTreeMap<String, Vec<String>>,
+    }
+
+    #[test]
+    fn svelte_and_failed_preloads_keep_the_original_reader() -> anyhow::Result<()> {
+        let fixture = SourceFixture::create()?;
+        let svelte = fixture.root.join("Component.svelte");
+        let unreadable = fixture.root.join("invalid.ts");
+        fs::write(&svelte, "<script>export const value = 1;</script>")?;
+        fs::write(&unreadable, [0xff])?;
+        let inputs = ModuleInputs::collect(&[svelte.clone(), unreadable.clone()]);
+        assert!(matches!(
+            inputs.top_level_module(&svelte),
+            TopLevelModule::ReadRequired
+        ));
+        assert!(matches!(
+            inputs.top_level_module(&unreadable),
+            TopLevelModule::ReadRequired
+        ));
+        assert!(matches!(
+            inputs.top_level_module(&fixture.root.join("absent.ts")),
+            TopLevelModule::ReadRequired
+        ));
+        Ok(())
     }
 
     impl SourceFixture {
