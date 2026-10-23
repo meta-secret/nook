@@ -17,6 +17,7 @@ tasks:
         msg: BUILDKIT_IMAGE must use the derivative version followed by its full source commit.
     cmds:
       - |
+        bash <<'PUBLISH'
         set -euo pipefail
         umask 077
         evidence=$(mktemp -d "${TMPDIR:-/tmp}/nook-buildkit-publish.XXXXXX")
@@ -26,6 +27,7 @@ tasks:
           --metadata-file "$evidence/metadata.json" buildkit-native
         jq -er '."buildkit-native"."containerimage.digest"' "$evidence/metadata.json"
         printf 'Buildx publication metadata: %s\n' "$evidence/metadata.json"
+        PUBLISH
 
   buildkit:test:
     desc: Run native BuildKit cache and GC regression tests in a disposable local container.
