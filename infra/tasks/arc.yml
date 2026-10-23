@@ -671,8 +671,7 @@ tasks:
           kubectl delete statefulset nook-buildkit \
             --namespace arc-runners --cascade=orphan --wait=true
         fi
-        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" \
-          -f "$remote_dir/infra/k0s/manifests/arc/buildkit-home-worker-0.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
         config_hash="$(kubectl get configmap nook-buildkit \
           --namespace arc-runners -o json | jq -cS '.data' | sha256sum | awk '{ print $1 }')"
         kubectl patch statefulset/nook-buildkit --namespace arc-runners \

@@ -171,19 +171,18 @@ class DockerizedRustBuildKitContract {
         ports: [{ name: "buildkit", port: 1234, targetPort: "buildkit" }],
       },
     });
+    const arcTasks = this.read("infra/tasks/arc.yml");
     expect(
-      this.read("infra/tasks/arc.yml").match(
+      arcTasks.match(
         /-f "\$remote_dir\/infra\/k0s\/manifests\/arc\/buildkit-home-worker-0.yaml"/g,
       ),
-    ).toHaveLength(2);
-    const workflow = this.read(".github/workflows/pr.yml");
-    expect(workflow.match(/arc-buildkit-backend:/g)).toHaveLength(1);
-    const prepare = workflow
-      .split("\n  prepare:\n")[1]
-      ?.split("\n  verify:\n")[0];
-    expect(prepare).toContain(
-      "arc-buildkit-backend: ${{ startsWith(runner.name, 'nook-k0s-') && 'home-worker-0' || 'local' }}",
+    ).toHaveLength(1);
+    expect(arcTasks.split("\n  arc:deploy:\n")[1]).not.toContain(
+      "buildkit-home-worker-0.yaml",
     );
+    const workflow = this.read(".github/workflows/pr.yml");
+    expect(workflow).not.toContain("arc-buildkit-backend:");
+    expect(workflow).not.toContain("home-worker-0");
     expect(setup).toContain(
       'echo "NOOK_BUILDKIT_BACKEND=$NOOK_BUILDKIT_BACKEND" >> "$GITHUB_ENV"',
     );
@@ -497,7 +496,9 @@ class DockerizedRustBuildKitContract {
       expect(bake).toContain(entry);
     }
     expect(bake).toContain("cache-to   = compile_foundation_cache_to");
-    expect(bake).toContain("mode=max,compression=zstd,timeout=20s");
+    expect(bake).toContain(
+      "mode=max,compression=zstd,force-compression=true,timeout=20s",
+    );
     expect(bake).not.toContain("ignore-error=true");
     const sourceTargetStart = bake.indexOf('target "build-compile"');
     const sourceTargetEnd = bake.indexOf("\n}", sourceTargetStart);
@@ -932,7 +933,7 @@ test("setup observations preserve fatal environment and optional telemetry bound
 });
 
 test(
-  "PR artifact backend stays fixed while all other consumers retain Local",
+  "PR retains Local while dormant fixed-backend guards remain enforced",
   contract.fixedArtifactBackend.bind(contract),
 );
 test(

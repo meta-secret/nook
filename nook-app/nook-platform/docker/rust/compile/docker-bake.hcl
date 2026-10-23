@@ -52,7 +52,7 @@ compile_foundation_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACH
   // source-free dependency vertex rooted by the dependency-only target; Phase
   // B imports this ref and never exports registry cache. The timeout applies
   // per registry operation, while the five-minute GitHub job bounds both phases.
-  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s",
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=20s",
 ] : []
 
 target "build-compile-foundation" {

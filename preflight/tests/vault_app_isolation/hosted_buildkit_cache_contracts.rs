@@ -69,11 +69,11 @@ impl MainProducerCacheContract<'_> {
             "wasm-source-v3",
         ] {
             let exporter = format!(
-                "nook-rust-{scope}${{GHA_CACHE_SCOPE_SUFFIX}}:buildcache,mode=${{GHA_CACHE_EXPORT_MODE}},compression=zstd,timeout=10m"
+                "nook-rust-{scope}${{GHA_CACHE_SCOPE_SUFFIX}}:buildcache,mode=${{GHA_CACHE_EXPORT_MODE}},compression=zstd,force-compression=true,timeout=10m"
             );
             assert!(
                 rust_toolchain_bake.contains(&exporter),
-                "ecosystem and source exports must retain their scope, mode, zstd, and timeout without forcing inherited-layer recompression: {scope}"
+                "ecosystem and source exports must force the selected zstd chain while retaining scope, mode, and timeout: {scope}"
             );
         }
         assert!(

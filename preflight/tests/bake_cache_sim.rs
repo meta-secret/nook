@@ -34,6 +34,62 @@ impl RepositoryFixture {
 }
 
 #[test]
+fn registry_cache_exporters_force_their_existing_compression_chain() {
+    let root = RepositoryFixture::repository_root();
+    for (path, expected_exports, explicit_zstd) in [
+        (
+            "nook-app/nook-platform/docker/rust/docker-bake.hcl",
+            10,
+            true,
+        ),
+        (
+            "nook-app/nook-platform/docker/rust/compile/docker-bake.hcl",
+            1,
+            true,
+        ),
+        ("infra/sim/bake-cache/compile-warm.docker-bake.hcl", 1, true),
+        (".github/scripts/verify-wasm-gha-cache.sh", 2, true),
+        ("preflight/docker-bake.hcl", 1, false),
+        ("nook-app/nook-web/docker/web.docker-bake.hcl", 2, false),
+        (
+            "nook-app/nook-web/docker/toolchain.docker-bake.hcl",
+            3,
+            false,
+        ),
+        ("infra/sim/bake-cache/docker-bake.hcl", 7, false),
+        ("infra/sim/kubernetes-cache/jobs.ts", 1, false),
+    ] {
+        let source = root.read(path);
+        let exporters = source
+            .lines()
+            .filter(|line| line.contains("type=registry,") && line.contains(",mode="))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            exporters.len(),
+            expected_exports,
+            "exporter inventory: {path}"
+        );
+        for exporter in exporters {
+            assert!(
+                exporter.contains(",force-compression=true"),
+                "registry cache export must select one compression chain: {path}"
+            );
+            assert_eq!(
+                exporter.contains(",compression=zstd"),
+                explicit_zstd,
+                "retain each exporter's existing codec or native default: {path}"
+            );
+            if !explicit_zstd {
+                assert!(
+                    !exporter.contains(",compression="),
+                    "default-codec exporters must retain the native default: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one cache simulation verifies the complete parent and leaf scope matrix"
@@ -268,7 +324,7 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(bake.contains("COMPILE_PARENT_SOURCE_SCOPE"));
     assert!(bake.contains("nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}"));
     assert!(bake.contains("nook-bake-sim-compile-${COMPILE_PARENT_SOURCE_SCOPE}"));
-    assert!(bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(bake.contains("mode=max,compression=zstd,force-compression=true,timeout=20s"));
     assert!(!bake.contains("nook-bake-sim-compile-v"));
     assert!(!bake.contains("ignore-error=true"));
     assert!(!bake.contains("compile_deps_cache_to"));
@@ -280,7 +336,9 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(production_bake.contains("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}"));
     assert!(production_bake.contains("nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}"));
     assert!(!production_bake.contains("nook-build-compile-v"));
-    assert!(production_bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(
+        production_bake.contains("mode=max,compression=zstd,force-compression=true,timeout=20s")
+    );
     assert!(!production_bake.contains("ignore-error=true"));
     assert!(setup.contains("git rev-parse --verify HEAD^1"));
     assert!(setup.contains("GHA_CACHE_PARENT_SCOPE_SUFFIX"));

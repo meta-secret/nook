@@ -152,7 +152,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
         --progress=plain \
         "${bake_args[@]}" \
         --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
         builder-wasm-deps-cache-proof
       ;;
     '')
@@ -160,7 +160,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
         --progress=plain \
         "${bake_args[@]}" \
         --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
         builder-wasm-deps-cache-proof
       ;;
     *)

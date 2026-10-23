@@ -302,9 +302,9 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted PR producers use `nook-k0s-container`. Artifact preparation selects the
-fixed home worker 0 Service; verification retains the persistent node-local
-BuildKit shard on the build pool. Full browser suites use the browser-only
+Trusted PR producers use `nook-k0s-container`. Artifact preparation and
+verification retain the persistent node-local BuildKit shard on the build pool.
+Full browser suites use the browser-only
 scale set on Rise-S-2 without BuildKit access. The final
 `PR validation / Verify and preview` job stays on the mixed scale set and checks the
 complete result join. Fork and Dependabot jobs remain secret-free on
@@ -690,8 +690,8 @@ authenticator-domain to 90 percent.
   Its upload waits for selected focused authentication and research source checks/build.
   Full validation reuses its web job's artifact download for research E2E;
   research-only validation adds one browser artifact download.
-- Trusted ARC artifact preparation uses the fixed home worker 0 backend;
-  verification retains Local routing. Producers can use different builders and
+- Trusted ARC artifact preparation and verification retain default Local routing;
+  the fixed-home opt-in is inactive. Producers can use different builders and
   repeat shared build dependencies. Native BuildKit decides reuse; no cross-node deduplication or
   timing improvement is guaranteed.
 - Generated files cross jobs in the immutable browser artifact.
@@ -708,6 +708,13 @@ authenticator-domain to 90 percent.
 - ARC jobs reuse the persistent BuildKit content store on their selected node.
 - Verified Main ARC jobs publish portable source, tool, and WASM dependency refs.
 - Zot exports provide cold-node recovery.
+- Registry cache exporters and their proof/simulation counterparts force their
+  existing compression format, including the native default where no format is
+  specified. In BuildKit 0.32.2 this selects one compression chain instead of
+  enumerating inherited variants. Missing variants can require recompression
+  and additional CPU, memory and disk space on the first export. This mitigation
+  does not establish the cause of the observed OOM or a measured speedup; imports,
+  cache modes, publication gates and proofs remain unchanged.
 Main no longer stages or uploads a commit-keyed coverage artifact for PR
 comparison. Repository coverage remains enforced by the Docker/BuildKit
 coverage solve and package floors in the verified Rust graph.
@@ -722,9 +729,8 @@ coverage solve and package floors in the verified Rust graph.
   mixed container workloads use `nook-k0s-container`. Known immutable browser
   consumers use the separate browser-only scale set.
 - On ARC, the shared setup creates a `remote` Buildx builder connected to the
-  persistent rootless BuildKit shard on the selected node by default. Only trusted
-  ARC PR artifact preparation selects the fixed home worker 0 Service; its
-  within-job consumers retain that binding, and failure never falls back to Local.
+  persistent rootless BuildKit shard on the selected node. The fixed home worker 0
+  binding remains inactive; its dormant guards never fall back to Local on failure.
 - Image-backed browser jobs use a two-stage Kubernetes path. `nook-k0s` builds
   and pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable image on the browser-only scale set.
