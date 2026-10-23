@@ -854,7 +854,7 @@ mod browser_tests {
             .ok_or_else(|| anyhow::anyhow!("genesis owner is missing from roster"))?;
         let owner_signing_key = js(manager.device_signing_public_key_js().await)?;
         let joiner = nook_core::DeviceIdentity::generate()?;
-        let records = js(manager
+        js(manager
             .approve_extension_device(
                 joiner.device_id().to_string(),
                 joiner.public_key().to_string(),
@@ -862,7 +862,7 @@ mod browser_tests {
                 "Browser extension".to_owned(),
             )
             .await)?;
-        assert!(records.is_empty());
+        assert!(manager.vault.meta.secrets.is_empty());
 
         let extension_member = js(manager.list_vault_members())?
             .into_iter()
@@ -882,13 +882,13 @@ mod browser_tests {
         enrollee.vault.store_id = nook_core::StoreId::generate()?.to_string();
         enrollee.bootstrap_event_log_genesis().await?;
         let keys = nook_core::VaultKeys::generate()?;
-        let enrolled = js(enrollee
+        js(enrollee
             .enroll_with_keys(
                 keys.secrets_key.as_str().to_owned(),
                 keys.members_key.as_str().to_owned(),
             )
             .await)?;
-        assert!(enrolled.is_empty());
+        assert!(enrollee.vault.meta.secrets.is_empty());
         assert!(!js(enrollee.list_vault_members())?.is_empty());
 
         js(manager.delete_local_browser_data().await)?;

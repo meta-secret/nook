@@ -524,11 +524,11 @@ mod tests {
             let mut manager = fixture.manager()?;
             manager.sentinel_unlock =
                 CeremonyState::Active(fixture.ready_session(&fixture.output.stored_records)?);
-            let records = manager
+            manager
                 .finalize_sentinel_unlock()
                 .await
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-            assert!(records.is_empty());
+            assert!(manager.vault.meta.secrets.is_empty());
             assert!(manager.vault.crypto.is_unlocked());
             assert!(!manager.vault.secrets_key.is_empty());
             assert!(!manager.vault.last_synced_content.is_empty());

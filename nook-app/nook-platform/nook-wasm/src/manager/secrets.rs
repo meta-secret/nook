@@ -771,10 +771,17 @@ mod projection_tests {
         })
         .to_yaml()?
         .into_inner();
-        let records = js(manager
+        js(manager
             .add_secret(original_id.clone(), SecretType::Login, original_data)
             .await)?;
-        assert!(records.iter().any(|record| record.id() == original_id));
+        assert!(
+            manager
+                .vault
+                .meta
+                .secrets
+                .keys()
+                .any(|id| id.to_string() == original_id)
+        );
         assert_eq!(
             manager.drain_status_log(),
             vec!["ADD_SECRET_START".to_owned(), "READY".to_owned()]
@@ -855,10 +862,17 @@ mod projection_tests {
         let data = SecretValue::Authenticator(authenticator)
             .to_yaml()?
             .into_inner();
-        let records = js(manager
+        js(manager
             .add_secret(secret_id.clone(), SecretType::Authenticator, data)
             .await)?;
-        assert!(records.iter().any(|record| record.id() == secret_id));
+        assert!(
+            manager
+                .vault
+                .meta
+                .secrets
+                .keys()
+                .any(|id| id.to_string() == secret_id)
+        );
 
         let code = js(manager.current_authenticator_code(&secret_id, 1_750_000_000))?;
         assert_eq!(code.code().len(), 6);
