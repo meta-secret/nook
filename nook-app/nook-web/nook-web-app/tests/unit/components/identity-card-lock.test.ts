@@ -270,3 +270,19 @@ describe('identity card unlock', () => {
     })
   })
 })
+
+describe('identity card width beside a vault panel', () => {
+  test('spreads across its row while a vault panel is open beside it', async () => {
+    const view = renderCard(IdentityCardStatus.Unlocked)
+    const article = view.getByTestId('identity-card')
+    expect(article.dataset.spread).toBe('false')
+
+    await fireEvent.click(view.getByTestId('identity-vault-row'))
+    await tick()
+    expect(article.dataset.spread).toBe('true')
+
+    await fireEvent.click(view.getByTestId('identity-vault-row'))
+    await tick()
+    expect(article.dataset.spread).toBe('false')
+  })
+})
