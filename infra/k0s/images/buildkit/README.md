@@ -7,12 +7,12 @@ selects this image automatically.
 
 ## Immutable inputs
 
-| Input | Identity |
-| --- | --- |
+| Input                                   | Identity                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------- |
 | Official BuildKit 0.34.1 source archive | SHA256 `0f7d4a765b273359d0752aa1c8a309606578fd0db42e71f0fc5de845d3b1139b` |
-| Go 1.26.8 Bookworm image index | SHA256 `dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107` |
-| Official rootless runtime image index | SHA256 `f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89` |
-| Two-file production patch | SHA256 `4eff5ddf943d69143a96a852cbd9f6aeddd0d06ef10078c4164d80e23b0111de` |
+| Go 1.26.8 Bookworm image index          | SHA256 `dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107` |
+| Official rootless runtime image index   | SHA256 `f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89` |
+| Two-file production patch               | SHA256 `4eff5ddf943d69143a96a852cbd9f6aeddd0d06ef10078c4164d80e23b0111de` |
 
 The source archive comes from the official release tag and is verified by its
 checksum. It contains no Git checkout; the binary reports the patch checksum
