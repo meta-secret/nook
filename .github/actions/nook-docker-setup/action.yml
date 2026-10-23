@@ -588,7 +588,7 @@ runs:
 
         # Only observations are optional; the environment write above is fatal.
         if [ "$NOOK_MONITOR_BUILDKIT_STORAGE" = true ]; then
-          if bash -euo pipefail <<'STORAGE_CHECK'
+          if bash <<'STORAGE_CHECK'
         set -euo pipefail
         usage="$(mktemp)"
         trap 'rm -f "$usage"' EXIT
@@ -615,7 +615,7 @@ runs:
           fi
         fi
 
-        if bash -euo pipefail <<'CACHE_TELEMETRY'
+        if bash <<'CACHE_TELEMETRY'
         set -euo pipefail
         node_bin="$(command -v node || true)"
         if [ -z "$node_bin" ] && [ -x /home/runner/externals/node24/bin/node ]; then
