@@ -126,16 +126,19 @@ test('choose a saved password after switching focus from username', async ({
     <html><head><title>Choose a credential field</title><style>
       :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
       * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #10131b; color: #f2f4f8; }
-      main { width: min(440px, calc(100vw - 48px)); padding: 36px; border: 1px solid #45506a; border-radius: 18px; background: #181d29; }
+      body { margin: 0; min-height: 100vh; display: grid; place-content: center; gap: 16px; background: #10131b; color: #f2f4f8; }
+      header, section { width: min(440px, calc(100vw - 48px)); padding: 24px; border: 1px solid #45506a; border-radius: 18px; background: #181d29; }
       label { display: grid; gap: 8px; margin: 18px 0; }
       input { min-height: 48px; padding: 12px; border: 1px solid #45506a; border-radius: 9px; background: #10131b; color: inherit; font: inherit; }
-    </style></head><body><main>
+    </style></head><body><header>
       <h1>Choose a credential field</h1>
       <p>Nook fills only the field you choose.</p>
+      <button type="button">Close</button>
+    </header><section>
       <label>Username<input id="focused-username" type="email" autocomplete="username"></label>
+    </section><section>
       <label>Password<input id="focused-password" type="password" autocomplete="current-password"></label>
-    </main></body></html>`)
+    </section></body></html>`)
   await page.evaluate(installDemoChromeStub, stubArgs)
   await injectPilotAutofill(page)
 
