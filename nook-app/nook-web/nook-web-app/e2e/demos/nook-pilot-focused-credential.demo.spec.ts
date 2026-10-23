@@ -101,3 +101,84 @@ for (const interaction of interactions) {
     await demoBeat(page)
   })
 }
+
+test('choose a saved password after switching focus from username', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const selectedCredential: WebsiteFocusedLoginFillResponse = {
+    ok: true,
+    value: 'demo-selected-password',
+  }
+  const stubArgs: Parameters<typeof installDemoChromeStub>[0] = {
+    localizedMessages: messages,
+    ...demoDomainEnumArgs,
+    loginPilotFlow: true,
+    recordRuntimeMessageTypes: true,
+    responsesByType: {
+      [WebsiteFocusedLoginRevealMessageType.Reveal]: selectedCredential,
+    },
+  }
+  const requestMethods: string[] = []
+  page.on('request', (request) => requestMethods.push(request.method()))
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html><head><title>Choose a credential field</title><style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #10131b; color: #f2f4f8; }
+      main { width: min(440px, calc(100vw - 48px)); padding: 36px; border: 1px solid #45506a; border-radius: 18px; background: #181d29; }
+      label { display: grid; gap: 8px; margin: 18px 0; }
+      input { min-height: 48px; padding: 12px; border: 1px solid #45506a; border-radius: 9px; background: #10131b; color: inherit; font: inherit; }
+    </style></head><body><main>
+      <h1>Choose a credential field</h1>
+      <p>Nook fills only the field you choose.</p>
+      <label>Username<input id="focused-username" type="email" autocomplete="username"></label>
+      <label>Password<input id="focused-password" type="password" autocomplete="current-password"></label>
+    </main></body></html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await injectPilotAutofill(page)
+
+  const username = page.locator('#focused-username')
+  const password = page.locator('#focused-password')
+  const widget = page.locator('#nook-auth-widget')
+  await username.click()
+  await expect(username).toBeFocused()
+  await expect(widget).toHaveAttribute('data-nook-credential-mode', 'focused')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await demoBeat(page)
+
+  await password.click()
+  await expect(password).toBeFocused()
+  await expect(widget).toHaveAttribute('data-nook-credential-mode', 'focused')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(username).toHaveValue('')
+  await expect(password).toHaveValue('')
+  const beforeChoice = await page.evaluate(
+    () => window.__nookDemoRuntimeMessageTypes,
+  )
+  expect(beforeChoice).not.toContain(
+    WebsiteFocusedLoginRevealMessageType.Reveal,
+  )
+  expect(beforeChoice).not.toContain(
+    AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+  )
+  await demoBeat(page)
+
+  const continueOptions: Parameters<Locator['getByRole']>[1] = {
+    name: 'Sign in',
+  }
+  await widget.getByRole('button', continueOptions).click()
+  await expect(password).toHaveValue(selectedCredential.value)
+  await expect(username).toHaveValue('')
+  const afterChoice = await page.evaluate(
+    () => window.__nookDemoRuntimeMessageTypes,
+  )
+  expect(afterChoice).toContain(
+    WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
+  )
+  expect(afterChoice).toContain(WebsiteFocusedLoginRevealMessageType.Reveal)
+  expect(afterChoice).not.toContain('nook:website-login-fill')
+  expect(requestMethods).not.toContain('POST')
+  await demoBeat(page)
+})
