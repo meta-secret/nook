@@ -79,12 +79,11 @@ fn registry_cache_exporters_force_their_existing_compression_chain() {
                 explicit_zstd,
                 "retain each exporter's existing codec or native default: {path}"
             );
-            if !explicit_zstd {
-                assert!(
-                    !exporter.contains(",compression="),
-                    "default-codec exporters must retain the native default: {path}"
-                );
-            }
+            assert_eq!(
+                exporter.matches(",compression=").count(),
+                usize::from(explicit_zstd),
+                "retain exactly the existing explicit codec or native default: {path}"
+            );
         }
     }
 }
