@@ -804,7 +804,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
   native.restore()
 })
 
-test('registers an authenticator selection before post-open validation yields', async () => {
+test('validates before publishing an authenticator picker and accepts its selection', async () => {
   const { authenticatorInteraction } =
     await import('../src/content/autofill/authenticator-actions')
   const { authenticationWorkflowUi, authenticationRuntimeTransport } =
@@ -812,7 +812,7 @@ test('registers an authenticator selection before post-open validation yields', 
   const { workflowUi } = await import('../src/content/autofill/workflow-ui')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
-  const { pickerState, widgetState } =
+  const { AuthenticatorPickerKind, pickerState, widgetState } =
     await import('../src/content/autofill/state')
   const { LiveAuthenticationWorkflowDisposition } =
     await import('../../nook-web-shared/src/extension/password-form-classified-observations')
@@ -877,8 +877,11 @@ test('registers an authenticator selection before post-open validation yields', 
   }
   const opening = authenticatorInteraction.continueWithAuthenticator(request)
   try {
-    expect(open).toHaveBeenCalledTimes(1)
     await validationEntered.promise
+    expect(open).not.toHaveBeenCalled()
+    validation.resolve(LiveAuthenticationWorkflowDisposition.Current)
+    await opening
+    expect(open).toHaveBeenCalledTimes(1)
     const acknowledged = mock(() => {})
     routeAutofillMessage(
       {
@@ -894,6 +897,13 @@ test('registers an authenticator selection before post-open validation yields', 
     )
     expect(acknowledged).toHaveBeenCalledWith({ ok: true })
     expect(fill).toHaveBeenCalledTimes(1)
+    expect(pickerState.authenticator.kind).toBe(AuthenticatorPickerKind.Closed)
+    await Promise.resolve()
+    validate.mockResolvedValue(LiveAuthenticationWorkflowDisposition.Changed)
+    await authenticatorInteraction.continueWithAuthenticator(request)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(fill).toHaveBeenCalledTimes(1)
+    expect(pickerState.authenticator.kind).toBe(AuthenticatorPickerKind.Closed)
   } finally {
     validation.resolve(LiveAuthenticationWorkflowDisposition.Current)
     await opening
