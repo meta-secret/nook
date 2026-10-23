@@ -361,7 +361,10 @@ class ArcManifestContract {
       "ovh-us",
     ]);
     if (admittedContract9.isErr()) return err(admittedContract9.error);
-    if (containerJobNodesSource !== "bynull-servo\nnook-rise-s-1\nnook-rise-s-2\novh-us\n") {
+    if (
+      containerJobNodesSource !==
+      "bynull-servo\nnook-rise-s-1\nnook-rise-s-2\novh-us\n"
+    ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
         message:
