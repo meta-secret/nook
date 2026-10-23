@@ -209,6 +209,10 @@ class FocusedFormTransitionFixture {
         verdict: { kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch },
         loginMatches: { kind: 'ready', count: 0 },
         selectedFacts: { state: 'notApplicable' },
+        pilotCapability: 'hidden',
+        savedLoginCapability: 'unavailable',
+        factsBindingToken: false,
+        savedLoginActionAvailable: false,
       },
     }
     return Effect.runPromise(Effect.succeed(delivery))
