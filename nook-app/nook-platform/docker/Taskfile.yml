@@ -417,17 +417,17 @@ tasks:
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:rust-base
-      - >-
-        GHA_CACHE_WRITE_ENABLED=
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        rust-kani
       - |
+        # The leaf's proof RUN must succeed before BuildKit exports its cache.
+        # Preserve the existing write admission without repeating the solve.
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            rust-kani
+          export GHA_CACHE_WRITE_ENABLED=1
+        else
+          export GHA_CACHE_WRITE_ENABLED=
         fi
+        {{.DOCKER}} buildx bake \
+          {{.NOOK_BAKE_FILES}} \
+          rust-kani
 
   docker:ecosystem:fuzz:
     desc: Bake the cargo-fuzz smoke target with a bounded runtime.
