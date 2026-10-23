@@ -469,7 +469,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(container_hook.contains("nook.nokey.sh/arc-build: \"true\""));
     assert!(container_hook.contains("nook.nokey.sh/arc-container-job: \"true\""));
     assert_eq!(
-        container_job_nodes, "nook-rise-s-1\nnook-rise-s-2\novh-us\n",
+        container_job_nodes, "bynull-servo\nnook-rise-s-1\nnook-rise-s-2\novh-us\n",
         "container jobs must remain limited to the explicit eligible-node inventory"
     );
     assert!(
