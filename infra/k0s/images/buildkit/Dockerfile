@@ -15,16 +15,17 @@ ARG TARGETOS
 ARG TARGETARCH
 RUN --network=none GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath \
   -tags 'osusergo netgo static_build seccomp' \
-  -ldflags '-extldflags -static -X github.com/moby/buildkit/version.Package=github.com/moby/buildkit -X github.com/moby/buildkit/version.Version=v0.34.1-nook.2 -X github.com/moby/buildkit/version.Revision=patch-sha256:06f395c676539fc545deb3d5fe7af146af1de2346d23191e6a9637f793082985' \
+  -ldflags '-extldflags -static -X github.com/moby/buildkit/version.Package=github.com/moby/buildkit -X github.com/moby/buildkit/version.Version=v0.34.1-nook.3 -X github.com/moby/buildkit/version.Revision=patch-sha256:2d01f5be67cd90ab01454a9417a94a14630b5ed9d0c55cf83834a51867d02fd7' \
   -o /out/buildkitd ./cmd/buildkitd
 
 FROM source AS native-tests
 COPY infra/k0s/images/buildkit/cache-noop-tests.patch /tmp/cache-noop-tests.patch
 RUN git apply --check /tmp/cache-noop-tests.patch && git apply /tmp/cache-noop-tests.patch
 RUN --network=none go test -c -o /usr/local/bin/cache.test ./cache \
+  && go test -c -o /usr/local/bin/cache-metadata.test ./cache/metadata \
   && go test -c -o /usr/local/bin/metadata.test github.com/containerd/containerd/v2/core/metadata
 ENTRYPOINT ["timeout", "--signal=TERM", "--kill-after=10s", "900", "sh", "-ec"]
-CMD ["/usr/local/bin/metadata.test -test.v -test.run '^TestLeaseResource' && /usr/local/bin/cache.test -test.v -test.run 'TestEnsureCompression|TestLinkBlobMatchingLabelsNoop|TestLoopLeaseContent|TestSharingCompressionVariant|TestGetRemotes'"]
+CMD ["/usr/local/bin/metadata.test -test.v -test.run '^TestLeaseResource' && /usr/local/bin/cache-metadata.test -test.v && /usr/local/bin/cache.test -test.v -test.run 'TestEnsureCompression|TestLinkBlobMatchingLabelsNoop|TestLoopLeaseContent|TestSharingCompressionVariant|TestGetRemotes|TestQueueUnknownSize'"]
 
 FROM registry.dev.nokey.sh/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 AS buildkit
 COPY --from=daemon /out/buildkitd /usr/bin/buildkitd

@@ -12,13 +12,12 @@ selects this image automatically.
 | Official BuildKit 0.34.1 source archive | SHA256 `0f7d4a765b273359d0752aa1c8a309606578fd0db42e71f0fc5de845d3b1139b` |
 | Go 1.26.8 Bookworm image index          | SHA256 `dc9ad6c05acc7a88e5b71bde60a5fe3bd4b9f0db209011711b464107438a8107` |
 | Official rootless runtime image index   | SHA256 `f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89` |
-| Three-file production patch             | SHA256 `06f395c676539fc545deb3d5fe7af146af1de2346d23191e6a9637f793082985` |
+| Five-file production patch              | SHA256 `2d01f5be67cd90ab01454a9417a94a14630b5ed9d0c55cf83834a51867d02fd7` |
 
 The source archive comes from the official release tag and is verified by its
 checksum. It contains no Git checkout; the binary reports the patch checksum
 as its revision, without claiming an upstream commit. Version
-`v0.34.1-nook.2` distinguishes it from the official daemon and the earlier
-`nook.1` derivative.
+`v0.34.1-nook.3` distinguishes it from the official daemon and earlier derivatives.
 
 ## Native behavior
 
@@ -34,11 +33,20 @@ Caller-owned transactions keep their other writes, commit/rollback behavior,
 and callbacks. Missing resources still commit normally; invalid resources and
 nonempty values retain their prior error or normalization behavior.
 
-Size metadata commits, Force, codecs, export modes, durability, and fsync remain
-unchanged. A local 64-layer imported matching-Zstd comparison against `nook.1`
-reduced measured daemon write bytes by 42.34%, with identical cache records and
-OCI output. This bounded result does not establish a production performance
-gain or prove the cause of an earlier timeout or OOM.
+Repeated unknown-size updates compare the actual durable, unindexed value inside
+the writable transaction. An identical value refreshes the handle's mirror
+without writing. Every queued operation still runs in order; only an entirely
+unchanged queue rolls back. Mixed changes commit normally, and callback or commit
+failures retain the complete queue for retry. Missing, malformed, indexed, and
+known-size values retain their existing update and error behavior.
+
+Force, codecs, export modes, GC links, durability, and fsync remain unchanged.
+A local 64-layer imported matching-Zstd comparison against `nook.2` reduced
+measured daemon write bytes by 59.45% and preparation from 2.0 to 0.8 seconds,
+with identical cache records and OCI output. These are whole-solve process I/O
+measurements from one rootful ARM64 pair, not database-only measurements or a
+production performance forecast. They do not prove the cause of an earlier
+timeout or OOM.
 
 ## Local build and validation
 
@@ -55,7 +63,7 @@ task pushes an image, modifies an existing daemon, or selects a
 production deployment.
 
 After the owning release decision, publish with `task infra:buildkit:publish
-BUILDKIT_IMAGE=registry.dev.nokey.sh/nook/buildkit:v0.34.1-nook.2-<full-source-commit>`.
+BUILDKIT_IMAGE=registry.dev.nokey.sh/nook/buildkit:v0.34.1-nook.3-<full-source-commit>`.
 This builds the same daemon target for `linux/amd64`, uses existing Docker
 registry authentication, and retains native Buildx digest metadata in a private
 temporary directory. Use a new source-commit tag for each derivative release;

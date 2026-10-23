@@ -13,7 +13,7 @@ tasks:
     env:
       BUILDKIT_IMAGE: "{{.BUILDKIT_IMAGE}}"
     preconditions:
-      - sh: printf '%s\n' "$BUILDKIT_IMAGE" | grep -Eq '^registry\.dev\.nokey\.sh/nook/buildkit:v0\.34\.1-nook\.2-[0-9a-f]{40}$'
+      - sh: printf '%s\n' "$BUILDKIT_IMAGE" | grep -Eq '^registry\.dev\.nokey\.sh/nook/buildkit:v0\.34\.1-nook\.3-[0-9a-f]{40}$'
         msg: BUILDKIT_IMAGE must use the derivative version followed by its full source commit.
     cmds:
       - |
@@ -41,4 +41,4 @@ tasks:
         container="nook-buildkit-native-tests-$(date +%s)-$$"
         trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
         docker run --rm --name "$container" --privileged --network none \
-          nook-buildkit-native-tests:v0.34.1-nook.2
+          nook-buildkit-native-tests:v0.34.1-nook.3

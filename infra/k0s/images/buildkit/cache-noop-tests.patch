@@ -436,3 +436,251 @@
 +	t.Logf("16 concurrent duplicate AddResource calls: bbolt writes=%d", delta)
 +	require.Zero(t, delta)
 +}
+--- /dev/null
++++ b/cache/size_noop_test.go
+@@ -0,0 +1,119 @@
++package cache
++
++import (
++	"errors"
++	"path/filepath"
++	"sync"
++	"testing"
++
++	"github.com/moby/buildkit/cache/metadata"
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++func TestQueueUnknownSizeDurableNoop(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(42))
++	require.NoError(t, md.commitMetadata())
++	stale, _ := s.Get("record")
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	var bdb *bolt.DB
++	require.NoError(t, s.DB().View(func(tx *bolt.Tx) error { bdb = tx.DB(); return nil }))
++	stats := bdb.Stats()
++	before := stats.TxStats.GetWrite()
++	staleMD := &cacheMetadata{si: stale}
++	require.Equal(t, int64(42), staleMD.getSize())
++	for range 16 {
++		require.NoError(t, staleMD.queueSize(sizeUnknown))
++		require.NoError(t, staleMD.commitMetadata())
++	}
++	stats = bdb.Stats()
++	writes := stats.TxStats.GetWrite() - before
++	t.Logf("16 durable unknown-size updates: bbolt writes=%d", writes)
++	require.Zero(t, writes)
++	require.Equal(t, sizeUnknown, staleMD.getSize(), "durable match refreshes stale mirror")
++	fresh, _ := s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++	// A different handle may change durable size while this handle remembers unknown.
++	require.NoError(t, md.queueSize(73))
++	require.NoError(t, md.commitMetadata())
++	require.NoError(t, staleMD.queueSize(sizeUnknown))
++	require.NoError(t, staleMD.commitMetadata())
++	fresh, _ = s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++}
++
++func TestQueueUnknownSizeMixedOrderAndRetry(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	order := []string{}
++	v, err := metadata.NewValue("written")
++	require.NoError(t, err)
++	si.Queue(func(b *bolt.Bucket) error { order = append(order, "before"); return si.SetValue(b, "first", v) })
++	require.NoError(t, md.queueSize(sizeUnknown))
++	si.Queue(func(b *bolt.Bucket) error { order = append(order, "after"); return si.SetValue(b, "second", v) })
++	failure := errors.New("late callback failure")
++	fail := true
++	si.Queue(func(*bolt.Bucket) error {
++		order = append(order, "last")
++		if fail {
++			return failure
++		}
++		return nil
++	})
++	require.ErrorIs(t, md.commitMetadata(), failure)
++	fresh, _ := s.Get("record")
++	require.Nil(t, fresh.Get("first"))
++	require.Nil(t, fresh.Get("second"))
++	fail = false
++	require.NoError(t, md.commitMetadata())
++	require.Equal(t, []string{"before", "after", "last", "before", "after", "last"}, order)
++	fresh, _ = s.Get("record")
++	require.Equal(t, v, fresh.Get("first"))
++	require.Equal(t, v, fresh.Get("second"))
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++	require.NoError(t, md.commitMetadata())
++	require.Len(t, order, 6, "successful commit consumes the queue")
++}
++
++func TestQueueUnknownSizeConcurrent(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	var wg sync.WaitGroup
++	errs := make(chan error, 16)
++	for range 16 {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			handle, _ := s.Get("record")
++			m := &cacheMetadata{si: handle}
++			if err := m.queueSize(sizeUnknown); err != nil {
++				errs <- err
++				return
++			}
++			errs <- m.commitMetadata()
++		}()
++	}
++	wg.Wait()
++	close(errs)
++	for err := range errs {
++		require.NoError(t, err)
++	}
++	fresh, _ := s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++}
+--- /dev/null
++++ b/cache/metadata/queue_commit_test.go
+@@ -0,0 +1,60 @@
++package metadata
++
++import (
++	"errors"
++	"path/filepath"
++	"testing"
++
++	"github.com/moby/buildkit/util/db"
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++// Fail after callbacks ran but before the native writable transaction commits.
++// The real bbolt rollback remains responsible for discarding all mutations.
++type failQueueCommitDB struct {
++	db.DB
++	fail    bool
++	failure error
++}
++
++func (d *failQueueCommitDB) Update(fn func(*bolt.Tx) error) error {
++	return d.DB.Update(func(tx *bolt.Tx) error {
++		if err := fn(tx); err != nil {
++			return err
++		}
++		if d.fail {
++			return d.failure
++		}
++		return nil
++	})
++}
++
++func TestQueueValueCommitFailureRetainsPending(t *testing.T) {
++	filename := filepath.Join(t.TempDir(), "metadata.db")
++	s, err := NewStore(filename)
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	known, err := NewValue(int64(42))
++	require.NoError(t, err)
++	unknown, err := NewValue(int64(-1))
++	require.NoError(t, err)
++	require.NoError(t, si.Update(func(b *bolt.Bucket) error { return si.SetValue(b, "size", known) }))
++	failDB := &failQueueCommitDB{DB: s.db, fail: true, failure: errors.New("commit failed after callbacks")}
++	s.db = failDB
++	si.Queue(func(b *bolt.Bucket) error { return si.SetValue(b, "size", unknown) })
++	require.ErrorIs(t, si.Commit(), failDB.failure)
++	require.Len(t, si.queue, 1)
++	require.Equal(t, unknown, si.Get("size"), "mirror changed before failed commit")
++	fresh, _ := s.Get("record")
++	require.Equal(t, known, fresh.Get("size"), "durable state rolled back")
++	failDB.fail = false
++	require.NoError(t, si.Commit())
++	require.Empty(t, si.queue)
++	require.NoError(t, s.Close())
++	s, err = NewStore(filename)
++	require.NoError(t, err)
++	fresh, _ = s.Get("record")
++	require.Equal(t, unknown, fresh.Get("size"), "retry uses durable state despite mirror")
++}
+--- /dev/null
++++ b/cache/metadata/queue_noop_test.go
+@@ -0,0 +1,60 @@
++package metadata
++
++import (
++	"path/filepath"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++func TestQueueValueIfChangedRepairAndErrors(t *testing.T) {
++	for _, kind := range []string{"missing", "indexed", "invalid", "bucket", "empty-key", "nil", "indexed-target"} {
++		t.Run(kind, func(t *testing.T) {
++			s, err := NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++			require.NoError(t, err)
++			t.Cleanup(func() { require.NoError(t, s.Close()) })
++			si, _ := s.Get("record")
++			desired, err := NewValue(int64(-1))
++			require.NoError(t, err)
++			key := "size"
++			switch kind {
++			case "indexed":
++				old, err := NewValue(int64(-1))
++				require.NoError(t, err)
++				old.Index = "old"
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { return si.SetValue(b, key, old) }))
++			case "invalid":
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { return b.Put([]byte(key), []byte("invalid")) }))
++			case "bucket":
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { _, err := b.CreateBucket([]byte(key)); return err }))
++			case "empty-key":
++				key = ""
++			case "nil":
++				desired = nil
++			case "indexed-target":
++				desired.Index = "new"
++			}
++			si.QueueValueIfChanged(key, desired)
++			err = si.Commit()
++			switch kind {
++			case "invalid", "bucket", "empty-key":
++				require.Error(t, err)
++				require.Len(t, si.queue, 1)
++			default:
++				require.NoError(t, err)
++				require.Empty(t, si.queue)
++				fresh, _ := s.Get("record")
++				require.Equal(t, desired, fresh.Get(key))
++				found, err := s.Probe("old")
++				require.NoError(t, err)
++				require.False(t, found)
++				if kind == "indexed-target" {
++					found, err := s.Probe("new")
++					require.NoError(t, err)
++					require.True(t, found)
++				}
++			}
++		})
++	}
++}
