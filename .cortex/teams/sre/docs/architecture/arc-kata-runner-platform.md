@@ -172,7 +172,10 @@ one replica on each qualified node.
 
 Each replica uses:
 
-- rootless BuildKit `v0.34.1`, pinned to the multi-platform image index digest;
+- the rootless BuildKit `v0.34.1-nook.1` derivative, pinned to published image
+  index `sha256:06e7f1b867b4386bf7f5aeda770e0cde2e924a497b3e6f8fed3dbc4aa69555a3`
+  containing the `linux/amd64` daemon image; its [recipe and native patch](../../../../../infra/k0s/images/buildkit/README.md)
+  preserve the official rootless runtime and skip redundant compression metadata writes;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
 - garbage collection through the shared policy below; and

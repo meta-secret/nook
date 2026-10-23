@@ -158,6 +158,7 @@ impl RepositoryFixture {
             "arc-separation",
             "arc-smoke",
             "sccache",
+            "buildkit",
             "operations",
             "bake-cache",
             "kubernetes-cache",

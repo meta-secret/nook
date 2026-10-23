@@ -1,0 +1,94 @@
+--- a/cache/blobs.go
++++ b/cache/blobs.go
+@@ -497,22 +497,15 @@
+ 
+ // ensureCompression ensures the specified ref has the blob of the specified compression Type.
+ func ensureCompression(ctx context.Context, ref *immutableRef, comp compression.Config, s session.Group) error {
++	if _, ok := leases.FromContext(ctx); !ok {
++		return errors.New("missing lease requirement for adopt")
++	}
+ 	l, err := g.Do(ctx, fmt.Sprintf("ensureComp-%s-%s", ref.ID(), comp.Type), func(ctx context.Context) (_ *leaseutil.LeaseRef, err error) {
+ 		desc, err := ref.ociDesc(ctx, ref.descHandlers, true)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 
+-		l, ctx, err := leaseutil.NewLease(ctx, ref.cm.LeaseManager, leaseutil.MakeTemporary)
+-		if err != nil {
+-			return nil, err
+-		}
+-		defer func() {
+-			if err != nil {
+-				l.Discard(ctx)
+-			}
+-		}()
+-
+ 		// Resolve converters
+ 		layerConvertFunc, err := converter.New(ctx, ref.cm.ContentStore, desc, comp)
+ 		if err != nil {
+@@ -522,19 +515,29 @@
+ 				return nil, err
+ 			} else if isLazy {
+ 				// This ref can be used as the specified compressionType. Keep it lazy.
+-				return l, nil
++				return nil, nil
+ 			}
+ 			if err := ref.linkBlob(ctx, desc); err != nil {
+ 				return nil, err
+ 			}
+-			return l, nil
++			return nil, nil
+ 		}
+ 
+ 		// First, lookup local content store
+ 		if _, err := ref.getBlobWithCompression(ctx, comp.Type); err == nil {
+-			return l, nil // found the compression variant. no need to convert.
++			return nil, nil // found the compression variant. no need to convert.
+ 		}
+ 
++		l, ctx, err := leaseutil.NewLease(ctx, ref.cm.LeaseManager, leaseutil.MakeTemporary)
++		if err != nil {
++			return nil, err
++		}
++		defer func() {
++			if err != nil {
++				l.Discard(ctx)
++			}
++		}()
++
+ 		// Convert layer compression type
+ 		if err := (lazyRefProvider{
+ 			ref:     ref,
+--- a/cache/refs.go
++++ b/cache/refs.go
+@@ -798,12 +798,18 @@
+ 	if err != nil {
+ 		return err
+ 	}
++	previousLabels := vInfo.Labels
+ 	vInfo.Labels = map[string]string{
+ 		blobVariantGCLabel + blobDigest.String(): blobDigest.String(),
+ 	}
+ 	vInfo = addBlobDescToInfo(desc, vInfo)
+-	if _, err := cs.Update(ctx, vInfo, fieldsFromLabels(vInfo.Labels)...); err != nil {
+-		return err
++	for key, value := range vInfo.Labels {
++		if previous, ok := previousLabels[key]; !ok || previous != value {
++			if _, err := cs.Update(ctx, vInfo, fieldsFromLabels(vInfo.Labels)...); err != nil {
++				return err
++			}
++			break
++		}
+ 	}
+ 	// let the future call to size() recalcultate the new size
+ 	sr.mu.Lock()
+@@ -816,6 +822,9 @@
+ 	if desc.Digest == blobDigest {
+ 		return nil
+ 	}
++	if info.Labels[blobVariantGCLabel+desc.Digest.String()] == desc.Digest.String() {
++		return nil
++	}
+ 	info.Labels = map[string]string{
+ 		blobVariantGCLabel + desc.Digest.String(): desc.Digest.String(),
+ 	}
