@@ -1,0 +1,253 @@
+--- /dev/null
++++ b/cache/compression_noop_test.go
+@@ -0,0 +1,250 @@
++package cache
++
++import (
++	"bytes"
++	"context"
++	"errors"
++	"io"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/containerd/containerd/v2/core/content"
++	"github.com/containerd/containerd/v2/core/leases"
++	"github.com/containerd/containerd/v2/pkg/namespaces"
++	cerrdefs "github.com/containerd/errdefs"
++	"github.com/klauspost/compress/zstd"
++	"github.com/moby/buildkit/util/compression"
++	digest "github.com/opencontainers/go-digest"
++	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
++	"github.com/stretchr/testify/require"
++	"golang.org/x/sync/errgroup"
++)
++
++// These wrappers count actual operations against the existing native metadata
++// and content stores; they do not replace their lease or GC behavior.
++type compressionLeaseCounter struct {
++	leases.Manager
++	temporary        atomic.Int64
++	variantResources atomic.Int64
++	variantLease     string
++	discarded        chan string
++}
++
++func (m *compressionLeaseCounter) AddResource(ctx context.Context, l leases.Lease, r leases.Resource) error {
++	if l.ID == m.variantLease {
++		m.variantResources.Add(1)
++	}
++	return m.Manager.AddResource(ctx, l, r)
++}
++
++func (m *compressionLeaseCounter) Create(ctx context.Context, opts ...leases.Opt) (leases.Lease, error) {
++	l, err := m.Manager.Create(ctx, opts...)
++	if err == nil {
++		if _, ok := l.Labels["buildkit/lease.temporary"]; ok {
++			m.temporary.Add(1)
++		}
++	}
++	return l, err
++}
++
++func (m *compressionLeaseCounter) Delete(ctx context.Context, l leases.Lease, opts ...leases.DeleteOpt) error {
++	err := m.Manager.Delete(ctx, l, opts...)
++	if err == nil {
++		m.discarded <- l.ID
++	}
++	return err
++}
++
++type compressionContentCounter struct {
++	content.Store
++	updates   atomic.Int64
++	writeErr  error
++	updateErr error
++}
++
++func (s *compressionContentCounter) Update(ctx context.Context, info content.Info, fields ...string) (content.Info, error) {
++	s.updates.Add(1)
++	if s.updateErr != nil {
++		return content.Info{}, s.updateErr
++	}
++	return s.Store.Update(ctx, info, fields...)
++}
++
++func (s *compressionContentCounter) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
++	if s.writeErr != nil {
++		return nil, s.writeErr
++	}
++	return s.Store.Writer(ctx, opts...)
++}
++
++func compressionNoopFixture(t *testing.T, zstandard, materialized bool) (context.Context, *immutableRef, *cmOut, *compressionLeaseCounter, *compressionContentCounter, ocispecs.Descriptor) {
++	t.Helper()
++	ctx := namespaces.WithNamespace(t.Context(), "buildkit-test")
++	co, cleanup, err := newCacheManager(ctx, t, cmOpt{})
++	require.NoError(t, err)
++	t.Cleanup(cleanup)
++	caller, err := co.lm.Create(ctx, leases.WithID("compression-noop-caller"))
++	require.NoError(t, err)
++	ctx = leases.WithLease(ctx, caller.ID)
++	var data []byte
++	var desc ocispecs.Descriptor
++	if zstandard {
++		data, desc, err = mapToBlobWithCompression(map[string]string{"file": "retained content"}, func(w io.Writer) (io.WriteCloser, string, error) {
++			zw, err := zstd.NewWriter(w)
++			return zw, ocispecs.MediaTypeImageLayerZstd, err
++		})
++	} else {
++		data, desc, err = mapToBlob(map[string]string{"file": "retained content"}, false)
++	}
++	require.NoError(t, err)
++	if materialized {
++		require.NoError(t, content.WriteBlob(ctx, co.cs, "source", bytes.NewReader(data), desc))
++	}
++	handlers := DescHandlers{desc.Digest: {}}
++	ref, err := co.manager.GetByBlob(ctx, desc, nil, handlers)
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, ref.Release(context.WithoutCancel(ctx))) })
++	native := ref.(*immutableRef)
++	lm := &compressionLeaseCounter{Manager: co.lm, discarded: make(chan string, 100), variantLease: native.compressionVariantsLeaseID()}
++	cs := &compressionContentCounter{Store: co.cs}
++	native.cm.LeaseManager = lm
++	native.cm.ContentStore = cs
++	return ctx, native, co, lm, cs, desc
++}
++
++func TestEnsureCompressionMatchingNoop(t *testing.T) {
++	for _, materialized := range []bool{false, true} {
++		t.Run(map[bool]string{false: "lazy", true: "materialized"}[materialized], func(t *testing.T) {
++			ctx, ref, co, lm, cs, desc := compressionNoopFixture(t, true, materialized)
++			require.NoError(t, ensureCompression(ctx, ref, compression.New(compression.Zstd).SetForce(true), nil))
++			t.Logf("matching materialized=%t: temporary leases=%d content updates=%d persistent AddResource=%d", materialized, lm.temporary.Load(), cs.updates.Load(), lm.variantResources.Load())
++			require.Zero(t, lm.temporary.Load(), "matching Zstd must not allocate an empty temporary lease")
++			if !materialized {
++				_, err := co.cs.Info(ctx, desc.Digest)
++				require.True(t, cerrdefs.IsNotFound(err), "matching lazy blob must remain unfetched")
++				require.Zero(t, cs.updates.Load())
++				return
++			}
++			resources, err := co.lm.ListResources(ctx, leases.Lease{ID: ref.compressionVariantsLeaseID()})
++			require.NoError(t, err)
++			require.Contains(t, resources, leases.Resource{Type: "content", ID: desc.Digest.String()})
++			info, err := co.cs.Info(ctx, desc.Digest)
++			require.NoError(t, err)
++			require.Equal(t, desc.Digest.String(), info.Labels[blobVariantGCLabel+desc.Digest.String()])
++			before := cs.updates.Load()
++			group, groupCtx := errgroup.WithContext(ctx)
++			for range 8 {
++				group.Go(func() error {
++					return ensureCompression(groupCtx, ref, compression.New(compression.Zstd).SetForce(true), nil)
++				})
++			}
++			require.NoError(t, group.Wait())
++			t.Logf("eight concurrent repeats: temporary leases=%d additional content updates=%d total persistent AddResource=%d", lm.temporary.Load(), cs.updates.Load()-before, lm.variantResources.Load())
++			require.Equal(t, before, cs.updates.Load(), "repeat/concurrent matching calls must not rewrite matching labels")
++			require.Zero(t, lm.temporary.Load())
++			// Missing persistent lease/resource and missing labels must still repair.
++			require.NoError(t, co.lm.Delete(ctx, leases.Lease{ID: ref.compressionVariantsLeaseID()}))
++			delete(info.Labels, blobVariantGCLabel+desc.Digest.String())
++			_, err = co.cs.Update(ctx, info, "labels."+blobVariantGCLabel+desc.Digest.String())
++			require.NoError(t, err)
++			require.NoError(t, ensureCompression(ctx, ref, compression.New(compression.Zstd), nil))
++			resources, err = co.lm.ListResources(ctx, leases.Lease{ID: ref.compressionVariantsLeaseID()})
++			require.NoError(t, err)
++			require.Contains(t, resources, leases.Resource{Type: "content", ID: desc.Digest.String()})
++			info, err = co.cs.Info(ctx, desc.Digest)
++			require.NoError(t, err)
++			require.Equal(t, desc.Digest.String(), info.Labels[blobVariantGCLabel+desc.Digest.String()])
++		})
++	}
++}
++
++func TestLinkBlobMatchingLabelsNoop(t *testing.T) {
++	ctx, ref, co, lm, cs, desc := compressionNoopFixture(t, true, true)
++	info, err := co.cs.Info(ctx, desc.Digest)
++	require.NoError(t, err)
++	if info.Labels == nil {
++		info.Labels = make(map[string]string)
++	}
++	info.Labels["example.unrelated"] = "retained"
++	_, err = co.cs.Update(ctx, info, "labels.example.unrelated")
++	require.NoError(t, err)
++	require.NoError(t, ref.linkBlob(ctx, desc))
++	before := cs.updates.Load()
++	beforeResources := lm.variantResources.Load()
++	require.NoError(t, ref.linkBlob(ctx, desc))
++	t.Logf("one repeated linkBlob: content updates=%d persistent AddResource=%d", cs.updates.Load()-before, lm.variantResources.Load()-beforeResources)
++	require.Equal(t, before, cs.updates.Load(), "matching targeted labels must not cause another content update")
++	info, err = co.cs.Info(ctx, desc.Digest)
++	require.NoError(t, err)
++	require.Equal(t, "retained", info.Labels["example.unrelated"])
++	require.Equal(t, desc.Digest.String(), info.Labels[blobVariantGCLabel+desc.Digest.String()])
++}
++
++func TestEnsureCompressionLeaseAndConversion(t *testing.T) {
++	ctx, ref, co, lm, cs, original := compressionNoopFixture(t, false, true)
++	withoutLease := namespaces.WithNamespace(t.Context(), "buildkit-test")
++	require.ErrorContains(t, ensureCompression(withoutLease, ref, compression.New(compression.Uncompressed), nil), "missing lease requirement")
++	require.Zero(t, lm.temporary.Load())
++	require.NoError(t, ensureCompression(ctx, ref, compression.New(compression.Zstd).SetForce(true), nil))
++	require.EqualValues(t, 1, lm.temporary.Load())
++	select {
++	case <-lm.discarded:
++	case <-time.After(5 * time.Second):
++		t.Fatal("conversion temporary lease was not discarded after adoption")
++	}
++	converted, err := ref.getBlobWithCompression(ctx, compression.Zstd)
++	require.NoError(t, err)
++	require.NotEqual(t, original.Digest, converted.Digest)
++	caller, _ := leases.FromContext(ctx)
++	resources, err := co.lm.ListResources(ctx, leases.Lease{ID: caller})
++	require.NoError(t, err)
++	require.Contains(t, resources, leases.Resource{Type: "content", ID: converted.Digest.String()})
++	before := cs.updates.Load()
++	require.NoError(t, ensureCompression(ctx, ref, compression.New(compression.Zstd).SetForce(true), nil))
++	require.EqualValues(t, 1, lm.temporary.Load(), "existing requested variant must not allocate another temporary lease")
++	require.Equal(t, before, cs.updates.Load())
++	for _, pair := range [][2]digest.Digest{{original.Digest, converted.Digest}, {converted.Digest, original.Digest}} {
++		info, err := co.cs.Info(ctx, pair[0])
++		require.NoError(t, err)
++		key := blobVariantGCLabel + pair[1].String()
++		require.Equal(t, pair[1].String(), info.Labels[key])
++		delete(info.Labels, key)
++		_, err = co.cs.Update(ctx, info, "labels."+key)
++		require.NoError(t, err)
++		require.NoError(t, ref.linkBlob(ctx, converted))
++		info, err = co.cs.Info(ctx, pair[0])
++		require.NoError(t, err)
++		require.Equal(t, pair[1].String(), info.Labels[key])
++	}
++	// Drop caller retention; persistent variant links must survive native GC.
++	require.NoError(t, co.lm.Delete(ctx, leases.Lease{ID: caller}))
++	_, err = ref.cm.GarbageCollect(ctx)
++	require.NoError(t, err)
++	for _, dgst := range []digest.Digest{original.Digest, converted.Digest} {
++		_, err := co.cs.Info(ctx, dgst)
++		require.NoError(t, err)
++	}
++}
++
++func TestEnsureCompressionFailures(t *testing.T) {
++	t.Run("conversion discards temporary lease", func(t *testing.T) {
++		ctx, ref, _, lm, cs, _ := compressionNoopFixture(t, false, true)
++		failure := errors.New("native writer unavailable")
++		cs.writeErr = failure
++		require.ErrorIs(t, ensureCompression(ctx, ref, compression.New(compression.Zstd), nil), failure)
++		require.EqualValues(t, 1, lm.temporary.Load())
++		select {
++		case <-lm.discarded:
++		case <-time.After(5 * time.Second):
++			t.Fatal("failed conversion temporary lease was not discarded")
++		}
++	})
++	t.Run("matching repair propagates update failure", func(t *testing.T) {
++		ctx, ref, _, lm, cs, _ := compressionNoopFixture(t, true, true)
++		failure := errors.New("native label update unavailable")
++		cs.updateErr = failure
++		require.ErrorIs(t, ensureCompression(ctx, ref, compression.New(compression.Zstd), nil), failure)
++		require.Zero(t, lm.temporary.Load())
++	})
++}

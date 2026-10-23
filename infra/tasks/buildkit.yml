@@ -1,0 +1,21 @@
+version: "3"
+
+tasks:
+  buildkit:build:
+    desc: Build the pinned BuildKit native cache patch into a local image without publishing.
+    cmds:
+      - docker buildx bake --load -f infra/k0s/images/buildkit/docker-bake.hcl buildkit-native
+
+  buildkit:test:
+    desc: Run native BuildKit cache and GC regression tests in a disposable local container.
+    preconditions:
+      - sh: test "${NOOK_ARC_RUNNER:-}" != 1 && test -z "${GITHUB_ACTIONS:-}"
+        msg: Native cache tests require a disposable local privileged container, outside ARC and CI.
+    cmds:
+      - docker buildx bake --load -f infra/k0s/images/buildkit/docker-bake.hcl buildkit-native-tests
+      - |
+        set -euo pipefail
+        container="nook-buildkit-native-tests-$(date +%s)-$$"
+        trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+        docker run --rm --name "$container" --privileged --network none \
+          nook-buildkit-native-tests:v0.34.1-nook.1

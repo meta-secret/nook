@@ -79,6 +79,10 @@ includes:
     taskfile: tasks/arc.yml
     dir: ..
     flatten: true
+  buildkit:
+    taskfile: tasks/buildkit.yml
+    dir: ..
+    flatten: true
   arc-operations:
     taskfile: tasks/arc-operations.yml
     dir: ..
