@@ -14,7 +14,7 @@ import {
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
-import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormScopeKind, passwordFormInteraction } from '../../nook-web-shared/src/extension/password-forms'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type {
   WebsiteLoginSaveActionResponse,
@@ -23,7 +23,7 @@ import type {
   WebsiteLoginSaveOfferResponse,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowActivity } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { AuthenticationWorkflowActivity, authentication_workflow_activity_progress } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval,
   AuthenticationWorkflowSnapshotIngress,
@@ -826,7 +826,11 @@ test('registers an authenticator selection before post-open validation yields', 
   widgetState.busy = false
   widgetState.dismissed = false
   const validationEntered = Promise.withResolvers<void>()
-  const validation = Promise.withResolvers<LiveAuthenticationWorkflowDisposition>()
+  const validation = Promise.withResolvers<Awaited<ReturnType<typeof authenticationWorkflowUi.approvedWorkflowDisposition>>>()
+  // The production scan preloads these native presentation projections before
+  // showing a control. This isolated handler fixture supplies that same policy.
+  const activity = spyOn(passwordFormInteraction, 'authenticationActivityProgress')
+    .mockImplementation(authentication_workflow_activity_progress)
   const validate = spyOn(authenticationWorkflowUi, 'approvedWorkflowDisposition')
     .mockImplementation(() => {
       validationEntered.resolve()
@@ -873,6 +877,7 @@ test('registers an authenticator selection before post-open validation yields', 
   }
   const opening = authenticatorInteraction.continueWithAuthenticator(request)
   try {
+    expect(open).toHaveBeenCalledTimes(1)
     await validationEntered.promise
     const acknowledged = mock(() => {})
     routeAutofillMessage(
@@ -899,6 +904,7 @@ test('registers an authenticator selection before post-open validation yields', 
     progress.mockRestore()
     status.mockRestore()
     fill.mockRestore()
+    activity.mockRestore()
     widgetState.busy = false
     native.restore()
   }
