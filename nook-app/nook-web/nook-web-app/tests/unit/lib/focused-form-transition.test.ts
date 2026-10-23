@@ -1,3 +1,4 @@
+import { GoogleLoginContinuationMessageType } from "../../../../nook-web-shared/src/extension/google-login-continuation-messages";
 import { Deferred, Effect, Fiber } from "effect";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -171,7 +172,35 @@ class FocusedFormTransitionFixture {
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
         return new FocusedFieldRecognitionOperation(message).run();
-      default:
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome:
+      case GoogleLoginContinuationMessageType.Session:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+      case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
+      case CompanionWasmSessionMessageType.PasswordWorkflowActivity:
+      case CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts:
+      case CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding:
+      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch:
+      case CompanionWasmSessionMessageType.HasLoginContext:
+      case CompanionWasmSessionMessageType.ClassifyPageInputField:
+      case CompanionWasmSessionMessageType.ClassifyPageInputs:
+      case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
+      case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
+      case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
+      case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
+      case CompanionWasmSessionMessageType.IsNookVaultAppUrl:
+      case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
+      case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
+      case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
+      case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
+      case CompanionWasmSessionMessageType.ValidateReviewedAuthenticatorLabels:
+      case CompanionWasmSessionMessageType.SitePageNeed:
         throw new Error("Expected the focused native recognition boundary");
     }
   }
@@ -218,7 +247,9 @@ class FocusedFormTransitionFixture {
     );
     yield* Deferred.await(this.started);
     const sequence = scanState.sequence;
+    this.scheduled.mockClear();
     this.password.focus();
+    expect(this.scheduled).toHaveBeenCalledOnce();
     expect(scanState.sequence).toBe(sequence);
     expect(focusedCredentialTargetSensor.target).toMatchObject({
       kind: FocusedCredentialTargetKind.Retained,
@@ -228,12 +259,10 @@ class FocusedFormTransitionFixture {
     yield* Fiber.join(oldScan);
     // Drive the scan already requested by focus; no new focus/click repairs the target.
     yield* Effect.tryPromise(() => this.lifecycle.scanAndRender());
-    expect
-      .soft(focusedCredentialTargetSensor.target)
-      .toMatchObject({
-        kind: FocusedCredentialTargetKind.Retained,
-        input: this.password,
-      });
+    expect.soft(focusedCredentialTargetSensor.target).toMatchObject({
+      kind: FocusedCredentialTargetKind.Retained,
+      input: this.password,
+    });
     expect
       .soft(
         document
