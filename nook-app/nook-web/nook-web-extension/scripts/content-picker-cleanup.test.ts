@@ -839,18 +839,19 @@ test('validates before publishing an authenticator picker and accepts its select
   const lifecycle = new AccountPickerAuthorizationLifecycle(crypto.randomUUID())
   const authorizationGeneration = lifecycle.snapshot()
   lifecycle.free()
-  const selected: WebsiteAuthenticatorSelectedMessage = {
-    type: WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
-    payload: {
-      origin: location.origin,
-      requestId: 'authenticator-order-request',
-      account: {
-        vaultStoreId: 'vault-1',
-        secretId: 'secret-1',
-        authorizationGeneration,
+  const selected: import('../src/lib/authenticator-picker-messages').WebsiteAuthenticatorSelectedMessage =
+    {
+      type: WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
+      payload: {
+        origin: location.origin,
+        requestId: 'authenticator-order-request',
+        account: {
+          vaultStoreId: 'vault-1',
+          secretId: 'secret-1',
+          authorizationGeneration,
+        },
       },
-    },
-  }
+    }
   expect(
     Effect.runSync(
       Effect.result(WebsiteAuthenticatorSelectedMessage.decode(selected)),

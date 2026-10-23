@@ -309,6 +309,16 @@ class AuthenticatorInteraction {
     authenticationWorkflowUi.setStatus(nookTypedArgs0_9)
 
     try {
+      // Finish the asynchronous approval check before the side panel can
+      // select this request. Registration below must not yield after Ready.
+      switch (
+        await authenticationWorkflowUi.approvedWorkflowDisposition(workflow)
+      ) {
+        case LiveAuthenticationWorkflowDisposition.Changed:
+          return
+        case LiveAuthenticationWorkflowDisposition.Current:
+          break
+      }
       const message: Parameters<
         typeof authenticationRuntimeTransport.sendAuthenticatorPickerOpenRuntimeMessage
       >[0] = {
@@ -433,14 +443,6 @@ class AuthenticatorInteraction {
       if (
         this.ui.widgetState.controlDisposition(continueButton) !==
         WidgetControlDisposition.Active
-      ) {
-        this.cancelAuthenticatorPickerRequest(requestId)
-        return
-      }
-      if (
-        (await authenticationWorkflowUi.approvedWorkflowDisposition(
-          workflow,
-        )) !== LiveAuthenticationWorkflowDisposition.Current
       ) {
         this.cancelAuthenticatorPickerRequest(requestId)
         return
