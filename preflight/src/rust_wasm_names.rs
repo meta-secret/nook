@@ -301,6 +301,7 @@ mod tests {
     use std::collections::HashSet;
     use std::fs;
     use std::path::Path;
+    use std::slice::from_ref;
 
     use super::RustWasmNames;
     use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource};
@@ -313,7 +314,7 @@ mod tests {
         let aliased = "import { generate_secret_id as generateSecretId } from '$app-wasm';";
         let direct = "import { generate_secret_id } from '$app-wasm';";
         fs::write(&path, aliased)?;
-        let inputs = ModuleInputs::collect(std::slice::from_ref(&path));
+        let inputs = ModuleInputs::collect(from_ref(&path));
         fs::write(&path, direct)?;
         let names = HashSet::from(["generate_secret_id".to_owned()]);
         let types = HashSet::new();
@@ -332,7 +333,7 @@ mod tests {
             )?,
             vec![1]
         );
-        let refreshed = ModuleInputs::collect(std::slice::from_ref(&path));
+        let refreshed = ModuleInputs::collect(from_ref(&path));
         assert!(
             RustWasmNames::typescript_wasm_import_alias_lines_at_path(
                 direct,
@@ -356,7 +357,7 @@ mod tests {
         let path = directory.path().join("consumer.tsx");
         let source = "import { generate_secret_id as generateSecretId } from '$app-wasm';\nconst view = <div />;";
         fs::write(&path, source)?;
-        let inputs = ModuleInputs::collect(std::slice::from_ref(&path));
+        let inputs = ModuleInputs::collect(from_ref(&path));
         let names = HashSet::from(["generate_secret_id".to_owned()]);
         assert_eq!(
             RustWasmNames::tsx_wasm_import_alias_lines(
