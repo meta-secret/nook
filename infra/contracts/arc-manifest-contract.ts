@@ -711,7 +711,7 @@ class ArcManifestContract {
     ]);
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
-      "Publish from the already-selected node-local rootless BuildKit shard",
+      "Publish from the already-selected fixed rootless BuildKit backend",
       'cache_scope="nook-rust-wasm-deps-v6"',
       "mode=max,compression=zstd,timeout=10m",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",

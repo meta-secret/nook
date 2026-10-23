@@ -132,7 +132,7 @@ class DockerizedRustBuildKitContract {
     }
     const wrapper = this.read(".github/scripts/with-remote-buildkit.sh");
     const conditional = wrapper.match(
-      /if \[ "\$\{NOOK_BUILDKIT_BACKEND:-local\}" = home-worker-0 \]; then[\s\S]*?\n  fi/,
+      /if \[ "\$\{NOOK_BUILDKIT_BACKEND:-local\}" = home-worker-0 \]; then[\s\S]*?\n {2}fi/,
     )?.[0];
     if (!conditional) throw new Error("home-only worker guard missing");
     for (const backend of ["local", "home-worker-0"]) {

@@ -235,6 +235,8 @@ selects the separate `nook-buildkit-home-worker-0` ClusterIP Service, whose
 `Cluster` traffic policy and Pod-name selector reach only `nook-buildkit-0`.
 Verification, Main, legacy callers and hosted jobs retain their existing backend.
 
+### Backend selection
+
 The setup input accepts only `local` or `home-worker-0`. The explicit home choice
 requires a trusted same-repository, non-Dependabot PR on ARC. Setup, ordinary
 BuildKit consumers and portable-proof reconstruction retain the selected enum
