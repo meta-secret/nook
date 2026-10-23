@@ -355,16 +355,14 @@ class ArcManifestContract {
     ]);
     if (admittedContract8.isErr()) return err(admittedContract8.error);
     const admittedContract9 = containerJobNodes.requireAll([
-      "bynull-servo",
       "nook-rise-s-1",
       "nook-rise-s-2",
       "ovh-us",
     ]);
     if (admittedContract9.isErr()) return err(admittedContract9.error);
-    if (
-      containerJobNodesSource !==
-      "bynull-servo\nnook-rise-s-1\nnook-rise-s-2\novh-us\n"
-    ) {
+    const admittedContract10 = containerJobNodes.forbid("bynull-servo");
+    if (admittedContract10.isErr()) return err(admittedContract10.error);
+    if (containerJobNodesSource !== "nook-rise-s-1\nnook-rise-s-2\novh-us\n") {
       return err({
         kind: OperationalContractFailureKind.Requirement,
         message:
