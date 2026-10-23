@@ -1,8 +1,7 @@
-use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource, TopLevelModule};
+use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource};
 pub struct RustWasmNames<'scan> {
     pub root: &'scan Path,
 }
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -78,10 +77,7 @@ impl RustWasmNames<'_> {
                 path: &path,
                 inputs: &inputs,
             };
-            let source = match inputs.top_level_module(&path) {
-                TopLevelModule::Parsed(module) => Cow::Borrowed(module.source.as_str()),
-                TopLevelModule::ReadRequired => Cow::Owned(fs::read_to_string(&path)?),
-            };
+            let source = fs::read_to_string(&path)?;
             let lines = if path
                 .extension()
                 .is_some_and(|extension| extension == "svelte")
@@ -211,21 +207,10 @@ impl RustWasmNames<'_> {
         wasm_types: &WasmTypeInventory,
         language: &tree_sitter::Language,
     ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-        let input = source_path.inputs.top_level_module(source_path.path);
-        let source = match input {
-            TopLevelModule::Parsed(module) => module.source.as_str(),
-            TopLevelModule::ReadRequired => source,
-        };
-        let tree = match input {
-            TopLevelModule::Parsed(module) => Cow::Borrowed(&module.tree),
-            TopLevelModule::ReadRequired => {
-                let mut parser = tree_sitter::Parser::new();
-                parser.set_language(language)?;
-                let Some(tree) = parser.parse(source, None) else {
-                    return Ok(Vec::new());
-                };
-                Cow::Owned(tree)
-            }
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(language)?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
         };
         let DirectAliasInventory {
             wasm_namespace_bindings,
@@ -299,117 +284,8 @@ impl RustWasmNames<'_> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use std::fs;
-    use std::path::Path;
-    use std::slice::from_ref;
 
     use super::RustWasmNames;
-    use crate::wasm_module_sources::inputs::{ModuleInputs, ModuleSource};
-
-    #[test]
-    fn cached_typescript_root_keeps_source_and_tree_paired_and_new_scan_is_fresh()
-    -> anyhow::Result<()> {
-        let directory = tempfile::tempdir()?;
-        let path = directory.path().join("consumer.ts");
-        let aliased = "import { generate_secret_id as generateSecretId } from '$app-wasm';";
-        let direct = "import { generate_secret_id } from '$app-wasm';";
-        fs::write(&path, aliased)?;
-        let inputs = ModuleInputs::collect(from_ref(&path));
-        fs::write(&path, direct)?;
-        let names = HashSet::from(["generate_secret_id".to_owned()]);
-        let types = HashSet::new();
-        let methods = RustWasmNames::test_wasm_methods_by_type();
-        assert_eq!(
-            RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-                direct,
-                &ModuleSource {
-                    path: &path,
-                    inputs: &inputs
-                },
-                1,
-                &names,
-                &types,
-                &methods,
-            )?,
-            vec![1]
-        );
-        let refreshed = ModuleInputs::collect(from_ref(&path));
-        assert!(
-            RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-                direct,
-                &ModuleSource {
-                    path: &path,
-                    inputs: &refreshed
-                },
-                1,
-                &names,
-                &types,
-                &methods,
-            )?
-            .is_empty()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn cached_tsx_root_preserves_aliases_and_tsx_grammar() -> anyhow::Result<()> {
-        let directory = tempfile::tempdir()?;
-        let path = directory.path().join("consumer.tsx");
-        let source = "import { generate_secret_id as generateSecretId } from '$app-wasm';\nconst view = <div />;";
-        fs::write(&path, source)?;
-        let inputs = ModuleInputs::collect(from_ref(&path));
-        let names = HashSet::from(["generate_secret_id".to_owned()]);
-        assert_eq!(
-            RustWasmNames::tsx_wasm_import_alias_lines(
-                source,
-                &ModuleSource {
-                    path: &path,
-                    inputs: &inputs
-                },
-                1,
-                &names,
-                &HashSet::new(),
-                &RustWasmNames::test_wasm_methods_by_type(),
-            )?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn unlisted_root_keeps_parsing_the_supplied_source() -> anyhow::Result<()> {
-        let inputs = ModuleInputs::default();
-        let source_path = ModuleSource {
-            path: Path::new("consumer.ts"),
-            inputs: &inputs,
-        };
-        let names = HashSet::from(["generate_secret_id".to_owned()]);
-        let types = HashSet::new();
-        let methods = RustWasmNames::test_wasm_methods_by_type();
-        assert_eq!(
-            RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-                "import { generate_secret_id as renamed } from '$app-wasm';",
-                &source_path,
-                1,
-                &names,
-                &types,
-                &methods,
-            )?,
-            vec![1]
-        );
-        assert!(
-            RustWasmNames::typescript_wasm_import_alias_lines_at_path(
-                "import { generate_secret_id } from '$app-wasm';",
-                &source_path,
-                1,
-                &names,
-                &types,
-                &methods,
-            )?
-            .is_empty()
-        );
-        Ok(())
-    }
 
     #[test]
     fn rejects_direct_typescript_alias() -> Result<(), tree_sitter::LanguageError> {
