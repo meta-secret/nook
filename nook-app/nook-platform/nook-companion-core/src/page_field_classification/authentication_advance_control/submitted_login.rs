@@ -17,10 +17,18 @@ pub(crate) enum SubmittedLoginControlAdmission {
     Absent,
 }
 
+/// The credential flow a submitted control is expected to advance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SubmittedCredentialIntent {
+    Login,
+    Signup,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct SubmittedLoginControlRequest {
     pub fields: AuthenticationFieldObservationFacts,
     pub username: AuthenticationUsernameEvidence,
+    pub intent: SubmittedCredentialIntent,
 }
 
 impl AuthenticationAdvanceControlObservation {
@@ -29,7 +37,11 @@ impl AuthenticationAdvanceControlObservation {
         &self,
         request: SubmittedLoginControlRequest,
     ) -> SubmittedLoginControlAdmission {
-        let SubmittedLoginControlRequest { fields, username } = request;
+        let SubmittedLoginControlRequest {
+            fields,
+            username,
+            intent,
+        } = request;
         let PageControlActionability::Actionable = self.actionability else {
             return SubmittedLoginControlAdmission::Inert;
         };
@@ -66,13 +78,18 @@ impl AuthenticationAdvanceControlObservation {
         .any(|identity| {
             let control = AuthenticationControlIdentity::new(identity);
             let expanded = AuthenticationControlText::new(identity).expand_identity_text();
+            let route = AuthenticationRouteIdentity::new(identity);
             control.is_auxiliary()
                 || AuthenticationControlText::new(&expanded).contains_any_word(&["reset"])
-                || control.is_registration()
                 || control.is_password_recovery()
                 || control.is_alternate_authentication_route()
-                || AuthenticationRouteIdentity::new(identity).has_control_veto()
                 || Self::looks_like_non_authentication_submit_control_label(identity)
+                || match intent {
+                    SubmittedCredentialIntent::Login => {
+                        control.is_registration() || route.has_control_veto()
+                    }
+                    SubmittedCredentialIntent::Signup => route.has_signup_control_veto(),
+                }
         }) else {
             return SubmittedLoginControlAdmission::SemanticVeto;
         };

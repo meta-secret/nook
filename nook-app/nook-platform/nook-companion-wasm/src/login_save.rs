@@ -1,12 +1,14 @@
 //! Typed browser edges for submitted-login capture and save eligibility.
 use crate::NookPageInputFieldObservation;
 use nook_companion_core::{
-    LoginPasswordFieldHistory, LoginSaveCaptureDecision, LoginSaveOutcomeDecision,
-    LoginSaveOutcomeObservation, LoginSubmissionCapture, LoginSubmissionDecision,
-    LoginSubmissionField, LoginSubmissionIntent, LoginSubmissionObservation,
+    LoginCapturedValueMatches, LoginPasswordFieldHistory, LoginSaveCaptureDecision,
+    LoginSaveOutcomeDecision, LoginSaveOutcomeObservation, LoginSubmissionCapture,
+    LoginSubmissionDecision, LoginSubmissionField, LoginSubmissionIntent,
+    LoginSubmissionObservation,
 };
 use tsify::{Ts, Tsify};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+use zeroize::Zeroize;
 
 #[wasm_bindgen]
 pub struct NookLoginSubmissionField {
@@ -62,8 +64,11 @@ impl NookLoginSubmissionObservation {
 )]
 pub fn classify_companion_login_submission(
     observation: &NookLoginSubmissionObservation,
+    mut captured_values: Vec<String>,
 ) -> Result<Ts<LoginSubmissionDecision>, JsError> {
-    Ok(observation.inner.classify().into_ts()?)
+    let values = LoginCapturedValueMatches::from_values(&captured_values);
+    captured_values.zeroize();
+    Ok(observation.inner.classify(&values).into_ts()?)
 }
 
 #[wasm_bindgen]
@@ -90,8 +95,11 @@ pub fn classify_companion_login_save_outcome(
 )]
 pub fn classify_companion_login_save_capture(
     capture: &Ts<LoginSubmissionCapture>,
+    mut captured_values: Vec<String>,
 ) -> Result<Ts<LoginSaveCaptureDecision>, JsError> {
-    Ok(capture.to_rust()?.classify()?.into_ts()?)
+    let values = LoginCapturedValueMatches::from_values(&captured_values);
+    captured_values.zeroize();
+    Ok(capture.to_rust()?.classify(&values)?.into_ts()?)
 }
 
 #[wasm_bindgen]
@@ -169,7 +177,11 @@ mod tests {
             .add_field(&NookLoginSubmissionField::new(&username))?
             .add_field(&NookLoginSubmissionField::new(&password))?;
         assert!(matches!(
-            classify_companion_login_submission(&request)?.to_rust()?,
+            classify_companion_login_submission(
+                &request,
+                vec!["user".to_owned(), "pw".to_owned()]
+            )?
+            .to_rust()?,
             LoginSubmissionDecision::Captured { .. }
         ));
         assert!(NookLoginSubmissionObservation::new(&Ts::new_unchecked(JsValue::NULL)).is_err());
@@ -213,7 +225,7 @@ mod tests {
             explicit_candidate: LoginExplicitCandidatePresence::Absent,
         };
         assert!(
-            matches!(classify_companion_login_save_capture(&capture.clone().into_ts()?)?.to_rust()?,
+            matches!(classify_companion_login_save_capture(&capture.clone().into_ts()?, vec!["user".to_owned(), "pw".to_owned()])?.to_rust()?,
             LoginSaveCaptureDecision::SubmittedLogin { baseline, .. }
             if baseline.source == LoginSaveCaptureSource::SubmittedLogin)
         );
@@ -222,7 +234,13 @@ mod tests {
             .get_mut(1)
             .ok_or_else(|| JsError::new("password fixture"))?
             .identity_text = "x".repeat(513);
-        assert!(classify_companion_login_save_capture(&capture.into_ts()?).is_err());
+        assert!(
+            classify_companion_login_save_capture(
+                &capture.into_ts()?,
+                vec!["user".to_owned(), "pw".to_owned()]
+            )
+            .is_err()
+        );
         Ok(())
     }
 }

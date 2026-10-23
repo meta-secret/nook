@@ -449,7 +449,10 @@ export class LoginSaveSessionOperations {
   private normalizeCapturedLogin(
     payload: LoginSaveCapturePayload,
   ): Effect.Effect<CapturedLoginSaveNormalization, SessionOperationFailure> {
-    const captured = classify_companion_login_save_capture(payload.capture)
+    const captured = classify_companion_login_save_capture(
+      payload.capture,
+      payload.capturedValues,
+    )
     let baseline: LoginSaveCaptureBaseline
     let selection: WebsiteLoginSaveOffer['selection']
     switch (captured.kind) {

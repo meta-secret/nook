@@ -1,4 +1,5 @@
 import {
+  AuthenticationWorkflowKind,
   classify_companion_login_save_capture,
   decode_extension_session_request,
   type ExtensionSessionRequest,
@@ -118,7 +119,7 @@ class LoginSaveCaptureFixture {
         },
       }
       decode_extension_session_request(request)
-      const decision = classify_companion_login_save_capture(capture)
+      const decision = classify_companion_login_save_capture(capture, values)
       let credentials: LoginCredentials
       switch (decision.kind) {
         case 'SubmittedLogin': {
@@ -362,12 +363,54 @@ describe('submitted login capture through the typed classifier', () => {
       },
     ])
   })
-  test('registration never stages a generic submitted login', async () => {
+  test('registration stages the submitted account and new password as a signup', async () => {
     document.body.innerHTML =
       '<form id="signup"><input autocomplete="username" value="user"><input type="password" autocomplete="new-password" value="new"><input type="password" autocomplete="new-password" value="new"><button>Create account</button></form>'
     const fixture = new LoginSaveCaptureFixture()
     await fixture.submit()
-    expect(fixture.staged).toMatchObject([{ kind: 'ExplicitAuthentication' }])
+    expect(fixture.staged).toMatchObject([
+      {
+        kind: 'SubmittedLogin',
+        credentials: { username: 'user', password: 'new' },
+        baseline: {
+          source: 'SubmittedLogin',
+          captured_workflow: AuthenticationWorkflowKind.Signup,
+        },
+      },
+    ])
+  })
+  test('a password typed twice without autocomplete hints stages a signup', async () => {
+    document.body.innerHTML =
+      '<form><input type="email" name="email" placeholder="Email" value="new@example.test"><input type="password" name="password" placeholder="Password" value=" s3cret "><input type="password" name="confirm" placeholder="Confirm password" value=" s3cret "><button>Sign up</button></form>'
+    const fixture = new LoginSaveCaptureFixture()
+    await fixture.submit()
+    expect(fixture.staged).toMatchObject([
+      {
+        kind: 'SubmittedLogin',
+        credentials: { username: 'new@example.test', password: ' s3cret ' },
+        baseline: { captured_workflow: AuthenticationWorkflowKind.Signup },
+      },
+    ])
+  })
+  test('a scripted create-account button outside a form stages a signup', async () => {
+    document.body.innerHTML =
+      '<main><div><input type="email" placeholder="Email" value="new@example.test"><input type="password" placeholder="Password" value="s3cret"><input type="password" placeholder="Repeat password" value="s3cret"><button type="button">Create account</button></div></main>'
+    const fixture = new LoginSaveCaptureFixture()
+    await fixture.click('button')
+    expect(fixture.staged).toMatchObject([
+      {
+        kind: 'SubmittedLogin',
+        credentials: { username: 'new@example.test', password: 's3cret' },
+        baseline: { captured_workflow: AuthenticationWorkflowKind.Signup },
+      },
+    ])
+  })
+  test('a mismatched password confirmation stages nothing', async () => {
+    document.body.innerHTML =
+      '<form><input type="email" placeholder="Email" value="new@example.test"><input type="password" placeholder="Password" value="s3cret"><input type="password" placeholder="Confirm password" value="s3cre7"><button>Sign up</button></form>'
+    const fixture = new LoginSaveCaptureFixture()
+    await fixture.submit()
+    expect(fixture.staged).toEqual([])
   })
   test('disabled capture prevents new ownership', async () => {
     document.body.innerHTML =
