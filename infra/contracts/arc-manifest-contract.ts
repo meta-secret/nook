@@ -390,7 +390,7 @@ class ArcManifestContract {
       "updateStrategy:\n    type: OnDelete\n    rollingUpdate: null",
       "requiredDuringSchedulingIgnoredDuringExecution:",
       'nook.nokey.sh/arc-build: "true"',
-      "registry.dev.nokey.sh/nook/buildkit@sha256:06e7f1b867b4386bf7f5aeda770e0cde2e924a497b3e6f8fed3dbc4aa69555a3",
+      "registry.dev.nokey.sh/nook/buildkit@sha256:bdf9c1489e0818a264324bd0cdc9a414ebbf12c99b723fd0dd2d70c9edb5ead4",
       "--oci-worker-no-process-sandbox",
       "storage: 128Gi",
       "type: Unconfined",

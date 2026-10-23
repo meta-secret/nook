@@ -190,13 +190,6 @@ test('waits for peer storage work before destructive identity recovery', async (
     delete window.__releaseRecoveryStorageWork
   })
 
-  await openDeviceSetup(page)
-  await expect(
-    page.getByTestId('device-protection-use-existing-choice'),
-  ).toHaveText('Authenticate')
-  const persisted = await readRecoveryStorage(page)
-  expect(persisted.wrappedIdentityStored).toBe(false)
-  expect(persisted.registryStored).toBe(true)
   await expect
     .poll(() =>
       peer.evaluate(() => {
@@ -204,6 +197,13 @@ test('waits for peer storage work before destructive identity recovery', async (
       }),
     )
     .toBe(false)
+  const persisted = await readRecoveryStorage(page)
+  expect(persisted.wrappedIdentityStored).toBe(false)
+  expect(persisted.registryStored).toBe(true)
+  await openDeviceSetup(page)
+  await expect(
+    page.getByTestId('device-protection-use-existing-choice'),
+  ).toHaveText('Authenticate')
   await peer.evaluate(async () => {
     const peerVault = window.__nookVault
     if (!peerVault) throw new Error('Vault runtime is not exposed')

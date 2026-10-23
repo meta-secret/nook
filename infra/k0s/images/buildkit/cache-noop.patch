@@ -92,3 +92,132 @@
  	info.Labels = map[string]string{
  		blobVariantGCLabel + desc.Digest.String(): desc.Digest.String(),
  	}
+--- a/vendor/github.com/containerd/containerd/v2/core/metadata/leases.go
++++ b/vendor/github.com/containerd/containerd/v2/core/metadata/leases.go
+@@ -17,6 +17,7 @@
+ package metadata
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"errors"
+ 	"fmt"
+@@ -189,7 +190,11 @@
+ 		return err
+ 	}
+ 
+-	return update(ctx, lm.db, func(tx *bolt.Tx) error {
++	// Roll back an owned transaction when the resource is already recorded.
++	// A caller-owned transaction must retain its other mutations and commit.
++	errUnchanged := errors.New("lease resource unchanged")
++	_, callerTransaction := boltutil.Transaction(ctx)
++	err = update(ctx, lm.db, func(tx *bolt.Tx) error {
+ 		topbkt := getBucket(tx, bucketKeyVersion, []byte(namespace), bucketKeyObjectLeases, []byte(lease.ID))
+ 		if topbkt == nil {
+ 			return fmt.Errorf("lease %q: %w", lease.ID, errdefs.ErrNotFound)
+@@ -207,8 +212,20 @@
+ 				return err
+ 			}
+ 		}
++		key := []byte(ref)
++		found, value := bkt.Cursor().Seek(key)
++		if found != nil && bytes.Equal(found, key) && len(value) == 0 && bkt.Bucket(key) == nil {
++			if callerTransaction {
++				return nil
++			}
++			return errUnchanged
++		}
+ 		return bkt.Put([]byte(ref), nil)
+ 	})
++	if err == errUnchanged {
++		return nil
++	}
++	return err
+ }
+ 
+ // DeleteResource dereferences the resource by the provided lease.
+--- a/cache/metadata.go
++++ b/cache/metadata.go
+@@ -362,6 +362,14 @@
+ }
+ 
+ func (md *cacheMetadata) queueSize(s int64) error {
++	if s == sizeUnknown {
++		v, err := metadata.NewValue(s)
++		if err != nil {
++			return errors.Wrap(err, "failed to create value")
++		}
++		md.si.QueueValueIfChanged(keySize, v)
++		return nil
++	}
+ 	return md.queueValue(keySize, s, "")
+ }
+ 
+--- a/cache/metadata/metadata.go
++++ b/cache/metadata/metadata.go
+@@ -24,6 +24,7 @@
+ )
+ 
+ var errNotFound = errors.New("not found")
++var errNoChange = errors.New("metadata value unchanged")
+ 
+ type Store struct {
+ 	db db.DB
+@@ -348,21 +349,53 @@
+ 	s.queue = append(s.queue, fn)
+ }
+ 
++// QueueValueIfChanged avoids a write only for an identical durable, unindexed value.
++func (s *StorageItem) QueueValueIfChanged(key string, v *Value) {
++	s.Queue(func(b *bolt.Bucket) error {
++		s.vmu.Lock()
++		defer s.vmu.Unlock()
++		if v != nil && v.Index == "" {
++			dt, err := json.Marshal(v)
++			if err != nil {
++				return errors.WithStack(err)
++			}
++			if bytes.Equal(b.Get([]byte(key)), dt) {
++				s.values[key] = v
++				return errNoChange
++			}
++		}
++		return s.setValue(b, key, v)
++	})
++}
++
+ func (s *StorageItem) Commit() error {
+ 	s.qmu.Lock()
+ 	defer s.qmu.Unlock()
+ 	if len(s.queue) == 0 {
+ 		return nil
+ 	}
+-	return errors.WithStack(s.Update(func(b *bolt.Bucket) error {
++	err := s.Update(func(b *bolt.Bucket) error {
++		changed := false
+ 		for _, fn := range s.queue {
+-			if err := fn(b); err != nil {
++			err := fn(b)
++			if err == errNoChange {
++				continue
++			}
++			if err != nil {
+ 				return errors.WithStack(err)
+ 			}
++			changed = true
++		}
++		if !changed {
++			return errNoChange
+ 		}
+-		s.queue = s.queue[:0]
+ 		return nil
+-	}))
++	})
++	if err != nil && !errors.Is(err, errNoChange) {
++		return errors.WithStack(err)
++	}
++	s.queue = s.queue[:0]
++	return nil
+ }
+ 
+ func (s *StorageItem) Indexes() (out []string) {

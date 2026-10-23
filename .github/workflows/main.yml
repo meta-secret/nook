@@ -201,6 +201,7 @@ jobs:
           preflight_cache_log="$RUNNER_TEMP/main-preflight-cache.log"
           cache_log="$RUNNER_TEMP/main-wasm-cache.log"
           web_log="$RUNNER_TEMP/main-web-artifacts.log"
+          browser_log="$RUNNER_TEMP/main-browser-construction.log"
           (
             set +e
             GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-preflight-cache 2>&1 | tee "$preflight_cache_log"
@@ -224,6 +225,15 @@ jobs:
             exit "${statuses[1]}"
           ) &
           web_pid=$!
+          (
+            set +e
+            E2E_OUTPUT=type=cacheonly task web:e2e:kubernetes-image:artifacts \
+              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" 2>&1 | tee "$browser_log"
+            statuses=("${PIPESTATUS[@]}")
+            if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+            exit "${statuses[1]}"
+          ) &
+          browser_pid=$!
           node_status=0
           task ci:main:wasm-node-test || node_status=$?
           cache_outcome=skipped
@@ -239,7 +249,9 @@ jobs:
           fi
           web_status=0
           wait "$web_pid" || web_status=$?
-          if [ "$node_status" -eq 0 ] && [ "$web_status" -eq 0 ]; then
+          browser_status=0
+          wait "$browser_pid" || browser_status=$?
+          if [ "$node_status" -eq 0 ] && [ "$web_status" -eq 0 ] && [ "$browser_status" -eq 0 ]; then
             task web:e2e:kubernetes-image:artifacts \
               CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" || web_status=$?
           fi
@@ -252,7 +264,8 @@ jobs:
           echo "preflight_cache_publication_outcome=$preflight_cache_outcome" >> "$GITHUB_OUTPUT"
           echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
           if [ "$node_status" -ne 0 ]; then exit "$node_status"; fi
-          exit "$web_status"
+          if [ "$web_status" -ne 0 ]; then exit "$web_status"; fi
+          exit "$browser_status"
         env:
           CI: true
           # Keep verification read-only; publish the already-solved dependency graph afterward.

@@ -251,3 +251,436 @@
 +		require.Zero(t, lm.temporary.Load())
 +	})
 +}
+--- /dev/null
++++ b/vendor/github.com/containerd/containerd/v2/core/metadata/leases_noop_test.go
+@@ -0,0 +1,182 @@
++package metadata
++
++import (
++	"context"
++	"errors"
++	"path/filepath"
++	"sync"
++	"sync/atomic"
++	"testing"
++
++	"github.com/containerd/containerd/v2/core/leases"
++	"github.com/containerd/containerd/v2/core/metadata/boltutil"
++	"github.com/containerd/containerd/v2/pkg/namespaces"
++	"github.com/containerd/errdefs"
++	digest "github.com/opencontainers/go-digest"
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++	errbolt "go.etcd.io/bbolt/errors"
++)
++
++func leaseResourceFixture(t *testing.T) (context.Context, *bolt.DB, *DB, leases.Manager, leases.Lease, *atomic.Int64) {
++	t.Helper()
++	db, err := bolt.Open(filepath.Join(t.TempDir(), "metadata.db"), 0600, nil)
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, db.Close()) })
++	require.False(t, db.NoSync)
++	mdb := NewDB(db, nil, nil)
++	ctx := namespaces.WithNamespace(t.Context(), "lease-noop")
++	lm := NewLeaseManager(mdb)
++	lease, err := lm.Create(ctx, leases.WithID("retained"))
++	require.NoError(t, err)
++	callbacks := new(atomic.Int64)
++	mdb.RegisterMutationCallback(func(bool) { callbacks.Add(1) })
++	return ctx, db, mdb, lm, lease, callbacks
++}
++
++func leaseResourceWrites(db *bolt.DB) int64 {
++	stats := db.Stats()
++	return stats.TxStats.GetWrite()
++}
++
++func TestLeaseResourceDuplicateWrites(t *testing.T) {
++	for _, resource := range []leases.Resource{
++		{Type: "content", ID: digest.FromString("content").String()},
++		{Type: "images", ID: "image"},
++		{Type: "ingests", ID: "ingest"},
++		{Type: "snapshots/overlayfs", ID: "snapshot"},
++	} {
++		t.Run(resource.Type, func(t *testing.T) {
++			ctx, db, _, lm, lease, callbacks := leaseResourceFixture(t)
++			before := leaseResourceWrites(db)
++			require.NoError(t, lm.AddResource(ctx, lease, resource))
++			require.Greater(t, leaseResourceWrites(db), before, "new resource must commit durably")
++			require.EqualValues(t, 1, callbacks.Load())
++			before = leaseResourceWrites(db)
++			for range 16 {
++				require.NoError(t, lm.AddResource(ctx, lease, resource))
++			}
++			delta := leaseResourceWrites(db) - before
++			t.Logf("16 duplicate AddResource calls: bbolt writes=%d callbacks=%d", delta, callbacks.Load()-1)
++			require.Zero(t, delta, "owned no-op transactions must roll back, not commit")
++			require.EqualValues(t, 1, callbacks.Load(), "no mutation callback after a no-op rollback")
++			resources, err := lm.ListResources(ctx, lease)
++			require.NoError(t, err)
++			require.Equal(t, []leases.Resource{resource}, resources)
++		})
++	}
++}
++
++func TestLeaseResourceValuesAndErrors(t *testing.T) {
++	ctx, db, _, lm, lease, callbacks := leaseResourceFixture(t)
++	resource := leases.Resource{Type: "images", ID: "value"}
++	require.NoError(t, lm.AddResource(ctx, lease, resource))
++	for _, value := range [][]byte{nil, {}, []byte("unexpected")} {
++		require.NoError(t, db.Update(func(tx *bolt.Tx) error {
++			return getBucket(tx, bucketKeyVersion, []byte("lease-noop"), bucketKeyObjectLeases, []byte(lease.ID), []byte("images")).Put([]byte(resource.ID), value)
++		}))
++		before := leaseResourceWrites(db)
++		callbackBefore := callbacks.Load()
++		require.NoError(t, lm.AddResource(ctx, lease, resource))
++		if len(value) == 0 {
++			require.Equal(t, before, leaseResourceWrites(db))
++			require.Equal(t, callbackBefore, callbacks.Load())
++		} else {
++			require.Greater(t, leaseResourceWrites(db), before, "nonempty values retain original normalization")
++			require.Equal(t, callbackBefore+1, callbacks.Load())
++		}
++		require.NoError(t, db.View(func(tx *bolt.Tx) error {
++			bkt := getBucket(tx, bucketKeyVersion, []byte("lease-noop"), bucketKeyObjectLeases, []byte(lease.ID), []byte("images"))
++			key, value := bkt.Cursor().Seek([]byte(resource.ID))
++			require.Equal(t, []byte(resource.ID), key)
++			require.Empty(t, value)
++			return nil
++		}))
++	}
++	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
++		bkt := getBucket(tx, bucketKeyVersion, []byte("lease-noop"), bucketKeyObjectLeases, []byte(lease.ID), []byte("images"))
++		_, err := bkt.CreateBucket([]byte("bucket"))
++		return err
++	}))
++	before := leaseResourceWrites(db)
++	callbackBefore := callbacks.Load()
++	require.ErrorIs(t, lm.AddResource(ctx, lease, leases.Resource{Type: "images", ID: "bucket"}), errbolt.ErrIncompatibleValue)
++	require.ErrorIs(t, lm.AddResource(ctx, lease, leases.Resource{Type: "images", ID: ""}), errbolt.ErrKeyRequired)
++	require.Error(t, lm.AddResource(context.Background(), lease, resource))
++	require.ErrorIs(t, lm.AddResource(namespaces.WithNamespace(ctx, "other"), lease, resource), errdefs.ErrNotFound)
++	require.ErrorIs(t, lm.AddResource(ctx, leases.Lease{ID: "missing"}, leases.Resource{Type: "unknown"}), errdefs.ErrNotFound)
++	require.ErrorIs(t, lm.AddResource(ctx, lease, leases.Resource{Type: "content", ID: "invalid"}), errdefs.ErrInvalidArgument)
++	require.ErrorIs(t, lm.AddResource(ctx, lease, leases.Resource{Type: "content/subtype", ID: resource.ID}), errdefs.ErrInvalidArgument)
++	require.ErrorIs(t, lm.AddResource(ctx, lease, leases.Resource{Type: "unknown", ID: resource.ID}), errdefs.ErrNotImplemented)
++	require.NoError(t, db.View(func(tx *bolt.Tx) error {
++		require.ErrorIs(t, lm.AddResource(boltutil.WithTransaction(ctx, tx), lease, resource), errbolt.ErrTxNotWritable)
++		return nil
++	}))
++	require.Equal(t, before, leaseResourceWrites(db), "failed calls must not commit")
++	require.Equal(t, callbackBefore, callbacks.Load())
++}
++
++func TestLeaseResourceCallerTransaction(t *testing.T) {
++	ctx, db, mdb, lm, lease, callbacks := leaseResourceFixture(t)
++	resource := leases.Resource{Type: "images", ID: "present"}
++	require.NoError(t, lm.AddResource(ctx, lease, resource))
++	before := leaseResourceWrites(db)
++	callbackBefore := callbacks.Load()
++	require.NoError(t, mdb.Update(func(tx *bolt.Tx) error {
++		ctx := boltutil.WithTransaction(ctx, tx)
++		require.NoError(t, lm.AddResource(ctx, lease, resource))
++		require.NoError(t, lm.AddResource(ctx, lease, leases.Resource{Type: "images", ID: "new"}))
++		bkt, err := tx.CreateBucket([]byte("other-mutation"))
++		require.NoError(t, err)
++		return bkt.Put([]byte("marker"), []byte("committed"))
++	}))
++	require.Greater(t, leaseResourceWrites(db), before)
++	require.Equal(t, callbackBefore+1, callbacks.Load(), "outer commit owns its callback")
++	require.NoError(t, db.View(func(tx *bolt.Tx) error {
++		require.Equal(t, []byte("committed"), tx.Bucket([]byte("other-mutation")).Get([]byte("marker")))
++		return nil
++	}))
++	before = leaseResourceWrites(db)
++	callbackBefore = callbacks.Load()
++	abort := errors.New("caller rollback")
++	require.ErrorIs(t, mdb.Update(func(tx *bolt.Tx) error {
++		ctx := boltutil.WithTransaction(ctx, tx)
++		require.NoError(t, lm.AddResource(ctx, lease, resource))
++		require.NoError(t, lm.AddResource(ctx, lease, leases.Resource{Type: "images", ID: "rolled-back"}))
++		return abort
++	}), abort)
++	require.Equal(t, before, leaseResourceWrites(db))
++	require.Equal(t, callbackBefore, callbacks.Load())
++	resources, err := lm.ListResources(ctx, lease)
++	require.NoError(t, err)
++	require.ElementsMatch(t, []leases.Resource{resource, {Type: "images", ID: "new"}}, resources)
++}
++
++func TestLeaseResourceConcurrentDuplicates(t *testing.T) {
++	ctx, db, _, lm, lease, callbacks := leaseResourceFixture(t)
++	resource := leases.Resource{Type: "content", ID: digest.FromString("concurrent").String()}
++	errors := make(chan error, 16)
++	var group sync.WaitGroup
++	for range 16 {
++		group.Go(func() { errors <- lm.AddResource(ctx, lease, resource) })
++	}
++	group.Wait()
++	close(errors)
++	for err := range errors {
++		require.NoError(t, err)
++	}
++	require.EqualValues(t, 1, callbacks.Load(), "exactly one insertion, all duplicates roll back")
++	before := leaseResourceWrites(db)
++	errors = make(chan error, 16)
++	for range 16 {
++		group.Go(func() { errors <- lm.AddResource(ctx, lease, resource) })
++	}
++	group.Wait()
++	close(errors)
++	for err := range errors {
++		require.NoError(t, err)
++	}
++	delta := leaseResourceWrites(db) - before
++	t.Logf("16 concurrent duplicate AddResource calls: bbolt writes=%d", delta)
++	require.Zero(t, delta)
++}
+--- /dev/null
++++ b/cache/size_noop_test.go
+@@ -0,0 +1,119 @@
++package cache
++
++import (
++	"errors"
++	"path/filepath"
++	"sync"
++	"testing"
++
++	"github.com/moby/buildkit/cache/metadata"
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++func TestQueueUnknownSizeDurableNoop(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(42))
++	require.NoError(t, md.commitMetadata())
++	stale, _ := s.Get("record")
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	var bdb *bolt.DB
++	require.NoError(t, s.DB().View(func(tx *bolt.Tx) error { bdb = tx.DB(); return nil }))
++	stats := bdb.Stats()
++	before := stats.TxStats.GetWrite()
++	staleMD := &cacheMetadata{si: stale}
++	require.Equal(t, int64(42), staleMD.getSize())
++	for range 16 {
++		require.NoError(t, staleMD.queueSize(sizeUnknown))
++		require.NoError(t, staleMD.commitMetadata())
++	}
++	stats = bdb.Stats()
++	writes := stats.TxStats.GetWrite() - before
++	t.Logf("16 durable unknown-size updates: bbolt writes=%d", writes)
++	require.Zero(t, writes)
++	require.Equal(t, sizeUnknown, staleMD.getSize(), "durable match refreshes stale mirror")
++	fresh, _ := s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++	// A different handle may change durable size while this handle remembers unknown.
++	require.NoError(t, md.queueSize(73))
++	require.NoError(t, md.commitMetadata())
++	require.NoError(t, staleMD.queueSize(sizeUnknown))
++	require.NoError(t, staleMD.commitMetadata())
++	fresh, _ = s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++}
++
++func TestQueueUnknownSizeMixedOrderAndRetry(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	order := []string{}
++	v, err := metadata.NewValue("written")
++	require.NoError(t, err)
++	si.Queue(func(b *bolt.Bucket) error { order = append(order, "before"); return si.SetValue(b, "first", v) })
++	require.NoError(t, md.queueSize(sizeUnknown))
++	si.Queue(func(b *bolt.Bucket) error { order = append(order, "after"); return si.SetValue(b, "second", v) })
++	failure := errors.New("late callback failure")
++	fail := true
++	si.Queue(func(*bolt.Bucket) error {
++		order = append(order, "last")
++		if fail {
++			return failure
++		}
++		return nil
++	})
++	require.ErrorIs(t, md.commitMetadata(), failure)
++	fresh, _ := s.Get("record")
++	require.Nil(t, fresh.Get("first"))
++	require.Nil(t, fresh.Get("second"))
++	fail = false
++	require.NoError(t, md.commitMetadata())
++	require.Equal(t, []string{"before", "after", "last", "before", "after", "last"}, order)
++	fresh, _ = s.Get("record")
++	require.Equal(t, v, fresh.Get("first"))
++	require.Equal(t, v, fresh.Get("second"))
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++	require.NoError(t, md.commitMetadata())
++	require.Len(t, order, 6, "successful commit consumes the queue")
++}
++
++func TestQueueUnknownSizeConcurrent(t *testing.T) {
++	s, err := metadata.NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	md := &cacheMetadata{si: si}
++	require.NoError(t, md.queueSize(sizeUnknown))
++	require.NoError(t, md.commitMetadata())
++	var wg sync.WaitGroup
++	errs := make(chan error, 16)
++	for range 16 {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			handle, _ := s.Get("record")
++			m := &cacheMetadata{si: handle}
++			if err := m.queueSize(sizeUnknown); err != nil {
++				errs <- err
++				return
++			}
++			errs <- m.commitMetadata()
++		}()
++	}
++	wg.Wait()
++	close(errs)
++	for err := range errs {
++		require.NoError(t, err)
++	}
++	fresh, _ := s.Get("record")
++	require.Equal(t, sizeUnknown, (&cacheMetadata{si: fresh}).getSize())
++}
+--- /dev/null
++++ b/cache/metadata/queue_commit_test.go
+@@ -0,0 +1,60 @@
++package metadata
++
++import (
++	"errors"
++	"path/filepath"
++	"testing"
++
++	"github.com/moby/buildkit/util/db"
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++// Fail after callbacks ran but before the native writable transaction commits.
++// The real bbolt rollback remains responsible for discarding all mutations.
++type failQueueCommitDB struct {
++	db.DB
++	fail    bool
++	failure error
++}
++
++func (d *failQueueCommitDB) Update(fn func(*bolt.Tx) error) error {
++	return d.DB.Update(func(tx *bolt.Tx) error {
++		if err := fn(tx); err != nil {
++			return err
++		}
++		if d.fail {
++			return d.failure
++		}
++		return nil
++	})
++}
++
++func TestQueueValueCommitFailureRetainsPending(t *testing.T) {
++	filename := filepath.Join(t.TempDir(), "metadata.db")
++	s, err := NewStore(filename)
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, s.Close()) })
++	si, _ := s.Get("record")
++	known, err := NewValue(int64(42))
++	require.NoError(t, err)
++	unknown, err := NewValue(int64(-1))
++	require.NoError(t, err)
++	require.NoError(t, si.Update(func(b *bolt.Bucket) error { return si.SetValue(b, "size", known) }))
++	failDB := &failQueueCommitDB{DB: s.db, fail: true, failure: errors.New("commit failed after callbacks")}
++	s.db = failDB
++	si.Queue(func(b *bolt.Bucket) error { return si.SetValue(b, "size", unknown) })
++	require.ErrorIs(t, si.Commit(), failDB.failure)
++	require.Len(t, si.queue, 1)
++	require.Equal(t, unknown, si.Get("size"), "mirror changed before failed commit")
++	fresh, _ := s.Get("record")
++	require.Equal(t, known, fresh.Get("size"), "durable state rolled back")
++	failDB.fail = false
++	require.NoError(t, si.Commit())
++	require.Empty(t, si.queue)
++	require.NoError(t, s.Close())
++	s, err = NewStore(filename)
++	require.NoError(t, err)
++	fresh, _ = s.Get("record")
++	require.Equal(t, unknown, fresh.Get("size"), "retry uses durable state despite mirror")
++}
+--- /dev/null
++++ b/cache/metadata/queue_noop_test.go
+@@ -0,0 +1,60 @@
++package metadata
++
++import (
++	"path/filepath"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++	bolt "go.etcd.io/bbolt"
++)
++
++func TestQueueValueIfChangedRepairAndErrors(t *testing.T) {
++	for _, kind := range []string{"missing", "indexed", "invalid", "bucket", "empty-key", "nil", "indexed-target"} {
++		t.Run(kind, func(t *testing.T) {
++			s, err := NewStore(filepath.Join(t.TempDir(), "metadata.db"))
++			require.NoError(t, err)
++			t.Cleanup(func() { require.NoError(t, s.Close()) })
++			si, _ := s.Get("record")
++			desired, err := NewValue(int64(-1))
++			require.NoError(t, err)
++			key := "size"
++			switch kind {
++			case "indexed":
++				old, err := NewValue(int64(-1))
++				require.NoError(t, err)
++				old.Index = "old"
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { return si.SetValue(b, key, old) }))
++			case "invalid":
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { return b.Put([]byte(key), []byte("invalid")) }))
++			case "bucket":
++				require.NoError(t, si.Update(func(b *bolt.Bucket) error { _, err := b.CreateBucket([]byte(key)); return err }))
++			case "empty-key":
++				key = ""
++			case "nil":
++				desired = nil
++			case "indexed-target":
++				desired.Index = "new"
++			}
++			si.QueueValueIfChanged(key, desired)
++			err = si.Commit()
++			switch kind {
++			case "invalid", "bucket", "empty-key":
++				require.Error(t, err)
++				require.Len(t, si.queue, 1)
++			default:
++				require.NoError(t, err)
++				require.Empty(t, si.queue)
++				fresh, _ := s.Get("record")
++				require.Equal(t, desired, fresh.Get(key))
++				found, err := s.Probe("old")
++				require.NoError(t, err)
++				require.False(t, found)
++				if kind == "indexed-target" {
++					found, err := s.Probe("new")
++					require.NoError(t, err)
++					require.True(t, found)
++				}
++			}
++		})
++	}
++}
