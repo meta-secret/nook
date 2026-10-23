@@ -8,7 +8,6 @@ use nook_companion_core::{
 };
 use tsify::{Ts, Tsify};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::Zeroize;
 
 #[wasm_bindgen]
 pub struct NookLoginSubmissionField {
@@ -64,10 +63,9 @@ impl NookLoginSubmissionObservation {
 )]
 pub fn classify_companion_login_submission(
     observation: &NookLoginSubmissionObservation,
-    mut captured_values: Vec<String>,
+    captured_values: Vec<String>,
 ) -> Result<Ts<LoginSubmissionDecision>, JsError> {
-    let values = LoginCapturedValueMatches::from_values(&captured_values);
-    captured_values.zeroize();
+    let values = LoginCapturedValueMatches::from_owned_values(captured_values);
     Ok(observation.inner.classify(&values).into_ts()?)
 }
 
@@ -95,10 +93,9 @@ pub fn classify_companion_login_save_outcome(
 )]
 pub fn classify_companion_login_save_capture(
     capture: &Ts<LoginSubmissionCapture>,
-    mut captured_values: Vec<String>,
+    captured_values: Vec<String>,
 ) -> Result<Ts<LoginSaveCaptureDecision>, JsError> {
-    let values = LoginCapturedValueMatches::from_values(&captured_values);
-    captured_values.zeroize();
+    let values = LoginCapturedValueMatches::from_owned_values(captured_values);
     Ok(capture.to_rust()?.classify(&values)?.into_ts()?)
 }
 

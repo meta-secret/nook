@@ -4,7 +4,7 @@ use super::{
     LoginSubmissionIntent, LoginSubmissionObservation, LoginSubmissionTarget,
 };
 use crate::credential_fill::field::{
-    Credential, CredentialRole, Editability, Index, Observation, Password,
+    Credential, CredentialRole, Editability, Index, NewPassword, Observation, Password,
 };
 use crate::page_field_classification::{SubmittedCredentialIntent, SubmittedLoginControlAdmission};
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
     AuthenticationWorkflowMatch, AuthenticationWorkflowStage, AutocompleteTokenQuery,
     PageInputFieldObservation,
 };
+use zeroize::Zeroize;
 
 /// Registration wording on the submitted control, form, or route.
 pub(super) const REGISTRATION_WORDS: [&str; 6] = [
@@ -57,6 +58,14 @@ impl LoginCapturedValueMatches {
             })
             .collect();
         Self { groups }
+    }
+
+    /// Derive matches from browser-owned values, then wipe this copy.
+    #[must_use]
+    pub fn from_owned_values(mut values: Vec<String>) -> Self {
+        let matches = Self::from_values(&values);
+        values.zeroize();
+        matches
     }
 
     #[must_use]
@@ -125,15 +134,17 @@ impl SignupScope<'_> {
                     role: CredentialRole::Username,
                     ..
                 }) => {}
-                Observation::Credential(Credential {
-                    role: CredentialRole::Password(Password::Current),
-                    ..
-                })
-                | Observation::Credential(Credential {
-                    role: CredentialRole::Password(Password::Generic),
-                    editability: Editability::Readonly,
-                    ..
-                })
+                Observation::Credential(
+                    Credential {
+                        role: CredentialRole::Password(Password::Current),
+                        ..
+                    }
+                    | Credential {
+                        role: CredentialRole::Password(Password::Generic),
+                        editability: Editability::Readonly,
+                        ..
+                    },
+                )
                 | Observation::OneTimeCode(_) => return SignupSelectionMatch::NotSignup,
             }
         }
@@ -159,10 +170,9 @@ impl SignupScope<'_> {
     }
 
     fn is_new_password(&self, index: Index) -> bool {
-        self.observed.iter().any(|observation| {
-            *observation
-                == Observation::from(crate::credential_fill::field::NewPassword::from(index))
-        })
+        self.observed
+            .iter()
+            .any(|observation| *observation == Observation::from(NewPassword::from(index)))
     }
 
     fn registration_intent(&self) -> bool {
