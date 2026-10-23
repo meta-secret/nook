@@ -43,6 +43,7 @@ enum FailureStage {
   PreflightCache = "preflight-cache",
   Web = "web",
   Image = "image",
+  Construction = "construction",
 }
 
 enum CacheOutcome {
@@ -54,6 +55,7 @@ enum CacheOutcome {
 enum LogCapture {
   File = "file",
   Directory = "directory",
+  BrowserDirectory = "browser-directory",
 }
 
 const scenarios = [
@@ -100,6 +102,20 @@ const scenarios = [
     logCapture: LogCapture.File,
   },
   {
+    failure: FailureStage.Construction,
+    exitStatus: 12,
+    publishes: false,
+    cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.File,
+  },
+  {
+    failure: FailureStage.None,
+    exitStatus: 1,
+    publishes: false,
+    cacheOutcome: CacheOutcome.Success,
+    logCapture: LogCapture.BrowserDirectory,
+  },
+  {
     failure: FailureStage.None,
     exitStatus: 1,
     publishes: false,
@@ -124,6 +140,9 @@ for (const scenario of scenarios) {
       if (scenario.logCapture === LogCapture.Directory) {
         mkdirSync(join(root, "main-web-artifacts.log"));
       }
+      if (scenario.logCapture === LogCapture.BrowserDirectory) {
+        mkdirSync(join(root, "main-browser-construction.log"));
+      }
       writeFileSync(
         join(bin, "task"),
         `#!/bin/bash
@@ -140,13 +159,21 @@ case "$1" in
     test "$GHA_CACHE_WRITE_ENABLED" = 1 ;;
   ci:main:web:artifacts) kind=web; other=node; test -z "$GHA_CACHE_WRITE_ENABLED" ;;
   web:e2e:kubernetes-image:artifacts)
+    if [ "\${E2E_OUTPUT:-}" = type=cacheonly ]; then
+      kind=construction; other=node
+      test -z "$GHA_CACHE_WRITE_ENABLED"
+    else
+    test -z "\${E2E_OUTPUT:-}"
     test -f "$PROBE_DIR/node.finished"
     test "$FAIL_STAGE" != node
     test -f "$PROBE_DIR/web.finished"
+    test -f "$PROBE_DIR/construction.finished"
+    test "$FAIL_STAGE" != construction
     test ! -f "$PROBE_DIR/cache.finished"
     touch "$PROBE_DIR/image.finished"
     if [ "$FAIL_STAGE" = image ]; then exit 9; fi
-    exit 0 ;;
+    exit 0
+    fi ;;
   *) exit 9 ;;
 esac
 touch "$PROBE_DIR/$kind.started"
@@ -164,7 +191,7 @@ if [ "$kind" = web ] && [ "$FAIL_STAGE" != node ]; then
   done
   test -f "$PROBE_DIR/cache.started"
 fi
-if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ] && [ "$LOG_CAPTURE" != directory ]; then
+if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ] && [ "$FAIL_STAGE" != construction ] && [ "$LOG_CAPTURE" = file ]; then
   for attempt in $(seq 1 100); do
     if [ -f "$PROBE_DIR/image.finished" ]; then break; fi
     sleep 0.01
@@ -173,11 +200,12 @@ if [ "$kind" = cache ] && [ "$FAIL_STAGE" != web ] && [ "$LOG_CAPTURE" != direct
 fi
 if [ "$kind" = preflight-cache ]; then
   for attempt in $(seq 1 100); do
-    if [ -f "$PROBE_DIR/node.finished" ] && [ -f "$PROBE_DIR/web.finished" ]; then break; fi
+    if [ -f "$PROBE_DIR/node.finished" ] && [ -f "$PROBE_DIR/web.finished" ] && [ -f "$PROBE_DIR/construction.finished" ]; then break; fi
     sleep 0.01
   done
   test -f "$PROBE_DIR/node.finished"
   test -f "$PROBE_DIR/web.finished"
+  test -f "$PROBE_DIR/construction.finished"
   sleep 0.05
 fi
 if [ "$kind" = node ]; then
@@ -187,11 +215,16 @@ if [ "$kind" = node ]; then
   done
   grep -q 'web started log' "$PROBE_DIR/live.out"
   grep -q 'preflight-cache started log' "$PROBE_DIR/live.out"
+  for attempt in $(seq 1 100); do
+    if grep -q 'construction started log' "$PROBE_DIR/live.out"; then break; fi
+    sleep 0.01
+  done
+  grep -q 'construction started log' "$PROBE_DIR/live.out"
 fi
 touch "$PROBE_DIR/$kind.finished"
 echo "$kind joined log"
 if [ "$FAIL_STAGE" = "$kind" ]; then
-  case "$kind" in node) exit 7 ;; web) exit 8 ;; cache) exit 10 ;; preflight-cache) exit 11 ;; esac
+  case "$kind" in node) exit 7 ;; web) exit 8 ;; cache) exit 10 ;; preflight-cache) exit 11 ;; construction) exit 12 ;; esac
 fi
 `,
         { mode: 0o755 },
@@ -233,12 +266,16 @@ exit "$status"`,
       );
       expect(readFileSync(join(root, "node.finished"), "utf8")).toBe("");
       expect(readFileSync(join(root, "web.finished"), "utf8")).toBe("");
+      expect(readFileSync(join(root, "construction.finished"), "utf8")).toBe(
+        "",
+      );
       expect(existsSync(join(root, "image.finished"))).toBe(scenario.publishes);
       expect(existsSync(join(root, "preflight-cache.finished"))).toBe(true);
       expect(result.stdout).toContain("preflight-cache joined log");
       for (const [kind, log] of [
         ["preflight-cache", "main-preflight-cache.log"],
         ["web", "main-web-artifacts.log"],
+        ["construction", "main-browser-construction.log"],
         ["cache", "main-wasm-cache.log"],
       ] as const) {
         if (kind === "cache" && scenario.failure === FailureStage.Node) {
@@ -256,8 +293,14 @@ exit "$status"`,
             .filter((line) => line === `${kind} diagnostic`),
         ).toHaveLength(1);
         if (
-          log !== "main-web-artifacts.log" ||
-          scenario.logCapture === LogCapture.File
+          !(
+            log === "main-web-artifacts.log" &&
+            scenario.logCapture === LogCapture.Directory
+          ) &&
+          !(
+            log === "main-browser-construction.log" &&
+            scenario.logCapture === LogCapture.BrowserDirectory
+          )
         ) {
           expect(readFileSync(join(root, log), "utf8")).toContain(
             `${kind} diagnostic`,

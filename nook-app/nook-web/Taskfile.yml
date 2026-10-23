@@ -101,7 +101,7 @@ tasks:
           SETUP_OUTPUT: type=registry
 
   web:e2e:kubernetes-image:artifacts:
-    desc: Build and push the browser image from the verified split-CI WASM artifact.
+    desc: Build the browser image from split-CI WASM artifacts; publish unless E2E_OUTPUT selects construction only.
     cmds:
       - task: _buildx:healthy
         vars:
@@ -111,7 +111,7 @@ tasks:
     cmds:
       - task: docker:ci:web:e2e:build
         vars:
-          E2E_OUTPUT: type=registry
+          E2E_OUTPUT: '{{default "type=registry" .E2E_OUTPUT}}'
 
   web:test:e2e:parallel:
     desc: Full local-provider Playwright e2e when wasm/dist is built (all available logical CPUs).
