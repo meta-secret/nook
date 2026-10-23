@@ -737,7 +737,9 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile
                 .contains("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
             && wasm_dockerfile
-                .contains("FROM builder-wasm-node-deps AS builder-wasm-handoff")
+                .contains("FROM builder-wasm-node-deps AS builder-wasm-test-base")
+            && wasm_dockerfile
+                .contains("FROM builder-wasm-test-base AS builder-wasm-handoff")
             && wasm_dockerfile.contains(
                 "COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/",
             )

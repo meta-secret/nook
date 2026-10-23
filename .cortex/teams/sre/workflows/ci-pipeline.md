@@ -648,8 +648,14 @@ authenticator-domain to 90 percent.
 - A report for each portable package enforces its registry floor; the combined
   report is artifact-only and cannot mask a package failure. Artifacts are
   written to `/opt/nook/coverage/nook-core` in the image.
-- The WASM lane gates companion separately, executes Chromium without cache
-  credentials, and combines native and browser profiles for one `nook-wasm` report.
+- WASM validation branches from one immutable test base into separate nook and
+  companion compiler stages. Each keeps its own native and WASM coverage profiles
+  and enforces the unchanged package floor. The public compiler target joins both
+  successful branches before runtime consumers can import their result stamps;
+  compiler credentials remain confined to the compiler `RUN` mounts.
+- The shared test base still contains both package sources. This overlap removes
+  a serial verification dependency; it does not isolate package cache inputs or
+  establish a measured runtime improvement.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;

@@ -48,6 +48,8 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
     let root = repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    let companion =
+        read(&root.join("nook-app/nook-platform/docker/rust/base/wasm-companion-verify.sh"))?;
     let nightly =
         read(&root.join("nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
@@ -61,7 +63,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let enforced = policy.enforced_packages.clone();
     for package in &enforced {
         assert!(
-            [&product, &nightly, &platform_tasks, &preflight]
+            [&product, &companion, &nightly, &platform_tasks, &preflight]
                 .iter()
                 .flat_map(|source| source.lines())
                 .filter(|line| line.contains("llvm-cov") || line.contains("for package in"))
@@ -90,7 +92,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         1
     );
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
-    assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
+    assert!(companion.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product
         .split_once("llvm-cov test --no-clean --release -p nook-wasm")
@@ -144,7 +146,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
     let wasm_coverage_stage = product
-        .split_once("FROM builder-wasm-node-deps AS builder-wasm-handoff")
+        .split_once("FROM builder-wasm-node-deps AS builder-wasm-test-base")
         .and_then(|(_, remainder)| {
             remainder
                 .split_once("FROM scratch AS wasm-export")
@@ -155,9 +157,21 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
-    let (handoff, compiler_and_browser) = wasm_coverage_stage
-        .split_once("\nFROM builder-wasm-handoff AS builder-wasm-node-compiler")
-        .context("sealed handoff and isolated Node compiler stage")?;
+    let (handoff, companion_and_nook) = wasm_coverage_stage
+        .split_once("\nFROM builder-wasm-test-base AS builder-companion-wasm-node-compiler")
+        .context("companion compiler must branch before nook coverage")?;
+    let (companion_leaf, compiler_and_browser) = companion_and_nook
+        .split_once("\nFROM builder-wasm-handoff AS builder-nook-wasm-node-compiler")
+        .context("nook compiler must retain its native coverage handoff")?;
+    assert!(handoff.contains("FROM builder-wasm-test-base AS builder-wasm-handoff"));
+    assert!(
+        companion_leaf
+            .contains("COPY nook-app/nook-platform/docker/rust/base/wasm-companion-verify.sh")
+    );
+    assert!(companion_leaf.contains("bash /opt/nook/wasm-companion-verify.sh"));
+    assert!(companion.contains("set -euo pipefail"));
+    assert!(!companion.contains("RUSTC_WRAPPER="));
+    assert!(!companion_leaf.contains("--mount=type=cache"));
     assert!(!handoff.contains("bun.sh/install"));
     let (compiler, browser) = compiler_and_browser
         .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
@@ -165,18 +179,30 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!handoff.contains("RUSTC_WRAPPER="));
     assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(compiler.contains("wasm-pack test --node --release nook-wasm"));
-    assert!(compiler.contains("wasm-pack test --node --release nook-companion-wasm"));
+    assert!(companion.contains("wasm-pack test --node --release nook-companion-wasm"));
+    assert!(!compiler.contains("--release nook-companion-wasm"));
+    assert!(compiler.contains("FROM builder-nook-wasm-node-compiler AS builder-wasm-node-compiler\nCOPY --from=builder-companion-wasm-node-compiler /opt/nook/wasm-companion-verified /opt/nook/wasm-companion-verified"));
     let companion_native_coverage = "llvm-cov test --no-clean --release -p nook-companion-wasm";
     let companion_wasm_coverage = "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines \"$companion_floor\"";
-    assert!(compiler.contains(companion_native_coverage));
+    assert!(companion.contains(companion_native_coverage));
     assert!(
-        !compiler.contains("llvm-cov test --no-clean --release -p nook-companion-wasm --no-report")
+        !companion
+            .contains("llvm-cov test --no-clean --release -p nook-companion-wasm --no-report")
     );
-    assert!(compiler.contains(companion_wasm_coverage));
+    assert!(companion.contains(companion_wasm_coverage));
     assert!(
-        compiler.find(companion_native_coverage) < compiler.find(companion_wasm_coverage),
+        companion.find(companion_native_coverage) < companion.find(companion_wasm_coverage),
         "native companion tests must contribute profiles before the wasm package floor is evaluated"
     );
+    assert!(
+        companion.find(companion_wasm_coverage)
+            < companion.find("touch /opt/nook/wasm-companion-verified")
+    );
+    for secret in ["sccache_s3_access_key", "sccache_s3_secret_key"] {
+        assert!(
+            companion_leaf.contains(&format!("--mount=type=secret,id={secret},required=false"))
+        );
+    }
     assert_eq!(
         compiler
             .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
