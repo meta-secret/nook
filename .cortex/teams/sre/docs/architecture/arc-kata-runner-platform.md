@@ -172,8 +172,8 @@ one replica on each qualified node.
 
 Each replica uses:
 
-- the rootless BuildKit `v0.34.1-nook.2` derivative, pinned to published image
-  index `sha256:48c50825b200fea2a0cc3be4a84a4874c14e04abfd65cd2d101fd2fde4d9ce47`
+- the rootless BuildKit `v0.34.1-nook.3` derivative, pinned to published image
+  index `sha256:bdf9c1489e0818a264324bd0cdc9a414ebbf12c99b723fd0dd2d70c9edb5ead4`
   containing the `linux/amd64` daemon image; its [recipe and native patch](../../../../../infra/k0s/images/buildkit/README.md)
   preserve the official rootless runtime and skip redundant compression metadata writes;
 - a retained 128 GiB local persistent volume;
