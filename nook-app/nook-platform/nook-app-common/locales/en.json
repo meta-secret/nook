@@ -1785,7 +1785,10 @@
       "fill_code_done": "Code filled. Review the page, then continue.",
       "fill_no_code_field": "No 2FA code field on this page. Open the code step, then fill again.",
       "fill_code_failed": "Nook could not fill this code. Try again.",
-      "fill_code_missing": "That 2FA code is no longer available for this site."
+      "fill_code_missing": "That 2FA code is no longer available for this site.",
+      "site_add_authenticator": "Add 2FA from this page",
+      "site_add_authenticator_started": "Review the authenticator in the Nook box on the page.",
+      "site_add_authenticator_missing": "Nook found no authenticator setup on this page."
     },
     "companion": {
       "step_label": "Browser companion",

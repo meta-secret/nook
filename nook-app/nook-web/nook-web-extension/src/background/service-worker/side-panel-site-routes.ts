@@ -18,7 +18,17 @@ import {
   accountPickerSessions,
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
+import { SidePanelAddAuthenticatorOperation } from './side-panel-add-authenticator-operation'
 import { SidePanelCodeFillOperation } from './side-panel-code-fill-operation'
+import {
+  SidePanelAddAuthenticatorKind,
+  SidePanelAuthenticatorSetupMessages,
+  type SidePanelAddAuthenticatorOutcome,
+} from '../../lib/side-panel-authenticator-setup'
+import {
+  VAULT_REVISION_CHANNEL,
+  VaultRevisionSignal,
+} from '../../lib/vault-revision-signal'
 import {
   SchemaRuntimeMessageRoute,
   type BackgroundRuntimeMessageRoute,
@@ -37,6 +47,9 @@ import {
   CompanionSidePanelTabClassifier,
   SidePanelTabTargetResolver,
 } from './side-panel-tab-target'
+
+/** Whether the worker relayed a page's change notice to the panel. */
+type SidePanelPageChangedRelay = { readonly ok: boolean }
 
 /** The tab's top frame received the message, but no content script there
  * answered it. */
@@ -133,6 +146,18 @@ export class SidePanelSiteRoutes {
     { decode: SidePanelSiteMessages.matchesFillLogin }
   private static readonly fillCode: RuntimeMessageSchema<BrowserRuntimeMessage> =
     { decode: SidePanelSiteMessages.matchesFillCode }
+  private static readonly addAuthenticatorFailed: SidePanelAddAuthenticatorOutcome =
+    { kind: SidePanelAddAuthenticatorKind.Failed }
+  private static readonly addAuthenticatorRequest: RuntimeMessageSchema<BrowserRuntimeMessage> =
+    { decode: SidePanelAuthenticatorSetupMessages.matchesAdd }
+  private static readonly pageChangedNotice: RuntimeMessageSchema<BrowserRuntimeMessage> =
+    { decode: SidePanelAuthenticatorSetupMessages.matchesPageChanged }
+  private static readonly pageChangedRelayed: SidePanelPageChangedRelay = {
+    ok: true,
+  }
+  private static readonly pageChangedRefused: SidePanelPageChangedRelay = {
+    ok: false,
+  }
 
   /** The listing route; its operation decodes the request strictly. */
   static listing(): BackgroundRuntimeMessageRoute {
@@ -162,5 +187,46 @@ export class SidePanelSiteRoutes {
     return SchemaRuntimeMessageRoute.matching(SidePanelSiteRoutes.fillCode)
       .respondWith(operation.run.bind(operation))
       .onRejected(() => SidePanelSiteRoutes.codeFillFailed)
+  }
+
+  /**
+   * A site tab's top document says it started or stopped showing an
+   * authenticator setup. The worker tells an open side panel, on the
+   * panel's one broadcast channel, to list the site again; the notice and
+   * the announcement carry nothing else.
+   */
+  static pageChanged(): BackgroundRuntimeMessageRoute {
+    const signal = new VaultRevisionSignal(
+      new BroadcastChannel(VAULT_REVISION_CHANNEL),
+    )
+    return SchemaRuntimeMessageRoute.matching(
+      SidePanelSiteRoutes.pageChangedNotice,
+    )
+      .respondWith(async ({ sender }) => {
+        const topDocument =
+          sender.id === chrome.runtime.id &&
+          typeof sender.tab?.id === 'number' &&
+          sender.frameId === 0
+        switch (topDocument) {
+          case true:
+            signal.raisePageChanged()
+            return SidePanelSiteRoutes.pageChangedRelayed
+          case false:
+            return SidePanelSiteRoutes.pageChangedRefused
+        }
+      })
+      .onRejected(() => SidePanelSiteRoutes.pageChangedRefused)
+  }
+
+  /** The Add 2FA from this page route; its operation decodes the request strictly. */
+  static addAuthenticator(): BackgroundRuntimeMessageRoute {
+    const operation = new SidePanelAddAuthenticatorOperation(
+      SidePanelSiteRoutes.dependencies,
+    )
+    return SchemaRuntimeMessageRoute.matching(
+      SidePanelSiteRoutes.addAuthenticatorRequest,
+    )
+      .respondWith(operation.run.bind(operation))
+      .onRejected(() => SidePanelSiteRoutes.addAuthenticatorFailed)
   }
 }

@@ -250,11 +250,14 @@ export async function saveVaultAuthenticator(
   issuer: string,
   account: string,
   secret: string,
+  website = '',
 ): Promise<void> {
   await vaultPage.getByTestId('add-secret-btn').click()
   await vaultPage.getByTestId('item-type-authenticator').click()
   await vaultPage.getByTestId('authenticator-issuer').fill(issuer)
   await vaultPage.getByTestId('authenticator-account').fill(account)
+  if (website)
+    await vaultPage.getByTestId('authenticator-website').fill(website)
   await vaultPage.getByTestId('authenticator-secret').fill(secret)
   await vaultPage.getByTestId('save-secret-btn').click()
   await expect(

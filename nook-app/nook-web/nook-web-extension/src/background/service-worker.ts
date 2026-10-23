@@ -343,6 +343,8 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SidePanelSiteRoutes.listing(),
   SidePanelSiteRoutes.fill(),
   SidePanelSiteRoutes.codeFill(),
+  SidePanelSiteRoutes.addAuthenticator(),
+  SidePanelSiteRoutes.pageChanged(),
   SidePanelAuthenticatorPickerRoute.route(),
   SchemaRuntimeMessageRoute.matching(SiteSidePanelOpenMessageSchema)
     .respondWith(siteSidePanelOpening.open.bind(siteSidePanelOpening))

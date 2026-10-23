@@ -42,12 +42,22 @@ import {
   type SidePanelPageNeedDelivery,
 } from './side-panel-page-need'
 import {
+  SidePanelPageAddAuthenticatorReceiver,
+  SidePanelPageAddAuthenticatorReception,
+  type SidePanelPageAddAuthenticatorDelivery,
+} from './side-panel-page-authenticator-setup'
+import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
+import {
   PendingPickerTakeKind,
   pickerState,
   scanState,
   widgetState,
 } from './state'
 import { workflowUi } from './workflow-ui'
+
+const sidePanelPageAddAuthenticator = new SidePanelPageAddAuthenticatorReceiver(
+  authenticatorEnrollmentInteraction,
+)
 
 export function removeScannedWidget(): void {
   authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -108,6 +118,17 @@ export const routeAutofillMessage: AutofillMessageListener = (
     case SidePanelPageNeedReception.Responding:
       return true
     case SidePanelPageNeedReception.Ignored:
+      break
+  }
+  const sidePanelAdd: SidePanelPageAddAuthenticatorDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (sidePanelPageAddAuthenticator.receive(sidePanelAdd)) {
+    case SidePanelPageAddAuthenticatorReception.Responding:
+      return true
+    case SidePanelPageAddAuthenticatorReception.Ignored:
       break
   }
   const verification = Schema.decodeUnknownResult(LoginPickerPageVerification)(

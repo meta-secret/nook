@@ -119,7 +119,11 @@ class SiteRows {
     return {
       kind: SidePanelSiteListingKind.Ready,
       display_host: host,
-      listing: { summary: { kind: 'Listed' }, sections },
+      listing: {
+        summary: { kind: 'Listed' },
+        sections,
+        page_offer: { kind: 'Absent' },
+      },
     }
   }
 }
@@ -375,6 +379,7 @@ test("a page that needs only 2FA codes shows Rust's typed empty state above the 
           hint: { kind: 'Absent' },
         },
         sections: [SiteRows.personalEmpty()],
+        page_offer: { kind: 'Absent' },
       },
     },
   })

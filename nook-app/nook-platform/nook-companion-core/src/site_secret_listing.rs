@@ -129,6 +129,18 @@ pub struct SiteSecretVaults {
 pub struct SiteSecretListing {
     pub summary: SiteSecretListingSummary,
     pub sections: Vec<SiteSecretSection>,
+    pub page_offer: SiteSecretPageOffer,
+}
+
+/// An action the panel offers for the page itself rather than for a row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind")]
+pub enum SiteSecretPageOffer {
+    /// The page needs nothing beyond its rows.
+    Absent,
+    /// The page shows an authenticator setup: offer to add it to Nook. The
+    /// page reads its QR code or setup key only after the user chooses it.
+    AddAuthenticator { label_key: SiteSecretMessageKey },
 }
 
 /// Whether any section lists a row the page needs.
@@ -401,7 +413,9 @@ mod tests {
 
         /// The presented sections of a listing that lists at least one row.
         fn listed_sections(&self) -> anyhow::Result<Vec<SiteSecretSection>> {
-            let SiteSecretListing { summary, sections } = self.present()?;
+            let SiteSecretListing {
+                summary, sections, ..
+            } = self.present()?;
             let SiteSecretListingSummary::Listed = summary else {
                 anyhow::bail!("expected a listed summary, got {summary:?}");
             };
@@ -577,6 +591,7 @@ mod tests {
                         ),
                     },
                 }],
+                page_offer: SiteSecretPageOffer::Absent,
             }
         );
         assert_eq!(
@@ -593,6 +608,7 @@ mod tests {
                     hint: save_hint.clone(),
                 },
                 sections: vec![],
+                page_offer: SiteSecretPageOffer::Absent,
             }
         );
         assert_eq!(

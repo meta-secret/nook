@@ -1,7 +1,9 @@
 /**
  * The service worker announces on one dedicated broadcast channel whenever
  * what the extension holds changes: a vault update or pairing imported from
- * Simple Vault, or a session unlocked. Only documents of the extension's own
+ * Simple Vault, or a session unlocked. It also announces when a site tab's
+ * top document starts or stops showing an authenticator setup, so the side
+ * panel lists that site again. Only documents of the extension's own
  * origin share the channel, and the announcement carries nothing but its
  * kind, so an extension page that shows this state (the side panel) can
  * listen here and re-read. Runtime broadcasts and session storage are
@@ -11,6 +13,8 @@ export const VAULT_REVISION_CHANNEL = 'nook:vault-revision'
 
 export enum VaultRevisionAnnouncement {
   Changed = 'changed',
+  /** A site page started or stopped showing an authenticator setup. */
+  PageChanged = 'page-changed',
 }
 
 /** The part of `BroadcastChannel` the announcement uses. */
@@ -24,5 +28,9 @@ export class VaultRevisionSignal {
 
   raise(): void {
     this.channel.postMessage(VaultRevisionAnnouncement.Changed)
+  }
+
+  raisePageChanged(): void {
+    this.channel.postMessage(VaultRevisionAnnouncement.PageChanged)
   }
 }

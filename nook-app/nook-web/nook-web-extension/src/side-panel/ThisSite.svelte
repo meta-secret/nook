@@ -23,17 +23,20 @@ its address, the panel's visibility or the lock state changes.
     extensionLocaleCatalog,
   } from '../lib/i18n'
   import type {
+    SiteSecretPageOffer,
     SiteSecretRow,
     SiteSecretSection,
   } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
   import type { ExtensionSessionDeviceState } from '../lib/nook-wasm'
   import type { PairedVaultGroup } from '../lib/paired-vaults'
   import {
+    SidePanelSiteListingKind,
     sidePanelSite,
     type SidePanelLoginFillRequest,
     type SidePanelWindowSelection,
   } from '../lib/side-panel-site'
   import ThisSiteItem from './ThisSiteItem.svelte'
+  import ThisSitePageOffer from './ThisSitePageOffer.svelte'
   import {
     SidePanelChangeKind,
     SidePanelRuntime,
@@ -102,6 +105,9 @@ its address, the panel's visibility or the lock state changes.
   let site = $state<ThisSiteState>(ThisSiteMemory.initial())
   /** A Fill request on its way blocks the next, also after a drop. */
   let fillActivity = $state<ThisSiteFillActivity>(ThisSiteFillActivity.Idle)
+  const absentOffer: SiteSecretPageOffer = { kind: 'Absent' }
+  /** Rust's offer for the page itself, from the current listing only. */
+  let pageOffer = $state<SiteSecretPageOffer>(absentOffer)
   const view = $derived(site.view)
   const fill = $derived(site.fill)
   const notice = $derived(site.notice)
@@ -203,6 +209,7 @@ its address, the panel's visibility or the lock state changes.
   /** List the active tab's logins again, dropping what was shown. */
   async function load(): Promise<void> {
     const read = reads.begin()
+    pageOffer = absentOffer
     await replace(ThisSiteViews.loading())
     switch (panelWindow.kind) {
       case SidePanelWindowKind.Resolving:
@@ -222,6 +229,10 @@ its address, the panel's visibility or the lock state changes.
         break
     }
     const outcome = ThisSiteViews.listing(listing)
+    pageOffer =
+      listing.kind === SidePanelSiteListingKind.Ready
+        ? listing.listing.page_offer
+        : absentOffer
     await replace(outcome.view)
     signal(outcome.signal)
   }
@@ -326,6 +337,7 @@ its address, the panel's visibility or the lock state changes.
         // A dropped list also drops any answer still on its way.
         reads.invalidate()
         fills.invalidate()
+        pageOffer = absentOffer
         site = result.state
         break
       case ThisSiteMemoryKind.Kept:
@@ -470,6 +482,8 @@ the other-identity tag, then its rows or Rust's muted empty line. -->
       </p>
     </div>
   {/if}
+
+  <ThisSitePageOffer {i18n} offer={pageOffer} {panelWindow} />
 
   {#if view.body.kind === ThisSiteBodyKind.Loading}
     <div class="side-panel-site-status" role="status">

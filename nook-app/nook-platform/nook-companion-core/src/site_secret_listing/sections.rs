@@ -164,7 +164,11 @@ impl SiteSecretSectionGrouping {
             Some(_) => SiteSecretListingSummary::Listed,
             None => need.empty_summary(),
         };
-        SiteSecretListing { summary, sections }
+        SiteSecretListing {
+            summary,
+            sections,
+            page_offer: need.page_offer(),
+        }
     }
 }
 

@@ -71,7 +71,11 @@ them.
 ### Eligibility
 
 - **Add 2FA from this page** appears only as a user-initiated Pilot action on
-  authenticator setup pages.
+  authenticator setup pages. The side panel offers the same action, which
+  starts the Pilot ceremony on the page.
+- While a native modal dialog (`showModal()`) is open, the Pilot widget
+  mounts inside the topmost one, because the browser makes everything outside
+  it inert.
 - A page qualifies when visible QR media sits beside instructions to scan it
   with an authenticator app.
 - A page with no QR media qualifies only through an open dialog.

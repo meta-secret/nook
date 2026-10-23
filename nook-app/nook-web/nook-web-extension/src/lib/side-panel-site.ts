@@ -6,6 +6,13 @@ import type {
   BrowserRuntimeMessageValue,
 } from './browser-runtime-message'
 import { SiteSecretListingCodec } from './side-panel-site-listing'
+import {
+  SidePanelAddAuthenticatorKind,
+  SidePanelAuthenticatorSetupMessageType,
+  SidePanelAuthenticatorSetupMessages,
+  type SidePanelAddAuthenticatorMessage,
+  type SidePanelAddAuthenticatorOutcome,
+} from './side-panel-authenticator-setup'
 
 /** The panel's requests. None carries an origin, URL, tab or frame. */
 export enum SidePanelSiteMessageType {
@@ -334,6 +341,7 @@ type SidePanelRuntimeRequest =
   | SidePanelSiteLoginsMessage
   | SidePanelLoginFillMessage
   | SidePanelCodeFillMessage
+  | SidePanelAddAuthenticatorMessage
 
 type SidePanelSiteClientConfiguration = { readonly browser: typeof globalThis }
 
@@ -350,6 +358,9 @@ export class SidePanelSiteClient {
   }
   private readonly codeFillFailed: SidePanelCodeFillOutcome = {
     kind: SidePanelCodeFillKind.FillFailed,
+  }
+  private readonly addAuthenticatorFailed: SidePanelAddAuthenticatorOutcome = {
+    kind: SidePanelAddAuthenticatorKind.Failed,
   }
 
   constructor(
@@ -403,6 +414,32 @@ export class SidePanelSiteClient {
     return Effect.runPromise(
       this.request(message).pipe(
         Effect.flatMap((reply) => this.codeFillOutcome(reply)),
+      ),
+    )
+  }
+
+  /** Starts the active tab's "Add 2FA from this page" in its page widget. */
+  addAuthenticator(
+    selection: SidePanelWindowSelection,
+  ): Promise<SidePanelAddAuthenticatorOutcome> {
+    const message: SidePanelAddAuthenticatorMessage = {
+      type: SidePanelAuthenticatorSetupMessageType.Add,
+      payload: { windowId: selection.windowId },
+    }
+    return Effect.runPromise(
+      this.request(message).pipe(
+        Effect.flatMap((reply) => {
+          switch (reply.kind) {
+            case SidePanelRuntimeReplyKind.Unavailable:
+              return Effect.succeed(this.addAuthenticatorFailed)
+            case SidePanelRuntimeReplyKind.Delivered:
+              return SidePanelAuthenticatorSetupMessages.decodeOutcome(
+                reply.response,
+              ).pipe(
+                Effect.catch(() => Effect.succeed(this.addAuthenticatorFailed)),
+              )
+          }
+        }),
       ),
     )
   }

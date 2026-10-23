@@ -21,3 +21,24 @@ export const IN_PAGE_SURFACE_TOKENS = `
       --nk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --nk-cut: 18px;
 `
+
+/**
+ * Where an in-page surface mounts. A native modal dialog (`showModal()`)
+ * renders in the browser's top layer and makes everything outside it inert,
+ * so a surface under the root element would sit beneath the dialog and take
+ * no clicks. While one is open, the surface mounts inside the topmost modal
+ * dialog; its fixed position still follows the viewport.
+ */
+class InPageSurfaceMount {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  parent(): Element {
+    const modals = Array.from(
+      this.browser.document.querySelectorAll('dialog'),
+    ).filter((dialog) => dialog.matches(':modal'))
+    const [topmost = this.browser.document.documentElement] = modals.slice(-1)
+    return topmost
+  }
+}
+
+export const inPageSurfaceMount = new InPageSurfaceMount(globalThis)

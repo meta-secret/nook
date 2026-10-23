@@ -8,6 +8,7 @@ import type {
   SiteSecretItemId,
   SiteSecretListing,
   SiteSecretListingSummary,
+  SiteSecretPageOffer,
   SiteSecretRow,
   SiteSecretSection,
   SiteSecretSectionContent,
@@ -81,9 +82,15 @@ type EmptySummaryFields = {
   readonly message_key: BoundedTextSchema
   readonly hint: Schema.Codec<SiteSecretEmptyHint>
 }
+type AbsentOfferFields = { readonly kind: Schema.Codec<'Absent'> }
+type AddAuthenticatorOfferFields = {
+  readonly kind: Schema.Codec<'AddAuthenticator'>
+  readonly label_key: BoundedTextSchema
+}
 type ListingFields = {
   readonly summary: Schema.Codec<SiteSecretListingSummary>
   readonly sections: Schema.Codec<SiteSecretSection[]>
+  readonly page_offer: Schema.Codec<SiteSecretPageOffer>
 }
 
 /**
@@ -194,6 +201,14 @@ export class SiteSecretListingCodec {
       Schema.Struct(SiteSecretListingCodec.absentHintFields),
     ]),
   }
+  private static readonly absentOfferFields: AbsentOfferFields = {
+    kind: Schema.Literal('Absent'),
+  }
+  private static readonly addAuthenticatorOfferFields: AddAuthenticatorOfferFields =
+    {
+      kind: Schema.Literal('AddAuthenticator'),
+      label_key: SiteSecretListingCodec.key,
+    }
   private static readonly listingFields: ListingFields = {
     summary: Schema.Union([
       Schema.Struct(SiteSecretListingCodec.listedSummaryFields),
@@ -202,6 +217,10 @@ export class SiteSecretListingCodec {
     sections: Schema.mutable(
       Schema.Array(Schema.Struct(SiteSecretListingCodec.sectionFields)),
     ),
+    page_offer: Schema.Union([
+      Schema.Struct(SiteSecretListingCodec.absentOfferFields),
+      Schema.Struct(SiteSecretListingCodec.addAuthenticatorOfferFields),
+    ]),
   }
 
   private static readonly itemFields: ItemFields = {

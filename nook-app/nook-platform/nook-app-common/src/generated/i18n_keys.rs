@@ -741,6 +741,11 @@ pub const EXTENSION_ACTION_OPENS_NEW_TAB: &str = "extension.action.opens_new_tab
 pub const EXTENSION_ACTION_OTHER_IDENTITY: &str = "extension.action.other_identity";
 pub const EXTENSION_ACTION_REFRESH: &str = "extension.action.refresh";
 pub const EXTENSION_ACTION_REOPEN_HINT: &str = "extension.action.reopen_hint";
+pub const EXTENSION_ACTION_SITE_ADD_AUTHENTICATOR: &str = "extension.action.site_add_authenticator";
+pub const EXTENSION_ACTION_SITE_ADD_AUTHENTICATOR_MISSING: &str =
+    "extension.action.site_add_authenticator_missing";
+pub const EXTENSION_ACTION_SITE_ADD_AUTHENTICATOR_STARTED: &str =
+    "extension.action.site_add_authenticator_started";
 pub const EXTENSION_ACTION_SITE_EMPTY: &str = "extension.action.site_empty";
 pub const EXTENSION_ACTION_SITE_EMPTY_ANY: &str = "extension.action.site_empty_any";
 pub const EXTENSION_ACTION_SITE_EMPTY_HINT: &str = "extension.action.site_empty_hint";

@@ -275,11 +275,19 @@ describe('side panel browser runtime', () => {
     new VaultRevisionSignal(serviceWorker).raise()
     await delivered()
     expect(changes).toEqual([SidePanelChangeKind.VaultChanged])
+    // A page that starts showing an authenticator setup lists the site again.
+    new VaultRevisionSignal(serviceWorker).raisePageChanged()
+    await delivered()
+    expect(changes).toEqual([
+      SidePanelChangeKind.VaultChanged,
+      SidePanelChangeKind.PageChanged,
+    ])
+    changes.splice(0)
 
     release()
     new VaultRevisionSignal(serviceWorker).raise()
     await delivered()
-    expect(changes).toEqual([SidePanelChangeKind.VaultChanged])
+    expect(changes).toEqual([])
     serviceWorker.close()
     elsewhere.close()
   })

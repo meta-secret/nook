@@ -56,6 +56,7 @@ import {
   loginSaveInteraction,
 } from './autofill/login-save'
 import { removeScannedWidget } from './autofill/message-router'
+import { sidePanelPageChangeNotice } from './autofill/side-panel-page-authenticator-setup'
 import {
   AuthenticationDiagnosticAvailability,
   AuthenticationDiagnosticGate,
@@ -222,6 +223,7 @@ export class AuthenticationScanRenderLifecycle {
       )
     )
       return AuthenticationScanOutcome.Stale
+    sidePanelPageChangeNotice.observe(setupSnapshot.observation)
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHintsRequest: Parameters<

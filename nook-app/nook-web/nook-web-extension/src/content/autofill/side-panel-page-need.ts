@@ -1,8 +1,12 @@
 import type { AuthenticationWorkflowMatch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  AuthenticationEnrollmentWorkflowMatchResponseKind,
   CompanionWasmSessionMessageType,
   type CompanionWasmRuntimeMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-forms'
+import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
+import { pageQrCapture } from '../../lib/page-qr-capture'
 import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
@@ -72,10 +76,68 @@ export class CompanionSidePanelPageNeed implements SidePanelPageNeedSource {
   }
 }
 
+/** Asks Rust whether a page without a selected form shows an authenticator setup. */
+export interface SidePanelPageSetupSource {
+  setupWorkflow(): Promise<AuthenticationWorkflowMatch>
+}
+
+/**
+ * A setup dialog often has no form at all. Like Pilot's scan, this reads
+ * only the pre-consent setup observation and recovery copy, never a QR
+ * payload or setup key, and lets Rust match the enrollment workflow.
+ */
+export class CompanionSidePanelPageSetup implements SidePanelPageSetupSource {
+  private readonly noMatch: AuthenticationWorkflowMatch = { kind: 'no-match' }
+
+  async setupWorkflow(): Promise<AuthenticationWorkflowMatch> {
+    const setup =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    switch (setup.observation) {
+      case 'absent':
+        return this.noMatch
+      case 'present':
+        break
+    }
+    await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
+    const message: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch,
+      payload: {
+        authenticatorSetupHint: true,
+        backupCodesCopy:
+          recoveryCopyObservation.authenticationRecoveryEvidence().copy,
+        manualCheckpointPresent:
+          passwordFieldDiscovery.pageHasManualCheckpoint(document),
+      },
+      origin: location.origin,
+    }
+    const delivery = await sendCompanionWasmRuntimeMessage(globalThis, message)
+    switch (delivery.kind) {
+      case CompanionWasmRuntimeDeliveryKind.Unavailable:
+        throw new Error('Authenticator setup match unavailable.')
+      case CompanionWasmRuntimeDeliveryKind.Delivered:
+        break
+    }
+    const response = delivery.response
+    switch (true) {
+      case typeof response === 'object' &&
+        !!response &&
+        'kind' in response &&
+        response.kind ===
+          AuthenticationEnrollmentWorkflowMatchResponseKind.Matched &&
+        'snapshot' in response:
+        return { kind: 'matched', snapshot: response.snapshot }
+      case true:
+      default:
+        return this.noMatch
+    }
+  }
+}
+
 /** The page discovery and the Rust page-need decision a query reads. */
 export interface SidePanelPageNeedCollaborators {
   readonly pages: SidePanelPageWorkflowSource
   readonly needs: SidePanelPageNeedSource
+  readonly setups: SidePanelPageSetupSource
 }
 
 export enum SidePanelPageNeedReception {
@@ -145,10 +207,10 @@ export class SidePanelPageNeedReceiver {
         }
         return this.collaborators.needs.pageNeed(matched)
       }
-      case SidePanelPageWorkflowKind.None: {
-        const noMatch: AuthenticationWorkflowMatch = { kind: 'no-match' }
-        return this.collaborators.needs.pageNeed(noMatch)
-      }
+      case SidePanelPageWorkflowKind.None:
+        return this.collaborators.setups
+          .setupWorkflow()
+          .then((setup) => this.collaborators.needs.pageNeed(setup))
       case SidePanelPageWorkflowKind.Unavailable: {
         const unavailable: SidePanelPageNeedReply = {
           kind: SidePanelPageNeedReplyKind.Unavailable,
@@ -196,6 +258,7 @@ class SidePanelPageNeedAnswer {
 const sidePanelPageNeedCollaborators: SidePanelPageNeedCollaborators = {
   pages: new SidePanelPageWorkflowDiscovery(),
   needs: new CompanionSidePanelPageNeed(),
+  setups: new CompanionSidePanelPageSetup(),
 }
 
 export const sidePanelPageNeed = new SidePanelPageNeedReceiver(
