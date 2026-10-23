@@ -81,7 +81,7 @@ class DockerizedRustBuildKitContract {
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
     expect(workflow).toContain(
-      "suite: [web, extension-1, extension-2, extension-3]",
+      'suite: ${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
     );
     expect(
       workflow.match(

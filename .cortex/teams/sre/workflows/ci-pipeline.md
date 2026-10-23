@@ -61,6 +61,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Independent jobs prepare browser artifacts and verify source, tests, coverage
   and heavy gates. Browser jobs wait only for the artifact producer.
 - Full browser validation uses independent web and three extension-shard jobs.
+- Requested research E2E runs in the existing web job; research-only validation
+  selects that job without the ordinary web or extension suites.
 - The final `PR validation / Verify and preview` job joins scope, both producers
   and every selected browser result before preview.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
@@ -324,12 +326,12 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 **Browser-only routing:**
 
 - `NOOK_BROWSER_RUNS_ON` selects `nook-k0s-browser` for these trusted consumers.
-- PR full-browser jobs consume the producer's immutable `browser.tar`.
+- PR full-browser and selected research jobs consume the producer's immutable `browser.tar`.
 - Main web and extension jobs consume their prepared image.
 - Main's disabled UI-demo job retains browser-only placement for later re-enable.
 - `e2e-pr.yml` consumes its prepared browser image.
 - Remote's explicit `ci-pr-e2e-suite` consumer uses the browser-only pool.
-- PR preparation, including focused auth and research checks, stays build-capable.
+- PR preparation, including focused auth and research source checks/build, stays build-capable.
 - Final preview, generic Remote runtime tasks, release, and research deploy jobs
   retain mixed placement because their existing paths are not browser-only.
 
@@ -412,7 +414,11 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
 - The browser branch exports production artifacts as a tar archive when built.
   It copies them into a separate checkout under `PR_ARTIFACT_DIR/runtime`.
   Browser tests never mutate the original checkout while BuildKit reads it.
-- The producer retains focused authentication and requested research checks.
+- The producer retains focused authentication and requested research format,
+  check and build commands. Research E2E runs in the existing web matrix slot
+  with its own 10-minute step budget, unchanged tests, retries and worker policy.
+  Research-only validation selects only that slot and skips the ordinary web suite.
+  Main and local `web:research:verify` retain source checks followed by E2E.
   Full browser validation runs in a separate matrix after the producer succeeds.
   Its web job and three extension shards have separate filesystems and browser ports.
   Each extension shard uses all available logical CPUs for Playwright workers;
@@ -421,8 +427,8 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   Each browser job and the final preview job restore that immutable artifact.
 - The final job requires successful scope and verification. Artifact preparation
   must succeed when product validation is selected and be skipped otherwise.
-  The browser matrix must succeed for full product validation and be skipped
-  otherwise. Failed or cancelled branches block preview.
+  The browser matrix must succeed when full browser validation or research E2E
+  is selected, and be skipped otherwise. Failed or cancelled branches block preview.
 - Artifact import and preview deployment follow the complete validation join.
   For example, a failed static check blocks preview even if browser tests pass.
 - Product and requested research uploads run concurrently after validation.
@@ -680,7 +686,9 @@ authenticator-domain to 90 percent.
 
 - Each producer retains one checkout and one BuildKit connection.
 - Browser preparation overlaps source verification, tests and heavy gates.
-  Its upload waits for selected focused authentication and research checks.
+  Its upload waits for selected focused authentication and research source checks/build.
+  Full validation reuses its web job's artifact download for research E2E;
+  research-only validation adds one browser artifact download.
 - Producers can land on different node-local builders and repeat shared build
   dependencies. Native BuildKit decides reuse; no cross-node deduplication or
   timing improvement is guaranteed.

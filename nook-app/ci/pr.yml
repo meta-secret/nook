@@ -113,7 +113,11 @@ tasks:
           task --silent ci:pr:browser:auth
         fi
         if [ "${PR_RESEARCH:-false}" = true ]; then
-          task --silent web:research:verify
+          if [ "${PR_BROWSER_JOBS:-false}" = true ]; then
+            task --silent web:research:source
+          else
+            task --silent web:research:verify
+          fi
         fi
 
   ci:pr:browser:prepare:
