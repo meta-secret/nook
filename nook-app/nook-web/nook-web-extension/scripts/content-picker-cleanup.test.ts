@@ -1,5 +1,5 @@
 import { expect, mock, spyOn, test } from 'bun:test'
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Window } from 'happy-dom'
 import {
   LoginSaveNavigationMode,
@@ -27,6 +27,7 @@ import type {
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
+  AccountPickerAuthorizationLifecycle,
   AuthenticationWorkflowActivity,
   authentication_workflow_activity_progress,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -826,11 +827,35 @@ test('validates before publishing an authenticator picker and accepts its select
     await import('../src/content/autofill/runtime-message-adapter')
   const { AuthenticatorPickerOpenResponseKind } =
     await import('../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js')
+  const {
+    WebsiteAuthenticatorSelectedMessage,
+    WebsiteAuthenticatorSelectedMessageType,
+  } = await import('../src/lib/authenticator-picker-messages')
   const native = new NativeSaveCaptureFixture()
   native.install()
   pickerState.clearPendingAuthenticator()
   widgetState.busy = false
   widgetState.dismissed = false
+  const lifecycle = new AccountPickerAuthorizationLifecycle(crypto.randomUUID())
+  const authorizationGeneration = lifecycle.snapshot()
+  lifecycle.free()
+  const selected: WebsiteAuthenticatorSelectedMessage = {
+    type: WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
+    payload: {
+      origin: location.origin,
+      requestId: 'authenticator-order-request',
+      account: {
+        vaultStoreId: 'vault-1',
+        secretId: 'secret-1',
+        authorizationGeneration,
+      },
+    },
+  }
+  expect(
+    Effect.runSync(
+      Effect.result(WebsiteAuthenticatorSelectedMessage.decode(selected)),
+    )._tag,
+  ).toBe('Success')
   const validationEntered = Promise.withResolvers<void>()
   const validation =
     Promise.withResolvers<
@@ -911,19 +936,12 @@ test('validates before publishing an authenticator picker and accepts its select
     validation.resolve(LiveAuthenticationWorkflowDisposition.Current)
     await opening
     expect(open).toHaveBeenCalledTimes(1)
+    expect(pickerState.authenticator).toMatchObject({
+      kind: AuthenticatorPickerKind.Open,
+      request: { requestId: selected.payload.requestId },
+    })
     const acknowledged = mock(() => {})
-    routeAutofillMessage(
-      {
-        type: 'nook:website-authenticator-selected',
-        payload: {
-          origin: location.origin,
-          requestId: 'authenticator-order-request',
-          account: { vaultStoreId: 'vault-1', secretId: 'secret-1' },
-        },
-      },
-      { id: 'nook-extension' },
-      acknowledged,
-    )
+    routeAutofillMessage(selected, { id: 'nook-extension' }, acknowledged)
     expect(acknowledged).toHaveBeenCalledWith({ ok: true })
     expect(fill).toHaveBeenCalledTimes(1)
     expect(pickerState.authenticator.kind).toBe(AuthenticatorPickerKind.Closed)
