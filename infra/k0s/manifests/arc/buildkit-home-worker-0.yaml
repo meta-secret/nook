@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nook-buildkit-home-worker-0
+  namespace: arc-runners
+spec:
+  type: ClusterIP
+  internalTrafficPolicy: Cluster
+  selector:
+    app.kubernetes.io/name: nook-buildkit
+    statefulset.kubernetes.io/pod-name: nook-buildkit-0
+  ports:
+    - name: buildkit
+      port: 1234
+      targetPort: buildkit

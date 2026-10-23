@@ -448,7 +448,7 @@ class ArcManifestContract {
     if (admittedContract19.isErr()) return err(admittedContract19.error);
     const admittedContract20 = dockerSetup.requireAll([
       "driver remote",
-      "node-local BuildKit shard",
+      "Connect ARC Buildx to the selected BuildKit backend",
       "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ]);
     if (admittedContract20.isErr()) return err(admittedContract20.error);
@@ -711,7 +711,7 @@ class ArcManifestContract {
     ]);
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
-      "Publish from the already-selected node-local rootless BuildKit shard",
+      "Publish from the already-selected fixed rootless BuildKit backend",
       'cache_scope="nook-rust-wasm-deps-v6"',
       "mode=max,compression=zstd,timeout=10m",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",

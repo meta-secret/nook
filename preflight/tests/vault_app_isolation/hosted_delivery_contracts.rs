@@ -248,7 +248,7 @@ fn assert_docker_setup_contract(root: &Path) {
         "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
         "main-cache-only",
         "main-cache-only requires cache-write=false",
-        "Connect ARC Buildx to the node-local BuildKit shard",
+        "Connect ARC Buildx to the selected BuildKit backend",
         "--driver remote",
         "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ] {

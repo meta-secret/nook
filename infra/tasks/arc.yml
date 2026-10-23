@@ -586,7 +586,8 @@ tasks:
           exit 1
         fi
         sudo -n k0s kubectl apply --dry-run=client \
-          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" >/dev/null
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" \
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit-home-worker-0.yaml" >/dev/null
         sudo -n k0s kubectl apply --dry-run=client \
           -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml" >/dev/null
         sudo -n k0s kubectl apply --dry-run=client \
@@ -670,7 +671,8 @@ tasks:
           kubectl delete statefulset nook-buildkit \
             --namespace arc-runners --cascade=orphan --wait=true
         fi
-        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" \
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit-home-worker-0.yaml"
         config_hash="$(kubectl get configmap nook-buildkit \
           --namespace arc-runners -o json | jq -cS '.data' | sha256sum | awk '{ print $1 }')"
         kubectl patch statefulset/nook-buildkit --namespace arc-runners \
