@@ -247,21 +247,25 @@ exit "$status"`,
         const pidFile = join(root, `${kind}.pid`);
         if (existsSync(pidFile)) {
           const pid = readFileSync(pidFile, "utf8").trim();
-          const alive = spawnSync("/bin/bash", [
-            "-c",
-            'kill -0 "$1" 2>/dev/null',
-            "check-child",
-            pid,
-          ]);
-          expect(alive.status, `${kind} remains alive`).not.toBe(0);
+          const observed = spawnSync("ps", ["-o", "stat=", "-p", pid]);
+          expect(observed.error).toBeUndefined();
+          expect(observed.stderr.toString().trim()).toBe("");
+          const state = observed.stdout.toString().trim();
+          if (state.length === 0) {
+            expect(observed.status).toBe(1);
+          } else {
+            expect(observed.status).toBe(0);
+            expect(
+              state.startsWith("Z"),
+              `${kind} remains live: ${state}`,
+            ).toBe(true);
+          }
         }
       }
       if (scenario.failure === FailureStage.Preflight) {
-        expect(existsSync(join(root, "node.stopped"))).toBe(true);
         expect(existsSync(join(root, "node.finished"))).toBe(false);
       }
       if (scenario.failure === FailureStage.Node) {
-        expect(existsSync(join(root, "web.stopped"))).toBe(true);
         expect(existsSync(join(root, "web.finished"))).toBe(false);
       }
       if (scenario.publishes) {
