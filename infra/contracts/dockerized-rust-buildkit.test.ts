@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { TrustedBuildkitSetupContract } from "./trusted-buildkit-setup.fixture";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -752,6 +753,14 @@ class DockerizedRustBuildKitContract {
 }
 
 const contract = new DockerizedRustBuildKitContract();
+const setupContract = new TrustedBuildkitSetupContract();
+
+test("trusted setup isolates login secrets and retains native backend failures", () => {
+  setupContract.credentialsAndBackend();
+});
+test("setup observations preserve fatal environment and optional telemetry boundaries", () => {
+  setupContract.observationsKeepFailureBoundaries();
+});
 
 test(
   "trusted ARC Rust validation consumes the producer through BuildKit",

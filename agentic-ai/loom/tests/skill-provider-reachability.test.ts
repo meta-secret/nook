@@ -569,8 +569,10 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   ).toEqual([]);
 });
 
-test('rejects drift in the dockerized Rust runtime contract digest', async () => {
-  const path = 'infra/contracts/dockerized-rust.test.ts';
+test.each([
+  'infra/contracts/dockerized-rust.test.ts',
+  'infra/contracts/trusted-buildkit-setup.fixture.ts',
+])('rejects drift in the runtime contract digest for %s', async (path) => {
   const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
   const request = { path, source };
   expect(() =>

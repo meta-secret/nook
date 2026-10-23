@@ -145,6 +145,10 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    'infra/contracts/trusted-buildkit-setup.fixture.ts',
+    '8a4c3e26dc8c16640231e394fb0c22e7c73e57d1fe36037d8547bc4bba3c2fd6',
+  ],
+  [
     'infra/contracts/main-producer-parallel.test.ts',
     '64236a01e57279f3e77dc099bc44d54b4e4c14f23f97042ba5555d5930855874',
   ],
