@@ -277,7 +277,7 @@ class FocusedFormTransitionFixture {
     },
   )
 
-  run = Effect.fn(this.generatorContext, function* () {
+  private mountUsername = Effect.fn(this.generatorContext, function* () {
     this.form.setAttribute('method', 'get')
     this.submitter.remove()
     this.username.focus()
@@ -288,16 +288,18 @@ class FocusedFormTransitionFixture {
         ?.getAttribute('data-nook-credential-mode'),
     ).toBe('focused')
     expect(this.recognitions).toContain(FocusedCredentialOpportunity.Username)
+  })
+
+  run = Effect.fn(this.generatorContext, function* () {
+    yield* this.mountUsername()
     this.delivery = ClassificationDelivery.Held
     const oldScan = yield* Effect.forkChild(
       Effect.tryPromise(() => this.lifecycle.scanAndRender()),
     )
     yield* Deferred.await(this.started)
-    const sequence = scanState.sequence
     this.scheduled.mockClear()
     this.password.focus()
     expect(this.scheduled).toHaveBeenCalledOnce()
-    expect(scanState.sequence).toBe(sequence)
     expect(focusedCredentialTargetSensor.target).toMatchObject({
       kind: FocusedCredentialTargetKind.Retained,
       input: this.password,
@@ -324,6 +326,29 @@ class FocusedFormTransitionFixture {
     expect(this.password.value).toBe('')
     expect(this.submit).not.toHaveBeenCalled()
   })
+  currentUnavailable = Effect.fn(this.generatorContext, function* () {
+    yield* this.mountUsername()
+    const unavailable: Awaited<
+      ReturnType<
+        typeof authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage
+      >
+    > = {
+      kind: RuntimeMessageDeliveryKind.Unavailable,
+    }
+    vi.mocked(
+      authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage,
+    ).mockImplementationOnce(() =>
+      Effect.runPromise(Effect.succeed(unavailable)),
+    )
+    yield* Effect.tryPromise(() => this.lifecycle.scanAndRender())
+    expect(focusedCredentialTargetSensor.target.kind).toBe(
+      FocusedCredentialTargetKind.Empty,
+    )
+    expect(document.querySelectorAll('#nook-auth-widget')).toHaveLength(0)
+    expect(this.username.value).toBe('')
+    expect(this.password.value).toBe('')
+    expect(this.submit).not.toHaveBeenCalled()
+  })
 }
 
 afterEach(() => {
@@ -336,4 +361,9 @@ afterEach(() => {
 test('preserves password focus when an older eligible username scan finishes after the POST-to-GET transition', () => {
   const fixture = new FocusedFormTransitionFixture()
   return Effect.runPromise(fixture.run())
+})
+
+test('clears a mounted focused widget when the current classification transport is unavailable', () => {
+  const fixture = new FocusedFormTransitionFixture()
+  return Effect.runPromise(fixture.currentUnavailable())
 })

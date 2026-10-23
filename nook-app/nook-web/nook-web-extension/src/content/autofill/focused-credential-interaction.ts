@@ -788,7 +788,13 @@ export class FocusedCredentialInteraction {
 }
 const sensorRequest: ConstructorParameters<
   typeof FocusedCredentialTargetSensor
->[0] = { document, schedule: () => scanState.schedule() }
+>[0] = {
+  document,
+  schedule: () => {
+    scanState.invalidatePendingScan()
+    scanState.schedule()
+  },
+}
 export const focusedCredentialTargetSensor = new FocusedCredentialTargetSensor(
   sensorRequest,
 )
