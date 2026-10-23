@@ -150,7 +150,11 @@ repository preflight before building. Only the web producer publishes preflight
 cache, overlapping that export with Node tests and web artifact verification on
 the same node-local shard that verified it. Native publishes only its verified
 native graph. The web producer joins every started child even on verification
-or image-publication failure. Separate preflight and WASM outcomes feed required
+or image-publication failure. Its three background tasks forward output live
+through `tee` while retaining their existing runner-temporary logs. Each join
+waits for both the task and logger; a task failure retains its original exit
+status, and a logger failure also fails an otherwise successful child.
+Separate preflight and WASM outcomes feed required
 assertions after artifact upload. Publication failures fail the producer job;
 explicit verification outputs still allow tests of its verified browser image.
 Deployment requires successful producers as well as all test consumers.

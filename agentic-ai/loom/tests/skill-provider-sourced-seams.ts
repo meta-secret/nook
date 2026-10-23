@@ -154,7 +154,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/main-producer-parallel.test.ts',
-    '64236a01e57279f3e77dc099bc44d54b4e4c14f23f97042ba5555d5930855874',
+    '3d9af89bc61d15042b5c1b58f4d3b472bb045891eede2021257318a31ded3337',
   ],
   [
     'infra/contracts/pr-preview-parallel.test.ts',
