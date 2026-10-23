@@ -120,6 +120,8 @@ export type DemoChromeStubArgs = {
   unavailableLoginPilotFlow?: boolean
   /** Stateful post-submit save-offer replies for Pilot login capture. */
   savePilotFlow?: boolean
+  /** Stage the post-submit save offer as a captured sign-up. */
+  savePilotSignup?: boolean
   /** Signup generate-password Pilot replies. */
   generatePilotFlow?: boolean
   /** Pilot-gated Create/Use passkey proposal replies. */
@@ -173,6 +175,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginPilotFlow = false,
     unavailableLoginPilotFlow = false,
     savePilotFlow = false,
+    savePilotSignup = false,
     generatePilotFlow = false,
     passkeyPilotFlow = false,
     enrollPilotFlow = false,
@@ -261,7 +264,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           source: 'SubmittedLogin',
           submitted_at: capture.submitted_at,
           submitted_url: capture.submitted_url,
-          captured_workflow: authenticationWorkflow.loginKind,
+          captured_workflow: savePilotSignup
+            ? authenticationWorkflow.signupKind
+            : authenticationWorkflow.loginKind,
           initial_auth_fields: 'Present',
           controls: capture.controls,
         },
