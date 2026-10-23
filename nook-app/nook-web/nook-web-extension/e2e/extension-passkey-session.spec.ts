@@ -25,6 +25,7 @@ import {
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
+  stopExtensionServiceWorker,
   leaveFirstRunReady,
   waitForExtensionPairingReady,
   waitForNewPage,
@@ -964,19 +965,10 @@ test('reuses the offscreen session after the service worker restarts', async ({
     const popupPage = await setupPasskeyExtensionPopup(context)
     const worker = await getServiceWorker(context)
     const cdp = await context.newCDPSession(popupPage)
-    const { targetInfos } = await cdp.send('Target.getTargets')
-    const workerTarget = targetInfos.find(
-      (target) =>
-        target.type === 'service_worker' && target.url === worker.url(),
-    )
-    if (!workerTarget) {
-      throw new Error('Expected the active extension service worker target')
-    }
-    await expect(
-      cdp.send('Target.closeTarget', {
-        targetId: workerTarget.targetId,
-      }),
-    ).resolves.toEqual({ success: true })
+    await stopExtensionServiceWorker({
+      worker,
+      cdp,
+    })
 
     await popupPage.reload()
     await expect

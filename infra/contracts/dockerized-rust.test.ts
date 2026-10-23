@@ -64,12 +64,17 @@ class DockerizedRustContract {
       uses: z.string().optional(),
       if: z.string().optional(),
       "continue-on-error": z.boolean().optional(),
+      "timeout-minutes": z.number().optional(),
       env: z.record(z.string(), z.string()).optional(),
     });
     const jobContract = z.object({
       steps: z.array(stepContract),
       needs: z.array(z.string()).optional(),
       permissions: z.record(z.string(), z.string()).optional(),
+      if: z.string().optional(),
+      strategy: z
+        .object({ matrix: z.object({ suite: z.string() }) })
+        .optional(),
     });
     const workflow = z
       .object({
@@ -98,6 +103,50 @@ class DockerizedRustContract {
     expect(jobContract.parse(workflow.jobs.browser).needs).toEqual([
       "scope",
       "prepare",
+    ]);
+    const browser = jobContract.parse(workflow.jobs.browser);
+    const browserRequired =
+      "${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}";
+    expect(browser.if).toBe(browserRequired);
+    expect(browser.strategy?.matrix.suite).toBe(
+      '${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
+    );
+    const fullSuite = stepContract.parse(
+      browser.steps.find((step) => step.name === "Run isolated browser suite"),
+    );
+    expect(fullSuite.if).toBe("inputs.full_e2e_requested");
+    const researchSuite = stepContract.parse(
+      browser.steps.find((step) => step.name === "Run research browser tests"),
+    );
+    expect(researchSuite.if).toBe(
+      "matrix.suite == 'web' && needs.scope.outputs.research == 'true'",
+    );
+    expect(researchSuite.run).toBe("task --silent web:research:e2e");
+    expect(researchSuite["timeout-minutes"]).toBe(10);
+    expect(researchSuite["continue-on-error"]).not.toBe(true);
+    const researchTaskContract = z.object({
+      cmds: z.array(z.union([z.string(), z.object({ task: z.string() })])),
+    });
+    const researchTasks = z
+      .object({
+        tasks: z.object({
+          "web:research:verify": researchTaskContract,
+          "web:research:source": researchTaskContract,
+          "web:research:e2e": researchTaskContract,
+        }),
+      })
+      .parse(Bun.YAML.parse(this.read(".task/ci-workflows.yml")));
+    expect(researchTasks.tasks["web:research:verify"].cmds).toEqual([
+      { task: "web:research:source" },
+      { task: "web:research:e2e" },
+    ]);
+    expect(researchTasks.tasks["web:research:source"].cmds).toEqual([
+      "bun run format:check",
+      "bun run check",
+      "bun run build",
+    ]);
+    expect(researchTasks.tasks["web:research:e2e"].cmds).toEqual([
+      "bun run test:e2e",
     ]);
     expect(jobContract.parse(workflow.jobs.validation).needs).toEqual([
       "scope",
@@ -133,8 +182,7 @@ class DockerizedRustContract {
       PREPARE_REQUIRED: "${{ needs.scope.outputs.validation == 'true' }}",
       PREPARE_RESULT: "${{ needs.prepare.result }}",
       BROWSER_RESULT: "${{ needs.browser.result }}",
-      BROWSER_REQUIRED:
-        "${{ inputs.full_e2e_requested && needs.scope.outputs.validation == 'true' }}",
+      BROWSER_REQUIRED: browserRequired,
     });
     const guardCommand = z.string().parse(guardStep.run);
     for (const selected of [

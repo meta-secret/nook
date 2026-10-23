@@ -20,7 +20,8 @@ explicit handoff.
 - Wait for the complete terminal check wave.
 - Preserve the exact required check `PR validation / Verify and preview`.
   Its final result requires the producer and every selected browser job to pass
-  before preview. A skipped full-browser matrix is valid only when not selected.
+  before preview. A skipped browser matrix is valid only when neither full
+  browser validation nor research E2E is selected.
 - When changing Main aggregation, validate the
   [producer and consumer failure gates](../../teams/sre/workflows/ci-pipeline.md)
   in hosted CI. Removing a status-only job must preserve its required assertion.

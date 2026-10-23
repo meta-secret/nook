@@ -145,6 +145,14 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    'infra/contracts/dockerized-rust-buildkit.test.ts',
+    '31e353e409e70f7e4b5fb046f360c715c258bd1cb9e4c420bfe64639e8ddd825',
+  ],
+  [
+    'infra/contracts/trusted-buildkit-setup.fixture.ts',
+    '47503151f6a118e0989837a32225732d366560bfd230a1b4bbf1307f3738e9a5',
+  ],
+  [
     'infra/contracts/main-producer-parallel.test.ts',
     '64236a01e57279f3e77dc099bc44d54b4e4c14f23f97042ba5555d5930855874',
   ],
@@ -178,7 +186,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '65ed0b70ca16c4aba53e5f73cfae0661e2cbdab2abe926238fb8aa602914969b',
+    'e963ef19dc919504e0e8d1b38ae7b976843ef70b849b68fe636f9307cfb52a3c',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',
@@ -198,7 +206,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/with-remote-buildkit.sh',
-    '1132f276fed615ce28a10a8a869c54d7b68c9174b2c2bb12865d9f5277042e38',
+    '71ec21b2beb1d0631531ab8c6bfa6f273ec4b04815ef4279ef31cd32400f4d1b',
   ],
   [
     'infra/contracts/services-network-repair-test.ts',

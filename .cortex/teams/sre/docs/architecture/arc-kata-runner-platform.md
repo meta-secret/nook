@@ -229,8 +229,22 @@ differs. Rise-S-2 remains in that storage inventory even though ordinary build
 producers are excluded from its workload pool. Separation does not delete or
 move its cached layers.
 
-The node-local Service uses `internalTrafficPolicy: Local`. A runner therefore
-reaches only the BuildKit endpoint on its own node.
+The default Service uses `internalTrafficPolicy: Local`, so its clients reach
+only the BuildKit endpoint on their own node. PR artifact preparation and
+verification retain this default. The dormant `nook-buildkit-home-worker-0`
+ClusterIP manifest uses `Cluster` traffic policy and a Pod-name selector for
+`nook-buildkit-0`; broad `arc:deploy` does not create it. Main, legacy callers and
+hosted jobs retain their existing backend.
+
+### Backend selection
+
+The setup input accepts only `local` or `home-worker-0`. The explicit home choice
+requires a trusted same-repository, non-Dependabot PR on ARC. Setup, ordinary
+BuildKit consumers and portable-proof reconstruction retain the selected enum
+and exact Service address; mismatched pairs fail without fallback. Explicit home
+also requires exactly one native worker hostname, `nook-buildkit-0`. Local may
+legitimately reach worker 0 when the client itself runs on home. This hostname
+check does not establish the Pod's physical node or PVC binding.
 
 The cache survives:
 
@@ -241,6 +255,34 @@ The cache survives:
 
 A node loss removes only that node's local shard. Zot remains the portable
 fallback.
+
+## Fixed artifact backend rollout
+
+The fixed-home experiment is inactive: the PR opt-in and broad deployment's
+Service creation are removed. The finite binding and manifest remain available
+for a future separately reviewed experiment. Any future workflow opt-in requires
+the approved Service rollout and native readback first; it is not a measured
+speed improvement. Do not run broad ARC apply or placement reconciliation to
+install this Service while a build-host quarantine is active.
+
+- Before applying only `infra/k0s/manifests/arc/buildkit-home-worker-0.yaml`, verify
+  Pod `nook-buildkit-0` is Ready on `bynull-servo`, uses the original Bound
+  `buildkit-state-nook-buildkit-0` claim and home PV, and exposes native worker 0.
+  Preserve every active build-host quarantine and absent workload label, home's absent
+  container-job capability, healthy JetStream quorum and the 35/16/4/10 ceilings.
+- Apply only that manifest through the existing controller's `k0s kubectl` route.
+  Verify the Service selector and sole Ready endpoint resolve to that same Pod
+  before publishing the workflow opt-in. No service-account, credential or
+  NetworkPolicy expansion is part of this change.
+- Use the next natural PR artifact job as the canary. Record its payload node,
+  selected endpoint and native worker, while verification retains Local routing.
+  Measure context transfer, raw artifact export, upload/download and the complete
+  PR critical path. Home builds share CPU, memory and I/O with general jobs and
+  stateful workloads; the cross-node transfer can erase any build-time gain.
+- If the canary fails or gives no acceptable net improvement, remove the artifact
+  job's opt-in for subsequent runs. Allow existing clients to finish before any
+  optional deletion of the new Service. Do not cancel bound jobs, remove caches
+  or PVs, restore home container capability, or readmit Rise1 as rollback.
 
 ## Cache distribution
 

@@ -382,6 +382,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # so the final report combines all portable crates while preserving cacheable dependency coverage.
 # The same run also bakes structured coverage evidence for BuildKit cache-only
 # consumers; no PR-side transport or report step reruns the Rust tests.
+# Remove terminal instrumented intermediates only after every report and health check.
+# Earlier dependency/coverage snapshots remain reachable in the mode=max cache.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/coverage/nook-core \
@@ -395,7 +397,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
-    && nook-sccache-report native-core-coverage
+    && nook-sccache-report native-core-coverage \
+    && rm -rf target/llvm-cov-target
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-platform/nook-wasm nook-wasm

@@ -5,7 +5,9 @@ import {
   chromium,
   expect,
   type BrowserContext,
+  type CDPSession,
   type Page,
+  type Worker,
 } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -662,6 +664,31 @@ export async function getServiceWorker(context: BrowserContext) {
   const [serviceWorker] = context.serviceWorkers()
   if (serviceWorker) return serviceWorker
   return await context.waitForEvent('serviceworker', { timeout: 15_000 })
+}
+
+type ExtensionServiceWorkerStop = {
+  readonly worker: Worker
+  readonly cdp: CDPSession
+}
+
+export async function stopExtensionServiceWorker(
+  request: ExtensionServiceWorkerStop,
+): Promise<void> {
+  const { worker, cdp } = request
+  const { targetInfos } = await cdp.send('Target.getTargets')
+  const workerTargets = targetInfos.filter(
+    (target) => target.type === 'service_worker',
+  )
+  expect(workerTargets.map((target) => target.url)).toEqual([worker.url()])
+  // This fresh profile has only the extension worker. The popup's storage
+  // partition owns the stop, whose reply waits for native worker termination;
+  // a stopped worker's retained DevTools target need not emit Worker.close.
+  await cdp.send('ServiceWorker.enable')
+  try {
+    await expect(cdp.send('ServiceWorker.stopAllWorkers')).resolves.toEqual({})
+  } finally {
+    await cdp.send('ServiceWorker.disable')
+  }
 }
 
 export async function launchExtensionContext(userDataDir: string) {

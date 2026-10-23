@@ -1,6 +1,9 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { z } from "zod";
+import { TrustedBuildkitSetupContract } from "./trusted-buildkit-setup.fixture";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -21,6 +24,172 @@ interface DockerfileStageRange {
 
 class DockerizedRustBuildKitContract {
   private readonly root = resolve(import.meta.dir, "../..");
+
+  fixedArtifactBackend(): void {
+    const setup = this.read(".github/actions/nook-docker-setup/action.yml");
+    const action = z
+      .object({
+        inputs: z.record(
+          z.string(),
+          z.object({ default: z.string().optional() }).passthrough(),
+        ),
+        runs: z.object({
+          steps: z.array(
+            z
+              .object({
+                name: z.string().optional(),
+                run: z.string().optional(),
+              })
+              .passthrough(),
+          ),
+        }),
+      })
+      .parse(Bun.YAML.parse(setup));
+    expect(action.inputs["arc-buildkit-backend"]?.default).toBe("local");
+    const inputGuard = action.runs.steps.find(
+      (step) => step.name === "Validate fixed ARC BuildKit backend",
+    )?.run;
+    if (!inputGuard) throw new Error("fixed backend input guard is missing");
+    expect(setup).toContain(
+      "startsWith(runner.name, 'nook-k0s-') && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'",
+    );
+    for (const [backend, allowed, success] of [
+      ["local", "false", true],
+      ["home-worker-0", "true", true],
+      ["home-worker-0", "false", false],
+      ["other", "true", false],
+    ] as const) {
+      const result = spawnSync("bash", ["-c", inputGuard], {
+        env: {
+          ...process.env,
+          REQUESTED_BACKEND: backend,
+          HOME_BACKEND_ALLOWED: allowed,
+        },
+      });
+      expect(result.status === 0).toBe(success);
+    }
+    const localAddress =
+      "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234";
+    const homeAddress =
+      "tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234";
+    for (const path of [
+      ".github/scripts/with-remote-buildkit.sh",
+      ".github/scripts/verify-wasm-gha-cache.sh",
+    ]) {
+      const source = this.read(path);
+      const guard = source.match(
+        /case "\$\{NOOK_BUILDKIT_BACKEND:-local\}:\$\{NOOK_BUILDKIT_ADDR:-\}" in[\s\S]*?esac/,
+      )?.[0];
+      if (!guard)
+        throw new Error(`fixed backend address guard missing in ${path}`);
+      for (const [backend, address, success] of [
+        ["", localAddress, true],
+        ["local", localAddress, true],
+        ["home-worker-0", homeAddress, true],
+        ["", homeAddress, false],
+        ["local", homeAddress, false],
+        ["home-worker-0", localAddress, false],
+        ["other", homeAddress, false],
+        ["home-worker-0", "tcp://other:1234", false],
+      ] as const) {
+        const result = spawnSync("bash", ["-c", guard], {
+          env: {
+            ...process.env,
+            NOOK_BUILDKIT_BACKEND: backend,
+            NOOK_BUILDKIT_ADDR: address,
+          },
+        });
+        expect(result.status === 0).toBe(success);
+      }
+    }
+    for (const source of [
+      setup,
+      this.read(".github/scripts/with-remote-buildkit.sh"),
+      this.read(".github/scripts/verify-wasm-gha-cache.sh"),
+    ]) {
+      const workerGuard = source.match(
+        /awk '(\n\s+\$1 == "org\.mobyproject\.buildkit\.worker\.hostname:"[\s\S]*?)\n\s*'/,
+      )?.[1];
+      if (!workerGuard) throw new Error("native worker hostname guard missing");
+      for (const [inspection, success] of [
+        [
+          "Labels:\n org.mobyproject.buildkit.worker.hostname:         nook-buildkit-0\n",
+          true,
+        ],
+        [
+          "\torg.mobyproject.buildkit.worker.hostname:\tnook-buildkit-0\n",
+          true,
+        ],
+        ["", false],
+        ["org.mobyproject.buildkit.worker.hostname: nook-buildkit-2\n", false],
+        [
+          "org.mobyproject.buildkit.worker.hostname: nook-buildkit-0\norg.mobyproject.buildkit.worker.hostname: nook-buildkit-0\n",
+          false,
+        ],
+      ] as const) {
+        const result = spawnSync("awk", [workerGuard], { input: inspection });
+        expect(result.status === 0).toBe(success);
+      }
+    }
+    const wrapper = this.read(".github/scripts/with-remote-buildkit.sh");
+    const conditional = wrapper.match(
+      /if \[ "\$\{NOOK_BUILDKIT_BACKEND:-local\}" = home-worker-0 \]; then[\s\S]*?\n {2}fi/,
+    )?.[0];
+    if (!conditional) throw new Error("home-only worker guard missing");
+    for (const backend of ["local", "home-worker-0"]) {
+      const result = spawnSync(
+        "bash",
+        ["-c", `guard() { ${conditional}; }; guard`],
+        {
+          env: {
+            ...process.env,
+            NOOK_BUILDKIT_BACKEND: backend,
+            inspection:
+              "org.mobyproject.buildkit.worker.hostname: nook-buildkit-0\n",
+          },
+        },
+      );
+      expect(result.status).toBe(0);
+    }
+    const service = Bun.YAML.parse(
+      this.read("infra/k0s/manifests/arc/buildkit-home-worker-0.yaml"),
+    );
+    expect(service).toEqual({
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: {
+        name: "nook-buildkit-home-worker-0",
+        namespace: "arc-runners",
+      },
+      spec: {
+        type: "ClusterIP",
+        internalTrafficPolicy: "Cluster",
+        selector: {
+          "app.kubernetes.io/name": "nook-buildkit",
+          "statefulset.kubernetes.io/pod-name": "nook-buildkit-0",
+        },
+        ports: [{ name: "buildkit", port: 1234, targetPort: "buildkit" }],
+      },
+    });
+    const arcTasks = this.read("infra/tasks/arc.yml");
+    expect(
+      arcTasks.match(
+        /-f "\$remote_dir\/infra\/k0s\/manifests\/arc\/buildkit-home-worker-0.yaml"/g,
+      ),
+    ).toHaveLength(1);
+    expect(arcTasks.split("\n  arc:deploy:\n")[1]).not.toContain(
+      "buildkit-home-worker-0.yaml",
+    );
+    const workflow = this.read(".github/workflows/pr.yml");
+    expect(workflow).not.toContain("arc-buildkit-backend:");
+    expect(workflow).not.toContain("home-worker-0");
+    expect(setup).toContain(
+      'echo "NOOK_BUILDKIT_BACKEND=$NOOK_BUILDKIT_BACKEND" >> "$GITHUB_ENV"',
+    );
+    expect(setup).toContain(
+      'echo "NOOK_BUILDKIT_ADDR=$NOOK_BUILDKIT_ADDR" >> "$GITHUB_ENV"',
+    );
+  }
 
   trustedRustConsumerUsesBuildKit(): void {
     const workflow = this.read(".github/workflows/pr.yml");
@@ -81,7 +250,7 @@ class DockerizedRustBuildKitContract {
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
     expect(workflow).toContain(
-      "suite: [web, extension-1, extension-2, extension-3]",
+      'suite: ${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
     );
     expect(
       workflow.match(
@@ -327,7 +496,9 @@ class DockerizedRustBuildKitContract {
       expect(bake).toContain(entry);
     }
     expect(bake).toContain("cache-to   = compile_foundation_cache_to");
-    expect(bake).toContain("mode=max,compression=zstd,timeout=20s");
+    expect(bake).toContain(
+      "mode=max,compression=zstd,force-compression=true,timeout=20s",
+    );
     expect(bake).not.toContain("ignore-error=true");
     const sourceTargetStart = bake.indexOf('target "build-compile"');
     const sourceTargetEnd = bake.indexOf("\n}", sourceTargetStart);
@@ -752,7 +923,19 @@ class DockerizedRustBuildKitContract {
 }
 
 const contract = new DockerizedRustBuildKitContract();
+const setupContract = new TrustedBuildkitSetupContract();
 
+test("trusted setup isolates login secrets and retains native backend failures", () => {
+  setupContract.credentialsAndBackend();
+});
+test("setup observations preserve fatal environment and optional telemetry boundaries", () => {
+  setupContract.observationsKeepFailureBoundaries();
+});
+
+test(
+  "PR retains Local while dormant fixed-backend guards remain enforced",
+  contract.fixedArtifactBackend.bind(contract),
+);
 test(
   "trusted ARC Rust validation consumes the producer through BuildKit",
   contract.trustedRustConsumerUsesBuildKit.bind(contract),

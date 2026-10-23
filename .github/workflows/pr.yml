@@ -304,11 +304,11 @@ jobs:
   browser:
     name: Browser tests (${{ matrix.suite }})
     needs: [scope, prepare]
-    if: ${{ inputs.full_e2e_requested && needs.scope.outputs.validation == 'true' }}
+    if: ${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}
     strategy:
       fail-fast: false
       matrix:
-        suite: [web, extension-1, extension-2, extension-3]
+        suite: ${{ fromJSON(inputs.full_e2e_requested && '["web","extension-1","extension-2","extension-3"]' || '["web"]') }}
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
@@ -352,9 +352,14 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           task --silent ci:pr:browser:restore PR_ARTIFACT_DIR="$RUNNER_TEMP/nook-pr-artifacts"
       - name: Run isolated browser suite
+        if: inputs.full_e2e_requested
         env:
           PR_BROWSER_SUITE: ${{ matrix.suite }}
         run: task --silent ci:pr:browser:suite
+      - name: Run research browser tests
+        if: matrix.suite == 'web' && needs.scope.outputs.research == 'true'
+        timeout-minutes: 10
+        run: task --silent web:research:e2e
       - name: Report failed extension browser context
         if: failure() && matrix.suite != 'web'
         run: |
@@ -402,7 +407,7 @@ jobs:
           PREPARE_REQUIRED: ${{ needs.scope.outputs.validation == 'true' }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
-          BROWSER_REQUIRED: ${{ inputs.full_e2e_requested && needs.scope.outputs.validation == 'true' }}
+          BROWSER_REQUIRED: ${{ needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true') }}
         run: |
           set -euo pipefail
           test "$SCOPE_RESULT" = success

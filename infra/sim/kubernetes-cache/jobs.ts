@@ -68,7 +68,7 @@ class JobsBuildCommandArguments {
     if (request.cacheExport.length > 0) {
       args.push(
         "--export-cache",
-        `type=registry,ref=${request.cacheExport},mode=max,image-manifest=true,oci-mediatypes=true`,
+        `type=registry,ref=${request.cacheExport},force-compression=true,mode=max,image-manifest=true,oci-mediatypes=true`,
       );
     }
     return args;

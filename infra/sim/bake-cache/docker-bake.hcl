@@ -78,7 +78,7 @@ base_cache_from = GHA_CACHE_ENABLED == "" || BASE_OWN_CACHE_ENABLED == "" ? [] :
 ]
 
 base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 // FALLBACK: exact git scope first, then content fingerprint, then trusted Main.
@@ -92,11 +92,11 @@ parent_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? 
 ]
 
 parent_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 parent_input_cache_to = INPUT_CACHE_WRITE_ENABLED != "" && INPUT_CACHE_CANDIDATE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:candidate-${RUST_DEPS_INPUT_FINGERPRINT}-${INPUT_CACHE_CANDIDATE},mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:candidate-${RUST_DEPS_INPUT_FINGERPRINT}-${INPUT_CACHE_CANDIDATE},force-compression=true,mode=max,timeout=5m",
 ] : []
 
 parent_input_candidate_cache_from = INPUT_CACHE_CANDIDATE != "" ? [
@@ -112,7 +112,7 @@ parent_nested_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED =
 ]
 
 parent_nested_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : NESTED_LEAF_EXACT_AVAILABLE != "" ? [
@@ -125,7 +125,7 @@ nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : NESTED_LEAF_EXACT_AVAILA
 ]
 
 nested_leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 consumer_cache_from = GHA_CACHE_ENABLED == "" ? [] : CONSUMER_EXACT_AVAILABLE != "" ? [
@@ -138,7 +138,7 @@ consumer_cache_from = GHA_CACHE_ENABLED == "" ? [] : CONSUMER_EXACT_AVAILABLE !=
 ]
 
 consumer_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 
@@ -157,7 +157,7 @@ leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : LEAF_EXACT_AVAILABLE != "" ? [
 ]
 
 leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,timeout=5m",
 ] : []
 
 // Short-chain: parent scope only (no leaf own-scope) — leaf RUN cannot restore.

@@ -327,6 +327,47 @@ fn wasm_browser_partitions_preserve_the_complete_instrumented_coverage_join() ->
     Ok(())
 }
 
+#[test]
+fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> anyhow::Result<()> {
+    let root = repository_root()?;
+    let product = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    let native = product
+        .split_once("FROM builder-core-deps AS builder-debug")
+        .and_then(|(_, tail)| tail.split_once("FROM scratch AS coverage-export"))
+        .map(|(stage, _)| stage)
+        .context("native coverage stage must exist")?;
+    let runs = dockerfile_run_instructions(native);
+    let terminal = runs
+        .last()
+        .context("native coverage must have a terminal RUN")?;
+    let cleanup = "&& rm -rf target/llvm-cov-target";
+    assert_eq!(product.matches(cleanup).count(), 1);
+    assert!(terminal.ends_with(cleanup));
+    assert_eq!(
+        terminal.lines().rev().nth(1),
+        Some("&& nook-sccache-report native-core-coverage \\")
+    );
+    for required in [
+        "&& cargo llvm-cov nextest --no-clean --profile ci -p nook-core",
+        "&& test \"$coverage_status\" -eq 0",
+        "/opt/nook/coverage/nook-core/summary.txt",
+        "/opt/nook/coverage/nook-core/summary.json",
+        "/opt/nook/coverage/nook-core/lcov.info",
+        "&& cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json",
+    ] {
+        let position = terminal.find(required).context(required.to_owned())?;
+        assert!(position < terminal.find(cleanup).context("cleanup must exist")?);
+    }
+    assert_eq!(native.matches("rm -rf").count(), 1);
+    for handoff in [
+        "COPY --from=builder-debug /opt/nook/coverage/nook-core/ /",
+        "COPY --from=builder-debug /opt/nook/coverage /coverage",
+    ] {
+        assert!(product.contains(handoff));
+    }
+    Ok(())
+}
+
 fn repository_root() -> anyhow::Result<PathBuf> {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

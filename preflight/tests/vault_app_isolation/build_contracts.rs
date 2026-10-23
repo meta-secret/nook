@@ -346,7 +346,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     for (path, invocation_count) in [
-        (".github/scripts/verify-wasm-gha-cache.sh", 4),
+        (".github/scripts/verify-wasm-gha-cache.sh", 5),
         (".github/scripts/with-healthy-buildkit.sh", 10),
         (".github/scripts/with-remote-buildkit.sh", 5),
         ("infra/tasks/bake-cache.yml", 15),
@@ -771,6 +771,7 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
 if [ "${FAIL_REMOTE_PROBE:-}" = 1 ] && [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
   exit 19
 fi
+printf '%s\n' 'org.mobyproject.buildkit.worker.hostname: nook-buildkit-0'
 "#,
     )?;
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
@@ -839,10 +840,11 @@ fi
         .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
+        .env("NOOK_BUILDKIT_BACKEND", "home-worker-0")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")
         .env(
             "NOOK_BUILDKIT_ADDR",
-            "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+            "tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234",
         )
         .output()?;
     assert_eq!(failed.status.code(), Some(19));

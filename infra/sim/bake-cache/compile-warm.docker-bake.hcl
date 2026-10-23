@@ -59,7 +59,7 @@ compile_cache_from = concat(
 )
 
 compile_source_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s",
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=20s",
 ] : []
 
 compile_solve_args = {

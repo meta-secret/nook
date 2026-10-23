@@ -448,7 +448,7 @@ class ArcManifestContract {
     if (admittedContract19.isErr()) return err(admittedContract19.error);
     const admittedContract20 = dockerSetup.requireAll([
       "driver remote",
-      "node-local BuildKit shard",
+      "Connect ARC Buildx to the selected BuildKit backend",
       "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ]);
     if (admittedContract20.isErr()) return err(admittedContract20.error);
@@ -610,8 +610,11 @@ class ArcManifestContract {
       "needs: [scope, prepare, verify, browser]",
       "if: ${{ always() }}",
       "fail-fast: false",
-      "suite: [web, extension-1, extension-2, extension-3]",
-      "inputs.full_e2e_requested && needs.scope.outputs.validation == 'true'",
+      'suite: ${{ fromJSON(inputs.full_e2e_requested && \'["web","extension-1","extension-2","extension-3"]\' || \'["web"]\') }}',
+      "needs.scope.outputs.validation == 'true' && (inputs.full_e2e_requested || needs.scope.outputs.research == 'true')",
+      "if: matrix.suite == 'web' && needs.scope.outputs.research == 'true'",
+      "timeout-minutes: 10",
+      "task --silent web:research:e2e",
       'test "$SCOPE_RESULT" = success',
       'test "$VERIFY_RESULT" = success',
       'test "$PREPARE_RESULT" = skipped',
@@ -648,6 +651,7 @@ class ArcManifestContract {
       "task --silent ci:pr:browser:full",
       "task --silent ci:pr:browser:auth",
       "task --silent web:research:verify",
+      "task --silent web:research:source",
       "git clone --quiet --shared --no-checkout",
       "{{.PR_ARTIFACT_DIR}}/runtime",
     ]);
@@ -707,9 +711,9 @@ class ArcManifestContract {
     ]);
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
-      "Publish from the already-selected node-local rootless BuildKit shard",
+      "Publish from the already-selected fixed rootless BuildKit backend",
       'cache_scope="nook-rust-wasm-deps-v6"',
-      "mode=max,compression=zstd,timeout=10m",
+      "mode=max,compression=zstd,force-compression=true,timeout=10m",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
       "verify-registry-cache-blobs.ts",
     ]);

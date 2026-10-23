@@ -17,7 +17,7 @@ preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m",
 ] : []
 
 variable "PREFLIGHT_SOURCE_CONTEXT" {

@@ -102,11 +102,22 @@ tasks:
 
   web:research:verify:
     desc: Format-check, check, build, and e2e the web-research catalog.
+    cmds:
+      - task: web:research:source
+      - task: web:research:e2e
+
+  web:research:source:
+    desc: Format-check, check, and build the web-research catalog.
     dir: "{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research"
     cmds:
       - bun run format:check
       - bun run check
       - bun run build
+
+  web:research:e2e:
+    desc: Run the web-research browser tests with installed dependencies.
+    dir: "{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research"
+    cmds:
       - bun run test:e2e
 
   web:research:deploy:

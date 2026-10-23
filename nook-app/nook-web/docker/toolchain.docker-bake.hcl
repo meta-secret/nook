@@ -25,15 +25,15 @@ web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
 ]
 
 web_app_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
 web_research_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
 web_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,force-compression=true,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
 target "web-app-deps" {

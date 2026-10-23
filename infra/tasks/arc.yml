@@ -586,7 +586,8 @@ tasks:
           exit 1
         fi
         sudo -n k0s kubectl apply --dry-run=client \
-          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" >/dev/null
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" \
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit-home-worker-0.yaml" >/dev/null
         sudo -n k0s kubectl apply --dry-run=client \
           -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml" >/dev/null
         sudo -n k0s kubectl apply --dry-run=client \

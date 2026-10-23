@@ -123,15 +123,16 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       exit 2
       ;;
   esac
-  # Publish from the already-selected node-local rootless BuildKit shard.
+  # Publish from the already-selected fixed rootless BuildKit backend.
   # The repair solve never imports the ref it is replacing.
   # Independent inputs may accelerate it, while a miss rebuilds from source.
   case "${NOOK_BUILDKIT_REMOTE:-}" in
     1)
-      case "${NOOK_BUILDKIT_ADDR:-}" in
-        tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+      case "${NOOK_BUILDKIT_BACKEND:-local}:${NOOK_BUILDKIT_ADDR:-}" in
+        local:tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+        home-worker-0:tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234) ;;
         *)
-          echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+          echo "ARC BuildKit backend and fixed service address must match" >&2
           exit 2
           ;;
       esac
@@ -139,12 +140,19 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       printf '{"Name":"%s","Driver":"remote","Nodes":[{"Name":"%s0","Endpoint":"%s","Platforms":null,"DriverOpts":null,"Flags":null,"Files":null}],"Dynamic":false}\n' \
         "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
       chmod 600 "$BUILDX_CONFIG/instances/$builder"
+      if [ "${NOOK_BUILDKIT_BACKEND:-local}" = home-worker-0 ]; then
+        inspection="$("$docker_cli" buildx inspect "$builder" --bootstrap)"
+        printf '%s\n' "$inspection" | awk '
+          $1 == "org.mobyproject.buildkit.worker.hostname:" { count++; if ($2 != "nook-buildkit-0" || NF != 2) bad = 1 }
+          END { exit (count != 1 || bad) }
+        ' || { echo 'Home BuildKit must expose exactly worker nook-buildkit-0' >&2; exit 2; }
+      fi
       "$docker_cli" buildx use "$builder"
       "$docker_cli" buildx bake \
         --progress=plain \
         "${bake_args[@]}" \
         --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
         builder-wasm-deps-cache-proof
       ;;
     '')
@@ -152,7 +160,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
         --progress=plain \
         "${bake_args[@]}" \
         --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
         builder-wasm-deps-cache-proof
       ;;
     *)
