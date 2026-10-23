@@ -1,8 +1,8 @@
 //! First-message capture metadata; credential values remain in the session ingress.
 use super::{
-    LoginAuthFieldPresence, LoginCapturedFieldIndex, LoginControlLabel, LoginObservationError,
-    LoginPasswordFieldHistory, LoginSaveCaptureBaseline, LoginSaveCaptureSource,
-    LoginSubmissionDecision, LoginSubmissionField, LoginSubmissionIntent,
+    LoginAuthFieldPresence, LoginCapturedFieldIndex, LoginCapturedValueMatches, LoginControlLabel,
+    LoginObservationError, LoginPasswordFieldHistory, LoginSaveCaptureBaseline,
+    LoginSaveCaptureSource, LoginSubmissionDecision, LoginSubmissionField, LoginSubmissionIntent,
     LoginSubmissionObservation, LoginSubmissionPageUrl,
 };
 use crate::{
@@ -138,6 +138,8 @@ pub enum LoginCaptureError {
     InvalidTimestamp,
     #[error("invalid login capture context")]
     InvalidContext,
+    #[error("login capture values do not match its fields")]
+    MismatchedValues,
     #[error(transparent)]
     InvalidMetadata(#[from] LoginObservationError),
 }
@@ -175,8 +177,16 @@ impl LoginSubmissionCapture {
         Ok(())
     }
 
-    pub fn classify(self) -> Result<LoginSaveCaptureDecision, LoginCaptureError> {
-        let decision = self.observation()?.classify();
+    /// Classify the capture; `values` are compared only to pair a password with
+    /// its confirmation and are not retained.
+    pub fn classify(
+        self,
+        values: &LoginCapturedValueMatches,
+    ) -> Result<LoginSaveCaptureDecision, LoginCaptureError> {
+        let true = values.len() == self.fields.len() else {
+            return Err(LoginCaptureError::MismatchedValues);
+        };
+        let decision = self.observation()?.classify(values);
         match decision {
             LoginSubmissionDecision::Captured {
                 username_field_index,

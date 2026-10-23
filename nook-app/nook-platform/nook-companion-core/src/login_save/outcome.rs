@@ -243,9 +243,8 @@ impl LoginSaveEligibilityInput {
 
     fn eligibility(&self) -> LoginSaveEligibility {
         match self.captured_workflow {
-            AuthenticationWorkflowKind::Login => {}
-            AuthenticationWorkflowKind::Signup
-            | AuthenticationWorkflowKind::PasswordChange
+            AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::Signup => {}
+            AuthenticationWorkflowKind::PasswordChange
             | AuthenticationWorkflowKind::TotpChallenge
             | AuthenticationWorkflowKind::TotpEnrollment
             | AuthenticationWorkflowKind::Manual => return LoginSaveEligibility::Rejected,
@@ -586,6 +585,11 @@ mod tests {
         );
         observed.origin = LoginSubmissionOrigin::SameOrigin;
         observed.captured_workflow = AuthenticationWorkflowKind::Signup;
+        assert_eq!(
+            observed.classify()?.eligibility,
+            LoginSaveEligibility::Eligible
+        );
+        observed.captured_workflow = AuthenticationWorkflowKind::PasswordChange;
         assert_eq!(
             observed.classify()?.eligibility,
             LoginSaveEligibility::Rejected

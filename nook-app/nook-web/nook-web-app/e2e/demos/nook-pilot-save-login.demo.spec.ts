@@ -216,3 +216,123 @@ test('recover a delayed save offer after authentication navigation', async ({
   await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await demoBeat(page)
 })
+
+test('save a new account after a sign-up with a confirmed password', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = { ...savePilotStubArgs(messages), savePilotSignup: true }
+
+  await page.addInitScript(installDemoChromeStub, stubArgs)
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Example account sign up</title>
+        <style>
+          :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background:
+              radial-gradient(circle at 80% 10%, rgb(57 48 79 / 55%), transparent 36%),
+              linear-gradient(145deg, #11131a, #090a0f 70%);
+            color: #f7f7f8;
+          }
+          main {
+            width: min(440px, calc(100vw - 48px));
+            padding: 42px;
+            border: 1px solid rgb(255 255 255 / 10%);
+            border-radius: 22px;
+            background: rgb(24 26 35 / 92%);
+            box-shadow: 0 28px 90px rgb(0 0 0 / 45%);
+          }
+          .eyebrow { margin: 0 0 10px; color: #9ca5b9; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+          h1 { margin: 0 0 10px; font-size: 32px; }
+          .intro { margin: 0 0 28px; color: #aeb4c1; line-height: 1.5; }
+          #signup-fields { display: grid; gap: 18px; }
+          label { display: grid; gap: 8px; color: #d8dbe3; font-size: 13px; font-weight: 650; }
+          input {
+            width: 100%;
+            min-height: 48px;
+            padding: 12px 14px;
+            border: 1px solid rgb(255 255 255 / 12%);
+            border-radius: 10px;
+            background: #11131a;
+            color: #f7f7f8;
+            font: inherit;
+          }
+          #signup-fields > button {
+            min-height: 48px;
+            border: 0;
+            border-radius: 10px;
+            background: #eef0f4;
+            color: #171921;
+            font: 750 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+          }
+          #site-status { min-height: 20px; margin: 18px 0 0; color: #94d4ae; font-size: 13px; }
+          #site-welcome { display: none; margin: 18px 0 0; color: #94d4ae; font-size: 14px; font-weight: 650; }
+          body.registered #signup-fields { display: none; }
+          body.registered #site-welcome { display: block; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <p class="eyebrow">Example account</p>
+          <h1>Create your account</h1>
+          <p class="intro">Type a password twice, create the account, then choose whether Nook saves it.</p>
+          <div id="signup-fields">
+            <label>Email<input name="email" type="email" placeholder="Email"></label>
+            <label>Password<input name="password" type="password" placeholder="Password"></label>
+            <label>Confirm password<input name="confirm" type="password" placeholder="Confirm password"></label>
+            <button type="button">Create account</button>
+          </div>
+          <p id="site-status" role="status"></p>
+          <p id="site-welcome">Welcome to your new account</p>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(() => {
+    document
+      .querySelector('#signup-fields > button')
+      ?.addEventListener('click', () => {
+        document.body.classList.add('registered')
+        const navigationState: Record<string, never> = {}
+        history.pushState(navigationState, '', '/welcome')
+        const status = document.querySelector('#site-status')
+        if (status) status.textContent = 'Account created'
+      })
+  })
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await injectPilotAutofill(page)
+
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget).toBeVisible()
+  await demoBeat(page)
+
+  await page.locator('input[name="email"]').fill('new-member@example.test')
+  await page.locator('input[name="password"]').fill('fresh-signup-password')
+  await page.locator('input[name="confirm"]').fill('fresh-signup-password')
+  await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByRole('status')).toHaveText('Account created')
+  await expect(widget.getByText('Save this login?')).toBeVisible()
+  await demoBeat(page)
+
+  const saveButton = widget.getByTestId('nook-auth-gate-save')
+  await expect(saveButton).toBeEnabled()
+  await saveButton.click()
+  await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
+  const offerCount = await page.evaluate(() => {
+    const messageTypes = window.__nookDemoRuntimeMessageTypes
+    return Array.isArray(messageTypes)
+      ? messageTypes.filter(
+          (messageType) => messageType === 'nook:website-login-save-offer',
+        ).length
+      : 0
+  })
+  expect(offerCount).toBe(1)
+  await demoBeat(page)
+})

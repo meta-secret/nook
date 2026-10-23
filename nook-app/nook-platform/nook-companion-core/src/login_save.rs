@@ -20,7 +20,7 @@ pub use outcome::{
     LoginSubmissionOrigin, LoginSubmissionPresence, LoginSubmissionTransition,
 };
 pub use submission::{
-    LoginCapturedFieldIndex, LoginPasswordFieldHistory, LoginSubmissionDecision,
-    LoginSubmissionEvent, LoginSubmissionField, LoginSubmissionIntent, LoginSubmissionObservation,
-    LoginSubmissionTarget, LoginSubmissionTrust,
+    LoginCapturedFieldIndex, LoginCapturedValueMatches, LoginPasswordFieldHistory,
+    LoginSubmissionDecision, LoginSubmissionEvent, LoginSubmissionField, LoginSubmissionIntent,
+    LoginSubmissionObservation, LoginSubmissionTarget, LoginSubmissionTrust,
 };

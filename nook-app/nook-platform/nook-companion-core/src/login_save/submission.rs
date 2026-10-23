@@ -7,7 +7,7 @@ use crate::credential_fill::field::{
 };
 use crate::credential_fill::{Assignment, CredentialKind, Plan};
 use crate::page_field_classification::{
-    SubmittedLoginControlAdmission, SubmittedLoginControlRequest,
+    SubmittedCredentialIntent, SubmittedLoginControlAdmission, SubmittedLoginControlRequest,
 };
 use crate::{OneTimeCodeEntryEvidence, PageControlActionability, PageInputType, PageLoginContext};
 
@@ -18,7 +18,12 @@ use crate::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, PageInputFieldObservation,
 };
 use serde::{Deserialize, Serialize};
+use signup::{SignupScope, SignupSelectionMatch};
 use tsify::Tsify;
+
+mod signup;
+
+pub use signup::LoginCapturedValueMatches;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 pub enum LoginSubmissionEvent {
@@ -220,7 +225,7 @@ impl LoginSubmissionObservation {
     }
 
     #[must_use]
-    pub fn classify(&self) -> LoginSubmissionDecision {
+    pub fn classify(&self, values: &LoginCapturedValueMatches) -> LoginSubmissionDecision {
         let LoginSubmissionTrust::Trusted = self.intent.trust else {
             return LoginSubmissionDecision::Ignored;
         };
@@ -249,6 +254,15 @@ impl LoginSubmissionObservation {
                 fields.push(observed.observation);
             }
         }
+        let signup = SignupScope {
+            intent: &self.intent,
+            fields: &self.fields,
+            observed: &fields,
+            values,
+        };
+        if let SignupSelectionMatch::Selected(selection) = signup.select() {
+            return self.classify_signup(&fields, selection);
+        }
         let AuthenticationWorkflowMatch::Matched(workflow) = self.intent.classify_workflow(&fields)
         else {
             return LoginSubmissionDecision::Ignored;
@@ -262,7 +276,7 @@ impl LoginSubmissionObservation {
             | AuthenticationWorkflowStage::Manual => return LoginSubmissionDecision::Ignored,
         }
         match workflow.kind {
-            AuthenticationWorkflowKind::Signup | AuthenticationWorkflowKind::PasswordChange => {
+            AuthenticationWorkflowKind::PasswordChange => {
                 return match self.intent.event {
                     LoginSubmissionEvent::FormSubmit => {
                         LoginSubmissionDecision::ExplicitAuthentication {
@@ -275,7 +289,9 @@ impl LoginSubmissionObservation {
                 };
             }
             AuthenticationWorkflowKind::Login => {}
-            AuthenticationWorkflowKind::TotpChallenge
+            // A sign-up the selector did not admit, such as a mismatched confirmation, is not saved.
+            AuthenticationWorkflowKind::Signup
+            | AuthenticationWorkflowKind::TotpChallenge
             | AuthenticationWorkflowKind::TotpEnrollment
             | AuthenticationWorkflowKind::Manual => return LoginSubmissionDecision::Ignored,
         }
@@ -286,7 +302,8 @@ impl LoginSubmissionObservation {
         else {
             return LoginSubmissionDecision::Ignored;
         };
-        let SubmittedLoginControlAdmission::Admitted = self.submission_control_admission(&fields)
+        let SubmittedLoginControlAdmission::Admitted =
+            self.submission_control_admission(&fields, SubmittedCredentialIntent::Login)
         else {
             return LoginSubmissionDecision::Ignored;
         };
@@ -312,6 +329,7 @@ impl LoginSubmissionObservation {
     fn submission_control_admission(
         &self,
         observed: &[Observation],
+        intent: SubmittedCredentialIntent,
     ) -> SubmittedLoginControlAdmission {
         match self.intent.event {
             LoginSubmissionEvent::FormSubmit | LoginSubmissionEvent::Enter => {
@@ -345,6 +363,7 @@ impl LoginSubmissionObservation {
             username: AuthenticationUsernameEvidence::strongest_authentication_username_evidence(
                 &usernames,
             ),
+            intent,
         })
     }
 }
@@ -545,6 +564,10 @@ mod tests {
 
     struct Fixture;
     impl Fixture {
+        fn unmatched() -> LoginCapturedValueMatches {
+            LoginCapturedValueMatches::from_values::<&str>(&[])
+        }
+
         fn login(
             event: LoginSubmissionEvent,
         ) -> Result<LoginSubmissionObservation, LoginObservationError> {
@@ -621,7 +644,7 @@ mod tests {
                 AuthenticationDetailedAdvanceControlObservation::observed(control);
             assert!(
                 matches!(
-                    observation.classify(),
+                    observation.classify(&Fixture::unmatched()),
                     LoginSubmissionDecision::Captured { .. }
                 ),
                 "{label}"
@@ -633,7 +656,7 @@ mod tests {
             observation.intent.context.detailed_advance_control =
                 AuthenticationDetailedAdvanceControlObservation::observed(Fixture::control(label));
             assert_eq!(
-                observation.classify(),
+                observation.classify(&Fixture::unmatched()),
                 LoginSubmissionDecision::Ignored,
                 "{label}"
             );
@@ -641,7 +664,10 @@ mod tests {
         let mut observation = Fixture::login(LoginSubmissionEvent::Click)?;
         observation.intent.context.detailed_advance_control =
             AuthenticationDetailedAdvanceControlObservation::Absent;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         for ownership in [
             PageControlOwnership::Unowned,
             PageControlOwnership::LocallyScoped,
@@ -651,7 +677,10 @@ mod tests {
             control.actionability = PageControlActionability::Inert;
             observation.intent.context.detailed_advance_control =
                 AuthenticationDetailedAdvanceControlObservation::observed(control);
-            assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+            assert_eq!(
+                observation.classify(&Fixture::unmatched()),
+                LoginSubmissionDecision::Ignored
+            );
         }
         Ok(())
     }
@@ -664,7 +693,7 @@ mod tests {
             LoginSubmissionEvent::Enter,
         ] {
             assert_eq!(
-                Fixture::login(event)?.classify(),
+                Fixture::login(event)?.classify(&Fixture::unmatched()),
                 LoginSubmissionDecision::Captured {
                     username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
                     password_field_index: LoginCapturedFieldIndex::from(Index::ONE),
@@ -679,16 +708,28 @@ mod tests {
     fn rejects_untrusted_and_unrelated_interactions() -> anyhow::Result<()> {
         let mut observation = Fixture::login(LoginSubmissionEvent::Click)?;
         observation.intent.trust = LoginSubmissionTrust::Untrusted;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         observation.intent.trust = LoginSubmissionTrust::Trusted;
         observation.intent.control_label = LoginControlLabel::try_from("Show password".to_owned())?;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         observation.intent.event = LoginSubmissionEvent::Enter;
         observation.intent.target = LoginSubmissionTarget::OutsideCredentialScope;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         observation.intent.target = LoginSubmissionTarget::CredentialScope;
         observation.intent.event = LoginSubmissionEvent::Other;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         Ok(())
     }
 
@@ -702,21 +743,26 @@ mod tests {
                 anyhow::bail!("missing password fixture")
             };
             password.autocomplete_tokens = vec!["one-time-code".to_owned()];
-            assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+            assert_eq!(
+                observation.classify(&Fixture::unmatched()),
+                LoginSubmissionDecision::Ignored
+            );
         }
         let Some(password) = original.fields.get(1) else {
             anyhow::bail!("missing password fixture")
         };
         assert_eq!(
-            original.clone().add_field(password.clone())?.classify(),
+            original
+                .clone()
+                .add_field(password.clone())?
+                .classify(&Fixture::unmatched()),
             LoginSubmissionDecision::Ignored
         );
         Ok(())
     }
 
     #[test]
-    fn routes_existing_explicit_native_signup_and_password_change_without_generic_capture()
-    -> anyhow::Result<()> {
+    fn captures_new_password_signup_and_keeps_password_change_explicit() -> anyhow::Result<()> {
         let mut signup = Fixture::login(LoginSubmissionEvent::FormSubmit)?;
         signup
             .fields
@@ -724,9 +770,11 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("missing password fixture"))?
             .autocomplete_tokens = vec!["new-password".to_owned()];
         assert_eq!(
-            signup.classify(),
-            LoginSubmissionDecision::ExplicitAuthentication {
-                workflow_kind: AuthenticationWorkflowKind::Signup
+            signup.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Captured {
+                username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
+                password_field_index: LoginCapturedFieldIndex::from(Index::ONE),
+                workflow_kind: AuthenticationWorkflowKind::Signup,
             }
         );
         let original = Fixture::login(LoginSubmissionEvent::FormSubmit)?;
@@ -738,16 +786,22 @@ mod tests {
                 .clone(),
         )?;
         assert_eq!(
-            change.classify(),
+            change.classify(&Fixture::unmatched()),
             LoginSubmissionDecision::ExplicitAuthentication {
                 workflow_kind: AuthenticationWorkflowKind::PasswordChange
             }
         );
         signup.intent.event = LoginSubmissionEvent::Enter;
-        assert_eq!(signup.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            signup.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         signup.intent.event = LoginSubmissionEvent::FormSubmit;
         signup.intent.trust = LoginSubmissionTrust::Untrusted;
-        assert_eq!(signup.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            signup.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         Ok(())
     }
 
@@ -760,14 +814,17 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("missing password fixture"))?;
         password.input_type = PageInputType::Text;
         password.autocomplete_tokens.clear();
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         observation
             .fields
             .get_mut(1)
             .ok_or_else(|| anyhow::anyhow!("missing password fixture"))?
             .password_history = LoginPasswordFieldHistory::PreviouslyPassword;
         assert!(matches!(
-            observation.classify(),
+            observation.classify(&Fixture::unmatched()),
             LoginSubmissionDecision::Captured { .. }
         ));
         observation
@@ -775,7 +832,10 @@ mod tests {
             .get_mut(1)
             .ok_or_else(|| anyhow::anyhow!("missing password fixture"))?
             .autocomplete_tokens = vec!["one-time-code".to_owned()];
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         Ok(())
     }
 
@@ -788,16 +848,22 @@ mod tests {
         };
         password.input_type = PageInputType::Text;
         assert!(matches!(
-            observation.classify(),
+            observation.classify(&Fixture::unmatched()),
             LoginSubmissionDecision::Captured { .. }
         ));
         let Some(password) = observation.fields.get_mut(1) else {
             anyhow::bail!("missing password fixture")
         };
         password.actionability = PageControlActionability::Inert;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         observation.fields.clear();
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         Ok(())
     }
 
@@ -821,7 +887,7 @@ mod tests {
                 field_index: LoginCapturedFieldIndex::from(selected),
             };
             assert!(matches!(
-                observation.classify(),
+                observation.classify(&Fixture::unmatched()),
                 LoginSubmissionDecision::Captured { .. }
             ));
         }
@@ -833,7 +899,10 @@ mod tests {
             LoginSubmissionTarget::OutsideCredentialScope,
         ] {
             observation.intent.target = target;
-            assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+            assert_eq!(
+                observation.classify(&Fixture::unmatched()),
+                LoginSubmissionDecision::Ignored
+            );
         }
         observation.intent.target = LoginSubmissionTarget::CredentialField {
             field_index: LoginCapturedFieldIndex::from(Index::ONE),
@@ -843,7 +912,10 @@ mod tests {
             .get_mut(1)
             .ok_or_else(|| anyhow::anyhow!("password fixture"))?
             .editability = Editability::Readonly;
-        assert_eq!(observation.classify(), LoginSubmissionDecision::Ignored);
+        assert_eq!(
+            observation.classify(&Fixture::unmatched()),
+            LoginSubmissionDecision::Ignored
+        );
         Ok(())
     }
 }
