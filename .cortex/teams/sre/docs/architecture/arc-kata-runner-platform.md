@@ -424,6 +424,20 @@ This task checks host identity, free space and effective journal settings, then
 flushes and verifies the persistent journal. It does not reconcile ARC labels,
 rejoin the node, restart workloads or clear an incident quarantine. Use this
 scoped path for an existing host; full provisioning remains a separate operation.
+When the established route needs a jump host, pass
+`INFRA_JOURNAL_SSH_CONFIG=<existing-ssh-config>` to retain its existing identity,
+proxy route and known-host trust; strict host-key checking remains enabled.
+
+For an incident quarantine, record the incident identifier in the native Node
+annotation `nook.nokey.sh/arc-quarantine` while removing its `arc-workload` label.
+The annotation's presence, even with an empty value, blocks placement-label
+reconciliation, separation apply and full ARC deployment. Label writes also
+check the observed Node resource version so a concurrent quarantine fails the
+stale write. This marker does not evict workloads or change BuildKit/JetStream
+storage. Remove the marker and restore the reviewed workload label only after
+host and stateful-service recovery and an explicit CI readmission decision;
+transient NodeReady alone is insufficient. The journal-only task remains usable
+while this hold is active.
 
 Inspect the live state with:
 

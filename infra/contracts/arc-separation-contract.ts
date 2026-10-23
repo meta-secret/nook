@@ -106,6 +106,10 @@ export class ArcSeparationContract {
           "nodeSelector: .nodeSelector",
           "affinity: .affinity",
           "(general,hive,container,browser)",
+          'has("nook.nokey.sh/arc-quarantine") | not',
+          "cmds:\n      - task: arc:placement:quarantine:check",
+          '--resource-version="$resource_version" --overwrite',
+          ".metadata.resourceVersion] | @tsv",
         ],
         forbidden: [],
       },
@@ -116,6 +120,7 @@ export class ArcSeparationContract {
           "helm upgrade --install nook-k0s-browser",
           "browser-hook.yaml",
           "browser-runner-scale-set-values.yaml",
+          "cmds:\n      - task: arc:placement:quarantine:check\n      - task: arc:auth:sync",
         ],
         forbidden: [],
       },
@@ -168,6 +173,7 @@ export class ArcSeparationContract {
       '"arc-job-container"',
       '"arc-browser-job"',
       ".spec.runnerScaleSetId > 0",
+      "cmds:\n      - task: arc:placement:quarantine:check\n      - task: arc:separation:idle",
     ]);
     if (required.isErr()) return err(required.error);
     const forbidden = tasks.forbidAll([
@@ -195,12 +201,19 @@ export class ArcSeparationContract {
       second: 'kubectl patch ephemeralrunnerset "$runner_set"',
     });
     if (drainOrder.isErr()) return err(drainOrder.error);
-    return new ArcSeparationDrainContract(source).assert();
+    const placement = await new OperationalContractSource(
+      resolve(this.root, "infra/tasks/arc-placement.yml"),
+    ).read();
+    if (placement.isErr()) return err(placement.error);
+    return new ArcSeparationDrainContract(source, placement.value).assert();
   }
 }
 
 class ArcSeparationDrainContract {
-  constructor(private readonly source: string) {}
+  constructor(
+    private readonly source: string,
+    private readonly placement: string,
+  ) {}
 
   assert(): Result<void, OperationalContractFailure> {
     const podGuard = this.source.match(/remaining=.*?\| jq '([^']+)'/s)?.[1];
@@ -213,7 +226,21 @@ class ArcSeparationDrainContract {
     const listenerGuard = this.source.match(
       /jq -e --arg pool "\$pool" '([^']+)'/,
     )?.[1];
-    if (!podGuard || !templateGuard || !replicaGuard || !listenerGuard) {
+    const quarantineGuards = [
+      ...this.placement.matchAll(
+        /jq -e '(all\(\.items\[\]; \(\(\.metadata\.annotations[^']+)'/g,
+      ),
+    ];
+    const quarantineGuard = quarantineGuards[0]?.[1];
+    if (
+      !podGuard ||
+      !templateGuard ||
+      !replicaGuard ||
+      !listenerGuard ||
+      !quarantineGuard ||
+      quarantineGuards.length !== 2 ||
+      quarantineGuards[1]?.[1] !== quarantineGuard
+    ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
         message: "ARC separation drain guards are missing",
@@ -227,6 +254,43 @@ class ArcSeparationDrainContract {
       },
     };
     const fixtures: { guard: string; input: object; expected: string }[] = [
+      {
+        guard: quarantineGuard,
+        input: { items: [{ metadata: {} }] },
+        expected: "true",
+      },
+      {
+        guard: quarantineGuard,
+        input: {
+          items: [{ metadata: { annotations: { unrelated: "value" } } }],
+        },
+        expected: "true",
+      },
+      {
+        guard: quarantineGuard,
+        input: {
+          items: [
+            {
+              metadata: { annotations: { "nook.nokey.sh/arc-quarantine": "" } },
+            },
+          ],
+        },
+        expected: "false",
+      },
+      {
+        guard: quarantineGuard,
+        input: {
+          items: [
+            { metadata: {} },
+            {
+              metadata: {
+                annotations: { "nook.nokey.sh/arc-quarantine": "arc-20261023" },
+              },
+            },
+          ],
+        },
+        expected: "false",
+      },
       { guard: listenerGuard, input: { items: [] }, expected: "true" },
       {
         guard: listenerGuard,
@@ -377,7 +441,7 @@ class ArcSeparationDrainContract {
         return err({
           kind: OperationalContractFailureKind.Requirement,
           message:
-            "ARC separation must reject stale templates and pending or terminating work",
+            "ARC separation must reject incident quarantine, stale templates and pending or terminating work",
         });
       }
     }

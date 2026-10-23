@@ -1,23 +1,40 @@
 version: "3"
 
 tasks:
-  arc:placement:labels:
-    desc: Apply native capacity topology labels to the declared build nodes.
+  arc:placement:quarantine:check:
+    desc: Reject ARC reconciliation while a declared build node has an incident quarantine.
     silent: true
     cmds:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        nodes="$(sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        if ! jq -e 'all(.items[]; ((.metadata.annotations // {}) | has("nook.nokey.sh/arc-quarantine") | not))' <<<"$nodes" >/dev/null; then
+          echo "ARC incident quarantine blocks reconciliation; review recovery before removing its node annotation." >&2
+          exit 1
+        fi
+        REMOTE
+
+  arc:placement:labels:
+    desc: Apply native capacity topology labels to the declared build nodes.
+    silent: true
+    cmds:
+      - task: arc:placement:quarantine:check
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
         kubectl() { sudo -n k0s kubectl "$@"; }
         nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        jq -e 'all(.items[]; ((.metadata.annotations // {}) | has("nook.nokey.sh/arc-quarantine") | not))' <<<"$nodes" >/dev/null
         expected="$(sort "{{.INFRA_REMOTE_DIR}}/infra/k0s/config/arc-build-nodes")"
         test "$(jq -r '.items[].metadata.name' <<<"$nodes" | sort)" = "$expected"
         browser_nodes="$(cat "{{.INFRA_REMOTE_DIR}}/infra/k0s/config/arc-browser-nodes")"
         test "$browser_nodes" = nook-rise-s-2
-        while IFS=$'\t' read -r node tier; do
+        while IFS=$'\t' read -r node tier resource_version; do
           workload=build
           test "$node" != "$browser_nodes" || workload=browser
-          kubectl label node "$node" "nook.nokey.sh/arc-workload=$workload" --overwrite
+          kubectl label node "$node" "nook.nokey.sh/arc-workload=$workload" \
+            --resource-version="$resource_version" --overwrite
           # These optional topology keys add a per-host penalty. Home deliberately
           # has neither key; every node still has kubernetes.io/hostname.
           case "$tier" in
@@ -35,7 +52,7 @@ tasks:
                 "nook.nokey.sh/arc-overflow-host=$node" --overwrite ;;
             *) echo "Unknown ARC tier on $node: $tier" >&2; exit 1 ;;
           esac
-        done < <(jq -r '.items[] | [.metadata.name, .metadata.labels["nook.nokey.sh/arc-tier"]] | @tsv' <<<"$nodes")
+        done < <(jq -r '.items[] | [.metadata.name, .metadata.labels["nook.nokey.sh/arc-tier"], .metadata.resourceVersion] | @tsv' <<<"$nodes")
         REMOTE
 
   arc:placement:hive:
