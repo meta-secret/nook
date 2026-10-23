@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
+import { TrustedBuildkitSetupContract } from "./trusted-buildkit-setup.fixture";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -921,6 +922,14 @@ class DockerizedRustBuildKitContract {
 }
 
 const contract = new DockerizedRustBuildKitContract();
+const setupContract = new TrustedBuildkitSetupContract();
+
+test("trusted setup isolates login secrets and retains native backend failures", () => {
+  setupContract.credentialsAndBackend();
+});
+test("setup observations preserve fatal environment and optional telemetry boundaries", () => {
+  setupContract.observationsKeepFailureBoundaries();
+});
 
 test(
   "PR artifact backend stays fixed while all other consumers retain Local",

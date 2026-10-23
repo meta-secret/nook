@@ -569,23 +569,22 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   ).toEqual([]);
 });
 
-test('rejects drift in the dockerized Rust runtime contract digest', async () => {
-  for (const path of [
-    'infra/contracts/dockerized-rust.test.ts',
-    'infra/contracts/dockerized-rust-buildkit.test.ts',
-  ]) {
-    const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
-    const request = { path, source };
-    expect(() =>
-      SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(request),
-    ).not.toThrow();
-    expect(() =>
-      SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
-        ...request,
-        source: `${source}\n`,
-      }),
-    ).toThrow(`Audited runtime source has drifted: ${path}`);
-  }
+test.each([
+  'infra/contracts/dockerized-rust.test.ts',
+  'infra/contracts/dockerized-rust-buildkit.test.ts',
+  'infra/contracts/trusted-buildkit-setup.fixture.ts',
+])('rejects drift in the runtime contract digest for %s', async (path) => {
+  const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
+  const request = { path, source };
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(request),
+  ).not.toThrow();
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+      ...request,
+      source: `${source}\n`,
+    }),
+  ).toThrow(`Audited runtime source has drifted: ${path}`);
 });
 
 test('rejects every alternate application consumer edge', () => {

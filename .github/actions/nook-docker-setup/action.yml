@@ -96,9 +96,20 @@ runs:
       with:
         version: 3.52.0
 
-    - name: Raise Linux filesystem watcher limits
+    - name: Login to Nook OCI registry and connect ARC BuildKit
+      id: arc-buildx
       shell: bash
+      env:
+        NOOK_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+        NOOK_BUILDKIT_BACKEND: ${{ inputs.arc-buildkit-backend }}
+        NOOK_SETUP_ARC: ${{ startsWith(runner.name, 'nook-k0s-') }}
       run: |
+        set -euo pipefail
+        # Keep the login secret out of every watcher and Buildx child process.
+        unset nook_setup_registry_password
+        nook_setup_registry_password="$NOOK_REGISTRY_PASSWORD"
+        export -n nook_setup_registry_password
+        unset NOOK_REGISTRY_PASSWORD
         ensure_minimum() {
           local key="$1"
           local minimum="$2"
@@ -117,17 +128,48 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    - name: Login to Nook OCI registry
-      shell: bash
-      env:
-        NOOK_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
-      run: |
         # The job container is ephemeral. A direct login avoids registering an
         # action post-step that would delay cancellation only to perform logout.
-        printf '%s' "$NOOK_REGISTRY_PASSWORD" | docker login \
+        printf '%s' "$nook_setup_registry_password" | docker login \
           "${{ inputs.registry-host }}" \
           --username "${{ inputs.registry-username }}" \
           --password-stdin
+        unset nook_setup_registry_password
+
+        # Connect ARC Buildx to the selected BuildKit backend; hosted setup follows.
+        if [ "$NOOK_SETUP_ARC" = true ]; then
+          case "$NOOK_BUILDKIT_BACKEND" in
+            local)
+              test "${NOOK_BUILDKIT_ADDR:-}" = tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
+              ;;
+            home-worker-0)
+              NOOK_BUILDKIT_ADDR=tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234
+              ;;
+            *)
+              echo "Unsupported ARC BuildKit backend" >&2
+              exit 2
+              ;;
+          esac
+          builder="nook-arc-${GITHUB_RUN_ID}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}"
+          builder="$(printf '%s' "$builder" | tr -c 'a-zA-Z0-9_.-' '-')"
+          docker buildx create \
+            --name "$builder" \
+            --driver remote \
+            --use \
+            "$NOOK_BUILDKIT_ADDR"
+          inspection="$(docker buildx inspect "$builder" --bootstrap)"
+          printf '%s\n' "$inspection"
+          if [ "$NOOK_BUILDKIT_BACKEND" = home-worker-0 ]; then
+            printf '%s\n' "$inspection" | awk '
+              $1 == "org.mobyproject.buildkit.worker.hostname:" { count++; if ($2 != "nook-buildkit-0" || NF != 2) bad = 1 }
+              END { exit (count != 1 || bad) }
+            ' || { echo 'Home BuildKit must expose exactly worker nook-buildkit-0' >&2; exit 2; }
+          fi
+          echo "name=$builder" >> "$GITHUB_OUTPUT"
+          echo "NOOK_BUILDKIT_REMOTE=1" >> "$GITHUB_ENV"
+          echo "NOOK_BUILDKIT_BACKEND=$NOOK_BUILDKIT_BACKEND" >> "$GITHUB_ENV"
+          echo "NOOK_BUILDKIT_ADDR=$NOOK_BUILDKIT_ADDR" >> "$GITHUB_ENV"
+        fi
 
     - name: Preload hosted BuildKit from Zot
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
@@ -147,46 +189,6 @@ runs:
         # Job containers ship an older Debian Buildx; Bake needs current flags.
         version: v0.37.2
         driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
-
-    - name: Connect ARC Buildx to the selected BuildKit backend
-      id: arc-buildx
-      if: ${{ startsWith(runner.name, 'nook-k0s-') }}
-      shell: bash
-      env:
-        NOOK_BUILDKIT_BACKEND: ${{ inputs.arc-buildkit-backend }}
-      run: |
-        set -euo pipefail
-        case "$NOOK_BUILDKIT_BACKEND" in
-          local)
-            test "${NOOK_BUILDKIT_ADDR:-}" = tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
-            ;;
-          home-worker-0)
-            NOOK_BUILDKIT_ADDR=tcp://nook-buildkit-home-worker-0.arc-runners.svc.cluster.local:1234
-            ;;
-          *)
-            echo "Unsupported ARC BuildKit backend" >&2
-            exit 2
-            ;;
-        esac
-        builder="nook-arc-${GITHUB_RUN_ID}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}"
-        builder="$(printf '%s' "$builder" | tr -c 'a-zA-Z0-9_.-' '-')"
-        docker buildx create \
-          --name "$builder" \
-          --driver remote \
-          --use \
-          "$NOOK_BUILDKIT_ADDR"
-        inspection="$(docker buildx inspect "$builder" --bootstrap)"
-        printf '%s\n' "$inspection"
-        if [ "$NOOK_BUILDKIT_BACKEND" = home-worker-0 ]; then
-          printf '%s\n' "$inspection" | awk '
-            $1 == "org.mobyproject.buildkit.worker.hostname:" { count++; if ($2 != "nook-buildkit-0" || NF != 2) bad = 1 }
-            END { exit (count != 1 || bad) }
-          ' || { echo 'Home BuildKit must expose exactly worker nook-buildkit-0' >&2; exit 2; }
-        fi
-        echo "name=$builder" >> "$GITHUB_OUTPUT"
-        echo "NOOK_BUILDKIT_REMOTE=1" >> "$GITHUB_ENV"
-        echo "NOOK_BUILDKIT_BACKEND=$NOOK_BUILDKIT_BACKEND" >> "$GITHUB_ENV"
-        echo "NOOK_BUILDKIT_ADDR=$NOOK_BUILDKIT_ADDR" >> "$GITHUB_ENV"
 
     - name: Connect SeaweedFS compiler cache
       uses: ./.github/actions/nook-cache-connect
@@ -575,16 +577,18 @@ runs:
           echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"
         } >> "$GITHUB_ENV"
 
-    - name: Set CI environment
+    - name: Set CI environment and start cache observations
       shell: bash
+      env:
+        NOOK_MONITOR_BUILDKIT_STORAGE: ${{ inputs.monitor-buildkit-storage == 'true' && startsWith(runner.name, 'nook-k0s-') }}
       run: |
+        set -euo pipefail
         echo "NOOK_ENV=ci" >> "$GITHUB_ENV"
+        export NOOK_ENV=ci
 
-    - name: Check ARC BuildKit storage pressure
-      if: ${{ inputs.monitor-buildkit-storage == 'true' && startsWith(runner.name, 'nook-k0s-') }}
-      continue-on-error: true
-      shell: bash
-      run: |
+        # Only observations are optional; the environment write above is fatal.
+        if [ "$NOOK_MONITOR_BUILDKIT_STORAGE" = true ]; then
+          if bash -euo pipefail <<'STORAGE_CHECK'
         set -euo pipefail
         usage="$(mktemp)"
         trap 'rm -f "$usage"' EXIT
@@ -603,11 +607,15 @@ runs:
         else
           echo "BuildKit shard usage: $total (below the 100 GB warning threshold)"
         fi
+        STORAGE_CHECK
+          then
+            :
+          else
+            echo "::warning::BuildKit storage observation failed"
+          fi
+        fi
 
-    - name: Start cache telemetry
-      continue-on-error: true
-      shell: bash
-      run: |
+        if bash -euo pipefail <<'CACHE_TELEMETRY'
         set -euo pipefail
         node_bin="$(command -v node || true)"
         if [ -z "$node_bin" ] && [ -x /home/runner/externals/node24/bin/node ]; then
@@ -620,3 +628,9 @@ runs:
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
         timeout 15s "$node_bin" "$GITHUB_ACTION_PATH/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"
+        CACHE_TELEMETRY
+        then
+          :
+        else
+          echo "::warning::Cache telemetry baseline failed"
+        fi
