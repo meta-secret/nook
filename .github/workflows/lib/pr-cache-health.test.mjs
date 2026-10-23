@@ -899,7 +899,7 @@ void test(
       nextStep === -1 ? workflow.length : nextStep,
     );
     const validationStart = workflow.indexOf(
-      "      - name: Parallel validation and browser tests\n",
+      "      - name: Prepare artifacts and selected focused browser tests\n",
     );
     assert.notEqual(validationStart, -1);
     const validationNextStep = workflow.indexOf(
@@ -913,7 +913,7 @@ void test(
 
     assert.match(
       step,
-      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && needs\.scope\.outputs\.auth == 'true'$/m,
     );
     assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(
@@ -932,7 +932,7 @@ void test(
     ]);
     assert.match(
       validationStep,
-      /^ {8}run: task --silent ci:pr:validate$/m,
+      /^ {8}run: task --silent ci:pr:browser$/m,
     );
     assert.doesNotMatch(validationStep, /^ {8}continue-on-error:/m);
     assert.equal(

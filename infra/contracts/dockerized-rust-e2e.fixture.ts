@@ -53,13 +53,17 @@ export class DockerizedRustE2eContract {
     expect(webPackage.scripts["test:e2e"]).toContain('exit "$failed"');
     const workflowJobSchema = z.object({
       "timeout-minutes": z.union([z.number(), z.string()]).optional(),
-      env: z.record(z.string(), z.union([
-        z.string(), z.number(), z.boolean(),
-      ])).optional(),
-      steps: z.array(z.object({
-        name: z.string().optional(),
-        run: z.string().optional(),
-      })).optional(),
+      env: z
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+        .optional(),
+      steps: z
+        .array(
+          z.object({
+            name: z.string().optional(),
+            run: z.string().optional(),
+          }),
+        )
+        .optional(),
       strategy: z
         .object({
           "fail-fast": z.boolean().optional(),
@@ -68,10 +72,7 @@ export class DockerizedRustE2eContract {
         .optional(),
     });
     const workflowSchema = z.object({
-      jobs: z.record(
-        z.string(),
-        workflowJobSchema,
-      ),
+      jobs: z.record(z.string(), workflowJobSchema),
     });
     const pr = workflowSchema.parse(
       Bun.YAML.parse(this.read(".github/workflows/pr.yml")),
@@ -86,7 +87,9 @@ export class DockerizedRustE2eContract {
       Bun.YAML.parse(this.read(".github/workflows/e2e-pr.yml")),
     );
     expect(Object.keys(pr.jobs)).toEqual([
+      "scope",
       "prepare",
+      "verify",
       "browser",
       "validation",
     ]);
@@ -94,6 +97,10 @@ export class DockerizedRustE2eContract {
     const browser = workflowJobSchema.parse(pr.jobs.browser);
     const validation = workflowJobSchema.parse(pr.jobs.validation);
     expect(prepare["timeout-minutes"]).toBe(240);
+    expect(workflowJobSchema.parse(pr.jobs.verify)["timeout-minutes"]).toBe(
+      240,
+    );
+    expect(workflowJobSchema.parse(pr.jobs.scope)["timeout-minutes"]).toBe(15);
     expect(browser["timeout-minutes"]).toBe(180);
     expect(browser.strategy?.["fail-fast"]).toBe(false);
     expect(validation["timeout-minutes"]).toBe(15);

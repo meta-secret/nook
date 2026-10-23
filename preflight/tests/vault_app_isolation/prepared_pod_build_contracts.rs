@@ -11,14 +11,14 @@ impl PreparedPodBuildScenario<'_> {
         let pr_tasks = self.root.read("nook-app/ci/pr.yml");
         let join = section(&pr_tasks, "  ci:pr:validate:\n", "\n  ci:pr:checks:");
         assert!(
-            pr_workflow.contains("run: task --silent ci:pr:validate")
+            pr_workflow.contains("run: task --silent ci:pr:verification")
                 && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
                 && !pr_workflow.contains("Publish exact-source PR browser job image")
                 && !pr_workflow.contains("Upload preview dist handoff")
                 && join.contains("deps:")
                 && join.contains("- ci:pr:browser")
                 && join.contains("- ci:pr:checks"),
-            "PR must fan out verified artifacts locally and deploy them in the same job"
+            "PR must join source verification with immutable browser artifacts before preview"
         );
     }
 }

@@ -174,7 +174,7 @@ impl RustEcosystemFixture {
     fn assert_pr_validation_join(&self) -> anyhow::Result<()> {
         let validation = self
             .pr
-            .find("run: task --silent ci:pr:validate\n")
+            .find("run: task --silent ci:pr:verification\n")
             .ok_or_else(|| anyhow::anyhow!("missing PR validation join"))?;
         let deploy = self
             .pr

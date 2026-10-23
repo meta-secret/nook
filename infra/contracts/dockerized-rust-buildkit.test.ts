@@ -44,7 +44,9 @@ class DockerizedRustBuildKitContract {
     expect(dockerSetup).toContain("--password-stdin");
     expect(dockerSetup).not.toContain("docker/login-action");
     expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
-    expect(workflow).toContain("task --silent ci:pr:validate");
+    expect(workflow).toContain("task --silent ci:pr:verification");
+    expect(workflow).toContain("task --silent ci:pr:browser");
+    expect(workflow).toContain("needs: [scope, prepare]");
     expect(workflow).not.toContain("nook-cache-telemetry");
     const workflowStep = (name: string): string => {
       const stepStart = workflow.indexOf(`      - name: ${name}\n`);
@@ -59,7 +61,7 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && steps\.browser-scope\.outputs\.auth == 'true'$/m,
+      /^ {8}if: always\(\) && !inputs\.full_e2e_requested && needs\.scope\.outputs\.auth == 'true'$/m,
     );
     expect(diagnosticsStep).toMatch(/^ {8}uses: actions\/upload-artifact@v7$/m);
     const diagnosticPaths = diagnosticsStep.match(
@@ -75,7 +77,7 @@ class DockerizedRustBuildKitContract {
       "uses: actions/upload-artifact@v7",
       "uses: actions/upload-artifact@v7",
     ]);
-    expect(workflow).toContain("needs: [prepare, browser]");
+    expect(workflow).toContain("needs: [scope, prepare, verify, browser]");
     expect(workflow).toContain("if: ${{ always() }}");
     expect(workflow).toContain("fail-fast: false");
     expect(workflow).toContain(
@@ -101,9 +103,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain(
       "E2E_SHARD=3/3 task --silent _extension:test:e2e:shard",
     );
-    const validationStep = workflowStep(
-      "Parallel validation and browser tests",
-    );
+    const validationStep = workflowStep("Verify product source and coverage");
     expect(validationStep).not.toMatch(/^ {8}continue-on-error:/m);
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
