@@ -43,5 +43,13 @@ Run `task infra:buildkit:build` to load the derivative image locally. Both paths
 use vendored Go dependencies and the pinned toolchain. The daemon uses the
 upstream BuildKit build tags; tests compile the native cache package. Neither
 task pushes an image, modifies an existing daemon, or selects a
-production deployment. Publication and an original-volume canary require the
-owning reviewed release decision; image downgrade after new writes is unproven.
+production deployment.
+
+After the owning release decision, publish with `task infra:buildkit:publish
+BUILDKIT_IMAGE=registry.dev.nokey.sh/nook/buildkit:v0.34.1-nook.1-<full-source-commit>`.
+This builds the same daemon target for `linux/amd64`, uses existing Docker
+registry authentication, and retains native Buildx digest metadata in a private
+temporary directory. Use a new source-commit tag for each derivative release;
+the task does not publish `latest` or overwrite an official image alias.
+Production pin selection and an original-volume canary remain separate release
+actions. Image downgrade after new writes is unproven.

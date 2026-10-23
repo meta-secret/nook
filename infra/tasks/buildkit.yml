@@ -6,6 +6,27 @@ tasks:
     cmds:
       - docker buildx bake --load -f infra/k0s/images/buildkit/docker-bake.hcl buildkit-native
 
+  buildkit:publish:
+    desc: Publish the pinned linux/amd64 derivative under an explicit source-commit tag.
+    requires:
+      vars: [BUILDKIT_IMAGE]
+    env:
+      BUILDKIT_IMAGE: "{{.BUILDKIT_IMAGE}}"
+    preconditions:
+      - sh: printf '%s\n' "$BUILDKIT_IMAGE" | grep -Eq '^registry\.dev\.nokey\.sh/nook/buildkit:v0\.34\.1-nook\.1-[0-9a-f]{40}$'
+        msg: BUILDKIT_IMAGE must use the derivative version followed by its full source commit.
+    cmds:
+      - |
+        set -euo pipefail
+        umask 077
+        evidence=$(mktemp -d "${TMPDIR:-/tmp}/nook-buildkit-publish.XXXXXX")
+        docker buildx bake --push -f infra/k0s/images/buildkit/docker-bake.hcl \
+          --set buildkit-native.platform=linux/amd64 \
+          --set "buildkit-native.tags=$BUILDKIT_IMAGE" \
+          --metadata-file "$evidence/metadata.json" buildkit-native
+        jq -er '."buildkit-native"."containerimage.digest"' "$evidence/metadata.json"
+        printf 'Buildx publication metadata: %s\n' "$evidence/metadata.json"
+
   buildkit:test:
     desc: Run native BuildKit cache and GC regression tests in a disposable local container.
     preconditions:
