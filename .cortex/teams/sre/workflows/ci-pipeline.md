@@ -120,11 +120,14 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Native Rust and the combined WASM/web producer each run read-only preflight
   before building. The web producer exports its immutable `wasm-handoff`
-  before starting Node tests, web artifact verification, and verified preflight
-  cache publication concurrently on the same BuildKit shard.
+  before starting Node tests, web artifact verification, private browser-image
+  construction, and verified preflight cache publication concurrently on the
+  same BuildKit shard. Browser construction uses the existing `type=cacheonly`
+  output and cannot publish an image or shared cache.
   WASM cache publication starts only after Node tests pass. Every started
   child is joined, including when product verification fails.
-  Browser-image publication requires successful Node tests and web verification.
+  Browser-image publication requires successful Node tests, web verification,
+  and browser construction; it uses the same inputs and builder afterward.
 - Cache-publication assertions run inside their verified producers. Explicit
   verification outputs let successful product checks feed later tests even
   when cache publication fails. For example, a failed WASM cache export fails
