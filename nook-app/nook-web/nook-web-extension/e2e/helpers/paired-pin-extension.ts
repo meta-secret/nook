@@ -212,11 +212,11 @@ export async function launchPairedPinExtension(
   )
 
   await leaveFirstRunReady(simplePage)
+  // The first vault's setup ends on the identities; callers use the vault.
+  await openVaultPage(simplePage)
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })
-  // The first vault's setup ends on the identities; callers use the vault.
-  await openVaultPage(simplePage)
   return {
     context,
     userDataDir,

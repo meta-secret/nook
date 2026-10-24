@@ -242,12 +242,17 @@ async function createAndApproveVault(context, popupPage) {
   }
   await authenticated
     .or(firstRunReady)
+    .or(simplePage.getByTestId('identities-hub'))
     .first()
     .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
   if (await firstRunReady.isVisible().catch(() => false)) {
     await simplePage.getByTestId('first-run-backup-skip').click()
   }
-  await authenticated.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  // The first run ends on the identities hub, which has no vault shell.
+  await authenticated
+    .or(simplePage.getByTestId('identities-hub'))
+    .first()
+    .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
   return simplePage
 }
 

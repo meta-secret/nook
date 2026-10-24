@@ -331,7 +331,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(simplePage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(simplePage.getByTestId('identities-hub')).toBeVisible()
     // Whether the reused tab's connect-route load adopts before the spec
     // navigates it away is timing-dependent, so later counts are relative.
     await flushNookLogPersistQueue(simplePage)
