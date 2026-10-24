@@ -30,6 +30,7 @@
     "../nook-vault-sentinel/src/extension-connect-disabled.ts",
     "../nook-vault-sentinel/src/extension-connect-progress-disabled.ts",
     "../nook-vault-sentinel/src/extension-connect-progress-steps-disabled.ts",
+    "../nook-vault-sentinel/src/paired-extension-identity-join-disabled.ts",
     "../nook-web-extension/scripts/{build,deployment-package,dev-loop}.ts",
     "../nook-web-extension/scripts/**/*.test.ts",
     "../nook-web-extension/e2e/**/*.spec.ts",
