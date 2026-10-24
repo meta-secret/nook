@@ -52,6 +52,7 @@ describe('focused credential widget surface', () => {
     const choose = vi.fn<() => void>()
     const request: Parameters<typeof FocusedCredentialWidget.mount>[0] = {
       vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+      field: document.createElement('input'),
       choose,
     }
     const widget = FocusedCredentialWidget.mount(request)
@@ -71,6 +72,7 @@ describe('focused credential widget surface', () => {
     const choose = vi.fn<() => void>()
     const request: Parameters<typeof FocusedCredentialWidget.mount>[0] = {
       vaultConnection: { kind: PilotVaultConnectionKind.Connected },
+      field: document.createElement('input'),
       choose,
     }
     FocusedCredentialWidget.mount(request).shell.continueButton.click()

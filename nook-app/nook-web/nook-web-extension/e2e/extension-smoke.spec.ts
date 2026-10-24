@@ -274,8 +274,13 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await loginPage.goto(`${loginServer.origin}/login`)
     const widget = loginPage.locator('#nook-auth-widget')
     await expect(widget).toBeVisible()
-    await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
-    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+    // Without a connected vault the widget offers the connect, never Sign in.
+    await expect(widget.getByText('Connect Nook to your vault')).toBeVisible()
+    await expect(
+      widget.getByText(
+        'Nook fills and saves logins only from a connected vault.',
+      ),
+    ).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
     const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
     await expect(vaultStatus).toHaveText('Vault not connected')
@@ -283,7 +288,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       'data-state',
       'vault-not-connected',
     )
-    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: 'Connect vault' }),
+    ).toBeVisible()
+    await expect(widget.getByRole('button', { name: 'Not now' })).toBeVisible()
+    await expect(widget.getByRole('button', { name: 'Sign in' })).toHaveCount(0)
     // One action on the page: the vault opens from the side panel.
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
@@ -295,9 +304,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     )
     const hiddenHeaderWidget =
       hiddenHeaderLoginPage.locator('#nook-auth-widget')
-    await expect(hiddenHeaderWidget.getByText('Ready to sign in')).toBeVisible()
     await expect(
-      hiddenHeaderWidget.getByRole('button', { name: 'Sign in' }),
+      hiddenHeaderWidget.getByText('Connect Nook to your vault'),
+    ).toBeVisible()
+    await expect(
+      hiddenHeaderWidget.getByRole('button', { name: 'Connect vault' }),
     ).toBeVisible()
     await expect(hiddenHeaderWidget.getByText('Manual checkpoint')).toHaveCount(
       0,
@@ -308,20 +319,25 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         ?.querySelector<HTMLButtonElement>('button.primary-button')
         ?.click()
     })
-    await expect(widget.getByText('Ready to sign in')).toBeVisible()
+    // An untrusted click starts nothing.
+    await expect(widget.getByText('Connect Nook to your vault')).toBeVisible()
 
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
-    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeHidden()
+    await expect(
+      widget.getByRole('button', { name: 'Connect vault' }),
+    ).toBeHidden()
     await expect(
       widget
         .getByTestId('nook-auth-gate-expand')
-        .getByText('1/3', { exact: true }),
+        .getByText('Nook Pilot', { exact: true }),
     ).toBeVisible()
     await expect(
-      widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
+      widget.getByRole('button', { name: 'Expand Nook: Nook Pilot' }),
     ).toBeVisible()
     await widget.getByTestId('nook-auth-gate-expand').click()
-    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
+    await expect(
+      widget.getByRole('button', { name: 'Connect vault' }),
+    ).toBeVisible()
 
     // The toolbar button opens the side panel; here its page runs in a tab.
     // Before setup it runs the shared ceremony, with Open vault in its header.

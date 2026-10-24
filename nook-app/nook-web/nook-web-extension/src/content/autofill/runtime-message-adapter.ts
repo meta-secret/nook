@@ -59,6 +59,7 @@ import type {
   PersonalFillOpenMessage,
   PersonalFillRevealMessage,
 } from '../../lib/personal-fill-messages'
+import type { SiteVaultConnectMessage } from '../../lib/site-vault-connect-messages'
 import type { SidePanelPageChangedMessage } from '../../lib/side-panel-authenticator-setup'
 
 import {
@@ -156,6 +157,7 @@ export type ExtensionRuntimeRequest =
   | PersonalFillOpenMessage
   | PersonalFillRevealMessage
   | PersonalFillCancelMessage
+  | SiteVaultConnectMessage
 
 export type {
   AuthenticationWorkflowSnapshotResponse,

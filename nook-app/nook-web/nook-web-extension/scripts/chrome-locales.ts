@@ -8,6 +8,10 @@ import {
   PersonalPickerChromeMessages,
   type PersonalPickerLocaleMessages,
 } from './chrome-locale-personal-picker'
+import {
+  VaultGateChromeMessages,
+  type VaultGateLocaleMessages,
+} from './chrome-locale-vault-gate'
 
 type ExtensionChromeLocaleBuildRequest = {
   appCommonLocalesRoot: string
@@ -57,7 +61,6 @@ type NookLocaleCatalogShape = {
       pilot_label: string
       vault_connected: string
       vault_not_connected: string
-      connect_vault: string
       login_title: string
       login_description: string
       login_match_count: string
@@ -181,7 +184,8 @@ type ExtensionLocaleCatalogAdmissionArgs = {
 }
 
 type WidgetLocaleMessageKey =
-  keyof NookLocaleCatalogShape['extension']['widget']
+  | keyof NookLocaleCatalogShape['extension']['widget']
+  | keyof VaultGateLocaleMessages
 type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
 type SetupLocaleMessageKey = keyof NookLocaleCatalogShape['extension']['setup']
@@ -474,9 +478,6 @@ export async function buildChromeLocales({
         },
         widgetVaultLocked: {
           message: catalog.extension.setup.message('status_locked', locale),
-        },
-        widgetConnectVault: {
-          message: catalog.extension.widget.message('connect_vault', locale),
         },
         widgetLoginTitle: {
           message: catalog.extension.widget.message('login_title', locale),
@@ -974,6 +975,10 @@ export async function buildChromeLocales({
           ),
         },
         ...passkeyCardMessages(catalog.extension.passkey, locale),
+        ...VaultGateChromeMessages.messages({
+          section: catalog.extension.widget,
+          locale,
+        }),
         ...PersonalPickerChromeMessages.messages({
           section: catalog.extension.personalPicker,
           locale,

@@ -7,10 +7,18 @@ import { authenticationWidgetShell } from './widget-shell'
 import { WidgetWorkflowRootKind } from './state'
 import {
   SavedLoginPresentationKind,
+  WidgetVaultGate,
+  WidgetVaultGateKind,
   WidgetVaultPresentationProjection,
+  WidgetVaultRequirement,
   type PilotVaultConnection,
 } from './widget-presentation-state'
 import { WorkflowCopy, workflowUi } from './workflow-ui'
+import {
+  VaultConnectResumeKind,
+  WidgetVaultGateSurface,
+  type WidgetVaultGateMount,
+} from './widget-vault-gate'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -19,6 +27,8 @@ import {
 type PersonalFillWidgetMount = {
   readonly vaultConnection: PilotVaultConnection
   readonly group: keyof typeof PersonalFieldGroup
+  /** The focused field the widget is offered for. */
+  readonly field: HTMLInputElement
   readonly choose: () => void
 }
 
@@ -44,19 +54,40 @@ export class PersonalFillWidget {
   }
 
   static mount(request: PersonalFillWidgetMount): PersonalFillWidget {
+    const vaultPresentation = WidgetVaultPresentationProjection.forConnection(
+      request.vaultConnection,
+    )
     const shellRequest: Parameters<
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
       copy: WorkflowCopy.forKind(AuthenticationWorkflowKind.Login),
-      vaultPresentation: WidgetVaultPresentationProjection.forConnection(
-        request.vaultConnection,
-      ),
+      vaultPresentation,
       savedLoginAction: true,
       savedLoginPresentation: SavedLoginPresentationKind.Workflow,
       currentStep: 1,
       totalSteps: 1,
     }
     const shell = authenticationWidgetShell.createWidgetShell(shellRequest)
+    shell.host.setAttribute('data-nook-credential-mode', 'personal')
+    const gateRequest: Parameters<typeof WidgetVaultGate.decide>[0] = {
+      presentation: vaultPresentation,
+      requirement: WidgetVaultRequirement.Required,
+    }
+    const gate = WidgetVaultGate.decide(gateRequest)
+    switch (gate) {
+      case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.Unlock: {
+        const gateMount: WidgetVaultGateMount = {
+          shell,
+          gate,
+          resume: { kind: VaultConnectResumeKind.Field, input: request.field },
+        }
+        WidgetVaultGateSurface.render(gateMount)
+        return PersonalFillWidget.mounted(shell)
+      }
+      case WidgetVaultGateKind.Open:
+        break
+    }
     shell.title.textContent = workflowUi.translatedMessage(
       PersonalFillWidget.titleKey(request.group),
     )
@@ -68,7 +99,6 @@ export class PersonalFillWidget {
     )
     shell.continueButton.textContent = continueLabel
     shell.continueButton.setAttribute('aria-label', continueLabel)
-    shell.host.setAttribute('data-nook-credential-mode', 'personal')
     shell.continueButton.addEventListener('click', (event) => {
       switch (new AuthenticationGesture(event).trusted) {
         case false:
@@ -77,6 +107,10 @@ export class PersonalFillWidget {
           request.choose()
       }
     })
+    return PersonalFillWidget.mounted(shell)
+  }
+
+  private static mounted(shell: PersonalFillWidgetShell): PersonalFillWidget {
     const mountRequest: Parameters<
       typeof authenticationWidgetShell.mountWidgetShell
     >[0] = {

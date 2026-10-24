@@ -133,7 +133,12 @@ for (const locked of [false, true]) {
       const page = await context.newPage()
       await page.goto(fixture.destination())
       const widget = page.locator('#nook-auth-widget')
-      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      // A locked vault offers Unlock in place of Sign in.
+      await expect(
+        widget.getByText(
+          locked ? 'Unlock Nook to continue' : 'Ready to sign in',
+        ),
+      ).toBeVisible()
       if (locked) {
         await expect(
           widget.getByTestId('nook-auth-gate-vault-status'),

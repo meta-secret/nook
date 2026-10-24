@@ -28,6 +28,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/lib/paired-vaults.ts",
   "nook-web-extension/src/lib/passkey-ceremony-error.ts",
   "nook-web-extension/src/lib/personal-fill-messages.ts",
+  "nook-web-extension/src/lib/site-vault-connect-messages.ts",
   "nook-web-extension/src/lib/provider-credential-staging.ts",
   "nook-web-extension/src/lib/serialized-wire-value-adapter.ts",
   "nook-web-extension/src/lib/webauthn-messages.ts",

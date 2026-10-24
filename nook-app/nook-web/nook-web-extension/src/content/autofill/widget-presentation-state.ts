@@ -135,7 +135,7 @@ export function savedLoginDescriptionKey(
 ): BrowserMessageKey {
   switch (presentation.kind) {
     case WidgetVaultPresentationKind.NotConnected:
-      return BROWSER_MESSAGE_KEYS.WidgetConnectVault
+      return BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription
     case WidgetVaultPresentationKind.Connected:
       return BROWSER_MESSAGE_KEYS.WidgetLoginDescription
     case WidgetVaultPresentationKind.Locked:
@@ -148,5 +148,54 @@ export function savedLoginDescriptionKey(
         : BROWSER_MESSAGE_KEYS.WidgetLoginMultipleDescription
     case WidgetVaultPresentationKind.Unavailable:
       return BROWSER_MESSAGE_KEYS.WidgetLoginUnavailableDescription
+  }
+}
+
+/** Whether a widget action reads or writes the connected vault. */
+export enum WidgetVaultRequirement {
+  Required = 'required',
+  NotRequired = 'not-required',
+}
+
+/** What the widget offers before an action that needs the vault. */
+export enum WidgetVaultGateKind {
+  /** No vault is connected: offer Connect vault, never the blocked action. */
+  Connect = 'connect',
+  /** The connected vault is locked: offer Unlock, never the blocked action. */
+  Unlock = 'unlock',
+  /** The action can run: offer it. */
+  Open = 'open',
+}
+
+export type WidgetVaultGateRequest = {
+  readonly presentation: WidgetVaultPresentation
+  readonly requirement: WidgetVaultRequirement
+}
+
+/**
+ * The one place that decides whether a widget may offer its vault action.
+ * Every widget flow asks it before wiring its primary action, so no flow
+ * offers Sign in, fill, save, passkey or authenticator actions that the
+ * current vault connection cannot complete.
+ */
+export class WidgetVaultGate {
+  static decide(request: WidgetVaultGateRequest): WidgetVaultGateKind {
+    switch (request.requirement) {
+      case WidgetVaultRequirement.NotRequired:
+        return WidgetVaultGateKind.Open
+      case WidgetVaultRequirement.Required:
+        break
+    }
+    switch (request.presentation.kind) {
+      case WidgetVaultPresentationKind.NotConnected:
+        return WidgetVaultGateKind.Connect
+      case WidgetVaultPresentationKind.Locked:
+        return WidgetVaultGateKind.Unlock
+      case WidgetVaultPresentationKind.Connected:
+      case WidgetVaultPresentationKind.NoMatchingCredential:
+      case WidgetVaultPresentationKind.CredentialAvailable:
+      case WidgetVaultPresentationKind.Unavailable:
+        return WidgetVaultGateKind.Open
+    }
   }
 }

@@ -255,6 +255,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
+  returnToConnectOrigin: mock(() => Promise.resolve()),
   lockExtensionSession: mock(() => Promise.resolve(true)),
 }
 

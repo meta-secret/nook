@@ -411,7 +411,9 @@ class AuthenticatorEnrollmentInteraction {
   }
 
   private unavailableMessage(host: EnrollmentFlowHost): string {
-    return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
+    return host.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
+    )
   }
 
   private lockedEnrollMessage(host: EnrollmentFlowHost): string {

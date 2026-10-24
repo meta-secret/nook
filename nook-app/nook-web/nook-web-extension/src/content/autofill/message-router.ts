@@ -1,7 +1,9 @@
 import {
   FocusedPickerOwnership,
   focusedCredentialInteraction,
+  focusedCredentialTargetSensor,
 } from './focused-credential-interaction'
+import { vaultConnectResume } from './widget-vault-gate'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { Schema } from 'effect'
 import { LoginPickerPageVerification } from '../../lib/inline-login-picker'
@@ -47,7 +49,10 @@ import {
   type SidePanelPageAddAuthenticatorDelivery,
 } from './side-panel-page-authenticator-setup'
 import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
-import { personalFillInteraction } from './personal-fill-interaction'
+import {
+  personalFillInteraction,
+  personalFillTargetSensor,
+} from './personal-fill-interaction'
 import {
   PersonalFillPageReceiver,
   PersonalFillReception,
@@ -176,6 +181,11 @@ export const routeAutofillMessage: AutofillMessageListener = (
     sidePanelCodeFill.withdraw()
     void clearAuthenticationSurface()
       .then(() => {
+        // A connect this page started resumes on the field it started from.
+        vaultConnectResume.resume([
+          focusedCredentialTargetSensor,
+          personalFillTargetSensor,
+        ])
         scanState.schedule()
         const response: Parameters<typeof sendResponse>[0] = { ok: true }
         sendResponse(response)

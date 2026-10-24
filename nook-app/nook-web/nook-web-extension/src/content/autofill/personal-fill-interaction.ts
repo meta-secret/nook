@@ -371,6 +371,7 @@ export class PersonalFillInteraction {
       const mountRequest: Parameters<typeof PersonalFillWidget.mount>[0] = {
         vaultConnection,
         group: request.plan.group,
+        field: request.scope.target.input,
         choose: () => {
           void this.choose()
         },

@@ -340,6 +340,7 @@ export class FocusedCredentialInteraction {
       const mountRequest: Parameters<typeof FocusedCredentialWidget.mount>[0] =
         {
           vaultConnection,
+          field: request.observation.target.input,
           choose: () => {
             void this.choose()
           },

@@ -1949,7 +1949,6 @@
       "pilot_label": "Nook Pilot",
       "vault_connected": "Сейф подключён",
       "vault_not_connected": "Сейф не подключен",
-      "connect_vault": "Подключите этот браузер к сейфу, затем снова нажмите «Войти».",
       "login_title": "Готово ко входу",
       "login_description": "Nook обнаружил этап входа и готов продолжить после вашего подтверждения.",
       "login_match_count": "Совпадений с сохранёнными входами: $1",
@@ -2087,7 +2086,14 @@
       "personal_address_title": "Заполнить адрес",
       "personal_card_title": "Заполнить данные карты",
       "personal_description": "Выберите сохранённую запись в Nook. Поля заполнятся только после выбора.",
-      "personal_picker_title": "Выбор личных данных"
+      "personal_picker_title": "Выбор личных данных",
+      "connect_first_title": "Подключите Nook к сейфу",
+      "connect_first_description": "Nook заполняет и сохраняет входы только из подключённого сейфа.",
+      "connect_first_action": "Подключить сейф",
+      "connect_first_opened": "Завершите подключение во вкладке Nook. Страница обновится, когда вы закончите.",
+      "connect_first_failed": "Nook не удалось открыть страницу подключения. Нажмите «Подключить сейф», чтобы попробовать снова.",
+      "unlock_first_title": "Разблокируйте Nook, чтобы продолжить",
+      "gate_dismiss": "Не сейчас"
     },
     "passkey": {
       "prompt_label": "Passkey Nook",

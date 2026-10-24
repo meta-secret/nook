@@ -49,7 +49,8 @@ test.describe('PIN Pilot session lifecycle', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
-      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      // A locked vault offers Unlock in place of Sign in.
+      await expect(widget.getByText('Unlock Nook to continue')).toBeVisible()
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'vault-locked')

@@ -1942,7 +1942,6 @@
       "pilot_label": "Nook Pilot",
       "vault_connected": "Vault connected",
       "vault_not_connected": "Vault not connected",
-      "connect_vault": "Connect this browser to your vault, then select Sign in again.",
       "login_title": "Ready to sign in",
       "login_description": "Nook detected a login step and is ready to continue with your approval.",
       "login_match_count": "Matching saved logins: $1",
@@ -2080,7 +2079,14 @@
       "personal_address_title": "Fill an address",
       "personal_card_title": "Fill a card",
       "personal_description": "Choose a saved record in Nook. Nothing is filled until you pick one.",
-      "personal_picker_title": "Choose personal data"
+      "personal_picker_title": "Choose personal data",
+      "connect_first_title": "Connect Nook to your vault",
+      "connect_first_description": "Nook fills and saves logins only from a connected vault.",
+      "connect_first_action": "Connect vault",
+      "connect_first_opened": "Finish connecting in the Nook tab. This page updates when you are done.",
+      "connect_first_failed": "Nook could not open the connect page. Select Connect vault to try again.",
+      "unlock_first_title": "Unlock Nook to continue",
+      "gate_dismiss": "Not now"
     },
     "passkey": {
       "prompt_label": "Nook passkey",
