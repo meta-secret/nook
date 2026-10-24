@@ -46,7 +46,7 @@ pub use personal_data_view::{
 };
 pub use personal_fill::{
     PersonalFieldGroup, PersonalFieldKind, PersonalFillError, PersonalFillProjection,
-    PersonalFillValue, PersonalFillValues,
+    PersonalFillRecordType, PersonalFillValue, PersonalFillValues,
 };
 
 /// Number of words exposed by a seed-phrase list projection.
