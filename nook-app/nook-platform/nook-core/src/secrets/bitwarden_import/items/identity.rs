@@ -112,7 +112,7 @@ impl BitwardenIdentity {
                 }),
                 document(IdentityDocumentKind::Passport, &self.passport_number),
                 document(IdentityDocumentKind::DriversLicense, &self.license_number),
-                document(IdentityDocumentKind::SocialSecurity, &self.ssn),
+                PersonalImportPart::identity_ssn_field(&self.ssn),
             ],
         }
         .disposition()
@@ -159,6 +159,21 @@ mod tests {
         assert_eq!(passport.number, "X1234567");
         assert!(passport.name_as_printed.is_empty());
         assert_eq!(license.kind, IdentityDocumentKind::DriversLicense);
+        Ok(())
+    }
+
+    #[test]
+    fn non_us_ssn_values_are_left_out_without_skipping_the_identity() -> anyhow::Result<()> {
+        let json = r#"{"items":[{"type":4,"name":"Taxpayer","identity":{"firstName":"Ada",
+          "lastName":"Lovelace","address1":"1 Main St","city":"Springfield","country":"US",
+          "ssn":"912-70-1234"}}]}"#;
+        let plan = BitwardenItems::parse(json)?.plan();
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        assert!(matches!(
+            plan.items.as_slice(),
+            [SecretValue::Person(_), SecretValue::Address(_)]
+        ));
         Ok(())
     }
 

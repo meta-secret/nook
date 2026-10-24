@@ -106,10 +106,7 @@ impl ProtonPassVaultItem<'_> {
                     IdentityDocumentKind::DriversLicense,
                     &identity.license_number,
                 ),
-                document(
-                    IdentityDocumentKind::SocialSecurity,
-                    &identity.social_security_number,
-                ),
+                PersonalImportPart::identity_ssn_field(&identity.social_security_number),
             ],
         }
         .disposition()
@@ -156,6 +153,21 @@ mod tests {
         assert_eq!(address.address_line2, "3");
         assert_eq!(passport.kind, IdentityDocumentKind::Passport);
         assert!(passport.name_as_printed.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn non_us_ssn_values_are_left_out_without_skipping_the_identity() -> anyhow::Result<()> {
+        let json = r#"{"vaults":{"a":{"items":[{"data":{"type":"identity",
+          "metadata":{"name":"Taxpayer"},"content":{"firstName":"Ada","lastName":"Lovelace",
+            "streetAddress":"1 Main St","city":"Springfield","socialSecurityNumber":"912-70-1234"}}}]}}}"#;
+        let plan = ProtonPassExport::parse(json)?.plan();
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        assert!(matches!(
+            plan.items.as_slice(),
+            [SecretValue::Person(_), SecretValue::Address(_)]
+        ));
         Ok(())
     }
 
