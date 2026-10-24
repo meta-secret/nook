@@ -8,9 +8,9 @@
 use super::{ImportItemDisposition, ImportSkipReason};
 use crate::{
     AddressFields, AddressSecret, CalendarDate, CalendarMonth, DomesticAccountFields,
-    DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentSecret,
+    DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
     InternationalAccountFields, InternationalAccountSecret, PersonFields, PersonSecret,
-    SecretValue,
+    SecretValue, ValidationError,
 };
 
 /// Outcome of converting one personal-data part of a source item.
@@ -66,6 +66,30 @@ impl PersonalImportPart {
         IdentityDocumentSecret::from_fields(fields).map_or(Self::Invalid, |document| {
             Self::Record(Box::new(SecretValue::IdentityDocument(document)))
         })
+    }
+
+    /// A free-form "SSN" field of an identity (Bitwarden, Proton Pass) may hold
+    /// an ITIN or a non-US national number. Only a valid US Social Security
+    /// number becomes a document; any other value is unsupported rather than
+    /// coerced into another kind, so the identity's other parts still import.
+    /// Typed SSN sources use `document` and stay fail-closed.
+    pub(crate) fn identity_ssn_field(number: &str) -> Self {
+        if number.trim().is_empty() {
+            return Self::Absent;
+        }
+        match IdentityDocumentSecret::from_fields(IdentityDocumentFields {
+            kind: IdentityDocumentKind::SocialSecurity,
+            number,
+            issuer: "",
+            issuing_country: "",
+            issue_date: "",
+            expiry_date: "",
+            name_as_printed: "",
+        }) {
+            Ok(document) => Self::Record(Box::new(SecretValue::IdentityDocument(document))),
+            Err(ValidationError::IdentityDocumentSsnInvalid) => Self::Unsupported,
+            Err(_) => Self::Invalid,
+        }
     }
 
     /// An IBAN makes an international account and an account number with a
