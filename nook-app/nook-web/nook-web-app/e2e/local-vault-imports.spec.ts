@@ -290,7 +290,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '1 unsupported',
@@ -318,7 +318,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '3 duplicates',
@@ -396,7 +396,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
       '1 unsupported',
@@ -418,7 +418,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
       '2 duplicates',
@@ -554,7 +554,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('lastpass-import-submit').click()
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
 
     await openVaultPage(page)
@@ -573,7 +573,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('lastpass-import-submit').click()
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
       '2 duplicates',
@@ -667,7 +667,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('proton-pass-import-submit').click()
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
       '1 unsupported',
@@ -695,7 +695,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('proton-pass-import-submit').click()
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
       '3 duplicates',
@@ -724,7 +724,7 @@ test.describe('local vault', () => {
     await page.getByTestId('bitwarden-import-submit').click()
 
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
     await expect(page.getByTestId('bitwarden-export-password')).toHaveValue('')
   })
@@ -761,7 +761,7 @@ test.describe('local vault', () => {
     )
     await expect(page.getByTestId('bitwarden-json-file')).toBeDisabled()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 1300 items',
+      'Imported 1300 records',
       { timeout: 30_000 },
     )
     expect(Date.now() - started).toBeLessThan(30_000)
@@ -813,7 +813,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 55 items',
+      'Imported 55 records',
     )
     await openVaultPage(page)
 

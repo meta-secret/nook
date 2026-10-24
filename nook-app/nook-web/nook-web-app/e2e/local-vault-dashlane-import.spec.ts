@@ -45,7 +45,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
 
     await openVaultPage(page)
@@ -64,7 +64,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
       '2 duplicates',
@@ -96,7 +96,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
       '1 unsupported',
