@@ -481,7 +481,6 @@
       "full_name": "Полное имя",
       "birth_date": "Дата рождения",
       "email": "Эл. почта",
-      "phone": "Телефон",
       "address_label": "Название",
       "address_line1": "Адрес, строка 1",
       "address_line2": "Адрес, строка 2",
@@ -501,7 +500,12 @@
       "iban": "IBAN",
       "swift_bic": "SWIFT/BIC",
       "routing_number": "Маршрутный номер",
-      "unnamed_personal_data": "Запись без названия"
+      "unnamed_personal_data": "Запись без названия",
+      "mobile_phone": "Мобильный телефон",
+      "home_phone": "Домашний телефон",
+      "work_phone": "Рабочий телефон",
+      "document_issuer": "Кем выдан",
+      "membership_organization": "Организация"
     },
     "status": {
       "synced": "Синхронизировано",
@@ -547,7 +551,10 @@
     "document_kinds": {
       "passport": "Паспорт",
       "national_id": "Удостоверение личности",
-      "drivers_license": "Водительское удостоверение"
+      "drivers_license": "Водительское удостоверение",
+      "social_security": "Соцстрахование (SSN)",
+      "tax_id": "ИНН",
+      "membership": "Членская карта"
     },
     "personal_count": "записей: {count}",
     "personal_count_page": "Показано {count} из {total} записей",
@@ -1117,7 +1124,8 @@
     "title_new_domestic_account": "Новый счёт в банке США",
     "title_edit_domestic_account": "Редактировать счёт в банке США",
     "placeholder_address_label": "например, Дом",
-    "placeholder_country": "например, Германия"
+    "placeholder_country": "например, Германия",
+    "document_date_hint": "ГГГГ-ММ или ГГГГ-ММ-ДД"
   },
   "status_bar": {
     "synced": "Синхронизировано",

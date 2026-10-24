@@ -481,7 +481,6 @@
       "full_name": "Full name",
       "birth_date": "Birth date",
       "email": "Email",
-      "phone": "Phone",
       "address_label": "Label",
       "address_line1": "Address line 1",
       "address_line2": "Address line 2",
@@ -501,7 +500,12 @@
       "iban": "IBAN",
       "swift_bic": "SWIFT/BIC",
       "routing_number": "Routing number",
-      "unnamed_personal_data": "Unnamed record"
+      "unnamed_personal_data": "Unnamed record",
+      "mobile_phone": "Mobile phone",
+      "home_phone": "Home phone",
+      "work_phone": "Work phone",
+      "document_issuer": "Issuer",
+      "membership_organization": "Organization"
     },
     "status": {
       "synced": "Synced",
@@ -547,7 +551,10 @@
     "document_kinds": {
       "passport": "Passport",
       "national_id": "National ID card",
-      "drivers_license": "Driver's license"
+      "drivers_license": "Driver's license",
+      "social_security": "Social security",
+      "tax_id": "Tax ID",
+      "membership": "Membership"
     },
     "personal_count": "Records: {count}",
     "personal_count_page": "Showing {count} of {total} records",
@@ -1412,7 +1419,8 @@
     "title_new_domestic_account": "New US bank account",
     "title_edit_domestic_account": "Edit US bank account",
     "placeholder_address_label": "e.g., Home",
-    "placeholder_country": "e.g., Germany"
+    "placeholder_country": "e.g., Germany",
+    "document_date_hint": "YYYY-MM or YYYY-MM-DD"
   },
   "status_bar": {
     "synced": "Synced",

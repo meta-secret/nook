@@ -10,7 +10,10 @@ import type { NookSecretListItem } from "$lib/nook";
 import type { TranslationRequest } from "$lib/vault/translation";
 import { SecretType } from "$lib/nook";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
-import { documentKindLabelKey } from "../add-secret/personal-data-fields";
+import {
+  documentIssuerLabelKey,
+  documentKindLabelKey,
+} from "../add-secret/personal-data-fields";
 import {
   ClipboardNoticeKind,
   SecretRevealKind,
@@ -94,9 +97,21 @@ const PERSON_SLOTS: readonly SlotSpec<PersonView>[] = [
   },
   {
     ...SLOT_DEFAULTS,
-    labelKey: I18N_KEYS.VaultFieldsPhone,
-    testId: "person-phone",
-    read: (view) => view.phone,
+    labelKey: I18N_KEYS.VaultFieldsMobilePhone,
+    testId: "person-mobile-phone",
+    read: (view) => view.mobilePhone,
+  },
+  {
+    ...SLOT_DEFAULTS,
+    labelKey: I18N_KEYS.VaultFieldsHomePhone,
+    testId: "person-home-phone",
+    read: (view) => view.homePhone,
+  },
+  {
+    ...SLOT_DEFAULTS,
+    labelKey: I18N_KEYS.VaultFieldsWorkPhone,
+    testId: "person-work-phone",
+    read: (view) => view.workPhone,
   },
   {
     ...SLOT_DEFAULTS,
@@ -223,7 +238,10 @@ export class PersonalDataSlots {
     }
   }
 
-  private documentSlots(): readonly SlotSpec<IdentityDocumentView>[] {
+  /** Document slots; the issuer label follows the kind once it is known. */
+  private documentSlots(
+    issuerLabelKey: string,
+  ): readonly SlotSpec<IdentityDocumentView>[] {
     return [
       {
         ...SLOT_DEFAULTS,
@@ -245,6 +263,12 @@ export class PersonalDataSlots {
         labelKey: I18N_KEYS.VaultFieldsNameAsPrinted,
         testId: "identity-document-name",
         read: (view) => view.nameAsPrinted,
+      },
+      {
+        ...SLOT_DEFAULTS,
+        labelKey: issuerLabelKey,
+        testId: "identity-document-issuer",
+        read: (view) => view.issuer,
       },
       {
         ...SLOT_DEFAULTS,
@@ -285,7 +309,7 @@ export class PersonalDataSlots {
       case SecretType.Address:
         return ADDRESS_SLOTS;
       case SecretType.IdentityDocument:
-        return this.documentSlots();
+        return this.documentSlots(I18N_KEYS.VaultFieldsDocumentIssuer);
       case SecretType.InternationalAccount:
         return INTERNATIONAL_ACCOUNT_SLOTS;
       case SecretType.DomesticAccount:
@@ -324,7 +348,9 @@ export class PersonalDataSlots {
           return this.open(request);
         });
       case "identity-document":
-        return this.documentSlots().map((spec) => {
+        return this.documentSlots(
+          documentIssuerLabelKey(view.documentKind),
+        ).map((spec) => {
           const request: OpenSlotRequest = { spec, text: spec.read(view) };
           return this.open(request);
         });

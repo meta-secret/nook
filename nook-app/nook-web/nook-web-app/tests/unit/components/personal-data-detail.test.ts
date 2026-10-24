@@ -214,3 +214,77 @@ test('shows only the Rust masked tail of a document number before reveal', () =>
     '•••• 4567',
   )
 })
+
+test('shows a membership with its organization and month-precision dates', () => {
+  const membership = SecretComponentTestFixture.listItem({
+    id: 'secret-membership',
+    type: SecretType.IdentityDocument,
+    displayTitle: 'ADA LOVELACE',
+    summary: '•••• 0042',
+    groupKey: 'ADA LOVELACE',
+  })
+  const request: DetailRender = {
+    item: membership,
+    reveal: revealed(membership, {
+      kind: 'identity-document',
+      documentKind: 'membership',
+      number: 'M-0042',
+      maskedNumber: '•••• 0042',
+      issuer: 'Royal Society',
+      issuingCountry: '',
+      issueDate: '2024-05',
+      expiryDate: '2026-05-31',
+      nameAsPrinted: 'ADA LOVELACE',
+    }),
+  }
+  const { view } = renderDetail(request)
+
+  expect(
+    view.getByTestId('personal-slot-identity-document-issuer').textContent,
+  ).toContain(I18N_KEYS.VaultFieldsMembershipOrganization)
+  expect(view.getByTestId('identity-document-issuer-value').textContent).toBe(
+    'Royal Society',
+  )
+  expect(
+    view.getByTestId('identity-document-issue-date-value').textContent,
+  ).toBe('2024-05')
+  expect(
+    view.getByTestId('identity-document-expiry-date-value').textContent,
+  ).toBe('2026-05-31')
+})
+
+test('shows mobile, home and work phones of a revealed person', () => {
+  const person = SecretComponentTestFixture.listItem({
+    id: 'secret-person',
+    type: SecretType.Person,
+    displayTitle: 'Ada Lovelace',
+    summary: 'ada@example.com',
+    groupKey: 'Ada Lovelace',
+  })
+  const request: DetailRender = {
+    item: person,
+    reveal: revealed(person, {
+      kind: 'person',
+      givenName: 'Ada',
+      middleName: '',
+      familyName: 'Lovelace',
+      fullName: 'Ada Lovelace',
+      birthDate: '',
+      email: 'ada@example.com',
+      mobilePhone: '+44 7700 900000',
+      homePhone: '',
+      workPhone: '+44 20 7946 0000',
+    }),
+  }
+  const { view } = renderDetail(request)
+
+  expect(view.getByTestId('person-mobile-phone-value').textContent).toBe(
+    '+44 7700 900000',
+  )
+  expect(view.getByTestId('person-home-phone-value').textContent).toBe(
+    I18N_KEYS.CommonNone,
+  )
+  expect(view.getByTestId('person-work-phone-value').textContent).toBe(
+    '+44 20 7946 0000',
+  )
+})

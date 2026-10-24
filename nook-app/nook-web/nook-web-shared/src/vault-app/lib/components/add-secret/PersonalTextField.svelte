@@ -23,6 +23,21 @@
   const inputClass =
     'flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring'
 
+  const hintId = $derived(`${field.testId}-hint`)
+
+  /** Format guidance under the input, linked to it for assistive technology. */
+  const hint = $derived.by(() => {
+    switch (field.hintKey) {
+      case '':
+        return { describedBy: {}, text: '' }
+      default:
+        return {
+          describedBy: { 'aria-describedby': hintId },
+          text: vault.t(field.hintKey),
+        }
+    }
+  })
+
   const placeholder = $derived.by(() => {
     switch (field.placeholderKey) {
       case '':
@@ -76,7 +91,11 @@
       bind:value
       {placeholder}
       autocomplete={field.autocomplete}
+      {...hint.describedBy}
       class={inputClass}
     />
+  {/if}
+  {#if hint.text}
+    <p id={hintId} class="text-xs text-muted-foreground">{hint.text}</p>
   {/if}
 </div>

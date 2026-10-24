@@ -24,7 +24,9 @@ function emptyPerson(): PersonSecretForm {
     familyName: "",
     birthDate: "",
     email: "",
-    phone: "",
+    mobilePhone: "",
+    homePhone: "",
+    workPhone: "",
   };
 }
 
@@ -44,6 +46,7 @@ function emptyDocument(): IdentityDocumentSecretForm {
   return {
     kind: "passport",
     number: "",
+    issuer: "",
     issuingCountry: "",
     issueDate: "",
     expiryDate: "",
@@ -93,7 +96,9 @@ export class PersonalDataFormState {
           familyName: view.familyName,
           birthDate: view.birthDate,
           email: view.email,
-          phone: view.phone,
+          mobilePhone: view.mobilePhone,
+          homePhone: view.homePhone,
+          workPhone: view.workPhone,
         };
         return;
       case "address":
@@ -111,6 +116,7 @@ export class PersonalDataFormState {
         this.document = {
           kind: view.documentKind,
           number: view.number,
+          issuer: view.issuer,
           issuingCountry: view.issuingCountry,
           issueDate: view.issueDate,
           expiryDate: view.expiryDate,

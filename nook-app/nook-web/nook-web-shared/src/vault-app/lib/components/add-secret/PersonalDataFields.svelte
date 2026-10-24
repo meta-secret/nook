@@ -3,15 +3,14 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { SecretType } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
+  import DocumentKindPicker from './DocumentKindPicker.svelte'
   import PersonalTextField from './PersonalTextField.svelte'
   import {
     ADDRESS_FIELDS,
-    DOCUMENT_FIELDS,
     DOMESTIC_ACCOUNT_FIELDS,
-    IDENTITY_DOCUMENT_KINDS,
     INTERNATIONAL_ACCOUNT_FIELDS,
     PERSON_FIELDS,
-    documentKindLabelKey,
+    documentFields,
   } from './personal-data-fields'
   import type {
     PersonalDataFormState,
@@ -39,22 +38,17 @@
       <PersonalTextField {vault} {field} bind:value={state.address[field.key]} />
     {/each}
   {:else if selectedType === SecretType.IdentityDocument}
-    <div class="space-y-1.5">
-      <label class="nk-field-label" for="identity-document-kind"
-        >{vault.t(I18N_KEYS.VaultFieldsDocumentKind)}</label
+    <div class="space-y-1.5 sm:col-span-2">
+      <span class="nk-field-label" id="identity-document-kind-label"
+        >{vault.t(I18N_KEYS.VaultFieldsDocumentKind)}</span
       >
-      <select
-        id="identity-document-kind"
-        data-testid="identity-document-kind"
-        bind:value={state.document.kind}
-        class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
-      >
-        {#each IDENTITY_DOCUMENT_KINDS as kind (kind)}
-          <option value={kind}>{vault.t(documentKindLabelKey(kind))}</option>
-        {/each}
-      </select>
+      <DocumentKindPicker
+        {vault}
+        labelId="identity-document-kind-label"
+        bind:kind={state.document.kind}
+      />
     </div>
-    {#each DOCUMENT_FIELDS as field (field.key)}
+    {#each documentFields(state.document.kind) as field (field.key)}
       <PersonalTextField
         {vault}
         {field}

@@ -195,6 +195,24 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* A chosen plate in an in-app radio group: titanium edge, a faint titanium
+   * face and a titanium glyph; unchosen plates keep the picker's steel. */
+  .nk-choice-tile[aria-checked="true"] {
+    --nk-edge: linear-gradient(
+      150deg,
+      var(--titanium) 0,
+      color-mix(in oklch, var(--titanium) 45%, transparent) 9rem
+    );
+    --nk-face: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--titanium) 12%, var(--card)) 0,
+      color-mix(in oklch, var(--titanium) 5%, var(--card)) 5rem
+    );
+  }
+  .nk-choice-tile[aria-checked="true"] .nk-choice-icon {
+    border-color: color-mix(in oklch, var(--titanium) 60%, var(--border));
+    color: var(--titanium);
+  }
   /* The list and the detail share one grid: rows and sheets are siblings, so
    * phones show the sheet under its row and wide screens pin it to the right. */
   .nk-vault-grid {

@@ -72,7 +72,9 @@ describe('personal-data form state', () => {
       familyName: 'Lovelace',
       birthDate: '1815-12-10',
       email: 'ada@example.com',
-      phone: '',
+      mobilePhone: '',
+      homePhone: '',
+      workPhone: '',
     })
     expect(yaml).toContain('Lovelace')
     expect(yaml).toContain('1815-12-10')
@@ -105,7 +107,8 @@ describe('personal-data form state', () => {
     const state = new PersonalDataFormState()
     state.document.kind = 'drivers-license'
     state.document.number = 'D1234567'
-    state.document.issueDate = '2020-01-01'
+    state.document.issuer = 'DMV'
+    state.document.issueDate = '2020-01'
     state.document.expiryDate = '2030-01-01'
 
     const yaml = buildSecretYaml(
@@ -115,12 +118,14 @@ describe('personal-data form state', () => {
     expect(identityDocument).toHaveBeenCalledWith({
       kind: 'drivers-license',
       number: 'D1234567',
+      issuer: 'DMV',
       issuingCountry: '',
-      issueDate: '2020-01-01',
+      issueDate: '2020-01',
       expiryDate: '2030-01-01',
       nameAsPrinted: '',
     })
     expect(yaml).toContain('drivers-license')
+    expect(yaml).toContain('2020-01')
   })
 
   test('sends the international account form as the typed Rust DTO', () => {
@@ -200,6 +205,7 @@ describe('personal-data form state', () => {
       documentKind: 'national-id',
       number: 'N998877',
       maskedNumber: '•••• 8877',
+      issuer: 'Préfecture',
       issuingCountry: 'France',
       issueDate: '2019-05-01',
       expiryDate: '2029-05-01',
@@ -225,6 +231,7 @@ describe('personal-data form state', () => {
     expect(state.document).toEqual({
       kind: 'national-id',
       number: 'N998877',
+      issuer: 'Préfecture',
       issuingCountry: 'France',
       issueDate: '2019-05-01',
       expiryDate: '2029-05-01',
@@ -304,7 +311,9 @@ describe('personal-data add and edit forms', () => {
       fullName: 'Ada King Lovelace',
       birthDate: '1815-12-10',
       email: 'ada@example.com',
-      phone: '+44 20 7946 0000',
+      mobilePhone: '+44 7700 900000',
+      homePhone: '',
+      workPhone: '+44 20 7946 0000',
     })
     const view = render(AddSecretForm, {
       vault,
@@ -323,7 +332,11 @@ describe('personal-data add and edit forms', () => {
     expect(inputValue(await view.findByTestId('person-given-name'))).toBe('Ada')
     expect(inputValue(view.getByTestId('person-middle-name'))).toBe('King')
     expect(inputValue(view.getByTestId('person-birth-date'))).toBe('1815-12-10')
-    expect(inputValue(view.getByTestId('person-phone'))).toBe(
+    expect(inputValue(view.getByTestId('person-mobile-phone'))).toBe(
+      '+44 7700 900000',
+    )
+    expect(inputValue(view.getByTestId('person-home-phone'))).toBe('')
+    expect(inputValue(view.getByTestId('person-work-phone'))).toBe(
       '+44 20 7946 0000',
     )
     expect(view.getByTestId('person-birth-date').getAttribute('type')).toBe(
@@ -351,8 +364,9 @@ describe('personal-data add and edit forms', () => {
       documentKind: 'passport',
       number: 'P1234567',
       maskedNumber: '•••• 4567',
+      issuer: 'Bundesdruckerei',
       issuingCountry: 'Germany',
-      issueDate: '2020-02-03',
+      issueDate: '2020-02',
       expiryDate: '2030-02-02',
       nameAsPrinted: 'ADA LOVELACE',
     })
@@ -370,8 +384,16 @@ describe('personal-data add and edit forms', () => {
       },
     })
 
-    expect(inputValue(await view.findByTestId('identity-document-kind'))).toBe(
-      'passport',
+    const passport = await view.findByTestId('identity-document-kind-passport')
+    expect(passport.getAttribute('aria-checked')).toBe('true')
+    expect(inputValue(view.getByTestId('identity-document-issuer'))).toBe(
+      'Bundesdruckerei',
+    )
+    const issueDate = view.getByTestId('identity-document-issue-date')
+    expect(inputValue(issueDate)).toBe('2020-02')
+    expect(issueDate.getAttribute('type')).toBe('text')
+    expect(issueDate.getAttribute('aria-describedby')).toBe(
+      'identity-document-issue-date-hint',
     )
     const number = view.getByTestId('identity-document-number')
     expect(inputValue(number)).toBe('P1234567')

@@ -427,6 +427,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/offscreen/session-personal-field-fill.ts',
   'nook-app/nook-web/nook-web-extension/src/offscreen/session-personal-fill-operations.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AddSecretForm.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/DocumentKindPicker.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/SecretTypePicker.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/personal-data-fields.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/personal-data-form-state.svelte.ts',

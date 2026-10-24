@@ -34,6 +34,8 @@ export type PersonalFieldSpec<Key extends string> = {
   readonly width: SlotWidth;
   readonly concealment: FieldConcealment;
   readonly placeholderKey: string;
+  /** Format guidance shown under the input; empty when the label is enough. */
+  readonly hintKey: string;
 };
 
 /** Defaults every field spec spreads before naming what differs. */
@@ -43,6 +45,7 @@ const FIELD_DEFAULTS = {
   width: SlotWidth.Half,
   concealment: FieldConcealment.Plain,
   placeholderKey: "",
+  hintKey: "",
 } as const satisfies Omit<
   PersonalFieldSpec<string>,
   "key" | "labelKey" | "testId"
@@ -94,11 +97,27 @@ export const PERSON_FIELDS: readonly PersonalFieldSpec<PersonFieldKey>[] = [
   },
   {
     ...FIELD_DEFAULTS,
-    key: "phone",
-    labelKey: I18N_KEYS.VaultFieldsPhone,
-    testId: "person-phone",
+    key: "mobilePhone",
+    labelKey: I18N_KEYS.VaultFieldsMobilePhone,
+    testId: "person-mobile-phone",
     inputType: PersonalInputType.Tel,
-    autocomplete: "tel",
+    autocomplete: "mobile tel",
+  },
+  {
+    ...FIELD_DEFAULTS,
+    key: "homePhone",
+    labelKey: I18N_KEYS.VaultFieldsHomePhone,
+    testId: "person-home-phone",
+    inputType: PersonalInputType.Tel,
+    autocomplete: "home tel",
+  },
+  {
+    ...FIELD_DEFAULTS,
+    key: "workPhone",
+    labelKey: I18N_KEYS.VaultFieldsWorkPhone,
+    testId: "person-work-phone",
+    inputType: PersonalInputType.Tel,
+    autocomplete: "work tel",
   },
 ];
 
@@ -158,43 +177,70 @@ export const ADDRESS_FIELDS: readonly PersonalFieldSpec<AddressFieldKey>[] = [
   },
 ];
 
-export const DOCUMENT_FIELDS: readonly PersonalFieldSpec<DocumentFieldKey>[] = [
-  {
-    ...FIELD_DEFAULTS,
-    key: "number",
-    labelKey: I18N_KEYS.VaultFieldsDocumentNumber,
-    testId: "identity-document-number",
-    concealment: FieldConcealment.Concealable,
-  },
-  {
-    ...FIELD_DEFAULTS,
-    key: "nameAsPrinted",
-    labelKey: I18N_KEYS.VaultFieldsNameAsPrinted,
-    testId: "identity-document-name",
-    width: SlotWidth.Full,
-  },
-  {
-    ...FIELD_DEFAULTS,
-    key: "issuingCountry",
-    labelKey: I18N_KEYS.VaultFieldsIssuingCountry,
-    testId: "identity-document-country",
-    placeholderKey: I18N_KEYS.AddSecretPlaceholderCountry,
-  },
-  {
-    ...FIELD_DEFAULTS,
-    key: "issueDate",
-    labelKey: I18N_KEYS.VaultFieldsIssueDate,
-    testId: "identity-document-issue-date",
-    inputType: PersonalInputType.Date,
-  },
-  {
-    ...FIELD_DEFAULTS,
-    key: "expiryDate",
-    labelKey: I18N_KEYS.VaultFieldsExpiryDate,
-    testId: "identity-document-expiry-date",
-    inputType: PersonalInputType.Date,
-  },
-];
+/** Label of the issuing body: a membership names its organization. */
+export function documentIssuerLabelKey(kind: IdentityDocumentKind): string {
+  switch (kind) {
+    case "membership":
+      return I18N_KEYS.VaultFieldsMembershipOrganization;
+    case "passport":
+    case "national-id":
+    case "drivers-license":
+    case "social-security":
+    case "tax-id":
+      return I18N_KEYS.VaultFieldsDocumentIssuer;
+  }
+}
+
+/**
+ * Document inputs for one kind. Dates are text so a month-only date
+ * (`YYYY-MM`) can be entered; Rust validates both precisions.
+ */
+export function documentFields(
+  kind: IdentityDocumentKind,
+): readonly PersonalFieldSpec<DocumentFieldKey>[] {
+  return [
+    {
+      ...FIELD_DEFAULTS,
+      key: "number",
+      labelKey: I18N_KEYS.VaultFieldsDocumentNumber,
+      testId: "identity-document-number",
+      concealment: FieldConcealment.Concealable,
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "nameAsPrinted",
+      labelKey: I18N_KEYS.VaultFieldsNameAsPrinted,
+      testId: "identity-document-name",
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "issuer",
+      labelKey: documentIssuerLabelKey(kind),
+      testId: "identity-document-issuer",
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "issuingCountry",
+      labelKey: I18N_KEYS.VaultFieldsIssuingCountry,
+      testId: "identity-document-country",
+      placeholderKey: I18N_KEYS.AddSecretPlaceholderCountry,
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "issueDate",
+      labelKey: I18N_KEYS.VaultFieldsIssueDate,
+      testId: "identity-document-issue-date",
+      hintKey: I18N_KEYS.AddSecretDocumentDateHint,
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "expiryDate",
+      labelKey: I18N_KEYS.VaultFieldsExpiryDate,
+      testId: "identity-document-expiry-date",
+      hintKey: I18N_KEYS.AddSecretDocumentDateHint,
+    },
+  ];
+}
 
 export const INTERNATIONAL_ACCOUNT_FIELDS: readonly PersonalFieldSpec<InternationalAccountFieldKey>[] =
   [
@@ -261,6 +307,9 @@ export const IDENTITY_DOCUMENT_KINDS: readonly IdentityDocumentKind[] = [
   "passport",
   "national-id",
   "drivers-license",
+  "social-security",
+  "tax-id",
+  "membership",
 ];
 
 /** Translation key that names one identity-document kind. */
@@ -272,5 +321,11 @@ export function documentKindLabelKey(kind: IdentityDocumentKind): string {
       return I18N_KEYS.VaultDocumentKindsNationalId;
     case "drivers-license":
       return I18N_KEYS.VaultDocumentKindsDriversLicense;
+    case "social-security":
+      return I18N_KEYS.VaultDocumentKindsSocialSecurity;
+    case "tax-id":
+      return I18N_KEYS.VaultDocumentKindsTaxId;
+    case "membership":
+      return I18N_KEYS.VaultDocumentKindsMembership;
   }
 }
