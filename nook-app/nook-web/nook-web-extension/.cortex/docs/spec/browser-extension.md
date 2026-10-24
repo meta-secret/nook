@@ -7,8 +7,9 @@ Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
 `nook-web-extension` is the browser integration for Simple Vault. It does not
 duplicate the vault application UI. Clicking the toolbar icon opens the
 extension's side panel, on first run and on every later launch. Device setup
-and unlock happen in that panel. The extension-owned authentication tab remains
-for the locked Pilot action and for pairing, in the initiating normal window.
+and unlock happen in that panel. The Unlock of a locked Pilot widget opens it
+too. The extension-owned authentication tab remains for pairing, in the
+initiating normal window.
 Both surfaces use the same device-protection component. A launcher reuses only
 a tab whose intent matches the requested action. It leaves an open tab with
 another intent untouched and opens the requested intent in a separate tab in
@@ -65,12 +66,11 @@ application capability checks enforce the vault-type boundary.
     site's items by connected identity and vault. Its gates and connect card
     are the companion's keytag cards: a cut corner, monospace labels, and a
     square action bar.
-- **Authentication tab and Pilot lock entry**
+- **Authentication tab**
   - **Responsibility:** Open or focus the shared extension-owned authentication
-    tab for the locked Pilot action.
+    tab for pairing, including Connect vault from a Pilot widget.
     It creates or unlocks the extension device with the device-protection
-    component it shares with the side panel. It shows localized return guidance
-    for Pilot and starts pairing.
+    component it shares with the side panel, then starts pairing.
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
@@ -420,7 +420,7 @@ private identity.
 - Neither connecting an identity nor All connections opens the
   authentication tab.
 - The panel follows device state that changes elsewhere, such as an unlock in
-  the authentication tab or by Pilot, or a lease expiry. It re-queries status
+  the authentication tab or a lease expiry. It re-queries status
   on focus, visibility, and tab events rather than listening for runtime
   broadcasts.
 - This site names the active tab's display host. It lists the site-bound items
@@ -451,10 +451,9 @@ private identity.
     vaults when the connect page reports `approved`, so no refresh is needed.
   - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
     requirement governs the listing and Fill.
-- The Pilot lock entry uses the extension-owned authentication tab per
-  initiating normal window. The service
-  worker focuses an existing tab only when its intent matches the requested
-  action. It leaves a different-intent auth tab untouched and opens the
+- Pairing uses the extension-owned authentication tab per initiating normal
+  window. The service worker focuses an existing tab only when its intent
+  matches the requested action. It leaves a different-intent auth tab untouched and opens the
   requested intent in another tab in the source window. It does not focus an
   auth tab in another normal window.
 - Existing companion popup windows created by older versions are not closed or
@@ -1355,10 +1354,11 @@ The gate must:
   origin. Reveal one credential after explicit choice and fill a detected
   form. Require explicit submission approval except for the
   [selected Google username advance](#google-two-step-login).
-  When locked, open the shared extension authentication tab and keep the host
-  page in status/Continue mode.
-  After unlock, show localized return guidance and require a fresh Continue click
-  with existing origin/workflow revalidation before any page interaction;
+  When locked, show the [connect-first vault gate](#connect-first-vault-gate)
+  Unlock action, which opens the side panel. The user decided that Unlock
+  opens the side panel rather than the authentication tab. After unlock,
+  require a fresh Continue click with existing origin/workflow revalidation
+  before any page interaction;
 - keep the Pilot panel to that one action. Open vault lives in the extension
   side panel, except for the Open Nook replacement below. The close button is
   how the person takes over the page;
