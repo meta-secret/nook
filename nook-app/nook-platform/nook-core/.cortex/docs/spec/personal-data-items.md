@@ -133,10 +133,14 @@ parts. Every present part is validated by its payload constructor.
 - A bank part with an IBAN becomes an international account. An account
   number with a routing number becomes a US bank account. Other bank values
   fit no type and are not imported.
+- No field substitutes for another. A missing value stays empty instead of
+  being derived from a neighbouring field.
+- `Month,Day,Year` dates need a four-digit year.
 - One invalid present part skips the whole source item with
   `InvalidPersonalData`. Values are never coerced, and the item never falls
   back to a secure note.
-- An item with only unsupported values is skipped as unsupported. An item with
+- An unsupported part does not stop the item's other parts from importing.
+  An item with only unsupported values is skipped as unsupported. An item with
   no present part is skipped as empty. Skips count per source item.
 
 ### Provider mappings
@@ -146,12 +150,14 @@ parts. Every present part is validated by its payload constructor.
     address. Unix-second dates become ISO dates.
   - Passport: passport document with issuing country and issue and expiry
     dates.
-  - Driver License: driver's license document. Its month-and-year expiry is not
+  - Driver License: driver's license document. Its issuing country comes only
+    from the country field, never the state. Its month-and-year expiry is not
     imported.
   - Bank Account: international or US bank account.
 - **Bitwarden JSON**
   - Identity (`type: 4`): person, address, passport, and driver's license.
-    SSN, company, username, and title are not imported.
+    Documents get no printed name, because Bitwarden exports none. SSN,
+    company, username, and title are not imported.
 - **Dashlane CSV or ZIP**
   - `ids.csv`: ID cards become national IDs; passports and driver's licenses
     map to their kinds. Other ID types are skipped.
@@ -159,23 +165,38 @@ parts. Every present part is validated by its payload constructor.
     addresses. Email, phone, website, and company rows are skipped.
   - `payments.csv` `bank` rows: a number that starts with two letters is an
     IBAN with the routing column as SWIFT/BIC. Any other number is a US
-    account with an ABA routing number.
+    account with an ABA routing number. The bank name comes only from the
+    issuing bank, never the account label.
 - **LastPass CSV**
   - `Address` notes: person and address.
-  - `Passport` and `Driver's License` notes: identity documents.
+  - `Passport` and `Driver's License` notes: identity documents. The issuing
+    country comes only from the country field, never the state.
   - `Bank Account` notes: international or US bank account.
   - `Credit Card` notes: cards. An invalid card is skipped as an invalid card.
+  - A typed note also keeps one secure note with its original title and text
+    when it has free-text Notes or any non-empty unmapped field. `Language` is
+    export metadata and is ignored. A blank date written as bare commas counts
+    as empty. A fully mapped note imports only its records.
+  - An invalid typed note is skipped and keeps no secure note.
   - Other note types stay secure notes.
 - **Proton Pass**
   - Identity: person, address, passport, and driver's license. A full name
-    without split names becomes the given name. Work, social, and SSN details
-    are not imported.
+    without split names is an unsupported person part; the other parts still
+    import. Documents get no printed name. Work, social, and SSN details are
+    not imported.
 - **Keeper, Chrome-family, Apple Passwords, Google Authenticator, KeePassXC**
   - Unchanged. They produce no personal-data records.
 
-Fields without a Nook equivalent stay unimported. Examples are sex, height,
-license class, occupation, PIN, account type, social security and tax numbers,
-and standalone email, phone, website, or company rows.
+Values the Nook types cannot represent stay unimported. Apart from text kept
+in a LastPass secure note, they are not carried elsewhere.
+
+- A person without a name, and an address with only a region or country.
+- Phones beyond the one a person stores.
+- A month-and-year-only document expiry.
+- Account and routing numbers when an IBAN exists.
+- Fields without a Nook equivalent, such as sex, height, license class,
+  occupation, PIN, account type, and social security and tax numbers.
+- Standalone email, phone, website, or company rows.
 
 ## Executable scenarios
 
