@@ -1,13 +1,13 @@
 import { Effect } from 'effect'
 import { err, ok, type Result } from 'neverthrow'
 import {
-  NookSecretTypeFilter,
+  PersonalFieldGroup,
+  personal_fill_record_filter,
   type NookPersonalFillRequest,
   type NookPersonalFillResponse,
   type NookSecretListItem,
   type NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { PersonalFieldGroup } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { SessionOperationFailure } from '../lib/session-operation-queue'
 import type { ExtensionSessionRequest } from './session-request-adapter'
@@ -23,7 +23,6 @@ type PersonalFillMessage = Extract<
   { type: typeof ExtensionSessionMessageType.RevealPersonalFill }
 >
 type PersonalVaultMessage = PersonalRecordsMessage | PersonalFillMessage
-type PersonalFieldGroupName = PersonalRecordsMessage['payload']['group']
 
 /** The record list fields this operation reads; never a secret value. */
 export type PersonalSecretListItem = Pick<
@@ -102,8 +101,8 @@ class PersonalVaultAdmission {
 }
 
 /**
- * Lists the list metadata of one record group from the grant's vault. Rust's
- * per-type secret filter selects the records; Rust computes title and summary.
+ * Lists the list metadata of one record group from the grant's vault. Rust
+ * maps the group to its record filter and computes title and summary.
  */
 export class PersonalRecordsListOperation {
   /** Upper bound on listed records; the picker shows no more than this. */
@@ -113,23 +112,14 @@ export class PersonalRecordsListOperation {
     private readonly request: PersonalSessionOperationRequest<PersonalRecordsMessage>,
   ) {}
 
-  private filter(group: PersonalFieldGroupName): NookSecretTypeFilter {
-    switch (PersonalFieldGroup[group]) {
-      case PersonalFieldGroup.Person:
-        return NookSecretTypeFilter.Person
-      case PersonalFieldGroup.Address:
-        return NookSecretTypeFilter.Address
-      case PersonalFieldGroup.Card:
-        return NookSecretTypeFilter.CreditCard
-    }
-  }
-
   private summaries(
     manager: PersonalFillVaultManager,
   ): PersonalRecordListResponse {
     const page = manager.query_secret_page_js(
       '',
-      this.filter(this.request.message.payload.group),
+      personal_fill_record_filter(
+        PersonalFieldGroup[this.request.message.payload.group],
+      ),
       0,
       PersonalRecordsListOperation.PAGE_LIMIT,
     )

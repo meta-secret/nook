@@ -733,7 +733,7 @@ export class PersonalFillInteraction {
         payload: {
           origin: surface.scope.target.origin,
           requestId,
-          kinds: [...new Set(surface.plan.fields.map((field) => field.kind))],
+          kinds: surface.plan.fields.map((field) => field.kind),
         },
       }
       const request: Parameters<

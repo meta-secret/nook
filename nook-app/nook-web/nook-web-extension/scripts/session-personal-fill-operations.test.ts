@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test'
-import {
-  NookSecretTypeFilter,
+import { beforeAll, describe, expect, test } from 'bun:test'
+import initNookWasm, {
+  PersonalFieldGroup,
+  personal_fill_record_filter,
   type NookPersonalFillRequest,
   type NookPersonalFillResponse,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -117,14 +118,23 @@ class PersonalVaultManagerFixture {
   }
 }
 
+beforeAll(async () => {
+  await initNookWasm({
+    module_or_path: await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer(),
+  })
+})
+
 describe('offscreen personal-data session requests', () => {
-  test.each([
-    ['Person', NookSecretTypeFilter.Person],
-    ['Address', NookSecretTypeFilter.Address],
-    ['Card', NookSecretTypeFilter.CreditCard],
-  ] as const)(
-    'lists %s records through its own secret-type filter with metadata only',
-    async (group, filter) => {
+  test.each(['Person', 'Address', 'Card'] as const)(
+    'passes the %s group to the Rust record filter and lists metadata only',
+    async (group) => {
+      // Rust owns the group-to-record mapping; the operation forwards the group.
+      const filter = personal_fill_record_filter(PersonalFieldGroup[group])
       const fixture = new PersonalVaultManagerFixture(VaultAdmission.Open)
       const listed = await new PersonalRecordsListOperation(
         fixture.listRequest(group),
