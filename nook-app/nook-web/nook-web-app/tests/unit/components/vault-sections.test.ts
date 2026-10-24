@@ -30,7 +30,8 @@ const PERSONAL_TYPES = [
   SecretType.Person,
   SecretType.Address,
   SecretType.IdentityDocument,
-  SecretType.BankAccount,
+  SecretType.InternationalAccount,
+  SecretType.DomesticAccount,
   SecretType.CreditCard,
 ]
 
@@ -80,7 +81,7 @@ class VaultSectionsFixture {
   }
 }
 
-function filterTestIds(container: HTMLElement): (string | undefined)[] {
+function filterTestIds(container: HTMLElement) {
   return within(container)
     .getAllByRole('button')
     .map((button) => button.dataset.testid)
@@ -169,11 +170,11 @@ describe('vault section switch', () => {
 
     await fireEvent.click(
       view.getByTestId(
-        `secret-type-filter-${secret_type_name(SecretType.BankAccount)}`,
+        `secret-type-filter-${secret_type_name(SecretType.DomesticAccount)}`,
       ),
     )
     expect(fixture.vault.secretTypeFilter).toBe(
-      NookSecretTypeFilter.BankAccount,
+      NookSecretTypeFilter.DomesticAccount,
     )
 
     await fireEvent.click(view.getByTestId('secret-type-filter-all'))

@@ -404,7 +404,6 @@
       "person": "Персона",
       "address": "Адрес",
       "identity_document": "Документ",
-      "bank_account": "Банковский счёт",
       "international_account": "Международный счёт",
       "domestic_account": "Счёт в банке США"
     },
@@ -499,7 +498,6 @@
       "account_holder": "Владелец счёта",
       "bank_name": "Название банка",
       "account_number": "Номер счёта",
-      "routing_code": "БИК или код банка",
       "iban": "IBAN",
       "swift_bic": "SWIFT/BIC",
       "routing_number": "Маршрутный номер",
@@ -1106,7 +1104,6 @@
     "person_desc": "Имя, дата рождения, почта и телефон",
     "address_desc": "Почтовый адрес для доставки и форм",
     "identity_document_desc": "Паспорт, удостоверение или права",
-    "bank_account_desc": "Номер счёта и реквизиты банка",
     "international_account_desc": "IBAN и SWIFT/BIC",
     "domestic_account_desc": "Счёт в США и маршрутный номер ABA",
     "title_new_person": "Новая персона",
@@ -1115,15 +1112,12 @@
     "title_edit_address": "Редактировать адрес",
     "title_new_identity_document": "Новый документ",
     "title_edit_identity_document": "Редактировать документ",
-    "title_new_bank_account": "Новый банковский счёт",
-    "title_edit_bank_account": "Редактировать банковский счёт",
     "title_new_international_account": "Новый международный счёт",
     "title_edit_international_account": "Редактировать международный счёт",
     "title_new_domestic_account": "Новый счёт в банке США",
     "title_edit_domestic_account": "Редактировать счёт в банке США",
     "placeholder_address_label": "например, Дом",
-    "placeholder_country": "например, Германия",
-    "placeholder_bank_account_number": "IBAN или номер счёта"
+    "placeholder_country": "например, Германия"
   },
   "status_bar": {
     "synced": "Синхронизировано",

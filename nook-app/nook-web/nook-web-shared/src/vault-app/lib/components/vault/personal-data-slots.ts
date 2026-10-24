@@ -1,7 +1,8 @@
 import type {
   AddressView,
-  BankAccountView,
+  DomesticAccountView,
   IdentityDocumentView,
+  InternationalAccountView,
   PersonalDataView,
   PersonView,
 } from "$app-wasm";
@@ -146,39 +147,68 @@ const ADDRESS_SLOTS: readonly SlotSpec<AddressView>[] = [
   },
 ];
 
-const BANK_ACCOUNT_SLOTS: readonly SlotSpec<BankAccountView>[] = [
+const INTERNATIONAL_ACCOUNT_SLOTS: readonly SlotSpec<InternationalAccountView>[] =
+  [
+    {
+      ...SLOT_DEFAULTS,
+      labelKey: I18N_KEYS.VaultFieldsIban,
+      testId: "international-account-iban",
+      width: SlotWidth.Full,
+      read: (view) => view.iban,
+    },
+    {
+      ...SLOT_DEFAULTS,
+      labelKey: I18N_KEYS.VaultFieldsSwiftBic,
+      testId: "international-account-swift-bic",
+      read: (view) => view.swiftBic,
+    },
+    {
+      ...SLOT_DEFAULTS,
+      labelKey: I18N_KEYS.VaultFieldsAccountHolder,
+      testId: "international-account-holder",
+      read: (view) => view.accountHolder,
+    },
+    {
+      ...SLOT_DEFAULTS,
+      labelKey: I18N_KEYS.VaultFieldsBankName,
+      testId: "international-account-bank-name",
+      read: (view) => view.bankName,
+    },
+  ];
+
+const DOMESTIC_ACCOUNT_SLOTS: readonly SlotSpec<DomesticAccountView>[] = [
   {
     ...SLOT_DEFAULTS,
     labelKey: I18N_KEYS.VaultFieldsAccountNumber,
-    testId: "bank-account-number",
+    testId: "domestic-account-number",
     width: SlotWidth.Full,
-    masking: SlotMasking.MaskedTail,
     read: (view) => view.accountNumber,
   },
   {
     ...SLOT_DEFAULTS,
+    labelKey: I18N_KEYS.VaultFieldsRoutingNumber,
+    testId: "domestic-account-routing-number",
+    read: (view) => view.routingNumber,
+  },
+  {
+    ...SLOT_DEFAULTS,
     labelKey: I18N_KEYS.VaultFieldsAccountHolder,
-    testId: "bank-account-holder",
+    testId: "domestic-account-holder",
     read: (view) => view.accountHolder,
   },
   {
     ...SLOT_DEFAULTS,
     labelKey: I18N_KEYS.VaultFieldsBankName,
-    testId: "bank-account-bank-name",
+    testId: "domestic-account-bank-name",
     read: (view) => view.bankName,
-  },
-  {
-    ...SLOT_DEFAULTS,
-    labelKey: I18N_KEYS.VaultFieldsRoutingCode,
-    testId: "bank-account-routing-code",
-    read: (view) => view.routingCode,
   },
 ];
 
 /**
  * Field slots for a person, address, identity document or bank account. Every
- * value stays sealed until the item is revealed; the document and account
- * numbers show only Rust's masked tail before that.
+ * value stays sealed until the item is revealed; the document number shows
+ * only Rust's masked tail before that. Account rows already show Rust's
+ * masked summary, so the IBAN and account-number slots stay fully sealed.
  */
 export class PersonalDataSlots {
   constructor(private readonly context: PersonalDataSlotsContext) {}
@@ -256,8 +286,10 @@ export class PersonalDataSlots {
         return ADDRESS_SLOTS;
       case SecretType.IdentityDocument:
         return this.documentSlots();
-      case SecretType.BankAccount:
-        return BANK_ACCOUNT_SLOTS;
+      case SecretType.InternationalAccount:
+        return INTERNATIONAL_ACCOUNT_SLOTS;
+      case SecretType.DomesticAccount:
+        return DOMESTIC_ACCOUNT_SLOTS;
       case SecretType.Login:
       case SecretType.ApiKey:
       case SecretType.SeedPhrase:
@@ -296,8 +328,13 @@ export class PersonalDataSlots {
           const request: OpenSlotRequest = { spec, text: spec.read(view) };
           return this.open(request);
         });
-      case "bank-account":
-        return BANK_ACCOUNT_SLOTS.map((spec) => {
+      case "international-account":
+        return INTERNATIONAL_ACCOUNT_SLOTS.map((spec) => {
+          const request: OpenSlotRequest = { spec, text: spec.read(view) };
+          return this.open(request);
+        });
+      case "domestic-account":
+        return DOMESTIC_ACCOUNT_SLOTS.map((spec) => {
           const request: OpenSlotRequest = { spec, text: spec.read(view) };
           return this.open(request);
         });

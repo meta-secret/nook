@@ -44,8 +44,10 @@
         return I18N_KEYS.AddSecretAddressDesc
       case SecretType.IdentityDocument:
         return I18N_KEYS.AddSecretIdentityDocumentDesc
-      case SecretType.BankAccount:
-        return I18N_KEYS.AddSecretBankAccountDesc
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.AddSecretInternationalAccountDesc
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.AddSecretDomesticAccountDesc
     }
   }
 </script>

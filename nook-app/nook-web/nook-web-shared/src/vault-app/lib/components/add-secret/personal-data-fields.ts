@@ -1,8 +1,9 @@
 import type {
   AddressSecretForm,
-  BankAccountSecretForm,
+  DomesticAccountSecretForm,
   IdentityDocumentKind,
   IdentityDocumentSecretForm,
+  InternationalAccountSecretForm,
   PersonSecretForm,
 } from "$app-wasm";
 import type { HTMLInputAttributes } from "svelte/elements";
@@ -15,12 +16,20 @@ export enum FieldConcealment {
   Concealable = "concealable",
 }
 
+/** The HTML input type of a personal-data form field. */
+export enum PersonalInputType {
+  Text = "text",
+  Date = "date",
+  Email = "email",
+  Tel = "tel",
+}
+
 /** How one personal-data form input is labelled, typed and laid out. */
 export type PersonalFieldSpec<Key extends string> = {
   readonly key: Key;
   readonly labelKey: string;
   readonly testId: string;
-  readonly inputType: "text" | "date" | "email" | "tel";
+  readonly inputType: PersonalInputType;
   readonly autocomplete: HTMLInputAttributes["autocomplete"];
   readonly width: SlotWidth;
   readonly concealment: FieldConcealment;
@@ -29,7 +38,7 @@ export type PersonalFieldSpec<Key extends string> = {
 
 /** Defaults every field spec spreads before naming what differs. */
 const FIELD_DEFAULTS = {
-  inputType: "text",
+  inputType: PersonalInputType.Text,
   autocomplete: "off",
   width: SlotWidth.Half,
   concealment: FieldConcealment.Plain,
@@ -42,7 +51,8 @@ const FIELD_DEFAULTS = {
 type PersonFieldKey = keyof PersonSecretForm;
 type AddressFieldKey = keyof AddressSecretForm;
 type DocumentFieldKey = Exclude<keyof IdentityDocumentSecretForm, "kind">;
-type BankAccountFieldKey = keyof BankAccountSecretForm;
+type InternationalAccountFieldKey = keyof InternationalAccountSecretForm;
+type DomesticAccountFieldKey = keyof DomesticAccountSecretForm;
 
 export const PERSON_FIELDS: readonly PersonalFieldSpec<PersonFieldKey>[] = [
   {
@@ -71,7 +81,7 @@ export const PERSON_FIELDS: readonly PersonalFieldSpec<PersonFieldKey>[] = [
     key: "birthDate",
     labelKey: I18N_KEYS.VaultFieldsBirthDate,
     testId: "person-birth-date",
-    inputType: "date",
+    inputType: PersonalInputType.Date,
     autocomplete: "bday",
   },
   {
@@ -79,7 +89,7 @@ export const PERSON_FIELDS: readonly PersonalFieldSpec<PersonFieldKey>[] = [
     key: "email",
     labelKey: I18N_KEYS.VaultFieldsEmail,
     testId: "person-email",
-    inputType: "email",
+    inputType: PersonalInputType.Email,
     autocomplete: "email",
   },
   {
@@ -87,7 +97,7 @@ export const PERSON_FIELDS: readonly PersonalFieldSpec<PersonFieldKey>[] = [
     key: "phone",
     labelKey: I18N_KEYS.VaultFieldsPhone,
     testId: "person-phone",
-    inputType: "tel",
+    inputType: PersonalInputType.Tel,
     autocomplete: "tel",
   },
 ];
@@ -175,45 +185,74 @@ export const DOCUMENT_FIELDS: readonly PersonalFieldSpec<DocumentFieldKey>[] = [
     key: "issueDate",
     labelKey: I18N_KEYS.VaultFieldsIssueDate,
     testId: "identity-document-issue-date",
-    inputType: "date",
+    inputType: PersonalInputType.Date,
   },
   {
     ...FIELD_DEFAULTS,
     key: "expiryDate",
     labelKey: I18N_KEYS.VaultFieldsExpiryDate,
     testId: "identity-document-expiry-date",
-    inputType: "date",
+    inputType: PersonalInputType.Date,
   },
 ];
 
-export const BANK_ACCOUNT_FIELDS: readonly PersonalFieldSpec<BankAccountFieldKey>[] =
+export const INTERNATIONAL_ACCOUNT_FIELDS: readonly PersonalFieldSpec<InternationalAccountFieldKey>[] =
   [
     {
       ...FIELD_DEFAULTS,
       key: "bankName",
       labelKey: I18N_KEYS.VaultFieldsBankName,
-      testId: "bank-account-bank-name",
+      testId: "international-account-bank-name",
     },
     {
       ...FIELD_DEFAULTS,
       key: "accountHolder",
       labelKey: I18N_KEYS.VaultFieldsAccountHolder,
-      testId: "bank-account-holder",
+      testId: "international-account-holder",
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "iban",
+      labelKey: I18N_KEYS.VaultFieldsIban,
+      testId: "international-account-iban",
+      width: SlotWidth.Full,
+      concealment: FieldConcealment.Concealable,
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "swiftBic",
+      labelKey: I18N_KEYS.VaultFieldsSwiftBic,
+      testId: "international-account-swift-bic",
+    },
+  ];
+
+export const DOMESTIC_ACCOUNT_FIELDS: readonly PersonalFieldSpec<DomesticAccountFieldKey>[] =
+  [
+    {
+      ...FIELD_DEFAULTS,
+      key: "bankName",
+      labelKey: I18N_KEYS.VaultFieldsBankName,
+      testId: "domestic-account-bank-name",
+    },
+    {
+      ...FIELD_DEFAULTS,
+      key: "accountHolder",
+      labelKey: I18N_KEYS.VaultFieldsAccountHolder,
+      testId: "domestic-account-holder",
     },
     {
       ...FIELD_DEFAULTS,
       key: "accountNumber",
       labelKey: I18N_KEYS.VaultFieldsAccountNumber,
-      testId: "bank-account-number",
+      testId: "domestic-account-number",
       width: SlotWidth.Full,
       concealment: FieldConcealment.Concealable,
-      placeholderKey: I18N_KEYS.AddSecretPlaceholderBankAccountNumber,
     },
     {
       ...FIELD_DEFAULTS,
-      key: "routingCode",
-      labelKey: I18N_KEYS.VaultFieldsRoutingCode,
-      testId: "bank-account-routing-code",
+      key: "routingNumber",
+      labelKey: I18N_KEYS.VaultFieldsRoutingNumber,
+      testId: "domestic-account-routing-number",
     },
   ];
 

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte'
 import { ok } from 'neverthrow'
@@ -122,22 +123,63 @@ describe('personal-data form state', () => {
     expect(yaml).toContain('drivers-license')
   })
 
-  test('sends the bank account form as the typed Rust DTO', () => {
-    const bankAccount = vi.spyOn(NookSecretFormFields, 'bank_account')
+  test('sends the international account form as the typed Rust DTO', () => {
+    const internationalAccount = vi.spyOn(
+      NookSecretFormFields,
+      'international_account',
+    )
     const state = new PersonalDataFormState()
-    state.bankAccount.bankName = 'Example Bank'
-    state.bankAccount.accountHolder = 'Ada Lovelace'
-    state.bankAccount.accountNumber = 'GB82 WEST 1234 5698 7654 32'
+    state.internationalAccount.bankName = 'Example Bank'
+    state.internationalAccount.accountHolder = 'Ada Lovelace'
+    state.internationalAccount.iban = 'GB82 WEST 1234 5698 7654 32'
+    state.internationalAccount.swiftBic = 'nwbk gb2l'
 
-    const yaml = buildSecretYaml(state.toFormFields(SecretType.BankAccount))
+    const yaml = buildSecretYaml(
+      state.toFormFields(SecretType.InternationalAccount),
+    )
 
-    expect(bankAccount).toHaveBeenCalledWith({
+    expect(internationalAccount).toHaveBeenCalledWith({
       accountHolder: 'Ada Lovelace',
       bankName: 'Example Bank',
-      accountNumber: 'GB82 WEST 1234 5698 7654 32',
-      routingCode: '',
+      iban: 'GB82 WEST 1234 5698 7654 32',
+      swiftBic: 'nwbk gb2l',
     })
     expect(yaml).toContain('GB82WEST12345698765432')
+    expect(yaml).toContain('NWBKGB2L')
+  })
+
+  test('sends the US bank account form as the typed Rust DTO', () => {
+    const domesticAccount = vi.spyOn(NookSecretFormFields, 'domestic_account')
+    const state = new PersonalDataFormState()
+    state.domesticAccount.bankName = 'Example Bank'
+    state.domesticAccount.accountHolder = 'Ada Lovelace'
+    state.domesticAccount.accountNumber = '1234-5678-9'
+    state.domesticAccount.routingNumber = '021000021'
+
+    const yaml = buildSecretYaml(state.toFormFields(SecretType.DomesticAccount))
+
+    expect(domesticAccount).toHaveBeenCalledWith({
+      accountHolder: 'Ada Lovelace',
+      bankName: 'Example Bank',
+      accountNumber: '1234-5678-9',
+      routingNumber: '021000021',
+    })
+    expect(yaml).toContain('123456789')
+    expect(yaml).toContain('021000021')
+  })
+
+  test('reports the Rust validation keys for invalid bank details', () => {
+    const state = new PersonalDataFormState()
+    state.internationalAccount.iban = 'GB00 WEST 1234 5698 7654 32'
+    state.domesticAccount.accountNumber = '123456789'
+    state.domesticAccount.routingNumber = '021000022'
+
+    expect(() =>
+      buildSecretYaml(state.toFormFields(SecretType.InternationalAccount)),
+    ).toThrow('international_account_iban_invalid')
+    expect(() =>
+      buildSecretYaml(state.toFormFields(SecretType.DomesticAccount)),
+    ).toThrow('routing_number_invalid')
   })
 
   test('reports the Rust validation key for an invalid record', () => {
@@ -164,12 +206,20 @@ describe('personal-data form state', () => {
       nameAsPrinted: 'ADA LOVELACE',
     })
     state.load({
-      kind: 'bank-account',
+      kind: 'international-account',
       accountHolder: 'Ada Lovelace',
       bankName: 'Example Bank',
-      accountNumber: '12345678',
-      maskedNumber: '•••• 5678',
-      routingCode: 'EXAMGB2L',
+      iban: 'GB82WEST12345698765432',
+      maskedNumber: '•••• 5432',
+      swiftBic: 'NWBKGB2L',
+    })
+    state.load({
+      kind: 'domestic-account',
+      accountHolder: 'Ada Lovelace',
+      bankName: 'US Bank',
+      accountNumber: '123456789',
+      maskedNumber: '•••• 6789',
+      routingNumber: '021000021',
     })
 
     expect(state.document).toEqual({
@@ -180,11 +230,17 @@ describe('personal-data form state', () => {
       expiryDate: '2029-05-01',
       nameAsPrinted: 'ADA LOVELACE',
     })
-    expect(state.bankAccount).toEqual({
+    expect(state.internationalAccount).toEqual({
       accountHolder: 'Ada Lovelace',
       bankName: 'Example Bank',
-      accountNumber: '12345678',
-      routingCode: 'EXAMGB2L',
+      iban: 'GB82WEST12345698765432',
+      swiftBic: 'NWBKGB2L',
+    })
+    expect(state.domesticAccount).toEqual({
+      accountHolder: 'Ada Lovelace',
+      bankName: 'US Bank',
+      accountNumber: '123456789',
+      routingNumber: '021000021',
     })
   })
 })
@@ -327,5 +383,79 @@ describe('personal-data add and edit forms', () => {
     expect(inputValue(view.getByTestId('identity-document-expiry-date'))).toBe(
       '2030-02-02',
     )
+  })
+
+  test('creates an international account with a concealed IBAN and a plain SWIFT/BIC', async () => {
+    translateKeys()
+    const onAddSecret = vi
+      .fn<
+        (
+          request: SecretSubmission & { readonly id: string },
+        ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>
+      >()
+      .mockResolvedValue(ok(SecretMutationOutcome.Added))
+    const view = render(AddSecretForm, {
+      vault,
+      isSaving: false,
+      section: SecretCategory.PersonalData,
+      onAddSecret,
+      onGeneratePassword: vi.fn(() => ''),
+      onCancel: vi.fn(),
+    })
+
+    await fireEvent.click(view.getByTestId('item-type-international-account'))
+    const iban = view.getByTestId('international-account-iban')
+    const swiftBic = view.getByTestId('international-account-swift-bic')
+    expect(iban.getAttribute('type')).toBe('password')
+    expect(swiftBic.getAttribute('type')).toBe('text')
+    expect(view.getByText(I18N_KEYS.VaultFieldsIban)).toBeTruthy()
+    expect(view.getByText(I18N_KEYS.VaultFieldsSwiftBic)).toBeTruthy()
+
+    await fireEvent.input(iban, {
+      target: { value: 'GB82 WEST 1234 5698 7654 32' },
+    })
+    await fireEvent.input(swiftBic, { target: { value: 'NWBKGB2L' } })
+    await fireEvent.click(view.getByTestId('save-secret-btn'))
+
+    await waitFor(() => expect(onAddSecret).toHaveBeenCalledTimes(1))
+    const [call] = onAddSecret.mock.calls
+    if (!call) expect.fail('saving must add the international account')
+    const [request] = call
+    expect(request.type).toBe(SecretType.InternationalAccount)
+    expect(request.data).toContain('GB82WEST12345698765432')
+  })
+
+  test('pre-fills the US bank account editor with a concealed account number', async () => {
+    translateKeys()
+    const record = personalRecord(SecretType.DomesticAccount, {
+      kind: 'domestic-account',
+      accountHolder: 'Ada Lovelace',
+      bankName: 'US Bank',
+      accountNumber: '123456789',
+      maskedNumber: '•••• 6789',
+      routingNumber: '021000021',
+    })
+    const view = render(AddSecretForm, {
+      vault,
+      isSaving: false,
+      onAddSecret: vi.fn(),
+      onReplaceSecret: vi.fn(),
+      onGeneratePassword: vi.fn(() => ''),
+      onCancel: vi.fn(),
+      editor: { kind: SecretEditorKind.Editing, record },
+      selectedTypeState: {
+        kind: SecretTypeSelectionKind.EditingFields,
+        itemType: SecretType.DomesticAccount,
+      },
+    })
+
+    const number = await view.findByTestId('domestic-account-number')
+    expect(inputValue(number)).toBe('123456789')
+    expect(number.getAttribute('type')).toBe('password')
+    const routing = view.getByTestId('domestic-account-routing-number')
+    expect(inputValue(routing)).toBe('021000021')
+    expect(routing.getAttribute('type')).toBe('text')
+    expect(view.getByText(I18N_KEYS.VaultFieldsAccountNumber)).toBeTruthy()
+    expect(view.getByText(I18N_KEYS.VaultFieldsRoutingNumber)).toBeTruthy()
   })
 })

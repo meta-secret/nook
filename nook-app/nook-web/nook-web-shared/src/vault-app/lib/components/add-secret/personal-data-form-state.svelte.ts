@@ -2,7 +2,8 @@ import {
   NookSecretFormFields,
   SecretType,
   type AddressSecretForm,
-  type BankAccountSecretForm,
+  type DomesticAccountSecretForm,
+  type InternationalAccountSecretForm,
   type IdentityDocumentSecretForm,
   type PersonalDataView,
   type PersonSecretForm,
@@ -13,7 +14,8 @@ export type PersonalDataFormType =
   | SecretType.Person
   | SecretType.Address
   | SecretType.IdentityDocument
-  | SecretType.BankAccount;
+  | SecretType.InternationalAccount
+  | SecretType.DomesticAccount;
 
 function emptyPerson(): PersonSecretForm {
   return {
@@ -49,12 +51,21 @@ function emptyDocument(): IdentityDocumentSecretForm {
   };
 }
 
-function emptyBankAccount(): BankAccountSecretForm {
+function emptyInternationalAccount(): InternationalAccountSecretForm {
+  return {
+    accountHolder: "",
+    bankName: "",
+    iban: "",
+    swiftBic: "",
+  };
+}
+
+function emptyDomesticAccount(): DomesticAccountSecretForm {
   return {
     accountHolder: "",
     bankName: "",
     accountNumber: "",
-    routingCode: "",
+    routingNumber: "",
   };
 }
 
@@ -66,8 +77,10 @@ export class PersonalDataFormState {
   person = $state(emptyPerson());
   address = $state(emptyAddress());
   document = $state(emptyDocument());
-  bankAccount = $state(emptyBankAccount());
+  internationalAccount = $state(emptyInternationalAccount());
+  domesticAccount = $state(emptyDomesticAccount());
   showDocumentNumber = $state(false);
+  showIban = $state(false);
   showAccountNumber = $state(false);
 
   /** Pre-fill the form from a decrypted record's Rust personal-data view. */
@@ -104,12 +117,20 @@ export class PersonalDataFormState {
           nameAsPrinted: view.nameAsPrinted,
         };
         return;
-      case "bank-account":
-        this.bankAccount = {
+      case "international-account":
+        this.internationalAccount = {
+          accountHolder: view.accountHolder,
+          bankName: view.bankName,
+          iban: view.iban,
+          swiftBic: view.swiftBic,
+        };
+        return;
+      case "domestic-account":
+        this.domesticAccount = {
           accountHolder: view.accountHolder,
           bankName: view.bankName,
           accountNumber: view.accountNumber,
-          routingCode: view.routingCode,
+          routingNumber: view.routingNumber,
         };
         return;
     }
@@ -126,9 +147,13 @@ export class PersonalDataFormState {
         return NookSecretFormFields.identity_document(
           $state.snapshot(this.document),
         );
-      case SecretType.BankAccount:
-        return NookSecretFormFields.bank_account(
-          $state.snapshot(this.bankAccount),
+      case SecretType.InternationalAccount:
+        return NookSecretFormFields.international_account(
+          $state.snapshot(this.internationalAccount),
+        );
+      case SecretType.DomesticAccount:
+        return NookSecretFormFields.domestic_account(
+          $state.snapshot(this.domesticAccount),
         );
     }
   }
@@ -137,8 +162,10 @@ export class PersonalDataFormState {
     this.person = emptyPerson();
     this.address = emptyAddress();
     this.document = emptyDocument();
-    this.bankAccount = emptyBankAccount();
+    this.internationalAccount = emptyInternationalAccount();
+    this.domesticAccount = emptyDomesticAccount();
     this.showDocumentNumber = false;
+    this.showIban = false;
     this.showAccountNumber = false;
   }
 }

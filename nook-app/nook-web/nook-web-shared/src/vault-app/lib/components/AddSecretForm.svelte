@@ -92,8 +92,10 @@
         return I18N_KEYS.AddSecretTitleNewAddress;
       case SecretType.IdentityDocument:
         return I18N_KEYS.AddSecretTitleNewIdentityDocument;
-      case SecretType.BankAccount:
-        return I18N_KEYS.AddSecretTitleNewBankAccount;
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.AddSecretTitleNewInternationalAccount;
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.AddSecretTitleNewDomesticAccount;
       case SecretType.Passkey:
         return I18N_KEYS.AddSecretTitleAddItem;
     }
@@ -121,8 +123,10 @@
         return I18N_KEYS.AddSecretTitleEditAddress;
       case SecretType.IdentityDocument:
         return I18N_KEYS.AddSecretTitleEditIdentityDocument;
-      case SecretType.BankAccount:
-        return I18N_KEYS.AddSecretTitleEditBankAccount;
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.AddSecretTitleEditInternationalAccount;
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.AddSecretTitleEditDomesticAccount;
       case SecretType.Passkey:
         return I18N_KEYS.AddSecretTitleEditItem;
     }
@@ -329,7 +333,7 @@
       </p>
     {/if}
 
-    {#if selectedTypeState.itemType === SecretType.Person || selectedTypeState.itemType === SecretType.Address || selectedTypeState.itemType === SecretType.IdentityDocument || selectedTypeState.itemType === SecretType.BankAccount}
+    {#if selectedTypeState.itemType === SecretType.Person || selectedTypeState.itemType === SecretType.Address || selectedTypeState.itemType === SecretType.IdentityDocument || selectedTypeState.itemType === SecretType.InternationalAccount || selectedTypeState.itemType === SecretType.DomesticAccount}
       <PersonalDataFields
         {vault}
         state={state.personal}

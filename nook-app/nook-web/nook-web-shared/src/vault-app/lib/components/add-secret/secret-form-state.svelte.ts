@@ -115,7 +115,8 @@ export class SecretFormState {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         this.personal.load(item.personalData);
         return;
       case SecretType.Passkey:
@@ -191,7 +192,8 @@ export class SecretFormState {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         return this.personal.toFormFields(selectedType);
       case SecretType.SecureNote:
       case SecretType.Passkey:
@@ -240,7 +242,8 @@ export class SecretFormState {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         return true;
       case SecretType.Passkey:
         return false;

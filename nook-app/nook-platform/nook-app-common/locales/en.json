@@ -404,7 +404,6 @@
       "person": "Person",
       "address": "Address",
       "identity_document": "Document",
-      "bank_account": "Bank account",
       "international_account": "International account",
       "domestic_account": "US bank account"
     },
@@ -499,7 +498,6 @@
       "account_holder": "Account holder",
       "bank_name": "Bank name",
       "account_number": "Account number",
-      "routing_code": "Routing code or BIC",
       "iban": "IBAN",
       "swift_bic": "SWIFT/BIC",
       "routing_number": "Routing number",
@@ -1400,7 +1398,6 @@
     "person_desc": "Name, birth date, email and phone",
     "address_desc": "Postal address for deliveries and forms",
     "identity_document_desc": "Passport, ID card or driver's license",
-    "bank_account_desc": "Account number and bank details",
     "international_account_desc": "IBAN and SWIFT/BIC",
     "domestic_account_desc": "US account and ABA routing number",
     "title_new_person": "New person",
@@ -1409,15 +1406,12 @@
     "title_edit_address": "Edit address",
     "title_new_identity_document": "New document",
     "title_edit_identity_document": "Edit document",
-    "title_new_bank_account": "New bank account",
-    "title_edit_bank_account": "Edit bank account",
     "title_new_international_account": "New international account",
     "title_edit_international_account": "Edit international account",
     "title_new_domestic_account": "New US bank account",
     "title_edit_domestic_account": "Edit US bank account",
     "placeholder_address_label": "e.g., Home",
-    "placeholder_country": "e.g., Germany",
-    "placeholder_bank_account_number": "IBAN or account number"
+    "placeholder_country": "e.g., Germany"
   },
   "status_bar": {
     "synced": "Synced",

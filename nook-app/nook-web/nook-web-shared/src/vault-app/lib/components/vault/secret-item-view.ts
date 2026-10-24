@@ -6,6 +6,7 @@ import {
   IdCard,
   KeyRound,
   Landmark,
+  Building2,
   MapPin,
   Paperclip,
   ShieldCheck,
@@ -51,8 +52,10 @@ export class SecretTypePresentation {
         return MapPin;
       case SecretType.IdentityDocument:
         return IdCard;
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
         return Landmark;
+      case SecretType.DomesticAccount:
+        return Building2;
     }
   }
 
@@ -80,8 +83,10 @@ export class SecretTypePresentation {
         return I18N_KEYS.VaultTypesAddress;
       case SecretType.IdentityDocument:
         return I18N_KEYS.VaultTypesIdentityDocument;
-      case SecretType.BankAccount:
-        return I18N_KEYS.VaultTypesBankAccount;
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.VaultTypesInternationalAccount;
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.VaultTypesDomesticAccount;
     }
   }
 }
@@ -150,7 +155,8 @@ export class SecretItemView {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         return (
           item.summary.trim() ||
           item.displayTitle.trim() ||
@@ -187,7 +193,8 @@ export class SecretItemView {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         return item.displayTitle.trim() || this.summary;
     }
   }
@@ -214,7 +221,8 @@ export class SecretItemView {
       case SecretType.Person:
       case SecretType.Address:
       case SecretType.IdentityDocument:
-      case SecretType.BankAccount:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
         return this.distinctSummary();
     }
   }

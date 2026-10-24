@@ -6,9 +6,10 @@
   import PersonalTextField from './PersonalTextField.svelte'
   import {
     ADDRESS_FIELDS,
-    BANK_ACCOUNT_FIELDS,
     DOCUMENT_FIELDS,
+    DOMESTIC_ACCOUNT_FIELDS,
     IDENTITY_DOCUMENT_KINDS,
+    INTERNATIONAL_ACCOUNT_FIELDS,
     PERSON_FIELDS,
     documentKindLabelKey,
   } from './personal-data-fields'
@@ -61,12 +62,21 @@
         bind:shown={state.showDocumentNumber}
       />
     {/each}
-  {:else}
-    {#each BANK_ACCOUNT_FIELDS as field (field.key)}
+  {:else if selectedType === SecretType.InternationalAccount}
+    {#each INTERNATIONAL_ACCOUNT_FIELDS as field (field.key)}
       <PersonalTextField
         {vault}
         {field}
-        bind:value={state.bankAccount[field.key]}
+        bind:value={state.internationalAccount[field.key]}
+        bind:shown={state.showIban}
+      />
+    {/each}
+  {:else}
+    {#each DOMESTIC_ACCOUNT_FIELDS as field (field.key)}
+      <PersonalTextField
+        {vault}
+        {field}
+        bind:value={state.domesticAccount[field.key]}
         bind:shown={state.showAccountNumber}
       />
     {/each}

@@ -93,9 +93,14 @@ const PERSONAL_DATA_TYPES: readonly VaultSectionTypeRequest[] = [
     labelKey: I18N_KEYS.VaultTypesIdentityDocument,
   },
   {
-    type: SecretType.BankAccount,
-    filter: NookSecretTypeFilter.BankAccount,
-    labelKey: I18N_KEYS.VaultTypesBankAccount,
+    type: SecretType.InternationalAccount,
+    filter: NookSecretTypeFilter.InternationalAccount,
+    labelKey: I18N_KEYS.VaultTypesInternationalAccount,
+  },
+  {
+    type: SecretType.DomesticAccount,
+    filter: NookSecretTypeFilter.DomesticAccount,
+    labelKey: I18N_KEYS.VaultTypesDomesticAccount,
   },
   {
     type: SecretType.CreditCard,

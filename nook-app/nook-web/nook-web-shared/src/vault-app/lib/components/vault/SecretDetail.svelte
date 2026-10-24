@@ -552,7 +552,7 @@
           <span class="whitespace-pre-wrap text-sm">{reveal.record.notes}</span>
         </SecretSlot>
       {/if}
-    {:else if item.type === SecretType.Person || item.type === SecretType.Address || item.type === SecretType.IdentityDocument || item.type === SecretType.BankAccount}
+    {:else if item.type === SecretType.Person || item.type === SecretType.Address || item.type === SecretType.IdentityDocument || item.type === SecretType.InternationalAccount || item.type === SecretType.DomesticAccount}
       <PersonalDataSlotList
         {item}
         {reveal}
