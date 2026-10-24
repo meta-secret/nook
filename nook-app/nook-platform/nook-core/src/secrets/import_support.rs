@@ -613,6 +613,19 @@ impl ImportItemDisposition {
         }
     }
 
+    /// Add one more produced record; a skipped item stays skipped.
+    #[must_use]
+    pub(crate) fn with_record(self, record: crate::SecretValue) -> Self {
+        match self {
+            Self::Imported(item) => Self::ImportedRecords(vec![item, record]),
+            Self::ImportedRecords(mut records) => {
+                records.push(record);
+                Self::ImportedRecords(records)
+            }
+            Self::Skipped(reason) => Self::Skipped(reason),
+        }
+    }
+
     /// CSV conversion shape: produced records and the skipped source count.
     pub(crate) fn collected(self) -> (Vec<crate::SecretValue>, usize) {
         let mut items = Vec::new();

@@ -233,7 +233,7 @@ impl MonthNameDate<'_> {
         let Some(month) = (MonthName { name: month }).number() else {
             return raw.to_owned();
         };
-        let candidate = format!("{year:0>4}-{month:02}-{day:0>2}");
+        let candidate = format!("{year}-{month:02}-{day:0>2}");
         match CalendarDate::parse(&candidate) {
             Ok(date) => date.to_string(),
             Err(_) => raw.to_owned(),
@@ -437,6 +437,9 @@ mod tests {
             .iso(),
             "Smarch,1,2030"
         );
+        for short_year in ["January,15,30", "January,15,030"] {
+            assert_eq!(MonthNameDate { raw: short_year }.iso(), short_year);
+        }
     }
 
     #[test]
