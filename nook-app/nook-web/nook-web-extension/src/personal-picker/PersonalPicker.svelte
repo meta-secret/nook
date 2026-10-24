@@ -1,24 +1,20 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
-  import type { ExtensionI18n } from '../lib/i18n'
   import {
     PersonalPickerActivity,
     PersonalPickerController,
+    PersonalPickerMessage,
     type PersonalPickerDocumentRequest,
   } from './personal-picker-controller.svelte'
 
   let {
-    i18n,
     requestId,
     parentOrigin,
   }: {
-    i18n: ExtensionI18n
     requestId: string
     parentOrigin: string
   } = $props()
   const documentRequest: PersonalPickerDocumentRequest = untrack(() => ({
-    i18n,
     requestId,
     parentOrigin,
   }))
@@ -41,23 +37,23 @@
   aria-busy={picker.activity === PersonalPickerActivity.Selecting}
 >
   <header class="login-picker-header">
-    <h1>{picker.translate(I18N_KEYS.ExtensionPersonalPickerTitle)}</h1>
+    <h1>{picker.translate(PersonalPickerMessage.Title)}</h1>
     <p class="destination-origin">
-      {picker.translate(I18N_KEYS.ExtensionPersonalPickerDescription)}
+      {picker.translate(PersonalPickerMessage.Description)}
     </p>
   </header>
 
   {#if picker.activity === PersonalPickerActivity.Failed}
     <p class="error-message" role="alert">
-      {picker.translate(I18N_KEYS.ExtensionPersonalPickerFailed)}
+      {picker.translate(PersonalPickerMessage.Failed)}
     </p>
   {:else if picker.activity === PersonalPickerActivity.Loading}
     <p class="picker-status" role="status">
-      {picker.translate(I18N_KEYS.ExtensionPersonalPickerLoading)}
+      {picker.translate(PersonalPickerMessage.Loading)}
     </p>
   {:else if picker.records.length === 0}
     <p class="picker-status" role="status">
-      {picker.translate(I18N_KEYS.ExtensionPersonalPickerNoResults)}
+      {picker.translate(PersonalPickerMessage.NoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="personal-results">

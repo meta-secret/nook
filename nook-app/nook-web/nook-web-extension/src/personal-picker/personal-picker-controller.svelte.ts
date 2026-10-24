@@ -1,10 +1,6 @@
 import { Effect, Schema } from 'effect'
 import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import {
-  I18N_KEYS,
-  type I18nKey,
-} from '../../../nook-web-shared/src/generated/i18n-keys'
-import {
   PersonalFillMessageType,
   PersonalFillMessages,
   PersonalFillQueryResponseKind,
@@ -17,7 +13,19 @@ import {
   type PersonalFillSelectMessage,
   type PersonalFillSelectResponse,
 } from '../lib/personal-fill-messages'
-import { extensionLocaleCatalog, type ExtensionI18n } from '../lib/i18n'
+
+/**
+ * The picker's Chrome message names, generated from the shared locale
+ * catalog. Reading them through chrome.i18n keeps WASM out of this page.
+ */
+export enum PersonalPickerMessage {
+  Title = 'personalPickerTitle',
+  Description = 'personalPickerDescription',
+  Unnamed = 'personalPickerUnnamed',
+  Loading = 'personalPickerLoading',
+  NoResults = 'personalPickerNoResults',
+  Failed = 'personalPickerFailed',
+}
 
 export enum PersonalPickerActivity {
   Loading = 'loading',
@@ -40,7 +48,6 @@ enum PersonalPickerTitlePresence {
 export interface PersonalPickerDocumentRequest {
   readonly requestId: string
   readonly parentOrigin: string
-  readonly i18n: ExtensionI18n
 }
 
 const transportFailureFields: Readonly<Record<never, never>> = {}
@@ -82,10 +89,8 @@ export class PersonalPickerController {
 
   constructor(private readonly request: PersonalPickerDocumentRequest) {}
 
-  translate(key: I18nKey): string {
-    return this.request.i18n.t(
-      extensionLocaleCatalog.plainExtensionTranslation(key),
-    )
+  translate(message: PersonalPickerMessage): string {
+    return chrome.i18n.getMessage(message)
   }
 
   private titlePresence(
@@ -104,7 +109,7 @@ export class PersonalPickerController {
       case PersonalPickerTitlePresence.Titled:
         return record.title.trim()
       case PersonalPickerTitlePresence.Untitled:
-        return this.translate(I18N_KEYS.ExtensionPersonalPickerUnnamed)
+        return this.translate(PersonalPickerMessage.Unnamed)
     }
   }
 

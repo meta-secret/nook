@@ -4,6 +4,10 @@ import {
   passkeyCardMessages,
   type PasskeyLocaleMessages,
 } from './chrome-locale-passkey-card'
+import {
+  PersonalPickerChromeMessages,
+  type PersonalPickerLocaleMessages,
+} from './chrome-locale-personal-picker'
 
 type ExtensionChromeLocaleBuildRequest = {
   appCommonLocalesRoot: string
@@ -167,6 +171,7 @@ type NookLocaleCatalogShape = {
       backup_mode_merge: string
     }
     passkey: PasskeyLocaleMessages
+    personal_picker: PersonalPickerLocaleMessages
   }
 }
 
@@ -180,6 +185,8 @@ type WidgetLocaleMessageKey =
 type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
 type SetupLocaleMessageKey = keyof NookLocaleCatalogShape['extension']['setup']
+type PersonalPickerLocaleMessageKey =
+  keyof NookLocaleCatalogShape['extension']['personal_picker']
 
 class LocaleMessageSection<Key extends string> {
   private readonly messages: Record<string, unknown>
@@ -213,6 +220,7 @@ type NookLocaleCatalog = {
     setup: LocaleMessageSection<SetupLocaleMessageKey>
     widget: LocaleMessageSection<WidgetLocaleMessageKey>
     passkey: LocaleMessageSection<PasskeyLocaleMessageKey>
+    personalPicker: LocaleMessageSection<PersonalPickerLocaleMessageKey>
   }
 }
 
@@ -231,7 +239,8 @@ class ExtensionLocaleCatalogAdmission {
       Array.isArray(value.extension) ||
       !('setup' in value.extension) ||
       !('widget' in value.extension) ||
-      !('passkey' in value.extension)
+      !('passkey' in value.extension) ||
+      !('personal_picker' in value.extension)
     ) {
       throw new Error(`Locale catalog ${locale} has an invalid shape.`)
     }
@@ -249,6 +258,11 @@ class ExtensionLocaleCatalogAdmission {
           value.extension.passkey,
           `${locale} passkey`,
         ),
+        personalPicker:
+          new LocaleMessageSection<PersonalPickerLocaleMessageKey>(
+            value.extension.personal_picker,
+            `${locale} personal picker`,
+          ),
       },
     }
   }
@@ -960,6 +974,10 @@ export async function buildChromeLocales({
           ),
         },
         ...passkeyCardMessages(catalog.extension.passkey, locale),
+        ...PersonalPickerChromeMessages.messages({
+          section: catalog.extension.personalPicker,
+          locale,
+        }),
       }
       const localeDir = join(distDir, '_locales', locale)
       await mkdir(localeDir, { recursive: true })

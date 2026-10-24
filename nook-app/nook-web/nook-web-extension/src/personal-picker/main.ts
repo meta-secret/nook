@@ -1,7 +1,5 @@
-import { Effect } from 'effect'
 import { mount, type ComponentProps, type MountOptions } from 'svelte'
 import PersonalPicker from './PersonalPicker.svelte'
-import { extensionLocaleCatalog } from '../lib/i18n'
 import {
   PersonalPickerInitializationCodec,
   type PersonalPickerInitialization,
@@ -48,30 +46,26 @@ class PersonalPickerDocument {
         return
       case true:
         this.phase = PersonalPickerDocumentPhase.Mounted
-        void Effect.runPromise(this.render(admission.success))
+        this.render(admission.success)
     }
   }
 
-  private render(initialization: PersonalPickerInitialization) {
-    return Effect.promise(async () => {
-      const target = document.getElementById('app')
-      switch (true) {
-        case target instanceof HTMLElement: {
-          const mountRequest: PersonalPickerMount = { target, initialization }
-          return this.mount(mountRequest)
-        }
-        case true:
-          return
+  private render(initialization: PersonalPickerInitialization): void {
+    const target = document.getElementById('app')
+    switch (true) {
+      case target instanceof HTMLElement: {
+        const mountRequest: PersonalPickerMount = { target, initialization }
+        return this.mount(mountRequest)
       }
-    })
+      case true:
+        return
+    }
   }
 
-  private async mount(request: PersonalPickerMount): Promise<void> {
-    const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
+  private mount(request: PersonalPickerMount): void {
     const options: MountOptions<ComponentProps<typeof PersonalPicker>> = {
       target: request.target,
       props: {
-        i18n,
         requestId: request.initialization.requestId,
         parentOrigin: request.initialization.origin,
       },
