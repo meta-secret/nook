@@ -390,7 +390,7 @@ band, the scrolling page and the status line.
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off
     openSection(next)
-    // The setup step can be long; the vault opens from its top.
+    // The setup step can be long; the next page opens from its top.
     const pageTop: ScrollToOptions = { top: 0 }
     window.scrollTo(pageTop)
   }
@@ -549,7 +549,7 @@ band, the scrolling page and the status line.
   <FirstRunBackupStep
     {vault}
     onReconnect={onSettingsReconnect}
-    onDone={() => finishFirstRun(WorkspaceSection.Vault)}
+    onDone={() => finishFirstRun(WorkspaceSection.Identities)}
   />
 {:else if section === WorkspaceSection.Identities || section === WorkspaceSection.Overview}
   <div

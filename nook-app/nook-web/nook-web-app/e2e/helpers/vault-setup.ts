@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import { unlockVaultOnLogin } from './settings-auth'
 import { disableVaultIdleLock, waitForStorageChainIdle } from './vault-runtime'
+import { openVaultPage } from './workspace-navigation'
 
 export async function openLoginProviderSetup(page: Page) {
   if (await page.getByTestId('provider-picker-list').isVisible()) {
@@ -76,16 +77,13 @@ export async function skipFirstRunBackup(
   }
 }
 
-/** The first vault opens after its setup steps; skip the backup offer. */
+/** The first vault's setup ends on the identities: skip the backup offer,
+ * then open the new vault from its row there. */
 export async function expectFirstVaultOpen(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
-  // Unlocked beside its card, the vault opens from its panel.
-  const open = page.getByTestId('vault-panel-open')
-  await skipFirstRunBackup(page, vaultPanel.or(open).first())
-  if (await open.isVisible()) await open.click()
-  await expect(vaultPanel).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  const hub = page.getByTestId('identities-hub')
+  await skipFirstRunBackup(page, vaultPanel.or(hub).first())
+  await openVaultPage(page)
 }
 
 export async function createLocalVaultOnLogin(
@@ -153,7 +151,12 @@ export async function createLocalVaultOnLogin(
     }
   }
 
-  await skipFirstRunBackup(page, readySurface)
+  await skipFirstRunBackup(
+    page,
+    readySurface.or(page.getByTestId('identities-hub')).first(),
+  )
+  // The first vault's setup ends on the identities; the vault opens there.
+  if (readyTestId === 'vault-panel') await openVaultPage(page)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

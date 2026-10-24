@@ -2030,7 +2030,11 @@
       "approved_reopen": "Extension device approved. Reopen Nook if browser access did not update.",
       "approval_failed": "Failed to approve extension device.",
       "approved_return": "Browser access approved. You can close this window or return to your vault.",
-      "approving": "Approving…",
+      "progress_step": "Step {step} of {total}",
+      "progress_authorizing": "Authorizing the extension device…",
+      "progress_preparing": "Preparing the extension's vault access…",
+      "progress_delivering": "Handing access to the extension…",
+      "progress_finishing": "Updating this identity's devices…",
       "approve": "Approve extension",
       "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}. It stays a filling companion with these permissions only.",
       "vault_only": "{identity} has no cloud sync provider yet, so the extension connects this vault only. Add one to connect every vault in {identity}."

@@ -1,8 +1,8 @@
 <!--
 Shown once the first vault exists: setup is done, and keeping a copy is
 recommended, not required. A sync provider is added right here; when it
-connects, or the person declines, the new vault opens. Identity management
-is never visited.
+connects, or the person declines, the identities open, so the new vault
+shows with everything that can be done with it.
 -->
 <script lang="ts">
   import { CheckCircle2 } from "@lucide/svelte";
@@ -22,7 +22,7 @@ is never visited.
   }: {
     vault: VaultState;
     onReconnect: () => void;
-    /** Leave setup for the new vault. */
+    /** Leave setup for the identities. */
     onDone: () => void;
   } = $props();
 
