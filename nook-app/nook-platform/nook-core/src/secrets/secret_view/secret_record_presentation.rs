@@ -55,7 +55,12 @@ impl SecretRecord {
             SecretValue::IdentityDocument(value) => {
                 SecretListItemData::IdentityDocument(value.list_item())
             }
-            SecretValue::BankAccount(value) => SecretListItemData::BankAccount(value.list_item()),
+            SecretValue::InternationalAccount(value) => {
+                SecretListItemData::InternationalAccount(value.list_item())
+            }
+            SecretValue::DomesticAccount(value) => {
+                SecretListItemData::DomesticAccount(value.list_item())
+            }
         };
         SecretListItem {
             id: self.id.clone(),
@@ -79,7 +84,8 @@ impl SecretRecord {
             SecretValue::Person(_)
             | SecretValue::Address(_)
             | SecretValue::IdentityDocument(_)
-            | SecretValue::BankAccount(_) => self.list_item().display_title(),
+            | SecretValue::InternationalAccount(_)
+            | SecretValue::DomesticAccount(_) => self.list_item().display_title(),
         }
     }
 
@@ -98,7 +104,8 @@ impl SecretRecord {
             SecretValue::Authenticator(value) => value.secret.as_str(),
             SecretValue::CreditCard(value) => value.number.as_str(),
             SecretValue::IdentityDocument(value) => value.number.as_str(),
-            SecretValue::BankAccount(value) => value.account_number.as_str(),
+            SecretValue::InternationalAccount(value) => value.iban.as_str(),
+            SecretValue::DomesticAccount(value) => value.account_number.as_str(),
         }
     }
 
@@ -147,7 +154,8 @@ impl SecretRecord {
             SecretValue::Person(_)
             | SecretValue::Address(_)
             | SecretValue::IdentityDocument(_)
-            | SecretValue::BankAccount(_) => self.list_item().group_key(),
+            | SecretValue::InternationalAccount(_)
+            | SecretValue::DomesticAccount(_) => self.list_item().group_key(),
         }
     }
 
@@ -191,7 +199,8 @@ impl SecretRecord {
             SecretValue::Person(_)
             | SecretValue::Address(_)
             | SecretValue::IdentityDocument(_)
-            | SecretValue::BankAccount(_) => self.list_item().summary(),
+            | SecretValue::InternationalAccount(_)
+            | SecretValue::DomesticAccount(_) => self.list_item().summary(),
         }
     }
 

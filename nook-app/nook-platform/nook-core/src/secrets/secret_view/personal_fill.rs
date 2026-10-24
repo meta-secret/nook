@@ -192,7 +192,8 @@ impl PersonalFillProjection<'_> {
             | SecretValue::Authenticator(_)
             | SecretValue::FileAttachment(_)
             | SecretValue::IdentityDocument(_)
-            | SecretValue::BankAccount(_) => Err(mismatch),
+            | SecretValue::InternationalAccount(_)
+            | SecretValue::DomesticAccount(_) => Err(mismatch),
         }
     }
 }

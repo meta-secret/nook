@@ -34,6 +34,7 @@ pub const ADD_SECRET_BIP39_DESC: &str = "add_secret.bip39_desc";
 pub const ADD_SECRET_CHANGE_TYPE: &str = "add_secret.change_type";
 pub const ADD_SECRET_CHOOSE_TYPE_DESC: &str = "add_secret.choose_type_desc";
 pub const ADD_SECRET_CREDIT_CARD_DESC: &str = "add_secret.credit_card_desc";
+pub const ADD_SECRET_DOMESTIC_ACCOUNT_DESC: &str = "add_secret.domestic_account_desc";
 pub const ADD_SECRET_FILE_ATTACHMENT_DESC: &str = "add_secret.file_attachment_desc";
 pub const ADD_SECRET_FILE_ATTACHMENT_HINT: &str = "add_secret.file_attachment_hint";
 pub const ADD_SECRET_FILE_EMPTY: &str = "add_secret.file_empty";
@@ -41,6 +42,7 @@ pub const ADD_SECRET_FILE_TOO_LARGE: &str = "add_secret.file_too_large";
 pub const ADD_SECRET_GENERATE_BTN: &str = "add_secret.generate_btn";
 pub const ADD_SECRET_GENERATE_PASSWORD: &str = "add_secret.generate_password";
 pub const ADD_SECRET_IDENTITY_DOCUMENT_DESC: &str = "add_secret.identity_document_desc";
+pub const ADD_SECRET_INTERNATIONAL_ACCOUNT_DESC: &str = "add_secret.international_account_desc";
 pub const ADD_SECRET_LENGTH: &str = "add_secret.length";
 pub const ADD_SECRET_LOWERCASE: &str = "add_secret.lowercase";
 pub const ADD_SECRET_MARKDOWN_SUPPORT: &str = "add_secret.markdown_support";
@@ -96,8 +98,11 @@ pub const ADD_SECRET_TITLE_EDIT_API_KEY: &str = "add_secret.title_edit_api_key";
 pub const ADD_SECRET_TITLE_EDIT_AUTHENTICATOR: &str = "add_secret.title_edit_authenticator";
 pub const ADD_SECRET_TITLE_EDIT_BANK_ACCOUNT: &str = "add_secret.title_edit_bank_account";
 pub const ADD_SECRET_TITLE_EDIT_CREDIT_CARD: &str = "add_secret.title_edit_credit_card";
+pub const ADD_SECRET_TITLE_EDIT_DOMESTIC_ACCOUNT: &str = "add_secret.title_edit_domestic_account";
 pub const ADD_SECRET_TITLE_EDIT_FILE_ATTACHMENT: &str = "add_secret.title_edit_file_attachment";
 pub const ADD_SECRET_TITLE_EDIT_IDENTITY_DOCUMENT: &str = "add_secret.title_edit_identity_document";
+pub const ADD_SECRET_TITLE_EDIT_INTERNATIONAL_ACCOUNT: &str =
+    "add_secret.title_edit_international_account";
 pub const ADD_SECRET_TITLE_EDIT_ITEM: &str = "add_secret.title_edit_item";
 pub const ADD_SECRET_TITLE_EDIT_LOGIN: &str = "add_secret.title_edit_login";
 pub const ADD_SECRET_TITLE_EDIT_PERSON: &str = "add_secret.title_edit_person";
@@ -108,8 +113,11 @@ pub const ADD_SECRET_TITLE_NEW_API_KEY: &str = "add_secret.title_new_api_key";
 pub const ADD_SECRET_TITLE_NEW_AUTHENTICATOR: &str = "add_secret.title_new_authenticator";
 pub const ADD_SECRET_TITLE_NEW_BANK_ACCOUNT: &str = "add_secret.title_new_bank_account";
 pub const ADD_SECRET_TITLE_NEW_CREDIT_CARD: &str = "add_secret.title_new_credit_card";
+pub const ADD_SECRET_TITLE_NEW_DOMESTIC_ACCOUNT: &str = "add_secret.title_new_domestic_account";
 pub const ADD_SECRET_TITLE_NEW_FILE_ATTACHMENT: &str = "add_secret.title_new_file_attachment";
 pub const ADD_SECRET_TITLE_NEW_IDENTITY_DOCUMENT: &str = "add_secret.title_new_identity_document";
+pub const ADD_SECRET_TITLE_NEW_INTERNATIONAL_ACCOUNT: &str =
+    "add_secret.title_new_international_account";
 pub const ADD_SECRET_TITLE_NEW_LOGIN: &str = "add_secret.title_new_login";
 pub const ADD_SECRET_TITLE_NEW_PASSKEY: &str = "add_secret.title_new_passkey";
 pub const ADD_SECRET_TITLE_NEW_PERSON: &str = "add_secret.title_new_person";
@@ -669,14 +677,6 @@ pub const ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID: &str =
     "errors.validation.authenticator_secret_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID: &str =
     "errors.validation.authenticator_uri_invalid";
-pub const ERRORS_VALIDATION_BANK_ACCOUNT_IBAN_INVALID: &str =
-    "errors.validation.bank_account_iban_invalid";
-pub const ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_INVALID: &str =
-    "errors.validation.bank_account_number_invalid";
-pub const ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_REQUIRED: &str =
-    "errors.validation.bank_account_number_required";
-pub const ERRORS_VALIDATION_BANK_ACCOUNT_ROUTING_CODE_INVALID: &str =
-    "errors.validation.bank_account_routing_code_invalid";
 pub const ERRORS_VALIDATION_BIP39_EMPTY: &str = "errors.validation.bip39_empty";
 pub const ERRORS_VALIDATION_BIP39_INVALID: &str = "errors.validation.bip39_invalid";
 pub const ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID: &str =
@@ -687,6 +687,10 @@ pub const ERRORS_VALIDATION_CREDIT_CARD_NUMBER_INVALID: &str =
     "errors.validation.credit_card_number_invalid";
 pub const ERRORS_VALIDATION_CREDIT_CARD_TITLE_REQUIRED: &str =
     "errors.validation.credit_card_title_required";
+pub const ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_INVALID: &str =
+    "errors.validation.domestic_account_number_invalid";
+pub const ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_REQUIRED: &str =
+    "errors.validation.domestic_account_number_required";
 pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS: &str = "errors.validation.drive_file_name_chars";
 pub const ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID: &str =
     "errors.validation.drive_file_name_invalid";
@@ -704,6 +708,10 @@ pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE: &str =
     "errors.validation.identity_document_expiry_before_issue";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_NUMBER_REQUIRED: &str =
     "errors.validation.identity_document_number_required";
+pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_INVALID: &str =
+    "errors.validation.international_account_iban_invalid";
+pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED: &str =
+    "errors.validation.international_account_iban_required";
 pub const ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET: &str =
     "errors.validation.invalid_sentinel_share_set";
 pub const ERRORS_VALIDATION_LOCAL_DATA_CHANGED_IN_ANOTHER_TAB: &str =
@@ -717,6 +725,10 @@ pub const ERRORS_VALIDATION_PERSON_NAME_REQUIRED: &str = "errors.validation.pers
 pub const ERRORS_VALIDATION_PERSON_PHONE_INVALID: &str = "errors.validation.person_phone_invalid";
 pub const ERRORS_VALIDATION_PERSONAL_DATA_TEXT_INVALID: &str =
     "errors.validation.personal_data_text_invalid";
+pub const ERRORS_VALIDATION_ROUTING_NUMBER_INVALID: &str =
+    "errors.validation.routing_number_invalid";
+pub const ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED: &str =
+    "errors.validation.routing_number_required";
 pub const ERRORS_VALIDATION_SECRET_DATA_REQUIRED: &str = "errors.validation.secret_data_required";
 pub const ERRORS_VALIDATION_SECRET_ID_REQUIRED: &str = "errors.validation.secret_id_required";
 pub const ERRORS_VALIDATION_SECRET_ID_RESERVED: &str = "errors.validation.secret_id_reserved";
@@ -734,6 +746,7 @@ pub const ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED: &str =
     "errors.validation.shared_storage_target_required";
 pub const ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_SHARES: &str =
     "errors.validation.simple_vault_has_sentinel_shares";
+pub const ERRORS_VALIDATION_SWIFT_BIC_INVALID: &str = "errors.validation.swift_bic_invalid";
 pub const ERRORS_VALIDATION_UNKNOWN_STORAGE_MODE: &str = "errors.validation.unknown_storage_mode";
 pub const ERRORS_VALIDATION_UNKNOWN_VAULT_APPLICATION: &str =
     "errors.validation.unknown_vault_application";
@@ -2439,6 +2452,7 @@ pub const VAULT_FIELDS_HISTORY_LOADING: &str = "vault.fields.history_loading";
 pub const VAULT_FIELDS_HISTORY_MODIFIED: &str = "vault.fields.history_modified";
 pub const VAULT_FIELDS_HISTORY_MODIFIED_DEVICE: &str = "vault.fields.history_modified_device";
 pub const VAULT_FIELDS_HISTORY_UNAVAILABLE: &str = "vault.fields.history_unavailable";
+pub const VAULT_FIELDS_IBAN: &str = "vault.fields.iban";
 pub const VAULT_FIELDS_ISSUE_DATE: &str = "vault.fields.issue_date";
 pub const VAULT_FIELDS_ISSUER: &str = "vault.fields.issuer";
 pub const VAULT_FIELDS_ISSUING_COUNTRY: &str = "vault.fields.issuing_country";
@@ -2481,6 +2495,8 @@ pub const VAULT_FIELDS_POSTAL_CODE: &str = "vault.fields.postal_code";
 pub const VAULT_FIELDS_REGION: &str = "vault.fields.region";
 pub const VAULT_FIELDS_RELYING_PARTY: &str = "vault.fields.relying_party";
 pub const VAULT_FIELDS_ROUTING_CODE: &str = "vault.fields.routing_code";
+pub const VAULT_FIELDS_ROUTING_NUMBER: &str = "vault.fields.routing_number";
+pub const VAULT_FIELDS_SWIFT_BIC: &str = "vault.fields.swift_bic";
 pub const VAULT_FIELDS_TITLE: &str = "vault.fields.title";
 pub const VAULT_FIELDS_UNNAMED_CARD: &str = "vault.fields.unnamed_card";
 pub const VAULT_FIELDS_UNNAMED_FILE: &str = "vault.fields.unnamed_file";
@@ -2540,8 +2556,10 @@ pub const VAULT_TYPES_API_KEY: &str = "vault.types.api_key";
 pub const VAULT_TYPES_AUTHENTICATOR: &str = "vault.types.authenticator";
 pub const VAULT_TYPES_BANK_ACCOUNT: &str = "vault.types.bank_account";
 pub const VAULT_TYPES_CREDIT_CARD: &str = "vault.types.credit_card";
+pub const VAULT_TYPES_DOMESTIC_ACCOUNT: &str = "vault.types.domestic_account";
 pub const VAULT_TYPES_FILE_ATTACHMENT: &str = "vault.types.file_attachment";
 pub const VAULT_TYPES_IDENTITY_DOCUMENT: &str = "vault.types.identity_document";
+pub const VAULT_TYPES_INTERNATIONAL_ACCOUNT: &str = "vault.types.international_account";
 pub const VAULT_TYPES_LOGIN: &str = "vault.types.login";
 pub const VAULT_TYPES_PASSKEY: &str = "vault.types.passkey";
 pub const VAULT_TYPES_PERSON: &str = "vault.types.person";

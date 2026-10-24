@@ -3,8 +3,8 @@
 use crate::errors::SecretPayloadResult;
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
-    AddressSecret, BankAccountSecret, CreditCardFields, IdentityDocumentSecret, PersonSecret,
-    ValidationError,
+    AddressSecret, CreditCardFields, DomesticAccountSecret, IdentityDocumentSecret,
+    InternationalAccountSecret, PersonSecret, ValidationError,
 };
 use crate::{
     ApiKeySecret, AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, LoginSecret,
@@ -36,13 +36,16 @@ pub use passkey_details::{
     PasskeyPublicKeyFingerprint,
 };
 pub use personal_data_forms::{
-    AddressSecretForm, BankAccountSecretForm, IdentityDocumentSecretForm, PersonSecretForm,
+    AddressSecretForm, DomesticAccountSecretForm, IdentityDocumentSecretForm,
+    InternationalAccountSecretForm, PersonSecretForm,
 };
 pub use personal_data_items::{
-    AddressListItem, BankAccountListItem, IdentityDocumentListItem, PersonListItem,
+    AddressListItem, DomesticAccountListItem, IdentityDocumentListItem,
+    InternationalAccountListItem, PersonListItem,
 };
 pub use personal_data_view::{
-    AddressView, BankAccountView, IdentityDocumentView, PersonView, PersonalDataView,
+    AddressView, DomesticAccountView, IdentityDocumentView, InternationalAccountView, PersonView,
+    PersonalDataView,
 };
 pub use personal_fill::{
     PersonalFieldGroup, PersonalFieldKind, PersonalFillError, PersonalFillProjection,
@@ -129,7 +132,8 @@ pub enum SecretListItemData {
     Person(PersonListItem),
     Address(AddressListItem),
     IdentityDocument(IdentityDocumentListItem),
-    BankAccount(BankAccountListItem),
+    InternationalAccount(InternationalAccountListItem),
+    DomesticAccount(DomesticAccountListItem),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -213,7 +217,8 @@ pub enum SecretFormFields {
     Person(PersonSecretForm),
     Address(AddressSecretForm),
     IdentityDocument(IdentityDocumentSecretForm),
-    BankAccount(BankAccountSecretForm),
+    InternationalAccount(InternationalAccountSecretForm),
+    DomesticAccount(DomesticAccountSecretForm),
 }
 
 impl SecretFormFields {
@@ -230,7 +235,8 @@ impl SecretFormFields {
             Self::Person(_) => SecretType::Person,
             Self::Address(_) => SecretType::Address,
             Self::IdentityDocument(_) => SecretType::IdentityDocument,
-            Self::BankAccount(_) => SecretType::BankAccount,
+            Self::InternationalAccount(_) => SecretType::InternationalAccount,
+            Self::DomesticAccount(_) => SecretType::DomesticAccount,
         }
     }
 }
@@ -321,8 +327,11 @@ impl SecretFormFields {
             SecretFormFields::IdentityDocument(form) => {
                 SecretValue::IdentityDocument(IdentityDocumentSecret::from_fields(form.fields())?)
             }
-            SecretFormFields::BankAccount(form) => {
-                SecretValue::BankAccount(BankAccountSecret::from_fields(form.fields())?)
+            SecretFormFields::InternationalAccount(form) => SecretValue::InternationalAccount(
+                InternationalAccountSecret::from_fields(form.fields())?,
+            ),
+            SecretFormFields::DomesticAccount(form) => {
+                SecretValue::DomesticAccount(DomesticAccountSecret::from_fields(form.fields())?)
             }
         };
         value.to_yaml()

@@ -4,7 +4,8 @@
 //! validated only by the payload constructors in `secrets::personal_data`.
 
 use crate::{
-    AddressFields, BankAccountFields, IdentityDocumentFields, IdentityDocumentKind, PersonFields,
+    AddressFields, DomesticAccountFields, IdentityDocumentFields, IdentityDocumentKind,
+    InternationalAccountFields, PersonFields,
 };
 use serde::Deserialize;
 use std::fmt;
@@ -47,14 +48,24 @@ pub struct IdentityDocumentSecretForm {
     pub name_as_printed: String,
 }
 
-/// Unvalidated bank-account form input.
+/// Unvalidated international-account (IBAN) form input.
 #[derive(Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BankAccountSecretForm {
+pub struct InternationalAccountSecretForm {
+    pub account_holder: String,
+    pub bank_name: String,
+    pub iban: String,
+    pub swift_bic: String,
+}
+
+/// Unvalidated US domestic-account form input.
+#[derive(Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DomesticAccountSecretForm {
     pub account_holder: String,
     pub bank_name: String,
     pub account_number: String,
-    pub routing_code: String,
+    pub routing_number: String,
 }
 
 impl fmt::Debug for PersonSecretForm {
@@ -82,10 +93,18 @@ impl fmt::Debug for IdentityDocumentSecretForm {
     }
 }
 
-impl fmt::Debug for BankAccountSecretForm {
+impl fmt::Debug for InternationalAccountSecretForm {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("BankAccountSecretForm")
+            .debug_struct("InternationalAccountSecretForm")
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for DomesticAccountSecretForm {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DomesticAccountSecretForm")
             .finish_non_exhaustive()
     }
 }
@@ -133,14 +152,26 @@ impl IdentityDocumentSecretForm {
     }
 }
 
-impl BankAccountSecretForm {
+impl InternationalAccountSecretForm {
     #[must_use]
-    pub fn fields(&self) -> BankAccountFields<'_> {
-        BankAccountFields {
+    pub fn fields(&self) -> InternationalAccountFields<'_> {
+        InternationalAccountFields {
+            account_holder: &self.account_holder,
+            bank_name: &self.bank_name,
+            iban: &self.iban,
+            swift_bic: &self.swift_bic,
+        }
+    }
+}
+
+impl DomesticAccountSecretForm {
+    #[must_use]
+    pub fn fields(&self) -> DomesticAccountFields<'_> {
+        DomesticAccountFields {
             account_holder: &self.account_holder,
             bank_name: &self.bank_name,
             account_number: &self.account_number,
-            routing_code: &self.routing_code,
+            routing_number: &self.routing_number,
         }
     }
 }
@@ -148,7 +179,8 @@ impl BankAccountSecretForm {
 #[cfg(test)]
 mod tests {
     use super::{
-        AddressSecretForm, BankAccountSecretForm, IdentityDocumentSecretForm, PersonSecretForm,
+        AddressSecretForm, DomesticAccountSecretForm, IdentityDocumentSecretForm,
+        InternationalAccountSecretForm, PersonSecretForm,
     };
     use crate::errors::SecretPayloadError;
     use crate::{IdentityDocumentKind, SecretFormFields, SecretType, SecretValue, ValidationError};
@@ -187,12 +219,21 @@ mod tests {
         }
     }
 
-    fn bank_form() -> BankAccountSecretForm {
-        BankAccountSecretForm {
+    fn international_form() -> InternationalAccountSecretForm {
+        InternationalAccountSecretForm {
             account_holder: "Ada Lovelace".to_owned(),
             bank_name: "Analytical Bank".to_owned(),
-            account_number: "de89 3704 0044 0532 0130 00".to_owned(),
-            routing_code: "COBADEFFXXX".to_owned(),
+            iban: "de89 3704 0044 0532 0130 00".to_owned(),
+            swift_bic: "cobadeffxxx".to_owned(),
+        }
+    }
+
+    fn domestic_form() -> DomesticAccountSecretForm {
+        DomesticAccountSecretForm {
+            account_holder: "Ada Lovelace".to_owned(),
+            bank_name: "Federal Bank".to_owned(),
+            account_number: "0001-2345-6789".to_owned(),
+            routing_number: "011000015".to_owned(),
         }
     }
 
@@ -224,12 +265,22 @@ mod tests {
         assert!(yaml.as_str().contains("nameAsPrinted: ADA LOVELACE"));
         round_trip(&fields)?;
 
-        let SecretValue::BankAccount(account) =
-            round_trip(&SecretFormFields::BankAccount(bank_form()))?
-        else {
-            anyhow::bail!("expected bank account");
+        let fields = SecretFormFields::InternationalAccount(international_form());
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
+        assert!(yaml.as_str().contains("iban: DE89370400440532013000"));
+        assert!(yaml.as_str().contains("swiftBic: COBADEFFXXX"));
+        let SecretValue::InternationalAccount(account) = round_trip(&fields)? else {
+            anyhow::bail!("expected international account");
         };
-        assert_eq!(account.account_number, "DE89370400440532013000");
+        assert_eq!(account.iban, "DE89370400440532013000");
+
+        let fields = SecretFormFields::DomesticAccount(domestic_form());
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&fields)?;
+        assert!(yaml.as_str().contains("routingNumber: '011000015'"));
+        let SecretValue::DomesticAccount(account) = round_trip(&fields)? else {
+            anyhow::bail!("expected domestic account");
+        };
+        assert_eq!(account.account_number, "000123456789");
         Ok(())
     }
 
@@ -259,11 +310,32 @@ mod tests {
                 ValidationError::IdentityDocumentExpiryBeforeIssue,
             ),
             (
-                SecretFormFields::BankAccount(BankAccountSecretForm {
-                    account_number: "DE89370400440532013001".to_owned(),
-                    ..bank_form()
+                SecretFormFields::InternationalAccount(InternationalAccountSecretForm {
+                    iban: "DE89370400440532013001".to_owned(),
+                    ..international_form()
                 }),
-                ValidationError::BankAccountIbanInvalid,
+                ValidationError::InternationalAccountIbanInvalid,
+            ),
+            (
+                SecretFormFields::InternationalAccount(InternationalAccountSecretForm {
+                    swift_bic: "COBADE".to_owned(),
+                    ..international_form()
+                }),
+                ValidationError::SwiftBicInvalid,
+            ),
+            (
+                SecretFormFields::DomesticAccount(DomesticAccountSecretForm {
+                    routing_number: "011000016".to_owned(),
+                    ..domestic_form()
+                }),
+                ValidationError::RoutingNumberInvalid,
+            ),
+            (
+                SecretFormFields::DomesticAccount(DomesticAccountSecretForm {
+                    account_number: "123".to_owned(),
+                    ..domestic_form()
+                }),
+                ValidationError::DomesticAccountNumberInvalid,
             ),
         ];
         for (fields, expected) in cases {
@@ -276,12 +348,29 @@ mod tests {
 
     #[test]
     fn decrypt_path_revalidates_and_rejects_unknown_or_invalid_payloads() {
-        let invalid_iban = "accountHolder: Ada\nbankName: Bank\naccountNumber: GB82WEST12345698765433\nroutingCode: ''\n";
+        let invalid_iban =
+            "accountHolder: Ada\nbankName: Bank\niban: GB82WEST12345698765433\nswiftBic: ''\n";
         assert!(matches!(
-            SecretValue::from_yaml_str(SecretType::BankAccount, invalid_iban),
+            SecretValue::from_yaml_str(SecretType::InternationalAccount, invalid_iban),
             Err(SecretPayloadError::Validation(
-                ValidationError::BankAccountIbanInvalid
+                ValidationError::InternationalAccountIbanInvalid
             ))
+        ));
+        let old_bank_shape = "accountHolder: Ada\nbankName: Bank\naccountNumber: GB82WEST12345698765432\nroutingCode: ''\n";
+        assert!(matches!(
+            SecretValue::from_yaml_str(SecretType::InternationalAccount, old_bank_shape),
+            Err(SecretPayloadError::InvalidInternationalAccount(_))
+        ));
+        let invalid_routing = "accountHolder: Ada\nbankName: Bank\naccountNumber: '123456789'\nroutingNumber: '021000022'\n";
+        assert!(matches!(
+            SecretValue::from_yaml_str(SecretType::DomesticAccount, invalid_routing),
+            Err(SecretPayloadError::Validation(
+                ValidationError::RoutingNumberInvalid
+            ))
+        ));
+        assert!(matches!(
+            SecretValue::from_yaml_str(SecretType::DomesticAccount, "accountHolder: Ada\n"),
+            Err(SecretPayloadError::InvalidDomesticAccount(_))
         ));
         let unknown_field = "givenName: Ada\nmiddleName: ''\nfamilyName: ''\nbirthDate: ''\nemail: ''\nphone: ''\nnickname: Countess\n";
         assert!(matches!(
@@ -314,16 +403,40 @@ mod tests {
             format!("{form:?}"),
             "IdentityDocumentSecretForm { kind: DriversLicense, .. }"
         );
+        let international: InternationalAccountSecretForm =
+            serde_json::from_value(serde_json::json!({
+                "accountHolder": "Ada", "bankName": "Bank", "iban": "DE89", "swiftBic": "",
+            }))?;
+        assert_eq!(international.iban, "DE89");
+        let domestic: DomesticAccountSecretForm = serde_json::from_value(serde_json::json!({
+            "accountHolder": "Ada", "bankName": "Bank", "accountNumber": "1234",
+            "routingNumber": "011000015",
+        }))?;
+        assert_eq!(domestic.routing_number, "011000015");
         assert!(
-            serde_json::from_value::<BankAccountSecretForm>(serde_json::json!({
-                "accountHolder": "", "bankName": "", "accountNumber": "1", "routingCode": "",
-                "iban": "extra"
+            serde_json::from_value::<InternationalAccountSecretForm>(serde_json::json!({
+                "accountHolder": "", "bankName": "", "iban": "", "swiftBic": "",
+                "accountNumber": "extra"
             }))
             .is_err()
         );
-        let debug = format!("{:?}", SecretFormFields::BankAccount(bank_form()));
-        assert!(!debug.contains("3704"));
-        assert!(!debug.contains("Ada"));
+        assert!(
+            serde_json::from_value::<DomesticAccountSecretForm>(serde_json::json!({
+                "accountHolder": "", "bankName": "", "accountNumber": "1", "routingCode": ""
+            }))
+            .is_err()
+        );
+        for debug in [
+            format!(
+                "{:?}",
+                SecretFormFields::InternationalAccount(international_form())
+            ),
+            format!("{:?}", SecretFormFields::DomesticAccount(domestic_form())),
+        ] {
+            assert!(!debug.contains("3704"));
+            assert!(!debug.contains("6789"));
+            assert!(!debug.contains("Ada"));
+        }
         Ok(())
     }
 }

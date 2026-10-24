@@ -27,7 +27,8 @@ pub enum SecretType {
     Person,
     Address,
     IdentityDocument,
-    BankAccount,
+    InternationalAccount,
+    DomesticAccount,
 }
 
 /// Vault section that owns a secret type: credentials and keys, or personal data
@@ -54,7 +55,8 @@ impl SecretType {
             "person" => Ok(Self::Person),
             "address" => Ok(Self::Address),
             "identity-document" => Ok(Self::IdentityDocument),
-            "bank-account" => Ok(Self::BankAccount),
+            "international-account" => Ok(Self::InternationalAccount),
+            "domestic-account" => Ok(Self::DomesticAccount),
             _ => Err(SecretPayloadError::UnknownSecretType {
                 value: value.to_owned(),
             }),
@@ -75,7 +77,8 @@ impl SecretType {
             Self::Person => "person",
             Self::Address => "address",
             Self::IdentityDocument => "identity-document",
-            Self::BankAccount => "bank-account",
+            Self::InternationalAccount => "international-account",
+            Self::DomesticAccount => "domestic-account",
         }
     }
 
@@ -93,7 +96,8 @@ impl SecretType {
             Self::Person
             | Self::Address
             | Self::IdentityDocument
-            | Self::BankAccount
+            | Self::InternationalAccount
+            | Self::DomesticAccount
             | Self::CreditCard => SecretCategory::PersonalData,
         }
     }
@@ -190,7 +194,8 @@ mod tests {
             ("person", SecretType::Person),
             ("address", SecretType::Address),
             ("identity-document", SecretType::IdentityDocument),
-            ("bank-account", SecretType::BankAccount),
+            ("international-account", SecretType::InternationalAccount),
+            ("domestic-account", SecretType::DomesticAccount),
         ];
         for (tag, expected) in cases {
             assert_eq!(SecretType::parse(tag)?, expected);
@@ -200,6 +205,7 @@ mod tests {
         }
         assert!(SecretType::parse("totp").is_err());
         assert!(SecretType::parse("identity_document").is_err());
+        assert!(SecretType::parse("bank-account").is_err());
         Ok(())
     }
 
@@ -209,7 +215,8 @@ mod tests {
             SecretType::Person,
             SecretType::Address,
             SecretType::IdentityDocument,
-            SecretType::BankAccount,
+            SecretType::InternationalAccount,
+            SecretType::DomesticAccount,
             SecretType::CreditCard,
         ];
         let secrets = [

@@ -28,7 +28,8 @@ pub enum NookSecretTypeFilter {
     Person,
     Address,
     IdentityDocument,
-    BankAccount,
+    InternationalAccount,
+    DomesticAccount,
 }
 
 impl NookSecretTypeFilter {
@@ -46,7 +47,8 @@ impl NookSecretTypeFilter {
             SecretType::Person => Self::Person,
             SecretType::Address => Self::Address,
             SecretType::IdentityDocument => Self::IdentityDocument,
-            SecretType::BankAccount => Self::BankAccount,
+            SecretType::InternationalAccount => Self::InternationalAccount,
+            SecretType::DomesticAccount => Self::DomesticAccount,
         }
     }
 
@@ -66,7 +68,8 @@ impl NookSecretTypeFilter {
             Self::Person => SecretTypeFilter::Only(SecretType::Person),
             Self::Address => SecretTypeFilter::Only(SecretType::Address),
             Self::IdentityDocument => SecretTypeFilter::Only(SecretType::IdentityDocument),
-            Self::BankAccount => SecretTypeFilter::Only(SecretType::BankAccount),
+            Self::InternationalAccount => SecretTypeFilter::Only(SecretType::InternationalAccount),
+            Self::DomesticAccount => SecretTypeFilter::Only(SecretType::DomesticAccount),
         }
     }
 }
@@ -113,7 +116,8 @@ mod personal_fill_filter_tests {
                 SecretType::Address,
                 SecretType::CreditCard,
                 SecretType::IdentityDocument,
-                SecretType::BankAccount,
+                SecretType::InternationalAccount,
+                SecretType::DomesticAccount,
                 SecretType::Login,
             ] {
                 assert_eq!(filter.matches(candidate), candidate == expected);
@@ -856,7 +860,8 @@ mod browser_projection_tests {
             NookSecretTypeFilter::Person,
             NookSecretTypeFilter::Address,
             NookSecretTypeFilter::IdentityDocument,
-            NookSecretTypeFilter::BankAccount,
+            NookSecretTypeFilter::InternationalAccount,
+            NookSecretTypeFilter::DomesticAccount,
         ] {
             let _ = filter.to_core();
         }
@@ -872,7 +877,8 @@ mod browser_projection_tests {
             SecretType::Person,
             SecretType::Address,
             SecretType::IdentityDocument,
-            SecretType::BankAccount,
+            SecretType::InternationalAccount,
+            SecretType::DomesticAccount,
         ] {
             assert!(!secret_type_name(secret_type).is_empty());
         }

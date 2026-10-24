@@ -7,16 +7,18 @@
 //! in `credit_card` but share the `SecretCategory::PersonalData` section.
 
 mod address;
-mod bank_account;
 mod calendar_date;
+mod domestic_account;
 mod identity_document;
+mod international_account;
 mod person;
 mod personal_text;
 mod sensitive_number;
 
 pub use address::{AddressFields, AddressSecret};
-pub use bank_account::{BankAccountFields, BankAccountSecret};
 pub use calendar_date::{CalendarDate, CalendarDateError};
+pub use domestic_account::{DomesticAccountFields, DomesticAccountSecret};
 pub use identity_document::{IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret};
+pub use international_account::{InternationalAccountFields, InternationalAccountSecret};
 pub use person::{PersonFields, PersonSecret};
 pub(crate) use sensitive_number::SensitiveNumber;

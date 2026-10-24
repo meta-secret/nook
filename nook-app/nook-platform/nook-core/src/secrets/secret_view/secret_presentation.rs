@@ -228,7 +228,8 @@ impl SecretListItem {
             SecretListItemData::Person(item) => fields.extend(item.search_fields()),
             SecretListItemData::Address(item) => fields.extend(item.search_fields()),
             SecretListItemData::IdentityDocument(item) => fields.extend(item.search_fields()),
-            SecretListItemData::BankAccount(item) => fields.extend(item.search_fields()),
+            SecretListItemData::InternationalAccount(item) => fields.extend(item.search_fields()),
+            SecretListItemData::DomesticAccount(item) => fields.extend(item.search_fields()),
         }
         fields
             .into_iter()
@@ -251,7 +252,8 @@ impl SecretListItem {
             SecretListItemData::Person(_) => SecretType::Person,
             SecretListItemData::Address(_) => SecretType::Address,
             SecretListItemData::IdentityDocument(_) => SecretType::IdentityDocument,
-            SecretListItemData::BankAccount(_) => SecretType::BankAccount,
+            SecretListItemData::InternationalAccount(_) => SecretType::InternationalAccount,
+            SecretListItemData::DomesticAccount(_) => SecretType::DomesticAccount,
         }
     }
 
@@ -303,7 +305,8 @@ impl SecretListItem {
             SecretListItemData::Person(item) => item.display_title(),
             SecretListItemData::Address(item) => item.display_title(),
             SecretListItemData::IdentityDocument(item) => item.display_title(),
-            SecretListItemData::BankAccount(item) => item.display_title(),
+            SecretListItemData::InternationalAccount(item) => item.display_title(),
+            SecretListItemData::DomesticAccount(item) => item.display_title(),
         }
     }
 
@@ -356,7 +359,8 @@ impl SecretListItem {
             SecretListItemData::Person(item) => item.group_key(),
             SecretListItemData::Address(item) => item.group_key(),
             SecretListItemData::IdentityDocument(item) => item.group_key(),
-            SecretListItemData::BankAccount(item) => item.group_key(),
+            SecretListItemData::InternationalAccount(item) => item.group_key(),
+            SecretListItemData::DomesticAccount(item) => item.group_key(),
         }
     }
 
@@ -431,7 +435,8 @@ impl SecretListItem {
             SecretListItemData::Person(item) => item.summary(),
             SecretListItemData::Address(item) => item.summary(),
             SecretListItemData::IdentityDocument(item) => item.summary(),
-            SecretListItemData::BankAccount(item) => item.summary(),
+            SecretListItemData::InternationalAccount(item) => item.summary(),
+            SecretListItemData::DomesticAccount(item) => item.summary(),
         }
     }
 

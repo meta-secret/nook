@@ -237,17 +237,26 @@ pub enum ValidationError {
     )]
     IdentityDocumentExpiryBeforeIssue,
 
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_REQUIRED)]
-    BankAccountNumberRequired,
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED)]
+    InternationalAccountIbanRequired,
 
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_INVALID)]
-    BankAccountNumberInvalid,
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_INVALID)]
+    InternationalAccountIbanInvalid,
 
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_BANK_ACCOUNT_IBAN_INVALID)]
-    BankAccountIbanInvalid,
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SWIFT_BIC_INVALID)]
+    SwiftBicInvalid,
 
-    #[error("{}", i18n_keys::ERRORS_VALIDATION_BANK_ACCOUNT_ROUTING_CODE_INVALID)]
-    BankAccountRoutingCodeInvalid,
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_REQUIRED)]
+    DomesticAccountNumberRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_INVALID)]
+    DomesticAccountNumberInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED)]
+    RoutingNumberRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ROUTING_NUMBER_INVALID)]
+    RoutingNumberInvalid,
 
     #[error("{}", ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID)]
     SymmetricKeyInvalid,

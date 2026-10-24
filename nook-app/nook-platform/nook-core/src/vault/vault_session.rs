@@ -230,7 +230,8 @@ mod tests {
             SecretType::Person,
             SecretType::Address,
             SecretType::IdentityDocument,
-            SecretType::BankAccount,
+            SecretType::InternationalAccount,
+            SecretType::DomesticAccount,
             SecretType::CreditCard,
         ] {
             assert!(personal.matches(secret_type));

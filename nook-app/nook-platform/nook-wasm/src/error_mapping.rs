@@ -105,10 +105,13 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::IdentityDocumentNumberRequired
             | ValidationError::IdentityDocumentDateInvalid
             | ValidationError::IdentityDocumentExpiryBeforeIssue
-            | ValidationError::BankAccountNumberRequired
-            | ValidationError::BankAccountNumberInvalid
-            | ValidationError::BankAccountIbanInvalid
-            | ValidationError::BankAccountRoutingCodeInvalid
+            | ValidationError::InternationalAccountIbanRequired
+            | ValidationError::InternationalAccountIbanInvalid
+            | ValidationError::SwiftBicInvalid
+            | ValidationError::DomesticAccountNumberRequired
+            | ValidationError::DomesticAccountNumberInvalid
+            | ValidationError::RoutingNumberRequired
+            | ValidationError::RoutingNumberInvalid
             | ValidationError::SymmetricKeyInvalid
             | ValidationError::SecretFingerprintKeyInvalid
             | ValidationError::AgeArmoredInvalid

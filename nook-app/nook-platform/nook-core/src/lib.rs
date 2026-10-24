@@ -201,9 +201,9 @@ pub use passkey_authenticator::{
     PasskeyUserVerification,
 };
 pub use personal_data::{
-    AddressFields, AddressSecret, BankAccountFields, BankAccountSecret, CalendarDate,
-    CalendarDateError, IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
-    PersonFields, PersonSecret,
+    AddressFields, AddressSecret, CalendarDate, CalendarDateError, DomesticAccountFields,
+    DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
+    InternationalAccountFields, InternationalAccountSecret, PersonFields, PersonSecret,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
 pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};
@@ -215,11 +215,12 @@ pub use secret_types::{
     StoredSecretRecord,
 };
 pub use secret_view::{
-    AddressListItem, AddressSecretForm, AddressView, BankAccountListItem, BankAccountSecretForm,
-    BankAccountView, IdentityDocumentListItem, IdentityDocumentSecretForm, IdentityDocumentView,
-    PersonListItem, PersonSecretForm, PersonView, PersonalDataView, PersonalFieldGroup,
-    PersonalFieldKind, PersonalFillError, PersonalFillProjection, PersonalFillRecordType,
-    PersonalFillValue, PersonalFillValues,
+    AddressListItem, AddressSecretForm, AddressView, DomesticAccountListItem,
+    DomesticAccountSecretForm, DomesticAccountView, IdentityDocumentListItem,
+    IdentityDocumentSecretForm, IdentityDocumentView, InternationalAccountListItem,
+    InternationalAccountSecretForm, InternationalAccountView, PersonListItem, PersonSecretForm,
+    PersonView, PersonalDataView, PersonalFieldGroup, PersonalFieldKind, PersonalFillError,
+    PersonalFillProjection, PersonalFillRecordType, PersonalFillValue, PersonalFillValues,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,

@@ -6,8 +6,8 @@
 
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::{
-    AddressSecret, BankAccountSecret, IdentityDocumentKind, IdentityDocumentSecret, PersonSecret,
-    SecretValue,
+    AddressSecret, DomesticAccountSecret, IdentityDocumentKind, IdentityDocumentSecret,
+    InternationalAccountSecret, PersonSecret, SecretValue,
 };
 use serde::Serialize;
 use std::fmt;
@@ -21,7 +21,8 @@ pub enum PersonalDataView {
     Person(PersonView),
     Address(AddressView),
     IdentityDocument(IdentityDocumentView),
-    BankAccount(BankAccountView),
+    InternationalAccount(InternationalAccountView),
+    DomesticAccount(DomesticAccountView),
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Tsify)]
@@ -62,12 +63,22 @@ pub struct IdentityDocumentView {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct BankAccountView {
+pub struct InternationalAccountView {
+    pub account_holder: String,
+    pub bank_name: String,
+    pub iban: String,
+    pub masked_number: String,
+    pub swift_bic: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct DomesticAccountView {
     pub account_holder: String,
     pub bank_name: String,
     pub account_number: String,
     pub masked_number: String,
-    pub routing_code: String,
+    pub routing_number: String,
 }
 
 impl PersonalDataView {
@@ -82,9 +93,12 @@ impl PersonalDataView {
             SecretValue::IdentityDocument(document) => Ok(Self::IdentityDocument(
                 IdentityDocumentView::from_secret(document),
             )),
-            SecretValue::BankAccount(account) => {
-                Ok(Self::BankAccount(BankAccountView::from_secret(account)))
-            }
+            SecretValue::InternationalAccount(account) => Ok(Self::InternationalAccount(
+                InternationalAccountView::from_secret(account),
+            )),
+            SecretValue::DomesticAccount(account) => Ok(Self::DomesticAccount(
+                DomesticAccountView::from_secret(account),
+            )),
             SecretValue::Login(_)
             | SecretValue::ApiKey(_)
             | SecretValue::SeedPhrase(_)
@@ -143,14 +157,26 @@ impl IdentityDocumentView {
     }
 }
 
-impl BankAccountView {
-    fn from_secret(account: &BankAccountSecret) -> Self {
+impl InternationalAccountView {
+    fn from_secret(account: &InternationalAccountSecret) -> Self {
+        Self {
+            account_holder: account.account_holder.clone(),
+            bank_name: account.bank_name.clone(),
+            iban: account.iban.clone(),
+            masked_number: account.masked_number(),
+            swift_bic: account.swift_bic.clone(),
+        }
+    }
+}
+
+impl DomesticAccountView {
+    fn from_secret(account: &DomesticAccountSecret) -> Self {
         Self {
             account_holder: account.account_holder.clone(),
             bank_name: account.bank_name.clone(),
             account_number: account.account_number.clone(),
             masked_number: account.masked_number(),
-            routing_code: account.routing_code.clone(),
+            routing_number: account.routing_number.clone(),
         }
     }
 }
@@ -184,12 +210,19 @@ impl Zeroize for PersonalDataView {
                 view.expiry_date.zeroize();
                 view.name_as_printed.zeroize();
             }
-            Self::BankAccount(view) => {
+            Self::InternationalAccount(view) => {
+                view.account_holder.zeroize();
+                view.bank_name.zeroize();
+                view.iban.zeroize();
+                view.masked_number.zeroize();
+                view.swift_bic.zeroize();
+            }
+            Self::DomesticAccount(view) => {
                 view.account_holder.zeroize();
                 view.bank_name.zeroize();
                 view.account_number.zeroize();
                 view.masked_number.zeroize();
-                view.routing_code.zeroize();
+                view.routing_number.zeroize();
             }
         }
     }
@@ -201,7 +234,8 @@ impl fmt::Debug for PersonalDataView {
             Self::Person(_) => "Person",
             Self::Address(_) => "Address",
             Self::IdentityDocument(_) => "IdentityDocument",
-            Self::BankAccount(_) => "BankAccount",
+            Self::InternationalAccount(_) => "InternationalAccount",
+            Self::DomesticAccount(_) => "DomesticAccount",
         };
         formatter
             .debug_struct("PersonalDataView")
@@ -215,9 +249,10 @@ mod tests {
     use super::PersonalDataView;
     use crate::errors::SecretPayloadError;
     use crate::{
-        BankAccountFields, BankAccountSecret, CreditCardFields, CreditCardSecret,
-        IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret, LoginSecret,
-        SecretType, SecretValue,
+        CreditCardFields, CreditCardSecret, DomesticAccountFields, DomesticAccountSecret,
+        IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
+        InternationalAccountFields, InternationalAccountSecret, LoginSecret, SecretType,
+        SecretValue,
     };
     use zeroize::Zeroize;
 
@@ -255,26 +290,71 @@ mod tests {
     }
 
     #[test]
-    fn bank_view_zeroizes_every_plaintext_field() -> anyhow::Result<()> {
-        let value = SecretValue::BankAccount(BankAccountSecret::from_fields(BankAccountFields {
-            account_holder: "Ada Lovelace",
-            bank_name: "Analytical Bank",
-            account_number: "GB82WEST12345698765432",
-            routing_code: "",
-        })?);
+    fn international_view_masks_iban_and_zeroizes_every_field() -> anyhow::Result<()> {
+        let value = SecretValue::InternationalAccount(InternationalAccountSecret::from_fields(
+            InternationalAccountFields {
+                account_holder: "Ada Lovelace",
+                bank_name: "Analytical Bank",
+                iban: "GB82WEST12345698765432",
+                swift_bic: "nwbkgb2l",
+            },
+        )?);
         let mut view = PersonalDataView::from_value(&value)?;
-        let PersonalDataView::BankAccount(account) = &view else {
-            anyhow::bail!("expected bank account view");
-        };
-        assert_eq!(account.masked_number, "•••• 5432");
-        assert_eq!(account.account_number, "GB82WEST12345698765432");
+        assert_eq!(
+            serde_json::to_value(&view)?,
+            serde_json::json!({
+                "kind": "international-account",
+                "accountHolder": "Ada Lovelace",
+                "bankName": "Analytical Bank",
+                "iban": "GB82WEST12345698765432",
+                "maskedNumber": "•••• 5432",
+                "swiftBic": "NWBKGB2L",
+            })
+        );
         view.zeroize();
-        let PersonalDataView::BankAccount(account) = &view else {
-            anyhow::bail!("expected bank account view");
+        let PersonalDataView::InternationalAccount(account) = &view else {
+            anyhow::bail!("expected international account view");
+        };
+        assert!(account.iban.is_empty());
+        assert!(account.masked_number.is_empty());
+        assert!(account.swift_bic.is_empty());
+        assert!(account.account_holder.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn domestic_view_masks_account_number_and_zeroizes_every_field() -> anyhow::Result<()> {
+        let value = SecretValue::DomesticAccount(DomesticAccountSecret::from_fields(
+            DomesticAccountFields {
+                account_holder: "Ada Lovelace",
+                bank_name: "Federal Bank",
+                account_number: "000123456789",
+                routing_number: "021000021",
+            },
+        )?);
+        let mut view = PersonalDataView::from_value(&value)?;
+        assert_eq!(
+            serde_json::to_value(&view)?,
+            serde_json::json!({
+                "kind": "domestic-account",
+                "accountHolder": "Ada Lovelace",
+                "bankName": "Federal Bank",
+                "accountNumber": "000123456789",
+                "maskedNumber": "•••• 6789",
+                "routingNumber": "021000021",
+            })
+        );
+        assert_eq!(
+            format!("{view:?}"),
+            "PersonalDataView { kind: \"DomesticAccount\", .. }"
+        );
+        view.zeroize();
+        let PersonalDataView::DomesticAccount(account) = &view else {
+            anyhow::bail!("expected domestic account view");
         };
         assert!(account.account_number.is_empty());
         assert!(account.masked_number.is_empty());
-        assert!(account.account_holder.is_empty());
+        assert!(account.routing_number.is_empty());
         Ok(())
     }
 

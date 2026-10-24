@@ -295,13 +295,23 @@ impl NookSecretFormFields {
         })
     }
 
-    /// Bank-account form input; Rust validates it in `build_secret_yaml`.
+    /// International (IBAN) account form input; Rust validates it in `build_secret_yaml`.
     #[wasm_bindgen]
-    pub fn bank_account(
-        form: &tsify::Ts<nook_core::BankAccountSecretForm>,
+    pub fn international_account(
+        form: &tsify::Ts<nook_core::InternationalAccountSecretForm>,
     ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
         Ok(Self {
-            inner: SecretFormFields::BankAccount(NookSecretFormFields::decode_form(form)?),
+            inner: SecretFormFields::InternationalAccount(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+
+    /// US domestic account form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn domestic_account(
+        form: &tsify::Ts<nook_core::DomesticAccountSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::DomesticAccount(NookSecretFormFields::decode_form(form)?),
         })
     }
 }

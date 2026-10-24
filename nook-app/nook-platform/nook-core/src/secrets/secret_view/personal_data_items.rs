@@ -7,7 +7,8 @@
 use super::secret_presentation::SecretTitle;
 use crate::secrets::personal_data::SensitiveNumber;
 use crate::{
-    AddressSecret, BankAccountSecret, IdentityDocumentKind, IdentityDocumentSecret, PersonSecret,
+    AddressSecret, DomesticAccountSecret, IdentityDocumentKind, IdentityDocumentSecret,
+    InternationalAccountSecret, PersonSecret,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -37,12 +38,24 @@ pub struct IdentityDocumentListItem {
     pub expiry_date: String,
 }
 
-/// List metadata for a bank account; the account number is reduced to its tail.
+/// List metadata for an international account; the IBAN is reduced to its tail.
+/// The SWIFT/BIC is a public bank identifier.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BankAccountListItem {
+pub struct InternationalAccountListItem {
     pub bank_name: String,
     pub account_holder: String,
     pub last4: String,
+    pub swift_bic: String,
+}
+
+/// List metadata for a US domestic account; the account number is reduced to
+/// its tail. The ABA routing number is a public bank identifier.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DomesticAccountListItem {
+    pub bank_name: String,
+    pub account_holder: String,
+    pub last4: String,
+    pub routing_number: String,
 }
 
 impl fmt::Debug for PersonListItem {
@@ -61,10 +74,18 @@ impl fmt::Debug for AddressListItem {
     }
 }
 
-impl fmt::Debug for BankAccountListItem {
+impl fmt::Debug for InternationalAccountListItem {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("BankAccountListItem")
+            .debug_struct("InternationalAccountListItem")
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for DomesticAccountListItem {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DomesticAccountListItem")
             .finish_non_exhaustive()
     }
 }
@@ -128,13 +149,26 @@ impl IdentityDocumentSecret {
     }
 }
 
-impl BankAccountSecret {
+impl InternationalAccountSecret {
     #[must_use]
-    pub fn list_item(&self) -> BankAccountListItem {
-        BankAccountListItem {
+    pub fn list_item(&self) -> InternationalAccountListItem {
+        InternationalAccountListItem {
             bank_name: self.bank_name.clone(),
             account_holder: self.account_holder.clone(),
             last4: self.last4(),
+            swift_bic: self.swift_bic.clone(),
+        }
+    }
+}
+
+impl DomesticAccountSecret {
+    #[must_use]
+    pub fn list_item(&self) -> DomesticAccountListItem {
+        DomesticAccountListItem {
+            bank_name: self.bank_name.clone(),
+            account_holder: self.account_holder.clone(),
+            last4: self.last4(),
+            routing_number: self.routing_number.clone(),
         }
     }
 }
@@ -231,42 +265,124 @@ impl IdentityDocumentListItem {
     }
 }
 
-impl BankAccountListItem {
-    #[must_use]
-    pub fn display_title(&self) -> String {
+/// Shared row text for both bank account kinds.
+struct BankAccountRow<'a> {
+    bank_name: &'a str,
+    account_holder: &'a str,
+    last4: &'a str,
+    /// Public bank identifier (SWIFT/BIC or ABA routing number), or empty.
+    bank_code: &'a str,
+}
+
+impl BankAccountRow<'_> {
+    fn display_title(&self) -> String {
         FirstPresent {
-            candidates: &[&self.bank_name, &self.account_holder, &self.summary()],
+            candidates: &[
+                self.bank_name,
+                self.account_holder,
+                &SensitiveNumber::masked_tail(self.last4),
+            ],
         }
         .text()
     }
 
-    /// Masked account number (`•••• 5432`).
+    /// Masked number plus the public bank code (`•••• 5432 · NWBKGB2L`).
+    fn summary(&self) -> String {
+        let masked = SensitiveNumber::masked_tail(self.last4);
+        match self.bank_code.trim() {
+            "" => masked,
+            code => format!("{masked} · {code}"),
+        }
+    }
+
+    fn group_key(&self) -> String {
+        SecretTitle::new(self.bank_name, "Unnamed Bank Account").group_key()
+    }
+}
+
+impl InternationalAccountListItem {
+    fn row(&self) -> BankAccountRow<'_> {
+        BankAccountRow {
+            bank_name: &self.bank_name,
+            account_holder: &self.account_holder,
+            last4: &self.last4,
+            bank_code: &self.swift_bic,
+        }
+    }
+
+    #[must_use]
+    pub fn display_title(&self) -> String {
+        self.row().display_title()
+    }
+
+    /// Masked IBAN plus the SWIFT/BIC when stored (`•••• 5432 · NWBKGB2L`).
     #[must_use]
     pub fn summary(&self) -> String {
-        SensitiveNumber::masked_tail(&self.last4)
+        self.row().summary()
     }
 
     #[must_use]
     pub(crate) fn group_key(&self) -> String {
-        SecretTitle::new(&self.bank_name, "Unnamed Bank Account").group_key()
+        self.row().group_key()
     }
 
-    pub(crate) fn search_fields(&self) -> [String; 3] {
+    pub(crate) fn search_fields(&self) -> [String; 4] {
         [
             self.bank_name.clone(),
             self.account_holder.clone(),
             self.last4.clone(),
+            self.swift_bic.clone(),
+        ]
+    }
+}
+
+impl DomesticAccountListItem {
+    fn row(&self) -> BankAccountRow<'_> {
+        BankAccountRow {
+            bank_name: &self.bank_name,
+            account_holder: &self.account_holder,
+            last4: &self.last4,
+            bank_code: &self.routing_number,
+        }
+    }
+
+    #[must_use]
+    pub fn display_title(&self) -> String {
+        self.row().display_title()
+    }
+
+    /// Masked account number plus the routing number (`•••• 6789 · 021000021`).
+    #[must_use]
+    pub fn summary(&self) -> String {
+        self.row().summary()
+    }
+
+    #[must_use]
+    pub(crate) fn group_key(&self) -> String {
+        self.row().group_key()
+    }
+
+    pub(crate) fn search_fields(&self) -> [String; 4] {
+        [
+            self.bank_name.clone(),
+            self.account_holder.clone(),
+            self.last4.clone(),
+            self.routing_number.clone(),
         ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AddressListItem, BankAccountListItem, IdentityDocumentListItem, PersonListItem};
+    use super::{
+        AddressListItem, DomesticAccountListItem, IdentityDocumentListItem,
+        InternationalAccountListItem, PersonListItem,
+    };
     use crate::{
-        AddressFields, AddressSecret, BankAccountFields, BankAccountSecret, IdentityDocumentFields,
-        IdentityDocumentKind, IdentityDocumentSecret, PersonFields, PersonSecret, SecretId,
-        SecretListItemData, SecretRecord, SecretValue,
+        AddressFields, AddressSecret, DomesticAccountFields, DomesticAccountSecret,
+        IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
+        InternationalAccountFields, InternationalAccountSecret, PersonFields, PersonSecret,
+        SecretCategory, SecretId, SecretListItemData, SecretRecord, SecretValue,
     };
 
     fn record(data: SecretValue) -> SecretRecord {
@@ -290,13 +406,24 @@ mod tests {
         )))
     }
 
-    fn bank_account() -> anyhow::Result<SecretRecord> {
-        Ok(record(SecretValue::BankAccount(
-            BankAccountSecret::from_fields(BankAccountFields {
+    fn international_account() -> anyhow::Result<SecretRecord> {
+        Ok(record(SecretValue::InternationalAccount(
+            InternationalAccountSecret::from_fields(InternationalAccountFields {
                 account_holder: "Ada Lovelace",
                 bank_name: "Analytical Bank",
-                account_number: "GB82WEST12345698765432",
-                routing_code: "NWBKGB2L",
+                iban: "GB82WEST12345698765432",
+                swift_bic: "NWBKGB2L",
+            })?,
+        )))
+    }
+
+    fn domestic_account() -> anyhow::Result<SecretRecord> {
+        Ok(record(SecretValue::DomesticAccount(
+            DomesticAccountSecret::from_fields(DomesticAccountFields {
+                account_holder: "Ada Lovelace",
+                bank_name: "Federal Bank",
+                account_number: "000123456789",
+                routing_number: "021000021",
             })?,
         )))
     }
@@ -391,37 +518,74 @@ mod tests {
     }
 
     #[test]
-    fn bank_list_item_masks_account_number_and_omits_routing_code() -> anyhow::Result<()> {
-        let record = bank_account()?;
+    fn international_list_item_masks_iban_and_shows_public_bic() -> anyhow::Result<()> {
+        let record = international_account()?;
         let item = record.list_item();
         assert_eq!(
             item.data,
-            SecretListItemData::BankAccount(BankAccountListItem {
+            SecretListItemData::InternationalAccount(InternationalAccountListItem {
                 bank_name: "Analytical Bank".to_owned(),
                 account_holder: "Ada Lovelace".to_owned(),
                 last4: "5432".to_owned(),
+                swift_bic: "NWBKGB2L".to_owned(),
             })
         );
         assert_eq!(item.display_title(), "Analytical Bank");
-        assert_eq!(item.summary(), "•••• 5432");
+        assert_eq!(item.summary(), "•••• 5432 · NWBKGB2L");
+        assert_eq!(record.summary(), "•••• 5432 · NWBKGB2L");
+        assert_eq!(record.primary_credential(), "GB82WEST12345698765432");
         assert_eq!(item.website_host(), "");
+        assert_eq!(record.secret_type.category(), SecretCategory::PersonalData);
         let search = item.normalized_search_text();
         assert!(!search.contains("gb82west"));
-        assert!(!search.contains("nwbkgb2l"));
         assert!(record.matches_search("analytical"));
-        assert!(!record.matches_search("NWBK"));
+        assert!(record.matches_search("nwbk"));
+        assert!(!format!("{item:?}").contains("5432"));
+        Ok(())
+    }
+
+    #[test]
+    fn domestic_list_item_masks_account_number_and_shows_routing_number() -> anyhow::Result<()> {
+        let record = domestic_account()?;
+        let item = record.list_item();
+        assert_eq!(
+            item.data,
+            SecretListItemData::DomesticAccount(DomesticAccountListItem {
+                bank_name: "Federal Bank".to_owned(),
+                account_holder: "Ada Lovelace".to_owned(),
+                last4: "6789".to_owned(),
+                routing_number: "021000021".to_owned(),
+            })
+        );
+        assert_eq!(item.display_title(), "Federal Bank");
+        assert_eq!(item.summary(), "•••• 6789 · 021000021");
+        assert_eq!(record.primary_credential(), "000123456789");
+        assert_eq!(record.secret_type.category(), SecretCategory::PersonalData);
+        let search = item.normalized_search_text();
+        assert!(!search.contains("000123456789"));
+        assert!(record.matches_search("021000021"));
+        assert!(!format!("{item:?}").contains("021000021"));
         Ok(())
     }
 
     #[test]
     fn blank_optional_labels_fall_back_to_masked_or_unnamed_titles() {
-        let account = BankAccountListItem {
+        let account = InternationalAccountListItem {
             bank_name: String::new(),
             account_holder: String::new(),
             last4: "5432".to_owned(),
+            swift_bic: String::new(),
         };
         assert_eq!(account.display_title(), "•••• 5432");
+        assert_eq!(account.summary(), "•••• 5432");
         assert_eq!(account.group_key(), "Unnamed Bank Account");
+        let domestic = DomesticAccountListItem {
+            bank_name: String::new(),
+            account_holder: "Ada Lovelace".to_owned(),
+            last4: "6789".to_owned(),
+            routing_number: "021000021".to_owned(),
+        };
+        assert_eq!(domestic.display_title(), "Ada Lovelace");
         let document = IdentityDocumentListItem {
             kind: IdentityDocumentKind::NationalId,
             name_as_printed: String::new(),
@@ -440,13 +604,20 @@ mod tests {
             anyhow::bail!("expected identity document");
         };
         assert!(document.number.is_empty());
-        let mut account = bank_account()?;
+        let mut account = international_account()?;
         account.zeroize_plaintext();
-        let SecretValue::BankAccount(account) = &account.data else {
-            anyhow::bail!("expected bank account");
+        let SecretValue::InternationalAccount(account) = &account.data else {
+            anyhow::bail!("expected international account");
         };
-        assert!(account.account_number.is_empty());
-        assert!(account.account_holder.is_empty());
+        assert!(account.iban.is_empty());
+        assert!(account.swift_bic.is_empty());
+        let mut domestic = domestic_account()?;
+        domestic.zeroize_plaintext();
+        let SecretValue::DomesticAccount(domestic) = &domestic.data else {
+            anyhow::bail!("expected domestic account");
+        };
+        assert!(domestic.account_number.is_empty());
+        assert!(domestic.routing_number.is_empty());
         Ok(())
     }
 }

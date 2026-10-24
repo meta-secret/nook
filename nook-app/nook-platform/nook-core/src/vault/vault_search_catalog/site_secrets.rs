@@ -141,7 +141,8 @@ impl SiteSecretCandidate<'_> {
             | SecretListItemData::Person(_)
             | SecretListItemData::Address(_)
             | SecretListItemData::IdentityDocument(_)
-            | SecretListItemData::BankAccount(_) => Ok(SiteSecretMatch::Unmatched),
+            | SecretListItemData::InternationalAccount(_)
+            | SecretListItemData::DomesticAccount(_) => Ok(SiteSecretMatch::Unmatched),
         }
     }
 

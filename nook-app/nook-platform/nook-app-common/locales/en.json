@@ -404,7 +404,9 @@
       "person": "Person",
       "address": "Address",
       "identity_document": "Document",
-      "bank_account": "Bank account"
+      "bank_account": "Bank account",
+      "international_account": "International account",
+      "domestic_account": "US bank account"
     },
     "fields": {
       "username": "Username",
@@ -498,6 +500,9 @@
       "bank_name": "Bank name",
       "account_number": "Account number",
       "routing_code": "Routing code or BIC",
+      "iban": "IBAN",
+      "swift_bic": "SWIFT/BIC",
+      "routing_number": "Routing number",
       "unnamed_personal_data": "Unnamed record"
     },
     "status": {
@@ -1077,10 +1082,13 @@
       "identity_document_number_required": "Enter the document number.",
       "identity_document_date_invalid": "Enter document dates as YYYY-MM-DD.",
       "identity_document_expiry_before_issue": "The expiry date cannot be earlier than the issue date.",
-      "bank_account_number_required": "Enter the account number.",
-      "bank_account_number_invalid": "Use only letters, digits, and hyphens in the account number.",
-      "bank_account_iban_invalid": "Enter a valid IBAN.",
-      "bank_account_routing_code_invalid": "Use only letters and digits in the routing code."
+      "international_account_iban_required": "Enter the IBAN.",
+      "international_account_iban_invalid": "Enter a valid IBAN.",
+      "swift_bic_invalid": "Enter a valid 8 or 11 character SWIFT/BIC code.",
+      "domestic_account_number_required": "Enter the account number.",
+      "domestic_account_number_invalid": "Enter an account number of 4 to 17 digits.",
+      "routing_number_required": "Enter the routing number.",
+      "routing_number_invalid": "Enter a valid 9-digit ABA routing number."
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
     "engine_loading": "Vault engine is still loading. Try again in a moment.",
@@ -1393,6 +1401,8 @@
     "address_desc": "Postal address for deliveries and forms",
     "identity_document_desc": "Passport, ID card or driver's license",
     "bank_account_desc": "Account number and bank details",
+    "international_account_desc": "IBAN and SWIFT/BIC",
+    "domestic_account_desc": "US account and ABA routing number",
     "title_new_person": "New person",
     "title_edit_person": "Edit person",
     "title_new_address": "New address",
@@ -1401,6 +1411,10 @@
     "title_edit_identity_document": "Edit document",
     "title_new_bank_account": "New bank account",
     "title_edit_bank_account": "Edit bank account",
+    "title_new_international_account": "New international account",
+    "title_edit_international_account": "Edit international account",
+    "title_new_domestic_account": "New US bank account",
+    "title_edit_domestic_account": "Edit US bank account",
     "placeholder_address_label": "e.g., Home",
     "placeholder_country": "e.g., Germany",
     "placeholder_bank_account_number": "IBAN or account number"

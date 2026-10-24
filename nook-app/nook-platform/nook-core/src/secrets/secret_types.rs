@@ -7,7 +7,8 @@
 use super::passkey_authenticator::encoding::Es256KeyValidation;
 use super::passkey_authenticator::{PasskeyAuthenticatorError, PasskeyAuthenticatorResult};
 use super::personal_data::{
-    AddressSecret, BankAccountSecret, IdentityDocumentSecret, PersonSecret,
+    AddressSecret, DomesticAccountSecret, IdentityDocumentSecret, InternationalAccountSecret,
+    PersonSecret,
 };
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
@@ -487,7 +488,8 @@ pub enum SecretValue {
     Person(PersonSecret),
     Address(AddressSecret),
     IdentityDocument(IdentityDocumentSecret),
-    BankAccount(BankAccountSecret),
+    InternationalAccount(InternationalAccountSecret),
+    DomesticAccount(DomesticAccountSecret),
 }
 
 impl SecretValue {
@@ -552,10 +554,15 @@ impl SecretValue {
                     .map_err(SecretPayloadError::InvalidIdentityDocument)?;
                 Ok(Self::IdentityDocument(secret.normalize()?))
             }
-            SecretType::BankAccount => {
-                let secret: BankAccountSecret =
-                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidBankAccount)?;
-                Ok(Self::BankAccount(secret.normalize()?))
+            SecretType::InternationalAccount => {
+                let secret: InternationalAccountSecret = serde_yaml::from_str(yaml)
+                    .map_err(SecretPayloadError::InvalidInternationalAccount)?;
+                Ok(Self::InternationalAccount(secret.normalize()?))
+            }
+            SecretType::DomesticAccount => {
+                let secret: DomesticAccountSecret = serde_yaml::from_str(yaml)
+                    .map_err(SecretPayloadError::InvalidDomesticAccount)?;
+                Ok(Self::DomesticAccount(secret.normalize()?))
             }
         }
     }
@@ -579,7 +586,8 @@ impl SecretValue {
             Self::Person(value) => serde_yaml::to_string(value),
             Self::Address(value) => serde_yaml::to_string(value),
             Self::IdentityDocument(value) => serde_yaml::to_string(value),
-            Self::BankAccount(value) => serde_yaml::to_string(value),
+            Self::InternationalAccount(value) => serde_yaml::to_string(value),
+            Self::DomesticAccount(value) => serde_yaml::to_string(value),
         }
         .map_err(SecretPayloadError::Serialize)?;
         Ok(SecretPayloadYaml::from_trusted(yaml))
@@ -599,7 +607,8 @@ impl SecretValue {
             Self::Person(_) => SecretType::Person,
             Self::Address(_) => SecretType::Address,
             Self::IdentityDocument(_) => SecretType::IdentityDocument,
-            Self::BankAccount(_) => SecretType::BankAccount,
+            Self::InternationalAccount(_) => SecretType::InternationalAccount,
+            Self::DomesticAccount(_) => SecretType::DomesticAccount,
         }
     }
 
@@ -631,7 +640,8 @@ impl SecretValue {
             Self::Person(value) => value.zeroize_plaintext(),
             Self::Address(value) => value.zeroize_plaintext(),
             Self::IdentityDocument(value) => value.zeroize_plaintext(),
-            Self::BankAccount(value) => value.zeroize_plaintext(),
+            Self::InternationalAccount(value) => value.zeroize_plaintext(),
+            Self::DomesticAccount(value) => value.zeroize_plaintext(),
         }
     }
 }

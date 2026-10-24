@@ -5,7 +5,10 @@
 )]
 //! Canonical fields and their vault key stay bound until digest completion.
 use super::metadata::{FingerprintText, ImportMetadataPolicy, ProviderNotes};
-use crate::{PasskeyCredentialKey, SecretValue, SymmetricKey};
+use crate::{
+    DomesticAccountSecret, InternationalAccountSecret, PasskeyCredentialKey, SecretValue,
+    SymmetricKey,
+};
 use hmac::{Hmac, KeyInit, Mac};
 use nook_auth2::{ValidationError, ValidationResult};
 use nook_event_log::SecretFingerprint;
@@ -169,14 +172,25 @@ impl CanonicalSecretBytes {
                 bytes.append_normalized(&document.issuing_country);
                 bytes.append(document.last4().as_str());
             }
-            SecretValue::BankAccount(account) => {
-                bytes.append("bank-account");
-                bytes.append_normalized(&account.bank_name);
-                bytes.append_normalized(&account.account_holder);
-                bytes.append(account.last4().as_str());
+            SecretValue::InternationalAccount(account) => {
+                bytes.append_international_identity(account);
             }
+            SecretValue::DomesticAccount(account) => bytes.append_domestic_identity(account),
         }
         bytes
+    }
+    fn append_international_identity(&mut self, account: &InternationalAccountSecret) {
+        self.append("international-account");
+        self.append_normalized(&account.bank_name);
+        self.append_normalized(&account.account_holder);
+        self.append(account.last4().as_str());
+    }
+    fn append_domestic_identity(&mut self, account: &DomesticAccountSecret) {
+        self.append("domestic-account");
+        self.append_normalized(&account.bank_name);
+        self.append_normalized(&account.account_holder);
+        self.append(account.routing_number.as_str());
+        self.append(account.last4().as_str());
     }
     fn append_normalized(&mut self, value: &str) {
         self.append(FingerprintText::new(value).normalized().as_str());
@@ -264,9 +278,12 @@ impl CanonicalSecretBytes {
                 bytes.append(document.issue_date.as_str());
                 bytes.append(document.expiry_date.as_str());
             }
-            SecretValue::BankAccount(account) => {
+            SecretValue::InternationalAccount(account) => {
+                bytes.append(account.iban.as_str());
+                bytes.append(account.swift_bic.as_str());
+            }
+            SecretValue::DomesticAccount(account) => {
                 bytes.append(account.account_number.as_str());
-                bytes.append(account.routing_code.as_str());
             }
         }
         bytes
@@ -279,10 +296,11 @@ mod tests {
         CanonicalSecretBytes, CanonicalSecretFingerprint, FingerprintKind, FingerprintRequest,
     };
     use crate::{
-        AddressFields, AddressSecret, ApiKeySecret, BankAccountFields, BankAccountSecret,
-        CreditCardSecret, FileAttachmentSecret, IdentityDocumentFields, IdentityDocumentKind,
-        IdentityDocumentSecret, LoginSecret, PersonFields, PersonSecret, SecretValue,
-        SecureNoteSecret, SeedPhraseSecret, SymmetricKey,
+        AddressFields, AddressSecret, ApiKeySecret, CreditCardSecret, DomesticAccountFields,
+        DomesticAccountSecret, FileAttachmentSecret, IdentityDocumentFields, IdentityDocumentKind,
+        IdentityDocumentSecret, InternationalAccountFields, InternationalAccountSecret,
+        LoginSecret, PersonFields, PersonSecret, SecretValue, SecureNoteSecret, SeedPhraseSecret,
+        SymmetricKey,
     };
     use nook_auth2::ValidationResult;
     use nook_event_log::SecretFingerprint;
@@ -491,16 +509,33 @@ mod tests {
             CanonicalSecretBytes::identity(&document).0,
             b"17:identity-document\x008:passport\x0012:ADA LOVELACE\x002:GB\x004:4567\x00"
         );
-        let account =
-            SecretValue::BankAccount(BankAccountSecret::from_fields(BankAccountFields {
+        let account = SecretValue::InternationalAccount(InternationalAccountSecret::from_fields(
+            InternationalAccountFields {
                 account_holder: "Ada Lovelace",
                 bank_name: "Analytical Bank",
-                account_number: "GB82WEST12345698765432",
-                routing_code: "NWBKGB2L",
-            })?);
+                iban: "GB82WEST12345698765432",
+                swift_bic: "NWBKGB2L",
+            },
+        )?);
         assert_eq!(
             CanonicalSecretBytes::version(&account).0,
-            b"12:bank-account\x0015:Analytical Bank\x0012:Ada Lovelace\x004:5432\x0022:GB82WEST12345698765432\x008:NWBKGB2L\x00"
+            b"21:international-account\x0015:Analytical Bank\x0012:Ada Lovelace\x004:5432\x0022:GB82WEST12345698765432\x008:NWBKGB2L\x00"
+        );
+        let domestic = SecretValue::DomesticAccount(DomesticAccountSecret::from_fields(
+            DomesticAccountFields {
+                account_holder: "Ada Lovelace",
+                bank_name: "Federal Bank",
+                account_number: "000123456789",
+                routing_number: "021000021",
+            },
+        )?);
+        assert_eq!(
+            CanonicalSecretBytes::identity(&domestic).0,
+            b"16:domestic-account\x0012:Federal Bank\x0012:Ada Lovelace\x009:021000021\x004:6789\x00"
+        );
+        assert_eq!(
+            CanonicalSecretBytes::version(&domestic).0,
+            b"16:domestic-account\x0012:Federal Bank\x0012:Ada Lovelace\x009:021000021\x004:6789\x0012:000123456789\x00"
         );
         Ok(())
     }

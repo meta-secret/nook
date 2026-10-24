@@ -404,7 +404,9 @@
       "person": "Персона",
       "address": "Адрес",
       "identity_document": "Документ",
-      "bank_account": "Банковский счёт"
+      "bank_account": "Банковский счёт",
+      "international_account": "Международный счёт",
+      "domestic_account": "Счёт в банке США"
     },
     "fields": {
       "username": "Имя пользователя",
@@ -498,6 +500,9 @@
       "bank_name": "Название банка",
       "account_number": "Номер счёта",
       "routing_code": "БИК или код банка",
+      "iban": "IBAN",
+      "swift_bic": "SWIFT/BIC",
+      "routing_number": "Маршрутный номер",
       "unnamed_personal_data": "Запись без названия"
     },
     "status": {
@@ -1102,6 +1107,8 @@
     "address_desc": "Почтовый адрес для доставки и форм",
     "identity_document_desc": "Паспорт, удостоверение или права",
     "bank_account_desc": "Номер счёта и реквизиты банка",
+    "international_account_desc": "IBAN и SWIFT/BIC",
+    "domestic_account_desc": "Счёт в США и маршрутный номер ABA",
     "title_new_person": "Новая персона",
     "title_edit_person": "Редактировать персону",
     "title_new_address": "Новый адрес",
@@ -1110,6 +1117,10 @@
     "title_edit_identity_document": "Редактировать документ",
     "title_new_bank_account": "Новый банковский счёт",
     "title_edit_bank_account": "Редактировать банковский счёт",
+    "title_new_international_account": "Новый международный счёт",
+    "title_edit_international_account": "Редактировать международный счёт",
+    "title_new_domestic_account": "Новый счёт в банке США",
+    "title_edit_domestic_account": "Редактировать счёт в банке США",
     "placeholder_address_label": "например, Дом",
     "placeholder_country": "например, Германия",
     "placeholder_bank_account_number": "IBAN или номер счёта"
@@ -1395,10 +1406,13 @@
       "identity_document_number_required": "Введите номер документа.",
       "identity_document_date_invalid": "Введите даты документа в формате ГГГГ-ММ-ДД.",
       "identity_document_expiry_before_issue": "Дата окончания срока действия не может быть раньше даты выдачи.",
-      "bank_account_number_required": "Введите номер счёта.",
-      "bank_account_number_invalid": "Используйте в номере счёта только буквы, цифры и дефисы.",
-      "bank_account_iban_invalid": "Введите корректный IBAN.",
-      "bank_account_routing_code_invalid": "Используйте в коде банка только буквы и цифры."
+      "international_account_iban_required": "Введите IBAN.",
+      "international_account_iban_invalid": "Введите корректный IBAN.",
+      "swift_bic_invalid": "Введите корректный SWIFT/BIC-код из 8 или 11 символов.",
+      "domestic_account_number_required": "Введите номер счёта.",
+      "domestic_account_number_invalid": "Введите номер счёта из 4–17 цифр.",
+      "routing_number_required": "Введите маршрутный номер банка.",
+      "routing_number_invalid": "Введите корректный 9-значный маршрутный номер ABA."
     },
     "google_sign_in_required": "Войдите через Google перед разблокировкой.",
     "engine_loading": "Движок сейфа ещё загружается. Повторите попытку через мгновение.",

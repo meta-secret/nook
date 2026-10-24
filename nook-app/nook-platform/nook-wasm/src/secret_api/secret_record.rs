@@ -323,7 +323,8 @@ impl NookSecretRecord {
     }
 
     /// Every plaintext field of a person, address, identity-document, or
-    /// bank-account record plus masked numbers. Other types throw.
+    /// international-account, or domestic-account record plus masked numbers.
+    /// Other types throw.
     #[wasm_bindgen(getter, js_name = personalData)]
     pub fn personal_data(
         &self,
@@ -418,27 +419,73 @@ mod personal_data_wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn bank_account_list_masks_number_and_detail_carries_routing_code() -> Result<(), JsError> {
-        let fields = NookSecretFormFields::bank_account(&dto(&serde_json::json!({
+    fn international_account_list_masks_iban_and_detail_carries_bic() -> Result<(), JsError> {
+        let fields = NookSecretFormFields::international_account(&dto(&serde_json::json!({
             "accountHolder": "Ada Lovelace",
             "bankName": "Analytical Bank",
-            "accountNumber": "gb82 west 1234 5698 7654 32",
-            "routingCode": "NWBKGB2L",
+            "iban": "gb82 west 1234 5698 7654 32",
+            "swiftBic": "nwbkgb2l",
         }))?)?;
-        let record = decoded(&build_secret_yaml(&fields)?, SecretType::BankAccount)?;
+        let record = decoded(
+            &build_secret_yaml(&fields)?,
+            SecretType::InternationalAccount,
+        )?;
         let item = NookSecretListItem::from_core(record.list_item(), String::new());
-        assert_eq!(item.summary(), "•••• 5432");
+        assert_eq!(item.summary(), "•••• 5432 · NWBKGB2L");
         assert!(!item.summary().contains("GB82WEST"));
         assert_eq!(
             view_json(&NookSecretRecord::from_record(record))?,
             serde_json::json!({
-                "kind": "bank-account",
+                "kind": "international-account",
                 "accountHolder": "Ada Lovelace",
                 "bankName": "Analytical Bank",
-                "accountNumber": "GB82WEST12345698765432",
+                "iban": "GB82WEST12345698765432",
                 "maskedNumber": "•••• 5432",
-                "routingCode": "NWBKGB2L",
+                "swiftBic": "NWBKGB2L",
             })
+        );
+        let non_iban = NookSecretFormFields::international_account(&dto(&serde_json::json!({
+            "accountHolder": "", "bankName": "", "iban": "000123456789", "swiftBic": "",
+        }))?)?;
+        assert!(build_secret_yaml(&non_iban).is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn domestic_account_list_masks_number_and_detail_carries_routing_number() -> Result<(), JsError>
+    {
+        let fields = NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+            "accountHolder": "Ada Lovelace",
+            "bankName": "Federal Bank",
+            "accountNumber": "0001-2345-6789",
+            "routingNumber": "021000021",
+        }))?)?;
+        let record = decoded(&build_secret_yaml(&fields)?, SecretType::DomesticAccount)?;
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+        assert_eq!(item.summary(), "•••• 6789 · 021000021");
+        assert!(!item.summary().contains("000123456789"));
+        assert_eq!(
+            view_json(&NookSecretRecord::from_record(record))?,
+            serde_json::json!({
+                "kind": "domestic-account",
+                "accountHolder": "Ada Lovelace",
+                "bankName": "Federal Bank",
+                "accountNumber": "000123456789",
+                "maskedNumber": "•••• 6789",
+                "routingNumber": "021000021",
+            })
+        );
+        let bad_routing = NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+            "accountHolder": "", "bankName": "", "accountNumber": "1234",
+            "routingNumber": "021000022",
+        }))?)?;
+        assert!(build_secret_yaml(&bad_routing).is_err());
+        assert!(
+            NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+                "accountHolder": "", "bankName": "", "accountNumber": "1234",
+                "routingCode": "021000021",
+            }))?)
+            .is_err()
         );
         Ok(())
     }
@@ -492,7 +539,11 @@ mod personal_data_wasm_tests {
             SecretCategory::Secrets
         );
         assert_eq!(
-            secret_type_category(SecretType::BankAccount),
+            secret_type_category(SecretType::DomesticAccount),
+            SecretCategory::PersonalData
+        );
+        assert_eq!(
+            secret_type_category(SecretType::InternationalAccount),
             SecretCategory::PersonalData
         );
         Ok(())
