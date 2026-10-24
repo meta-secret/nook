@@ -11,8 +11,9 @@ Simple Vault connect route in the panel's window. Creating a first vault,
 joining with an existing identity, and choosing the identity to connect all
 happen on that page, and the panel shows its current step until the identity is
 approved or the tab closes. All connections is a page of the panel itself,
-with Make default and Use this identity. A locked Pilot action opens
-or focuses the matching Pilot auth tab in the initiating normal window. If
+with Make default and Use this identity. A locked Pilot widget offers
+Unlock, which opens the side panel. Connect vault from a Pilot widget opens or
+focuses the pairing auth tab in the initiating normal window. If
 another auth intent is already open, it is left untouched and the requested
 intent opens in a separate tab in that window. Pairing from that tab sends the
 public device request directly to the configured Simple Vault deployment,
