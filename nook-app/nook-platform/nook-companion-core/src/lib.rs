@@ -34,6 +34,12 @@ mod browser_tab_target;
 mod companion_pairing;
 mod companion_protocol;
 pub mod credential_fill;
+pub mod personal_field_classification;
+pub use personal_field_classification::{
+    ClassifiedPersonalField, PersonalFieldClassification, PersonalFieldEvidence,
+    PersonalFieldGroup, PersonalFieldKind, PersonalFillField, PersonalFillOpportunity,
+    PersonalFillPlan, PersonalFillScope, PersonalFillUnavailability,
+};
 mod domain_numbers;
 mod extension_consent;
 mod extension_pairing_state;
