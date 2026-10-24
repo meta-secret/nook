@@ -76,7 +76,8 @@ admission applies.
 `nook-core::PersonalFillProjection` derives the values.
 
 - It rejects a record outside the requested group and a kind outside the
-  group. Identity documents and bank accounts never fill.
+  group. Identity documents, international accounts, and US bank accounts
+  never fill.
 - Full name joins the stored names. Birth day, month, and year come from the
   stored ISO date. An invalid stored birth date fails closed.
 - Street address joins both address lines with a newline. Country code and
@@ -109,5 +110,5 @@ password, or one-time-code field.
 ## Out of scope (for now)
 
 - Sign-up detection, registration drafts, and login-to-personal linking.
-- Filling identity documents and bank accounts.
+- Filling identity documents, international accounts, and US bank accounts.
 - Automatic fill or submission without an explicit record selection.
