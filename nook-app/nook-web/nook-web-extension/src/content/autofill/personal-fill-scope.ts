@@ -8,6 +8,7 @@ import {
   type CompanionWasmRuntimeMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-forms'
+import { PageInputRendering } from '../../../../nook-web-shared/src/extension/authentication-input-surface'
 import type { RetainedFocusedCredentialTarget } from './focused-credential-target'
 import type { PersonalFillRevealedValues } from '../../lib/personal-fill-messages'
 
@@ -61,12 +62,22 @@ export type PersonalFillInputMutation = {
 export class PersonalFillScope {
   private constructor(private readonly request: PersonalFillScopeRequest) {}
 
-  /** Observes the retained field's form, or the formless inputs of its document. */
+  /**
+   * Observes the rendered inputs of the retained field's form, or the formless
+   * rendered inputs of its document. Hidden and non-rendered inputs never enter
+   * the scope, so a value the person cannot see is never planned or filled;
+   * a hidden focused field leaves the scope without its focused field.
+   */
   static observe(target: RetainedFocusedCredentialTarget): PersonalFillScope {
     const owner = target.input.form
     const inputs = Array.from(
       target.input.ownerDocument.querySelectorAll<HTMLInputElement>('input'),
-    ).filter((input) => input.form === owner)
+    ).filter(
+      (input) =>
+        input.form === owner &&
+        passwordFieldDiscovery.inputRendering(input) ===
+          PageInputRendering.Rendered,
+    )
     const request: PersonalFillScopeRequest = { target, inputs }
     return new PersonalFillScope(request)
   }

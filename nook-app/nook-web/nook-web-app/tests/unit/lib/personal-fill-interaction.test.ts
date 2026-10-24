@@ -89,9 +89,16 @@ import {
   type PersonalFillSelectedMessage,
 } from '../../../../nook-web-extension/src/lib/personal-fill-messages'
 
+enum FieldConcealment {
+  Visible = 'visible',
+  HiddenType = 'hidden-type',
+  DisplayNone = 'display-none',
+  HiddenWrapper = 'hidden-wrapper',
+}
 type PersonalFixtureField = {
   readonly autocomplete: string
   readonly type: string
+  readonly concealment: FieldConcealment
 }
 type CompanionDelivery = Awaited<
   ReturnType<
@@ -105,12 +112,20 @@ type DecodedRequest = Parameters<
 /** A contact form with an address section; Rust plans the focused field's group. */
 class PersonalInteractionFixture {
   static readonly FIELDS: readonly PersonalFixtureField[] = [
-    { autocomplete: 'given-name', type: 'text' },
-    { autocomplete: 'family-name', type: 'text' },
-    { autocomplete: 'tel', type: 'tel' },
-    { autocomplete: 'email', type: 'email' },
-    { autocomplete: 'address-line1', type: 'text' },
+    PersonalInteractionFixture.field('given-name', 'text'),
+    PersonalInteractionFixture.field('family-name', 'text'),
+    PersonalInteractionFixture.field('tel', 'tel'),
+    PersonalInteractionFixture.field('email', 'email'),
+    PersonalInteractionFixture.field('address-line1', 'text'),
   ]
+
+  static field(
+    autocomplete: string,
+    type: string,
+    concealment = FieldConcealment.Visible,
+  ): PersonalFixtureField {
+    return { autocomplete, type, concealment }
+  }
   readonly inputs: HTMLInputElement[] = []
   readonly submit = vi.fn<() => void>()
   readonly events = vi.fn<(type: string) => void>()
@@ -121,7 +136,7 @@ class PersonalInteractionFixture {
   readonly groups: (keyof typeof PersonalFieldGroup)[] = []
   readonly pickers: PersonalPickerFrameMount[] = []
   readonly requests: ExtensionRuntimeRequest[] = []
-  readonly revealed: PersonalFillRevealedValues = [
+  revealed: PersonalFillRevealedValues = [
     { kind: 'GivenName', value: 'Ada' },
     { kind: 'FamilyName', value: 'Lovelace' },
     { kind: 'Phone', value: '+44 20 7946 0000' },
@@ -146,7 +161,7 @@ class PersonalInteractionFixture {
       input.addEventListener('input', () => this.events('input'))
       input.addEventListener('change', () => this.events('change'))
       this.inputs.push(input)
-      form.append(input)
+      form.append(PersonalInteractionFixture.conceal(input, field.concealment))
     }
     document.body.append(form)
     const sensorRequest: ConstructorParameters<
@@ -272,6 +287,32 @@ class PersonalInteractionFixture {
     throw new Error('unreachable fixture request')
   }
 
+  private static conceal(
+    input: HTMLInputElement,
+    concealment: FieldConcealment,
+  ): HTMLElement {
+    switch (concealment) {
+      case FieldConcealment.Visible:
+        return input
+      case FieldConcealment.HiddenType:
+        input.type = 'hidden'
+        return input
+      case FieldConcealment.DisplayNone:
+        input.style.display = 'none'
+        return input
+      case FieldConcealment.HiddenWrapper: {
+        const wrapper = document.createElement('div')
+        wrapper.hidden = true
+        wrapper.append(input)
+        return wrapper
+      }
+    }
+  }
+
+  values(): string[] {
+    return this.inputs.map((input) => input.value)
+  }
+
   focus(position: number): void {
     this.inputs[position]?.focus()
   }
@@ -376,8 +417,8 @@ describe('personal-data fill from a focused form field', () => {
 
   test('offers nothing for a login username field', async () => {
     const fixture = new PersonalInteractionFixture([
-      { autocomplete: 'username', type: 'text' },
-      { autocomplete: 'current-password', type: 'password' },
+      PersonalInteractionFixture.field('username', 'text'),
+      PersonalInteractionFixture.field('current-password', 'password'),
     ])
     fixture.focus(0)
     expect(await fixture.interaction.tryRender()).toBe(
@@ -431,6 +472,106 @@ describe('personal-data fill from a focused form field', () => {
 
     expect(fixture.requestTypes()).toEqual([PersonalFillMessageType.Open])
     expect(fixture.inputs.every((input) => input.value === '')).toBe(true)
+  })
+})
+
+describe('personal fill never reaches inputs the person cannot see', () => {
+  test('hidden telephone and birthday inputs of the Person form are never planned or filled', async () => {
+    const fixture = new PersonalInteractionFixture([
+      PersonalInteractionFixture.field('given-name', 'text'),
+      PersonalInteractionFixture.field('family-name', 'text'),
+      PersonalInteractionFixture.field(
+        'tel',
+        'tel',
+        FieldConcealment.HiddenType,
+      ),
+      PersonalInteractionFixture.field(
+        'bday',
+        'text',
+        FieldConcealment.DisplayNone,
+      ),
+      PersonalInteractionFixture.field('email', 'email'),
+    ])
+    fixture.revealed = [
+      { kind: 'GivenName', value: 'Ada' },
+      { kind: 'FamilyName', value: 'Lovelace' },
+      { kind: 'Phone', value: '+44 20 7946 0000' },
+      { kind: 'BirthDate', value: '1815-12-10' },
+      { kind: 'Email', value: 'ada@nook.test' },
+    ]
+    fixture.focus(0)
+    expect(await fixture.interaction.tryRender()).toBe(
+      PersonalFillDisposition.Ready,
+    )
+    await fixture.interaction.choose()
+    await fixture.interaction.selected(fixture.selected())
+
+    expect(fixture.requests[1]).toMatchObject({
+      payload: { kinds: ['GivenName', 'FamilyName', 'Email'] },
+    })
+    expect(fixture.values()).toEqual([
+      'Ada',
+      'Lovelace',
+      '',
+      '',
+      'ada@nook.test',
+    ])
+  })
+
+  test('a security code inside a hidden wrapper is never planned for a card form', async () => {
+    const fixture = new PersonalInteractionFixture([
+      PersonalInteractionFixture.field('cc-name', 'text'),
+      PersonalInteractionFixture.field('cc-number', 'text'),
+      PersonalInteractionFixture.field('cc-exp', 'text'),
+      PersonalInteractionFixture.field(
+        'cc-csc',
+        'text',
+        FieldConcealment.HiddenWrapper,
+      ),
+    ])
+    fixture.revealed = [
+      { kind: 'CardholderName', value: 'Ada Lovelace' },
+      { kind: 'CardNumber', value: '4111111111111111' },
+      { kind: 'CardExpiration', value: '12/30' },
+      { kind: 'CardSecurityCode', value: '123' },
+    ]
+    fixture.focus(1)
+    expect(await fixture.interaction.tryRender()).toBe(
+      PersonalFillDisposition.Ready,
+    )
+    expect(fixture.groups).toEqual(['Card'])
+    await fixture.interaction.choose()
+    await fixture.interaction.selected(fixture.selected())
+
+    expect(fixture.requests[1]).toMatchObject({
+      payload: { kinds: ['CardholderName', 'CardNumber', 'CardExpiration'] },
+    })
+    expect(fixture.values()).toEqual([
+      'Ada Lovelace',
+      '4111111111111111',
+      '12/30',
+      '',
+    ])
+  })
+
+  test('a focused field that is no longer rendered offers nothing', async () => {
+    const fixture = new PersonalInteractionFixture(
+      PersonalInteractionFixture.FIELDS,
+    )
+    fixture.focus(0)
+    const focused = fixture.inputs[0]
+    switch (true) {
+      case focused instanceof HTMLInputElement:
+        focused.style.visibility = 'hidden'
+        break
+      case true:
+        throw new Error('fixture lacks its focused field')
+    }
+
+    expect(await fixture.interaction.tryRender()).toBe(
+      PersonalFillDisposition.Unavailable,
+    )
+    expect(fixture.mounts).toEqual([])
   })
 })
 

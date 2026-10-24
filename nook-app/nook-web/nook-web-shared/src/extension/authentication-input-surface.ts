@@ -1,6 +1,22 @@
+/** Whether the person can see an input: the credential scan's rendered-input rule. */
+export enum PageInputRendering {
+  Rendered = "rendered",
+  Hidden = "hidden",
+}
+
 /** Owns browser observations shared by the concrete authentication interaction. */
 export class AuthenticationInputSurface {
   constructor(protected readonly browser: typeof globalThis) {}
+
+  /** Applies the credential scan's rendered-input rule to a host scope outside it. */
+  inputRendering(field: HTMLInputElement): PageInputRendering {
+    switch (this.isRenderedInput(field)) {
+      case true:
+        return PageInputRendering.Rendered;
+      case false:
+        return PageInputRendering.Hidden;
+    }
+  }
   protected isRenderedInput(field: HTMLInputElement): boolean {
     if (field.type === "hidden") return false;
     return this.isRenderedElement(field);

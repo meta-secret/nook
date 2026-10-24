@@ -1,4 +1,5 @@
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import { AccountPickerPageTarget } from './account-picker-page-target'
 import {
   PersonalFillCancelResponseKind,
   PersonalFillMessageType,
@@ -280,26 +281,13 @@ export class PersonalFillPickers {
     switch (
       this.dependencies.isWebsiteSender(websiteRequest) &&
       sender.tab?.id === picker.tabId &&
-      this.senderFrameId(sender) === picker.frameId &&
+      AccountPickerPageTarget.senderFrameId(sender) === picker.frameId &&
       sender.documentId === picker.parentDocumentId
     ) {
       case true:
         return PersonalPickerAdmission.Admitted
       case false:
         return PersonalPickerAdmission.Forbidden
-    }
-  }
-
-  private senderFrameId(sender: chrome.runtime.MessageSender): number {
-    switch (
-      typeof sender.frameId === 'number' &&
-      Number.isInteger(sender.frameId) &&
-      sender.frameId >= 0
-    ) {
-      case true:
-        return Number(sender.frameId)
-      case false:
-        return 0
     }
   }
 
@@ -386,7 +374,7 @@ export class PersonalFillPickers {
       origin: message.payload.origin,
       group: message.payload.group,
       tabId: Number(tabId),
-      frameId: this.senderFrameId(sender),
+      frameId: AccountPickerPageTarget.senderFrameId(sender),
       parentDocumentId: String(sender.documentId),
       allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
       expiresAt: this.dependencies.now() + PersonalFillPickers.TTL_MS,
