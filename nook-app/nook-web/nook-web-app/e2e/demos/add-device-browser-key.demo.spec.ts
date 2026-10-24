@@ -60,9 +60,15 @@ test("a page on the extension's key switches to this browser's passkey to add a 
   })
 
   // On the extension's key, which has not joined, the page says so instead
-  // of showing nothing, and offers this browser's own passkey.
-  await useUnjoinedExtensionKey(page)
-  await expect(stage).toHaveAttribute('data-stage', 'not-member')
+  // of showing nothing, and offers this browser's own passkey. Sync is held
+  // so a reprojection of the identity does not replace the scenario.
+  await forceVaultQuiescentForE2e(page)
+  await expect(async () => {
+    await useUnjoinedExtensionKey(page)
+    await expect(stage).toHaveAttribute('data-stage', 'not-member', {
+      timeout: 1_000,
+    })
+  }).toPass({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await expect(page.getByTestId('add-device-not-member')).toContainText(
     "Nook is using the key your browser extension holds, and that key hasn't joined",
   )
