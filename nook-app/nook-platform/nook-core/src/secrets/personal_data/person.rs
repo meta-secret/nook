@@ -1,7 +1,7 @@
 //! Person payload: names, birth date, and contact details.
 
 use super::calendar_date::DateEntry;
-use super::personal_text::PersonalText;
+use super::personal_text::{PersonalText, PresentParts};
 use crate::ValidationError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -94,11 +94,15 @@ impl PersonSecret {
     /// Given, middle, and family names joined by single spaces.
     #[must_use]
     pub fn full_name(&self) -> String {
-        PersonalText::join_present([
-            self.given_name.as_str(),
-            self.middle_name.as_str(),
-            self.family_name.as_str(),
-        ])
+        PresentParts {
+            parts: &[
+                self.given_name.as_str(),
+                self.middle_name.as_str(),
+                self.family_name.as_str(),
+            ],
+            separator: " ",
+        }
+        .joined()
     }
 
     pub fn zeroize_plaintext(&mut self) {

@@ -6,6 +6,7 @@
 use super::BitwardenText;
 use crate::secrets::import_support::personal::{PersonalImportItem, PersonalImportPart};
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
+use crate::secrets::personal_data::PresentParts;
 use crate::{AddressFields, IdentityDocumentFields, IdentityDocumentKind, PersonFields};
 use serde::Deserialize;
 
@@ -67,17 +68,16 @@ impl BitwardenIdentityPayload {
 
 impl BitwardenIdentity {
     fn disposition(&self, name: &str) -> ImportItemDisposition {
-        let full_name = [&self.first_name, &self.middle_name, &self.last_name]
-            .iter()
-            .map(|part| part.trim())
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let address_line2 = [self.address2.trim(), self.address3.trim()]
-            .into_iter()
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let full_name = PresentParts {
+            parts: &[&self.first_name, &self.middle_name, &self.last_name],
+            separator: " ",
+        }
+        .joined();
+        let address_line2 = PresentParts {
+            parts: &[&self.address2, &self.address3],
+            separator: ", ",
+        }
+        .joined();
         let document = |kind, number: &BitwardenText| {
             PersonalImportPart::document(IdentityDocumentFields {
                 kind,

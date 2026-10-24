@@ -203,6 +203,21 @@ const MONTH_NAMES: [&str; 12] = [
     "december",
 ];
 
+/// An English month name (`January` … `December`, any case).
+pub(crate) struct MonthName<'a> {
+    pub(crate) name: &'a str,
+}
+
+impl MonthName<'_> {
+    /// Month number 1–12, or none for text that names no month.
+    pub(crate) fn number(&self) -> Option<usize> {
+        MONTH_NAMES
+            .iter()
+            .position(|candidate| candidate.eq_ignore_ascii_case(self.name.trim()))
+            .map(|index| index + 1)
+    }
+}
+
 impl MonthNameDate<'_> {
     /// ISO text for a complete date, empty for a blank one, or the original
     /// text so that validation reports a malformed date instead of losing it.
@@ -215,13 +230,10 @@ impl MonthNameDate<'_> {
         let [month, day, year] = parts.as_slice() else {
             return raw.to_owned();
         };
-        let Some(month) = MONTH_NAMES
-            .iter()
-            .position(|name| name.eq_ignore_ascii_case(month))
-        else {
+        let Some(month) = (MonthName { name: month }).number() else {
             return raw.to_owned();
         };
-        let candidate = format!("{year:0>4}-{:02}-{day:0>2}", month + 1);
+        let candidate = format!("{year:0>4}-{month:02}-{day:0>2}");
         match CalendarDate::parse(&candidate) {
             Ok(date) => date.to_string(),
             Err(_) => raw.to_owned(),

@@ -6,6 +6,7 @@
 use super::ProtonPassVaultItem;
 use crate::secrets::import_support::ImportItemDisposition;
 use crate::secrets::import_support::personal::{PersonalImportItem, PersonalImportPart};
+use crate::secrets::personal_data::PresentParts;
 use crate::{AddressFields, IdentityDocumentFields, IdentityDocumentKind, PersonFields};
 use serde::Deserialize;
 
@@ -62,16 +63,15 @@ impl ProtonPassVaultItem<'_> {
             identity.first_name.as_str()
         };
         let printed_name = match identity.full_name.trim() {
-            "" => [
-                &identity.first_name,
-                &identity.middle_name,
-                &identity.last_name,
-            ]
-            .iter()
-            .map(|name| name.trim())
-            .filter(|name| !name.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
+            "" => PresentParts {
+                parts: &[
+                    &identity.first_name,
+                    &identity.middle_name,
+                    &identity.last_name,
+                ],
+                separator: " ",
+            }
+            .joined(),
             full_name => full_name.to_owned(),
         };
         let document = |kind, number: &str| {

@@ -35,21 +35,29 @@ impl PersonalText {
             Self::Text(text) => Ok(text),
         }
     }
+}
 
-    /// Join the present parts with one space (`Ada Augusta Lovelace`).
-    pub(super) fn join_present<'a>(parts: impl IntoIterator<Item = &'a str>) -> String {
-        parts
-            .into_iter()
-            .map(str::trim)
+/// Trimmed, non-blank text parts joined by one separator
+/// (`Ada Augusta Lovelace`, `Flat 3, Building B`).
+pub(crate) struct PresentParts<'a> {
+    pub(crate) parts: &'a [&'a str],
+    pub(crate) separator: &'a str,
+}
+
+impl PresentParts<'_> {
+    pub(crate) fn joined(&self) -> String {
+        self.parts
+            .iter()
+            .map(|part| part.trim())
             .filter(|part| !part.is_empty())
             .collect::<Vec<_>>()
-            .join(" ")
+            .join(self.separator)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PersonalText;
+    use super::{PersonalText, PresentParts};
     use crate::ValidationError;
 
     #[test]
@@ -84,11 +92,30 @@ mod tests {
     }
 
     #[test]
-    fn join_present_skips_blank_parts() {
+    fn present_parts_skip_blank_parts_and_use_the_separator() {
         assert_eq!(
-            PersonalText::join_present(["Ada", "", " Lovelace "]),
+            PresentParts {
+                parts: &["Ada", "", " Lovelace "],
+                separator: " ",
+            }
+            .joined(),
             "Ada Lovelace"
         );
-        assert_eq!(PersonalText::join_present(["", " "]), "");
+        assert_eq!(
+            PresentParts {
+                parts: &[" Flat 3 ", "", "Building B"],
+                separator: ", ",
+            }
+            .joined(),
+            "Flat 3, Building B"
+        );
+        assert_eq!(
+            PresentParts {
+                parts: &["", " "],
+                separator: " ",
+            }
+            .joined(),
+            ""
+        );
     }
 }

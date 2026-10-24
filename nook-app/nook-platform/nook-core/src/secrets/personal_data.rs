@@ -21,4 +21,5 @@ pub use domestic_account::{DomesticAccountFields, DomesticAccountSecret};
 pub use identity_document::{IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret};
 pub use international_account::{InternationalAccountFields, InternationalAccountSecret};
 pub use person::{PersonFields, PersonSecret};
+pub(crate) use personal_text::PresentParts;
 pub(crate) use sensitive_number::SensitiveNumber;
