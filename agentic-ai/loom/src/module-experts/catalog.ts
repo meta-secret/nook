@@ -420,6 +420,19 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/ui.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/main.ts',
   'nook-app/nook-web/nook-web-shared/vite-config.ts',
+  'nook-app/nook-web/nook-web-extension/src/background/service-worker/personal-fill-session-adapter.ts',
+  'nook-app/nook-web/nook-web-extension/src/content/autofill/personal-fill-interaction.ts',
+  'nook-app/nook-web/nook-web-extension/src/content/autofill/personal-fill-scope.ts',
+  'nook-app/nook-web/nook-web-extension/src/content/autofill/personal-fill-widget.ts',
+  'nook-app/nook-web/nook-web-extension/src/offscreen/session-personal-field-fill.ts',
+  'nook-app/nook-web/nook-web-extension/src/offscreen/session-personal-fill-operations.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AddSecretForm.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/SecretTypePicker.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/personal-data-fields.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-secret/personal-data-form-state.svelte.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/vault/VaultListToolbar.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/vault/personal-data-slots.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/secret-sections.ts',
 ] as const;
 
 export const INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS = [
