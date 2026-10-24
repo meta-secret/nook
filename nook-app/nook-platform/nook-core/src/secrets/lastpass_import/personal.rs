@@ -27,6 +27,9 @@ pub(super) struct LastPassTypedNote {
     fields: HashMap<String, String>,
 }
 
+/// Export metadata naming the note template language (`en-US`).
+const EXPORT_LANGUAGE_KEY: &str = "language";
+
 impl LastPassTypedNote {
     /// Parse `extra` when it starts with a `NoteType:` line.
     pub(super) fn parse(extra: &str) -> Option<Self> {
@@ -145,11 +148,13 @@ impl LastPassTypedNote {
     }
 
     /// Whether free text or any non-empty field has no typed mapping.
-    /// `LastPass` writes blank dates as bare commas.
+    /// `LastPass` writes blank dates as bare commas, and `Language` is
+    /// export metadata rather than user data.
     pub(super) fn has_unmapped_values(&self) -> bool {
         let mapped = self.mapped_keys();
         self.fields.iter().any(|(key, value)| {
             !mapped.contains(&key.as_str())
+                && key != EXPORT_LANGUAGE_KEY
                 && value
                     .chars()
                     .any(|character| character != ',' && !character.is_whitespace())
@@ -267,10 +272,11 @@ mod tests {
     }
 
     #[test]
-    fn fully_mapped_address_gives_person_and_address_only() -> anyhow::Result<()> {
+    fn fully_mapped_address_with_export_language_gives_person_and_address_only()
+    -> anyhow::Result<()> {
         let text = csv(&[(
             "Home",
-            "NoteType:Address\nTitle:\nFirst Name:Ada\nMiddle Name:\nLast Name:Lovelace\nUsername:\nGender:\nBirthday:December,10,1815\nCompany:\nAddress 1:12 Analytical Row\nAddress 2:Flat 3\nAddress 3:\nCity / Town:London\nCounty:\nState:Greater London\nZip / Postal Code:W1 1AA\nCountry:GB\nTimezone:\nEmail Address:ada@example.com\nPhone:{\"num\":\"2079460958\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nEvening Phone:\nMobile Phone:\nFax:\nNotes:",
+            "NoteType:Address\nLanguage:en-US\nTitle:\nFirst Name:Ada\nMiddle Name:\nLast Name:Lovelace\nUsername:\nGender:\nBirthday:December,10,1815\nCompany:\nAddress 1:12 Analytical Row\nAddress 2:Flat 3\nAddress 3:\nCity / Town:London\nCounty:\nState:Greater London\nZip / Postal Code:W1 1AA\nCountry:GB\nTimezone:\nEmail Address:ada@example.com\nPhone:{\"num\":\"2079460958\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nEvening Phone:\nMobile Phone:\nFax:\nNotes:",
         )]);
         let plan = LastPassCsvInput::new(&text).plan()?;
         assert_eq!(usize::from(plan.source_count), 1);
