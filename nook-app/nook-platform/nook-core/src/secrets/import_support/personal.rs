@@ -7,9 +7,10 @@
 
 use super::{ImportItemDisposition, ImportSkipReason};
 use crate::{
-    AddressFields, AddressSecret, CalendarDate, DomesticAccountFields, DomesticAccountSecret,
-    IdentityDocumentFields, IdentityDocumentSecret, InternationalAccountFields,
-    InternationalAccountSecret, PersonFields, PersonSecret, SecretValue,
+    AddressFields, AddressSecret, CalendarDate, CalendarMonth, DomesticAccountFields,
+    DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentSecret,
+    InternationalAccountFields, InternationalAccountSecret, PersonFields, PersonSecret,
+    SecretValue,
 };
 
 /// Outcome of converting one personal-data part of a source item.
@@ -67,9 +68,10 @@ impl PersonalImportPart {
         })
     }
 
-    /// An IBAN makes an international account; an account number with a
-    /// routing number makes a US domestic account; anything else is unsupported.
-    pub(crate) fn bank(fields: &BankImportFields<'_>) -> Self {
+    /// An IBAN makes an international account and an account number with a
+    /// routing number makes a US domestic account; a source item carrying both
+    /// produces both records. Bank values that fit neither are unsupported.
+    pub(crate) fn banks(fields: &BankImportFields<'_>) -> Vec<Self> {
         let BankImportFields {
             account_holder,
             bank_name,
@@ -79,40 +81,51 @@ impl PersonalImportPart {
             routing_number,
         } = *fields;
         let present = |value: &str| !value.trim().is_empty();
+        let mut parts = Vec::new();
         if present(iban) {
-            return InternationalAccountSecret::from_fields(InternationalAccountFields {
-                account_holder,
-                bank_name,
-                iban,
-                swift_bic,
-            })
-            .map_or(Self::Invalid, |account| {
-                Self::Record(Box::new(SecretValue::InternationalAccount(account)))
-            });
+            parts.push(
+                InternationalAccountSecret::from_fields(InternationalAccountFields {
+                    account_holder,
+                    bank_name,
+                    iban,
+                    swift_bic,
+                })
+                .map_or(Self::Invalid, |account| {
+                    Self::Record(Box::new(SecretValue::InternationalAccount(account)))
+                }),
+            );
         }
         if present(account_number) && present(routing_number) {
-            return DomesticAccountSecret::from_fields(DomesticAccountFields {
-                account_holder,
-                bank_name,
-                account_number,
-                routing_number,
-            })
-            .map_or(Self::Invalid, |account| {
-                Self::Record(Box::new(SecretValue::DomesticAccount(account)))
-            });
+            parts.push(
+                DomesticAccountSecret::from_fields(DomesticAccountFields {
+                    account_holder,
+                    bank_name,
+                    account_number,
+                    routing_number,
+                })
+                .map_or(Self::Invalid, |account| {
+                    Self::Record(Box::new(SecretValue::DomesticAccount(account)))
+                }),
+            );
         }
-        if [swift_bic, account_number, routing_number]
-            .iter()
-            .all(|value| value.trim().is_empty())
-        {
-            Self::Absent
-        } else {
-            Self::Unsupported
+        if parts.is_empty() {
+            parts.push(
+                if [swift_bic, account_number, routing_number]
+                    .iter()
+                    .all(|value| value.trim().is_empty())
+                {
+                    Self::Absent
+                } else {
+                    Self::Unsupported
+                },
+            );
         }
+        parts
     }
 }
 
-/// Bank details as exported; `iban` and `account_number` are alternatives.
+/// Bank details as exported; an item may carry an IBAN, a US account and
+/// routing number, or both.
 #[derive(Clone, Copy)]
 pub(crate) struct BankImportFields<'a> {
     pub(crate) account_holder: &'a str,
@@ -239,6 +252,26 @@ impl MonthNameDate<'_> {
             Err(_) => raw.to_owned(),
         }
     }
+
+    /// Like `iso`, but a document date written without a day
+    /// (`January,,2030`) keeps month precision (`2030-01`).
+    pub(crate) fn document_iso(&self) -> String {
+        let raw = self.raw.trim();
+        let parts: Vec<&str> = raw.split(',').map(str::trim).collect();
+        let [month, "", year] = parts.as_slice() else {
+            return self.iso();
+        };
+        if month.is_empty() && year.is_empty() {
+            return String::new();
+        }
+        let Some(month) = (MonthName { name: month }).number() else {
+            return raw.to_owned();
+        };
+        match CalendarMonth::parse(&format!("{year}-{month:02}")) {
+            Ok(month) => month.to_string(),
+            Err(_) => raw.to_owned(),
+        }
+    }
 }
 
 /// An exported date stored as Unix seconds (1Password `date` fields).
@@ -293,7 +326,9 @@ mod tests {
             family_name: "",
             birth_date,
             email: "ada@example.com",
-            phone: "",
+            mobile_phone: "",
+            home_phone: "",
+            work_phone: "",
         }
     }
 
@@ -311,8 +346,10 @@ mod tests {
                     postal_code: "",
                     country: "US",
                 }),
-                PersonalImportPart::bank(&NO_BANK),
-            ],
+            ]
+            .into_iter()
+            .chain(PersonalImportPart::banks(&NO_BANK))
+            .collect(),
         }
         .disposition();
         let ImportItemDisposition::ImportedRecords(records) = disposition else {
@@ -346,50 +383,76 @@ mod tests {
     }
 
     #[test]
-    fn bank_parts_choose_iban_then_domestic_and_reject_other_shapes() {
-        let international = PersonalImportPart::bank(&BankImportFields {
+    fn bank_parts_produce_international_domestic_or_both() {
+        let international = PersonalImportPart::banks(&BankImportFields {
             iban: "DE89 3704 0044 0532 0130 00",
             swift_bic: "COBADEFFXXX",
             ..NO_BANK
         });
         assert!(matches!(
-            international,
-            PersonalImportPart::Record(box_value) if matches!(*box_value, SecretValue::InternationalAccount(_))
+            international.as_slice(),
+            [PersonalImportPart::Record(record)] if matches!(**record, SecretValue::InternationalAccount(_))
         ));
-        let domestic = PersonalImportPart::bank(&BankImportFields {
+        let domestic = PersonalImportPart::banks(&BankImportFields {
             account_number: "000123456789",
             routing_number: "021000021",
             ..NO_BANK
         });
         assert!(matches!(
-            domestic,
-            PersonalImportPart::Record(box_value) if matches!(*box_value, SecretValue::DomesticAccount(_))
+            domestic.as_slice(),
+            [PersonalImportPart::Record(record)] if matches!(**record, SecretValue::DomesticAccount(_))
+        ));
+        let both = PersonalImportPart::banks(&BankImportFields {
+            iban: "DE89 3704 0044 0532 0130 00",
+            swift_bic: "COBADEFFXXX",
+            account_number: "000123456789",
+            routing_number: "021000021",
+            ..NO_BANK
+        });
+        let ImportItemDisposition::ImportedRecords(records) =
+            (PersonalImportItem { parts: both }).disposition()
+        else {
+            panic!("expected two bank records");
+        };
+        assert!(matches!(
+            records.as_slice(),
+            [
+                SecretValue::InternationalAccount(_),
+                SecretValue::DomesticAccount(_)
+            ]
+        ));
+        let invalid_domestic = PersonalImportPart::banks(&BankImportFields {
+            iban: "DE89 3704 0044 0532 0130 00",
+            account_number: "000123456789",
+            routing_number: "021000022",
+            ..NO_BANK
+        });
+        assert!(matches!(
+            (PersonalImportItem {
+                parts: invalid_domestic
+            })
+            .disposition(),
+            ImportItemDisposition::Skipped(ImportSkipReason::InvalidPersonalData)
         ));
         assert!(matches!(
-            PersonalImportPart::bank(&BankImportFields {
+            PersonalImportPart::banks(&BankImportFields {
                 account_number: "000123456789",
                 ..NO_BANK
-            }),
-            PersonalImportPart::Unsupported
+            })
+            .as_slice(),
+            [PersonalImportPart::Unsupported]
         ));
         assert!(matches!(
-            PersonalImportPart::bank(&BankImportFields {
+            PersonalImportPart::banks(&BankImportFields {
                 iban: "DE89370400440532013001",
                 ..NO_BANK
-            }),
-            PersonalImportPart::Invalid
+            })
+            .as_slice(),
+            [PersonalImportPart::Invalid]
         ));
         assert!(matches!(
-            PersonalImportPart::bank(&BankImportFields {
-                account_number: "000123456789",
-                routing_number: "021000022",
-                ..NO_BANK
-            }),
-            PersonalImportPart::Invalid
-        ));
-        assert!(matches!(
-            PersonalImportPart::bank(&NO_BANK),
-            PersonalImportPart::Absent
+            PersonalImportPart::banks(&NO_BANK).as_slice(),
+            [PersonalImportPart::Absent]
         ));
     }
 
@@ -440,6 +503,31 @@ mod tests {
         for short_year in ["January,15,30", "January,15,030"] {
             assert_eq!(MonthNameDate { raw: short_year }.iso(), short_year);
         }
+        assert_eq!(
+            MonthNameDate {
+                raw: "December,,2030"
+            }
+            .document_iso(),
+            "2030-12"
+        );
+        assert_eq!(
+            MonthNameDate {
+                raw: "December,31,2030"
+            }
+            .document_iso(),
+            "2030-12-31"
+        );
+        assert_eq!(MonthNameDate { raw: ",," }.document_iso(), "");
+        for malformed in ["December,,30", "Smarch,,2030"] {
+            assert_eq!(MonthNameDate { raw: malformed }.document_iso(), malformed);
+        }
+        assert_eq!(
+            MonthNameDate {
+                raw: "December,,2030"
+            }
+            .iso(),
+            "December,,2030"
+        );
     }
 
     #[test]

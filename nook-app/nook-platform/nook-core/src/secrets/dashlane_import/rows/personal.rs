@@ -1,9 +1,10 @@
 //! Dashlane `ids.csv`, `personalInfo.csv`, and bank payment rows.
 //!
-//! IDs map ID cards, passports, and driver's licenses to identity documents;
-//! social security and tax numbers have no Nook type. Personal-info `name`
-//! rows become people and `address` rows become addresses; email, phone,
-//! website, and company rows stand alone without a name and are not imported.
+//! IDs map ID cards, passports, driver's licenses, social security numbers,
+//! and tax numbers to identity documents. Personal-info `name` rows become
+//! people and `address` rows become addresses. Email, phone (`number`),
+//! website, and company rows are separate rows with no name, so they cannot
+//! join a person and are not imported.
 
 use super::super::DashlaneImportError;
 use super::NormalizedDashlaneHeaders;
@@ -51,6 +52,8 @@ impl IdColumns {
             "license" | "driver_license" | "driving_licence" => {
                 IdentityDocumentKind::DriversLicense
             }
+            "social_security" => IdentityDocumentKind::SocialSecurity,
+            "tax_number" => IdentityDocumentKind::TaxId,
             _ => {
                 return ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind)
                     .collected();
@@ -60,6 +63,7 @@ impl IdColumns {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind,
                 number: &fields.optional(self.number),
+                issuer: "",
                 issuing_country: &fields.optional(self.place_of_issue),
                 issue_date: &fields.optional(self.issue_date),
                 expiry_date: &fields.optional(self.expiration_date),
@@ -116,7 +120,9 @@ impl PersonalInfoColumns {
                 family_name: &fields.optional(self.last_name),
                 birth_date: &fields.optional(self.date_of_birth),
                 email: "",
-                phone: "",
+                mobile_phone: "",
+                home_phone: "",
+                work_phone: "",
             }),
             "address" => PersonalImportPart::address(AddressFields {
                 label: &fields.optional(self.item_name),
@@ -184,7 +190,7 @@ impl BankPaymentColumns {
             },
         };
         PersonalImportItem {
-            parts: vec![PersonalImportPart::bank(&bank)],
+            parts: PersonalImportPart::banks(&bank),
         }
         .disposition()
         .collected()
@@ -197,14 +203,17 @@ mod tests {
     use crate::{IdentityDocumentKind, SecretValue};
 
     #[test]
-    fn ids_map_cards_passports_and_licenses_and_skip_other_numbers() -> anyhow::Result<()> {
+    fn ids_map_every_document_type_and_skip_invalid_rows() -> anyhow::Result<()> {
         let text = concat!(
             "type,number,name,issue_date,expiration_date,place_of_issue,state\n",
             "card,ID998877,Ada Lovelace,2021-03-01,2031-03-01,GB,\n",
             "passport,X1234567,ADA LOVELACE,2020-01-15,2030-01-14,GB,\n",
-            "license,D1234567,Ada Lovelace,,2030-12-31,US,CA\n",
+            "license,D1234567,Ada Lovelace,,2030-12,US,CA\n",
+            "social_security,123-45-6789,Ada Lovelace,,,US,\n",
+            "tax_number,DE 123 456 789,Ada Lovelace,,,DE,\n",
             "social_security,000-00-0000,Ada Lovelace,,,US,\n",
             "passport,X7654321,Ada Lovelace,2030-01-15,2020-01-14,GB,\n",
+            "loyalty,42,Ada Lovelace,,,,\n",
         );
         let plan = DashlaneCsvInput {
             text,
@@ -212,8 +221,8 @@ mod tests {
         }
         .check()?
         .collect()?;
-        assert_eq!(usize::from(plan.source_count), 5);
-        assert_eq!(usize::from(plan.skipped_unsupported), 2);
+        assert_eq!(usize::from(plan.source_count), 8);
+        assert_eq!(usize::from(plan.skipped_unsupported), 3);
         let kinds: Vec<IdentityDocumentKind> = plan
             .items
             .iter()
@@ -227,9 +236,15 @@ mod tests {
             [
                 IdentityDocumentKind::NationalId,
                 IdentityDocumentKind::Passport,
-                IdentityDocumentKind::DriversLicense
+                IdentityDocumentKind::DriversLicense,
+                IdentityDocumentKind::SocialSecurity,
+                IdentityDocumentKind::TaxId
             ]
         );
+        let Some(SecretValue::IdentityDocument(license)) = plan.items.get(2) else {
+            anyhow::bail!("expected the license");
+        };
+        assert_eq!(license.expiry_date, "2030-12");
         Ok(())
     }
 

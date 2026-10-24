@@ -1,7 +1,9 @@
 //! Bitwarden identity items (type 4) as person, address, and document records.
 //!
-//! One identity may produce a person, a postal address, a passport, and a
-//! driver's license. The SSN, company, username, and title have no Nook type.
+//! One identity may produce a person, a postal address, a passport, a
+//! driver's license, and a US Social Security number. Bitwarden's single
+//! phone is the person's mobile phone. Company, username, and title have no
+//! Nook field.
 
 use super::BitwardenText;
 use crate::secrets::import_support::personal::{PersonalImportItem, PersonalImportPart};
@@ -55,6 +57,8 @@ pub(super) struct BitwardenIdentity {
     passport_number: BitwardenText,
     #[serde(default)]
     license_number: BitwardenText,
+    #[serde(default)]
+    ssn: BitwardenText,
 }
 
 impl BitwardenIdentityPayload {
@@ -78,6 +82,7 @@ impl BitwardenIdentity {
             PersonalImportPart::document(IdentityDocumentFields {
                 kind,
                 number,
+                issuer: "",
                 issuing_country: "",
                 issue_date: "",
                 expiry_date: "",
@@ -92,7 +97,9 @@ impl BitwardenIdentity {
                     family_name: &self.last_name,
                     birth_date: "",
                     email: &self.email,
-                    phone: &self.phone,
+                    mobile_phone: &self.phone,
+                    home_phone: "",
+                    work_phone: "",
                 }),
                 PersonalImportPart::address(AddressFields {
                     label: name,
@@ -105,6 +112,7 @@ impl BitwardenIdentity {
                 }),
                 document(IdentityDocumentKind::Passport, &self.passport_number),
                 document(IdentityDocumentKind::DriversLicense, &self.license_number),
+                document(IdentityDocumentKind::SocialSecurity, &self.ssn),
             ],
         }
         .disposition()
@@ -120,11 +128,11 @@ mod tests {
       "identity":{"title":"Ms","firstName":"Ada","middleName":null,"lastName":"Lovelace",
         "address1":"12 Analytical Row","address2":"Flat 3","address3":null,"city":"London",
         "state":"Greater London","postalCode":"W1 1AA","country":"GB","company":"Engines Ltd",
-        "email":"ada@example.com","phone":"+44 20 7946 0958","ssn":"000-00-0000",
+        "email":"ada@example.com","phone":"+44 20 7946 0958","ssn":"123-45-6789",
         "username":"ada","passportNumber":"X1234567","licenseNumber":"LOVEL812105AA9IJ"}}]}"#;
 
     #[test]
-    fn identity_produces_person_address_passport_and_license() -> anyhow::Result<()> {
+    fn identity_produces_person_address_passport_license_and_ssn() -> anyhow::Result<()> {
         let plan = BitwardenItems::parse(IDENTITY)?.plan();
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
@@ -133,10 +141,15 @@ mod tests {
             SecretValue::Address(address),
             SecretValue::IdentityDocument(passport),
             SecretValue::IdentityDocument(license),
+            SecretValue::IdentityDocument(ssn),
         ] = plan.items.as_slice()
         else {
-            anyhow::bail!("expected person, address, passport and license");
+            anyhow::bail!("expected person, address, passport, license and SSN");
         };
+        assert_eq!(person.mobile_phone, "+44 20 7946 0958");
+        assert!(person.home_phone.is_empty());
+        assert_eq!(ssn.kind, IdentityDocumentKind::SocialSecurity);
+        assert_eq!(ssn.number, "123456789");
         assert_eq!(person.full_name(), "Ada Lovelace");
         assert_eq!(person.email, "ada@example.com");
         assert_eq!(address.label, "Personal");
@@ -165,7 +178,7 @@ mod tests {
     fn invalid_or_empty_identities_are_counted_as_skipped() -> anyhow::Result<()> {
         let json = r#"{"items":[
           {"type":4,"name":"Bad email","identity":{"firstName":"Ada","email":"not-an-email"}},
-          {"type":4,"name":"Only SSN","identity":{"ssn":"000-00-0000"}},
+          {"type":4,"name":"Unissued SSN","identity":{"ssn":"000-00-0000"}},
           {"type":4,"name":"No payload","identity":null},
           {"id":"bitwarden-identity-1","type":4,"name":"Skipped identity"},
           {"type":2,"name":"Note","notes":"kept"}]}"#;

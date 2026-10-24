@@ -34,7 +34,9 @@ pub struct PersonView {
     pub full_name: String,
     pub birth_date: String,
     pub email: String,
-    pub phone: String,
+    pub mobile_phone: String,
+    pub home_phone: String,
+    pub work_phone: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Tsify)]
@@ -55,6 +57,7 @@ pub struct IdentityDocumentView {
     pub document_kind: IdentityDocumentKind,
     pub number: String,
     pub masked_number: String,
+    pub issuer: String,
     pub issuing_country: String,
     pub issue_date: String,
     pub expiry_date: String,
@@ -124,7 +127,9 @@ impl PersonView {
             full_name: person.full_name(),
             birth_date: person.birth_date.clone(),
             email: person.email.clone(),
-            phone: person.phone.clone(),
+            mobile_phone: person.mobile_phone.clone(),
+            home_phone: person.home_phone.clone(),
+            work_phone: person.work_phone.clone(),
         }
     }
 }
@@ -149,6 +154,7 @@ impl IdentityDocumentView {
             document_kind: document.kind,
             number: document.number.clone(),
             masked_number: document.masked_number(),
+            issuer: document.issuer.clone(),
             issuing_country: document.issuing_country.clone(),
             issue_date: document.issue_date.clone(),
             expiry_date: document.expiry_date.clone(),
@@ -191,7 +197,9 @@ impl Zeroize for PersonalDataView {
                 view.full_name.zeroize();
                 view.birth_date.zeroize();
                 view.email.zeroize();
-                view.phone.zeroize();
+                view.mobile_phone.zeroize();
+                view.home_phone.zeroize();
+                view.work_phone.zeroize();
             }
             Self::Address(view) => {
                 view.label.zeroize();
@@ -205,6 +213,7 @@ impl Zeroize for PersonalDataView {
             Self::IdentityDocument(view) => {
                 view.number.zeroize();
                 view.masked_number.zeroize();
+                view.issuer.zeroize();
                 view.issuing_country.zeroize();
                 view.issue_date.zeroize();
                 view.expiry_date.zeroize();
@@ -261,6 +270,7 @@ mod tests {
         let value = SecretValue::IdentityDocument(IdentityDocumentSecret::from_fields(
             IdentityDocumentFields {
                 kind: IdentityDocumentKind::DriversLicense,
+                issuer: "",
                 number: "D1234567",
                 issuing_country: "US",
                 issue_date: "",
@@ -276,6 +286,7 @@ mod tests {
                 "documentKind": "drivers-license",
                 "number": "D1234567",
                 "maskedNumber": "•••• 4567",
+                "issuer": "",
                 "issuingCountry": "US",
                 "issueDate": "",
                 "expiryDate": "2031-05-01",

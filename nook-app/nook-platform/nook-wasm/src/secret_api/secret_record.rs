@@ -381,9 +381,10 @@ mod personal_data_wasm_tests {
         let fields = NookSecretFormFields::identity_document(&dto(&serde_json::json!({
             "kind": "passport",
             "number": " X1234567 ",
+            "issuer": "HM Passport Office",
             "issuingCountry": "GB",
             "issueDate": "2020-01-15",
-            "expiryDate": "2030-01-14",
+            "expiryDate": "2030-01",
             "nameAsPrinted": "ADA LOVELACE",
         }))?)?;
         let record = decoded(&build_secret_yaml(&fields)?, SecretType::IdentityDocument)?;
@@ -408,9 +409,10 @@ mod personal_data_wasm_tests {
                 "documentKind": "passport",
                 "number": "X1234567",
                 "maskedNumber": "•••• 4567",
+                "issuer": "HM Passport Office",
                 "issuingCountry": "GB",
                 "issueDate": "2020-01-15",
-                "expiryDate": "2030-01-14",
+                "expiryDate": "2030-01",
                 "nameAsPrinted": "ADA LOVELACE",
             })
         );
@@ -494,7 +496,8 @@ mod personal_data_wasm_tests {
     fn person_and_address_forms_validate_and_expose_typed_detail_views() -> Result<(), JsError> {
         let person = NookSecretFormFields::person(&dto(&serde_json::json!({
             "givenName": "Ada", "middleName": "", "familyName": "Lovelace",
-            "birthDate": "1815-12-10", "email": "ada@example.com", "phone": "",
+            "birthDate": "1815-12-10", "email": "ada@example.com",
+            "mobilePhone": "+44 20 7946 0958", "homePhone": "", "workPhone": "",
         }))?)?;
         let record = decoded(&build_secret_yaml(&person)?, SecretType::Person)?;
         assert_eq!(
@@ -507,7 +510,9 @@ mod personal_data_wasm_tests {
                 "fullName": "Ada Lovelace",
                 "birthDate": "1815-12-10",
                 "email": "ada@example.com",
-                "phone": "",
+                "mobilePhone": "+44 20 7946 0958",
+                "homePhone": "",
+                "workPhone": "",
             })
         );
 

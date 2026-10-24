@@ -20,7 +20,9 @@ pub struct PersonSecretForm {
     pub family_name: String,
     pub birth_date: String,
     pub email: String,
-    pub phone: String,
+    pub mobile_phone: String,
+    pub home_phone: String,
+    pub work_phone: String,
 }
 
 /// Unvalidated postal-address form input.
@@ -42,6 +44,7 @@ pub struct AddressSecretForm {
 pub struct IdentityDocumentSecretForm {
     pub kind: IdentityDocumentKind,
     pub number: String,
+    pub issuer: String,
     pub issuing_country: String,
     pub issue_date: String,
     pub expiry_date: String,
@@ -118,7 +121,9 @@ impl PersonSecretForm {
             family_name: &self.family_name,
             birth_date: &self.birth_date,
             email: &self.email,
-            phone: &self.phone,
+            mobile_phone: &self.mobile_phone,
+            home_phone: &self.home_phone,
+            work_phone: &self.work_phone,
         }
     }
 }
@@ -144,6 +149,7 @@ impl IdentityDocumentSecretForm {
         IdentityDocumentFields {
             kind: self.kind,
             number: &self.number,
+            issuer: &self.issuer,
             issuing_country: &self.issuing_country,
             issue_date: &self.issue_date,
             expiry_date: &self.expiry_date,
@@ -192,7 +198,9 @@ mod tests {
             family_name: "Lovelace".to_owned(),
             birth_date: "1815-12-10".to_owned(),
             email: "ada@example.com".to_owned(),
-            phone: "+44 20 7946 0958".to_owned(),
+            mobile_phone: "+44 20 7946 0958".to_owned(),
+            home_phone: String::new(),
+            work_phone: "+44 20 7946 0000".to_owned(),
         }
     }
 
@@ -212,6 +220,7 @@ mod tests {
         IdentityDocumentSecretForm {
             kind: IdentityDocumentKind::NationalId,
             number: "ID-998877".to_owned(),
+            issuer: "HM Passport Office".to_owned(),
             issuing_country: "GB".to_owned(),
             issue_date: "2021-03-01".to_owned(),
             expiry_date: "2031-03-01".to_owned(),
@@ -372,7 +381,7 @@ mod tests {
             SecretValue::from_yaml_str(SecretType::DomesticAccount, "accountHolder: Ada\n"),
             Err(SecretPayloadError::InvalidDomesticAccount(_))
         ));
-        let unknown_field = "givenName: Ada\nmiddleName: ''\nfamilyName: ''\nbirthDate: ''\nemail: ''\nphone: ''\nnickname: Countess\n";
+        let unknown_field = "givenName: Ada\nmiddleName: ''\nfamilyName: ''\nbirthDate: ''\nemail: ''\nmobilePhone: ''\nhomePhone: ''\nworkPhone: ''\nnickname: Countess\n";
         assert!(matches!(
             SecretValue::from_yaml_str(SecretType::Person, unknown_field),
             Err(SecretPayloadError::InvalidPerson(_))
@@ -393,6 +402,7 @@ mod tests {
         let form: IdentityDocumentSecretForm = serde_json::from_value(serde_json::json!({
             "kind": "drivers-license",
             "number": "D1234567",
+            "issuer": "",
             "issuingCountry": "US",
             "issueDate": "",
             "expiryDate": "",

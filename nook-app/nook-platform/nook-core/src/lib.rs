@@ -201,9 +201,10 @@ pub use passkey_authenticator::{
     PasskeyUserVerification,
 };
 pub use personal_data::{
-    AddressFields, AddressSecret, CalendarDate, CalendarDateError, DomesticAccountFields,
-    DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
-    InternationalAccountFields, InternationalAccountSecret, PersonFields, PersonSecret,
+    AddressFields, AddressSecret, CalendarDate, CalendarDateError, CalendarMonth,
+    DomesticAccountFields, DomesticAccountSecret, IdentityDocumentFields, IdentityDocumentKind,
+    IdentityDocumentSecret, InternationalAccountFields, InternationalAccountSecret, PersonFields,
+    PersonSecret,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
 pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};
