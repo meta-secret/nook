@@ -80,6 +80,9 @@ admission applies.
   never fill.
 - Full name joins the stored names. Birth day, month, and year come from the
   stored ISO date. An invalid stored birth date fails closed.
+- Phone receives the mobile phone. Without a mobile phone it receives the home
+  phone, then the work phone. A `home` or `work` contact hint does not change
+  that order.
 - Street address joins both address lines with a newline. Country code and
   country name both receive the stored country text.
 - Card expiration is `MM/YY`. Month is `MM`, year is `YYYY`, and the security
@@ -102,8 +105,8 @@ password, or one-time-code field.
   recognition, and plans for sign-up, address, and card forms.
 - Companion-core plan tests cover once-only identity-text kinds and
   fail-closed scopes.
-- `nook-core` projection tests cover derivations, group and kind rejection,
-  invalid stored dates, redacted `Debug`, and zeroization.
+- `nook-core` projection tests cover derivations, the phone order, group and
+  kind rejection, invalid stored dates, redacted `Debug`, and zeroization.
 - `nook-wasm` tests cover the typed request and response shapes and reveal only
   planned non-empty values.
 

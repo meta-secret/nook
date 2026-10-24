@@ -1424,6 +1424,50 @@ user-presence gate. Silent create/assert and automatic submit stay out of
 scope. See
 [passkey-manager.md](../architecture/passkey-manager.md).
 
+### Connect-first vault gate
+
+Accepted requirement: without a connected vault, no widget flow offers an
+action that cannot complete. One presentation decision, `WidgetVaultGate`,
+covers the workflow, enrollment, focused-field, and personal-fill widgets.
+
+- **No connected vault**
+  - The widget shows **Connect Nook to your vault**, a one-line reason,
+    **Connect vault**, and **Not now**.
+  - It offers no Sign in, fill, save, passkey, or authenticator action.
+- **Locked vault**
+  - The widget shows **Unlock Nook to continue**. Unlock opens the side panel.
+- **No vault needed**
+  - Take over and Generate password stay available.
+
+Connect vault reuses the existing pairing path:
+
+1. The widget asks the service worker to open the authentication tab with the
+   pair intent. The worker connects nothing itself; approval follows
+   [first run and approval](#first-run-and-approval).
+2. The worker chooses a normal window.
+   - A tab in a normal window uses its own window.
+   - A tab in a `popup` window, such as a provider's sign-in popup, uses the
+     opener's window. Otherwise it uses the last focused normal window, else a
+     new normal window. The popup never receives a tab.
+   - If no window opens, the widget shows the failure as an alert.
+3. After the approved pairing refreshes the page widgets, the worker focuses
+   the originating tab and its window once.
+4. The widget renders as connected and offers the original action.
+   - A widget started from a focused field offers that field's action again
+     without another focus.
+   - The action is offered, never run automatically.
+
+The worker keeps the originating tab in memory only. A worker restart or an
+expired connect leaves nothing to refocus.
+
+### Personal picker document
+
+The personal fill record chooser is the extension-origin
+`personal-picker/index.html` document. It accepts one initialization message
+from its parent window. It reads its strings through `chrome.i18n`. The Chrome
+locale build emits them from the shared catalog's `extension.personal_picker`
+section. The page therefore loads no WASM.
+
 ## Device-Key And Storage Boundary
 
 ### Paired-vault identity label

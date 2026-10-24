@@ -104,9 +104,9 @@ flowchart TD
    - The user can select an unencrypted LastPass generic CSV export.
    - Rust validates the canonical CSV columns.
    - Rust maps normal rows to Nook logins.
-   - Rust maps `Address`, `Passport`, `Driver's License`, and `Bank Account`
-     typed `http://sn` notes to personal data records, and `Credit Card`
-     notes to credit cards.
+   - Rust maps `Address`, `Passport`, `Driver's License`, `Social Security`,
+     `Membership`, and `Bank Account` typed `http://sn` notes to personal data
+     records, and `Credit Card` notes to credit cards.
    - Rust maps other `http://sn` rows to Nook secure notes.
    - Rust preserves grouping, favorite, and optional TOTP metadata in encrypted notes.
    - The user can select an unencrypted KeePassXC CSV export.
@@ -123,7 +123,7 @@ flowchart TD
    - Rust maps Login and Password items to Nook logins.
    - Rust maps Secure Note items to Nook secure notes.
    - Rust maps Credit Card items to Nook credit cards.
-   - Rust maps Identity, Passport, Driver License, and Bank Account items to personal data records.
+   - Rust maps Identity, Passport, Driver License, Social Security Number, Membership, and Bank Account items to personal data records.
    - Attachments, passkeys, SSH keys, and other unsupported categories are skipped.
    - The user can alternatively select an unencrypted Apple Passwords CSV export or a Safari browsing-data ZIP that contains a passwords CSV.
    - Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns.
