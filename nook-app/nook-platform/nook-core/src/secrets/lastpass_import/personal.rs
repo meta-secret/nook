@@ -1,5 +1,5 @@
 //! Typed `LastPass` secure notes: Address, Bank Account, Driver's License,
-//! Passport, and Credit Card.
+//! Passport, Social Security, Membership, and Credit Card.
 //!
 //! `LastPass` exports these as secure notes (`url` = `http://sn`) whose `extra`
 //! text starts with `NoteType:<type>` followed by `Key:Value` lines; `Notes:`
@@ -86,6 +86,14 @@ impl LastPassTypedNote {
         .iso()
     }
 
+    /// Document dates keep month precision when the day is blank.
+    fn document_date(&self, key: &str) -> String {
+        MonthNameDate {
+            raw: self.field(key),
+        }
+        .document_iso()
+    }
+
     /// Convert a supported note type; other types keep secure-note handling.
     pub(super) fn disposition(&self, name: &str) -> Option<ImportItemDisposition> {
         match self.note_type.as_str() {
@@ -93,27 +101,35 @@ impl LastPassTypedNote {
             "Bank Account" => Some(self.bank_account()),
             "Driver's License" => Some(self.document(IdentityDocumentKind::DriversLicense)),
             "Passport" => Some(self.document(IdentityDocumentKind::Passport)),
+            "Social Security" => Some(self.social_security()),
+            "Membership" => Some(self.membership()),
             "Credit Card" => Some(self.credit_card(name)),
             _ => None,
         }
     }
 
-    /// The phone field an address imports: mobile, then main, then evening.
-    fn chosen_phone(&self) -> Option<&'static str> {
-        ["mobile phone", "phone", "evening phone"]
-            .into_iter()
-            .find(|key| !self.phone(key).is_empty())
+    /// The field filling the mobile phone: `Mobile Phone`, or the unlabelled
+    /// `Phone` when no mobile phone is stored. Beside a mobile phone the
+    /// unlabelled phone stays in the kept secure note.
+    fn mobile_phone_key(&self) -> &'static str {
+        if self.phone("mobile phone").is_empty() {
+            "phone"
+        } else {
+            "mobile phone"
+        }
     }
 
     /// Fields this note's typed records consume.
     fn mapped_keys(&self) -> Vec<&'static str> {
         match self.note_type.as_str() {
-            "Address" => [
+            "Address" => vec![
                 "first name",
                 "middle name",
                 "last name",
                 "birthday",
                 "email address",
+                self.mobile_phone_key(),
+                "evening phone",
                 "address 1",
                 "address 2",
                 "address 3",
@@ -121,20 +137,41 @@ impl LastPassTypedNote {
                 "state",
                 "zip / postal code",
                 "country",
-            ]
-            .into_iter()
-            .chain(self.chosen_phone())
-            .collect(),
-            "Bank Account" => match self.field("iban number") {
-                "" => vec!["bank name", "account number", "routing number"],
-                _ => vec!["bank name", "iban number", "swift code"],
-            },
-            "Driver's License" | "Passport" => vec![
+            ],
+            "Bank Account" => {
+                let mut keys = vec!["bank name"];
+                if !self.field("iban number").is_empty() {
+                    keys.extend(["iban number", "swift code"]);
+                }
+                if !self.field("account number").is_empty()
+                    && !self.field("routing number").is_empty()
+                {
+                    keys.extend(["account number", "routing number"]);
+                }
+                keys
+            }
+            "Driver's License" => vec![
                 "number",
                 "country",
                 "issued date",
                 "expiration date",
                 "name",
+            ],
+            "Passport" => vec![
+                "number",
+                "country",
+                "issuing authority",
+                "issued date",
+                "expiration date",
+                "name",
+            ],
+            "Social Security" => vec!["number", "name"],
+            "Membership" => vec![
+                "organization",
+                "membership number",
+                "member name",
+                "start date",
+                "expiration date",
             ],
             "Credit Card" => vec![
                 "name on card",
@@ -162,10 +199,6 @@ impl LastPassTypedNote {
     }
 
     fn address(&self, name: &str) -> ImportItemDisposition {
-        let phone = self
-            .chosen_phone()
-            .map(|key| self.phone(key))
-            .unwrap_or_default();
         let address_line2 = PresentParts {
             parts: &[self.field("address 2"), self.field("address 3")],
             separator: ", ",
@@ -179,7 +212,11 @@ impl LastPassTypedNote {
                     family_name: self.field("last name"),
                     birth_date: &self.date("birthday"),
                     email: self.field("email address"),
-                    phone: &phone,
+                    mobile_phone: &self.phone(self.mobile_phone_key()),
+                    // The evening phone is the home phone; LastPass has no
+                    // work phone field.
+                    home_phone: &self.phone("evening phone"),
+                    work_phone: "",
                 }),
                 PersonalImportPart::address(AddressFields {
                     label: name,
@@ -197,14 +234,14 @@ impl LastPassTypedNote {
 
     fn bank_account(&self) -> ImportItemDisposition {
         PersonalImportItem {
-            parts: vec![PersonalImportPart::bank(&BankImportFields {
+            parts: PersonalImportPart::banks(&BankImportFields {
                 account_holder: "",
                 bank_name: self.field("bank name"),
                 iban: self.field("iban number"),
                 swift_bic: self.field("swift code"),
                 account_number: self.field("account number"),
                 routing_number: self.field("routing number"),
-            })],
+            }),
         }
         .disposition()
     }
@@ -214,10 +251,42 @@ impl LastPassTypedNote {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind,
                 number: self.field("number"),
+                issuer: self.field("issuing authority"),
                 issuing_country: self.field("country"),
-                issue_date: &self.date("issued date"),
-                expiry_date: &self.date("expiration date"),
+                issue_date: &self.document_date("issued date"),
+                expiry_date: &self.document_date("expiration date"),
                 name_as_printed: self.field("name"),
+            })],
+        }
+        .disposition()
+    }
+
+    fn social_security(&self) -> ImportItemDisposition {
+        PersonalImportItem {
+            parts: vec![PersonalImportPart::document(IdentityDocumentFields {
+                kind: IdentityDocumentKind::SocialSecurity,
+                number: self.field("number"),
+                issuer: "",
+                issuing_country: "",
+                issue_date: "",
+                expiry_date: "",
+                name_as_printed: self.field("name"),
+            })],
+        }
+        .disposition()
+    }
+
+    /// The membership start date is its issue date.
+    fn membership(&self) -> ImportItemDisposition {
+        PersonalImportItem {
+            parts: vec![PersonalImportPart::document(IdentityDocumentFields {
+                kind: IdentityDocumentKind::Membership,
+                number: self.field("membership number"),
+                issuer: self.field("organization"),
+                issuing_country: "",
+                issue_date: &self.document_date("start date"),
+                expiry_date: &self.document_date("expiration date"),
+                name_as_printed: self.field("member name"),
             })],
         }
         .disposition()
@@ -285,7 +354,8 @@ mod tests {
             anyhow::bail!("expected person and address only");
         };
         assert_eq!(person.birth_date, "1815-12-10");
-        assert_eq!(person.phone, "2079460958");
+        assert_eq!(person.mobile_phone, "2079460958");
+        assert!(person.home_phone.is_empty());
         assert_eq!(address.label, "Home");
         assert_eq!(address.city, "London");
         Ok(())
@@ -306,7 +376,8 @@ mod tests {
         else {
             anyhow::bail!("expected person, address and the original note");
         };
-        assert_eq!(person.phone, "7700900000");
+        assert_eq!(person.mobile_phone, "7700900000");
+        assert_eq!(person.home_phone, "2079460958");
         assert_eq!(note.title, "Home");
         assert!(note.note.starts_with(extra));
         assert!(note.note.contains("## LastPass\n- group: Personal"));
@@ -358,6 +429,83 @@ mod tests {
     }
 
     #[test]
+    fn social_security_membership_and_month_dates_map_to_documents() -> anyhow::Result<()> {
+        let text = csv(&[
+            (
+                "SSN",
+                "NoteType:Social Security\nName:Ada Lovelace\nNumber:123-45-6789\nNotes:",
+            ),
+            (
+                "Society",
+                "NoteType:Membership\nOrganization:Analytical Society\nMembership Number:M-0042\nMember Name:Ada Lovelace\nStart Date:May,,2019\nExpiration Date:May,31,2031\nWebsite:\nTelephone:\nPassword:\nNotes:",
+            ),
+            (
+                "Passport",
+                "NoteType:Passport\nName:ADA LOVELACE\nCountry:GB\nNumber:X1234567\nIssuing Authority:HM Passport Office\nIssued Date:January,15,2020\nExpiration Date:January,,2030\nNotes:",
+            ),
+        ]);
+        let plan = LastPassCsvInput::new(&text).plan()?;
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        let [
+            SecretValue::IdentityDocument(ssn),
+            SecretValue::IdentityDocument(membership),
+            SecretValue::IdentityDocument(passport),
+        ] = plan.items.as_slice()
+        else {
+            anyhow::bail!("expected three documents and no kept notes");
+        };
+        assert_eq!(ssn.kind, IdentityDocumentKind::SocialSecurity);
+        assert_eq!(ssn.number, "123456789");
+        assert_eq!(membership.kind, IdentityDocumentKind::Membership);
+        assert_eq!(membership.issuer, "Analytical Society");
+        assert_eq!(membership.issue_date, "2019-05");
+        assert_eq!(membership.expiry_date, "2031-05-31");
+        assert_eq!(passport.issuer, "HM Passport Office");
+        assert_eq!(passport.expiry_date, "2030-01");
+        Ok(())
+    }
+
+    #[test]
+    fn labelled_phones_fill_mobile_and_home_and_a_second_unlabelled_phone_is_kept()
+    -> anyhow::Result<()> {
+        let text = csv(&[(
+            "Home",
+            "NoteType:Address\nFirst Name:Ada\nAddress 1:1 Main St\nPhone:{\"num\":\"5550100\",\"ext\":\"\",\"cc3l\":\"USA\"}\nMobile Phone:{\"num\":\"5550199\",\"ext\":\"\",\"cc3l\":\"USA\"}\nEvening Phone:{\"num\":\"5550142\",\"ext\":\"\",\"cc3l\":\"USA\"}\nNotes:",
+        )]);
+        let plan = LastPassCsvInput::new(&text).plan()?;
+        let [
+            SecretValue::Person(person),
+            SecretValue::Address(_),
+            SecretValue::SecureNote(note),
+        ] = plan.items.as_slice()
+        else {
+            anyhow::bail!("expected person, address and the kept note");
+        };
+        assert_eq!(person.mobile_phone, "5550199");
+        assert_eq!(person.home_phone, "5550142");
+        assert!(person.work_phone.is_empty());
+        assert!(note.note.contains("5550100"));
+        Ok(())
+    }
+
+    #[test]
+    fn bank_notes_with_iban_and_us_routing_produce_both_accounts() -> anyhow::Result<()> {
+        let text = csv(&[(
+            "Transatlantic",
+            "NoteType:Bank Account\nBank Name:Transatlantic Bank\nRouting Number:021000021\nAccount Number:000123456789\nSWIFT Code:NWBKGB2L\nIBAN Number:GB82WEST12345698765432\nNotes:",
+        )]);
+        let plan = LastPassCsvInput::new(&text).plan()?;
+        assert!(matches!(
+            plan.items.as_slice(),
+            [
+                SecretValue::InternationalAccount(_),
+                SecretValue::DomesticAccount(_)
+            ]
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn license_state_stays_in_the_note_instead_of_the_issuing_country() -> anyhow::Result<()> {
         let text = csv(&[(
             "License",
@@ -388,17 +536,21 @@ mod tests {
                 "NoteType:Passport\nNumber:X1\nExpiration Date:Smarch,1,2030\nNotes:",
             ),
             (
-                "SSN",
+                "Unissued SSN",
                 "NoteType:Social Security\nName:Ada\nNumber:000-00-0000\nNotes:",
+            ),
+            (
+                "Insurance",
+                "NoteType:Insurance\nCompany:Example Mutual\nPolicy Number:P-1\nNotes:",
             ),
         ]);
         let plan = LastPassCsvInput::new(&text).plan()?;
-        assert_eq!(usize::from(plan.source_count), 3);
-        assert_eq!(usize::from(plan.skipped_unsupported), 2);
+        assert_eq!(usize::from(plan.source_count), 4);
+        assert_eq!(usize::from(plan.skipped_unsupported), 3);
         let [SecretValue::SecureNote(note)] = plan.items.as_slice() else {
-            anyhow::bail!("expected only the social security note");
+            anyhow::bail!("expected only the insurance note");
         };
-        assert_eq!(note.title, "SSN");
+        assert_eq!(note.title, "Insurance");
         Ok(())
     }
 }

@@ -34,6 +34,8 @@ pub struct AddressListItem {
 pub struct IdentityDocumentListItem {
     pub kind: IdentityDocumentKind,
     pub name_as_printed: String,
+    /// Issuing organization (a public name, not a secret), or empty.
+    pub issuer: String,
     pub last4: String,
     pub expiry_date: String,
 }
@@ -143,6 +145,7 @@ impl IdentityDocumentSecret {
         IdentityDocumentListItem {
             kind: self.kind,
             name_as_printed: self.name_as_printed.clone(),
+            issuer: self.issuer.clone(),
             last4: self.last4(),
             expiry_date: self.expiry_date.clone(),
         }
@@ -236,10 +239,24 @@ impl AddressListItem {
 }
 
 impl IdentityDocumentListItem {
+    /// A membership is known by its organization; other documents by the
+    /// holder's printed name, then their issuer.
+    fn title_candidates(&self) -> [&str; 2] {
+        match self.kind {
+            IdentityDocumentKind::Membership => [&self.issuer, &self.name_as_printed],
+            IdentityDocumentKind::Passport
+            | IdentityDocumentKind::NationalId
+            | IdentityDocumentKind::DriversLicense
+            | IdentityDocumentKind::SocialSecurity
+            | IdentityDocumentKind::TaxId => [&self.name_as_printed, &self.issuer],
+        }
+    }
+
     #[must_use]
     pub fn display_title(&self) -> String {
+        let [first, second] = self.title_candidates();
         FirstPresent {
-            candidates: &[&self.name_as_printed, &self.summary()],
+            candidates: &[first, second, &self.summary()],
         }
         .text()
     }
@@ -252,13 +269,19 @@ impl IdentityDocumentListItem {
 
     #[must_use]
     pub(crate) fn group_key(&self) -> String {
-        SecretTitle::new(&self.name_as_printed, "Unnamed Document").group_key()
+        let [first, second] = self.title_candidates();
+        let title = FirstPresent {
+            candidates: &[first, second],
+        }
+        .text();
+        SecretTitle::new(&title, "Unnamed Document").group_key()
     }
 
-    pub(crate) fn search_fields(&self) -> [String; 4] {
+    pub(crate) fn search_fields(&self) -> [String; 5] {
         [
             self.kind.as_str().to_owned(),
             self.name_as_printed.clone(),
+            self.issuer.clone(),
             self.last4.clone(),
             self.expiry_date.clone(),
         ]
@@ -397,6 +420,7 @@ mod tests {
         Ok(record(SecretValue::IdentityDocument(
             IdentityDocumentSecret::from_fields(IdentityDocumentFields {
                 kind: IdentityDocumentKind::Passport,
+                issuer: "",
                 number: "X1234567",
                 issuing_country: "GB",
                 issue_date: "2020-01-15",
@@ -437,7 +461,9 @@ mod tests {
                 family_name: "Lovelace",
                 birth_date: "1815-12-10",
                 email: "ada@example.com",
-                phone: "+44 20 7946 0958",
+                mobile_phone: "+44 20 7946 0958",
+                home_phone: "",
+                work_phone: "",
             },
         )?));
         let item = record.list_item();
@@ -501,6 +527,7 @@ mod tests {
             SecretListItemData::IdentityDocument(IdentityDocumentListItem {
                 kind: IdentityDocumentKind::Passport,
                 name_as_printed: "ADA LOVELACE".to_owned(),
+                issuer: String::new(),
                 last4: "4567".to_owned(),
                 expiry_date: "2030-01-14".to_owned(),
             })
@@ -589,11 +616,31 @@ mod tests {
         let document = IdentityDocumentListItem {
             kind: IdentityDocumentKind::NationalId,
             name_as_printed: String::new(),
+            issuer: String::new(),
             last4: String::new(),
             expiry_date: String::new(),
         };
         assert_eq!(document.display_title(), "••••");
         assert_eq!(document.group_key(), "Unnamed Document");
+        let membership = IdentityDocumentListItem {
+            kind: IdentityDocumentKind::Membership,
+            name_as_printed: "Ada Lovelace".to_owned(),
+            issuer: "Analytical Society".to_owned(),
+            last4: "0042".to_owned(),
+            expiry_date: "2031-05".to_owned(),
+        };
+        assert_eq!(membership.display_title(), "Analytical Society");
+        assert_eq!(membership.group_key(), "Analytical Society");
+        assert_eq!(membership.summary(), "•••• 0042");
+        let ssn = IdentityDocumentListItem {
+            kind: IdentityDocumentKind::SocialSecurity,
+            name_as_printed: String::new(),
+            issuer: "Social Security Administration".to_owned(),
+            last4: "6789".to_owned(),
+            expiry_date: String::new(),
+        };
+        assert_eq!(ssn.display_title(), "Social Security Administration");
+        assert_eq!(ssn.summary(), "•••• 6789");
     }
 
     #[test]

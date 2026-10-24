@@ -230,7 +230,7 @@ impl GroupRecord<'_> {
             PersonalFieldKind::BirthMonth => birth_part(CalendarDate::month_text),
             PersonalFieldKind::BirthYear => birth_part(CalendarDate::year_text),
             PersonalFieldKind::Email => Ok(person.email.clone()),
-            PersonalFieldKind::Phone => Ok(person.phone.clone()),
+            PersonalFieldKind::Phone => Ok(person.preferred_phone().to_owned()),
             PersonalFieldKind::StreetAddress
             | PersonalFieldKind::AddressLine1
             | PersonalFieldKind::AddressLine2
@@ -351,7 +351,9 @@ mod tests {
                 family_name: "Lovelace",
                 birth_date: "1815-12-10",
                 email: "ada@example.com",
-                phone: "+44 20 7946 0958",
+                mobile_phone: "+44 20 7946 0958",
+                home_phone: "",
+                work_phone: "",
             },
         )?)))
     }
@@ -474,6 +476,30 @@ mod tests {
                 (Phone, "+44 20 7946 0958"),
             ],
         );
+        Ok(())
+    }
+
+    #[test]
+    fn phone_fills_mobile_then_home_then_work() -> anyhow::Result<()> {
+        for (mobile_phone, home_phone, work_phone, expected) in [
+            ("+1 555 0100", "+1 555 0101", "+1 555 0102", "+1 555 0100"),
+            ("", "+1 555 0101", "+1 555 0102", "+1 555 0101"),
+            ("", "", "+1 555 0102", "+1 555 0102"),
+        ] {
+            let mut record = person()?;
+            if let SecretValue::Person(person) = &mut record.data {
+                person.mobile_phone = mobile_phone.to_owned();
+                person.home_phone = home_phone.to_owned();
+                person.work_phone = work_phone.to_owned();
+            }
+            let filled = Reveal {
+                record,
+                group: PersonalFieldGroup::Person,
+                kinds: &[PersonalFieldKind::Phone],
+            }
+            .filled()?;
+            assert_filled(&filled, &[(PersonalFieldKind::Phone, expected)]);
+        }
         Ok(())
     }
 
@@ -603,7 +629,9 @@ mod tests {
                 family_name: "",
                 birth_date: "",
                 email: "",
-                phone: "",
+                mobile_phone: "",
+                home_phone: "",
+                work_phone: "",
             },
         )?));
         let filled = Reveal {
@@ -627,6 +655,7 @@ mod tests {
         let document = record(SecretValue::IdentityDocument(
             IdentityDocumentSecret::from_fields(IdentityDocumentFields {
                 kind: IdentityDocumentKind::Passport,
+                issuer: "",
                 number: "X1234567",
                 issuing_country: "GB",
                 issue_date: "",

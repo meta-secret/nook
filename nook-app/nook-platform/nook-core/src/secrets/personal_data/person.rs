@@ -17,7 +17,9 @@ pub struct PersonSecret {
     /// ISO `YYYY-MM-DD`, or empty.
     pub birth_date: String,
     pub email: String,
-    pub phone: String,
+    pub mobile_phone: String,
+    pub home_phone: String,
+    pub work_phone: String,
 }
 
 impl fmt::Debug for PersonSecret {
@@ -36,7 +38,9 @@ pub struct PersonFields<'a> {
     pub family_name: &'a str,
     pub birth_date: &'a str,
     pub email: &'a str,
-    pub phone: &'a str,
+    pub mobile_phone: &'a str,
+    pub home_phone: &'a str,
+    pub work_phone: &'a str,
 }
 
 /// Phone punctuation accepted between digits.
@@ -51,7 +55,9 @@ impl PersonSecret {
             family_name,
             birth_date,
             email,
-            phone,
+            mobile_phone,
+            home_phone,
+            work_phone,
         } = request;
         let given_name = PersonalText::parse(given_name)?;
         let family_name = PersonalText::parse(family_name)?;
@@ -69,7 +75,9 @@ impl PersonSecret {
                 .map_err(|_| ValidationError::PersonBirthDateInvalid)?
                 .into_string(),
             email: PersonSecret::normalize_email(email)?,
-            phone: PersonSecret::normalize_phone(phone)?,
+            mobile_phone: PersonSecret::normalize_phone(mobile_phone)?,
+            home_phone: PersonSecret::normalize_phone(home_phone)?,
+            work_phone: PersonSecret::normalize_phone(work_phone)?,
         })
     }
 
@@ -87,8 +95,20 @@ impl PersonSecret {
             family_name: &self.family_name,
             birth_date: &self.birth_date,
             email: &self.email,
-            phone: &self.phone,
+            mobile_phone: &self.mobile_phone,
+            home_phone: &self.home_phone,
+            work_phone: &self.work_phone,
         }
+    }
+
+    /// The phone a form's single phone field receives: mobile, then home,
+    /// then work.
+    #[must_use]
+    pub fn preferred_phone(&self) -> &str {
+        [&self.mobile_phone, &self.home_phone, &self.work_phone]
+            .into_iter()
+            .find(|phone| !phone.is_empty())
+            .map_or("", String::as_str)
     }
 
     /// Given, middle, and family names joined by single spaces.
@@ -111,7 +131,9 @@ impl PersonSecret {
         self.family_name.zeroize();
         self.birth_date.zeroize();
         self.email.zeroize();
-        self.phone.zeroize();
+        self.mobile_phone.zeroize();
+        self.home_phone.zeroize();
+        self.work_phone.zeroize();
     }
 }
 
@@ -176,7 +198,9 @@ mod tests {
             family_name: "Lovelace ",
             birth_date: " 1815-12-10 ",
             email: " ada@example.com ",
-            phone: "+44 (20) 7946-0958",
+            mobile_phone: "+44 (20) 7946-0958",
+            home_phone: " 020 7946 0000 ",
+            work_phone: "",
         }
     }
 
@@ -187,7 +211,9 @@ mod tests {
         assert_eq!(person.family_name, "Lovelace");
         assert_eq!(person.birth_date, "1815-12-10");
         assert_eq!(person.email, "ada@example.com");
-        assert_eq!(person.phone, "+44 (20) 7946-0958");
+        assert_eq!(person.mobile_phone, "+44 (20) 7946-0958");
+        assert_eq!(person.home_phone, "020 7946 0000");
+        assert!(person.work_phone.is_empty());
         assert_eq!(person.full_name(), "Ada Augusta Lovelace");
         assert_eq!(person.clone().normalize()?, person);
         Ok(())
@@ -220,11 +246,32 @@ mod tests {
             family_name: "",
             birth_date: "",
             email: "",
-            phone: "",
+            mobile_phone: "",
+            home_phone: "",
+            work_phone: "",
         })?;
         assert!(person.birth_date.is_empty());
         assert!(person.email.is_empty());
-        assert!(person.phone.is_empty());
+        assert!(person.preferred_phone().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn preferred_phone_takes_mobile_then_home_then_work() -> anyhow::Result<()> {
+        for (mobile_phone, home_phone, work_phone, expected) in [
+            ("+1 555 0100", "+1 555 0101", "+1 555 0102", "+1 555 0100"),
+            ("", "+1 555 0101", "+1 555 0102", "+1 555 0101"),
+            ("", "", "+1 555 0102", "+1 555 0102"),
+            ("", "", "", ""),
+        ] {
+            let person = PersonSecret::from_fields(PersonFields {
+                mobile_phone,
+                home_phone,
+                work_phone,
+                ..fields()
+            })?;
+            assert_eq!(person.preferred_phone(), expected);
+        }
         Ok(())
     }
 
@@ -256,11 +303,26 @@ mod tests {
             );
         }
         for phone in ["call me", "+()", "555-0100 ext. 7"] {
-            assert_eq!(
-                PersonSecret::from_fields(PersonFields { phone, ..fields() }),
-                Err(ValidationError::PersonPhoneInvalid),
-                "{phone}"
-            );
+            for fields in [
+                PersonFields {
+                    mobile_phone: phone,
+                    ..fields()
+                },
+                PersonFields {
+                    home_phone: phone,
+                    ..fields()
+                },
+                PersonFields {
+                    work_phone: phone,
+                    ..fields()
+                },
+            ] {
+                assert_eq!(
+                    PersonSecret::from_fields(fields),
+                    Err(ValidationError::PersonPhoneInvalid),
+                    "{phone}"
+                );
+            }
         }
         assert_eq!(
             PersonSecret::from_fields(PersonFields {
@@ -282,7 +344,9 @@ mod tests {
         assert!(person.family_name.is_empty());
         assert!(person.birth_date.is_empty());
         assert!(person.email.is_empty());
-        assert!(person.phone.is_empty());
+        assert!(person.mobile_phone.is_empty());
+        assert!(person.home_phone.is_empty());
+        assert!(person.work_phone.is_empty());
         Ok(())
     }
 }

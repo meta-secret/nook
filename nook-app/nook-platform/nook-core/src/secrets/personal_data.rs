@@ -16,7 +16,7 @@ mod personal_text;
 mod sensitive_number;
 
 pub use address::{AddressFields, AddressSecret};
-pub use calendar_date::{CalendarDate, CalendarDateError};
+pub use calendar_date::{CalendarDate, CalendarDateError, CalendarMonth};
 pub use domestic_account::{DomesticAccountFields, DomesticAccountSecret};
 pub use identity_document::{IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret};
 pub use international_account::{InternationalAccountFields, InternationalAccountSecret};

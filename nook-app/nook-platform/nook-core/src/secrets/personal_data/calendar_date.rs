@@ -1,5 +1,7 @@
-//! ISO 8601 calendar dates (`YYYY-MM-DD`) used by personal-data payloads.
+//! ISO 8601 calendar dates (`YYYY-MM-DD`) and months (`YYYY-MM`) used by
+//! personal-data payloads.
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -9,6 +11,13 @@ pub struct CalendarDate {
     year: u16,
     month: u8,
     day: u8,
+}
+
+/// A calendar month written as `YYYY-MM`.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CalendarMonth {
+    year: u16,
+    month: u8,
 }
 
 /// The text is not an ISO `YYYY-MM-DD` date that exists in the calendar.
@@ -59,6 +68,13 @@ impl CalendarDate {
     pub fn day_text(&self) -> String {
         let Self { day, .. } = self;
         format!("{day:02}")
+    }
+
+    /// The month containing this date.
+    #[must_use]
+    pub fn calendar_month(&self) -> CalendarMonth {
+        let Self { year, month, .. } = *self;
+        CalendarMonth { year, month }
     }
 
     /// Parse a strict ISO `YYYY-MM-DD` date and verify that the day exists.
@@ -124,6 +140,77 @@ impl DateEntry {
     }
 }
 
+impl CalendarMonth {
+    /// Parse a strict ISO `YYYY-MM` month.
+    pub fn parse(raw: &str) -> Result<Self, CalendarDateError> {
+        let mut parts = raw.split('-');
+        let (Some(year), Some(month), None) = (parts.next(), parts.next(), parts.next()) else {
+            return Err(CalendarDateError);
+        };
+        let year = CalendarDate::component::<u16>(year, 4)?;
+        let month = CalendarDate::component::<u8>(month, 2)?;
+        match (year, month) {
+            (0, _) | (_, 0 | 13..) => Err(CalendarDateError),
+            _ => Ok(Self { year, month }),
+        }
+    }
+}
+
+impl fmt::Display for CalendarMonth {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self { year, month } = self;
+        write!(formatter, "{year:04}-{month:02}")
+    }
+}
+
+impl fmt::Debug for CalendarMonth {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("CalendarMonth([REDACTED])")
+    }
+}
+
+/// An optional document date kept at the precision its source recorded:
+/// a full day (`YYYY-MM-DD`) or only a month (`YYYY-MM`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum DocumentDateEntry {
+    Unset,
+    Day(CalendarDate),
+    Month(CalendarMonth),
+}
+
+impl DocumentDateEntry {
+    /// Trim the field; blank means unset, otherwise a real day or month.
+    pub(super) fn parse(raw: &str) -> Result<Self, CalendarDateError> {
+        let text = raw.trim();
+        match text.matches('-').count() {
+            _ if text.is_empty() => Ok(Self::Unset),
+            1 => CalendarMonth::parse(text).map(Self::Month),
+            _ => CalendarDate::parse(text).map(Self::Day),
+        }
+    }
+
+    /// Canonical stored text at the recorded precision.
+    pub(super) fn into_string(self) -> String {
+        match self {
+            Self::Unset => String::new(),
+            Self::Day(date) => date.to_string(),
+            Self::Month(month) => month.to_string(),
+        }
+    }
+
+    /// Chronological order of two set dates. A month-only side compares by
+    /// month, so `2030-01` neither precedes nor follows `2030-01-15`.
+    pub(super) fn chronology(self, other: Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::Unset, _) | (_, Self::Unset) => None,
+            (Self::Day(left), Self::Day(right)) => Some(left.cmp(&right)),
+            (Self::Day(left), Self::Month(right)) => Some(left.calendar_month().cmp(&right)),
+            (Self::Month(left), Self::Day(right)) => Some(left.cmp(&right.calendar_month())),
+            (Self::Month(left), Self::Month(right)) => Some(left.cmp(&right)),
+        }
+    }
+}
+
 impl fmt::Display for CalendarDate {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self { year, month, day } = self;
@@ -139,7 +226,60 @@ impl fmt::Debug for CalendarDate {
 
 #[cfg(test)]
 mod tests {
-    use super::{CalendarDate, CalendarDateError, DateEntry};
+    use super::{CalendarDate, CalendarDateError, CalendarMonth, DateEntry, DocumentDateEntry};
+    use std::cmp::Ordering;
+
+    #[test]
+    fn months_parse_strictly_and_keep_their_precision() -> anyhow::Result<()> {
+        assert_eq!(CalendarMonth::parse("2030-12")?.to_string(), "2030-12");
+        for raw in [
+            "2030-13",
+            "2030-00",
+            "0000-01",
+            "30-12",
+            "2030-1",
+            "2030/12",
+            "2030-12-01",
+        ] {
+            assert_eq!(CalendarMonth::parse(raw), Err(CalendarDateError), "{raw}");
+        }
+        assert_eq!(
+            DocumentDateEntry::parse(" 2030-12 ")?.into_string(),
+            "2030-12"
+        );
+        assert_eq!(
+            DocumentDateEntry::parse("2030-12-31")?.into_string(),
+            "2030-12-31"
+        );
+        assert_eq!(DocumentDateEntry::parse("")?.into_string(), "");
+        for raw in ["2030", "30-12", "2030-02-30", "12/2030", "2030-12-"] {
+            assert!(DocumentDateEntry::parse(raw).is_err(), "{raw}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn document_dates_compare_by_month_when_either_side_is_month_only() -> anyhow::Result<()> {
+        let day = |raw| DocumentDateEntry::parse(raw);
+        assert_eq!(
+            day("2030-01-15")?.chronology(day("2030-01")?),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            day("2030-01")?.chronology(day("2030-02-01")?),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            day("2030-03")?.chronology(day("2030-02")?),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            day("2030-01-15")?.chronology(day("2030-01-14")?),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(day("")?.chronology(day("2030-01")?), None);
+        Ok(())
+    }
 
     #[test]
     fn accepts_real_dates_including_leap_days() -> anyhow::Result<()> {

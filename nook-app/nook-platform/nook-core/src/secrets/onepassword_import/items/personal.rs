@@ -1,9 +1,11 @@
-//! 1Password Identity, Passport, Driver License, and Bank Account items.
+//! 1Password Identity, Passport, Driver License, Bank Account, Social
+//! Security Number, and Membership items.
 //!
 //! 1PUX stores these as typed section fields addressed by stable ids
-//! (`firstname`, `number`, `iban`, …). Dates are Unix seconds; addresses are
-//! structured objects. Fields without a Nook equivalent (sex, height, class,
-//! occupation, PIN, account type, …) are not imported.
+//! (`firstname`, `number`, `iban`, …). Dates are Unix seconds or
+//! `YYYYMM` month values; addresses are structured objects. Fields without a
+//! Nook equivalent (sex, height, class, occupation, PIN, account type,
+//! membership website and phone, …) are not imported.
 
 use super::{OnePasswordSection, OnePasswordVaultItem};
 use crate::secrets::import_support::ImportItemDisposition;
@@ -16,7 +18,9 @@ use serde_json::Value;
 pub(super) const IDENTITY_CATEGORY_UUID: &str = "004";
 pub(super) const BANK_ACCOUNT_CATEGORY_UUID: &str = "101";
 pub(super) const DRIVER_LICENSE_CATEGORY_UUID: &str = "103";
+pub(super) const MEMBERSHIP_CATEGORY_UUID: &str = "105";
 pub(super) const PASSPORT_CATEGORY_UUID: &str = "106";
+pub(super) const SOCIAL_SECURITY_CATEGORY_UUID: &str = "108";
 
 /// Section fields of one item, addressed by their 1PUX field id.
 struct OnePasswordTypedFields<'a> {
@@ -86,6 +90,25 @@ impl OnePasswordTypedFields<'_> {
         }
     }
 
+    /// Document date: a Unix-seconds day, or a `{"monthYear": YYYYMM}` month
+    /// kept at month precision (`YYYY-MM`).
+    fn document_date(&self, id: &str) -> String {
+        let Some(Value::Object(wrapped)) = self.value(id) else {
+            return self.date(id);
+        };
+        match wrapped.get("monthYear") {
+            Some(Value::Number(month_year)) => {
+                let digits = month_year.to_string();
+                match (digits.len(), digits.get(..4), digits.get(4..)) {
+                    (6, Some(year), Some(month)) => format!("{year}-{month}"),
+                    _ => digits,
+                }
+            }
+            Some(other) => Self::scalar_text(other),
+            None => self.date(id),
+        }
+    }
+
     fn address(&self, id: &str) -> OnePasswordAddress {
         let Some(Value::Object(wrapped)) = self.value(id) else {
             return OnePasswordAddress::default();
@@ -111,15 +134,18 @@ impl OnePasswordVaultItem<'_> {
         }
     }
 
-    /// Identity → person (names, birth date, email, phone) and address.
+    /// Identity → person (names, birth date, email, phones) and address.
+    ///
+    /// Cell, home, and business phones fill the mobile, home, and work
+    /// phones. The unlabelled default phone is a mobile phone when no cell
+    /// phone is stored; beside a different cell phone it has no Nook field.
     pub(super) fn identity(&self) -> ImportItemDisposition {
         let fields = self.typed_fields();
         let address = fields.address("address");
-        let phone = ["defphone", "cellphone", "homephone", "busphone"]
-            .iter()
-            .map(|id| fields.text(id))
-            .find(|phone| !phone.is_empty())
-            .unwrap_or_default();
+        let mobile_phone = match fields.text("cellphone") {
+            cell if cell.is_empty() => fields.text("defphone"),
+            cell => cell,
+        };
         PersonalImportItem {
             parts: vec![
                 PersonalImportPart::person(PersonFields {
@@ -128,7 +154,9 @@ impl OnePasswordVaultItem<'_> {
                     family_name: &fields.text("lastname"),
                     birth_date: &fields.date("birthdate"),
                     email: &fields.text("email"),
-                    phone: &phone,
+                    mobile_phone: &mobile_phone,
+                    home_phone: &fields.text("homephone"),
+                    work_phone: &fields.text("busphone"),
                 }),
                 PersonalImportPart::address(AddressFields {
                     label: self.item.overview.title.trim(),
@@ -151,44 +179,80 @@ impl OnePasswordVaultItem<'_> {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind: IdentityDocumentKind::Passport,
                 number: &fields.text("number"),
+                issuer: &fields.text("issuing_authority"),
                 issuing_country: &fields.text("issuing_country"),
-                issue_date: &fields.date("issue_date"),
-                expiry_date: &fields.date("expiry_date"),
+                issue_date: &fields.document_date("issue_date"),
+                expiry_date: &fields.document_date("expiry_date"),
                 name_as_printed: &fields.text("fullname"),
             })],
         }
         .disposition()
     }
 
-    /// Driver License → identity document. Its month-and-year expiry names no
-    /// calendar day, so it is not imported.
+    /// Driver License → identity document; its month-and-year expiry keeps
+    /// month precision.
     pub(super) fn driver_license(&self) -> ImportItemDisposition {
         let fields = self.typed_fields();
         PersonalImportItem {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind: IdentityDocumentKind::DriversLicense,
                 number: &fields.text("number"),
+                issuer: "",
                 issuing_country: &fields.text("country"),
                 issue_date: "",
-                expiry_date: "",
+                expiry_date: &fields.document_date("expiry_date"),
                 name_as_printed: &fields.text("fullname"),
             })],
         }
         .disposition()
     }
 
-    /// Bank Account → international (IBAN) or US domestic account.
+    /// Social Security Number → US Social Security document.
+    pub(super) fn social_security(&self) -> ImportItemDisposition {
+        let fields = self.typed_fields();
+        PersonalImportItem {
+            parts: vec![PersonalImportPart::document(IdentityDocumentFields {
+                kind: IdentityDocumentKind::SocialSecurity,
+                number: &fields.text("number"),
+                issuer: "",
+                issuing_country: "",
+                issue_date: "",
+                expiry_date: "",
+                name_as_printed: &fields.text("name"),
+            })],
+        }
+        .disposition()
+    }
+
+    /// Membership → membership document; "member since" is its issue date.
+    pub(super) fn membership(&self) -> ImportItemDisposition {
+        let fields = self.typed_fields();
+        PersonalImportItem {
+            parts: vec![PersonalImportPart::document(IdentityDocumentFields {
+                kind: IdentityDocumentKind::Membership,
+                number: &fields.text("membership_no"),
+                issuer: &fields.text("org_name"),
+                issuing_country: "",
+                issue_date: &fields.document_date("member_since"),
+                expiry_date: &fields.document_date("expiry_date"),
+                name_as_printed: &fields.text("member_name"),
+            })],
+        }
+        .disposition()
+    }
+
+    /// Bank Account → international (IBAN) and/or US domestic account.
     pub(super) fn bank_account(&self) -> ImportItemDisposition {
         let fields = self.typed_fields();
         PersonalImportItem {
-            parts: vec![PersonalImportPart::bank(&BankImportFields {
+            parts: PersonalImportPart::banks(&BankImportFields {
                 account_holder: &fields.text("owner"),
                 bank_name: &fields.text("bankName"),
                 iban: &fields.text("iban"),
                 swift_bic: &fields.text("swift"),
                 account_number: &fields.text("accountNo"),
                 routing_number: &fields.text("routingNo"),
-            })],
+            }),
         }
         .disposition()
     }
@@ -226,6 +290,8 @@ mod tests {
               {"id":"birthdate","value":{"date":951782400}},
               {"id":"address","value":{"address":{"street":"12 Analytical Row","city":"London","state":"Greater London","zip":"W1 1AA","country":"gb"}}},
               {"id":"defphone","value":{"phone":"+44 20 7946 0958"}},
+              {"id":"homephone","value":{"phone":"+44 20 7946 0000"}},
+              {"id":"busphone","value":{"phone":"+44 20 7946 0001"}},
               {"id":"email","value":{"email":{"email_address":"ada@example.com","provider":null}}}"#,
         }
         .json();
@@ -238,7 +304,9 @@ mod tests {
         assert_eq!(person.full_name(), "Ada A Lovelace");
         assert_eq!(person.birth_date, "2000-02-29");
         assert_eq!(person.email, "ada@example.com");
-        assert_eq!(person.phone, "+44 20 7946 0958");
+        assert_eq!(person.mobile_phone, "+44 20 7946 0958");
+        assert_eq!(person.home_phone, "+44 20 7946 0000");
+        assert_eq!(person.work_phone, "+44 20 7946 0001");
         assert_eq!(address.label, "Home identity");
         assert_eq!(address.address_line1, "12 Analytical Row");
         assert_eq!(address.postal_code, "W1 1AA");
@@ -284,7 +352,7 @@ mod tests {
         };
         assert_eq!(document.kind, IdentityDocumentKind::DriversLicense);
         assert!(document.issuing_country.is_empty());
-        assert!(document.expiry_date.is_empty());
+        assert_eq!(document.expiry_date, "2030-12");
         Ok(())
     }
 
@@ -339,6 +407,100 @@ mod tests {
             assert!(plan.items.is_empty());
             assert_eq!(usize::from(plan.skipped_unsupported), 1);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn social_security_and_membership_items_produce_documents() -> anyhow::Result<()> {
+        let ssn = OnePasswordFixture {
+            category: "108",
+            title: "SSN",
+            fields: r#"{"id":"name","value":{"string":"Ada Lovelace"}},
+              {"id":"number","value":{"concealed":"123-45-6789"}}"#,
+        }
+        .json();
+        let plan = ExportData::parse(&ssn)?.plan();
+        let [SecretValue::IdentityDocument(document)] = plan.items.as_slice() else {
+            anyhow::bail!("expected a Social Security document");
+        };
+        assert_eq!(document.kind, IdentityDocumentKind::SocialSecurity);
+        assert_eq!(document.number, "123456789");
+        assert_eq!(document.name_as_printed, "Ada Lovelace");
+
+        let membership = OnePasswordFixture {
+            category: "105",
+            title: "Society",
+            fields: r#"{"id":"org_name","value":{"string":"Analytical Society"}},
+              {"id":"website","value":{"url":"https://society.example"}},
+              {"id":"phone","value":{"phone":"+44 20 7946 0100"}},
+              {"id":"member_name","value":{"string":"Ada Lovelace"}},
+              {"id":"member_since","value":{"monthYear":201905}},
+              {"id":"expiry_date","value":{"monthYear":203105}},
+              {"id":"membership_no","value":{"string":"M-0042"}},
+              {"id":"pin","value":{"concealed":"0000"}}"#,
+        }
+        .json();
+        let plan = ExportData::parse(&membership)?.plan();
+        let [SecretValue::IdentityDocument(document)] = plan.items.as_slice() else {
+            anyhow::bail!("expected a membership document");
+        };
+        assert_eq!(document.kind, IdentityDocumentKind::Membership);
+        assert_eq!(document.issuer, "Analytical Society");
+        assert_eq!(document.issue_date, "2019-05");
+        assert_eq!(document.expiry_date, "2031-05");
+
+        let unissued = OnePasswordFixture {
+            category: "108",
+            title: "SSN",
+            fields: r#"{"id":"number","value":{"concealed":"000-12-3456"}}"#,
+        }
+        .json();
+        let plan = ExportData::parse(&unissued)?.plan();
+        assert!(plan.items.is_empty());
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn bank_account_with_iban_and_us_routing_produces_both_records() -> anyhow::Result<()> {
+        let json = OnePasswordFixture {
+            category: "101",
+            title: "Bank",
+            fields: r#"{"id":"bankName","value":{"string":"Transatlantic Bank"}},
+              {"id":"owner","value":{"string":"Ada Lovelace"}},
+              {"id":"iban","value":{"string":"GB82 WEST 1234 5698 7654 32"}},
+              {"id":"swift","value":{"string":"NWBKGB2L"}},
+              {"id":"routingNo","value":{"string":"021000021"}},
+              {"id":"accountNo","value":{"string":"000123456789"}}"#,
+        }
+        .json();
+        let plan = ExportData::parse(&json)?.plan();
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        assert!(matches!(
+            plan.items.as_slice(),
+            [
+                SecretValue::InternationalAccount(_),
+                SecretValue::DomesticAccount(_)
+            ]
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn default_phone_is_mobile_only_without_a_cell_phone() -> anyhow::Result<()> {
+        let json = OnePasswordFixture {
+            category: "004",
+            title: "Identity",
+            fields: r#"{"id":"firstname","value":{"string":"Ada"}},
+              {"id":"defphone","value":{"phone":"+1 555 0100"}},
+              {"id":"cellphone","value":{"phone":"+1 555 0199"}}"#,
+        }
+        .json();
+        let plan = ExportData::parse(&json)?.plan();
+        let [SecretValue::Person(person)] = plan.items.as_slice() else {
+            anyhow::bail!("expected a person");
+        };
+        assert_eq!(person.mobile_phone, "+1 555 0199");
         Ok(())
     }
 

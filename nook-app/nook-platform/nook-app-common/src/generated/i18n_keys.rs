@@ -703,6 +703,8 @@ pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE: &str =
     "errors.validation.identity_document_expiry_before_issue";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_NUMBER_REQUIRED: &str =
     "errors.validation.identity_document_number_required";
+pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_SSN_INVALID: &str =
+    "errors.validation.identity_document_ssn_invalid";
 pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_INVALID: &str =
     "errors.validation.international_account_iban_invalid";
 pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED: &str =

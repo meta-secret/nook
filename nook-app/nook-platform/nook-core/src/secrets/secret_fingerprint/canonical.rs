@@ -170,6 +170,7 @@ impl CanonicalSecretBytes {
                 bytes.append(document.kind.as_str());
                 bytes.append_normalized(&document.name_as_printed);
                 bytes.append_normalized(&document.issuing_country);
+                bytes.append_normalized(&document.issuer);
                 bytes.append(document.last4().as_str());
             }
             SecretValue::InternationalAccount(account) => {
@@ -266,7 +267,9 @@ impl CanonicalSecretBytes {
             SecretValue::Person(person) => {
                 bytes.append_normalized(&person.middle_name);
                 bytes.append(person.email.as_str());
-                bytes.append(person.phone.as_str());
+                bytes.append(person.mobile_phone.as_str());
+                bytes.append(person.home_phone.as_str());
+                bytes.append(person.work_phone.as_str());
             }
             SecretValue::Address(address) => {
                 bytes.append_normalized(&address.address_line2);
@@ -485,7 +488,9 @@ mod tests {
             family_name: "Lovelace",
             birth_date: "1815-12-10",
             email: "ada@example.com",
-            phone: "+44 20",
+            mobile_phone: "+44 20",
+            home_phone: "",
+            work_phone: "",
         })?);
         assert_eq!(
             CanonicalSecretBytes::identity(&person).0,
@@ -493,11 +498,12 @@ mod tests {
         );
         assert_eq!(
             CanonicalSecretBytes::version(&person).0,
-            b"6:person\x003:Ada\x008:Lovelace\x0010:1815-12-10\x007:Augusta\x0015:ada@example.com\x006:+44 20\x00"
+            b"6:person\x003:Ada\x008:Lovelace\x0010:1815-12-10\x007:Augusta\x0015:ada@example.com\x006:+44 20\x000:\x000:\x00"
         );
         let document = SecretValue::IdentityDocument(IdentityDocumentSecret::from_fields(
             IdentityDocumentFields {
                 kind: IdentityDocumentKind::Passport,
+                issuer: "",
                 number: "X1234567",
                 issuing_country: "GB",
                 issue_date: "2020-01-15",
@@ -507,7 +513,7 @@ mod tests {
         )?);
         assert_eq!(
             CanonicalSecretBytes::identity(&document).0,
-            b"17:identity-document\x008:passport\x0012:ADA LOVELACE\x002:GB\x004:4567\x00"
+            b"17:identity-document\x008:passport\x0012:ADA LOVELACE\x002:GB\x000:\x004:4567\x00"
         );
         let account = SecretValue::InternationalAccount(InternationalAccountSecret::from_fields(
             InternationalAccountFields {
@@ -568,7 +574,9 @@ mod tests {
             family_name: "12 Analytical Row",
             birth_date: "",
             email: "",
-            phone: "",
+            mobile_phone: "",
+            home_phone: "",
+            work_phone: "",
         })?);
         assert_ne!(
             original.identity_fingerprint(&key)?,

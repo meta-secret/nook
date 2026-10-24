@@ -231,6 +231,9 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_DATE_INVALID)]
     IdentityDocumentDateInvalid,
 
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_SSN_INVALID)]
+    IdentityDocumentSsnInvalid,
+
     #[error(
         "{}",
         i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE

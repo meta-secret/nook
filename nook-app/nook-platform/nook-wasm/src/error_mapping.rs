@@ -104,6 +104,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AddressLine1Required
             | ValidationError::IdentityDocumentNumberRequired
             | ValidationError::IdentityDocumentDateInvalid
+            | ValidationError::IdentityDocumentSsnInvalid
             | ValidationError::IdentityDocumentExpiryBeforeIssue
             | ValidationError::InternationalAccountIbanRequired
             | ValidationError::InternationalAccountIbanInvalid

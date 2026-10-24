@@ -556,6 +556,8 @@ impl OnePasswordVaultItem<'_> {
             personal::PASSPORT_CATEGORY_UUID => self.passport(),
             personal::DRIVER_LICENSE_CATEGORY_UUID => self.driver_license(),
             personal::BANK_ACCOUNT_CATEGORY_UUID => self.bank_account(),
+            personal::SOCIAL_SECURITY_CATEGORY_UUID => self.social_security(),
+            personal::MEMBERSHIP_CATEGORY_UUID => self.membership(),
             _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
         }
     }

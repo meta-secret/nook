@@ -555,6 +555,7 @@ export const I18N_KEYS = {
   ErrorsValidationIdentityDocumentDateInvalid: 'errors.validation.identity_document_date_invalid',
   ErrorsValidationIdentityDocumentExpiryBeforeIssue: 'errors.validation.identity_document_expiry_before_issue',
   ErrorsValidationIdentityDocumentNumberRequired: 'errors.validation.identity_document_number_required',
+  ErrorsValidationIdentityDocumentSsnInvalid: 'errors.validation.identity_document_ssn_invalid',
   ErrorsValidationInternationalAccountIbanInvalid: 'errors.validation.international_account_iban_invalid',
   ErrorsValidationInternationalAccountIbanRequired: 'errors.validation.international_account_iban_required',
   ErrorsValidationInvalidSentinelShareSet: 'errors.validation.invalid_sentinel_share_set',
