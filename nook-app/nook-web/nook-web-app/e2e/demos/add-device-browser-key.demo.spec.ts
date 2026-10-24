@@ -18,19 +18,32 @@ async function snapshot(page: Page, name: string) {
 
 /** The page as it runs on a paired extension's key that has not joined the
  * identity: the extension's offscreen session is not routable here, so its
- * key source and standing are set on the exposed vault. */
+ * key source and standing are set on the exposed vault. The identity is
+ * not loaded again meanwhile, so the scenario holds until the switch. */
 async function useUnjoinedExtensionKey(page: Page) {
   await page.evaluate(() => {
     const vault = window.__nookVault
     if (!vault) throw new Error('vault-unavailable')
     const view = vault.identityControl.view
     if (!('snapshot' in view)) throw new Error('identity-not-loaded')
+    Reflect.set(vault.identityControl, 'followOpenVault', async () => ({
+      isErr: () => false,
+    }))
     // VaultIdentityKeySource.PairedCompanion
     vault.identityKeySource = 1
     vault.identityControl.view = {
       ...view,
       snapshot: { ...view.snapshot, standing: 'notListed' },
     }
+  })
+}
+
+/** The identity follows the open vault again, as it does in the app. */
+async function followIdentityAgain(page: Page) {
+  await page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('vault-unavailable')
+    Reflect.deleteProperty(vault.identityControl, 'followOpenVault')
   })
 }
 
@@ -78,6 +91,7 @@ test("a page on the extension's key switches to this browser's passkey to add a 
 
   // Only this page locks; this browser's passkey reopens the same vault and
   // the flow comes back at the invite.
+  await followIdentityAgain(page)
   await useBrowserKey.click()
   await expect(page.getByTestId('add-device-stage')).toHaveAttribute(
     'data-stage',
