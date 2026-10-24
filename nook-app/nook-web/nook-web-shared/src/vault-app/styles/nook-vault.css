@@ -161,6 +161,40 @@
   .nk-chips-track .nk-chip:focus-visible {
     outline-offset: -2px;
   }
+  /* Vault sections: two engraved tabs on a hairline; the open one carries the
+   * titanium edge underneath. */
+  .nk-section-tabs {
+    display: flex;
+    gap: 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .nk-section-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: -1px;
+    padding: 0.625rem 0.125rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .nk-section-tab:hover {
+    color: var(--foreground);
+  }
+  .nk-section-tab[aria-selected="true"] {
+    border-bottom-color: var(--primary);
+    color: var(--foreground);
+  }
+  .nk-section-tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
   /* The list and the detail share one grid: rows and sheets are siblings, so
    * phones show the sheet under its row and wide screens pin it to the right. */
   .nk-vault-grid {

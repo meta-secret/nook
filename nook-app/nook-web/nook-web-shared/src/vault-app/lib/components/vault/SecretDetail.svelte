@@ -35,6 +35,7 @@
   } from "../secret-vault-state";
   import SecretSlot from "./SecretSlot.svelte";
   import PasskeyDetailSlots from "./PasskeyDetailSlots.svelte";
+  import PersonalDataSlotList from "./PersonalDataSlotList.svelte";
   import SecretStrengthMeter from "./SecretStrengthMeter.svelte";
   import {
     SecretItemView,
@@ -551,6 +552,14 @@
           <span class="whitespace-pre-wrap text-sm">{reveal.record.notes}</span>
         </SecretSlot>
       {/if}
+    {:else if item.type === SecretType.Person || item.type === SecretType.Address || item.type === SecretType.IdentityDocument || item.type === SecretType.BankAccount}
+      <PersonalDataSlotList
+        {item}
+        {reveal}
+        {copiedNotice}
+        {onCopyToClipboard}
+        {vault}
+      />
     {:else if item.type === SecretType.FileAttachment}
       <SecretSlot label={vault.t(I18N_KEYS.VaultFieldsFileName)}>
         <span data-testid="file-attachment-name"

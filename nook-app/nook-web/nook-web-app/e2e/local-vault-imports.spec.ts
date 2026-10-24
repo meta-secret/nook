@@ -11,6 +11,8 @@ import {
   revealSecretInRow,
   storedZip,
   openVaultPage,
+  openVaultSection,
+  VaultSection,
   openManagePage,
   ManagePage,
 } from './helpers'
@@ -301,10 +303,12 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported private note',
     )
+    await openVaultSection(page, VaultSection.PersonalData)
     const creditCardGroup = page.getByTestId('vault-group-credit-card')
     await expect(creditCardGroup).toContainText('Imported card')
     await expect(creditCardGroup).not.toContainText('4111111111111111')
     await expect(creditCardGroup).not.toContainText('123')
+    await openVaultSection(page, VaultSection.Secrets)
 
     await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
@@ -676,10 +680,12 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported Proton note',
     )
+    await openVaultSection(page, VaultSection.PersonalData)
     const creditCardGroup = page.getByTestId('vault-group-credit-card')
     await expect(creditCardGroup).toContainText('Imported Proton card')
     await expect(creditCardGroup).not.toContainText('4111111111111111')
     await expect(creditCardGroup).not.toContainText('123')
+    await openVaultSection(page, VaultSection.Secrets)
 
     await openPasswordManagerImport(page, 'proton-pass')
     await page.getByTestId('proton-pass-export-file').setInputFiles({

@@ -3,11 +3,15 @@ import {
   Braces,
   CreditCard,
   Globe,
+  IdCard,
   KeyRound,
+  Landmark,
+  MapPin,
   Paperclip,
   ShieldCheck,
   Sprout,
   StickyNote,
+  UserRound,
 } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { NookSecretListItem } from "$lib/nook";
@@ -21,16 +25,10 @@ export type SecretItemViewSubject = {
 
 const MASK = "••••";
 
-/** Titles, subtitles and the type glyph for one secret in the vault list. */
-export class SecretItemView {
-  constructor(private readonly subject: SecretItemViewSubject) {}
-
-  private t(key: string): string {
-    return this.subject.vault.t(key);
-  }
-
-  get icon(): Component {
-    switch (this.subject.item.type) {
+/** The glyph and label that name a secret type wherever it is shown. */
+export class SecretTypePresentation {
+  static icon(type: SecretType): Component {
+    switch (type) {
       case SecretType.Login:
         return Globe;
       case SecretType.ApiKey:
@@ -47,11 +45,19 @@ export class SecretItemView {
         return Paperclip;
       case SecretType.SecureNote:
         return StickyNote;
+      case SecretType.Person:
+        return UserRound;
+      case SecretType.Address:
+        return MapPin;
+      case SecretType.IdentityDocument:
+        return IdCard;
+      case SecretType.BankAccount:
+        return Landmark;
     }
   }
 
-  get typeLabelKey(): string {
-    switch (this.subject.item.type) {
+  static labelKey(type: SecretType): string {
+    switch (type) {
       case SecretType.Login:
         return I18N_KEYS.VaultTypesLogin;
       case SecretType.ApiKey:
@@ -68,7 +74,32 @@ export class SecretItemView {
         return I18N_KEYS.VaultTypesFileAttachment;
       case SecretType.SecureNote:
         return I18N_KEYS.VaultTypesSecureNote;
+      case SecretType.Person:
+        return I18N_KEYS.VaultTypesPerson;
+      case SecretType.Address:
+        return I18N_KEYS.VaultTypesAddress;
+      case SecretType.IdentityDocument:
+        return I18N_KEYS.VaultTypesIdentityDocument;
+      case SecretType.BankAccount:
+        return I18N_KEYS.VaultTypesBankAccount;
     }
+  }
+}
+
+/** Titles, subtitles and the type glyph for one secret in the vault list. */
+export class SecretItemView {
+  constructor(private readonly subject: SecretItemViewSubject) {}
+
+  private t(key: string): string {
+    return this.subject.vault.t(key);
+  }
+
+  get icon(): Component {
+    return SecretTypePresentation.icon(this.subject.item.type);
+  }
+
+  get typeLabelKey(): string {
+    return SecretTypePresentation.labelKey(this.subject.item.type);
   }
 
   /** Short description used when the item has no better title. */
@@ -116,6 +147,15 @@ export class SecretItemView {
         );
       case SecretType.SecureNote:
         return item.title.trim() || this.t(I18N_KEYS.VaultFieldsNoTitle);
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.BankAccount:
+        return (
+          item.summary.trim() ||
+          item.displayTitle.trim() ||
+          this.t(I18N_KEYS.VaultFieldsUnnamedPersonalData)
+        );
     }
   }
 
@@ -144,6 +184,11 @@ export class SecretItemView {
       case SecretType.SeedPhrase:
       case SecretType.SecureNote:
         return this.summary;
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.BankAccount:
+        return item.displayTitle.trim() || this.summary;
     }
   }
 
@@ -166,6 +211,22 @@ export class SecretItemView {
       case SecretType.SecureNote:
       case SecretType.FileAttachment:
         return "";
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.BankAccount:
+        return this.distinctSummary();
+    }
+  }
+
+  /** The Rust summary when it adds something the title does not already say. */
+  private distinctSummary(): string {
+    const summary = this.subject.item.summary.trim();
+    switch (summary) {
+      case this.title:
+        return "";
+      default:
+        return summary;
     }
   }
 }

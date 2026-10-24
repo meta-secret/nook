@@ -400,7 +400,11 @@
       "passkey": "Passkey",
       "authenticator": "Authenticator",
       "credit_card": "Credit Card",
-      "file_attachment": "File"
+      "file_attachment": "File",
+      "person": "Person",
+      "address": "Address",
+      "identity_document": "Document",
+      "bank_account": "Bank account"
     },
     "fields": {
       "username": "Username",
@@ -469,7 +473,32 @@
       "file_name": "File name",
       "file_size": "Size",
       "mime_type": "Type",
-      "unnamed_file": "Unnamed File"
+      "unnamed_file": "Unnamed File",
+      "given_name": "Given name",
+      "middle_name": "Middle name",
+      "family_name": "Family name",
+      "full_name": "Full name",
+      "birth_date": "Birth date",
+      "email": "Email",
+      "phone": "Phone",
+      "address_label": "Label",
+      "address_line1": "Address line 1",
+      "address_line2": "Address line 2",
+      "city": "City",
+      "region": "State or region",
+      "postal_code": "Postal code",
+      "country": "Country",
+      "document_kind": "Document type",
+      "document_number": "Document number",
+      "issuing_country": "Issuing country",
+      "issue_date": "Issue date",
+      "expiry_date": "Expiry date",
+      "name_as_printed": "Name as printed",
+      "account_holder": "Account holder",
+      "bank_name": "Bank name",
+      "account_number": "Account number",
+      "routing_code": "Routing code or BIC",
+      "unnamed_personal_data": "Unnamed record"
     },
     "status": {
       "synced": "Synced",
@@ -493,13 +522,33 @@
       "pick_title": "Pick an item",
       "pick_body": "Choose an item from the list. Values stay sealed until you reveal them.",
       "empty_title": "This vault is empty",
-      "empty_body": "Add a login, note, key or card. Each value is encrypted on its own before it is saved.",
+      "empty_body": "Add a login, note or key. Each value is encrypted on its own before it is saved.",
       "no_match_title": "No secrets found",
       "no_match_body": "Try another search or type.",
       "reveal": "Reveal",
       "hide": "Hide",
-      "list_label": "Secrets"
-    }
+      "list_label": "Secrets",
+      "personal_empty_title": "No personal data yet",
+      "personal_empty_body": "Add a person, address, document, bank account or card to fill forms faster. Each record is encrypted on its own before it is saved.",
+      "personal_list_label": "Personal data"
+    },
+    "add_personal_data": "Add personal data",
+    "filter_personal_by_type": "Filter personal data by type",
+    "no_personal_data": "No personal data found",
+    "copy_field": "Copy {field}",
+    "sections": {
+      "label": "Vault sections",
+      "secrets": "Secrets",
+      "personal_data": "Personal data"
+    },
+    "document_kinds": {
+      "passport": "Passport",
+      "national_id": "National ID card",
+      "drivers_license": "Driver's license"
+    },
+    "personal_count": "Records: {count}",
+    "personal_count_page": "Showing {count} of {total} records",
+    "personal_search_placeholder": "Search personal data…"
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
@@ -1339,7 +1388,22 @@
     "file_attachment_desc": "Encrypted file upload",
     "file_attachment_hint": "Choose a file up to {max}. The file is encrypted in your vault.",
     "file_empty": "Choose a non-empty file.",
-    "file_too_large": "File is too large. Maximum size is {max}."
+    "file_too_large": "File is too large. Maximum size is {max}.",
+    "person_desc": "Name, birth date, email and phone",
+    "address_desc": "Postal address for deliveries and forms",
+    "identity_document_desc": "Passport, ID card or driver's license",
+    "bank_account_desc": "Account number and bank details",
+    "title_new_person": "New person",
+    "title_edit_person": "Edit person",
+    "title_new_address": "New address",
+    "title_edit_address": "Edit address",
+    "title_new_identity_document": "New document",
+    "title_edit_identity_document": "Edit document",
+    "title_new_bank_account": "New bank account",
+    "title_edit_bank_account": "Edit bank account",
+    "placeholder_address_label": "e.g., Home",
+    "placeholder_country": "e.g., Germany",
+    "placeholder_bank_account_number": "IBAN or account number"
   },
   "status_bar": {
     "synced": "Synced",

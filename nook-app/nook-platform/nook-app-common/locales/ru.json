@@ -400,7 +400,11 @@
       "passkey": "Ключ доступа",
       "authenticator": "Аутентификатор",
       "credit_card": "Банковская карта",
-      "file_attachment": "Файл"
+      "file_attachment": "Файл",
+      "person": "Персона",
+      "address": "Адрес",
+      "identity_document": "Документ",
+      "bank_account": "Банковский счёт"
     },
     "fields": {
       "username": "Имя пользователя",
@@ -469,7 +473,32 @@
       "file_name": "Имя файла",
       "file_size": "Размер",
       "mime_type": "Тип",
-      "unnamed_file": "Безымянный файл"
+      "unnamed_file": "Безымянный файл",
+      "given_name": "Имя",
+      "middle_name": "Отчество или второе имя",
+      "family_name": "Фамилия",
+      "full_name": "Полное имя",
+      "birth_date": "Дата рождения",
+      "email": "Эл. почта",
+      "phone": "Телефон",
+      "address_label": "Название",
+      "address_line1": "Адрес, строка 1",
+      "address_line2": "Адрес, строка 2",
+      "city": "Город",
+      "region": "Регион или область",
+      "postal_code": "Почтовый индекс",
+      "country": "Страна",
+      "document_kind": "Тип документа",
+      "document_number": "Номер документа",
+      "issuing_country": "Страна выдачи",
+      "issue_date": "Дата выдачи",
+      "expiry_date": "Действителен до",
+      "name_as_printed": "Имя как в документе",
+      "account_holder": "Владелец счёта",
+      "bank_name": "Название банка",
+      "account_number": "Номер счёта",
+      "routing_code": "БИК или код банка",
+      "unnamed_personal_data": "Запись без названия"
     },
     "status": {
       "synced": "Синхронизировано",
@@ -493,13 +522,33 @@
       "pick_title": "Выберите запись",
       "pick_body": "Выберите запись в списке. Значения остаются запечатанными, пока вы их не откроете.",
       "empty_title": "Сейф пуст",
-      "empty_body": "Добавьте логин, заметку, ключ или карту. Каждое значение шифруется отдельно перед сохранением.",
+      "empty_body": "Добавьте логин, заметку или ключ. Каждое значение шифруется отдельно перед сохранением.",
       "no_match_title": "Ничего не найдено",
       "no_match_body": "Попробуйте другой запрос или тип.",
       "reveal": "Показать",
       "hide": "Скрыть",
-      "list_label": "Секреты"
-    }
+      "list_label": "Секреты",
+      "personal_empty_title": "Личных данных пока нет",
+      "personal_empty_body": "Добавьте персону, адрес, документ, банковский счёт или карту, чтобы быстрее заполнять формы. Каждая запись шифруется отдельно перед сохранением.",
+      "personal_list_label": "Личные данные"
+    },
+    "add_personal_data": "Добавить личные данные",
+    "filter_personal_by_type": "Фильтр личных данных по типу",
+    "no_personal_data": "Личные данные не найдены",
+    "copy_field": "Скопировать: {field}",
+    "sections": {
+      "label": "Разделы сейфа",
+      "secrets": "Секреты",
+      "personal_data": "Личные данные"
+    },
+    "document_kinds": {
+      "passport": "Паспорт",
+      "national_id": "Удостоверение личности",
+      "drivers_license": "Водительское удостоверение"
+    },
+    "personal_count": "записей: {count}",
+    "personal_count_page": "Показано {count} из {total} записей",
+    "personal_search_placeholder": "Поиск личных данных…"
   },
   "bitwarden_import": {
     "button": "Импорт Bitwarden",
@@ -1048,7 +1097,22 @@
     "file_attachment_desc": "Зашифрованный файл",
     "file_attachment_hint": "Выберите файл размером до {max}. Файл шифруется в вашем сейфе.",
     "file_empty": "Выберите непустой файл.",
-    "file_too_large": "Файл слишком большой. Максимальный размер — {max}."
+    "file_too_large": "Файл слишком большой. Максимальный размер — {max}.",
+    "person_desc": "Имя, дата рождения, почта и телефон",
+    "address_desc": "Почтовый адрес для доставки и форм",
+    "identity_document_desc": "Паспорт, удостоверение или права",
+    "bank_account_desc": "Номер счёта и реквизиты банка",
+    "title_new_person": "Новая персона",
+    "title_edit_person": "Редактировать персону",
+    "title_new_address": "Новый адрес",
+    "title_edit_address": "Редактировать адрес",
+    "title_new_identity_document": "Новый документ",
+    "title_edit_identity_document": "Редактировать документ",
+    "title_new_bank_account": "Новый банковский счёт",
+    "title_edit_bank_account": "Редактировать банковский счёт",
+    "placeholder_address_label": "например, Дом",
+    "placeholder_country": "например, Германия",
+    "placeholder_bank_account_number": "IBAN или номер счёта"
   },
   "status_bar": {
     "synced": "Синхронизировано",

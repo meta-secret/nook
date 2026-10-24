@@ -4,6 +4,7 @@ import {
   type NookSecretListItem,
   type NookSecretRecord,
 } from '$lib/nook'
+import type { PersonalDataView } from '$app-wasm'
 
 /** Owns complete generated secret projections used by component tests. */
 export class SecretComponentTestFixture {
@@ -74,6 +75,9 @@ export class SecretComponentTestFixture {
       passkeyUserName: '',
       password: '',
       period: 0,
+      get personalData(): PersonalDataView {
+        throw new Error('Only personal-data records have a personal-data view.')
+      },
       primaryCredential: '',
       rpId: '',
       seed: '',
