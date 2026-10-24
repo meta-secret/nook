@@ -567,7 +567,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toHaveCount(0)
-    await expect(simplePage.getByTestId('app-success')).toBeVisible()
     await expect(simplePage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )

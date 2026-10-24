@@ -778,7 +778,9 @@ test('accepts the pairing grant after the extension session was locked', async (
       },
       'Locked session handoff vault',
     )
-    await expect(simplePage.getByTestId('app-success')).toBeVisible()
+    await expect(
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(
       simplePage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)
@@ -849,7 +851,9 @@ test('re-approves an existing local vault after reload without event-log-access-
       },
       vaultName,
     )
-    await expect(connectPage.getByTestId('app-success')).toBeVisible()
+    await expect(
+      connectPage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(connectPage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )
@@ -928,7 +932,9 @@ test('re-approves an existing local vault after reload without event-log-access-
       },
       vaultName,
     )
-    await expect(reconnectPage.getByTestId('app-success')).toBeVisible()
+    await expect(
+      reconnectPage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(
       reconnectPage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)

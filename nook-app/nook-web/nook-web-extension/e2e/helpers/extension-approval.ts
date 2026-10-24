@@ -2,10 +2,13 @@ import { expect, type Page } from '@playwright/test'
 
 /**
  * Waits for a delivered approval, then for the extension's ready setup.
- * After the extension takes the grant the consent closes at once and the
- * vault announces the approval in its success toast. The in-consent approved
- * notice remains only for an approval the extension did not take, so it is
- * reported as such rather than as ready.
+ * After the extension takes the grant the consent closes at once and the page
+ * moves on (the identities, or the first vault's ready step). A failure keeps
+ * the consent open with its alert. The in-consent approved notice remains only
+ * for an approval the extension did not take, so it is reported by name. The
+ * vault's success toast is not a signal: it lasts five seconds and the first
+ * vault's ready step renders no status bar for it. The extension's own ready
+ * setup, polled next, proves the delivery.
  */
 export async function waitForExtensionPairingReady(
   vaultPage: Page,
@@ -15,22 +18,17 @@ export async function waitForExtensionPairingReady(
   await expect
     .poll(
       async () => {
-        const consentOpen = await vaultPage
-          .getByTestId('extension-connect-consent')
-          .isVisible()
-        if (
-          !consentOpen &&
-          (await vaultPage.getByTestId('app-success').isVisible())
-        ) {
-          return 'approved'
-        }
         if (
           await vaultPage.getByTestId('extension-connect-approved').isVisible()
         ) {
           return 'approved-not-delivered'
         }
+        const consentOpen = await vaultPage
+          .getByTestId('extension-connect-consent')
+          .isVisible()
         const alerts = vaultPage.getByRole('alert')
         const alertTexts = await alerts.allTextContents()
+        if (!consentOpen && alertTexts.length === 0) return 'approved'
         const alertText = ((...[v = 'pending']) => v)(alertTexts.at(-1))
         if (alertTexts.length === 0) return alertText
         const rejectionReason = ((...[v = '']) => v)(
