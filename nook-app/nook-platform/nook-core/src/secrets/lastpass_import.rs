@@ -6,8 +6,11 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+mod personal;
+
 use super::import_support::{ImportMetadata, SourceLabelMetadata};
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
+use personal::LastPassTypedNote;
 
 use std::collections::HashMap;
 
@@ -151,6 +154,11 @@ impl LastPassRecord<'_> {
         let mut notes = self.field("extra").to_owned();
 
         if (LastPassUrl { url }).is_secure_note() {
+            if let Some(disposition) =
+                LastPassTypedNote::parse(&notes).and_then(|note| note.disposition(name))
+            {
+                return disposition;
+            }
             LastPassMetadata {
                 name: "",
                 website_url: "",
@@ -257,20 +265,26 @@ struct CheckedLastPassCsv<'a> {
 impl CheckedLastPassCsv<'_> {
     fn collect(mut self) -> Result<LastPassImportPlan, LastPassImportError> {
         let mut items = Vec::new();
+        let mut source_count = 0_usize;
+        let mut skipped_unsupported = 0;
         for record in self.reader.records() {
-            if let ImportItemDisposition::Imported(item) = (LastPassRecord {
-                record: &record?,
-                columns: &self.columns,
-            })
-            .convert()
-            {
-                items.push(item);
+            let record = record?;
+            // Blank rows are export padding, not source records.
+            if record.iter().all(|value| value.trim().is_empty()) {
+                continue;
             }
+            source_count += 1;
+            skipped_unsupported += LastPassRecord {
+                record: &record,
+                columns: &self.columns,
+            }
+            .convert()
+            .append(&mut items);
         }
         Ok(LastPassImportPlan {
-            source_count: items.len().into(),
+            source_count: source_count.into(),
             items,
-            skipped_unsupported: 0.into(),
+            skipped_unsupported: skipped_unsupported.into(),
         })
     }
 }

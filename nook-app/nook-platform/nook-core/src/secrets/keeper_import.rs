@@ -8,7 +8,6 @@ mod columns;
 mod records;
 use super::import_support::{CsvImportConversion, CsvImportReader, MAX_CSV_BYTES};
 use crate::SecretValue;
-use crate::secrets::import_support::ImportItemDisposition;
 use columns::{KeeperColumns, KeeperHeaders};
 use csv::StringRecord;
 use records::KeeperRecord;
@@ -91,14 +90,13 @@ impl CheckedKeeperCsv<'_> {
     fn collect(self) -> Result<KeeperImportPlan, KeeperImportError> {
         let collection = self.reader.collect(CsvImportConversion {
             too_many_records: KeeperImportError::TooManyRecords,
-            convert: |record: &StringRecord| match (KeeperRecord {
-                record,
-                columns: &self.columns,
-            })
-            .convert()
-            {
-                ImportItemDisposition::Imported(item) => (vec![item], 0),
-                ImportItemDisposition::Skipped(_) => (Vec::new(), 1),
+            convert: |record: &StringRecord| {
+                KeeperRecord {
+                    record,
+                    columns: &self.columns,
+                }
+                .convert()
+                .collected()
             },
         })?;
         Ok(KeeperImportPlan {

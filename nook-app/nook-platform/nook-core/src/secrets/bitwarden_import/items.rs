@@ -4,11 +4,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Bitwarden plaintext items, nullable text and ordered metadata conversion.
+mod identity;
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{BitwardenImportError, BitwardenImportPlan};
 use crate::CreditCardFields;
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
+use identity::BitwardenIdentityPayload;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
@@ -93,6 +95,8 @@ struct BitwardenItem {
     login: BitwardenLoginPayload,
     #[serde(default)]
     card: BitwardenCardPayload,
+    #[serde(default)]
+    identity: BitwardenIdentityPayload,
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,10 +167,10 @@ impl BitwardenItems {
     pub(super) fn plan(self) -> BitwardenImportPlan {
         let source_count = self.items.len();
         let mut converted = Vec::new();
+        let mut skipped_unsupported = 0;
         for item in self.items {
-            item.convert().append(&mut converted);
+            skipped_unsupported += item.convert().append(&mut converted);
         }
-        let skipped_unsupported = source_count.saturating_sub(converted.len());
         BitwardenImportPlan {
             items: converted,
             source_count: source_count.into(),
@@ -270,6 +274,7 @@ impl BitwardenItem {
                 }))
             }
             3 => self.card(),
+            4 => self.identity.disposition(&self.name),
             _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
         }
     }
