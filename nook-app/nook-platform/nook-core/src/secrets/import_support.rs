@@ -8,6 +8,8 @@
 
 use csv::{Reader, ReaderBuilder, StringRecord, Trim};
 
+pub(crate) mod personal;
+
 pub(crate) const MAX_CSV_BYTES: usize = 64 * 1024 * 1024;
 const MAX_CSV_RECORDS: usize = 100_000;
 
@@ -577,23 +579,44 @@ pub(crate) enum ImportSkipReason {
     UnsupportedKind,
     IncompletePayload,
     InvalidCard,
+    /// A present personal-data value failed its record validation.
+    InvalidPersonalData,
 }
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ImportItemDisposition {
     Imported(crate::SecretValue),
+    /// One composite source item produced several records.
+    ImportedRecords(Vec<crate::SecretValue>),
     Skipped(ImportSkipReason),
 }
 impl ImportItemDisposition {
-    pub(crate) fn append(self, items: &mut Vec<crate::SecretValue>) {
+    /// Append produced records and return how many source items were skipped.
+    #[must_use = "count the skipped source item"]
+    pub(crate) fn append(self, items: &mut Vec<crate::SecretValue>) -> usize {
         match self {
-            Self::Imported(item) => items.push(item),
+            Self::Imported(item) => {
+                items.push(item);
+                0
+            }
+            Self::ImportedRecords(mut records) => {
+                items.append(&mut records);
+                0
+            }
             Self::Skipped(
                 ImportSkipReason::EmptyRecord
                 | ImportSkipReason::PasswordlessLogin
                 | ImportSkipReason::UnsupportedKind
                 | ImportSkipReason::IncompletePayload
-                | ImportSkipReason::InvalidCard,
-            ) => {}
+                | ImportSkipReason::InvalidCard
+                | ImportSkipReason::InvalidPersonalData,
+            ) => 1,
         }
+    }
+
+    /// CSV conversion shape: produced records and the skipped source count.
+    pub(crate) fn collected(self) -> (Vec<crate::SecretValue>, usize) {
+        let mut items = Vec::new();
+        let skipped = self.append(&mut items);
+        (items, skipped)
     }
 }

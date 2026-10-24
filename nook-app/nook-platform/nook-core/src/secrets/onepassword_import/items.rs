@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Ordered vault item conversion and dynamic field interpretation.
+mod personal;
 #[derive(Debug, PartialEq, Eq)]
 enum ExportFieldExclusion {
     EmptyText,
@@ -551,6 +552,10 @@ impl OnePasswordVaultItem<'_> {
             }
             SECURE_NOTE_CATEGORY_UUID => ImportItemDisposition::Imported(self.secure_note()),
             CREDIT_CARD_CATEGORY_UUID => self.credit_card(),
+            personal::IDENTITY_CATEGORY_UUID => self.identity(),
+            personal::PASSPORT_CATEGORY_UUID => self.passport(),
+            personal::DRIVER_LICENSE_CATEGORY_UUID => self.driver_license(),
+            personal::BANK_ACCOUNT_CATEGORY_UUID => self.bank_account(),
             _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
         }
     }
@@ -580,6 +585,7 @@ impl ExportData {
     #[must_use]
     pub(super) fn plan(self) -> OnePasswordImportPlan {
         let mut source_count = 0;
+        let mut skipped_unsupported = 0;
         let mut items = Vec::new();
         for account in self.accounts {
             for vault in account.vaults {
@@ -587,7 +593,7 @@ impl ExportData {
                 source_count += vault.items.len();
                 for item in vault.items {
                     let item = OnePasswordItem::from(item);
-                    OnePasswordVaultItem {
+                    skipped_unsupported += OnePasswordVaultItem {
                         item,
                         vault_name: &vault_name,
                     }
@@ -596,7 +602,6 @@ impl ExportData {
                 }
             }
         }
-        let skipped_unsupported = source_count.saturating_sub(items.len());
         OnePasswordImportPlan {
             items,
             source_count: source_count.into(),

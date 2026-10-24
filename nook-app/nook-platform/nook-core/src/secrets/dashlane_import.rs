@@ -197,14 +197,26 @@ mod tests {
         ));
         let missing = DashlaneZipFixture {
             entries: &[ZipFixtureEntry {
-                name: "ids.csv",
-                bytes: b"type,number,name\npassport,1,Ada\n",
+                name: "loyaltyCards.csv",
+                bytes: b"type,number,name\nloyalty,1,Ada\n",
             }],
         }
         .build()?;
         assert!(matches!(
             DashlaneExport::from_bytes(&missing).plan(),
             Err(DashlaneImportError::MissingSupportedCsv)
+        ));
+        let ids = DashlaneZipFixture {
+            entries: &[ZipFixtureEntry {
+                name: "ids.csv",
+                bytes: b"type,number,name,issue_date,expiration_date,place_of_issue,state\npassport,X1234567,Ada Lovelace,,,GB,\n",
+            }],
+        }
+        .build()?;
+        let plan = DashlaneExport::from_bytes(&ids).plan()?;
+        assert!(matches!(
+            plan.items.as_slice(),
+            [SecretValue::IdentityDocument(_)]
         ));
         let oversized = vec![0_u8; MAX_ARCHIVE_BYTES + 1];
         assert!(matches!(

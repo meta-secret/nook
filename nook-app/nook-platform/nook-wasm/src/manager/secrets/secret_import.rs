@@ -605,6 +605,40 @@ mod secret_import_browser_tests {
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn composite_personal_items_count_every_produced_record() -> anyhow::Result<()> {
+        let mut manager = ready_manager().await?;
+        let bitwarden = r#"{"items":[
+          {"type":4,"name":"Personal","identity":{"firstName":"Ada","lastName":"Lovelace",
+            "address1":"12 Analytical Row","city":"London","passportNumber":"X1234567",
+            "licenseNumber":"D1234567"}},
+          {"type":4,"name":"Bad","identity":{"firstName":"Ada","email":"not-an-email"}}]}"#;
+        let result = js(manager
+            .import_bitwarden_json(bitwarden.to_owned(), String::new())
+            .await)?;
+        assert_eq!(result.imported(), 4);
+        assert_eq!(result.skipped_unsupported(), 1);
+        assert_eq!(result.skipped_duplicates(), 0);
+        assert_status(&manager, "IMPORT_BITWARDEN");
+
+        let result = js(manager
+            .import_bitwarden_json(bitwarden.to_owned(), String::new())
+            .await)?;
+        assert_eq!(result.imported(), 0);
+        assert_eq!(result.skipped_duplicates(), 4);
+        assert_status(&manager, "IMPORT_BITWARDEN");
+
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
     #[wasm_bindgen_test]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
