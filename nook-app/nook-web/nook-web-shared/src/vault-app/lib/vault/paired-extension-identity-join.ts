@@ -4,7 +4,7 @@ import { DeviceJoinMounts } from "$lib/components/add-device/device-join-mounts"
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import {
   extensionConnectionBrowser,
-  PairedExtensionDiscoveryFailureKind,
+  InstalledExtensionRuntimeKind,
   type ExtensionConnectRequest,
   type PairedExtensionDiscoveryFailure,
   type PairedExtensionIdentityDiscovery,
@@ -42,6 +42,8 @@ export type PairedExtensionApprover = (
 
 export type PairedExtensionIdentityJoinRequest = {
   readonly vault: VaultState;
+  /** An extension is installed beside this page. */
+  readonly extensionInstalled: () => boolean;
   readonly discover: PairedExtensionDiscover;
   /** Installations the open vault authorizes now. */
   readonly vaultRoster: () => readonly string[];
@@ -69,6 +71,9 @@ export class PairedExtensionIdentityJoin {
   static forPage(vault: VaultState): PairedExtensionIdentityJoin {
     const request: PairedExtensionIdentityJoinRequest = {
       vault,
+      extensionInstalled: () =>
+        extensionConnectionBrowser.readInstalledExtensionRuntimeId().kind ===
+        InstalledExtensionRuntimeKind.Installed,
       discover: async (storeId) =>
         (
           await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
@@ -112,7 +117,8 @@ export class PairedExtensionIdentityJoin {
   }
 
   async run(): Promise<Result<PairedExtensionIdentityJoinOutcome, I18nKey>> {
-    const { vault, discover, vaultRoster, approve } = this.request;
+    const { vault, extensionInstalled, discover, vaultRoster, approve } =
+      this.request;
     const unchanged = ok(PairedExtensionIdentityJoinOutcome.Unchanged);
     // Only a member can invite; the extension's own key is not one yet.
     if (vault.identityKeySource !== VaultIdentityKeySource.ThisBrowser)
@@ -129,16 +135,10 @@ export class PairedExtensionIdentityJoin {
     };
     if (new DeviceJoinMounts(mountRequest).compatible.length === 0)
       return unchanged;
+    // No extension beside this page: nothing is paired.
+    if (!extensionInstalled()) return unchanged;
     const discovered = await discover(storeId);
-    if (discovered.isErr()) {
-      // No extension is installed beside this page: nothing is paired.
-      if (
-        discovered.error.kind ===
-        PairedExtensionDiscoveryFailureKind.NotInstalled
-      )
-        return unchanged;
-      return err(discovered.error.translationKey);
-    }
+    if (discovered.isErr()) return err(discovered.error.translationKey);
     const discovery = discovered.value;
     // A locked extension is invited the next time both are open.
     if (discovery.status !== PairedStatus.Unlocked) return unchanged;

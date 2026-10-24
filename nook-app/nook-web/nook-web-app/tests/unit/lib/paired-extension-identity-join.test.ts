@@ -46,12 +46,12 @@ const PAGE_APP = 'app_page'
 const EXTENSION_APP = 'app_extension'
 
 type Scenario = {
-  readonly keySource?: VaultIdentityKeySource
-  readonly members?: readonly string[]
-  readonly roster?: readonly string[]
-  readonly cloud?: boolean
-  readonly scopes?: ExtensionConnectScope[]
-  readonly discover?: PairedExtensionDiscover
+  readonly keySource: VaultIdentityKeySource
+  readonly members: readonly string[]
+  readonly roster: readonly string[]
+  readonly cloud: boolean
+  readonly extensionInstalled: boolean
+  readonly discover: PairedExtensionDiscover
 }
 
 function cloudMount(): StorageProvider {
@@ -83,16 +83,39 @@ function extensionRequest(
   }
 }
 
-function joinFor(scenario: Scenario) {
+function unlockedWith(
+  scopes: ExtensionConnectScope[],
+): PairedExtensionDiscover {
+  return async () =>
+    ok({
+      status: PairedStatus.Unlocked,
+      request: extensionRequest(scopes),
+    })
+}
+
+/** This browser's member key is open, the identity has a cloud copy, and
+ * the extension is unlocked, paired for the vault, and not a member. */
+function memberWithUnjoinedExtension(): Scenario {
+  return {
+    keySource: VaultIdentityKeySource.ThisBrowser,
+    members: [PAGE_APP],
+    roster: [PAGE_APP, EXTENSION_APP],
+    cloud: true,
+    extensionInstalled: true,
+    discover: unlockedWith([ExtensionConnectScope.SyncProviderCredentials]),
+  }
+}
+
+function joinFor(overrides: Partial<Scenario>) {
+  const scenario: Scenario = { ...memberWithUnjoinedExtension(), ...overrides }
   const vault = VaultStateTestFixture.create()
-  vault.identityKeySource =
-    scenario.keySource ?? VaultIdentityKeySource.ThisBrowser
+  vault.identityKeySource = scenario.keySource
   vault.openActiveVault(STORE_ID)
   const snapshot: IdentityControlSnapshot = {
     identityId: 'idn_test',
     identityLabel: 'Personal',
     standing: 'member',
-    members: (scenario.members ?? [PAGE_APP]).map((appId) => ({
+    members: scenario.members.map((appId) => ({
       appId,
       label: '',
       isCurrentInstallation: appId === PAGE_APP,
@@ -105,25 +128,16 @@ function joinFor(scenario: Scenario) {
     snapshot,
   }
   vault.identityControl.view = ready
-  vault.identityControl.mounts = scenario.cloud === false ? [] : [cloudMount()]
-  const scopes = scenario.scopes ?? [
-    ExtensionConnectScope.SyncProviderCredentials,
-  ]
-  const discover = vi.fn<PairedExtensionDiscover>(
-    scenario.discover ??
-      (async () =>
-        ok({
-          status: PairedStatus.Unlocked,
-          request: extensionRequest(scopes),
-        })),
-  )
+  vault.identityControl.mounts = scenario.cloud ? [cloudMount()] : []
+  const discover = vi.fn<PairedExtensionDiscover>(scenario.discover)
   const approve = vi.fn<PairedExtensionApprover>(async () =>
     ok(ExtensionPairingDeliveryKind.Delivered),
   )
   const join = new PairedExtensionIdentityJoin({
     vault,
+    extensionInstalled: () => scenario.extensionInstalled,
     discover,
-    vaultRoster: () => scenario.roster ?? [PAGE_APP, EXTENSION_APP],
+    vaultRoster: () => scenario.roster,
     approve,
   })
   return { join, discover, approve }
@@ -140,7 +154,9 @@ describe('a paired extension that joined only a vault', () => {
     )
     expect(discover).toHaveBeenCalledWith(STORE_ID)
     expect(approve).toHaveBeenCalledOnce()
-    expect(approve.mock.calls[0]?.[0].deviceId).toBe(EXTENSION_APP)
+    expect(approve).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: EXTENSION_APP }),
+    )
   })
 
   test("is not invited while the page runs on the extension's own key", async () => {
@@ -185,7 +201,7 @@ describe('a paired extension that joined only a vault', () => {
 
   test('is not invited without the sync-provider scope its approval granted', async () => {
     const { join, approve } = joinFor({
-      scopes: [ExtensionConnectScope.VaultAccess],
+      discover: unlockedWith([ExtensionConnectScope.VaultAccess]),
     })
 
     expect((await join.run())._unsafeUnwrap()).toBe(
@@ -206,18 +222,22 @@ describe('a paired extension that joined only a vault', () => {
   })
 
   test('no extension installed is nothing to do', async () => {
-    const { join, approve } = joinFor({
-      discover: async () =>
-        err(
-          new PairedExtensionDiscoveryFailure(
-            PairedExtensionDiscoveryFailureKind.NotInstalled,
-          ),
-        ),
-    })
+    const { join, discover, approve } = joinFor({ extensionInstalled: false })
 
     expect((await join.run())._unsafeUnwrap()).toBe(
       PairedExtensionIdentityJoinOutcome.Unchanged,
     )
+    expect(discover).not.toHaveBeenCalled()
+    expect(approve).not.toHaveBeenCalled()
+  })
+
+  test('an installed extension that cannot be reached is reported', async () => {
+    const failure = new PairedExtensionDiscoveryFailure(
+      PairedExtensionDiscoveryFailureKind.Delivery,
+    )
+    const { join, approve } = joinFor({ discover: async () => err(failure) })
+
+    expect((await join.run())._unsafeUnwrapErr()).toBe(failure.translationKey)
     expect(approve).not.toHaveBeenCalled()
   })
 

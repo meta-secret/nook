@@ -101,7 +101,7 @@ describe('add a device', () => {
         replacements: { identity: IDENTITY },
       }),
     )
-    expect(screen.queryByTestId('onboard-device-submit')).toBeNull()
+    expect(screen.queryAllByTestId('onboard-device-submit')).toHaveLength(0)
   })
 
   test("offers this browser's passkey while the extension's key is in use", () => {
@@ -118,7 +118,9 @@ describe('add a device', () => {
   test('says this browser has not joined when it uses its own key', () => {
     const vault = renderFlow('pendingJoin', VaultIdentityKeySource.ThisBrowser)
 
-    expect(screen.queryByTestId('add-device-use-browser-key')).toBeNull()
+    expect(screen.queryAllByTestId('add-device-use-browser-key')).toHaveLength(
+      0,
+    )
 
     expect(screen.getByTestId('add-device-not-member').textContent).toContain(
       vault.t({

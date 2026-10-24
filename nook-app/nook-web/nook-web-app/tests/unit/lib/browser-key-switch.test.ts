@@ -19,16 +19,20 @@ afterEach(() => {
 const STORE_ID = 'store_vault'
 
 type Session = {
-  readonly keySource?: VaultIdentityKeySource
-  readonly protection?: DeviceProtectionStatus
+  readonly keySource: VaultIdentityKeySource
+  readonly protection: DeviceProtectionStatus
 }
 
-function extensionSession(session: Session): VaultState {
+const EXTENSION_KEY_WITH_PASSKEY: Session = {
+  keySource: VaultIdentityKeySource.PairedCompanion,
+  protection: DeviceProtectionStatus.Passkey,
+}
+
+function extensionSession(overrides: Partial<Session>): VaultState {
+  const session: Session = { ...EXTENSION_KEY_WITH_PASSKEY, ...overrides }
   const vault = VaultStateTestFixture.create()
-  vault.identityKeySource =
-    session.keySource ?? VaultIdentityKeySource.PairedCompanion
-  vault.deviceProtectionLockedStatus =
-    session.protection ?? DeviceProtectionStatus.Passkey
+  vault.identityKeySource = session.keySource
+  vault.deviceProtectionLockedStatus = session.protection
   vault.openActiveVault(STORE_ID)
   vault.isAuthenticated = true
   vault.workspaceSection = WorkspaceSection.AddDevice
