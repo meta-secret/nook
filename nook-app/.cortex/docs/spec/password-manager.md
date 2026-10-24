@@ -235,8 +235,12 @@ secrets:
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Supported user-secret tags:** `login`, `api-key`, `seed-phrase`,
-  `secure-note`, `passkey`, `authenticator`, `credit-card`, and
-  `file-attachment`. A `passkey` plaintext payload is versioned and contains
+  `secure-note`, `passkey`, `authenticator`, `credit-card`,
+  `file-attachment`, `person`, `address`, `identity-document`, and
+  `bank-account`. The last four and `credit-card` form the Personal data
+  category; see
+  [personal-data-items.md](../../../nook-platform/nook-core/.cortex/docs/spec/personal-data-items.md).
+  A `passkey` plaintext payload is versioned and contains
   the RP/account metadata, credential id, user handle, ES256 PKCS#8/COSE key
   material, signature counter, discoverability, and backup flags. It is
   encrypted as one ordinary per-record payload; private key material never

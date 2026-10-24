@@ -6,3 +6,4 @@
 
 - [Identity and authorization](../../../nook-auth2/.cortex/docs/spec/index.md)
 - [Vault items](../../../nook-core/.cortex/docs/spec/index.md)
+- [Personal field autofill](../../../nook-companion-core/.cortex/docs/spec/index.md)
