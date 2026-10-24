@@ -28,6 +28,8 @@ export const ExtensionSessionMessageType = {
   ListSiteSecrets: 'nook:extension-session-list-site-secrets',
   RevealLogin: 'nook:extension-session-reveal-login',
   RevealFocusedLogin: 'nook:extension-session-reveal-focused-login',
+  ListPersonalRecords: 'nook:extension-session-list-personal-records',
+  RevealPersonalFill: 'nook:extension-session-reveal-personal-fill',
   ListAuthenticators: 'nook:extension-session-list-authenticators',
   AuthenticatorCode: 'nook:extension-session-authenticator-code',
   AuthenticatorEnrollPreview:

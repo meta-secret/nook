@@ -1918,6 +1918,14 @@
       "no_results": "No matching logins for this site.",
       "failed": "Nook could not load or select this login. Unlock the extension and try again."
     },
+    "personal_picker": {
+      "title": "Choose a record",
+      "description": "The record you pick fills only the fields of this form.",
+      "unnamed": "Untitled record",
+      "loading": "Loading saved records…",
+      "no_results": "No saved records of this kind. Add one in Nook.",
+      "failed": "Nook could not load or fill this record. Unlock the extension and try again."
+    },
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
@@ -2059,7 +2067,12 @@
       "checklist_site_message": "Message from the site",
       "checklist_complete": "Sign-in confirmed",
       "checklist_inactive": "You are in control",
-      "checklist_label": "Sign-in steps"
+      "checklist_label": "Sign-in steps",
+      "personal_person_title": "Fill your details",
+      "personal_address_title": "Fill an address",
+      "personal_card_title": "Fill a card",
+      "personal_description": "Choose a saved record in Nook. Nothing is filled until you pick one.",
+      "personal_picker_title": "Choose personal data"
     },
     "passkey": {
       "prompt_label": "Nook passkey",

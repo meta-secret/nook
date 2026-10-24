@@ -1,5 +1,9 @@
 import { LoginSaveSessionOperations } from './session-login-save-operations'
 import { FocusedLoginRevealOperation } from './session-focused-login-reveal'
+import {
+  PersonalFillRevealOperation,
+  PersonalRecordsListOperation,
+} from './session-personal-fill-operations'
 import { SessionVaultEventLogExport } from './session-vault-event-log-export'
 import { Effect } from 'effect'
 import {
@@ -676,6 +680,18 @@ export async function handleSessionMessage({
           getManager,
         }
         return new FocusedLoginRevealOperation(request).run()
+      }
+      case ExtensionSessionMessageType.ListPersonalRecords: {
+        const request: ConstructorParameters<
+          typeof PersonalRecordsListOperation
+        >[0] = { message, getManager }
+        return new PersonalRecordsListOperation(request).run()
+      }
+      case ExtensionSessionMessageType.RevealPersonalFill: {
+        const request: ConstructorParameters<
+          typeof PersonalFillRevealOperation
+        >[0] = { message, getManager }
+        return new PersonalFillRevealOperation(request).run()
       }
       case ExtensionSessionMessageType.RevealLogin: {
         const payload = message.payload

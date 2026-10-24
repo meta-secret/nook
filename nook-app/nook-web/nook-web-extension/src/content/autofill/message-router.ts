@@ -47,6 +47,12 @@ import {
   type SidePanelPageAddAuthenticatorDelivery,
 } from './side-panel-page-authenticator-setup'
 import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
+import { personalFillInteraction } from './personal-fill-interaction'
+import {
+  PersonalFillPageReceiver,
+  PersonalFillReception,
+  type PersonalFillPageDelivery,
+} from './personal-fill-reception'
 import {
   PendingPickerTakeKind,
   pickerState,
@@ -58,6 +64,9 @@ import { workflowUi } from './workflow-ui'
 const sidePanelPageAddAuthenticator = new SidePanelPageAddAuthenticatorReceiver(
   authenticatorEnrollmentInteraction,
 )
+const personalFillPageReceiver = new PersonalFillPageReceiver(
+  personalFillInteraction,
+)
 
 export function removeScannedWidget(): void {
   authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -68,6 +77,7 @@ export function removeScannedWidget(): void {
 async function clearAuthenticationSurface(): Promise<void> {
   widgetState.googleLoginContinuation.cancel()
   focusedCredentialInteraction.clear()
+  personalFillInteraction.clear()
   const dismissal = loginSaveInteraction.dismissPendingSaveOffer()
   removeScannedWidget()
   await dismissal
@@ -118,6 +128,17 @@ export const routeAutofillMessage: AutofillMessageListener = (
     case SidePanelPageNeedReception.Responding:
       return true
     case SidePanelPageNeedReception.Ignored:
+      break
+  }
+  const personalFill: PersonalFillPageDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (personalFillPageReceiver.receive(personalFill)) {
+    case PersonalFillReception.Responded:
+      return false
+    case PersonalFillReception.Ignored:
       break
   }
   const sidePanelAdd: SidePanelPageAddAuthenticatorDelivery = {

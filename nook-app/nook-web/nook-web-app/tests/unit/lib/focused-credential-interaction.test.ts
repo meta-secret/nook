@@ -195,6 +195,8 @@ class FocusedInteractionFixture {
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
       case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
       case CompanionWasmSessionMessageType.ValidateReviewedAuthenticatorLabels:
+      case CompanionWasmSessionMessageType.ClassifyPersonalField:
+      case CompanionWasmSessionMessageType.PlanPersonalFill:
       case CompanionWasmSessionMessageType.SitePageNeed:
         return { kind: RuntimeMessageDeliveryKind.Unavailable }
     }

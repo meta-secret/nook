@@ -89,6 +89,10 @@ export class ExtensionSessionSenderPolicy {
       ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.RevealFocusedLogin]:
       ExtensionSessionRequestAudience.ServiceWorker,
+    [ExtensionSessionMessageType.ListPersonalRecords]:
+      ExtensionSessionRequestAudience.ServiceWorker,
+    [ExtensionSessionMessageType.RevealPersonalFill]:
+      ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.ListAuthenticators]:
       ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.AuthenticatorCode]:

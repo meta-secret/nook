@@ -15,6 +15,12 @@ import {
   focusedCredentialInteraction,
   focusedCredentialTargetSensor,
 } from './autofill/focused-credential-interaction'
+import {
+  PersonalFillDisposition,
+  PersonalFillSurfaceKind,
+  personalFillInteraction,
+  personalFillTargetSensor,
+} from './autofill/personal-fill-interaction'
 import { companionWasmReadiness } from './autofill/companion-wasm-readiness'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
@@ -136,7 +142,31 @@ export class AuthenticationScanRenderLifecycle {
       case FocusedSurfaceKind.Visible:
         return
       case FocusedSurfaceKind.Empty:
+        break
+    }
+    switch (personalFillInteraction.hasSurface) {
+      case PersonalFillSurfaceKind.Visible:
+        return
+      case PersonalFillSurfaceKind.Empty:
         removeScannedWidget()
+    }
+  }
+
+  /** The focused field has no credential opportunity; Rust may still plan a personal fill. */
+  private async renderPersonalFill(sequence: number): Promise<void> {
+    const rendered = await personalFillInteraction.tryRender()
+    switch (sequence === scanState.sequence) {
+      case false:
+        return
+      case true:
+        break
+    }
+    switch (rendered) {
+      case PersonalFillDisposition.Unavailable:
+        removeScannedWidget()
+        return
+      case PersonalFillDisposition.Ready:
+        return
     }
   }
 
@@ -500,7 +530,7 @@ export class AuthenticationScanRenderLifecycle {
             }
             switch (rendered) {
               case FocusedUiDisposition.Unavailable:
-                removeScannedWidget()
+                yield* Effect.promise(() => this.renderPersonalFill(sequence))
                 break
               case FocusedUiDisposition.Ready:
                 break
@@ -766,6 +796,7 @@ void runAfterCompanionWasmReady({
       'click',
       (event) => {
         focusedCredentialTargetSensor.observe(event)
+        personalFillTargetSensor.observe(event)
         authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
           event,
         )
@@ -778,6 +809,11 @@ void runAfterCompanionWasmReady({
     document.addEventListener(
       'focusin',
       focusedCredentialTargetSensor.observe.bind(focusedCredentialTargetSensor),
+      true,
+    )
+    document.addEventListener(
+      'focusin',
+      personalFillTargetSensor.observe.bind(personalFillTargetSensor),
       true,
     )
     const observer = new MutationObserver((mutations) => {

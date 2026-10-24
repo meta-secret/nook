@@ -63,6 +63,11 @@ type NookLocaleCatalogShape = {
       login_no_match_title: string
       login_unavailable: string
       login_unavailable_description: string
+      personal_person_title: string
+      personal_address_title: string
+      personal_card_title: string
+      personal_description: string
+      personal_picker_title: string
       signup_title: string
       signup_description: string
       password_change_title: string
@@ -495,6 +500,36 @@ export async function buildChromeLocales({
         widgetLoginUnavailableDescription: {
           message: catalog.extension.widget.message(
             'login_unavailable_description',
+            locale,
+          ),
+        },
+        widgetPersonalPersonTitle: {
+          message: catalog.extension.widget.message(
+            'personal_person_title',
+            locale,
+          ),
+        },
+        widgetPersonalAddressTitle: {
+          message: catalog.extension.widget.message(
+            'personal_address_title',
+            locale,
+          ),
+        },
+        widgetPersonalCardTitle: {
+          message: catalog.extension.widget.message(
+            'personal_card_title',
+            locale,
+          ),
+        },
+        widgetPersonalDescription: {
+          message: catalog.extension.widget.message(
+            'personal_description',
+            locale,
+          ),
+        },
+        widgetPersonalPickerTitle: {
+          message: catalog.extension.widget.message(
+            'personal_picker_title',
             locale,
           ),
         },
