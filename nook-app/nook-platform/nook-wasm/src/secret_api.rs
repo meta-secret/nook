@@ -3,8 +3,8 @@ use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 use js_sys::Date;
 use nook_core::SecretFormFields;
 use nook_core::{
-    AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
-    ValidationError,
+    AuthenticatorSecret, BackupCodeAttachMode, SecretCategory, SecretListItemData, SecretType,
+    SecretTypeFilter, ValidationError,
 };
 
 mod secret_record;
@@ -23,6 +23,12 @@ pub enum NookSecretTypeFilter {
     Authenticator,
     CreditCard,
     FileAttachment,
+    Secrets,
+    PersonalData,
+    Person,
+    Address,
+    IdentityDocument,
+    BankAccount,
 }
 
 impl NookSecretTypeFilter {
@@ -37,6 +43,12 @@ impl NookSecretTypeFilter {
             Self::Authenticator => SecretTypeFilter::Only(SecretType::Authenticator),
             Self::CreditCard => SecretTypeFilter::Only(SecretType::CreditCard),
             Self::FileAttachment => SecretTypeFilter::Only(SecretType::FileAttachment),
+            Self::Secrets => SecretTypeFilter::Category(SecretCategory::Secrets),
+            Self::PersonalData => SecretTypeFilter::Category(SecretCategory::PersonalData),
+            Self::Person => SecretTypeFilter::Only(SecretType::Person),
+            Self::Address => SecretTypeFilter::Only(SecretType::Address),
+            Self::IdentityDocument => SecretTypeFilter::Only(SecretType::IdentityDocument),
+            Self::BankAccount => SecretTypeFilter::Only(SecretType::BankAccount),
         }
     }
 }
@@ -45,6 +57,13 @@ impl NookSecretTypeFilter {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
     secret_type.as_str().to_owned()
+}
+
+/// Vault section (secrets or personal data) that lists and creates a type.
+#[wasm_bindgen]
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn secret_type_category(secret_type: nook_core::SecretType) -> nook_core::SecretCategory {
+    secret_type.category()
 }
 
 #[wasm_bindgen]
@@ -776,6 +795,12 @@ mod browser_projection_tests {
             NookSecretTypeFilter::Authenticator,
             NookSecretTypeFilter::CreditCard,
             NookSecretTypeFilter::FileAttachment,
+            NookSecretTypeFilter::Secrets,
+            NookSecretTypeFilter::PersonalData,
+            NookSecretTypeFilter::Person,
+            NookSecretTypeFilter::Address,
+            NookSecretTypeFilter::IdentityDocument,
+            NookSecretTypeFilter::BankAccount,
         ] {
             let _ = filter.to_core();
         }
@@ -788,6 +813,10 @@ mod browser_projection_tests {
             SecretType::Authenticator,
             SecretType::CreditCard,
             SecretType::FileAttachment,
+            SecretType::Person,
+            SecretType::Address,
+            SecretType::IdentityDocument,
+            SecretType::BankAccount,
         ] {
             assert!(!secret_type_name(secret_type).is_empty());
         }

@@ -6,6 +6,9 @@
 
 use super::passkey_authenticator::encoding::Es256KeyValidation;
 use super::passkey_authenticator::{PasskeyAuthenticatorError, PasskeyAuthenticatorResult};
+use super::personal_data::{
+    AddressSecret, BankAccountSecret, IdentityDocumentSecret, PersonSecret,
+};
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{AuthenticatorSecret, CreditCardSecret, SecretId};
@@ -481,6 +484,10 @@ pub enum SecretValue {
     Authenticator(AuthenticatorSecret),
     CreditCard(CreditCardSecret),
     FileAttachment(FileAttachmentSecret),
+    Person(PersonSecret),
+    Address(AddressSecret),
+    IdentityDocument(IdentityDocumentSecret),
+    BankAccount(BankAccountSecret),
 }
 
 impl SecretValue {
@@ -530,6 +537,26 @@ impl SecretValue {
                 secret.validate()?;
                 Ok(Self::FileAttachment(secret))
             }
+            SecretType::Person => {
+                let secret: PersonSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidPerson)?;
+                Ok(Self::Person(secret.normalize()?))
+            }
+            SecretType::Address => {
+                let secret: AddressSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidAddress)?;
+                Ok(Self::Address(secret.normalize()?))
+            }
+            SecretType::IdentityDocument => {
+                let secret: IdentityDocumentSecret = serde_yaml::from_str(yaml)
+                    .map_err(SecretPayloadError::InvalidIdentityDocument)?;
+                Ok(Self::IdentityDocument(secret.normalize()?))
+            }
+            SecretType::BankAccount => {
+                let secret: BankAccountSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidBankAccount)?;
+                Ok(Self::BankAccount(secret.normalize()?))
+            }
         }
     }
 
@@ -549,6 +576,10 @@ impl SecretValue {
                 value.validate()?;
                 serde_yaml::to_string(value)
             }
+            Self::Person(value) => serde_yaml::to_string(value),
+            Self::Address(value) => serde_yaml::to_string(value),
+            Self::IdentityDocument(value) => serde_yaml::to_string(value),
+            Self::BankAccount(value) => serde_yaml::to_string(value),
         }
         .map_err(SecretPayloadError::Serialize)?;
         Ok(SecretPayloadYaml::from_trusted(yaml))
@@ -565,6 +596,10 @@ impl SecretValue {
             Self::Authenticator(_) => SecretType::Authenticator,
             Self::CreditCard(_) => SecretType::CreditCard,
             Self::FileAttachment(_) => SecretType::FileAttachment,
+            Self::Person(_) => SecretType::Person,
+            Self::Address(_) => SecretType::Address,
+            Self::IdentityDocument(_) => SecretType::IdentityDocument,
+            Self::BankAccount(_) => SecretType::BankAccount,
         }
     }
 
@@ -593,6 +628,10 @@ impl SecretValue {
             Self::Authenticator(value) => value.zeroize(),
             Self::CreditCard(value) => value.zeroize_plaintext(),
             Self::FileAttachment(value) => value.zeroize_plaintext(),
+            Self::Person(value) => value.zeroize_plaintext(),
+            Self::Address(value) => value.zeroize_plaintext(),
+            Self::IdentityDocument(value) => value.zeroize_plaintext(),
+            Self::BankAccount(value) => value.zeroize_plaintext(),
         }
     }
 }

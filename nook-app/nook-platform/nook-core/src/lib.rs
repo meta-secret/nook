@@ -45,11 +45,13 @@ pub use device_access::{
 };
 pub use nook_auth2::MemberLabelState;
 pub use nook_auth2::RecordTypeDeclaration;
+pub use nook_auth2::SecretCategory;
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
     import_support, keepassxc_import, keeper_import, lastpass_import, onepassword_import,
-    passkey_authenticator, password, proton_pass_import, secret_types, secret_view, session,
+    passkey_authenticator, password, personal_data, proton_pass_import, secret_types, secret_view,
+    session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -198,6 +200,11 @@ pub use passkey_authenticator::{
     PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
     PasskeyUserVerification,
 };
+pub use personal_data::{
+    AddressFields, AddressSecret, BankAccountFields, BankAccountSecret, CalendarDate,
+    CalendarDateError, IdentityDocumentFields, IdentityDocumentKind, IdentityDocumentSecret,
+    PersonFields, PersonSecret,
+};
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
 pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};
 pub use secret_types::{
@@ -206,6 +213,11 @@ pub use secret_types::{
     PasskeyPublicKeyCose, PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord,
     SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload,
     StoredSecretRecord,
+};
+pub use secret_view::{
+    AddressListItem, AddressSecretForm, AddressView, BankAccountListItem, BankAccountSecretForm,
+    BankAccountView, IdentityDocumentListItem, IdentityDocumentSecretForm, IdentityDocumentView,
+    PersonListItem, PersonSecretForm, PersonView, PersonalDataView,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,

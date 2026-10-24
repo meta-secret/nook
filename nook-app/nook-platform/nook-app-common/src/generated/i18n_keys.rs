@@ -637,6 +637,8 @@ pub const ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED: &str = "errors.local_backup_folde
 pub const ERRORS_MANAGER_UNINITIALIZED: &str = "errors.manager_uninitialized";
 pub const ERRORS_SHARED_PROVIDER_ACCESS_REQUIRED: &str = "errors.shared_provider_access_required";
 pub const ERRORS_SHARED_PROVIDER_OAUTH_REQUIRED: &str = "errors.shared_provider_oauth_required";
+pub const ERRORS_VALIDATION_ADDRESS_LINE1_REQUIRED: &str =
+    "errors.validation.address_line1_required";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_BACKUP_CODES_INVALID: &str =
     "errors.validation.authenticator_backup_codes_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID: &str =
@@ -651,6 +653,14 @@ pub const ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID: &str =
     "errors.validation.authenticator_secret_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID: &str =
     "errors.validation.authenticator_uri_invalid";
+pub const ERRORS_VALIDATION_BANK_ACCOUNT_IBAN_INVALID: &str =
+    "errors.validation.bank_account_iban_invalid";
+pub const ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_INVALID: &str =
+    "errors.validation.bank_account_number_invalid";
+pub const ERRORS_VALIDATION_BANK_ACCOUNT_NUMBER_REQUIRED: &str =
+    "errors.validation.bank_account_number_required";
+pub const ERRORS_VALIDATION_BANK_ACCOUNT_ROUTING_CODE_INVALID: &str =
+    "errors.validation.bank_account_routing_code_invalid";
 pub const ERRORS_VALIDATION_BIP39_EMPTY: &str = "errors.validation.bip39_empty";
 pub const ERRORS_VALIDATION_BIP39_INVALID: &str = "errors.validation.bip39_invalid";
 pub const ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID: &str =
@@ -672,12 +682,25 @@ pub const ERRORS_VALIDATION_GITHUB_PAT_EMPTY: &str = "errors.validation.github_p
 pub const ERRORS_VALIDATION_GITHUB_REPO_CHARS: &str = "errors.validation.github_repo_chars";
 pub const ERRORS_VALIDATION_GITHUB_REPO_INVALID: &str = "errors.validation.github_repo_invalid";
 pub const ERRORS_VALIDATION_GITHUB_REPO_LENGTH: &str = "errors.validation.github_repo_length";
+pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_DATE_INVALID: &str =
+    "errors.validation.identity_document_date_invalid";
+pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE: &str =
+    "errors.validation.identity_document_expiry_before_issue";
+pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_NUMBER_REQUIRED: &str =
+    "errors.validation.identity_document_number_required";
 pub const ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET: &str =
     "errors.validation.invalid_sentinel_share_set";
 pub const ERRORS_VALIDATION_LOCAL_DATA_CHANGED_IN_ANOTHER_TAB: &str =
     "errors.validation.local_data_changed_in_another_tab";
 pub const ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY: &str =
     "errors.validation.oauth_access_token_empty";
+pub const ERRORS_VALIDATION_PERSON_BIRTH_DATE_INVALID: &str =
+    "errors.validation.person_birth_date_invalid";
+pub const ERRORS_VALIDATION_PERSON_EMAIL_INVALID: &str = "errors.validation.person_email_invalid";
+pub const ERRORS_VALIDATION_PERSON_NAME_REQUIRED: &str = "errors.validation.person_name_required";
+pub const ERRORS_VALIDATION_PERSON_PHONE_INVALID: &str = "errors.validation.person_phone_invalid";
+pub const ERRORS_VALIDATION_PERSONAL_DATA_TEXT_INVALID: &str =
+    "errors.validation.personal_data_text_invalid";
 pub const ERRORS_VALIDATION_SECRET_DATA_REQUIRED: &str = "errors.validation.secret_data_required";
 pub const ERRORS_VALIDATION_SECRET_ID_REQUIRED: &str = "errors.validation.secret_id_required";
 pub const ERRORS_VALIDATION_SECRET_ID_RESERVED: &str = "errors.validation.secret_id_reserved";

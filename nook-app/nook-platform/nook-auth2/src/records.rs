@@ -24,6 +24,20 @@ pub enum SecretType {
     Authenticator,
     CreditCard,
     FileAttachment,
+    Person,
+    Address,
+    IdentityDocument,
+    BankAccount,
+}
+
+/// Vault section that owns a secret type: credentials and keys, or personal data
+/// used to fill identity, address, and payment forms.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecretCategory {
+    Secrets,
+    PersonalData,
 }
 
 impl SecretType {
@@ -37,6 +51,10 @@ impl SecretType {
             "authenticator" => Ok(Self::Authenticator),
             "credit-card" => Ok(Self::CreditCard),
             "file-attachment" => Ok(Self::FileAttachment),
+            "person" => Ok(Self::Person),
+            "address" => Ok(Self::Address),
+            "identity-document" => Ok(Self::IdentityDocument),
+            "bank-account" => Ok(Self::BankAccount),
             _ => Err(SecretPayloadError::UnknownSecretType {
                 value: value.to_owned(),
             }),
@@ -54,6 +72,29 @@ impl SecretType {
             Self::Authenticator => "authenticator",
             Self::CreditCard => "credit-card",
             Self::FileAttachment => "file-attachment",
+            Self::Person => "person",
+            Self::Address => "address",
+            Self::IdentityDocument => "identity-document",
+            Self::BankAccount => "bank-account",
+        }
+    }
+
+    /// Vault section that lists and creates this secret type.
+    #[must_use]
+    pub const fn category(self) -> SecretCategory {
+        match self {
+            Self::Login
+            | Self::ApiKey
+            | Self::SeedPhrase
+            | Self::SecureNote
+            | Self::Passkey
+            | Self::Authenticator
+            | Self::FileAttachment => SecretCategory::Secrets,
+            Self::Person
+            | Self::Address
+            | Self::IdentityDocument
+            | Self::BankAccount
+            | Self::CreditCard => SecretCategory::PersonalData,
         }
     }
 }
@@ -146,6 +187,10 @@ mod tests {
             ("authenticator", SecretType::Authenticator),
             ("credit-card", SecretType::CreditCard),
             ("file-attachment", SecretType::FileAttachment),
+            ("person", SecretType::Person),
+            ("address", SecretType::Address),
+            ("identity-document", SecretType::IdentityDocument),
+            ("bank-account", SecretType::BankAccount),
         ];
         for (tag, expected) in cases {
             assert_eq!(SecretType::parse(tag)?, expected);
@@ -154,6 +199,42 @@ mod tests {
             assert_eq!(serde_json::from_str::<SecretType>(&encoded)?, expected);
         }
         assert!(SecretType::parse("totp").is_err());
+        assert!(SecretType::parse("identity_document").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn secret_type_category_splits_personal_data_from_secrets() -> anyhow::Result<()> {
+        let personal = [
+            SecretType::Person,
+            SecretType::Address,
+            SecretType::IdentityDocument,
+            SecretType::BankAccount,
+            SecretType::CreditCard,
+        ];
+        let secrets = [
+            SecretType::Login,
+            SecretType::ApiKey,
+            SecretType::SeedPhrase,
+            SecretType::SecureNote,
+            SecretType::Passkey,
+            SecretType::Authenticator,
+            SecretType::FileAttachment,
+        ];
+        for secret_type in personal {
+            assert_eq!(secret_type.category(), SecretCategory::PersonalData);
+        }
+        for secret_type in secrets {
+            assert_eq!(secret_type.category(), SecretCategory::Secrets);
+        }
+        assert_eq!(
+            serde_json::to_string(&SecretCategory::PersonalData)?,
+            "\"personal-data\""
+        );
+        assert_eq!(
+            serde_json::from_str::<SecretCategory>("\"secrets\"")?,
+            SecretCategory::Secrets
+        );
         Ok(())
     }
 

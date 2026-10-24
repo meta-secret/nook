@@ -50,6 +50,12 @@ impl SecretRecord {
                 mime_type: value.mime_type.clone(),
                 size_bytes: value.size_bytes,
             },
+            SecretValue::Person(value) => SecretListItemData::Person(value.list_item()),
+            SecretValue::Address(value) => SecretListItemData::Address(value.list_item()),
+            SecretValue::IdentityDocument(value) => {
+                SecretListItemData::IdentityDocument(value.list_item())
+            }
+            SecretValue::BankAccount(value) => SecretListItemData::BankAccount(value.list_item()),
         };
         SecretListItem {
             id: self.id.clone(),
@@ -70,6 +76,10 @@ impl SecretRecord {
             SecretValue::Authenticator(value) => value.issuer.clone(),
             SecretValue::CreditCard(value) => value.title.clone(),
             SecretValue::FileAttachment(value) => value.title.clone(),
+            SecretValue::Person(_)
+            | SecretValue::Address(_)
+            | SecretValue::IdentityDocument(_)
+            | SecretValue::BankAccount(_) => self.list_item().display_title(),
         }
     }
 
@@ -81,9 +91,14 @@ impl SecretRecord {
             SecretValue::ApiKey(value) => value.key.as_str(),
             SecretValue::SeedPhrase(value) => value.seed.as_str(),
             SecretValue::SecureNote(value) => value.note.as_str(),
-            SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
+            SecretValue::Passkey(_)
+            | SecretValue::FileAttachment(_)
+            | SecretValue::Person(_)
+            | SecretValue::Address(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),
             SecretValue::CreditCard(value) => value.number.as_str(),
+            SecretValue::IdentityDocument(value) => value.number.as_str(),
+            SecretValue::BankAccount(value) => value.account_number.as_str(),
         }
     }
 
@@ -129,6 +144,10 @@ impl SecretRecord {
                     title.to_owned()
                 }
             }
+            SecretValue::Person(_)
+            | SecretValue::Address(_)
+            | SecretValue::IdentityDocument(_)
+            | SecretValue::BankAccount(_) => self.list_item().group_key(),
         }
     }
 
@@ -169,6 +188,10 @@ impl SecretRecord {
             }
             SecretValue::CreditCard(value) => value.masked_number(),
             SecretValue::FileAttachment(value) => value.file_name.trim().to_owned(),
+            SecretValue::Person(_)
+            | SecretValue::Address(_)
+            | SecretValue::IdentityDocument(_)
+            | SecretValue::BankAccount(_) => self.list_item().summary(),
         }
     }
 

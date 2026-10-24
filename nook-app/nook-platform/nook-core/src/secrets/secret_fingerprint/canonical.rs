@@ -149,8 +149,37 @@ impl CanonicalSecretBytes {
                 bytes.append(FingerprintText::new(&file.mime_type).normalized().as_str());
                 bytes.append(u64::from(file.size_bytes).to_string().as_str());
             }
+            SecretValue::Person(person) => {
+                bytes.append("person");
+                bytes.append_normalized(&person.given_name);
+                bytes.append_normalized(&person.family_name);
+                bytes.append(person.birth_date.as_str());
+            }
+            SecretValue::Address(address) => {
+                bytes.append("address");
+                bytes.append_normalized(&address.label);
+                bytes.append_normalized(&address.address_line1);
+                bytes.append_normalized(&address.postal_code);
+                bytes.append_normalized(&address.country);
+            }
+            SecretValue::IdentityDocument(document) => {
+                bytes.append("identity-document");
+                bytes.append(document.kind.as_str());
+                bytes.append_normalized(&document.name_as_printed);
+                bytes.append_normalized(&document.issuing_country);
+                bytes.append(document.last4().as_str());
+            }
+            SecretValue::BankAccount(account) => {
+                bytes.append("bank-account");
+                bytes.append_normalized(&account.bank_name);
+                bytes.append_normalized(&account.account_holder);
+                bytes.append(account.last4().as_str());
+            }
         }
         bytes
+    }
+    fn append_normalized(&mut self, value: &str) {
+        self.append(FingerprintText::new(value).normalized().as_str());
     }
     fn version(value: &SecretValue) -> Self {
         let mut bytes = Self::identity(value);
@@ -220,6 +249,25 @@ impl CanonicalSecretBytes {
             SecretValue::FileAttachment(file) => {
                 bytes.append(file.content_base64.as_str());
             }
+            SecretValue::Person(person) => {
+                bytes.append_normalized(&person.middle_name);
+                bytes.append(person.email.as_str());
+                bytes.append(person.phone.as_str());
+            }
+            SecretValue::Address(address) => {
+                bytes.append_normalized(&address.address_line2);
+                bytes.append_normalized(&address.city);
+                bytes.append_normalized(&address.region);
+            }
+            SecretValue::IdentityDocument(document) => {
+                bytes.append(document.number.as_str());
+                bytes.append(document.issue_date.as_str());
+                bytes.append(document.expiry_date.as_str());
+            }
+            SecretValue::BankAccount(account) => {
+                bytes.append(account.account_number.as_str());
+                bytes.append(account.routing_code.as_str());
+            }
         }
         bytes
     }
@@ -231,7 +279,9 @@ mod tests {
         CanonicalSecretBytes, CanonicalSecretFingerprint, FingerprintKind, FingerprintRequest,
     };
     use crate::{
-        ApiKeySecret, CreditCardSecret, FileAttachmentSecret, LoginSecret, SecretValue,
+        AddressFields, AddressSecret, ApiKeySecret, BankAccountFields, BankAccountSecret,
+        CreditCardSecret, FileAttachmentSecret, IdentityDocumentFields, IdentityDocumentKind,
+        IdentityDocumentSecret, LoginSecret, PersonFields, PersonSecret, SecretValue,
         SecureNoteSecret, SeedPhraseSecret, SymmetricKey,
     };
     use nook_auth2::ValidationResult;
@@ -407,6 +457,89 @@ mod tests {
         );
         assert_eq!(CanonicalSecretBytes::version(&value).0,
             b"11:credit-card\x004:Card\x005:Alice\x004:1111\x0016:4111111111111111\x002:01\x004:2030\x003:007\x004:note\x00");
+    }
+
+    #[test]
+    fn personal_data_framing_separates_identity_from_version_fields() -> anyhow::Result<()> {
+        let person = SecretValue::Person(PersonSecret::from_fields(PersonFields {
+            given_name: "Ada",
+            middle_name: "Augusta",
+            family_name: "Lovelace",
+            birth_date: "1815-12-10",
+            email: "ada@example.com",
+            phone: "+44 20",
+        })?);
+        assert_eq!(
+            CanonicalSecretBytes::identity(&person).0,
+            b"6:person\x003:Ada\x008:Lovelace\x0010:1815-12-10\x00"
+        );
+        assert_eq!(
+            CanonicalSecretBytes::version(&person).0,
+            b"6:person\x003:Ada\x008:Lovelace\x0010:1815-12-10\x007:Augusta\x0015:ada@example.com\x006:+44 20\x00"
+        );
+        let document = SecretValue::IdentityDocument(IdentityDocumentSecret::from_fields(
+            IdentityDocumentFields {
+                kind: IdentityDocumentKind::Passport,
+                number: "X1234567",
+                issuing_country: "GB",
+                issue_date: "2020-01-15",
+                expiry_date: "2030-01-14",
+                name_as_printed: "ADA LOVELACE",
+            },
+        )?);
+        assert_eq!(
+            CanonicalSecretBytes::identity(&document).0,
+            b"17:identity-document\x008:passport\x0012:ADA LOVELACE\x002:GB\x004:4567\x00"
+        );
+        let account =
+            SecretValue::BankAccount(BankAccountSecret::from_fields(BankAccountFields {
+                account_holder: "Ada Lovelace",
+                bank_name: "Analytical Bank",
+                account_number: "GB82WEST12345698765432",
+                routing_code: "NWBKGB2L",
+            })?);
+        assert_eq!(
+            CanonicalSecretBytes::version(&account).0,
+            b"12:bank-account\x0015:Analytical Bank\x0012:Ada Lovelace\x004:5432\x0022:GB82WEST12345698765432\x008:NWBKGB2L\x00"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn personal_data_fingerprints_are_distinct_per_type_and_version() -> anyhow::Result<()> {
+        let key = SymmetricKey::parse(&"a".repeat(64))?;
+        let address = AddressSecret::from_fields(AddressFields {
+            label: "Home",
+            address_line1: "12 Analytical Row",
+            address_line2: "",
+            city: "London",
+            region: "",
+            postal_code: "W1 1AA",
+            country: "GB",
+        })?;
+        let mut moved = address.clone();
+        moved.city = "Cambridge".to_owned();
+        let original = SecretValue::Address(address);
+        let moved = SecretValue::Address(moved);
+        assert_eq!(
+            original.identity_fingerprint(&key)?,
+            moved.identity_fingerprint(&key)?
+        );
+        assert_ne!(original.fingerprint(&key)?, moved.fingerprint(&key)?);
+
+        let person = SecretValue::Person(PersonSecret::from_fields(PersonFields {
+            given_name: "Home",
+            middle_name: "",
+            family_name: "12 Analytical Row",
+            birth_date: "",
+            email: "",
+            phone: "",
+        })?);
+        assert_ne!(
+            original.identity_fingerprint(&key)?,
+            person.identity_fingerprint(&key)?
+        );
+        Ok(())
     }
 
     #[test]

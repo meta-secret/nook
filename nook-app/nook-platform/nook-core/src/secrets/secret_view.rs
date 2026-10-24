@@ -3,10 +3,13 @@
 use crate::errors::SecretPayloadResult;
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
+    AddressSecret, BankAccountSecret, CreditCardFields, IdentityDocumentSecret, PersonSecret,
+    ValidationError,
+};
+use crate::{
     ApiKeySecret, AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, LoginSecret,
     SecretId, SecretRecord, SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret,
 };
-use crate::{CreditCardFields, ValidationError};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -19,6 +22,9 @@ pub use secret_presentation::{
 };
 mod focused_login_fill;
 mod passkey_details;
+mod personal_data_forms;
+mod personal_data_items;
+mod personal_data_view;
 mod secret_record_presentation;
 pub use focused_login_fill::{
     CredentialKind, FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
@@ -27,6 +33,15 @@ pub use focused_login_fill::{
 pub use passkey_details::{
     PasskeyBackupStatus, PasskeyDetails, PasskeyDiscoverability, PasskeyKeyAlgorithm,
     PasskeyPublicKeyFingerprint,
+};
+pub use personal_data_forms::{
+    AddressSecretForm, BankAccountSecretForm, IdentityDocumentSecretForm, PersonSecretForm,
+};
+pub use personal_data_items::{
+    AddressListItem, BankAccountListItem, IdentityDocumentListItem, PersonListItem,
+};
+pub use personal_data_view::{
+    AddressView, BankAccountView, IdentityDocumentView, PersonView, PersonalDataView,
 };
 
 /// Number of words exposed by a seed-phrase list projection.
@@ -106,6 +121,10 @@ pub enum SecretListItemData {
         mime_type: String,
         size_bytes: FileAttachmentByteCount,
     },
+    Person(PersonListItem),
+    Address(AddressListItem),
+    IdentityDocument(IdentityDocumentListItem),
+    BankAccount(BankAccountListItem),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -186,6 +205,10 @@ pub enum SecretFormFields {
     Authenticator(AuthenticatorSecretForm),
     CreditCard(CreditCardSecretForm),
     FileAttachment(FileAttachmentSecretForm),
+    Person(PersonSecretForm),
+    Address(AddressSecretForm),
+    IdentityDocument(IdentityDocumentSecretForm),
+    BankAccount(BankAccountSecretForm),
 }
 
 impl SecretFormFields {
@@ -199,6 +222,10 @@ impl SecretFormFields {
             Self::Authenticator(_) => SecretType::Authenticator,
             Self::CreditCard(_) => SecretType::CreditCard,
             Self::FileAttachment(_) => SecretType::FileAttachment,
+            Self::Person(_) => SecretType::Person,
+            Self::Address(_) => SecretType::Address,
+            Self::IdentityDocument(_) => SecretType::IdentityDocument,
+            Self::BankAccount(_) => SecretType::BankAccount,
         }
     }
 }
@@ -279,6 +306,18 @@ impl SecretFormFields {
                     content_base64: fields.content_base64.clone(),
                 };
                 return SecretValue::FileAttachment(value).to_yaml();
+            }
+            SecretFormFields::Person(form) => {
+                SecretValue::Person(PersonSecret::from_fields(form.fields())?)
+            }
+            SecretFormFields::Address(form) => {
+                SecretValue::Address(AddressSecret::from_fields(form.fields())?)
+            }
+            SecretFormFields::IdentityDocument(form) => {
+                SecretValue::IdentityDocument(IdentityDocumentSecret::from_fields(form.fields())?)
+            }
+            SecretFormFields::BankAccount(form) => {
+                SecretValue::BankAccount(BankAccountSecret::from_fields(form.fields())?)
             }
         };
         value.to_yaml()

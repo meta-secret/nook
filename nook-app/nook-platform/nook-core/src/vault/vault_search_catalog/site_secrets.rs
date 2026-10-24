@@ -137,7 +137,11 @@ impl SiteSecretCandidate<'_> {
             SecretListItemData::SeedPhrase { .. }
             | SecretListItemData::SecureNote { .. }
             | SecretListItemData::CreditCard { .. }
-            | SecretListItemData::FileAttachment { .. } => Ok(SiteSecretMatch::Unmatched),
+            | SecretListItemData::FileAttachment { .. }
+            | SecretListItemData::Person(_)
+            | SecretListItemData::Address(_)
+            | SecretListItemData::IdentityDocument(_)
+            | SecretListItemData::BankAccount(_) => Ok(SiteSecretMatch::Unmatched),
         }
     }
 

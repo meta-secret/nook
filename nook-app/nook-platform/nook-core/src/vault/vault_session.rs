@@ -10,8 +10,8 @@ use crate::RecordTypeDeclaration;
 
 use crate::errors::{SessionError, VaultResult};
 use crate::{
-    Database, SecretId, SecretListItem, SecretRecord, SecretType, SecretValue, StoredRecordPayload,
-    StoredSecretRecord, VaultCrypto, VaultMetaState,
+    Database, SecretCategory, SecretId, SecretListItem, SecretRecord, SecretType, SecretValue,
+    StoredRecordPayload, StoredSecretRecord, VaultCrypto, VaultMetaState,
 };
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -22,6 +22,8 @@ pub const MAX_SECRET_PAGE_SIZE: usize = 100;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecretTypeFilter {
     All,
+    /// Every type in one vault section (secrets or personal data).
+    Category(SecretCategory),
     Only(SecretType),
 }
 
@@ -30,6 +32,7 @@ impl SecretTypeFilter {
     pub fn matches(self, candidate: SecretType) -> bool {
         match self {
             Self::All => true,
+            Self::Category(category) => candidate.category() == category,
             Self::Only(expected) => expected == candidate,
         }
     }
@@ -218,6 +221,32 @@ mod tests {
         ApiKeySecret, LoginSecret, SecretId, SecretValue, StoredRecordPayload, VaultKeys,
         VaultResult,
     };
+
+    #[test]
+    fn category_filter_selects_one_vault_section() {
+        let personal = SecretTypeFilter::Category(SecretCategory::PersonalData);
+        let secrets = SecretTypeFilter::Category(SecretCategory::Secrets);
+        for secret_type in [
+            SecretType::Person,
+            SecretType::Address,
+            SecretType::IdentityDocument,
+            SecretType::BankAccount,
+            SecretType::CreditCard,
+        ] {
+            assert!(personal.matches(secret_type));
+            assert!(!secrets.matches(secret_type));
+        }
+        for secret_type in [
+            SecretType::Login,
+            SecretType::Passkey,
+            SecretType::FileAttachment,
+        ] {
+            assert!(secrets.matches(secret_type));
+            assert!(!personal.matches(secret_type));
+        }
+        assert!(SecretTypeFilter::Only(SecretType::Person).matches(SecretType::Person));
+        assert!(!SecretTypeFilter::Only(SecretType::Person).matches(SecretType::Address));
+    }
 
     #[test]
     fn apply_user_records_preserves_meta_and_replaces_secrets() -> VaultResult<()> {
