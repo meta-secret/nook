@@ -14,6 +14,24 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub use nook_companion_core::{PersonalFieldGroup, PersonalFieldKind};
 
+/// The one secret type whose records fill a personal field group.
+///
+/// Record listing for a fill offer and the fill projection both use this
+/// mapping, so the offered records are exactly the records the reveal admits.
+pub trait PersonalFillRecordType {
+    fn record_type(self) -> SecretType;
+}
+
+impl PersonalFillRecordType for PersonalFieldGroup {
+    fn record_type(self) -> SecretType {
+        match self {
+            PersonalFieldGroup::Person => SecretType::Person,
+            PersonalFieldGroup::Address => SecretType::Address,
+            PersonalFieldGroup::Card => SecretType::CreditCard,
+        }
+    }
+}
+
 /// One derived value for one requested field kind.
 pub struct PersonalFillValue {
     kind: PersonalFieldKind,
@@ -154,34 +172,27 @@ impl PersonalFillProjection<'_> {
     }
 
     fn admitted_record(&self) -> Result<GroupRecord<'_>, PersonalFillError> {
-        match (self.group, &self.record.data) {
-            (PersonalFieldGroup::Person, SecretValue::Person(person)) => {
-                Ok(GroupRecord::Person(person))
-            }
-            (PersonalFieldGroup::Address, SecretValue::Address(address)) => {
-                Ok(GroupRecord::Address(address))
-            }
-            (PersonalFieldGroup::Card, SecretValue::CreditCard(card)) => {
-                Ok(GroupRecord::Card(card))
-            }
-            (
-                PersonalFieldGroup::Person | PersonalFieldGroup::Address | PersonalFieldGroup::Card,
-                SecretValue::Login(_)
-                | SecretValue::ApiKey(_)
-                | SecretValue::SeedPhrase(_)
-                | SecretValue::SecureNote(_)
-                | SecretValue::Passkey(_)
-                | SecretValue::Authenticator(_)
-                | SecretValue::CreditCard(_)
-                | SecretValue::FileAttachment(_)
-                | SecretValue::Person(_)
-                | SecretValue::Address(_)
-                | SecretValue::IdentityDocument(_)
-                | SecretValue::BankAccount(_),
-            ) => Err(PersonalFillError::GroupMismatch {
-                secret_type: self.record.data.secret_type(),
-                group: self.group,
-            }),
+        let secret_type = self.record.data.secret_type();
+        let mismatch = PersonalFillError::GroupMismatch {
+            secret_type,
+            group: self.group,
+        };
+        if secret_type != self.group.record_type() {
+            return Err(mismatch);
+        }
+        match &self.record.data {
+            SecretValue::Person(person) => Ok(GroupRecord::Person(person)),
+            SecretValue::Address(address) => Ok(GroupRecord::Address(address)),
+            SecretValue::CreditCard(card) => Ok(GroupRecord::Card(card)),
+            SecretValue::Login(_)
+            | SecretValue::ApiKey(_)
+            | SecretValue::SeedPhrase(_)
+            | SecretValue::SecureNote(_)
+            | SecretValue::Passkey(_)
+            | SecretValue::Authenticator(_)
+            | SecretValue::FileAttachment(_)
+            | SecretValue::IdentityDocument(_)
+            | SecretValue::BankAccount(_) => Err(mismatch),
         }
     }
 }
@@ -314,7 +325,7 @@ impl GroupRecord<'_> {
 mod tests {
     use super::{
         PersonalFieldGroup, PersonalFieldKind, PersonalFillError, PersonalFillProjection,
-        PersonalFillValues,
+        PersonalFillRecordType, PersonalFillValues,
     };
     use crate::{
         AddressFields, AddressSecret, CreditCardFields, CreditCardSecret, IdentityDocumentFields,
@@ -653,6 +664,29 @@ mod tests {
                 .map(|values| values.values().len()),
                 Err(PersonalFillError::GroupMismatch { secret_type, group })
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn listing_filter_type_is_exactly_the_type_the_projection_admits() -> anyhow::Result<()> {
+        for group in [
+            PersonalFieldGroup::Person,
+            PersonalFieldGroup::Address,
+            PersonalFieldGroup::Card,
+        ] {
+            let filter = crate::SecretTypeFilter::Only(group.record_type());
+            for record in [person()?, address("")?, card(&UNDATED)?] {
+                let listed = filter.matches(record.secret_type);
+                let admitted = Reveal {
+                    record,
+                    group,
+                    kinds: &[],
+                }
+                .values()
+                .is_ok();
+                assert_eq!(listed, admitted, "{group:?}");
+            }
         }
         Ok(())
     }

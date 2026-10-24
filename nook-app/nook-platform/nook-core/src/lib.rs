@@ -218,8 +218,8 @@ pub use secret_view::{
     AddressListItem, AddressSecretForm, AddressView, BankAccountListItem, BankAccountSecretForm,
     BankAccountView, IdentityDocumentListItem, IdentityDocumentSecretForm, IdentityDocumentView,
     PersonListItem, PersonSecretForm, PersonView, PersonalDataView, PersonalFieldGroup,
-    PersonalFieldKind, PersonalFillError, PersonalFillProjection, PersonalFillValue,
-    PersonalFillValues,
+    PersonalFieldKind, PersonalFillError, PersonalFillProjection, PersonalFillRecordType,
+    PersonalFillValue, PersonalFillValues,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,

@@ -10,7 +10,6 @@
 use super::queue::QueueDisposition;
 use crate::{PersonalFieldGroup, PersonalFieldKind};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use tsify::Tsify;
 
 /// Grant-bound request for the list metadata of one personal record group.
@@ -27,39 +26,6 @@ pub struct PersonalRecordsGrantPayload {
     queue: QueueDisposition,
 }
 
-/// Planned kinds of one fill: at least one, each at most once.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
-#[serde(try_from = "Vec<PersonalFieldKind>")]
-#[tsify(type = "(keyof typeof PersonalFieldKind)[]")]
-pub struct PersonalFillKinds(Vec<PersonalFieldKind>);
-
-impl PersonalFillKinds {
-    /// The number of distinct personal field kinds.
-    const MAXIMUM: usize = 24;
-
-    #[must_use]
-    pub fn as_slice(&self) -> &[PersonalFieldKind] {
-        let Self(kinds) = self;
-        kinds
-    }
-}
-
-impl TryFrom<Vec<PersonalFieldKind>> for PersonalFillKinds {
-    type Error = String;
-
-    fn try_from(kinds: Vec<PersonalFieldKind>) -> Result<Self, Self::Error> {
-        let distinct = kinds.iter().collect::<HashSet<_>>().len();
-        match (kinds.len(), distinct == kinds.len()) {
-            (0, _) => Err("personal fill requires at least one kind".to_owned()),
-            (count, _) if count > Self::MAXIMUM => {
-                Err("personal fill lists too many kinds".to_owned())
-            }
-            (_, false) => Err("personal fill repeats a kind".to_owned()),
-            (_, true) => Ok(Self(kinds)),
-        }
-    }
-}
-
 /// Grant-bound reveal of one selected record's planned kinds.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -71,7 +37,8 @@ pub struct PersonalFillGrantPayload {
     secret_id: String,
     #[tsify(type = "keyof typeof PersonalFieldGroup")]
     group: PersonalFieldGroup,
-    kinds: PersonalFillKinds,
+    #[tsify(type = "(keyof typeof PersonalFieldKind)[]")]
+    kinds: Vec<PersonalFieldKind>,
     queue: QueueDisposition,
 }
 
@@ -103,7 +70,7 @@ mod tests {
         };
         assert_eq!(payload.group, PersonalFieldGroup::Person);
         assert_eq!(
-            payload.kinds.as_slice(),
+            payload.kinds,
             [
                 PersonalFieldKind::GivenName,
                 PersonalFieldKind::FamilyName,
@@ -140,16 +107,24 @@ mod tests {
     }
 
     #[test]
-    fn personal_fill_kinds_are_present_distinct_and_bounded() {
+    fn personal_fill_kinds_pass_through_for_the_projection_to_deduplicate() -> anyhow::Result<()> {
+        let repeated = REVEAL.replace(r#""FamilyName""#, r#""GivenName""#);
         assert_eq!(
-            validation(&REVEAL.replace(r#"["GivenName","FamilyName","Email"]"#, "[]")),
-            ExtensionSessionRequestValidation::Rejected
+            validation(&repeated),
+            ExtensionSessionRequestValidation::Accepted
         );
+        let ExtensionSessionRequest::RevealPersonalFill(payload) = serde_json::from_str(&repeated)?
+        else {
+            anyhow::bail!("expected a personal fill reveal");
+        };
         assert_eq!(
-            validation(&REVEAL.replace(r#""FamilyName""#, r#""GivenName""#)),
-            ExtensionSessionRequestValidation::Rejected
+            payload.kinds,
+            [
+                PersonalFieldKind::GivenName,
+                PersonalFieldKind::GivenName,
+                PersonalFieldKind::Email
+            ]
         );
-        let oversized = vec![PersonalFieldKind::GivenName; PersonalFillKinds::MAXIMUM + 1];
-        assert!(PersonalFillKinds::try_from(oversized).is_err());
+        Ok(())
     }
 }
