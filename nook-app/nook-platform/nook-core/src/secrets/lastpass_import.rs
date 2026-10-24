@@ -145,6 +145,23 @@ impl LastPassUrl<'_> {
 }
 
 impl LastPassRecord<'_> {
+    /// The whole secure note, with its original text and `LastPass` metadata.
+    fn secure_note(&self, name: &str) -> SecretValue {
+        let mut note = self.field("extra").to_owned();
+        LastPassMetadata {
+            name: "",
+            website_url: "",
+            grouping: self.field("grouping"),
+            favorite: self.field("fav"),
+            totp: self.field("totp"),
+        }
+        .append_to(&mut note);
+        SecretValue::SecureNote(SecureNoteSecret {
+            title: name.to_owned(),
+            note,
+        })
+    }
+
     fn convert(&self) -> ImportItemDisposition {
         if self.record.iter().all(|value| value.trim().is_empty()) {
             return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
@@ -154,23 +171,15 @@ impl LastPassRecord<'_> {
         let mut notes = self.field("extra").to_owned();
 
         if (LastPassUrl { url }).is_secure_note() {
-            if let Some(disposition) =
-                LastPassTypedNote::parse(&notes).and_then(|note| note.disposition(name))
-            {
-                return disposition;
-            }
-            LastPassMetadata {
-                name: "",
-                website_url: "",
-                grouping: self.field("grouping"),
-                favorite: self.field("fav"),
-                totp: self.field("totp"),
-            }
-            .append_to(&mut notes);
-            return ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
-                title: name.to_owned(),
-                note: notes,
-            }));
+            let typed = LastPassTypedNote::parse(&notes)
+                .and_then(|note| note.disposition(name).map(|records| (note, records)));
+            return match typed {
+                Some((note, records)) if note.has_unmapped_values() => {
+                    records.with_record(self.secure_note(name))
+                }
+                Some((_, records)) => records,
+                None => ImportItemDisposition::Imported(self.secure_note(name)),
+            };
         }
 
         let website_url = if url.is_empty() { name } else { url }.to_owned();

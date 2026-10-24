@@ -68,16 +68,12 @@ impl BitwardenIdentityPayload {
 
 impl BitwardenIdentity {
     fn disposition(&self, name: &str) -> ImportItemDisposition {
-        let full_name = PresentParts {
-            parts: &[&self.first_name, &self.middle_name, &self.last_name],
-            separator: " ",
-        }
-        .joined();
         let address_line2 = PresentParts {
             parts: &[&self.address2, &self.address3],
             separator: ", ",
         }
         .joined();
+        // Bitwarden exports no printed name for its documents.
         let document = |kind, number: &BitwardenText| {
             PersonalImportPart::document(IdentityDocumentFields {
                 kind,
@@ -85,7 +81,7 @@ impl BitwardenIdentity {
                 issuing_country: "",
                 issue_date: "",
                 expiry_date: "",
-                name_as_printed: &full_name,
+                name_as_printed: "",
             })
         };
         PersonalImportItem {
@@ -148,7 +144,7 @@ mod tests {
         assert_eq!(address.region, "Greater London");
         assert_eq!(passport.kind, IdentityDocumentKind::Passport);
         assert_eq!(passport.number, "X1234567");
-        assert_eq!(passport.name_as_printed, "Ada Lovelace");
+        assert!(passport.name_as_printed.is_empty());
         assert_eq!(license.kind, IdentityDocumentKind::DriversLicense);
         Ok(())
     }
@@ -171,10 +167,11 @@ mod tests {
           {"type":4,"name":"Bad email","identity":{"firstName":"Ada","email":"not-an-email"}},
           {"type":4,"name":"Only SSN","identity":{"ssn":"000-00-0000"}},
           {"type":4,"name":"No payload","identity":null},
+          {"id":"bitwarden-identity-1","type":4,"name":"Skipped identity"},
           {"type":2,"name":"Note","notes":"kept"}]}"#;
         let plan = BitwardenItems::parse(json)?.plan();
-        assert_eq!(usize::from(plan.source_count), 4);
-        assert_eq!(usize::from(plan.skipped_unsupported), 3);
+        assert_eq!(usize::from(plan.source_count), 5);
+        assert_eq!(usize::from(plan.skipped_unsupported), 4);
         assert!(matches!(
             plan.items.as_slice(),
             [SecretValue::SecureNote(_)]

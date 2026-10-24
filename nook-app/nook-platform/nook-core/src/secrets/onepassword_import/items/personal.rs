@@ -164,15 +164,11 @@ impl OnePasswordVaultItem<'_> {
     /// calendar day, so it is not imported.
     pub(super) fn driver_license(&self) -> ImportItemDisposition {
         let fields = self.typed_fields();
-        let issuing_country = [fields.text("country"), fields.text("state")]
-            .into_iter()
-            .find(|value| !value.is_empty())
-            .unwrap_or_default();
         PersonalImportItem {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind: IdentityDocumentKind::DriversLicense,
                 number: &fields.text("number"),
-                issuing_country: &issuing_country,
+                issuing_country: &fields.text("country"),
                 issue_date: "",
                 expiry_date: "",
                 name_as_printed: &fields.text("fullname"),
@@ -287,7 +283,7 @@ mod tests {
             anyhow::bail!("expected driver license");
         };
         assert_eq!(document.kind, IdentityDocumentKind::DriversLicense);
-        assert_eq!(document.issuing_country, "CA");
+        assert!(document.issuing_country.is_empty());
         assert!(document.expiry_date.is_empty());
         Ok(())
     }

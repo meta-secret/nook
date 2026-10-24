@@ -139,7 +139,6 @@ impl PersonalInfoColumns {
 /// and one routing number (a BIC beside an IBAN, otherwise a US ABA number).
 #[derive(Clone, Copy)]
 pub(super) struct BankPaymentColumns {
-    pub(super) account_name: CsvExportColumn,
     pub(super) account_holder: CsvExportColumn,
     pub(super) account_number: CsvExportColumn,
     pub(super) routing_number: CsvExportColumn,
@@ -149,7 +148,6 @@ pub(super) struct BankPaymentColumns {
 impl BankPaymentColumns {
     pub(super) fn from_headers(headers: &NormalizedDashlaneHeaders) -> Self {
         Self {
-            account_name: headers.optional(&["account_name", "account name"]),
             account_holder: headers.optional(&["account_holder", "account holder"]),
             account_number: headers.optional(&["account_number", "account number"]),
             routing_number: headers.optional(&["routing_number", "routing number"]),
@@ -161,10 +159,7 @@ impl BankPaymentColumns {
         let fields = CsvRecordFields::new(record);
         let account_number = fields.optional(self.account_number);
         let routing_number = fields.optional(self.routing_number);
-        let bank_name = match fields.optional(self.issuing_bank) {
-            bank if bank.is_empty() => fields.optional(self.account_name),
-            bank => bank,
-        };
+        let bank_name = fields.optional(self.issuing_bank);
         let account_holder = fields.optional(self.account_holder);
         let bank = match (ExportedAccountNumber {
             raw: &account_number,
@@ -297,7 +292,7 @@ mod tests {
         };
         assert_eq!(international.bank_name, "Commerzbank");
         assert_eq!(international.swift_bic, "COBADEFFXXX");
-        assert_eq!(domestic.bank_name, "Checking");
+        assert!(domestic.bank_name.is_empty());
         assert_eq!(domestic.routing_number, "021000021");
         Ok(())
     }

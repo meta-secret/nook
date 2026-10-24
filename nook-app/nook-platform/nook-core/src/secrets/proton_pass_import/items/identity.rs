@@ -6,7 +6,6 @@
 use super::ProtonPassVaultItem;
 use crate::secrets::import_support::ImportItemDisposition;
 use crate::secrets::import_support::personal::{PersonalImportItem, PersonalImportPart};
-use crate::secrets::personal_data::PresentParts;
 use crate::{AddressFields, IdentityDocumentFields, IdentityDocumentKind, PersonFields};
 use serde::Deserialize;
 
@@ -56,24 +55,20 @@ impl ProtonPassVaultItem<'_> {
         ]
         .iter()
         .all(|name| name.trim().is_empty());
-        // A full name alone has no reliable split; it becomes the given name.
-        let given_name = if split_names {
-            identity.full_name.as_str()
+        // A full name alone has no reliable given/family split.
+        let person = if split_names && !identity.full_name.trim().is_empty() {
+            PersonalImportPart::Unsupported
         } else {
-            identity.first_name.as_str()
+            PersonalImportPart::person(PersonFields {
+                given_name: &identity.first_name,
+                middle_name: &identity.middle_name,
+                family_name: &identity.last_name,
+                birth_date: &identity.birthdate,
+                email: &identity.email,
+                phone: &identity.phone_number,
+            })
         };
-        let printed_name = match identity.full_name.trim() {
-            "" => PresentParts {
-                parts: &[
-                    &identity.first_name,
-                    &identity.middle_name,
-                    &identity.last_name,
-                ],
-                separator: " ",
-            }
-            .joined(),
-            full_name => full_name.to_owned(),
-        };
+        // Proton Pass exports no printed name for its documents.
         let document = |kind, number: &str| {
             PersonalImportPart::document(IdentityDocumentFields {
                 kind,
@@ -81,19 +76,12 @@ impl ProtonPassVaultItem<'_> {
                 issuing_country: "",
                 issue_date: "",
                 expiry_date: "",
-                name_as_printed: &printed_name,
+                name_as_printed: "",
             })
         };
         PersonalImportItem {
             parts: vec![
-                PersonalImportPart::person(PersonFields {
-                    given_name,
-                    middle_name: &identity.middle_name,
-                    family_name: &identity.last_name,
-                    birth_date: &identity.birthdate,
-                    email: &identity.email,
-                    phone: &identity.phone_number,
-                }),
+                person,
                 PersonalImportPart::address(AddressFields {
                     label: self.item.data.metadata.name.trim(),
                     address_line1: &identity.street_address,
@@ -145,23 +133,24 @@ mod tests {
         assert_eq!(address.label, "Me");
         assert_eq!(address.address_line2, "3");
         assert_eq!(passport.kind, IdentityDocumentKind::Passport);
-        assert_eq!(passport.name_as_printed, "Ada Lovelace");
+        assert!(passport.name_as_printed.is_empty());
         Ok(())
     }
 
     #[test]
-    fn full_name_only_becomes_the_given_name_and_bad_dates_skip() -> anyhow::Result<()> {
+    fn full_name_only_is_unsupported_and_bad_dates_skip() -> anyhow::Result<()> {
         let json = r#"{"vaults":{"a":{"items":[
           {"data":{"type":"identity","metadata":{"name":"Short"},"content":{"fullName":"Ada Lovelace"}}},
+          {"data":{"type":"identity","metadata":{"name":"Mail"},"content":{"fullName":"Ada Lovelace","streetAddress":"1 Main St"}}},
           {"data":{"type":"identity","metadata":{"name":"Bad"},"content":{"firstName":"Ada","birthdate":"10/12/1815"}}},
           {"data":{"type":"identity","metadata":{"name":"Empty"},"content":{"socialSecurityNumber":"000-00-0000"}}}]}}}"#;
         let plan = ProtonPassExport::parse(json)?.plan();
-        assert_eq!(usize::from(plan.source_count), 3);
-        assert_eq!(usize::from(plan.skipped_unsupported), 2);
-        let [SecretValue::Person(person)] = plan.items.as_slice() else {
-            anyhow::bail!("expected one person");
+        assert_eq!(usize::from(plan.source_count), 4);
+        assert_eq!(usize::from(plan.skipped_unsupported), 3);
+        let [SecretValue::Address(address)] = plan.items.as_slice() else {
+            anyhow::bail!("expected only the address of the full-name identity");
         };
-        assert_eq!(person.given_name, "Ada Lovelace");
+        assert_eq!(address.address_line1, "1 Main St");
         Ok(())
     }
 }

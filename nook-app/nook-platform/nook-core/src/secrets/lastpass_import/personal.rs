@@ -5,6 +5,10 @@
 //! text starts with `NoteType:<type>` followed by `Key:Value` lines; `Notes:`
 //! holds the remaining free text. Dates are written `Month,Day,Year` and phone
 //! numbers as small JSON objects. Other note types stay secure notes.
+//!
+//! A typed note whose free text or other fields have no Nook mapping also
+//! imports as a secure note, so its original text is kept alongside the
+//! typed records.
 
 use crate::secrets::import_support::personal::{
     BankImportFields, MonthName, MonthNameDate, PersonalImportItem, PersonalImportPart,
@@ -22,6 +26,9 @@ pub(super) struct LastPassTypedNote {
     note_type: String,
     fields: HashMap<String, String>,
 }
+
+/// Export metadata naming the note template language (`en-US`).
+const EXPORT_LANGUAGE_KEY: &str = "language";
 
 impl LastPassTypedNote {
     /// Parse `extra` when it starts with a `NoteType:` line.
@@ -91,11 +98,73 @@ impl LastPassTypedNote {
         }
     }
 
+    /// The phone field an address imports: mobile, then main, then evening.
+    fn chosen_phone(&self) -> Option<&'static str> {
+        ["mobile phone", "phone", "evening phone"]
+            .into_iter()
+            .find(|key| !self.phone(key).is_empty())
+    }
+
+    /// Fields this note's typed records consume.
+    fn mapped_keys(&self) -> Vec<&'static str> {
+        match self.note_type.as_str() {
+            "Address" => [
+                "first name",
+                "middle name",
+                "last name",
+                "birthday",
+                "email address",
+                "address 1",
+                "address 2",
+                "address 3",
+                "city / town",
+                "state",
+                "zip / postal code",
+                "country",
+            ]
+            .into_iter()
+            .chain(self.chosen_phone())
+            .collect(),
+            "Bank Account" => match self.field("iban number") {
+                "" => vec!["bank name", "account number", "routing number"],
+                _ => vec!["bank name", "iban number", "swift code"],
+            },
+            "Driver's License" | "Passport" => vec![
+                "number",
+                "country",
+                "issued date",
+                "expiration date",
+                "name",
+            ],
+            "Credit Card" => vec![
+                "name on card",
+                "number",
+                "security code",
+                "expiration date",
+                "notes",
+            ],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether free text or any non-empty field has no typed mapping.
+    /// `LastPass` writes blank dates as bare commas, and `Language` is
+    /// export metadata rather than user data.
+    pub(super) fn has_unmapped_values(&self) -> bool {
+        let mapped = self.mapped_keys();
+        self.fields.iter().any(|(key, value)| {
+            !mapped.contains(&key.as_str())
+                && key != EXPORT_LANGUAGE_KEY
+                && value
+                    .chars()
+                    .any(|character| character != ',' && !character.is_whitespace())
+        })
+    }
+
     fn address(&self, name: &str) -> ImportItemDisposition {
-        let phone = ["mobile phone", "phone", "evening phone"]
-            .iter()
+        let phone = self
+            .chosen_phone()
             .map(|key| self.phone(key))
-            .find(|phone| !phone.is_empty())
             .unwrap_or_default();
         let address_line2 = PresentParts {
             parts: &[self.field("address 2"), self.field("address 3")],
@@ -141,15 +210,11 @@ impl LastPassTypedNote {
     }
 
     fn document(&self, kind: IdentityDocumentKind) -> ImportItemDisposition {
-        let issuing_country = match self.field("country") {
-            "" => self.field("state"),
-            country => country,
-        };
         PersonalImportItem {
             parts: vec![PersonalImportPart::document(IdentityDocumentFields {
                 kind,
                 number: self.field("number"),
-                issuing_country,
+                issuing_country: self.field("country"),
                 issue_date: &self.date("issued date"),
                 expiry_date: &self.date("expiration date"),
                 name_as_printed: self.field("name"),
@@ -207,16 +272,17 @@ mod tests {
     }
 
     #[test]
-    fn address_notes_produce_person_and_address() -> anyhow::Result<()> {
+    fn fully_mapped_address_with_export_language_gives_person_and_address_only()
+    -> anyhow::Result<()> {
         let text = csv(&[(
             "Home",
-            "NoteType:Address\nLanguage:en-US\nTitle:ms\nFirst Name:Ada\nMiddle Name:\nLast Name:Lovelace\nUsername:\nGender:f\nBirthday:December,10,1815\nCompany:\nAddress 1:12 Analytical Row\nAddress 2:Flat 3\nAddress 3:\nCity / Town:London\nCounty:\nState:Greater London\nZip / Postal Code:W1 1AA\nCountry:GB\nTimezone:\nEmail Address:ada@example.com\nPhone:{\"num\":\"2079460958\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nEvening Phone:\nMobile Phone:\nFax:\nNotes:",
+            "NoteType:Address\nLanguage:en-US\nTitle:\nFirst Name:Ada\nMiddle Name:\nLast Name:Lovelace\nUsername:\nGender:\nBirthday:December,10,1815\nCompany:\nAddress 1:12 Analytical Row\nAddress 2:Flat 3\nAddress 3:\nCity / Town:London\nCounty:\nState:Greater London\nZip / Postal Code:W1 1AA\nCountry:GB\nTimezone:\nEmail Address:ada@example.com\nPhone:{\"num\":\"2079460958\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nEvening Phone:\nMobile Phone:\nFax:\nNotes:",
         )]);
         let plan = LastPassCsvInput::new(&text).plan()?;
         assert_eq!(usize::from(plan.source_count), 1);
         let [SecretValue::Person(person), SecretValue::Address(address)] = plan.items.as_slice()
         else {
-            anyhow::bail!("expected person and address");
+            anyhow::bail!("expected person and address only");
         };
         assert_eq!(person.birth_date, "1815-12-10");
         assert_eq!(person.phone, "2079460958");
@@ -226,23 +292,45 @@ mod tests {
     }
 
     #[test]
-    fn documents_banks_and_cards_map_to_typed_records() -> anyhow::Result<()> {
+    fn unmapped_fields_and_free_text_also_keep_the_whole_secure_note() -> anyhow::Result<()> {
+        let extra = "NoteType:Address\nLanguage:en-US\nFirst Name:Ada\nLast Name:Lovelace\nGender:f\nAddress 1:12 Analytical Row\nCity / Town:London\nPhone:\nMobile Phone:{\"num\":\"7700900000\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nEvening Phone:{\"num\":\"2079460958\",\"ext\":\"\",\"cc3l\":\"GBR\"}\nNotes:Gate code 1234";
+        let text = csv(&[("Home", extra)]);
+        let plan = LastPassCsvInput::new(&text).plan()?;
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        let [
+            SecretValue::Person(person),
+            SecretValue::Address(_),
+            SecretValue::SecureNote(note),
+        ] = plan.items.as_slice()
+        else {
+            anyhow::bail!("expected person, address and the original note");
+        };
+        assert_eq!(person.phone, "7700900000");
+        assert_eq!(note.title, "Home");
+        assert!(note.note.starts_with(extra));
+        assert!(note.note.contains("## LastPass\n- group: Personal"));
+        Ok(())
+    }
+
+    #[test]
+    fn fully_mapped_documents_banks_and_cards_map_to_typed_records() -> anyhow::Result<()> {
         let text = csv(&[
             (
                 "Passport",
-                "NoteType:Passport\nType:P\nName:ADA LOVELACE\nCountry:GB\nNumber:X1234567\nSex:F\nNationality:British\nIssuing Authority:HMPO\nDate of Birth:December,10,1815\nIssued Date:January,15,2020\nExpiration Date:January,14,2030\nNotes:",
+                "NoteType:Passport\nType:\nName:ADA LOVELACE\nCountry:GB\nNumber:X1234567\nSex:\nNationality:\nIssuing Authority:\nDate of Birth:,,\nIssued Date:January,15,2020\nExpiration Date:January,14,2030\nNotes:",
             ),
             (
                 "License",
-                "NoteType:Driver's License\nNumber:D1234567\nExpiration Date:December,31,2030\nLicense Class:C\nName:Ada Lovelace\nAddress:\nCity / Town:\nState:CA\nZIP / Postal Code:\nCountry:\nDate of Birth:\nSex:\nHeight:\nNotes:",
+                "NoteType:Driver's License\nNumber:D1234567\nExpiration Date:December,31,2030\nLicense Class:\nName:Ada Lovelace\nAddress:\nCity / Town:\nState:\nZIP / Postal Code:\nCountry:US\nDate of Birth:\nSex:\nHeight:\nNotes:",
             ),
             (
                 "Checking",
-                "NoteType:Bank Account\nBank Name:Federal Bank\nAccount Type:Checking\nRouting Number:021000021\nAccount Number:000123456789\nSWIFT Code:\nIBAN Number:\nPin:1234\nBranch Address:\nBranch Phone:\nNotes:",
+                "NoteType:Bank Account\nBank Name:Federal Bank\nAccount Type:\nRouting Number:021000021\nAccount Number:000123456789\nSWIFT Code:\nIBAN Number:\nPin:\nBranch Address:\nBranch Phone:\nNotes:",
             ),
             (
                 "Visa",
-                "NoteType:Credit Card\nLanguage:en-US\nName on Card:Ada Lovelace\nType:Visa\nNumber:4111111111111111\nSecurity Code:123\nStart Date:,\nExpiration Date:July,2031\nNotes:billing\nsecond line",
+                "NoteType:Credit Card\nName on Card:Ada Lovelace\nType:\nNumber:4111111111111111\nSecurity Code:123\nStart Date:,\nExpiration Date:July,2031\nNotes:billing\nsecond line",
             ),
         ]);
         let plan = LastPassCsvInput::new(&text).plan()?;
@@ -255,12 +343,12 @@ mod tests {
             SecretValue::CreditCard(card),
         ] = plan.items.as_slice()
         else {
-            anyhow::bail!("expected passport, license, account and card");
+            anyhow::bail!("expected passport, license, account and card only");
         };
         assert_eq!(passport.kind, IdentityDocumentKind::Passport);
         assert_eq!(passport.issue_date, "2020-01-15");
         assert_eq!(passport.expiry_date, "2030-01-14");
-        assert_eq!(license.issuing_country, "CA");
+        assert_eq!(license.issuing_country, "US");
         assert_eq!(license.expiry_date, "2030-12-31");
         assert_eq!(account.bank_name, "Federal Bank");
         assert_eq!(card.expiration_month, "07");
@@ -270,11 +358,30 @@ mod tests {
     }
 
     #[test]
+    fn license_state_stays_in_the_note_instead_of_the_issuing_country() -> anyhow::Result<()> {
+        let text = csv(&[(
+            "License",
+            "NoteType:Driver's License\nNumber:D1234567\nState:CA\nCountry:\nNotes:",
+        )]);
+        let plan = LastPassCsvInput::new(&text).plan()?;
+        let [
+            SecretValue::IdentityDocument(license),
+            SecretValue::SecureNote(note),
+        ] = plan.items.as_slice()
+        else {
+            anyhow::bail!("expected license and note");
+        };
+        assert!(license.issuing_country.is_empty());
+        assert!(note.note.contains("State:CA"));
+        Ok(())
+    }
+
+    #[test]
     fn invalid_typed_notes_are_skipped_and_other_types_stay_notes() -> anyhow::Result<()> {
         let text = csv(&[
             (
                 "Bad bank",
-                "NoteType:Bank Account\nBank Name:Bank\nRouting Number:021000022\nAccount Number:000123456789\nNotes:",
+                "NoteType:Bank Account\nBank Name:Bank\nRouting Number:021000022\nAccount Number:000123456789\nNotes:keep me",
             ),
             (
                 "Bad passport",
@@ -289,7 +396,7 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 2);
         let [SecretValue::SecureNote(note)] = plan.items.as_slice() else {
-            anyhow::bail!("expected the social security note");
+            anyhow::bail!("expected only the social security note");
         };
         assert_eq!(note.title, "SSN");
         Ok(())
