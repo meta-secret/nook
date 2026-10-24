@@ -28,6 +28,8 @@ export const I18N_KEYS = {
   AddDeviceRegenerate: 'add_device.regenerate',
   AddDeviceSingleDevice: 'add_device.single_device',
   AddDeviceTitle: 'add_device.title',
+  AddDeviceUseBrowserKey: 'add_device.use_browser_key',
+  AddDeviceUseBrowserKeyHint: 'add_device.use_browser_key_hint',
   AddSecretAddressDesc: 'add_secret.address_desc',
   AddSecretApiKeyWebsiteHint: 'add_secret.api_key_website_hint',
   AddSecretAuthenticatorDesc: 'add_secret.authenticator_desc',

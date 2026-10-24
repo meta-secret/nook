@@ -3,6 +3,7 @@ import type { ComponentProps } from 'svelte'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import { ok } from 'neverthrow'
 import initNookWasm, {
+  DeviceProtectionStatus,
   VaultIdentityKeySource,
   type IdentityControlSnapshot,
 } from '$app-wasm'
@@ -69,6 +70,8 @@ function renderFlow(
   vault.identityControl.view = ready
   vault.identityControl.mounts = [cloudMount()]
   vault.identityKeySource = keySource
+  vault.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey
+  vault.openActiveVault('store_vault')
   vi.spyOn(vault.identityControl, 'followOpenVault').mockResolvedValue(
     ok(IdentityActionOutcome.Completed),
   )
@@ -101,8 +104,21 @@ describe('add a device', () => {
     expect(screen.queryByTestId('onboard-device-submit')).toBeNull()
   })
 
+  test("offers this browser's passkey while the extension's key is in use", () => {
+    const vault = renderFlow(
+      'notListed',
+      VaultIdentityKeySource.PairedCompanion,
+    )
+
+    expect(
+      screen.getByTestId('add-device-use-browser-key').textContent,
+    ).toContain(vault.t(I18N_KEYS.AddDeviceUseBrowserKey))
+  })
+
   test('says this browser has not joined when it uses its own key', () => {
     const vault = renderFlow('pendingJoin', VaultIdentityKeySource.ThisBrowser)
+
+    expect(screen.queryByTestId('add-device-use-browser-key')).toBeNull()
 
     expect(screen.getByTestId('add-device-not-member').textContent).toContain(
       vault.t({

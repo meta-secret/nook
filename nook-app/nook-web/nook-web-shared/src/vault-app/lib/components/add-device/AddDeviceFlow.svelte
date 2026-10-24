@@ -21,6 +21,7 @@ Every place that offers "Add a device" opens this.
   import { localizeProviderLabel } from "$lib/auth/providers";
   import { enrollmentBrowser } from "$lib/enrollment/code";
   import type { VaultState } from "$lib/vault.svelte";
+  import { BrowserKeySwitch } from "$lib/vault/browser-key-switch";
   import { DeviceJoinMounts } from "./device-join-mounts";
   import PairingDiagram from "./PairingDiagram.svelte";
   import { PairingProgress, PairingStage } from "./pairing-stage";
@@ -93,6 +94,16 @@ Every place that offers "Add a device" opens this.
       replacements: { identity: identityName },
     };
     return vault.t(notMemberRequest);
+  });
+  /** The extension's key is in use and this browser holds its own key
+   * behind a passkey: the page can switch to it. */
+  const browserKey = $derived(new BrowserKeySwitch(vault));
+  const browserKeyHint = $derived.by(() => {
+    const hintRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.AddDeviceUseBrowserKeyHint,
+      replacements: { identity: identityName },
+    };
+    return vault.t(hintRequest);
   });
   const manualJoin = $derived.by(() => {
     const appUrl = enrollmentBrowser
@@ -217,21 +228,37 @@ Every place that offers "Add a device" opens this.
           </Button>
         </div>
       {:else if stage === PairingStage.NotMember}
-        <div
-          class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
-          data-testid="add-device-not-member"
-        >
-          <span class="nk-pair-node" data-state="missing">
-            <KeyRound class="size-6" aria-hidden="true" />
-          </span>
-          <div class="grid gap-2">
-            <h2 class="text-xl font-semibold tracking-tight text-foreground">
-              {vault.t(I18N_KEYS.AddDeviceNotMemberTitle)}
-            </h2>
-            <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
-              {notMember}
-            </p>
+        <div class="grid gap-6" data-testid="add-device-not-member">
+          <div class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+            <span class="nk-pair-node" data-state="missing">
+              <KeyRound class="size-6" aria-hidden="true" />
+            </span>
+            <div class="grid gap-2">
+              <h2 class="text-xl font-semibold tracking-tight text-foreground">
+                {vault.t(I18N_KEYS.AddDeviceNotMemberTitle)}
+              </h2>
+              <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+                {notMember}
+              </p>
+              {#if browserKey.available}
+                <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+                  {browserKeyHint}
+                </p>
+              {/if}
+            </div>
           </div>
+          {#if browserKey.available}
+            <Button
+              type="button"
+              class="nk-go h-11 justify-self-start px-5"
+              data-testid="add-device-use-browser-key"
+              disabled={isBusy}
+              onclick={() => void browserKey.run()}
+            >
+              <KeyRound class="size-4" />
+              {vault.t(I18N_KEYS.AddDeviceUseBrowserKey)}
+            </Button>
+          {/if}
         </div>
       {:else}
         <OnboardDevice
