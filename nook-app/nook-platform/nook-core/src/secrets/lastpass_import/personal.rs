@@ -7,9 +7,10 @@
 //! numbers as small JSON objects. Other note types stay secure notes.
 
 use crate::secrets::import_support::personal::{
-    BankImportFields, MonthNameDate, PersonalImportItem, PersonalImportPart,
+    BankImportFields, MonthName, MonthNameDate, PersonalImportItem, PersonalImportPart,
 };
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
+use crate::secrets::personal_data::PresentParts;
 use crate::{
     AddressFields, CreditCardFields, CreditCardSecret, IdentityDocumentFields,
     IdentityDocumentKind, PersonFields, SecretValue,
@@ -21,21 +22,6 @@ pub(super) struct LastPassTypedNote {
     note_type: String,
     fields: HashMap<String, String>,
 }
-
-const MONTH_NAMES: [&str; 12] = [
-    "january",
-    "february",
-    "march",
-    "april",
-    "may",
-    "june",
-    "july",
-    "august",
-    "september",
-    "october",
-    "november",
-    "december",
-];
 
 impl LastPassTypedNote {
     /// Parse `extra` when it starts with a `NoteType:` line.
@@ -111,11 +97,11 @@ impl LastPassTypedNote {
             .map(|key| self.phone(key))
             .find(|phone| !phone.is_empty())
             .unwrap_or_default();
-        let address_line2 = [self.field("address 2"), self.field("address 3")]
-            .into_iter()
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let address_line2 = PresentParts {
+            parts: &[self.field("address 2"), self.field("address 3")],
+            separator: ", ",
+        }
+        .joined();
         PersonalImportItem {
             parts: vec![
                 PersonalImportPart::person(PersonFields {
@@ -176,13 +162,9 @@ impl LastPassTypedNote {
     fn credit_card(&self, name: &str) -> ImportItemDisposition {
         let (month, year) = match self.field("expiration date").split_once(',') {
             Some((month, year)) => (
-                MONTH_NAMES
-                    .iter()
-                    .position(|candidate| candidate.eq_ignore_ascii_case(month.trim()))
-                    .map_or_else(
-                        || month.trim().to_owned(),
-                        |index| format!("{:02}", index + 1),
-                    ),
+                (MonthName { name: month })
+                    .number()
+                    .map_or_else(|| month.trim().to_owned(), |number| format!("{number:02}")),
                 year.trim().to_owned(),
             ),
             None => (String::new(), String::new()),

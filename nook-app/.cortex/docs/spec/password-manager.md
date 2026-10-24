@@ -97,11 +97,17 @@ flowchart TD
      - Bitwarden login items → Nook logins
      - Bitwarden secure-note items → Nook secure notes
      - Bitwarden card items → Nook credit cards
-   - Identities, SSH keys, and other unsupported types are counted and skipped.
+     - Bitwarden identity items → Nook personal data records
+   - SSH keys and other unsupported types are counted and skipped.
+   - Personal data imports for every provider follow the
+     [personal data import rules](../../../nook-platform/nook-core/.cortex/docs/spec/personal-data-items.md#import).
    - The user can select an unencrypted LastPass generic CSV export.
    - Rust validates the canonical CSV columns.
    - Rust maps normal rows to Nook logins.
-   - Rust maps `http://sn` rows to Nook secure notes.
+   - Rust maps `Address`, `Passport`, `Driver's License`, and `Bank Account`
+     typed `http://sn` notes to personal data records, and `Credit Card`
+     notes to credit cards.
+   - Rust maps other `http://sn` rows to Nook secure notes.
    - Rust preserves grouping, favorite, and optional TOTP metadata in encrypted notes.
    - The user can select an unencrypted KeePassXC CSV export.
    - Rust requires the canonical `Group`, `Title`, `Username`, `Password`, `URL`, and `Notes` columns.
@@ -117,7 +123,8 @@ flowchart TD
    - Rust maps Login and Password items to Nook logins.
    - Rust maps Secure Note items to Nook secure notes.
    - Rust maps Credit Card items to Nook credit cards.
-   - Attachments, passkeys, identities, SSH keys, and other unsupported categories are skipped.
+   - Rust maps Identity, Passport, Driver License, and Bank Account items to personal data records.
+   - Attachments, passkeys, SSH keys, and other unsupported categories are skipped.
    - The user can alternatively select an unencrypted Apple Passwords CSV export or a Safari browsing-data ZIP that contains a passwords CSV.
    - Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns.
    - Rust maps each row to a Nook login.
@@ -140,21 +147,22 @@ flowchart TD
    - Chrome, Chromium, Brave, and Edge exports share one import path.
    - Browser passkeys and non-password autofill data are not included.
    - The user can select an unencrypted Dashlane CSV or CSV ZIP export.
-   - Rust accepts a single credentials, secure-notes, or payments CSV.
+   - Rust accepts a single credentials, secure-notes, payments, IDs, or personal-info CSV.
    - Rust also accepts a ZIP that contains those category files.
    - Credential rows map to Nook logins.
    - Valid `otpSecret`/`otpUrl` values become standalone authenticator items.
    - Secure-note rows map to secure notes.
    - `credit_card` payment rows map to credit cards.
+   - IDs, personal-info name and address rows, and `bank` payment rows map to personal data records.
    - Alternate usernames and categories are preserved under a Dashlane notes section.
-   - IDs, personal information, Wi-Fi, bank accounts, passkeys, attachments, encrypted DASH archives, and Credential Exchange transfers are not imported.
+   - Wi-Fi, passkeys, attachments, encrypted DASH archives, and Credential Exchange transfers are not imported.
    - The user can select an unencrypted Proton Pass ZIP export or a decrypted `data.json`.
    - Rust validates the bounded archive.
    - Rust reads `Proton Pass/data.json` in memory.
-   - Rust maps login, note, and credit-card items.
+   - Rust maps login, note, credit-card, and identity items.
    - Rust preserves supported vault, state, pin, TOTP, alternate URL/email, and custom-field metadata in encrypted item notes.
    - Encrypted PGP exports require prior decryption.
-   - Identities, aliases, passkeys, attachments, and other unsupported types are skipped.
+   - Aliases, passkeys, attachments, and other unsupported types are skipped.
    - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`:
      - an item-identity tag that excludes the password and provider metadata
      - a secret-version tag that includes the password or other secret value and is bound to that identity
@@ -236,9 +244,9 @@ secrets:
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Supported user-secret tags:** `login`, `api-key`, `seed-phrase`,
   `secure-note`, `passkey`, `authenticator`, `credit-card`,
-  `file-attachment`, `person`, `address`, `identity-document`, and
-  `bank-account`. The last four and `credit-card` form the Personal data
-  category; see
+  `file-attachment`, `person`, `address`, `identity-document`,
+  `international-account`, and `domestic-account`. The last five and
+  `credit-card` form the Personal data category; see
   [personal-data-items.md](../../../nook-platform/nook-core/.cortex/docs/spec/personal-data-items.md).
   A `passkey` plaintext payload is versioned and contains
   the RP/account metadata, credential id, user handle, ES256 PKCS#8/COSE key

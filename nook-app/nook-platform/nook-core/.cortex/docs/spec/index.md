@@ -16,5 +16,5 @@
   - Description: Display-only password strength estimate for revealed passwords and API keys
   - Status: Implemented
 - **[personal-data-items.md](personal-data-items.md)**
-  - Description: Personal data category with person, address, identity document, bank account, and card items
+  - Description: Personal data category with person, address, identity document, international and US bank account, and card items, plus their imports
   - Status: Active

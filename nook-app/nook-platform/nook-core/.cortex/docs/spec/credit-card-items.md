@@ -56,9 +56,11 @@ cardholder, number, expiry, and CVV values are revealed for that fill.
 ## Import
 
 Bitwarden (`type: 3`), 1Password Credit Card (`categoryUuid: 002`), Proton Pass
-(`type: creditCard`), and Dashlane `credit_card` payment rows map into this type
-when the export carries a usable card number. Unsupported payment rows remain
-counted and skipped.
+(`type: creditCard`), Dashlane `credit_card` payment rows, and LastPass
+`Credit Card` secure notes map into this type when the export carries a usable
+card number. Unsupported payment rows remain counted and skipped. Other
+personal-data imports are specified in
+[personal data items](personal-data-items.md#import).
 
 ## Executable scenarios
 
