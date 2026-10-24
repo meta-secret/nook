@@ -5,6 +5,7 @@ import {
 } from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
 import { SecretType, type NookSecretRecord } from '$lib/nook'
+import type { PersonalDataView } from '$app-wasm'
 import { SecretExposure } from '$lib/vault/secret-exposure'
 import type { Result } from 'neverthrow'
 import {
@@ -40,6 +41,9 @@ function fakeRecord(value: string) {
     passkeyUserName: '',
     password: '',
     period: 0,
+    get personalData(): PersonalDataView {
+      throw new Error('Only personal-data records have a personal-data view.')
+    },
     primaryCredential: value,
     rpId: '',
     seed: '',

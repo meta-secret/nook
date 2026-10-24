@@ -2,8 +2,8 @@
 
 ## Overview
 
-Add payment cards as a first-class vault item type alongside login, API key,
-secure note, seed phrase, passkey, and authenticator.
+Add payment cards as a first-class vault item type. Cards belong to the
+[Personal data](personal-data-items.md) category, not to Secrets.
 
 ## Goals
 
@@ -38,19 +38,29 @@ Expiry month and year are either both empty or both present.
 
 ## UI and security
 
-- Type picker entry creates a credit-card form (title, cardholder, number,
-  expiry, CVV, notes).
+- The Personal data section's add picker creates a credit-card form (title,
+  cardholder, number, expiry, CVV, notes).
 - List rows show title, masked last four (`•••• 4242`), and expiry when present.
 - Expanding an item decrypts the full record. Number and CVV stay masked until
   explicit reveal. Copy actions cover number, CVV, expiry, and cardholder.
 - Full card number and CVV must never be logged.
 
+## Browser autofill
+
+The extension fills payment forms through the `Card` group of
+[personal field autofill](../../../../nook-companion-core/.cortex/docs/spec/personal-field-autofill.md).
+Fields are classified by the `cc-*` autocomplete tokens, with the
+identity-text fallback. The user selects one card. Only the planned
+cardholder, number, expiry, and CVV values are revealed for that fill.
+
 ## Import
 
 Bitwarden (`type: 3`), 1Password Credit Card (`categoryUuid: 002`), Proton Pass
-(`type: creditCard`), and Dashlane `credit_card` payment rows map into this type
-when the export carries a usable card number. Unsupported payment rows remain
-counted and skipped.
+(`type: creditCard`), Dashlane `credit_card` payment rows, and LastPass
+`Credit Card` secure notes map into this type when the export carries a usable
+card number. Unsupported payment rows remain counted and skipped. Other
+personal-data imports are specified in
+[personal data items](personal-data-items.md#import).
 
 ## Executable scenarios
 
@@ -65,6 +75,5 @@ counted and skipped.
 
 ## Out of scope (for now)
 
-- Browser autofill of payment forms
 - Card brand detection UI (Visa/Mastercard/…) as a stored field
 - Billing address as structured fields (use notes if needed)

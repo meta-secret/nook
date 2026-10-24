@@ -114,6 +114,8 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.CommitLoginSave:
     case ExtensionSessionMessageType.RevealLogin:
     case ExtensionSessionMessageType.RevealFocusedLogin:
+    case ExtensionSessionMessageType.ListPersonalRecords:
+    case ExtensionSessionMessageType.RevealPersonalFill:
     case ExtensionSessionMessageType.AuthenticatorCode:
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach:

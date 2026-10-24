@@ -204,6 +204,8 @@ export class GoogleLoginSessionContinuations {
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
+      case CompanionWasmSessionMessageType.ClassifyPersonalField:
+      case CompanionWasmSessionMessageType.PlanPersonalFill:
       case CompanionWasmSessionMessageType.SitePageNeed:
       case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
       case CompanionWasmSessionMessageType.ValidateReviewedAuthenticatorLabels:

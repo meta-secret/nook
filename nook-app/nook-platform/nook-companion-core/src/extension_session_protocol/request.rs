@@ -10,6 +10,7 @@ use super::login_save::{
     DirectLoginSaveActionPayload, GrantedLoginSaveActionPayload, LoginSavePlanPayload,
     OriginPayload,
 };
+use super::personal_fill::{PersonalFillGrantPayload, PersonalRecordsGrantPayload};
 use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
@@ -442,6 +443,10 @@ pub enum ExtensionSessionRequest {
     RevealLogin(SecretGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-focused-login")]
     RevealFocusedLogin(FocusedSecretGrantPayload),
+    #[serde(rename = "nook:extension-session-list-personal-records")]
+    ListPersonalRecords(PersonalRecordsGrantPayload),
+    #[serde(rename = "nook:extension-session-reveal-personal-fill")]
+    RevealPersonalFill(PersonalFillGrantPayload),
     #[serde(rename = "nook:extension-session-list-authenticators")]
     ListAuthenticators(QueryGrantPayload),
     #[serde(rename = "nook:extension-session-authenticator-code")]
@@ -556,6 +561,8 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::ListSiteSecrets(_)
             | ExtensionSessionRequest::RevealLogin(_)
             | ExtensionSessionRequest::RevealFocusedLogin(_)
+            | ExtensionSessionRequest::ListPersonalRecords(_)
+            | ExtensionSessionRequest::RevealPersonalFill(_)
             | ExtensionSessionRequest::ListAuthenticators(_)
             | ExtensionSessionRequest::AuthenticatorCode(_)
             | ExtensionSessionRequest::PendingLoginSave(_)

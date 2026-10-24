@@ -119,4 +119,10 @@ test('builds the side panel with the Nook tab and no toolbar popup page', () => 
     output: ExtensionPageOutput.Owned,
     inputs: ['index.html'],
   })
+  expect(plan.layout(ExtensionPageBuild.PersonalPicker)).toEqual({
+    root: 'src/personal-picker',
+    outDir: 'personal-picker',
+    output: ExtensionPageOutput.Owned,
+    inputs: ['index.html'],
+  })
 })

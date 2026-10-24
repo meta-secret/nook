@@ -68,25 +68,23 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookSecretTypeFilter,
-    secret_type_name,
+    SecretCategory,
     VaultEditDecision,
   } from '$app-wasm'
 
   import {
     ArrowLeft,
-    ChevronLeft,
-    ChevronRight,
-    Plus,
-    Search,
     SearchX,
     TriangleAlert,
     Vault,
     MousePointerClick,
   } from '@lucide/svelte'
   import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
-  import { Button } from '$lib/components/ui/button'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
+  import VaultListPagination from './vault/VaultListPagination.svelte'
+  import VaultListToolbar from './vault/VaultListToolbar.svelte'
+  import { VaultSections } from '$lib/vault/secret-sections'
   import type {
     AuthenticatorCodeView,
     NookSecretListItem,
@@ -189,70 +187,11 @@
     }
   }
 
-  const typeFilters: Array<{
-    value: SecretType
-    filter: NookSecretTypeFilter
-    testId: string
-    labelKey: string
-  }> = [
-    {
-      value: SecretType.Login,
-      filter: NookSecretTypeFilter.Login,
-      testId: secret_type_name(SecretType.Login),
-      labelKey: I18N_KEYS.VaultTypesLogin,
-    },
-    {
-      value: SecretType.Authenticator,
-      filter: NookSecretTypeFilter.Authenticator,
-      testId: secret_type_name(SecretType.Authenticator),
-      labelKey: I18N_KEYS.VaultTypesAuthenticator,
-    },
-    {
-      value: SecretType.ApiKey,
-      filter: NookSecretTypeFilter.ApiKey,
-      testId: secret_type_name(SecretType.ApiKey),
-      labelKey: I18N_KEYS.VaultTypesApiKey,
-    },
-    {
-      value: SecretType.SeedPhrase,
-      filter: NookSecretTypeFilter.SeedPhrase,
-      testId: secret_type_name(SecretType.SeedPhrase),
-      labelKey: I18N_KEYS.VaultTypesSeedPhrase,
-    },
-    {
-      value: SecretType.SecureNote,
-      filter: NookSecretTypeFilter.SecureNote,
-      testId: secret_type_name(SecretType.SecureNote),
-      labelKey: I18N_KEYS.VaultTypesSecureNote,
-    },
-    {
-      value: SecretType.CreditCard,
-      filter: NookSecretTypeFilter.CreditCard,
-      testId: secret_type_name(SecretType.CreditCard),
-      labelKey: I18N_KEYS.VaultTypesCreditCard,
-    },
-    {
-      value: SecretType.FileAttachment,
-      filter: NookSecretTypeFilter.FileAttachment,
-      testId: secret_type_name(SecretType.FileAttachment),
-      labelKey: I18N_KEYS.VaultTypesFileAttachment,
-    },
-    {
-      value: SecretType.Passkey,
-      filter: NookSecretTypeFilter.Passkey,
-      testId: secret_type_name(SecretType.Passkey),
-      labelKey: I18N_KEYS.VaultTypesPasskey,
-    },
-  ]
-
   const filteredItems = $derived(secrets)
 
   const visibleItemCount = $derived(secrets.length)
-  const currentPage = $derived(
-    Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
-  )
-  const pageCount = $derived(
-    Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
+  const sectionDefinition = $derived(
+    VaultSections.definition(vault.secretSection),
   )
 
   const groups = $derived.by(() => {
@@ -297,7 +236,7 @@
 
   const filtersNarrowed = $derived(
     vault.secretQuery.trim() !== '' ||
-      vault.secretTypeFilter !== NookSecretTypeFilter.All,
+      vault.secretTypeFilter !== sectionDefinition.allFilter,
   )
 
   function isSelected(id: string): boolean {
@@ -316,26 +255,22 @@
     onAddModeChange?.(onAddModeChangeArgs)
   }
 
-  function selectTypeFilter(value: string) {
-    if (value === 'all') {
-      vault.secretTypeFilter = NookSecretTypeFilter.All
-      const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
-        query: searchPattern.trim(),
-        requestedOffset: 0,
-      }
-      loadInteractionPage(pageRequest)
-      return
-    }
-    const nextFilter = typeFilters.find(
-      (filter) => filter.filter === Number(value),
-    )
-    if (!nextFilter) return
-    vault.secretTypeFilter = nextFilter.filter
+  function reloadFirstPage(): void {
     const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
       query: searchPattern.trim(),
       requestedOffset: 0,
     }
     loadInteractionPage(pageRequest)
+  }
+
+  function selectTypeFilter(filter: NookSecretTypeFilter): void {
+    vault.secretTypeFilter = filter
+    reloadFirstPage()
+  }
+
+  function selectSection(section: SecretCategory): void {
+    vault.selectSecretSection(section)
+    reloadFirstPage()
   }
 
   function resetTransientSecretViews() {
@@ -693,6 +628,7 @@
       <AddSecretForm
         {vault}
         {isSaving}
+        section={vault.secretSection}
         bind:selectedTypeState={formSelectedType}
         {onAddSecret}
         {onReplaceSecret}
@@ -703,86 +639,16 @@
     </div>
   {:else}
     <div class="flex min-h-0 flex-1 flex-col gap-4">
-      <div class="flex flex-col gap-3" data-testid="secret-search-and-filter">
-        <div class="flex flex-wrap items-center gap-2.5">
-          <label class="nk-search">
-            <Search
-              class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              type="search"
-              bind:value={searchPattern}
-              data-testid="search-secrets"
-              placeholder={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
-              aria-label={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
-              class="flex h-10 w-full rounded-none border border-border bg-card py-2 pl-9 pr-3 text-sm focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <div class="ml-auto flex items-center gap-3">
-            <span class="nk-label" data-testid="vault-secret-count">
-              {vault.secretTotal !== visibleItemCount
-                ? (() => {
-                    const pageCountArgs: Parameters<typeof vault.t>[0] = {
-                      key: I18N_KEYS.VaultSecretCountPage,
-                      replacements: {
-                        count: String(visibleItemCount),
-                        total: String(vault.secretTotal),
-                      },
-                    }
-                    return vault.t(pageCountArgs)
-                  })()
-                : (() => {
-                    const countArgs: Parameters<typeof vault.t>[0] = {
-                      key: I18N_KEYS.VaultSecretCount,
-                      replacements: {
-                        count: String(visibleItemCount),
-                      },
-                    }
-                    return vault.t(countArgs)
-                  })()}
-            </span>
-            <Button
-              size="sm"
-              data-testid="add-secret-btn"
-              disabled={editsBlocked}
-              {...editRestriction.decision !== VaultEditDecision.Allowed
-                ? { title: editRestriction.reason }
-                : {}}
-              onclick={openAddSecret}
-            >
-              <Plus class="size-3.5" />
-              {vault.t(I18N_KEYS.VaultAddSecret)}
-            </Button>
-          </div>
-        </div>
-        <div
-          class="nk-chips nk-chips-track"
-          role="group"
-          aria-label={vault.t(I18N_KEYS.VaultFilterByType)}
-          data-testid="secret-type-filter"
-        >
-          <button
-            type="button"
-            class="nk-chip"
-            aria-pressed={vault.secretTypeFilter === NookSecretTypeFilter.All}
-            data-testid="secret-type-filter-all"
-            onclick={() => selectTypeFilter('all')}
-          >
-            {vault.t(I18N_KEYS.VaultFilterAllTypes)}
-          </button>
-          {#each typeFilters as filter (filter.filter)}
-            <button
-              type="button"
-              class="nk-chip"
-              aria-pressed={vault.secretTypeFilter === filter.filter}
-              data-testid={`secret-type-filter-${filter.testId}`}
-              onclick={() => selectTypeFilter(String(filter.filter))}
-            >
-              {vault.t(filter.labelKey)}
-            </button>
-          {/each}
-        </div>
-      </div>
+      <VaultListToolbar
+        {vault}
+        definition={sectionDefinition}
+        {editRestriction}
+        {visibleItemCount}
+        bind:searchPattern
+        onSelectSection={selectSection}
+        onSelectTypeFilter={selectTypeFilter}
+        onAdd={openAddSecret}
+      />
 
       {#if editRestriction.decision !== VaultEditDecision.Allowed}
         <div
@@ -808,20 +674,20 @@
           </span>
           <strong>
             {filtersNarrowed
-              ? vault.t(I18N_KEYS.VaultNoSecrets)
-              : vault.t(I18N_KEYS.VaultDetailEmptyTitle)}
+              ? vault.t(sectionDefinition.copy.noMatchTitleKey)
+              : vault.t(sectionDefinition.copy.emptyTitleKey)}
           </strong>
           <span class="max-w-sm text-sm">
             {filtersNarrowed
               ? vault.t(I18N_KEYS.VaultDetailNoMatchBody)
-              : vault.t(I18N_KEYS.VaultDetailEmptyBody)}
+              : vault.t(sectionDefinition.copy.emptyBodyKey)}
           </span>
         </div>
       {:else}
         <div
           class="nk-vault-grid"
           style:--nk-vault-rows={String(listLayout.rows)}
-          aria-label={vault.t(I18N_KEYS.VaultDetailListLabel)}
+          aria-label={vault.t(sectionDefinition.copy.listKey)}
           data-testid="vault-secret-list"
         >
           {#each listLayout.groups as group (group.site)}
@@ -878,68 +744,7 @@
           {/if}
         </div>
         {#if vault.secretTotal > vault.secretPageSize}
-          <div
-            class="nk-vault-pagination flex items-center justify-between gap-2"
-            data-testid="secret-pagination"
-          >
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="secret-page-previous"
-              disabled={vault.secretPageOffset === 0}
-              onclick={() => {
-                const pageRequest: Parameters<typeof vault.loadSecretPage>[0] =
-                  {
-                    query: vault.secretQuery,
-                    requestedOffset: Math.max(
-                      0,
-                      vault.secretPageOffset - vault.secretPageSize,
-                    ),
-                  }
-                void vault.loadSecretPage(pageRequest).then((result) => {
-                  if (result.isErr())
-                    vault.errorMsg = vault.t(result.error.translationKey)
-                })
-              }}
-            >
-              <ChevronLeft class="size-3.5" />
-              {vault.t(I18N_KEYS.VaultPreviousPage)}
-            </Button>
-            <span class="nk-label">
-              {(() => {
-                const pageStatusArgs: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.VaultPageStatus,
-                  replacements: {
-                    page: String(currentPage),
-                    total: String(pageCount),
-                  },
-                }
-                return vault.t(pageStatusArgs)
-              })()}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="secret-page-next"
-              disabled={vault.secretPageOffset + vault.secretPageSize >=
-                vault.secretTotal}
-              onclick={() => {
-                const pageRequest: Parameters<typeof vault.loadSecretPage>[0] =
-                  {
-                    query: vault.secretQuery,
-                    requestedOffset:
-                      vault.secretPageOffset + vault.secretPageSize,
-                  }
-                void vault.loadSecretPage(pageRequest).then((result) => {
-                  if (result.isErr())
-                    vault.errorMsg = vault.t(result.error.translationKey)
-                })
-              }}
-            >
-              {vault.t(I18N_KEYS.VaultNextPage)}
-              <ChevronRight class="size-3.5" />
-            </Button>
-          </div>
+          <VaultListPagination {vault} />
         {/if}
       {/if}
     </div>

@@ -1,5 +1,6 @@
 //! Credit-card secret payload parsing and validation.
 
+use super::personal_data::SensitiveNumber;
 use crate::ValidationError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -107,20 +108,13 @@ impl CreditCardSecret {
     /// Last four digits for safe list display.
     #[must_use]
     pub fn last4(&self) -> String {
-        self.number
-            .chars()
-            .rev()
-            .take(4)
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect()
+        SensitiveNumber::new(&self.number).last4()
     }
 
     /// Masked PAN for collapsed UI (`•••• 4242`).
     #[must_use]
     pub fn masked_number(&self) -> String {
-        format!("•••• {}", self.last4())
+        SensitiveNumber::new(&self.number).masked()
     }
 
     /// `MM/YYYY` when both expiry parts are present.

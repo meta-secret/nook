@@ -251,6 +251,8 @@ class FocusedFormTransitionFixture {
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
       case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
       case CompanionWasmSessionMessageType.ValidateReviewedAuthenticatorLabels:
+      case CompanionWasmSessionMessageType.ClassifyPersonalField:
+      case CompanionWasmSessionMessageType.PlanPersonalFill:
       case CompanionWasmSessionMessageType.SitePageNeed:
         throw new Error('Expected the focused native recognition boundary')
     }

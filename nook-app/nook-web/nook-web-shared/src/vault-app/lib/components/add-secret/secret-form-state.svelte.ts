@@ -15,6 +15,7 @@ import {
 import type { NookSecretRecord } from "$lib/nook";
 import { NookSecretFormFields } from "$app-wasm";
 import { SecretEditorKind, type SecretEditor } from "../secret-vault-state";
+import { PersonalDataFormState } from "./personal-data-form-state.svelte";
 
 const passwordGenerationDefaults = default_password_generation_options();
 
@@ -56,6 +57,7 @@ export class SecretFormState {
   showCardNumber = $state(false);
   showCvv = $state(false);
   submitError = $state("");
+  readonly personal = new PersonalDataFormState();
 
   generationLength = $state(passwordGenerationDefaults.length);
   generationUppercase = $state(passwordGenerationDefaults.uppercase);
@@ -64,44 +66,61 @@ export class SecretFormState {
   generationSymbols = $state(passwordGenerationDefaults.symbols);
 
   load(item: NookSecretRecord): void {
-    if (item.type === SecretType.Login) {
-      this.websiteUrl = item.websiteUrl;
-      this.username = item.username;
-      this.password = item.password;
-      this.notes = ((v) => (v ? v : ""))(item.notes);
-    } else if (item.type === SecretType.ApiKey) {
-      this.websiteUrl = item.websiteUrl;
-      this.apiKey = item.primaryCredential || item.key;
-      this.expiresAt = ((v) => (v ? v : ""))(item.expiresAt);
-    } else if (item.type === SecretType.SeedPhrase) {
-      this.accountName = item.name;
-      this.seedPhrase = item.seed;
-    } else if (item.type === SecretType.SecureNote) {
-      this.noteTitle = item.title;
-      this.noteBody = item.note;
-    } else if (item.type === SecretType.FileAttachment) {
-      this.fileTitle = item.title;
-      this.fileName = item.fileName;
-      this.fileMimeType = item.mimeType;
-      this.fileSizeBytes = item.sizeBytes;
-      this.fileContentBase64 = item.contentBase64;
-    } else if (item.type === SecretType.Authenticator) {
-      this.websiteUrl = ((v) => (v ? v : ""))(item.websiteUrl);
-      this.authenticatorIssuer = item.issuer;
-      this.authenticatorAccount = item.account;
-      this.authenticatorSecret = item.totpSecret;
-      this.authenticatorAlgorithm = item.algorithm;
-      this.authenticatorDigits = String(item.digits);
-      this.authenticatorPeriod = String(item.period);
-      this.authenticatorBackupCodes = item.backupCodes.join("\n");
-    } else if (item.type === SecretType.CreditCard) {
-      this.cardTitle = item.title;
-      this.cardholderName = item.cardholderName;
-      this.cardNumber = item.cardNumber;
-      this.expirationMonth = item.expirationMonth;
-      this.expirationYear = item.expirationYear;
-      this.cardCvv = item.cvv;
-      this.cardNotes = ((v) => (v ? v : ""))(item.notes);
+    switch (item.type) {
+      case SecretType.Login:
+        this.websiteUrl = item.websiteUrl;
+        this.username = item.username;
+        this.password = item.password;
+        this.notes = item.notes;
+        return;
+      case SecretType.ApiKey:
+        this.websiteUrl = item.websiteUrl;
+        this.apiKey = item.primaryCredential || item.key;
+        this.expiresAt = item.expiresAt;
+        return;
+      case SecretType.SeedPhrase:
+        this.accountName = item.name;
+        this.seedPhrase = item.seed;
+        return;
+      case SecretType.SecureNote:
+        this.noteTitle = item.title;
+        this.noteBody = item.note;
+        return;
+      case SecretType.FileAttachment:
+        this.fileTitle = item.title;
+        this.fileName = item.fileName;
+        this.fileMimeType = item.mimeType;
+        this.fileSizeBytes = item.sizeBytes;
+        this.fileContentBase64 = item.contentBase64;
+        return;
+      case SecretType.Authenticator:
+        this.websiteUrl = item.websiteUrl;
+        this.authenticatorIssuer = item.issuer;
+        this.authenticatorAccount = item.account;
+        this.authenticatorSecret = item.totpSecret;
+        this.authenticatorAlgorithm = item.algorithm;
+        this.authenticatorDigits = String(item.digits);
+        this.authenticatorPeriod = String(item.period);
+        this.authenticatorBackupCodes = item.backupCodes.join("\n");
+        return;
+      case SecretType.CreditCard:
+        this.cardTitle = item.title;
+        this.cardholderName = item.cardholderName;
+        this.cardNumber = item.cardNumber;
+        this.expirationMonth = item.expirationMonth;
+        this.expirationYear = item.expirationYear;
+        this.cardCvv = item.cvv;
+        this.cardNotes = item.notes;
+        return;
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
+        this.personal.load(item.personalData);
+        return;
+      case SecretType.Passkey:
+        return;
     }
   }
 
@@ -169,6 +188,17 @@ export class SecretFormState {
         this.fileContentBase64,
       );
     }
+    switch (selectedType) {
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
+        return this.personal.toFormFields(selectedType);
+      case SecretType.SecureNote:
+      case SecretType.Passkey:
+        break;
+    }
     return NookSecretFormFields.secure_note(
       this.noteTitle.trim(),
       this.noteBody,
@@ -207,7 +237,17 @@ export class SecretFormState {
         this.cardTitle.trim().length > 0 && this.cardNumber.trim().length > 0
       );
     }
-    return false;
+    switch (selectedType) {
+      // Rust validates personal data on submit and reports what is missing.
+      case SecretType.Person:
+      case SecretType.Address:
+      case SecretType.IdentityDocument:
+      case SecretType.InternationalAccount:
+      case SecretType.DomesticAccount:
+        return true;
+      case SecretType.Passkey:
+        return false;
+    }
   }
 
   reset(): void {
@@ -247,5 +287,6 @@ export class SecretFormState {
     this.showPasswordValue = false;
     this.showCardNumber = false;
     this.showCvv = false;
+    this.personal.reset();
   }
 }

@@ -351,6 +351,8 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.ListSiteSecrets]: [],
   [ExtensionSessionMessageType.RevealLogin]: [],
   [ExtensionSessionMessageType.RevealFocusedLogin]: [],
+  [ExtensionSessionMessageType.ListPersonalRecords]: [],
+  [ExtensionSessionMessageType.RevealPersonalFill]: [],
   [ExtensionSessionMessageType.ListAuthenticators]: [],
   [ExtensionSessionMessageType.AuthenticatorCode]: [],
   [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: [

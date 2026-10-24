@@ -11,6 +11,8 @@ import {
   revealSecretInRow,
   storedZip,
   openVaultPage,
+  openVaultSection,
+  VaultSection,
   openManagePage,
   ManagePage,
 } from './helpers'
@@ -288,7 +290,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '1 unsupported',
@@ -301,10 +303,12 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported private note',
     )
+    await openVaultSection(page, VaultSection.PersonalData)
     const creditCardGroup = page.getByTestId('vault-group-credit-card')
     await expect(creditCardGroup).toContainText('Imported card')
     await expect(creditCardGroup).not.toContainText('4111111111111111')
     await expect(creditCardGroup).not.toContainText('123')
+    await openVaultSection(page, VaultSection.Secrets)
 
     await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
@@ -314,7 +318,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       '3 duplicates',
@@ -392,7 +396,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
       '1 unsupported',
@@ -414,7 +418,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
       '2 duplicates',
@@ -550,7 +554,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('lastpass-import-submit').click()
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
 
     await openVaultPage(page)
@@ -569,7 +573,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('lastpass-import-submit').click()
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
       '2 duplicates',
@@ -663,7 +667,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('proton-pass-import-submit').click()
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
       '1 unsupported',
@@ -676,10 +680,12 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Imported Proton note',
     )
+    await openVaultSection(page, VaultSection.PersonalData)
     const creditCardGroup = page.getByTestId('vault-group-credit-card')
     await expect(creditCardGroup).toContainText('Imported Proton card')
     await expect(creditCardGroup).not.toContainText('4111111111111111')
     await expect(creditCardGroup).not.toContainText('123')
+    await openVaultSection(page, VaultSection.Secrets)
 
     await openPasswordManagerImport(page, 'proton-pass')
     await page.getByTestId('proton-pass-export-file').setInputFiles({
@@ -689,7 +695,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('proton-pass-import-submit').click()
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('proton-pass-import-result')).toContainText(
       '3 duplicates',
@@ -718,7 +724,7 @@ test.describe('local vault', () => {
     await page.getByTestId('bitwarden-import-submit').click()
 
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
     await expect(page.getByTestId('bitwarden-export-password')).toHaveValue('')
   })
@@ -755,7 +761,7 @@ test.describe('local vault', () => {
     )
     await expect(page.getByTestId('bitwarden-json-file')).toBeDisabled()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 1300 items',
+      'Imported 1300 records',
       { timeout: 30_000 },
     )
     expect(Date.now() - started).toBeLessThan(30_000)
@@ -807,7 +813,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 55 items',
+      'Imported 55 records',
     )
     await openVaultPage(page)
 

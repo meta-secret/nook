@@ -246,10 +246,7 @@ impl CheckedChromePasswordsCsv<'_> {
     fn collect(self) -> Result<ChromePasswordsImportPlan, ChromePasswordsImportError> {
         let collection = self.reader.collect(CsvImportConversion {
             too_many_records: ChromePasswordsImportError::TooManyRecords,
-            convert: |record: &StringRecord| match self.columns.convert(record) {
-                ImportItemDisposition::Imported(item) => (vec![item], 0),
-                ImportItemDisposition::Skipped(_) => (Vec::new(), 1),
-            },
+            convert: |record: &StringRecord| self.columns.convert(record).collected(),
         })?;
 
         Ok(ChromePasswordsImportPlan {

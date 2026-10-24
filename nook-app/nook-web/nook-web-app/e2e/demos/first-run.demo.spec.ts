@@ -1,10 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
-import {
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  expectFirstVaultOpen,
-  UI_TIMEOUT_MS,
-} from '../helpers'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
@@ -52,7 +48,17 @@ test('a first vault takes a name, then introduces its identity and offers a back
   await expect(backup).toContainText('Personal is ready')
   await demoBeat(page)
 
-  await expectFirstVaultOpen(page)
+  // Declining the backup leaves setup on the identities, where the new
+  // vault shows with everything that can be done with it.
+  await page.getByTestId('first-run-backup-skip').click()
   await expect(page.getByTestId('first-run-backup-step')).toHaveCount(0)
+  await expect(page.getByTestId('identities-hub')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page).toHaveURL((url) => url.pathname.endsWith('/identities'))
+  await expect(
+    page.getByTestId('identity-vault-row').filter({ hasText: 'Personal' }),
+  ).toBeVisible()
+  await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   await demoBeat(page)
 })

@@ -45,6 +45,7 @@ import {
   authorizeDeviceProtection,
   waitForVaultInitialized,
 } from '../../nook-web-app/e2e/helpers/settings-auth'
+import { openVaultPage } from '../../nook-web-app/e2e/helpers/workspace-navigation'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -565,13 +566,14 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       'Unpair test vault',
     )
     await expect(
-      simplePage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
-    await expect(simplePage.getByTestId('app-success')).toBeVisible()
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(simplePage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )
     await leaveFirstRunReady(simplePage)
+    // The first run ends on the identities; the vault's shell opens there.
+    await openVaultPage(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     // Independent local creation requires a locked companion. Locking the

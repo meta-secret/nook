@@ -1,5 +1,6 @@
 import { classify_companion_login_save_outcome } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { FocusedFieldRecognitionOperation } from './session-focused-field-recognition'
+import { PersonalFieldFillOperation } from './session-personal-field-fill'
 import { authenticatorEnrollmentCandidateResolver } from './authenticator-enrollment-candidates'
 import { reviewedAuthenticatorLabelValidator } from './authenticator-reviewed-labels'
 import { GoogleLoginContinuationMessageType } from '../../../nook-web-shared/src/extension/google-login-continuation-messages'
@@ -267,6 +268,9 @@ export async function handleCompanionWasmMessage(
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
         return ok(new FocusedFieldRecognitionOperation(message).run())
+      case CompanionWasmSessionMessageType.ClassifyPersonalField:
+      case CompanionWasmSessionMessageType.PlanPersonalFill:
+        return ok(new PersonalFieldFillOperation(message).run())
       case CompanionWasmSessionMessageType.ClassifyPageInputField:
         return ok(classifyPageInputField(message.payload.observation))
       case CompanionWasmSessionMessageType.ClassifyPageInputs:

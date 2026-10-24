@@ -1,5 +1,10 @@
 import { expect, test } from '../fixtures'
-import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
+import {
+  connectLocalVault,
+  openVaultSection,
+  UI_TIMEOUT_MS,
+  VaultSection,
+} from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
@@ -11,6 +16,8 @@ test('add a credit card and reveal the card number', async ({ page }) => {
   await connectLocalVault(page)
   await demoBeat(page)
 
+  await openVaultSection(page, VaultSection.PersonalData)
+  await demoBeat(page)
   await page.getByTestId('add-secret-btn').click()
   await demoBeat(page)
   await page.getByTestId('item-type-credit-card').click()

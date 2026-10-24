@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! CSV schema admission and conversion bound to the original reader.
+mod personal;
 use super::super::import_support::{
     CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     MAX_CSV_BYTES, SourceLabelMetadata,
@@ -16,11 +17,14 @@ use crate::{
     SecureNoteSecret, ValidationError,
 };
 use csv::StringRecord;
+use personal::{BankPaymentColumns, IdColumns, PersonalInfoColumns};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DashlaneCsvKind {
     Credentials,
     SecureNotes,
     Payments,
+    Ids,
+    PersonalInfo,
 }
 pub(super) enum DashlaneCsvSelection {
     Detect,
@@ -53,6 +57,10 @@ impl<'a> DashlaneCsvInput<'a> {
             }
             DashlaneCsvKind::Payments => {
                 DashlaneColumns::Payments(PaymentColumns::from_headers(&headers)?)
+            }
+            DashlaneCsvKind::Ids => DashlaneColumns::Ids(IdColumns::from_headers(&headers)?),
+            DashlaneCsvKind::PersonalInfo => {
+                DashlaneColumns::PersonalInfo(PersonalInfoColumns::from_headers(&headers)?)
             }
         };
         Ok(CheckedDashlaneCsv { reader, columns })
@@ -90,6 +98,8 @@ enum DashlaneColumns {
     Credentials(CredentialColumns),
     SecureNotes(SecureNoteColumns),
     Payments(PaymentColumns),
+    Ids(IdColumns),
+    PersonalInfo(PersonalInfoColumns),
 }
 impl DashlaneColumns {
     fn convert(
@@ -100,6 +110,8 @@ impl DashlaneColumns {
             Self::Credentials(columns) => columns.convert(record),
             Self::SecureNotes(columns) => Ok(columns.convert(record)),
             Self::Payments(columns) => Ok(columns.convert(record)),
+            Self::Ids(columns) => Ok(columns.convert(record)),
+            Self::PersonalInfo(columns) => Ok(columns.convert(record)),
         }
     }
 }
@@ -145,6 +157,17 @@ impl NormalizedDashlaneHeaders {
             return Ok(DashlaneCsvKind::SecureNotes);
         }
         if self.values.first().is_some_and(|header| header == "type")
+            && self.values.iter().any(|header| header == "number")
+            && self.values.iter().any(|header| header == "expirationdate")
+        {
+            return Ok(DashlaneCsvKind::Ids);
+        }
+        if self.values.first().is_some_and(|header| header == "type")
+            && self.values.iter().any(|header| header == "firstname")
+        {
+            return Ok(DashlaneCsvKind::PersonalInfo);
+        }
+        if self.values.first().is_some_and(|header| header == "type")
             && self
                 .values
                 .iter()
@@ -184,6 +207,7 @@ struct PaymentColumns {
     code: CsvExportColumn,
     expiration_month: CsvExportColumn,
     expiration_year: CsvExportColumn,
+    bank: BankPaymentColumns,
 }
 
 impl CredentialColumns {
@@ -350,6 +374,7 @@ impl PaymentColumns {
             code: headers.optional(&["code", "cvv"]),
             expiration_month: headers.optional(&["expiration_month", "expiration month"]),
             expiration_year: headers.optional(&["expiration_year", "expiration year"]),
+            bank: BankPaymentColumns::from_headers(headers),
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
@@ -390,6 +415,8 @@ impl PaymentColumns {
                 }
                 Err(_) => (Vec::new(), 1),
             }
+        } else if kind.trim().eq_ignore_ascii_case("bank") {
+            self.bank.convert(record)
         } else {
             (Vec::new(), 1)
         }

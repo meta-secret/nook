@@ -146,7 +146,9 @@ const secretsKeys = [
   "secretPageOffset",
   "secretPageSize",
   "secretQuery",
+  "secretSection",
   "secretTypeFilter",
+  "selectSecretSection",
   "clearSecretTypeFilter",
 ] as const satisfies readonly (keyof VaultSecretsState)[];
 
@@ -309,7 +311,9 @@ class VaultStateSlicesImplementation {
   declare secretPageOffset: VaultSecretsState["secretPageOffset"];
   declare secretPageSize: VaultSecretsState["secretPageSize"];
   declare secretQuery: VaultSecretsState["secretQuery"];
+  declare secretSection: VaultSecretsState["secretSection"];
   declare secretTypeFilter: VaultSecretsState["secretTypeFilter"];
+  declare selectSecretSection: VaultSecretsState["selectSecretSection"];
   declare clearSecretTypeFilter: VaultSecretsState["clearSecretTypeFilter"];
 
   declare sentinelGenesisPhase: VaultSentinelState["sentinelGenesisPhase"];

@@ -42,7 +42,7 @@ test('search a paginated vault through encrypted metadata', async ({
   })
   await page.getByTestId('bitwarden-import-submit').click()
   await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-    'Imported 60 items',
+    'Imported 60 records',
     { timeout: 30_000 },
   )
 

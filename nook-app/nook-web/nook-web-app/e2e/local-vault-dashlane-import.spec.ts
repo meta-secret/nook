@@ -6,6 +6,8 @@ import {
   openPasswordManagerImport,
   storedZip,
   openVaultPage,
+  openVaultSection,
+  VaultSection,
 } from './helpers'
 
 test.describe('local vault Dashlane import', () => {
@@ -43,7 +45,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 2 items',
+      'Imported 2 records',
     )
 
     await openVaultPage(page)
@@ -62,7 +64,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 0 items',
+      'Imported 0 records',
     )
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
       '2 duplicates',
@@ -94,7 +96,7 @@ test.describe('local vault Dashlane import', () => {
     })
     await page.getByTestId('dashlane-import-submit').click()
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
-      'Imported 3 items',
+      'Imported 3 records',
     )
     await expect(page.getByTestId('dashlane-import-result')).toContainText(
       '1 unsupported',
@@ -105,9 +107,11 @@ test.describe('local vault Dashlane import', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Private',
     )
+    await openVaultSection(page, VaultSection.PersonalData)
     const creditCardGroup = page.getByTestId('vault-group-credit-card')
     await expect(creditCardGroup).toContainText('Travel')
     await expect(creditCardGroup).not.toContainText('4111111111111111')
     await expect(creditCardGroup).not.toContainText('123')
+    await openVaultSection(page, VaultSection.Secrets)
   })
 })

@@ -16,6 +16,7 @@ import {
   focusedWebsiteLoginFillDependencies,
 } from './service-worker/focused-login-operations'
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
+import { PersonalFillRoutes } from './service-worker/personal-fill-routes'
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
@@ -442,6 +443,7 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
     )
     .onRejected(() => ({ ok: false, reason: 'login-options-failed' })),
   new FocusedLoginMessageRoute(focusedLoginMessageRouteRequest),
+  ...PersonalFillRoutes.routes(),
   SchemaRuntimeMessageRoute.matching(WebsiteLoginRevealMessageSchema)
     .respondWith(websiteLoginFill)
     .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),

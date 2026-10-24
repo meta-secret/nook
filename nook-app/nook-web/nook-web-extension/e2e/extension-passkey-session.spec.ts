@@ -328,8 +328,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
 
     await leaveFirstRunReady(simplePage)
-    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(simplePage).toHaveURL((url) =>
+      url.pathname.endsWith('/identities'),
+    )
+    await expect(simplePage.getByTestId('identities-hub')).toBeVisible()
     // Whether the reused tab's connect-route load adopts before the spec
     // navigates it away is timing-dependent, so later counts are relative.
     await flushNookLogPersistQueue(simplePage)
@@ -777,8 +779,8 @@ test('accepts the pairing grant after the extension session was locked', async (
       'Locked session handoff vault',
     )
     await expect(
-      simplePage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
+      simplePage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(
       simplePage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)
@@ -850,9 +852,8 @@ test('re-approves an existing local vault after reload without event-log-access-
       vaultName,
     )
     await expect(
-      connectPage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
-    await expect(connectPage.getByTestId('app-success')).toBeVisible()
+      connectPage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(connectPage).toHaveURL((url) =>
       url.pathname.endsWith('/identities'),
     )
@@ -932,8 +933,8 @@ test('re-approves an existing local vault after reload without event-log-access-
       vaultName,
     )
     await expect(
-      reconnectPage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
+      reconnectPage.getByTestId('extension-connect-consent'),
+    ).toHaveCount(0)
     await expect(
       reconnectPage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)

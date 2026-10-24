@@ -6,6 +6,10 @@ targets = [
 ]
 
 [advisories]
+ignore = [
+  # RUSTSEC-2026-0387: crypto-bigint 0.5.5 timing variability (pinned age graph).
+  { id = "RUSTSEC-2026-0387", reason = "Review by 2027-01-24. crypto-bigint 0.5.5 only enters via age 0.12.1 (latest release) -> p256 0.13 / hpke 0.12 -> elliptic-curve 0.13; no patched 0.5.x exists and the 0.7.x copy is upgraded to 0.7.6. Remove when age ships on p256 0.14 / crypto-bigint >=0.7.6." },
+]
 unmaintained = "workspace"
 yanked = "deny"
 
