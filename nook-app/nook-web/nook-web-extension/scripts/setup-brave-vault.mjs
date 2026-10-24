@@ -230,8 +230,16 @@ async function createAndApproveVault(context, popupPage) {
   }
 
   await simplePage.getByTestId('approve-extension-device-btn').click()
-  await approved.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
-  await simplePage.getByRole('button', { name: 'Done' }).click()
+  // A delivered approval closes the consent and announces it in the vault's
+  // success toast; an undelivered one keeps the consent with its Done action.
+  const delivered = simplePage.getByTestId('app-success')
+  await delivered
+    .or(approved)
+    .first()
+    .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  if (await approved.isVisible().catch(() => false)) {
+    await simplePage.getByRole('button', { name: 'Done' }).click()
+  }
   await authenticated.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
   return simplePage
 }

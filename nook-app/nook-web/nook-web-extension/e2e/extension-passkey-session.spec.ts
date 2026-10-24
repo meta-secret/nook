@@ -928,9 +928,7 @@ test('re-approves an existing local vault after reload without event-log-access-
       },
       vaultName,
     )
-    await expect(
-      reconnectPage.getByTestId('extension-connect-approved'),
-    ).toBeVisible()
+    await expect(reconnectPage.getByTestId('app-success')).toBeVisible()
     await expect(
       reconnectPage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)

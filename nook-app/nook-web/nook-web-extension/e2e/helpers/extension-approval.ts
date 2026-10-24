@@ -1,5 +1,12 @@
 import { expect, type Page } from '@playwright/test'
 
+/**
+ * Waits for a delivered approval, then for the extension's ready setup.
+ * After the extension takes the grant the consent closes at once and the
+ * vault announces the approval in its success toast. The in-consent approved
+ * notice remains only for an approval the extension did not take, so it is
+ * reported as such rather than as ready.
+ */
 export async function waitForExtensionPairingReady(
   vaultPage: Page,
   readSetupState: () => Promise<unknown>,
@@ -8,10 +15,19 @@ export async function waitForExtensionPairingReady(
   await expect
     .poll(
       async () => {
+        const consentOpen = await vaultPage
+          .getByTestId('extension-connect-consent')
+          .isVisible()
+        if (
+          !consentOpen &&
+          (await vaultPage.getByTestId('app-success').isVisible())
+        ) {
+          return 'approved'
+        }
         if (
           await vaultPage.getByTestId('extension-connect-approved').isVisible()
         ) {
-          return 'approved'
+          return 'approved-not-delivered'
         }
         const alerts = vaultPage.getByRole('alert')
         const alertTexts = await alerts.allTextContents()
