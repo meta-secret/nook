@@ -56,6 +56,7 @@ mod multi_device;
 mod passkeys;
 mod password;
 mod password_unlock;
+mod personal_fill;
 mod remote_vault_choice;
 mod search_catalog;
 mod secrets;

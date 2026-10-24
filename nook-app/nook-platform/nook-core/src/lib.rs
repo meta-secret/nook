@@ -217,7 +217,9 @@ pub use secret_types::{
 pub use secret_view::{
     AddressListItem, AddressSecretForm, AddressView, BankAccountListItem, BankAccountSecretForm,
     BankAccountView, IdentityDocumentListItem, IdentityDocumentSecretForm, IdentityDocumentView,
-    PersonListItem, PersonSecretForm, PersonView, PersonalDataView,
+    PersonListItem, PersonSecretForm, PersonView, PersonalDataView, PersonalFieldGroup,
+    PersonalFieldKind, PersonalFillError, PersonalFillProjection, PersonalFillValue,
+    PersonalFillValues,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,

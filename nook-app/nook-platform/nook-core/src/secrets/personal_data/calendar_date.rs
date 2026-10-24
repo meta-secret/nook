@@ -34,6 +34,33 @@ impl YearLength {
 }
 
 impl CalendarDate {
+    /// ISO `YYYY-MM-DD` text.
+    #[must_use]
+    pub fn iso_text(&self) -> String {
+        self.to_string()
+    }
+
+    /// Four-digit year (`1815`).
+    #[must_use]
+    pub fn year_text(&self) -> String {
+        let Self { year, .. } = self;
+        format!("{year:04}")
+    }
+
+    /// Two-digit month (`01`–`12`).
+    #[must_use]
+    pub fn month_text(&self) -> String {
+        let Self { month, .. } = self;
+        format!("{month:02}")
+    }
+
+    /// Two-digit day of month (`01`–`31`).
+    #[must_use]
+    pub fn day_text(&self) -> String {
+        let Self { day, .. } = self;
+        format!("{day:02}")
+    }
+
     /// Parse a strict ISO `YYYY-MM-DD` date and verify that the day exists.
     pub fn parse(raw: &str) -> Result<Self, CalendarDateError> {
         let mut parts = raw.split('-');
@@ -153,6 +180,15 @@ mod tests {
         );
         assert_eq!(DateEntry::parse("").map(DateEntry::into_string)?, "");
         assert!(DateEntry::parse("2030-06-31").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn exposes_zero_padded_components() -> anyhow::Result<()> {
+        let date = CalendarDate::parse("0987-03-04")?;
+        assert_eq!(date.year_text(), "0987");
+        assert_eq!(date.month_text(), "03");
+        assert_eq!(date.day_text(), "04");
         Ok(())
     }
 

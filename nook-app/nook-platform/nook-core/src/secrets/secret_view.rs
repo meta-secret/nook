@@ -25,6 +25,7 @@ mod passkey_details;
 mod personal_data_forms;
 mod personal_data_items;
 mod personal_data_view;
+mod personal_fill;
 mod secret_record_presentation;
 pub use focused_login_fill::{
     CredentialKind, FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
@@ -42,6 +43,10 @@ pub use personal_data_items::{
 };
 pub use personal_data_view::{
     AddressView, BankAccountView, IdentityDocumentView, PersonView, PersonalDataView,
+};
+pub use personal_fill::{
+    PersonalFieldGroup, PersonalFieldKind, PersonalFillError, PersonalFillProjection,
+    PersonalFillValue, PersonalFillValues,
 };
 
 /// Number of words exposed by a seed-phrase list projection.
