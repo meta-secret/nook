@@ -179,7 +179,7 @@ describe('authentication widget vault presentation', () => {
     }> = [
       {
         presentation: { kind: WidgetVaultPresentationKind.NotConnected },
-        expected: BROWSER_MESSAGE_KEYS.WidgetConnectVault,
+        expected: BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
       },
       {
         presentation: { kind: WidgetVaultPresentationKind.Locked },

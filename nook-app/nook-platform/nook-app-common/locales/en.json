@@ -400,7 +400,12 @@
       "passkey": "Passkey",
       "authenticator": "Authenticator",
       "credit_card": "Credit Card",
-      "file_attachment": "File"
+      "file_attachment": "File",
+      "person": "Person",
+      "address": "Address",
+      "identity_document": "Document",
+      "international_account": "International account",
+      "domestic_account": "US bank account"
     },
     "fields": {
       "username": "Username",
@@ -469,7 +474,38 @@
       "file_name": "File name",
       "file_size": "Size",
       "mime_type": "Type",
-      "unnamed_file": "Unnamed File"
+      "unnamed_file": "Unnamed File",
+      "given_name": "Given name",
+      "middle_name": "Middle name",
+      "family_name": "Family name",
+      "full_name": "Full name",
+      "birth_date": "Birth date",
+      "email": "Email",
+      "address_label": "Label",
+      "address_line1": "Address line 1",
+      "address_line2": "Address line 2",
+      "city": "City",
+      "region": "State or region",
+      "postal_code": "Postal code",
+      "country": "Country",
+      "document_kind": "Document type",
+      "document_number": "Document number",
+      "issuing_country": "Issuing country",
+      "issue_date": "Issue date",
+      "expiry_date": "Expiry date",
+      "name_as_printed": "Name as printed",
+      "account_holder": "Account holder",
+      "bank_name": "Bank name",
+      "account_number": "Account number",
+      "iban": "IBAN",
+      "swift_bic": "SWIFT/BIC",
+      "routing_number": "Routing number",
+      "unnamed_personal_data": "Unnamed record",
+      "mobile_phone": "Mobile phone",
+      "home_phone": "Home phone",
+      "work_phone": "Work phone",
+      "document_issuer": "Issuer",
+      "membership_organization": "Organization"
     },
     "status": {
       "synced": "Synced",
@@ -493,13 +529,36 @@
       "pick_title": "Pick an item",
       "pick_body": "Choose an item from the list. Values stay sealed until you reveal them.",
       "empty_title": "This vault is empty",
-      "empty_body": "Add a login, note, key or card. Each value is encrypted on its own before it is saved.",
+      "empty_body": "Add a login, note or key. Each value is encrypted on its own before it is saved.",
       "no_match_title": "No secrets found",
       "no_match_body": "Try another search or type.",
       "reveal": "Reveal",
       "hide": "Hide",
-      "list_label": "Secrets"
-    }
+      "list_label": "Secrets",
+      "personal_empty_title": "No personal data yet",
+      "personal_empty_body": "Add a person, address, document, bank account or card to fill forms faster. Each record is encrypted on its own before it is saved.",
+      "personal_list_label": "Personal data"
+    },
+    "add_personal_data": "Add personal data",
+    "filter_personal_by_type": "Filter personal data by type",
+    "no_personal_data": "No personal data found",
+    "copy_field": "Copy {field}",
+    "sections": {
+      "label": "Vault sections",
+      "secrets": "Secrets",
+      "personal_data": "Personal data"
+    },
+    "document_kinds": {
+      "passport": "Passport",
+      "national_id": "National ID card",
+      "drivers_license": "Driver's license",
+      "social_security": "Social security",
+      "tax_id": "Tax ID",
+      "membership": "Membership"
+    },
+    "personal_count": "Records: {count}",
+    "personal_count_page": "Showing {count} of {total} records",
+    "personal_search_placeholder": "Search personal data…"
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
@@ -512,12 +571,12 @@
     "password_label": "Export password",
     "password_placeholder": "Enter the export password",
     "password_hint": "Required only for password-protected encrypted JSON. Account-restricted exports are not supported.",
-    "supported_types": "Nook imports logins and secure notes. Cards, identities, SSH keys, and other item types are skipped.",
+    "supported_types": "Nook imports logins, secure notes, cards, and identities. Each identity adds a person, an address, a passport, and a driver's license for the parts it contains. SSH keys and other item types are skipped.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "Bitwarden import failed: {error}",
-    "result_imported": "Imported {count} items.",
-    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+    "result_imported": "Imported {count} records.",
+    "result_skipped": "Skipped {unsupported} unsupported or incomplete items and {duplicates} duplicates."
   },
   "keepassxc_import": {
     "source": "KeePassXC",
@@ -536,16 +595,16 @@
   "lastpass_import": {
     "source": "LastPass",
     "title": "Import from LastPass",
-    "description": "Move logins and secure notes from a LastPass generic CSV export into this vault.",
+    "description": "Move logins, secure notes, and supported personal data from a LastPass generic CSV export into this vault.",
     "export_hint_title": "Export a CSV file from LastPass",
     "export_hint": "In the LastPass desktop browser extension, open Account, choose Fix a problem yourself, then Export vault items and Export data for use anywhere. The CSV is unencrypted, so delete it after the import finishes.",
     "file_label": "LastPass CSV export",
-    "supported_types": "Nook imports website logins and secure notes. LastPass grouping, favorite, and optional TOTP metadata are preserved in encrypted item notes.",
+    "supported_types": "Nook imports website logins and secure notes. Address, Passport, Driver's License, Bank Account, and Credit Card notes become personal-data records; other note types stay secure notes. LastPass grouping, favorite, and optional TOTP metadata are preserved in encrypted item notes.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "LastPass import failed: {error}",
-    "result_imported": "Imported {count} items.",
-    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+    "result_imported": "Imported {count} records.",
+    "result_skipped": "Skipped {unsupported} unsupported or incomplete items and {duplicates} duplicates."
   },
   "onepassword_import": {
     "source": "1Password",
@@ -554,12 +613,12 @@
     "export_hint_title": "Export a 1PUX file from 1Password",
     "export_hint": "In 1Password, choose Export, select your account, and use the 1PUX format. The export is unencrypted, so keep it safe and delete it after the import finishes.",
     "file_label": "1Password 1PUX export",
-    "supported_types": "Nook imports logins, password items, and secure notes. Attachments, passkeys, cards, identities, SSH keys, and other item types are skipped.",
+    "supported_types": "Nook imports logins, password items, secure notes, credit cards, identities (as a person and an address), passports, driver's licenses, and bank accounts (an international IBAN account or a US account with a routing number). One 1Password item can add several records. Attachments, passkeys, SSH keys, and other item types are skipped.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "1Password import failed: {error}",
-    "result_imported": "Imported {count} items.",
-    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+    "result_imported": "Imported {count} records.",
+    "result_skipped": "Skipped {unsupported} unsupported or incomplete items and {duplicates} duplicates."
   },
   "apple_passwords_import": {
     "source": "Safari / Apple Passwords",
@@ -578,16 +637,16 @@
   "dashlane_import": {
     "source": "Dashlane",
     "title": "Import from Dashlane",
-    "description": "Move logins, secure notes, and credit cards from an unencrypted Dashlane CSV or CSV ZIP export into this vault.",
+    "description": "Move logins, secure notes, payment details, IDs, and personal information from an unencrypted Dashlane CSV or CSV ZIP export into this vault.",
     "export_hint_title": "Export your Dashlane vault as CSV",
     "export_hint": "In Dashlane, open Settings, choose Export Data, then export an unencrypted CSV or CSV ZIP. The export is unencrypted, so delete it and empty the Trash or Recycle Bin after the import finishes.",
     "file_label": "Dashlane CSV or CSV ZIP export",
-    "supported_types": "Nook imports Dashlane credentials, secure notes, credit cards, and valid TOTP secrets from unencrypted CSV or CSV ZIP exports. IDs, personal information, Wi-Fi, bank accounts, passkeys, attachments, and encrypted DASH exports are not imported.",
+    "supported_types": "Nook imports Dashlane credentials, secure notes, credit cards, bank accounts, valid TOTP secrets, ID cards, passports, driver's licenses, and the names and addresses from personal information in unencrypted CSV or CSV ZIP exports. Wi-Fi, passkeys, attachments, other IDs and personal-information rows, and encrypted DASH exports are not imported.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "Dashlane import failed: {error}",
-    "result_imported": "Imported {count} items.",
-    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+    "result_imported": "Imported {count} records.",
+    "result_skipped": "Skipped {unsupported} unsupported or incomplete items and {duplicates} duplicates."
   },
   "chrome_passwords_import": {
     "source": "Chrome or another browser",
@@ -628,16 +687,16 @@
   "proton_pass_import": {
     "source": "Proton Pass",
     "title": "Import from Proton Pass",
-    "description": "Move logins and secure notes from a Proton Pass export into this vault.",
+    "description": "Move logins, secure notes, cards, and identities from a Proton Pass export into this vault.",
     "export_hint_title": "Export an unencrypted ZIP from Proton Pass",
     "export_hint": "In Proton Pass, open Settings, choose Export, then select the unencrypted ZIP option. A decrypted data.json file is also accepted. Encrypted PGP exports must be decrypted first. Delete the plaintext export after the import finishes.",
     "file_label": "Proton Pass ZIP or JSON export",
-    "supported_types": "Nook imports logins and secure notes. Vault, TOTP, alternate URL/email, pin, and supported custom-field metadata are preserved in item notes. Cards, identities, aliases, passkeys, attachments, and other types are skipped.",
+    "supported_types": "Nook imports logins, secure notes, credit cards, and identities. Each identity adds a person, an address, a passport, and a driver's license for the parts it contains. Vault, TOTP, alternate URL/email, pin, and supported custom-field metadata are preserved in item notes. Aliases, passkeys, attachments, and other types are skipped.",
     "import": "Import items",
     "importing": "Importing…",
     "failed": "Proton Pass import failed: {error}",
-    "result_imported": "Imported {count} items.",
-    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+    "result_imported": "Imported {count} records.",
+    "result_skipped": "Skipped {unsupported} unsupported or incomplete items and {duplicates} duplicates."
   },
   "keeper_import": {
     "source": "Keeper",
@@ -1018,7 +1077,24 @@
       "credit_card_title_required": "Enter a title for this card.",
       "credit_card_number_invalid": "Enter a valid card number.",
       "credit_card_expiration_invalid": "Enter a valid expiration month and year.",
-      "credit_card_cvv_invalid": "Enter a valid 3 or 4 digit security code."
+      "credit_card_cvv_invalid": "Enter a valid 3 or 4 digit security code.",
+      "personal_data_text_invalid": "Remove control characters from personal data fields.",
+      "person_name_required": "Enter a given name or a family name.",
+      "person_birth_date_invalid": "Enter the birth date as YYYY-MM-DD.",
+      "person_email_invalid": "Enter a valid email address.",
+      "person_phone_invalid": "Enter a phone number using digits, spaces, and + ( ) - . only.",
+      "address_line1_required": "Enter the first address line.",
+      "identity_document_number_required": "Enter the document number.",
+      "identity_document_date_invalid": "Enter document dates as YYYY-MM-DD or YYYY-MM.",
+      "identity_document_ssn_invalid": "Enter a valid 9-digit US Social Security number.",
+      "identity_document_expiry_before_issue": "The expiry date cannot be earlier than the issue date.",
+      "international_account_iban_required": "Enter the IBAN.",
+      "international_account_iban_invalid": "Enter a valid IBAN.",
+      "swift_bic_invalid": "Enter a valid 8 or 11 character SWIFT/BIC code.",
+      "domestic_account_number_required": "Enter the account number.",
+      "domestic_account_number_invalid": "Enter an account number of 4 to 17 digits.",
+      "routing_number_required": "Enter the routing number.",
+      "routing_number_invalid": "Enter a valid 9-digit ABA routing number."
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
     "engine_loading": "Vault engine is still loading. Try again in a moment.",
@@ -1326,7 +1402,25 @@
     "file_attachment_desc": "Encrypted file upload",
     "file_attachment_hint": "Choose a file up to {max}. The file is encrypted in your vault.",
     "file_empty": "Choose a non-empty file.",
-    "file_too_large": "File is too large. Maximum size is {max}."
+    "file_too_large": "File is too large. Maximum size is {max}.",
+    "person_desc": "Name, birth date, email and phone",
+    "address_desc": "Postal address for deliveries and forms",
+    "identity_document_desc": "Passport, ID card or driver's license",
+    "international_account_desc": "IBAN and SWIFT/BIC",
+    "domestic_account_desc": "US account and ABA routing number",
+    "title_new_person": "New person",
+    "title_edit_person": "Edit person",
+    "title_new_address": "New address",
+    "title_edit_address": "Edit address",
+    "title_new_identity_document": "New document",
+    "title_edit_identity_document": "Edit document",
+    "title_new_international_account": "New international account",
+    "title_edit_international_account": "Edit international account",
+    "title_new_domestic_account": "New US bank account",
+    "title_edit_domestic_account": "Edit US bank account",
+    "placeholder_address_label": "e.g., Home",
+    "placeholder_country": "e.g., Germany",
+    "document_date_hint": "YYYY-MM or YYYY-MM-DD"
   },
   "status_bar": {
     "synced": "Synced",
@@ -1841,6 +1935,14 @@
       "no_results": "No matching logins for this site.",
       "failed": "Nook could not load or select this login. Unlock the extension and try again."
     },
+    "personal_picker": {
+      "title": "Choose a record",
+      "description": "The record you pick fills only the fields of this form.",
+      "unnamed": "Untitled record",
+      "loading": "Loading saved records…",
+      "no_results": "No saved records of this kind. Add one in Nook.",
+      "failed": "Nook could not load or fill this record. Unlock the extension and try again."
+    },
     "widget": {
       "open_vault": "Open vault",
       "dismiss": "Dismiss Nook",
@@ -1849,7 +1951,6 @@
       "pilot_label": "Nook Pilot",
       "vault_connected": "Vault connected",
       "vault_not_connected": "Vault not connected",
-      "connect_vault": "Connect this browser to your vault, then select Sign in again.",
       "login_title": "Ready to sign in",
       "login_description": "Nook detected a login step and is ready to continue with your approval.",
       "login_match_count": "Matching saved logins: $1",
@@ -1982,7 +2083,19 @@
       "checklist_site_message": "Message from the site",
       "checklist_complete": "Sign-in confirmed",
       "checklist_inactive": "You are in control",
-      "checklist_label": "Sign-in steps"
+      "checklist_label": "Sign-in steps",
+      "personal_person_title": "Fill your details",
+      "personal_address_title": "Fill an address",
+      "personal_card_title": "Fill a card",
+      "personal_description": "Choose a saved record in Nook. Nothing is filled until you pick one.",
+      "personal_picker_title": "Choose personal data",
+      "connect_first_title": "Connect Nook to your vault",
+      "connect_first_description": "Nook fills and saves logins only from a connected vault.",
+      "connect_first_action": "Connect vault",
+      "connect_first_opened": "Finish connecting in the Nook tab. This page updates when you are done.",
+      "connect_first_failed": "Nook could not open the connect page. Select Connect vault to try again.",
+      "unlock_first_title": "Unlock Nook to continue",
+      "gate_dismiss": "Not now"
     },
     "passkey": {
       "prompt_label": "Nook passkey",
@@ -2030,7 +2143,11 @@
       "approved_reopen": "Extension device approved. Reopen Nook if browser access did not update.",
       "approval_failed": "Failed to approve extension device.",
       "approved_return": "Browser access approved. You can close this window or return to your vault.",
-      "approving": "Approving…",
+      "progress_step": "Step {step} of {total}",
+      "progress_authorizing": "Authorizing the extension device…",
+      "progress_preparing": "Preparing the extension's vault access…",
+      "progress_delivering": "Handing access to the extension…",
+      "progress_finishing": "Updating this identity's devices…",
       "approve": "Approve extension",
       "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}. It stays a filling companion with these permissions only.",
       "vault_only": "{identity} has no cloud sync provider yet, so the extension connects this vault only. Add one to connect every vault in {identity}."

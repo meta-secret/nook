@@ -52,6 +52,24 @@ const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
   [ManagePage.Import]: 'vault-import-export-section',
 }
 
+/** Sections of the vault page, named by their tab test ids. */
+export enum VaultSection {
+  Secrets = 'secrets',
+  PersonalData = 'personal-data',
+}
+
+/** Switch the open vault page to a section; cards and personal data live apart from secrets. */
+export async function openVaultSection(
+  page: Page,
+  section: VaultSection,
+): Promise<void> {
+  const tab = page.getByTestId(`vault-section-${section}`)
+  await tab.click({ timeout: UI_TIMEOUT_MS })
+  await expect(tab).toHaveAttribute('aria-selected', 'true', {
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /** Return to the open vault's secret list from any workspace page. */
 export async function openVaultPage(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')

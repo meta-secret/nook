@@ -62,6 +62,8 @@ export enum ExtensionPageBuild {
   Pages = 'pages',
   /** The in-page login picker, web-accessible on its own path. */
   LoginPicker = 'login-picker',
+  /** The in-page personal-data picker, web-accessible on its own path. */
+  PersonalPicker = 'personal-picker',
 }
 
 /** Whether a page build owns its output directory or shares it. */
@@ -104,6 +106,13 @@ export class ExtensionPageBuildPlan {
         return {
           root: 'src/login-picker',
           outDir: 'login-picker',
+          output: ExtensionPageOutput.Owned,
+          inputs: ['index.html'],
+        }
+      case ExtensionPageBuild.PersonalPicker:
+        return {
+          root: 'src/personal-picker',
+          outDir: 'personal-picker',
           output: ExtensionPageOutput.Owned,
           inputs: ['index.html'],
         }

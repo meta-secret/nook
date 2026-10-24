@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Decoded Proton Pass vaults and ordered item metadata conversion.
+mod identity;
 #[derive(Debug, PartialEq, Eq)]
 enum ExportFieldExclusion {
     EmptyText,
@@ -14,6 +15,7 @@ use super::{ProtonPassImportError, ProtonPassImportPlan};
 use crate::CreditCardFields;
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
+use identity::ProtonPassIdentityContent;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 use serde_json::Number;
@@ -91,6 +93,8 @@ struct ProtonPassContent {
     verification_number: String,
     #[serde(default)]
     pin: String,
+    #[serde(flatten)]
+    identity: ProtonPassIdentityContent,
 }
 
 #[derive(Debug, Deserialize)]
@@ -364,40 +368,25 @@ impl ProtonPassExport {
     #[must_use]
     pub(super) fn plan(self) -> ProtonPassImportPlan {
         let mut source_count = 0;
+        let mut skipped_unsupported = 0;
         let mut items = Vec::new();
         for vault in self.vaults.into_values() {
             source_count += vault.items.len();
             for item in vault.items {
-                match item.data.item_type.as_str() {
-                    "login" => items.push(
-                        ProtonPassVaultItem {
-                            item,
-                            vault_name: &vault.name,
-                        }
-                        .login(),
-                    ),
-                    "note" => items.push(
-                        ProtonPassVaultItem {
-                            item,
-                            vault_name: &vault.name,
-                        }
-                        .note(),
-                    ),
-                    "creditCard" => {
-                        if let ImportItemDisposition::Imported(card) = (ProtonPassVaultItem {
-                            item,
-                            vault_name: &vault.name,
-                        })
-                        .credit_card()
-                        {
-                            items.push(card);
-                        }
-                    }
-                    _ => {}
-                }
+                let item = ProtonPassVaultItem {
+                    item,
+                    vault_name: &vault.name,
+                };
+                let disposition = match item.item.data.item_type.as_str() {
+                    "login" => ImportItemDisposition::Imported(item.login()),
+                    "note" => ImportItemDisposition::Imported(item.note()),
+                    "creditCard" => item.credit_card(),
+                    "identity" => item.identity(),
+                    _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
+                };
+                skipped_unsupported += disposition.append(&mut items);
             }
         }
-        let skipped_unsupported = source_count.saturating_sub(items.len());
         ProtonPassImportPlan {
             items,
             source_count: source_count.into(),

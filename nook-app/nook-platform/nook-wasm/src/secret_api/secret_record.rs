@@ -1,5 +1,6 @@
-use super::wasm_bindgen;
+use super::{NookError, wasm_bindgen};
 use nook_core::{SecretValue, TotpDigits};
+use zeroize::Zeroizing;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -321,12 +322,236 @@ impl NookSecretRecord {
         }
     }
 
+    /// Every plaintext field of a person, address, identity-document, or
+    /// international-account, or domestic-account record plus masked numbers.
+    /// Other types throw.
+    #[wasm_bindgen(getter, js_name = personalData)]
+    pub fn personal_data(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::PersonalDataView>, wasm_bindgen::JsError> {
+        let view = Zeroizing::new(
+            nook_core::PersonalDataView::from_value(&self.record.data).map_err(NookError::from)?,
+        );
+        tsify::Ts::from_rust(&*view)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    }
+
     #[wasm_bindgen(getter, js_name = backupCodes)]
     pub fn backup_codes(&self) -> Vec<String> {
         match &self.record.data {
             SecretValue::Authenticator(value) => value.backup_codes.clone(),
             _ => Vec::new(),
         }
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod personal_data_wasm_tests {
+    use super::NookSecretRecord;
+    use crate::{
+        NookSecretFormFields, NookSecretListItem, build_secret_yaml, secret_type_category,
+    };
+    use nook_core::{SecretCategory, SecretId, SecretRecord, SecretType, SecretValue};
+    use wasm_bindgen::JsError;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn dto<T: tsify::Tsify>(value: &serde_json::Value) -> Result<tsify::Ts<T>, JsError> {
+        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+        serde::Serialize::serialize(value, &serializer)
+            .map(tsify::Ts::new_unchecked)
+            .map_err(|_| JsError::new("Typed test input could not be encoded."))
+    }
+
+    fn decoded(yaml: &str, secret_type: SecretType) -> Result<SecretRecord, JsError> {
+        Ok(SecretRecord {
+            id: SecretId::from_vault_record("secret_personal"),
+            secret_type,
+            data: SecretValue::from_yaml_str(secret_type, yaml)
+                .map_err(|error| JsError::new(&error.to_string()))?,
+        })
+    }
+
+    fn view_json(record: &NookSecretRecord) -> Result<serde_json::Value, JsError> {
+        serde_wasm_bindgen::from_value(record.personal_data()?.into())
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))
+    }
+
+    #[wasm_bindgen_test]
+    fn identity_document_list_masks_number_while_detail_reveals_it() -> Result<(), JsError> {
+        let fields = NookSecretFormFields::identity_document(&dto(&serde_json::json!({
+            "kind": "passport",
+            "number": " X1234567 ",
+            "issuer": "HM Passport Office",
+            "issuingCountry": "GB",
+            "issueDate": "2020-01-15",
+            "expiryDate": "2030-01",
+            "nameAsPrinted": "ADA LOVELACE",
+        }))?)?;
+        let record = decoded(&build_secret_yaml(&fields)?, SecretType::IdentityDocument)?;
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+        assert_eq!(item.secret_type(), SecretType::IdentityDocument);
+        assert_eq!(item.display_title(), "ADA LOVELACE");
+        assert_eq!(item.summary(), "•••• 4567");
+        for exposed in [
+            item.display_title(),
+            item.summary(),
+            item.title(),
+            item.last4(),
+        ] {
+            assert!(!exposed.contains("X1234567"));
+        }
+
+        let detail = NookSecretRecord::from_record(record);
+        assert_eq!(
+            view_json(&detail)?,
+            serde_json::json!({
+                "kind": "identity-document",
+                "documentKind": "passport",
+                "number": "X1234567",
+                "maskedNumber": "•••• 4567",
+                "issuer": "HM Passport Office",
+                "issuingCountry": "GB",
+                "issueDate": "2020-01-15",
+                "expiryDate": "2030-01",
+                "nameAsPrinted": "ADA LOVELACE",
+            })
+        );
+        assert_eq!(detail.primary_credential(), "X1234567");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn international_account_list_masks_iban_and_detail_carries_bic() -> Result<(), JsError> {
+        let fields = NookSecretFormFields::international_account(&dto(&serde_json::json!({
+            "accountHolder": "Ada Lovelace",
+            "bankName": "Analytical Bank",
+            "iban": "gb82 west 1234 5698 7654 32",
+            "swiftBic": "nwbkgb2l",
+        }))?)?;
+        let record = decoded(
+            &build_secret_yaml(&fields)?,
+            SecretType::InternationalAccount,
+        )?;
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+        assert_eq!(item.summary(), "•••• 5432 · NWBKGB2L");
+        assert!(!item.summary().contains("GB82WEST"));
+        assert_eq!(
+            view_json(&NookSecretRecord::from_record(record))?,
+            serde_json::json!({
+                "kind": "international-account",
+                "accountHolder": "Ada Lovelace",
+                "bankName": "Analytical Bank",
+                "iban": "GB82WEST12345698765432",
+                "maskedNumber": "•••• 5432",
+                "swiftBic": "NWBKGB2L",
+            })
+        );
+        let non_iban = NookSecretFormFields::international_account(&dto(&serde_json::json!({
+            "accountHolder": "", "bankName": "", "iban": "000123456789", "swiftBic": "",
+        }))?)?;
+        assert!(build_secret_yaml(&non_iban).is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn domestic_account_list_masks_number_and_detail_carries_routing_number() -> Result<(), JsError>
+    {
+        let fields = NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+            "accountHolder": "Ada Lovelace",
+            "bankName": "Federal Bank",
+            "accountNumber": "0001-2345-6789",
+            "routingNumber": "021000021",
+        }))?)?;
+        let record = decoded(&build_secret_yaml(&fields)?, SecretType::DomesticAccount)?;
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+        assert_eq!(item.summary(), "•••• 6789 · 021000021");
+        assert!(!item.summary().contains("000123456789"));
+        assert_eq!(
+            view_json(&NookSecretRecord::from_record(record))?,
+            serde_json::json!({
+                "kind": "domestic-account",
+                "accountHolder": "Ada Lovelace",
+                "bankName": "Federal Bank",
+                "accountNumber": "000123456789",
+                "maskedNumber": "•••• 6789",
+                "routingNumber": "021000021",
+            })
+        );
+        let bad_routing = NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+            "accountHolder": "", "bankName": "", "accountNumber": "1234",
+            "routingNumber": "021000022",
+        }))?)?;
+        assert!(build_secret_yaml(&bad_routing).is_err());
+        assert!(
+            NookSecretFormFields::domestic_account(&dto(&serde_json::json!({
+                "accountHolder": "", "bankName": "", "accountNumber": "1234",
+                "routingCode": "021000021",
+            }))?)
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn person_and_address_forms_validate_and_expose_typed_detail_views() -> Result<(), JsError> {
+        let person = NookSecretFormFields::person(&dto(&serde_json::json!({
+            "givenName": "Ada", "middleName": "", "familyName": "Lovelace",
+            "birthDate": "1815-12-10", "email": "ada@example.com",
+            "mobilePhone": "+44 20 7946 0958", "homePhone": "", "workPhone": "",
+        }))?)?;
+        let record = decoded(&build_secret_yaml(&person)?, SecretType::Person)?;
+        assert_eq!(
+            view_json(&NookSecretRecord::from_record(record))?,
+            serde_json::json!({
+                "kind": "person",
+                "givenName": "Ada",
+                "middleName": "",
+                "familyName": "Lovelace",
+                "fullName": "Ada Lovelace",
+                "birthDate": "1815-12-10",
+                "email": "ada@example.com",
+                "mobilePhone": "+44 20 7946 0958",
+                "homePhone": "",
+                "workPhone": "",
+            })
+        );
+
+        let address = NookSecretFormFields::address(&dto(&serde_json::json!({
+            "label": "Home", "addressLine1": "", "addressLine2": "", "city": "London",
+            "region": "", "postalCode": "", "country": "GB",
+        }))?)?;
+        assert!(build_secret_yaml(&address).is_err());
+        assert!(
+            NookSecretFormFields::address(&dto(&serde_json::json!({ "label": "Home" }))?).is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn card_records_keep_card_getters_and_have_no_personal_view() -> Result<(), JsError> {
+        let card = NookSecretRecord::from_record(decoded(
+            "title: Card\ncardholderName: ''\nnumber: '4111111111111111'\nexpirationMonth: ''\nexpirationYear: ''\ncvv: ''\nnotes: ''\n",
+            SecretType::CreditCard,
+        )?);
+        assert_eq!(card.card_number(), "4111111111111111");
+        assert!(card.personal_data().is_err());
+        assert_eq!(
+            secret_type_category(SecretType::CreditCard),
+            SecretCategory::PersonalData
+        );
+        assert_eq!(
+            secret_type_category(SecretType::Login),
+            SecretCategory::Secrets
+        );
+        assert_eq!(
+            secret_type_category(SecretType::DomesticAccount),
+            SecretCategory::PersonalData
+        );
+        assert_eq!(
+            secret_type_category(SecretType::InternationalAccount),
+            SecretCategory::PersonalData
+        );
+        Ok(())
     }
 }
 

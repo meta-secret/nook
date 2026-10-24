@@ -402,7 +402,7 @@ class AuthenticatorInteraction {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetConnectVault,
+            BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
           ),
           enableContinue: true,
         }

@@ -57,10 +57,17 @@ import { WorkflowCopy, workflowUi } from './workflow-ui'
 import {
   SavedLoginPresentation,
   SavedLoginPresentationKind,
-  WidgetVaultPresentationKind,
+  WidgetVaultGate,
+  WidgetVaultGateKind,
   WidgetVaultPresentationProjection,
+  WidgetVaultRequirement,
+  type WidgetVaultPresentation,
 } from './widget-presentation-state'
-import { SiteSidePanel } from './site-side-panel'
+import {
+  VaultConnectResumeKind,
+  WidgetVaultGateSurface,
+  type WidgetVaultGateMount,
+} from './widget-vault-gate'
 import { PilotVaultOpening } from './pilot-vault-opening'
 import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
@@ -82,6 +89,12 @@ type RenderWidgetArgs = {
   savedLoginActionAvailable: boolean
 }
 
+type MountVaultGateArgs = {
+  readonly shell: ReturnType<typeof authenticationWidgetShell.createWidgetShell>
+  readonly presentation: WidgetVaultPresentation
+  readonly requirement: WidgetVaultRequirement
+}
+
 type MountLoginChecklistArgs = ConstructorParameters<
   typeof LoginChecklistProgress
 >[0] & {
@@ -95,6 +108,44 @@ type AuthenticationWidgetRendererContext = {
 }
 class AuthenticationWidgetRenderer {
   constructor(private readonly ui: AuthenticationWidgetRendererContext) {}
+
+  /** Take over and password generation run without the vault; every other
+   * Pilot action reads or writes it. */
+  private vaultRequirement(
+    action: AuthenticationWorkflowAction,
+  ): WidgetVaultRequirement {
+    switch (action) {
+      case AuthenticationWorkflowAction.TakeOver:
+      case AuthenticationWorkflowAction.GeneratePassword:
+        return WidgetVaultRequirement.NotRequired
+      case AuthenticationWorkflowAction.ContinueWithNook:
+      case AuthenticationWorkflowAction.FillTotp:
+      case AuthenticationWorkflowAction.EnrollAuthenticator:
+      case AuthenticationWorkflowAction.SaveBackupCodes:
+      case AuthenticationWorkflowAction.UsePasskey:
+      case AuthenticationWorkflowAction.CreatePasskey:
+        return WidgetVaultRequirement.Required
+    }
+  }
+
+  /** Renders the connect-first or unlock-first state when the vault action cannot run. */
+  private vaultGate(request: MountVaultGateArgs): WidgetVaultGateKind {
+    const gate = WidgetVaultGate.decide(request)
+    switch (gate) {
+      case WidgetVaultGateKind.Open:
+        return gate
+      case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.Unlock: {
+        const mount: WidgetVaultGateMount = {
+          shell: request.shell,
+          gate,
+          resume: { kind: VaultConnectResumeKind.Page },
+        }
+        WidgetVaultGateSurface.render(mount)
+        return gate
+      }
+    }
+  }
 
   private async mountLoginChecklist(
     request: MountLoginChecklistArgs,
@@ -176,7 +227,20 @@ class AuthenticationWidgetRenderer {
       workflowKey,
       workflowRoot,
     }
+    const enrollmentGate: MountVaultGateArgs = {
+      shell,
+      presentation: vaultPresentation,
+      requirement: WidgetVaultRequirement.Required,
+    }
+    const enrollmentGateKind = this.vaultGate(enrollmentGate)
     authenticationWidgetShell.mountWidgetShell(nookTypedArgs0_1)
+    switch (enrollmentGateKind) {
+      case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.Unlock:
+        return
+      case WidgetVaultGateKind.Open:
+        break
+    }
 
     const nookTypedArgs0_2: Parameters<
       typeof authenticationWidgetShell.buildEnrollmentFlowHost
@@ -307,6 +371,30 @@ class AuthenticationWidgetRenderer {
     }
     const shell = authenticationWidgetShell.createWidgetShell(nookTypedArgs0_3)
     const { body, step, title, description, continueButton } = shell
+    const workflowRootRequest: Parameters<
+      typeof authenticationWidgetShell.mountWidgetShell
+    >[0]['workflowRoot'] = {
+      kind: WidgetWorkflowRootKind.Assigned,
+      observation: workflow,
+      facts,
+    }
+    const workflowGate: MountVaultGateArgs = {
+      shell,
+      presentation: vaultPresentation,
+      requirement: this.vaultRequirement(snapshot.action),
+    }
+    switch (this.vaultGate(workflowGate)) {
+      case WidgetVaultGateKind.Connect:
+      case WidgetVaultGateKind.Unlock: {
+        const gateMount: Parameters<
+          typeof authenticationWidgetShell.mountWidgetShell
+        >[0] = { shell, workflowKey, workflowRoot: workflowRootRequest }
+        authenticationWidgetShell.mountWidgetShell(gateMount)
+        return
+      }
+      case WidgetVaultGateKind.Open:
+        break
+    }
     const canContinueWithNook =
       snapshot.action === AuthenticationWorkflowAction.ContinueWithNook ||
       snapshot.action === AuthenticationWorkflowAction.FillTotp ||
@@ -315,13 +403,8 @@ class AuthenticationWidgetRenderer {
       snapshot.action === AuthenticationWorkflowAction.GeneratePassword ||
       snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
       snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-    // A locked vault has no logins to offer yet: the button unlocks Nook in the side panel.
-    const unlocksFirst =
-      vaultPresentation.kind === WidgetVaultPresentationKind.Locked &&
-      snapshot.action === AuthenticationWorkflowAction.ContinueWithNook
-    let continueMessageKey: BrowserMessageKey = unlocksFirst
-      ? BROWSER_MESSAGE_KEYS.WidgetUnlock
-      : snapshot.action === AuthenticationWorkflowAction.FillTotp
+    let continueMessageKey: BrowserMessageKey =
+      snapshot.action === AuthenticationWorkflowAction.FillTotp
         ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
         : snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
           ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
@@ -365,10 +448,6 @@ class AuthenticationWidgetRenderer {
         }
         case SavedLoginPresentationKind.Workflow:
           break
-      }
-      if (unlocksFirst) {
-        SiteSidePanel.open()
-        return
       }
       if (!canContinueWithNook) {
         authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -565,7 +644,15 @@ class AuthenticationWidgetRenderer {
     const supplementalHints = new SupplementalEnrollmentPresentation(
       supplementalHintsRequest,
     ).hints
-    if (supplementalHints.qr === 'present' || supplementalHints.backupCodes) {
+    // Supplemental enrollment writes to the vault, so it follows the vault gate too.
+    const supplementalGate: Parameters<typeof WidgetVaultGate.decide>[0] = {
+      presentation: vaultPresentation,
+      requirement: WidgetVaultRequirement.Required,
+    }
+    if (
+      WidgetVaultGate.decide(supplementalGate) === WidgetVaultGateKind.Open &&
+      (supplementalHints.qr === 'present' || supplementalHints.backupCodes)
+    ) {
       const nookTypedArgs0_9: Parameters<
         typeof authenticationWidgetShell.buildEnrollmentFlowHost
       >[0] = {

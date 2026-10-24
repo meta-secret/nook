@@ -145,7 +145,9 @@ pub use ids::{
     STORE_ID_PREFIX, SecretId, StoreId,
 };
 pub use multi_device_api::*;
-pub use records::{RecordTypeDeclaration, SecretType, StoredRecordPayload, StoredSecretRecord};
+pub use records::{
+    RecordTypeDeclaration, SecretCategory, SecretType, StoredRecordPayload, StoredSecretRecord,
+};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,

@@ -116,7 +116,7 @@ test('clear a recovered scheduled sync alert on extension consent', async ({
     })
   })
   await page.getByTestId('approve-extension-device-btn').click()
-  await expect(page.getByTestId('extension-connect-approved')).toBeVisible({
+  await expect(page.getByTestId('app-success')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await expect(vaultError).toHaveCount(0)

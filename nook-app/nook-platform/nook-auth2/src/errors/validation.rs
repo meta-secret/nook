@@ -207,6 +207,60 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID)]
     CreditCardCvvInvalid,
 
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PERSONAL_DATA_TEXT_INVALID)]
+    PersonalDataTextInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PERSON_NAME_REQUIRED)]
+    PersonNameRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PERSON_BIRTH_DATE_INVALID)]
+    PersonBirthDateInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PERSON_EMAIL_INVALID)]
+    PersonEmailInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PERSON_PHONE_INVALID)]
+    PersonPhoneInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ADDRESS_LINE1_REQUIRED)]
+    AddressLine1Required,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_NUMBER_REQUIRED)]
+    IdentityDocumentNumberRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_DATE_INVALID)]
+    IdentityDocumentDateInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_SSN_INVALID)]
+    IdentityDocumentSsnInvalid,
+
+    #[error(
+        "{}",
+        i18n_keys::ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE
+    )]
+    IdentityDocumentExpiryBeforeIssue,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED)]
+    InternationalAccountIbanRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_INVALID)]
+    InternationalAccountIbanInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SWIFT_BIC_INVALID)]
+    SwiftBicInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_REQUIRED)]
+    DomesticAccountNumberRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DOMESTIC_ACCOUNT_NUMBER_INVALID)]
+    DomesticAccountNumberInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED)]
+    RoutingNumberRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_ROUTING_NUMBER_INVALID)]
+    RoutingNumberInvalid,
+
     #[error("{}", ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID)]
     SymmetricKeyInvalid,
 

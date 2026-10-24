@@ -196,6 +196,8 @@ class ChecklistBrowserFixture {
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
       case CompanionWasmSessionMessageType.ResolveAuthenticatorEnrollmentCandidates:
       case CompanionWasmSessionMessageType.ValidateReviewedAuthenticatorLabels:
+      case CompanionWasmSessionMessageType.ClassifyPersonalField:
+      case CompanionWasmSessionMessageType.PlanPersonalFill:
       case CompanionWasmSessionMessageType.SitePageNeed:
         void handleCompanionWasmMessage(message).then(
           reply.complete.bind(reply),

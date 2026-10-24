@@ -4,6 +4,14 @@ import {
   passkeyCardMessages,
   type PasskeyLocaleMessages,
 } from './chrome-locale-passkey-card'
+import {
+  PersonalPickerChromeMessages,
+  type PersonalPickerLocaleMessages,
+} from './chrome-locale-personal-picker'
+import {
+  VaultGateChromeMessages,
+  type VaultGateLocaleMessages,
+} from './chrome-locale-vault-gate'
 
 type ExtensionChromeLocaleBuildRequest = {
   appCommonLocalesRoot: string
@@ -53,7 +61,6 @@ type NookLocaleCatalogShape = {
       pilot_label: string
       vault_connected: string
       vault_not_connected: string
-      connect_vault: string
       login_title: string
       login_description: string
       login_match_count: string
@@ -63,6 +70,11 @@ type NookLocaleCatalogShape = {
       login_no_match_title: string
       login_unavailable: string
       login_unavailable_description: string
+      personal_person_title: string
+      personal_address_title: string
+      personal_card_title: string
+      personal_description: string
+      personal_picker_title: string
       signup_title: string
       signup_description: string
       password_change_title: string
@@ -162,6 +174,7 @@ type NookLocaleCatalogShape = {
       backup_mode_merge: string
     }
     passkey: PasskeyLocaleMessages
+    personal_picker: PersonalPickerLocaleMessages
   }
 }
 
@@ -171,10 +184,13 @@ type ExtensionLocaleCatalogAdmissionArgs = {
 }
 
 type WidgetLocaleMessageKey =
-  keyof NookLocaleCatalogShape['extension']['widget']
+  | keyof NookLocaleCatalogShape['extension']['widget']
+  | keyof VaultGateLocaleMessages
 type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
 type SetupLocaleMessageKey = keyof NookLocaleCatalogShape['extension']['setup']
+type PersonalPickerLocaleMessageKey =
+  keyof NookLocaleCatalogShape['extension']['personal_picker']
 
 class LocaleMessageSection<Key extends string> {
   private readonly messages: Record<string, unknown>
@@ -208,6 +224,7 @@ type NookLocaleCatalog = {
     setup: LocaleMessageSection<SetupLocaleMessageKey>
     widget: LocaleMessageSection<WidgetLocaleMessageKey>
     passkey: LocaleMessageSection<PasskeyLocaleMessageKey>
+    personalPicker: LocaleMessageSection<PersonalPickerLocaleMessageKey>
   }
 }
 
@@ -226,7 +243,8 @@ class ExtensionLocaleCatalogAdmission {
       Array.isArray(value.extension) ||
       !('setup' in value.extension) ||
       !('widget' in value.extension) ||
-      !('passkey' in value.extension)
+      !('passkey' in value.extension) ||
+      !('personal_picker' in value.extension)
     ) {
       throw new Error(`Locale catalog ${locale} has an invalid shape.`)
     }
@@ -244,6 +262,11 @@ class ExtensionLocaleCatalogAdmission {
           value.extension.passkey,
           `${locale} passkey`,
         ),
+        personalPicker:
+          new LocaleMessageSection<PersonalPickerLocaleMessageKey>(
+            value.extension.personal_picker,
+            `${locale} personal picker`,
+          ),
       },
     }
   }
@@ -456,9 +479,6 @@ export async function buildChromeLocales({
         widgetVaultLocked: {
           message: catalog.extension.setup.message('status_locked', locale),
         },
-        widgetConnectVault: {
-          message: catalog.extension.widget.message('connect_vault', locale),
-        },
         widgetLoginTitle: {
           message: catalog.extension.widget.message('login_title', locale),
         },
@@ -495,6 +515,36 @@ export async function buildChromeLocales({
         widgetLoginUnavailableDescription: {
           message: catalog.extension.widget.message(
             'login_unavailable_description',
+            locale,
+          ),
+        },
+        widgetPersonalPersonTitle: {
+          message: catalog.extension.widget.message(
+            'personal_person_title',
+            locale,
+          ),
+        },
+        widgetPersonalAddressTitle: {
+          message: catalog.extension.widget.message(
+            'personal_address_title',
+            locale,
+          ),
+        },
+        widgetPersonalCardTitle: {
+          message: catalog.extension.widget.message(
+            'personal_card_title',
+            locale,
+          ),
+        },
+        widgetPersonalDescription: {
+          message: catalog.extension.widget.message(
+            'personal_description',
+            locale,
+          ),
+        },
+        widgetPersonalPickerTitle: {
+          message: catalog.extension.widget.message(
+            'personal_picker_title',
             locale,
           ),
         },
@@ -925,6 +975,14 @@ export async function buildChromeLocales({
           ),
         },
         ...passkeyCardMessages(catalog.extension.passkey, locale),
+        ...VaultGateChromeMessages.messages({
+          section: catalog.extension.widget,
+          locale,
+        }),
+        ...PersonalPickerChromeMessages.messages({
+          section: catalog.extension.personalPicker,
+          locale,
+        }),
       }
       const localeDir = join(distDir, '_locales', locale)
       await mkdir(localeDir, { recursive: true })

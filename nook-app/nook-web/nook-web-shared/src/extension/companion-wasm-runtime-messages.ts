@@ -16,6 +16,8 @@ import type {
   AuthenticationUsernameEvidence,
   FocusedCredentialOpportunity,
   FocusedCredentialSelection,
+  PersonalFieldClassification,
+  PersonalFillOpportunity,
   AuthenticationWorkflowMatch,
   AuthenticationWorkflowSnapshot,
   AuthenticationRecoveryCopyEvidence,
@@ -66,6 +68,8 @@ export enum CompanionWasmSessionMessageType {
   ProjectAuthenticationLoginChecklist = "nook:extension-session-project-authentication-login-checklist",
   ClassifyFocusedCredentialField = "nook:extension-session-classify-focused-credential-field",
   RevalidateFocusedCredentialField = "nook:extension-session-revalidate-focused-credential-field",
+  ClassifyPersonalField = "nook:extension-session-classify-personal-field",
+  PlanPersonalFill = "nook:extension-session-plan-personal-fill",
   GetAuthenticationActivityProgress = "nook:extension-session-get-authentication-activity-progress",
   ExtractAuthenticationBackupCodeCandidates = "nook:extension-session-extract-authentication-backup-code-candidates",
   ProjectAuthenticationNavigationPath = "nook:extension-session-project-authentication-navigation-path",
@@ -161,6 +165,12 @@ export type CompanionWasmPageInputFieldRequest = {
   readonly loginContextObservation: CompanionWasmLoginContextObservation;
 };
 
+/** The focused field's form-scope inputs in document order; indices are positions. */
+export type CompanionWasmPersonalFillScope = {
+  readonly fields: readonly CompanionWasmPageInputFieldObservation[];
+  readonly focusedIndex: number;
+};
+
 export type CompanionWasmLabelRequest = {
   readonly kind: CompanionWasmLabelKind;
   readonly value: string;
@@ -188,6 +198,16 @@ export type CompanionWasmSessionMessage =
         readonly observation: CompanionWasmPageInputFieldObservation;
         readonly opportunity: FocusedCredentialOpportunity;
       };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.ClassifyPersonalField;
+      readonly payload: {
+        readonly observation: CompanionWasmPageInputFieldObservation;
+      };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.PlanPersonalFill;
+      readonly payload: CompanionWasmPersonalFillScope;
     }
   | {
       readonly type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress;
@@ -393,8 +413,18 @@ export type CompanionWasmFocusedRecognitionResponse =
       readonly focusedSelection: FocusedCredentialSelection;
     };
 
+export type CompanionWasmPersonalFieldResponse = {
+  readonly personalFieldClassification: PersonalFieldClassification;
+};
+
+export type CompanionWasmPersonalFillPlanResponse = {
+  readonly personalFillOpportunity: PersonalFillOpportunity;
+};
+
 export type CompanionWasmSessionResponse =
   | GoogleLoginSessionResponse
+  | CompanionWasmPersonalFieldResponse
+  | CompanionWasmPersonalFillPlanResponse
   | NookAuthenticatorEnrollmentCandidates
   | ReviewedAuthenticatorLabelsVerdictResponse
   | LoginSaveOutcomeDecision

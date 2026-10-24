@@ -18,6 +18,7 @@
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import { ArrowLeft, RefreshCw } from "@lucide/svelte";
+  import { SecretCategory } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import {
     buildSecretYaml,
@@ -31,6 +32,7 @@
     type SecretTypeSelection,
   } from "$lib/components/secret-form-state";
   import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
+  import PersonalDataFields from "./add-secret/PersonalDataFields.svelte";
   import SecretFields from "./add-secret/SecretFields.svelte";
   import { SecretFormState } from "./add-secret/secret-form-state.svelte";
   import SecretTypePicker from "./add-secret/SecretTypePicker.svelte";
@@ -43,6 +45,7 @@
     onReplaceSecret,
     onGeneratePassword,
     onCancel,
+    section = SecretCategory.Secrets,
     editor = { kind: SecretEditorKind.Creating },
     selectedTypeState = $bindable<SecretTypeSelection>({
       kind: SecretTypeSelectionKind.ChoosingType,
@@ -58,6 +61,8 @@
     ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
     onGeneratePassword: (options: PasswordGenerationOptions) => string;
     onCancel: () => void;
+    /** The vault section whose types the picker offers. */
+    section?: SecretCategory;
     editor?: SecretEditor;
     selectedTypeState?: SecretTypeSelection;
   } = $props();
@@ -65,42 +70,80 @@
   const state = new SecretFormState();
   const isEditMode = $derived(editor.kind === SecretEditorKind.Editing);
 
-  const typeTitle = $derived.by(() => {
-    if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields) {
-      return vault.t(I18N_KEYS.AddSecretTitleAddItem);
+  function newTitleKey(type: SecretType): string {
+    switch (type) {
+      case SecretType.Login:
+        return I18N_KEYS.AddSecretTitleNewLogin;
+      case SecretType.ApiKey:
+        return I18N_KEYS.AddSecretTitleNewApiKey;
+      case SecretType.SeedPhrase:
+        return I18N_KEYS.AddSecretTitleNewSeedPhrase;
+      case SecretType.SecureNote:
+        return I18N_KEYS.AddSecretTitleNewSecureNote;
+      case SecretType.Authenticator:
+        return I18N_KEYS.AddSecretTitleNewAuthenticator;
+      case SecretType.CreditCard:
+        return I18N_KEYS.AddSecretTitleNewCreditCard;
+      case SecretType.FileAttachment:
+        return I18N_KEYS.AddSecretTitleNewFileAttachment;
+      case SecretType.Person:
+        return I18N_KEYS.AddSecretTitleNewPerson;
+      case SecretType.Address:
+        return I18N_KEYS.AddSecretTitleNewAddress;
+      case SecretType.IdentityDocument:
+        return I18N_KEYS.AddSecretTitleNewIdentityDocument;
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.AddSecretTitleNewInternationalAccount;
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.AddSecretTitleNewDomesticAccount;
+      case SecretType.Passkey:
+        return I18N_KEYS.AddSecretTitleAddItem;
     }
-    const selectedType = selectedTypeState.itemType;
-    return isEditMode
-      ? selectedType === SecretType.Login
-        ? vault.t(I18N_KEYS.AddSecretTitleEditLogin)
-        : selectedType === SecretType.ApiKey
-          ? vault.t(I18N_KEYS.AddSecretTitleEditApiKey)
-          : selectedType === SecretType.SeedPhrase
-            ? vault.t(I18N_KEYS.AddSecretTitleEditSeedPhrase)
-            : selectedType === SecretType.SecureNote
-              ? vault.t(I18N_KEYS.AddSecretTitleEditSecureNote)
-              : selectedType === SecretType.Authenticator
-                ? vault.t(I18N_KEYS.AddSecretTitleEditAuthenticator)
-                : selectedType === SecretType.CreditCard
-                  ? vault.t(I18N_KEYS.AddSecretTitleEditCreditCard)
-                  : selectedType === SecretType.FileAttachment
-                    ? vault.t(I18N_KEYS.AddSecretTitleEditFileAttachment)
-                    : vault.t(I18N_KEYS.AddSecretTitleEditItem)
-      : selectedType === SecretType.Login
-        ? vault.t(I18N_KEYS.AddSecretTitleNewLogin)
-        : selectedType === SecretType.ApiKey
-          ? vault.t(I18N_KEYS.AddSecretTitleNewApiKey)
-          : selectedType === SecretType.SeedPhrase
-            ? vault.t(I18N_KEYS.AddSecretTitleNewSeedPhrase)
-            : selectedType === SecretType.SecureNote
-              ? vault.t(I18N_KEYS.AddSecretTitleNewSecureNote)
-              : selectedType === SecretType.Authenticator
-                ? vault.t(I18N_KEYS.AddSecretTitleNewAuthenticator)
-                : selectedType === SecretType.CreditCard
-                  ? vault.t(I18N_KEYS.AddSecretTitleNewCreditCard)
-                  : selectedType === SecretType.FileAttachment
-                    ? vault.t(I18N_KEYS.AddSecretTitleNewFileAttachment)
-                    : vault.t(I18N_KEYS.AddSecretTitleAddItem);
+  }
+
+  function editTitleKey(type: SecretType): string {
+    switch (type) {
+      case SecretType.Login:
+        return I18N_KEYS.AddSecretTitleEditLogin;
+      case SecretType.ApiKey:
+        return I18N_KEYS.AddSecretTitleEditApiKey;
+      case SecretType.SeedPhrase:
+        return I18N_KEYS.AddSecretTitleEditSeedPhrase;
+      case SecretType.SecureNote:
+        return I18N_KEYS.AddSecretTitleEditSecureNote;
+      case SecretType.Authenticator:
+        return I18N_KEYS.AddSecretTitleEditAuthenticator;
+      case SecretType.CreditCard:
+        return I18N_KEYS.AddSecretTitleEditCreditCard;
+      case SecretType.FileAttachment:
+        return I18N_KEYS.AddSecretTitleEditFileAttachment;
+      case SecretType.Person:
+        return I18N_KEYS.AddSecretTitleEditPerson;
+      case SecretType.Address:
+        return I18N_KEYS.AddSecretTitleEditAddress;
+      case SecretType.IdentityDocument:
+        return I18N_KEYS.AddSecretTitleEditIdentityDocument;
+      case SecretType.InternationalAccount:
+        return I18N_KEYS.AddSecretTitleEditInternationalAccount;
+      case SecretType.DomesticAccount:
+        return I18N_KEYS.AddSecretTitleEditDomesticAccount;
+      case SecretType.Passkey:
+        return I18N_KEYS.AddSecretTitleEditItem;
+    }
+  }
+
+  const typeTitle = $derived.by(() => {
+    switch (selectedTypeState.kind) {
+      case SecretTypeSelectionKind.ChoosingType:
+        return vault.t(I18N_KEYS.AddSecretTitleAddItem);
+      case SecretTypeSelectionKind.EditingFields:
+        switch (editor.kind) {
+          case SecretEditorKind.Creating:
+            return vault.t(newTitleKey(selectedTypeState.itemType));
+          case SecretEditorKind.Editing:
+            return vault.t(editTitleKey(selectedTypeState.itemType));
+        }
+    }
   });
 
   $effect(() => {
@@ -213,7 +256,7 @@
 </script>
 
 {#if selectedTypeState.kind === SecretTypeSelectionKind.ChoosingType && !isEditMode}
-  <SecretTypePicker {vault} onSelect={selectSecretType} />
+  <SecretTypePicker {vault} {section} onSelect={selectSecretType} />
 {:else if selectedTypeState.kind === SecretTypeSelectionKind.EditingFields && selectedTypeState.itemType === SecretType.Passkey && !isEditMode}
   <PasskeyCreationGuidance
     {vault}
@@ -290,11 +333,19 @@
       </p>
     {/if}
 
-    <SecretFields
-      {vault}
-      {state}
-      selectedType={selectedTypeState.itemType}
-      {onGeneratePassword}
-    />
+    {#if selectedTypeState.itemType === SecretType.Person || selectedTypeState.itemType === SecretType.Address || selectedTypeState.itemType === SecretType.IdentityDocument || selectedTypeState.itemType === SecretType.InternationalAccount || selectedTypeState.itemType === SecretType.DomesticAccount}
+      <PersonalDataFields
+        {vault}
+        state={state.personal}
+        selectedType={selectedTypeState.itemType}
+      />
+    {:else}
+      <SecretFields
+        {vault}
+        {state}
+        selectedType={selectedTypeState.itemType}
+        {onGeneratePassword}
+      />
+    {/if}
   </form>
 {/if}

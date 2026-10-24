@@ -134,7 +134,9 @@ class EnrollmentBackupInteraction {
   }
 
   private unavailableMessage(host: BackupEnrollmentHost): string {
-    return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
+    return host.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
+    )
   }
 
   private lockedBackupMessage(host: BackupEnrollmentHost): string {

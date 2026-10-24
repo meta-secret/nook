@@ -481,25 +481,61 @@ describe('saved-login empty state', () => {
         vaultConnection: { kind: PilotVaultConnectionKind.Connected },
       }
       await authenticationWidgetRenderer.renderWidget(args)
-      expect(document.querySelector('.step-label')?.textContent).toContain(
-        '1/3',
-      )
       switch (loginMatches.kind) {
         case 'locked':
+          // A locked vault offers Unlock in place of Sign in, with no checklist.
+          expect(document.querySelector('.step-label')?.textContent).toBe(
+            'widgetPilotLabel',
+          )
           expect(document.querySelector('.primary-button')?.textContent).toBe(
             'widgetUnlock',
           )
+          expect(document.querySelector('h1')?.textContent).toBe(
+            'widgetUnlockFirstTitle',
+          )
+          expect(actions.initializeChecklist).not.toHaveBeenCalled()
           break
         case 'ready':
         case 'unavailable':
+          expect(document.querySelector('.step-label')?.textContent).toContain(
+            '1/3',
+          )
           expect(document.querySelector('.primary-button')?.textContent).toBe(
             'widgetContinue',
           )
+          expect(actions.initializeChecklist).toHaveBeenCalledOnce()
           break
       }
-      expect(actions.initializeChecklist).toHaveBeenCalledOnce()
     },
   )
+
+  test('offers Connect vault instead of Sign in when no vault is connected', async () => {
+    const args: Parameters<
+      typeof authenticationWidgetRenderer.renderWidget
+    >[0] = {
+      authenticatorSetupSnapshot,
+      snapshot: {
+        ...snapshot,
+        action: AuthenticationWorkflowAction.ContinueWithNook,
+      },
+      workflow,
+      facts,
+      factsBindingToken: 'approved-observation',
+      loginMatches: { kind: 'unavailable' },
+      savedLoginActionAvailable: true,
+      vaultConnection: { kind: PilotVaultConnectionKind.NotConnected },
+    }
+    await authenticationWidgetRenderer.renderWidget(args)
+    expect(document.querySelector('h1')?.textContent).toBe(
+      'widgetConnectFirstTitle',
+    )
+    expect(document.querySelector('.primary-button')?.textContent).toBe(
+      'widgetConnectFirstAction',
+    )
+    expect(savedLoginButton()).toBe(false)
+    expect(actions.initializeChecklist).not.toHaveBeenCalled()
+    expect(actions.continueWithNook).not.toHaveBeenCalled()
+  })
 })
 
 describe('passkey workflow saved-login fallback', () => {
@@ -513,13 +549,15 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.continueWithNook).toHaveBeenCalledOnce()
   })
 
-  test('renders saved login for a locked vault', async () => {
+  test('offers Unlock instead of passkey and saved-login actions for a locked vault', async () => {
     await renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
-    const savedLogin = savedLoginButton()
-    if (savedLogin) savedLogin.click()
 
-    expect(savedLoginButton()).not.toBe(false)
-    expect(actions.continueWithNook).toHaveBeenCalledOnce()
+    expect(savedLoginButton()).toBe(false)
+    expect(document.querySelector('.primary-button')?.textContent).toBe(
+      'widgetUnlock',
+    )
+    expect(actions.continueWithNook).not.toHaveBeenCalled()
+    expect(actions.proposePasskeyWithNook).not.toHaveBeenCalled()
   })
 
   test('omits saved login for empty and unavailable matches', async () => {

@@ -271,6 +271,7 @@ await Promise.all([
 await Promise.all([
   buildSveltePage(ExtensionPageBuild.Pages),
   buildSveltePage(ExtensionPageBuild.LoginPicker),
+  buildSveltePage(ExtensionPageBuild.PersonalPicker),
   buildChromeLocales({ appCommonLocalesRoot, distDir }),
 ])
 

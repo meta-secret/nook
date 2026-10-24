@@ -405,14 +405,15 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
-  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(widget.getByText('Connect Nook to your vault')).toBeVisible()
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Vault not connected',
   )
-  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await expect(widget.getByRole('button', { name: 'Sign in' })).toHaveCount(0)
+  await widget.getByRole('button', { name: 'Connect vault' }).click()
   await expect(
     widget.getByText(
-      'Connect this browser to your vault, then select Sign in again.',
+      'Finish connecting in the Nook tab. This page updates when you are done.',
     ),
   ).toBeVisible()
   await expect

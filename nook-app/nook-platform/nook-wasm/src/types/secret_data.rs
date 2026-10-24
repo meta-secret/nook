@@ -2,6 +2,7 @@ use super::{
     NookError, NookJoinRequest, NookSecretListItem, NookSecretRecord, NookVaultMember, wasm_bindgen,
 };
 use nook_core::SecretFormFields;
+use serde::de::DeserializeOwned;
 use std::mem;
 
 #[wasm_bindgen]
@@ -262,6 +263,67 @@ impl NookSecretFormFields {
                 content_base64,
             }),
         }
+    }
+
+    /// Person form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn person(
+        form: &tsify::Ts<nook_core::PersonSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::Person(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+
+    /// Postal-address form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn address(
+        form: &tsify::Ts<nook_core::AddressSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::Address(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+
+    /// Identity-document form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn identity_document(
+        form: &tsify::Ts<nook_core::IdentityDocumentSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::IdentityDocument(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+
+    /// International (IBAN) account form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn international_account(
+        form: &tsify::Ts<nook_core::InternationalAccountSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::InternationalAccount(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+
+    /// US domestic account form input; Rust validates it in `build_secret_yaml`.
+    #[wasm_bindgen]
+    pub fn domestic_account(
+        form: &tsify::Ts<nook_core::DomesticAccountSecretForm>,
+    ) -> Result<NookSecretFormFields, wasm_bindgen::JsError> {
+        Ok(Self {
+            inner: SecretFormFields::DomesticAccount(NookSecretFormFields::decode_form(form)?),
+        })
+    }
+}
+
+impl NookSecretFormFields {
+    fn decode_form<T>(form: &tsify::Ts<T>) -> Result<T, wasm_bindgen::JsError>
+    where
+        T: tsify::Tsify + DeserializeOwned,
+        <T as tsify::Tsify>::JsType: Clone,
+    {
+        form.to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
     }
 }
 

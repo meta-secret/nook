@@ -37,6 +37,24 @@ pub enum SecretPayloadError {
     #[error("Invalid credit card payload")]
     InvalidCreditCard(#[source] serde_yaml::Error),
 
+    #[error("Invalid person payload")]
+    InvalidPerson(#[source] serde_yaml::Error),
+
+    #[error("Invalid address payload")]
+    InvalidAddress(#[source] serde_yaml::Error),
+
+    #[error("Invalid identity document payload")]
+    InvalidIdentityDocument(#[source] serde_yaml::Error),
+
+    #[error("Invalid international account payload")]
+    InvalidInternationalAccount(#[source] serde_yaml::Error),
+
+    #[error("Invalid domestic account payload")]
+    InvalidDomesticAccount(#[source] serde_yaml::Error),
+
+    #[error("Secret type {} has no personal data view", .secret_type.as_str())]
+    PersonalDataViewUnavailable { secret_type: crate::SecretType },
+
     #[error("Invalid file attachment payload: {reason}")]
     InvalidFileAttachment { reason: String },
 

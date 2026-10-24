@@ -96,6 +96,23 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::CreditCardNumberInvalid
             | ValidationError::CreditCardExpirationInvalid
             | ValidationError::CreditCardCvvInvalid
+            | ValidationError::PersonalDataTextInvalid
+            | ValidationError::PersonNameRequired
+            | ValidationError::PersonBirthDateInvalid
+            | ValidationError::PersonEmailInvalid
+            | ValidationError::PersonPhoneInvalid
+            | ValidationError::AddressLine1Required
+            | ValidationError::IdentityDocumentNumberRequired
+            | ValidationError::IdentityDocumentDateInvalid
+            | ValidationError::IdentityDocumentSsnInvalid
+            | ValidationError::IdentityDocumentExpiryBeforeIssue
+            | ValidationError::InternationalAccountIbanRequired
+            | ValidationError::InternationalAccountIbanInvalid
+            | ValidationError::SwiftBicInvalid
+            | ValidationError::DomesticAccountNumberRequired
+            | ValidationError::DomesticAccountNumberInvalid
+            | ValidationError::RoutingNumberRequired
+            | ValidationError::RoutingNumberInvalid
             | ValidationError::SymmetricKeyInvalid
             | ValidationError::SecretFingerprintKeyInvalid
             | ValidationError::AgeArmoredInvalid

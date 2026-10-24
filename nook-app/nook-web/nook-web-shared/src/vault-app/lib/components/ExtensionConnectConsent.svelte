@@ -24,6 +24,11 @@
   } from './extension-connect-consent-workflow'
   import { ExtensionConsentCloseOutcome } from './extension-connect-consent-outcome'
   import { ExtensionConnectConsentSteps } from './extension-connect-consent-progress'
+  import {
+    ExtensionConsentActivityKind,
+    ExtensionConsentActivityPresentation,
+    ExtensionConsentActivitySegment,
+  } from './extension-connect-consent-activity'
   import { extensionConnectProgress } from '$lib/extension/connect-progress'
 
   type ExtensionConsentWorkflowSession = {
@@ -128,6 +133,23 @@
       workflowState.outcome.kind ===
         ExtensionConsentDeliveryOutcomeKind.Delivered,
   )
+  const activity = $derived(
+    ExtensionConsentActivityPresentation.of(workflowState),
+  )
+  const activitySegments = $derived(
+    ExtensionConsentActivityPresentation.segments(activity),
+  )
+  const activityStepLabel = $derived.by(() => {
+    if (activity.kind !== ExtensionConsentActivityKind.Working) return ''
+    const stepRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ExtensionConsentProgressStep,
+      replacements: {
+        step: String(activity.step),
+        total: String(activity.total),
+      },
+    }
+    return vault.t(stepRequest)
+  })
 
   // The side panel follows the consent; approved is reported only after
   // the extension took the grant and event log.
@@ -143,12 +165,9 @@
   $effect(() => {
     if (!isDeliveredSuccess) return
 
-    // Leave the consent status visible briefly, then announce approval in the vault.
-    const returnTimer = window.setTimeout(() => {
-      vault.showSuccess(vault.t(I18N_KEYS.ExtensionConsentApproved))
-      onClose(ExtensionConsentCloseOutcome.Approved)
-    }, 2_000)
-    return () => window.clearTimeout(returnTimer)
+    // The progress stays up until here; the vault announces the approval.
+    vault.showSuccess(vault.t(I18N_KEYS.ExtensionConsentApproved))
+    onClose(ExtensionConsentCloseOutcome.Approved)
   })
   onDestroy(() => session.dispose())
 
@@ -287,29 +306,41 @@
     >
       {vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)}
     </p>
-  {:else if isDeliveredSuccess}
-    <p
-      class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
-      data-testid="extension-connect-approved"
-      role="status"
-      aria-live="polite"
-    >
-      {vault.t(I18N_KEYS.ExtensionConsentApproved)}
-    </p>
   {/if}
 
-  {#if !isDeliveredSuccess}
+  {#if activity.kind === ExtensionConsentActivityKind.Working}
+    <div
+      class="mt-4 grid gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-3"
+      role="status"
+      aria-live="polite"
+      data-testid="extension-connect-progress"
+      data-extension-connect-progress-step={activity.step}
+    >
+      <div class="flex items-baseline justify-between gap-3">
+        <p class="text-sm text-foreground">
+          {vault.t(activity.translationKey)}
+        </p>
+        <p class="shrink-0 font-mono text-[11px] text-muted-foreground">
+          {activityStepLabel}
+        </p>
+      </div>
+      <div class="grid grid-cols-4 gap-1" aria-hidden="true">
+        {#each activitySegments as segment, index (index)}
+          {#if segment === ExtensionConsentActivitySegment.Current}
+            <span class="nk-progress-sweep"></span>
+          {:else}
+            <span
+              class="block h-0.5 {segment === ExtensionConsentActivitySegment.Done
+                ? 'bg-[var(--titanium)]'
+                : 'bg-foreground/10'}"
+            ></span>
+          {/if}
+        {/each}
+      </div>
+    </div>
+  {:else}
     <div class="mt-4 flex flex-wrap justify-end gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        disabled={workflowState.kind ===
-          ExtensionConsentWorkflowKind.SubmittingAuthorization ||
-          workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
-          workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
-          workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
-        onclick={closeConsent}
-      >
+      <Button type="button" variant="outline" onclick={closeConsent}>
         {closeOutcome === ExtensionConsentCloseOutcome.Approved
           ? vault.t(I18N_KEYS.CommonDone)
           : vault.t(I18N_KEYS.CommonCancel)}
@@ -320,13 +351,7 @@
         data-testid="approve-extension-device-btn"
         onclick={() => void approveExtension()}
       >
-        {workflowState.kind ===
-          ExtensionConsentWorkflowKind.SubmittingAuthorization ||
-        workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
-        workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
-        workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
-          ? vault.t(I18N_KEYS.ExtensionConsentApproving)
-          : vault.t(actionTranslationKey)}
+        {vault.t(actionTranslationKey)}
       </Button>
     </div>
   {/if}

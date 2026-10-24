@@ -59,14 +59,13 @@ describe('loadSecretPage', () => {
       [Symbol.dispose]: vi.fn(),
     }
     const manager = new NookVaultManager()
-    vi.spyOn(manager, 'query_prepared_secret_page_js').mockResolvedValue(
-      emptyPage,
-    )
+    const query = vi
+      .spyOn(manager, 'query_prepared_secret_page_js')
+      .mockResolvedValue(emptyPage)
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
     state.storageMode = 'local'
     state.isAuthenticated = true
-    state.secretTypeFilter = NookSecretTypeFilter.All
     state.secretPageSize = 25
 
     const result = await new VaultSecretActions(state).loadSecretPage({
@@ -87,6 +86,8 @@ describe('loadSecretPage', () => {
       state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
     )
     expect(state.isAuthenticated).toBe(true)
+    // The vault page opens on the Secrets section, so Rust never lists personal data there.
+    expect(query).toHaveBeenCalledWith('', NookSecretTypeFilter.Secrets, 0, 25)
   })
 
   test('discards an older page that resolves after a newer search', async () => {
@@ -103,7 +104,7 @@ describe('loadSecretPage', () => {
     )
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
-    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretTypeFilter = NookSecretTypeFilter.Secrets
     state.secretPageSize = 25
     state.secrets = [previousRecord]
     state.secretTotal = 1
@@ -157,7 +158,7 @@ describe('loadSecretPage', () => {
     )
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
-    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretTypeFilter = NookSecretTypeFilter.Secrets
     state.secretPageSize = 25
 
     const olderRequest = new VaultSecretActions(state).loadSecretPage({
@@ -194,7 +195,7 @@ describe('loadSecretPage', () => {
     )
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(new NookVaultManager())
-    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretTypeFilter = NookSecretTypeFilter.Secrets
     vi.spyOn(state, 'enqueueStorage').mockImplementation(async () =>
       err(markerMismatch),
     )
@@ -239,7 +240,7 @@ describe('loadSecretPage', () => {
       .mockReturnValueOnce(maintenance.promise)
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
-    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretTypeFilter = NookSecretTypeFilter.Secrets
     state.secretPageSize = 25
     state.secretTotal = 50
     state.secretQuery = 'vault'

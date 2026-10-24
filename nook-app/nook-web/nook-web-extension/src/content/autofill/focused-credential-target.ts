@@ -96,6 +96,15 @@ export class FocusedCredentialTargetSensor {
     }
   }
 
+  /** Retains a field again after a vault connection rebuilt the widgets. */
+  retain(input: HTMLInputElement): void {
+    this.retained = {
+      kind: FocusedCredentialTargetKind.Retained,
+      input,
+      origin: location.origin,
+    }
+  }
+
   clear(): void {
     this.retained = { kind: FocusedCredentialTargetKind.Empty }
   }

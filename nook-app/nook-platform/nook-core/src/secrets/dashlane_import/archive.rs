@@ -115,6 +115,10 @@ impl DashlaneEntryName<'_> {
             DashlaneEntryKind::Supported(DashlaneCsvKind::SecureNotes)
         } else if base == "payments" || base == "payment" {
             DashlaneEntryKind::Supported(DashlaneCsvKind::Payments)
+        } else if base == "ids" || base == "id" {
+            DashlaneEntryKind::Supported(DashlaneCsvKind::Ids)
+        } else if base == "personalinfo" {
+            DashlaneEntryKind::Supported(DashlaneCsvKind::PersonalInfo)
         } else {
             DashlaneEntryKind::Ignored
         }
@@ -171,7 +175,17 @@ pub(super) mod tests {
             ("credentials.CSV", true, DashlaneEntryKind::Ignored),
             ("credentials.csv/", false, DashlaneEntryKind::Ignored),
             ("credentials.txt", false, DashlaneEntryKind::Ignored),
-            ("ids.csv", true, DashlaneEntryKind::Ignored),
+            (
+                "ids.csv",
+                true,
+                DashlaneEntryKind::Supported(DashlaneCsvKind::Ids),
+            ),
+            (
+                "personalInfo.csv",
+                true,
+                DashlaneEntryKind::Supported(DashlaneCsvKind::PersonalInfo),
+            ),
+            ("securenotes-backup.csv", true, DashlaneEntryKind::Ignored),
         ] {
             let entry = DashlaneEntryName { name };
             assert_eq!(entry.is_csv(), csv);

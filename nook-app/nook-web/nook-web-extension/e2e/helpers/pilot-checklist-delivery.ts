@@ -164,6 +164,8 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.companion.DecodeContentRuntimeResponse:
         case install.companion.EvaluateAuthenticationPolicies:
         case install.companion.RevalidateApprovedAuthenticationWorkflow:
+        case install.companion.ClassifyPersonalField:
+        case install.companion.PlanPersonalFill:
         case install.companion.SitePageNeed:
         case install.companion.ResolveAuthenticatorEnrollmentCandidates:
         case install.companion.ValidateReviewedAuthenticatorLabels:
@@ -191,6 +193,8 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.ListSiteSecrets:
         case install.session.RevealLogin:
         case install.session.RevealFocusedLogin:
+        case install.session.ListPersonalRecords:
+        case install.session.RevealPersonalFill:
         case install.session.ListAuthenticators:
         case install.session.AuthenticatorCode:
         case install.session.AuthenticatorEnrollPreview:

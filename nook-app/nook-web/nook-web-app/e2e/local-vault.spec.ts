@@ -19,6 +19,8 @@ import {
   waitForVaultUnlocked,
   openManagePage,
   ManagePage,
+  openVaultSection,
+  VaultSection,
 } from './helpers'
 
 test.describe('local vault', () => {
@@ -572,6 +574,7 @@ test.describe('local vault', () => {
     const cvv = '123'
     const notes = 'private billing note'
 
+    await openVaultSection(page, VaultSection.PersonalData)
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-credit-card').click()
     await page.getByTestId('secret-label').fill(title)
@@ -663,6 +666,7 @@ test.describe('local vault', () => {
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
+    await openVaultSection(page, VaultSection.PersonalData)
 
     const persistedRow = page
       .getByTestId('secret-row')

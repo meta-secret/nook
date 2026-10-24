@@ -9,6 +9,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
+import { openVaultPage } from '../../../nook-web-app/e2e/helpers/workspace-navigation'
 import {
   belongs_to_simple_vault,
   normalize_simple_vault_base_url,
@@ -211,6 +212,8 @@ export async function launchPairedPinExtension(
   )
 
   await leaveFirstRunReady(simplePage)
+  // The first vault's setup ends on the identities; callers use the vault.
+  await openVaultPage(simplePage)
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })

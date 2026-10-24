@@ -70,6 +70,8 @@ export type ExternalCompanionRoutingDependencies = {
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
+  /** Focuses the tab whose widget started the connect that was just approved. */
+  returnToConnectOrigin: () => Promise<void>
   /** Locks the extension session and tells its vault tabs; false when the
    * cleanup did not complete. */
   lockExtensionSession: () => Promise<boolean>
@@ -235,6 +237,7 @@ export class ExternalCompanionRouter {
       openCompanionLauncher,
       refreshAuthenticationSurfaces,
       requestPairedVaultUnlock,
+      returnToConnectOrigin,
     } = dependencies
     const exportRoute = this.observeVaultEventLogRoute()
     switch (exportRoute) {
@@ -389,6 +392,11 @@ export class ExternalCompanionRouter {
           await refreshAuthenticationSurfaces()
         } catch {
           // The pairing import has already committed; keep its success response.
+        }
+        try {
+          await returnToConnectOrigin()
+        } catch {
+          // The originating tab closed; the import still succeeded.
         }
         return response
       })

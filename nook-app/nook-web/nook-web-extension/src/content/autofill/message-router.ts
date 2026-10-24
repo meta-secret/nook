@@ -1,7 +1,9 @@
 import {
   FocusedPickerOwnership,
   focusedCredentialInteraction,
+  focusedCredentialTargetSensor,
 } from './focused-credential-interaction'
+import { vaultConnectResume } from './widget-vault-gate'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { Schema } from 'effect'
 import { LoginPickerPageVerification } from '../../lib/inline-login-picker'
@@ -48,6 +50,15 @@ import {
 } from './side-panel-page-authenticator-setup'
 import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
 import {
+  personalFillInteraction,
+  personalFillTargetSensor,
+} from './personal-fill-interaction'
+import {
+  PersonalFillPageReceiver,
+  PersonalFillReception,
+  type PersonalFillPageDelivery,
+} from './personal-fill-reception'
+import {
   PendingPickerTakeKind,
   pickerState,
   scanState,
@@ -57,6 +68,9 @@ import { workflowUi } from './workflow-ui'
 
 const sidePanelPageAddAuthenticator = new SidePanelPageAddAuthenticatorReceiver(
   authenticatorEnrollmentInteraction,
+)
+const personalFillPageReceiver = new PersonalFillPageReceiver(
+  personalFillInteraction,
 )
 
 export function removeScannedWidget(): void {
@@ -68,6 +82,7 @@ export function removeScannedWidget(): void {
 async function clearAuthenticationSurface(): Promise<void> {
   widgetState.googleLoginContinuation.cancel()
   focusedCredentialInteraction.clear()
+  personalFillInteraction.clear()
   const dismissal = loginSaveInteraction.dismissPendingSaveOffer()
   removeScannedWidget()
   await dismissal
@@ -120,6 +135,17 @@ export const routeAutofillMessage: AutofillMessageListener = (
     case SidePanelPageNeedReception.Ignored:
       break
   }
+  const personalFill: PersonalFillPageDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (personalFillPageReceiver.receive(personalFill)) {
+    case PersonalFillReception.Responded:
+      return false
+    case PersonalFillReception.Ignored:
+      break
+  }
   const sidePanelAdd: SidePanelPageAddAuthenticatorDelivery = {
     message,
     sender,
@@ -155,6 +181,11 @@ export const routeAutofillMessage: AutofillMessageListener = (
     sidePanelCodeFill.withdraw()
     void clearAuthenticationSurface()
       .then(() => {
+        // A connect this page started resumes on the field it started from.
+        vaultConnectResume.resume([
+          focusedCredentialTargetSensor,
+          personalFillTargetSensor,
+        ])
         scanState.schedule()
         const response: Parameters<typeof sendResponse>[0] = { ok: true }
         sendResponse(response)

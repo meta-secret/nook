@@ -186,7 +186,7 @@ class LoginPasskeyInteraction {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetConnectVault,
+          BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
         ),
         enableContinue: true,
       }
@@ -830,7 +830,7 @@ class LoginPasskeyInteraction {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetConnectVault,
+            BROWSER_MESSAGE_KEYS.WidgetConnectFirstDescription,
           ),
           enableContinue: true,
         }

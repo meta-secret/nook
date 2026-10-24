@@ -213,6 +213,8 @@ export function createManifest(
           'icons/nook.png',
           'login-picker/index.html',
           'login-picker/assets/*',
+          'personal-picker/index.html',
+          'personal-picker/assets/*',
           'content/companion-wasm-host.html',
           'content/companion-wasm-host.js',
           // Content scripts fetch companion WASM via chrome.runtime.getURL;

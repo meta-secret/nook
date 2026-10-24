@@ -533,10 +533,12 @@ describe('external companion routing', () => {
       Promise.resolve({ ok: true as const, eventCount: 1 }),
     )
     const refresh = mock(() => Promise.resolve())
+    const returnToConnectOrigin = mock(() => Promise.resolve())
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
       importPairingAfterCompanionReady,
       refreshAuthenticationSurfaces: refresh,
+      returnToConnectOrigin,
     }
     const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
@@ -557,6 +559,8 @@ describe('external companion routing', () => {
     await flushResponses()
 
     expect(refresh).toHaveBeenCalledTimes(1)
+    // The tab whose widget started the connect regains focus after approval.
+    expect(returnToConnectOrigin).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
   })
 

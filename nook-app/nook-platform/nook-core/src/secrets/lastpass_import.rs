@@ -6,8 +6,11 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+mod personal;
+
 use super::import_support::{ImportMetadata, SourceLabelMetadata};
 use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
+use personal::LastPassTypedNote;
 
 use std::collections::HashMap;
 
@@ -142,6 +145,23 @@ impl LastPassUrl<'_> {
 }
 
 impl LastPassRecord<'_> {
+    /// The whole secure note, with its original text and `LastPass` metadata.
+    fn secure_note(&self, name: &str) -> SecretValue {
+        let mut note = self.field("extra").to_owned();
+        LastPassMetadata {
+            name: "",
+            website_url: "",
+            grouping: self.field("grouping"),
+            favorite: self.field("fav"),
+            totp: self.field("totp"),
+        }
+        .append_to(&mut note);
+        SecretValue::SecureNote(SecureNoteSecret {
+            title: name.to_owned(),
+            note,
+        })
+    }
+
     fn convert(&self) -> ImportItemDisposition {
         if self.record.iter().all(|value| value.trim().is_empty()) {
             return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
@@ -151,18 +171,15 @@ impl LastPassRecord<'_> {
         let mut notes = self.field("extra").to_owned();
 
         if (LastPassUrl { url }).is_secure_note() {
-            LastPassMetadata {
-                name: "",
-                website_url: "",
-                grouping: self.field("grouping"),
-                favorite: self.field("fav"),
-                totp: self.field("totp"),
-            }
-            .append_to(&mut notes);
-            return ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
-                title: name.to_owned(),
-                note: notes,
-            }));
+            let typed = LastPassTypedNote::parse(&notes)
+                .and_then(|note| note.disposition(name).map(|records| (note, records)));
+            return match typed {
+                Some((note, records)) if note.has_unmapped_values() => {
+                    records.with_record(self.secure_note(name))
+                }
+                Some((_, records)) => records,
+                None => ImportItemDisposition::Imported(self.secure_note(name)),
+            };
         }
 
         let website_url = if url.is_empty() { name } else { url }.to_owned();
@@ -257,20 +274,26 @@ struct CheckedLastPassCsv<'a> {
 impl CheckedLastPassCsv<'_> {
     fn collect(mut self) -> Result<LastPassImportPlan, LastPassImportError> {
         let mut items = Vec::new();
+        let mut source_count = 0_usize;
+        let mut skipped_unsupported = 0;
         for record in self.reader.records() {
-            if let ImportItemDisposition::Imported(item) = (LastPassRecord {
-                record: &record?,
-                columns: &self.columns,
-            })
-            .convert()
-            {
-                items.push(item);
+            let record = record?;
+            // Blank rows are export padding, not source records.
+            if record.iter().all(|value| value.trim().is_empty()) {
+                continue;
             }
+            source_count += 1;
+            skipped_unsupported += LastPassRecord {
+                record: &record,
+                columns: &self.columns,
+            }
+            .convert()
+            .append(&mut items);
         }
         Ok(LastPassImportPlan {
-            source_count: items.len().into(),
+            source_count: source_count.into(),
             items,
-            skipped_unsupported: 0.into(),
+            skipped_unsupported: skipped_unsupported.into(),
         })
     }
 }

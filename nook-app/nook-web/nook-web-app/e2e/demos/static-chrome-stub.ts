@@ -573,6 +573,18 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           )
           return { ok: true, status: 'unavailable' }
         }
+        case 'nook:site-vault-connect': {
+          const demoWindow = window as typeof window & {
+            __nookDemoCompanionLauncherUrls?: string[]
+          }
+          demoWindow.__nookDemoCompanionLauncherUrls = ((v) => (v ? v : []))(
+            demoWindow.__nookDemoCompanionLauncherUrls,
+          )
+          demoWindow.__nookDemoCompanionLauncherUrls.push(
+            'chrome-extension://demo-extension/popup/index.html?intent=pair',
+          )
+          return { kind: 'opened' }
+        }
         default:
           return { ok: true }
       }

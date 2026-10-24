@@ -54,6 +54,12 @@ import type {
 
 import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
 import type { SiteSidePanelOpenMessage } from '../../lib/site-side-panel-messages'
+import type {
+  PersonalFillCancelMessage,
+  PersonalFillOpenMessage,
+  PersonalFillRevealMessage,
+} from '../../lib/personal-fill-messages'
+import type { SiteVaultConnectMessage } from '../../lib/site-vault-connect-messages'
 import type { SidePanelPageChangedMessage } from '../../lib/side-panel-authenticator-setup'
 
 import {
@@ -148,6 +154,10 @@ export type ExtensionRuntimeRequest =
   | CompanionWasmSessionMessage
   | SiteSidePanelOpenMessage
   | SidePanelPageChangedMessage
+  | PersonalFillOpenMessage
+  | PersonalFillRevealMessage
+  | PersonalFillCancelMessage
+  | SiteVaultConnectMessage
 
 export type {
   AuthenticationWorkflowSnapshotResponse,

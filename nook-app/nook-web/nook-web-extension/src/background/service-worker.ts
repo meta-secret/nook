@@ -16,6 +16,8 @@ import {
   focusedWebsiteLoginFillDependencies,
 } from './service-worker/focused-login-operations'
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
+import { PersonalFillRoutes } from './service-worker/personal-fill-routes'
+import { SiteVaultConnectService } from './service-worker/site-vault-connect-route'
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
@@ -271,6 +273,7 @@ void Effect.runPromise(
     )
 })
 
+const siteVaultConnect = new SiteVaultConnectService()
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
     vaultEventLogExporter: ExtensionVaultEventLogExport.create(),
@@ -314,6 +317,8 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       extensionPairingIdentity.requestPairedVaultUnlock.bind(
         extensionPairingIdentity,
       ),
+    returnToConnectOrigin:
+      siteVaultConnect.returnToOrigin.bind(siteVaultConnect),
   }
 
 const focusedLoginMessageRouteRequest: ConstructorParameters<
@@ -442,6 +447,8 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
     )
     .onRejected(() => ({ ok: false, reason: 'login-options-failed' })),
   new FocusedLoginMessageRoute(focusedLoginMessageRouteRequest),
+  ...PersonalFillRoutes.routes(),
+  siteVaultConnect.route(),
   SchemaRuntimeMessageRoute.matching(WebsiteLoginRevealMessageSchema)
     .respondWith(websiteLoginFill)
     .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),
