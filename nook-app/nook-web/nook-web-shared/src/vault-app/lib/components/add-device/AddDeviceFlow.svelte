@@ -7,7 +7,8 @@ out the new device joins by itself: nothing here waits for it.
 Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
-  import { Cloud, CloudOff, ShieldCheck } from "@lucide/svelte";
+  import { Cloud, CloudOff, KeyRound, ShieldCheck } from "@lucide/svelte";
+  import { VaultIdentityKeySource } from "$app-wasm";
   import { onMount, type ComponentProps } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
@@ -53,6 +54,7 @@ Every place that offers "Add a device" opens this.
   });
   const progress = $derived.by(() => {
     const facts: ConstructorParameters<typeof PairingProgress>[0] = {
+      member: standing.isMember(),
       cloudReady: joinMounts.length > 0,
       inviteReady: vault.enrollmentCode !== "",
     };
@@ -79,6 +81,18 @@ Every place that offers "Add a device" opens this.
       replacements: { identity: identityName },
     };
     return vault.t(introRequest);
+  });
+  /** Why the key in use cannot invite: the paired extension's key, or this
+   * browser's own key, has not joined the identity. */
+  const notMember = $derived.by(() => {
+    const notMemberRequest: Parameters<typeof vault.t>[0] = {
+      key:
+        vault.identityKeySource === VaultIdentityKeySource.PairedCompanion
+          ? I18N_KEYS.AddDeviceNotMemberExtension
+          : I18N_KEYS.AddDeviceNotMemberBrowser,
+      replacements: { identity: identityName },
+    };
+    return vault.t(notMemberRequest);
   });
   const manualJoin = $derived.by(() => {
     const appUrl = enrollmentBrowser
@@ -158,7 +172,17 @@ Every place that offers "Add a device" opens this.
 
   <IdentityStandingNotices {vault} />
 
-  {#if standing.isMember()}
+  {#if vault.errorMsg}
+    <p
+      class="nk-banner nk-banner-destructive p-3 text-sm text-pretty text-foreground"
+      role="alert"
+      data-testid="add-device-error"
+    >
+      {vault.errorMsg}
+    </p>
+  {/if}
+
+  {#if snapshot !== false && !standing.isRevoked()}
     <div
       class="nk-frame-sheet p-5 sm:p-8"
       data-testid="add-device-stage"
@@ -191,6 +215,23 @@ Every place that offers "Add a device" opens this.
             <Cloud class="size-4" />
             {vault.t(I18N_KEYS.AddDeviceCloudAction)}
           </Button>
+        </div>
+      {:else if stage === PairingStage.NotMember}
+        <div
+          class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+          data-testid="add-device-not-member"
+        >
+          <span class="nk-pair-node" data-state="missing">
+            <KeyRound class="size-6" aria-hidden="true" />
+          </span>
+          <div class="grid gap-2">
+            <h2 class="text-xl font-semibold tracking-tight text-foreground">
+              {vault.t(I18N_KEYS.AddDeviceNotMemberTitle)}
+            </h2>
+            <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+              {notMember}
+            </p>
+          </div>
         </div>
       {:else}
         <OnboardDevice

@@ -31,6 +31,7 @@ type MountVaultDeletion = {
 };
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
+import { PairedExtensionIdentityJoin } from "$lib/vault/paired-extension-identity-join";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
@@ -97,6 +98,8 @@ export class IdentityControlModel {
   /** Remote provider rows that carry this identity's control log. */
   mounts = $state<StorageProvider[]>([]);
   busy = $state(false);
+  /** The paired extension's identity join in progress; one at a time. */
+  private extensionJoin: Promise<void> | false = false;
 
   constructor(private readonly vault: VaultState) {}
 
@@ -205,7 +208,24 @@ export class IdentityControlModel {
       if (synced.isErr()) return err(synced.error);
     }
     log.info("identity log synchronized with mounts");
-    return this.loadSnapshot();
+    const loaded = await this.loadSnapshot();
+    if (loaded.isOk()) this.invitePairedExtension();
+    return loaded;
+  }
+
+  /** With a cloud copy, bring a paired extension that joined only a vault
+   * into the identity. Runs beside the sync and shows its failure. */
+  private invitePairedExtension(): void {
+    if (this.extensionJoin !== false) return;
+    const vault = this.vault;
+    this.extensionJoin = PairedExtensionIdentityJoin.forPage(vault)
+      .run()
+      .then((joined) => {
+        if (joined.isErr()) vault.errorMsg = vault.t(joined.error);
+      })
+      .finally(() => {
+        this.extensionJoin = false;
+      });
   }
 
   /** Delete a removed vault's files at one identity mount. A local folder

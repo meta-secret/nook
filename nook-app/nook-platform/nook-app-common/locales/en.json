@@ -2364,7 +2364,10 @@
     "done": "Done",
     "new_invite": "Make a new invite",
     "how_it_works": "How the new device gets access",
-    "single_device": "Only this device can open your identity. Add another so losing it doesn't lock you out."
+    "single_device": "Only this device can open your identity. Add another so losing it doesn't lock you out.",
+    "not_member_title": "This key can't invite devices yet",
+    "not_member_extension": "Nook is using the key your browser extension holds, and that key hasn't joined {identity} yet. Only a member of {identity} can invite a new device.",
+    "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device."
   },
   "first_run": {
     "title": "Name your first vault",
