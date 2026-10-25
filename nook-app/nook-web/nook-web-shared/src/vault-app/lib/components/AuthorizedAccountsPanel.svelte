@@ -70,6 +70,16 @@ device invite.
     }
   }
 
+  /** An invited account shows that it has not joined yet; others their role. */
+  function accessLabel(account: AuthorizedAccount): string {
+    switch (account.status) {
+      case 'invited':
+        return vault.t(I18N_KEYS.AuthorizedAccountsStatusInvited)
+      case 'active':
+        return roleLabel(account)
+    }
+  }
+
   function removeLabel(account: AuthorizedAccount): string {
     const removeArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AuthorizedAccountsRemove,
@@ -304,9 +314,7 @@ device invite.
             <span
               class="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground"
             >
-              {account.status === 'invited'
-                ? vault.t(I18N_KEYS.AuthorizedAccountsStatusInvited)
-                : roleLabel(account)}
+              {accessLabel(account)}
             </span>
             {#if !isICloud && account.role !== 'owner'}
               <button

@@ -26,11 +26,27 @@ export function e2eICloudShareTarget(role: ICloudShareRole): string {
 }
 
 /** One participant of the e2e CloudKit share, as CloudKit JS reports it. */
+export enum E2eCloudKitParticipantType {
+  Owner = 'OWNER',
+  PrivateUser = 'PRIVATE_USER',
+}
+
+export enum E2eCloudKitPermission {
+  ReadWrite = 'READ_WRITE',
+  ReadOnly = 'READ_ONLY',
+}
+
+export enum E2eCloudKitAcceptance {
+  Accepted = 'ACCEPTED',
+  Invited = 'INVITED',
+  Pending = 'PENDING',
+}
+
 export type E2eICloudShareParticipant = {
   readonly email: string
-  readonly type: 'OWNER' | 'PRIVATE_USER'
-  readonly permission: 'READ_WRITE' | 'READ_ONLY'
-  readonly acceptanceStatus: 'ACCEPTED' | 'INVITED' | 'PENDING'
+  readonly type: E2eCloudKitParticipantType
+  readonly permission: E2eCloudKitPermission
+  readonly acceptanceStatus: E2eCloudKitAcceptance
 }
 
 /**
@@ -47,7 +63,7 @@ export async function installCloudKitShareStub(
 ) {
   await page.addInitScript(
     ({ share, shareParticipants }) => {
-      const database = (name: 'private' | 'shared') => ({
+      const database = (name: string) => ({
         fetchRecords: async (
           records: readonly { recordName: string }[],
           options: { zoneID: { zoneName: string } },
@@ -262,24 +278,22 @@ export function createLocalE2eICloudVaultStub(
               : {}
           const requested =
             typeof firstRecordValue === 'string' ? firstRecordValue : fileName
-          const event =
-            eventRecords.get(requested)?.zone === zone
-              ? eventRecord(requested)
-              : undefined
-          const records = event
-            ? [event]
-            : requested === fileName && vaultYaml.trim().length > 0
-              ? [
-                  {
-                    recordName: fileName,
-                    recordType: 'NookVault',
-                    recordChangeTag,
-                    fields: {
-                      content: { value: vaultYaml },
+          const event = eventRecord(requested)
+          const records =
+            event && eventRecords.get(requested)?.zone === zone
+              ? [event]
+              : requested === fileName && vaultYaml.trim().length > 0
+                ? [
+                    {
+                      recordName: fileName,
+                      recordType: 'NookVault',
+                      recordChangeTag,
+                      fields: {
+                        content: { value: vaultYaml },
+                      },
                     },
-                  },
-                ]
-              : []
+                  ]
+                : []
           await route.fulfill({
             status: 200,
             contentType: 'application/json',

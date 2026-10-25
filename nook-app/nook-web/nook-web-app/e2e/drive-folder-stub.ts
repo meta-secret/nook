@@ -11,10 +11,14 @@ export enum DriveFolderRole {
   Writer = 'writer',
 }
 
+export enum DrivePermissionType {
+  User = 'user',
+}
+
 /** One Drive permission on a vault folder: an authorized account. */
 export type DriveFolderPermission = {
   readonly id: string
-  readonly type: 'user'
+  readonly type: DrivePermissionType
   readonly role: DriveFolderRole
   readonly emailAddress: string
 }
@@ -63,7 +67,7 @@ export function createDriveVaultFolders(idPrefix: string) {
     permissionSequence += 1
     return {
       id: `${idPrefix}-perm-${permissionSequence}`,
-      type: 'user',
+      type: DrivePermissionType.User,
       role: DriveFolderRole.Owner,
       emailAddress,
     }
@@ -168,7 +172,7 @@ export function createDriveVaultFolders(idPrefix: string) {
       permissionSequence += 1
       const added: DriveFolderPermission = {
         id: `${idPrefix}-perm-${permissionSequence}`,
-        type: 'user',
+        type: DrivePermissionType.User,
         role: DriveFolderRole.Writer,
         emailAddress,
       }

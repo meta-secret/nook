@@ -2,11 +2,6 @@ import { expect, type Page } from '@playwright/test'
 import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
-import {
-  localizeAppLinkForE2e,
-  openOnboardDevicePanel,
-  submitOnboardEnrollmentCode,
-} from './settings-auth'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import {
   clearBrowserVault,
@@ -19,6 +14,11 @@ import {
   openManagePage,
   openVaultPage,
 } from './workspace-navigation'
+import {
+  localizeAppLinkForE2e,
+  openOnboardDevicePanel,
+  submitOnboardEnrollmentCode,
+} from './onboard-invite'
 
 /** One-time passphrase e2e members share with an identity enrollment code. */
 export const E2E_IDENTITY_PASSPHRASE = 'e2e-identity-passphrase'

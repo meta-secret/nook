@@ -41,6 +41,9 @@ import {
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   createLocalE2eICloudVaultStub,
+  E2eCloudKitAcceptance,
+  E2eCloudKitParticipantType,
+  E2eCloudKitPermission,
   e2eICloudShareTarget,
   installCloudKitShareStub,
 } from './icloud-stub'
@@ -389,21 +392,21 @@ test.describe('iCloud provider setup', () => {
     await installCloudKitShareStub(page, [
       {
         email: ownerEmail,
-        type: 'OWNER',
-        permission: 'READ_WRITE',
-        acceptanceStatus: 'ACCEPTED',
+        type: E2eCloudKitParticipantType.Owner,
+        permission: E2eCloudKitPermission.ReadWrite,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
       },
       {
         email: memberEmail,
-        type: 'PRIVATE_USER',
-        permission: 'READ_WRITE',
-        acceptanceStatus: 'ACCEPTED',
+        type: E2eCloudKitParticipantType.PrivateUser,
+        permission: E2eCloudKitPermission.ReadWrite,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
       },
       {
         email: viewerEmail,
-        type: 'PRIVATE_USER',
-        permission: 'READ_ONLY',
-        acceptanceStatus: 'ACCEPTED',
+        type: E2eCloudKitParticipantType.PrivateUser,
+        permission: E2eCloudKitPermission.ReadOnly,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
       },
     ])
     const iCloudStub = createLocalE2eICloudVaultStub('', 'icloud-share-events')

@@ -191,7 +191,11 @@ class AuthorizedAccountsClient {
       try {
         return ok(icloud_authorized_accounts(share.value));
       } catch (failure) {
-        return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(failure));
+        return err(
+          new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(
+            failure,
+          ),
+        );
       }
     }
     try {
@@ -202,7 +206,11 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(failure));
+      return err(
+        new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(
+          failure,
+        ),
+      );
     }
   }
 
@@ -226,7 +234,11 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Add).from(failure));
+      return err(
+        new AccountFailureMapping(AuthorizedAccountsFailureKind.Add).from(
+          failure,
+        ),
+      );
     }
   }
 
@@ -250,7 +262,11 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Remove).from(failure));
+      return err(
+        new AccountFailureMapping(AuthorizedAccountsFailureKind.Remove).from(
+          failure,
+        ),
+      );
     }
   }
 
@@ -283,7 +299,9 @@ class AuthorizedAccountsClient {
       return ok(authorized_invite_account(accounts, email));
     } catch (failure) {
       return err(
-        new AccountFailureMapping(AuthorizedAccountsFailureKind.Rejected).from(failure),
+        new AccountFailureMapping(AuthorizedAccountsFailureKind.Rejected).from(
+          failure,
+        ),
       );
     }
   }
