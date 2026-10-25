@@ -55,6 +55,9 @@ See
    It does not replace identity or app-key unlock.
 7. Sync providers are replication transports mounted on the identity.
    They never grant identity membership or vault decryption by themselves.
+   A Google Drive or iCloud mount records only its shared target: the vault
+   folder or CloudKit share. The provider's sharing state lists the accounts
+   authorized to reach it.
 8. Passwords and other secret items are vault content, not identity state.
 
 ## Evidence and provenance
@@ -356,7 +359,12 @@ Current dashboard requirements:
   - Raw app-key identifiers and cryptographic terminology remain internal.
 - App enrollment begins from **Identity → Devices**.
   - A member issues a one-time identity invite code there.
+  - For a Google Drive or iCloud mount, the member picks one authorized
+    account with write access. The code names that account and the shared
+    target, never a provider credential. Issuing it grants no provider access.
   - The joining installation connects the code's mount and joins at once.
+    For Google Drive it signs in with the named account; for iCloud it accepts
+    the share.
   - A member renames or revokes apps there; no join waits for approval.
   - The selected-identity inventory lists connected apps; it does not create
     a local app key itself.

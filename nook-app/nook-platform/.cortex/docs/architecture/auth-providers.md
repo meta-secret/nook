@@ -14,7 +14,8 @@ how provider transports relate independently to identities and vaults.
 > vault event logs; they are not identities, vaults, or unlock factors.
 > Provider **event-log sync** mechanics live in
 > [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md); this doc owns credentials, sealing,
-> login UX, and OAuth origin constraints.
+> shared provider targets, authorized accounts, login UX, and OAuth origin
+> constraints.
 
 **Related:** [Application architecture](../../../../.cortex/docs/architecture/system.md) §4,
 [password-manager.md](../../../../.cortex/docs/spec/password-manager.md) §2A,
@@ -94,15 +95,14 @@ authorizes a wire format change.
 - **`accessToken`, `refreshToken`**
   - **Notes:** Sealed at rest
 - **`expiresAt`, `fileId`, `fileName`, `accountEmail`**
-  - **Notes:** Non-secret metadata; `fileName` names a private Drive folder
-- **`driveMode`, `folderId`**
-  - **Notes:** Google Drive private/shared
-- **`drivePrivateTarget`**
-  - **Notes:** Private Drive folder: `pending` until resolved, then
-    `folderId`. A private Drive provider always routes through its own child
-    folder under appData.
-- **`iCloudMode`, `iCloudShareTarget`**
-  - **Notes:** iCloud private/shared; share target is credential-free routing
+  - **Notes:** Non-secret metadata; `fileName` names the event file or the
+    default vault-folder name
+- **`folderId`**
+  - **Notes:** Google Drive vault folder; unset until the folder is created or
+    connected
+- **`iCloudShareTarget`**
+  - **Notes:** iCloud share target; credential-free CloudKit routing, unbound
+    until the share is created or accepted
 
 ### Ownership
 
@@ -118,6 +118,8 @@ wasm; the web shim is adapters + i18n only.
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`
 - **Seal/open credential fields with device identity**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`
+- **Authorized-account list, invite, and joiner rules**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/authorized_accounts.rs`
 
 **WASM storage and manager APIs**
 
@@ -133,8 +135,9 @@ wasm; the web shim is adapters + i18n only.
   - **Home:** WASM binding + thin TypeScript wrapper
 - **Seal providers with `seal_auth_providers_for_device_public_key`**
   - **Home:** WASM binding + thin TypeScript wrapper
-- **Bind provider storage modes**
-  - **Home:** WASM bindings + thin TypeScript wrappers
+- **Create or connect the Drive vault folder and manage authorized accounts**
+  - **Home:** `nook-app/nook-platform/nook-wasm/src/public_api/authorized_accounts.rs`,
+    wrapped by [`vault/authorized-accounts.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/authorized-accounts.ts)
 
 **Enrollment and web presentation**
 
@@ -193,47 +196,103 @@ TypeScript owns browser integration:
   - Backup-password lists must reflect the remote vault for that provider, never
     a previous provider's in-memory session.
 
-### Google Drive modes
+### Google Drive vault folder
 
-Provider setup offers `private` and `shared` independently of vault replication
-or membership. Private mode requests `drive.appdata` and stores events below the
-hidden `appDataFolder`. Shared mode requests `drive.file` for app-created writes
-plus `drive.readonly` because Drive authorizes `drive.file` per user and
-collaborators must read folders and event files created by another account. It
-creates or verifies a visible My Drive folder and stores its stable `folderId`;
-writes remain limited to app-created files below that selected folder. Each
-collaborator saves a separate OAuth token for their own Google account. Switching
-modes clears the scope-bound token and target in Rust before the user signs in
-again; it never reuses an app-data token for a shared folder or vice versa.
+Every Google Drive provider is shared. It syncs under one visible My Drive
+folder, the vault folder, independently of vault replication or membership.
+Provider setup requests `drive.file` for app-created writes plus
+`drive.readonly`. Drive authorizes `drive.file` per user, so authorized
+accounts need read access to folders and event files created by another
+account. Writes remain limited to app-created files below the vault folder.
 
-#### Private Drive target
+- **Target:** The row persists the folder's stable Drive ID in `folderId`.
+  Its connect reference is `shared:{folderId}`. The identity log and each vault
+  live in their own namespace folder inside it.
+- **Setup:** Setup step 2 either creates the folder with
+  `create_google_drive_vault_folder` or connects an existing folder ID or URL
+  with `verify_shared_google_drive_folder`. Creating the folder shares it with
+  no other account.
+- **Incomplete rows:** A signed-in Drive provider without a folder is not
+  connectable. Its staged connection reports `Incomplete`, and connect
+  arguments for a saved row fail with `SharedStorageTargetRequired`.
+- **Credentials:** Each authorized account saves a separate OAuth token for
+  its own Google account. Tokens never move between accounts.
 
-- **Target:** A private provider looks up or creates one folder named
-  `nook-events-v2-{fileName}` directly under `appDataFolder`, then persists
-  that folder's stable Drive ID in `drivePrivateTarget`. The identity log and
-  each vault live in their own namespace folder inside it. All event
-  list/fetch/write operations and the local projection-cache key use that ID.
-  A Drive reference that names no folder resolves this folder by name.
-- **Fail-closed resolution:** If the name resolves to multiple matching
-  folders, sync fails closed and does not choose a parent. Lookup or creation
-  failure leaves the typed target pending; the next connection repeats
-  lookup/create resolution before any event operation. The Drive API supports
-  listing the appData space and creating folder resources there
-  ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
-  [folder guide](https://developers.google.com/workspace/drive/api/guides/folder)).
+**Prohibited:** keep a Drive provider's events in the hidden `appDataFolder`
+under a `drive.appdata` token because no other account needs them yet.
 
-**Shared-folder grant outcomes:** After Rust validates a shared Google Drive
-grant request, WASM attempts `files.create` (folder) and `permissions.create`
-(writer for the joiner email) with the owner's token. Outcomes are
-`SharedStorageGrantOutcome::{Granted, ManualGrantRequired, Unsupported}`.
-Success returns `Granted` with the stable `storageTargetId` (`folderId`). When
-the owner token is missing, the token lacks `drive.file`, or Drive rejects the
-create/share call, WASM returns `ManualGrantRequired` with
-`architecture_modes.shared_grant_manual_instructions`. The UI then shows those
-manual share steps; if folder create succeeded but share failed, the outcome may
-still carry `storageTargetId` so enrollment can bind the existing folder without
-creating a replacement. Personal / private providers keep using `drive.appdata`
-and never enter this grant path.
+**Required:** create or connect the vault folder before the provider syncs.
+The folder's Drive permissions decide which accounts can reach it.
+
+### iCloud share target
+
+Every iCloud provider is shared. It syncs under one CloudKit share. Setup
+either creates a custom record zone with a shareable root record in the
+owner's private database or accepts an existing share.
+
+- **Target:** `iCloudShareTarget` stores an `icloud-share-v1:` reference with
+  the routing role, zone name, zone owner record name, root record name, and
+  short GUID.
+- **Routing:** The owner reaches the zone through its private database. Each
+  participant reaches the same hierarchy through its shared database after
+  accepting the share. Every event record is a child of the share root.
+- **Incomplete rows:** A signed-in iCloud provider without a share target is
+  not connectable, as for Drive.
+- **Credentials:** The target never contains the owner's CloudKit web-auth
+  token. Each account signs into Apple and accepts the share with its own
+  account before sync.
+
+### Authorized accounts
+
+The provider's own sharing state is the authorized-account list. Nook keeps no
+second copy of it in `nook_auth`, the identity log, or a vault log.
+
+- **Google Drive:** The list contains the vault folder's individual `user`
+  permissions. Domain, group, link, and deleted permissions name no account a
+  device can use, so the list omits them.
+- **iCloud:** The list contains the share participants that CloudKit names by
+  email. Accepted participants are active. `INVITED` and `PENDING`
+  participants are shown as invited.
+
+Rust `AuthorizedAccountList` owns the account rules:
+
+- It orders the owner first, then by email, and removes case-insensitive
+  duplicates.
+- An addition already on the list fails with `AuthorizedAccountExists`.
+- Removing the owner fails with `AuthorizedAccountOwner`.
+- An invite names an account on the list. Others fail with
+  `AuthorizedAccountMissing`. A reader fails with `AuthorizedAccountReadOnly`,
+  because a device syncs by writing events.
+- `JoinerAccountCheck` requires the joining device's signed-in account to match
+  the invited account case-insensitively. A different account fails with
+  `JoinerAccountMismatch`.
+- `AuthorizedAccountEmail` validates the address again when it is deserialized
+  at the web boundary.
+
+Each provider manages its list through its own sharing API:
+
+- **Drive management:** WASM `list_google_drive_authorized_accounts` reads the
+  folder permissions. `add_google_drive_authorized_account` calls
+  `permissions.create` with the writer role, and
+  `remove_google_drive_authorized_account` calls `permissions.delete`. Each
+  change is checked against the current list in Rust and returns the
+  refreshed list.
+- **iCloud management:** TypeScript reads participants with CloudKit JS
+  `fetchRecords`: the root record, then its share record. Rust
+  `icloud_authorized_accounts` projects them into the list. CloudKit JS cannot
+  invite an account by email, so adding or removing a participant opens
+  Apple's sharing sheet (`shareWithUI`).
+- **Presentation:** The setup wizard has no storage-mode toggle. After step 2
+  creates or connects the target, it shows the Authorized accounts panel.
+  **Identity → Sync** shows an Authorized accounts toggle for each Drive and
+  iCloud provider. **Add device** picks one account with write access from the
+  same panel.
+
+**Prohibited:** grant Drive access to an email typed into the device-invite
+form while issuing the code.
+
+**Required:** authorize the account in the Authorized accounts panel first.
+The invite then names that account from the provider's list.
 
 ### Shared-provider onboarding
 
@@ -249,20 +308,33 @@ vault. Earlier vault-named codes fail closed as invalid codes.
 
 **Provider target handoff**
 
-- A shared Google Drive row persists its stable `folderId`.
-- Enrollment codes carry that folder id.
-- Enrollment codes never carry the owner's OAuth access or refresh token, even
-  when the vault's legacy/default `replication_type` is `personal`.
-- The joining browser signs into its own Google account and saves its own token.
-- The owner may grant that account access to the already-persisted folder.
-- Onboarding must not create a replacement folder or transfer owner credentials.
-- A personal private Drive code carries the issuer's private event folder as
-  its connect reference in `remote_file.file_id`: `private-folder-v2:{id}`, or
-  the pending reference. The joiner projects it into its `drive_private_target`
-  so both apps read the identity log under the same folder.
-- A code without that reference lets the joiner resolve the folder by name.
-- The joiner saves its row with `remote_target: adopted`, so saving keeps the
-  issuer's target instead of resolving a fresh private folder.
+- Google Drive and iCloud device invites are always `SharedProviderGrant`
+  payloads, whatever the vault's `replication_type`.
+- The payload carries the shared target, either the Drive `folderId` or the
+  `icloud-share-v1:` reference. It also carries `joiner_identity`: the
+  authorized account picked from the provider's list.
+- Issuing an invite grants no access. The named account must already be on
+  the list with write access.
+- Codes never carry the owner's OAuth access token, refresh token, or CloudKit
+  web-auth token.
+- **Drive joiner:** The joining browser signs into Google with `login_hint`
+  set to the invited account. `verify_joiner_account` requires the signed-in
+  email to match, or the join fails with `JoinerAccountMismatch`. Folder access
+  itself comes from the folder's Drive permissions. The joiner saves its own
+  token with the invite's folder.
+- **iCloud joiner:** The joining browser signs into Apple and accepts the
+  share. Acceptance is the access gate. The joiner saves the participant-role
+  share target.
+- Onboarding must not create a replacement folder or share, or transfer owner
+  credentials.
+- **Companion handoff:** The only credential-bearing OAuth payload is the
+  same-browser extension companion handoff: `EnrollmentAudience::Personal` in
+  a vault whose `replication_type` is `personal`. Its `remote_file.file_id`
+  carries the provider's shared target (`shared:{folderId}` or the
+  `icloud-share-v1:` reference). The companion projects it back into
+  `folderId` or `iCloudShareTarget`.
+- GitHub, local, and local-folder invites still follow the vault's
+  `replication_type`.
 
 **Rust typestates**
 
@@ -273,28 +345,19 @@ Rust models those as sealed typestates in `nook-auth2`:
 
 - `TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local,
   GitHub, or credential-bearing OAuth data; and
-- `TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google Drive
-  folder grant or iCloud share target.
+- `TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google
+  Drive folder target or an iCloud share target, each with its
+  `joiner_identity`.
 
 The encrypted wire payload records the onboarding type beside its correspondingly
 typed provider data. A shared wire tag paired with the legacy OAuth shape fails
-deserialization. Legacy OAuth codes are classified as personal only.
+deserialization. Legacy OAuth codes are classified as personal only. A shared
+iCloud grant without a plausible `joiner_identity` or an `icloud-share-v1:`
+target fails validation as a malformed shared-provider grant.
 
 Shared-target types have no PAT, OAuth access-token, or refresh-token fields or
 constructors. The credential-free rule is enforced by Rust construction and
 deserialization rather than a TypeScript convention or a late runtime branch.
-
-### iCloud modes
-
-Private mode preserves the legacy default private CloudKit database behavior.
-Shared mode creates a custom private record zone and a shareable root record. The
-owner accesses that hierarchy through the private database; after accepting the
-share, each participant accesses it through their shared database. Every event
-record is parented to the shared root. The saved `iCloudShareTarget` contains
-only the stable short GUID, zone owner/name, root record name, and
-owner/participant routing role. Enrollment copies that target, never the owner's
-CloudKit web-auth token; the recipient signs into Apple and accepts the share
-with their own account before sync.
 
 ### Local-folder provider availability
 

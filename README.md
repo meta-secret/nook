@@ -64,9 +64,9 @@ Nook replaces that with device keys and deliberate consent:
 
 Unlock this browser with a passkey (WebAuthn PRF) or PIN fallback. GitHub,
 Google Drive, iCloud, and local-folder sync are available today; more providers
-are planned. Google Drive and iCloud can use either a private store or a share
-across accounts — enrollment transfers only the stable share target; each
-browser signs in independently.
+are planned. Google Drive and iCloud sync through a vault folder or share that
+you authorize other accounts on — a device invite names one authorized account
+and carries only the share target; each browser signs in independently.
 
 One trade-off: if you lose every approved device (and any recovery path you
 configured), you lose the vault. Approve at least two devices.

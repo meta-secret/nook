@@ -222,27 +222,27 @@ No `update_event` or `delete_event` in v1.
 
 The active provider adapters are GitHub, Google Drive, and iCloud.
 
-### Google Drive private target compatibility
+### Shared provider targets
 
-The provider-settings wire version is independent of the vault event schema.
-Schema-1 private Drive providers continue to list, fetch, and write in the
-historical `appDataFolder` root. They are not reclassified from an unresolved
-`fileId`, target label, or vault `store_id`. New private-provider setup projects
-a pending target for its first remote assessment using the Rust-owned setup kind.
-After setup, schema-2 private providers resolve a deterministic child folder
-named `nook-events-v2-{fileName}` under `appDataFolder`; the provider persists
-the stable folder ID and uses it for remote parent queries and its local cache key.
-An ambiguous name match fails closed before event sync.
+Google Drive and iCloud providers always sync under one shared target. The
+provider-settings wire version is independent of the vault event schema.
 
-No event files are automatically moved, renamed, or deleted. Schema-1
-rollback projection keeps legacy-root and shared Drive providers and omits
-schema-2 private-folder providers, preventing an older build from silently
-routing a new provider back to the shared root. Restore schema 2 to use those
-new targets. The event classification guard still runs inside each selected
-target: a different `store_id`, multiple store IDs, unreadable files, or invalid
-event bytes fail closed before any writes.
+- **Google Drive:** Events live below the vault folder named by the
+  provider's `folderId` (connect reference `shared:{folderId}`). The identity
+  log and each vault use their own namespace folder inside it. A Drive
+  reference without a folder fails closed; no hidden app-data root exists.
+- **iCloud:** Event records are children of the CloudKit share root named by
+  the provider's `icloud-share-v1:` target. The owner queries its private
+  database and each participant queries its shared database.
 
-Provider synchronization rules:
+No event files are automatically moved, renamed, or deleted. The event
+classification guard still runs inside each target: a different `store_id`,
+multiple store IDs, unreadable files, or invalid event bytes fail closed
+before any writes.
+
+### Provider synchronization
+
+Apply these rules during provider sync:
 
 - During outbox flush, upload queued events that are absent remotely. Then
   repair the provider with any missing local event-store events.
@@ -278,7 +278,7 @@ Event-log provider sync never writes the materialized projection. Normal
 provider fan-out appends YAML event files. It repairs missing provider events
 from the local event store.
 
-Drive event storage tolerates duplicate app-data files for the same event name.
+Drive event storage tolerates duplicate event files for the same event name.
 Fetch:
 
 - downloads all matches;

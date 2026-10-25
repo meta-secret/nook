@@ -271,7 +271,7 @@ Registry and factories live in `nook-app/nook-web/nook-web-app/e2e/sync-provider
 - **`live/google-drive-shared-grant.smoke.spec.ts`** — opt-in real Drive
   shared-folder create + `permissions.create` (+ optional joiner verify);
   skips unless `NOOK_GOOGLE_E2E_ACCESS_TOKEN` and `NOOK_GOOGLE_E2E_JOINER_EMAIL`
-  are set. Distinct from private `drive.appdata` sync smoke.
+  are set.
 - **`local` is a legacy alias for `file`** in e2e; new tests should use
   `file` when they need the default local file-backed provider explicitly.
 

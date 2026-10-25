@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** June 27, 2026
+**Last updated:** October 24, 2026
 
 ## 1. Introduction
 
@@ -42,14 +42,16 @@ If you self-host or deploy Nook, **you** control the hosting environment. This p
 
 ## 5. Google Drive (optional sync)
 
-If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token**. You choose the provider's storage mode independently of the vault type:
+If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token** with these scopes:
 
-- **Private** provider mode: `https://www.googleapis.com/auth/drive.appdata` — encrypted vault data in a **hidden Google Drive application data folder** associated with your Google account (not in your normal visible Drive files).
-- **Shared** provider mode: `https://www.googleapis.com/auth/drive.file` and `https://www.googleapis.com/auth/drive.readonly` — Nook creates or connects a dedicated **My Drive folder**, grants another Google account writer access when requested, and syncs encrypted event files under that folder. Read-only Drive access is required because Google authorizes `drive.file` per user, so a collaborator cannot otherwise read files created by the other account. Nook writes only app-created files in the selected folder. Google may email the invited account about the shared folder.
+- `https://www.googleapis.com/auth/drive.file` — Nook creates or connects a dedicated **vault folder** in your My Drive and syncs encrypted event files under that folder. Nook writes only app-created files in that folder.
+- `https://www.googleapis.com/auth/drive.readonly` — required because Google authorizes `drive.file` per user, so an authorized account cannot otherwise read files created by another account.
+
+The vault folder is **visible in your Google Drive**. Nook shares it only with the Google accounts you authorize. Nook reads the folder's sharing permissions, including the email addresses of accounts with access, to show and manage authorized accounts.
 
 - The OAuth token is stored **only in your browser** (like a saved GitHub token).
 - Nook may read your **Google account email address** from Google's API to show "Signed in as …" in the UI.
-- In shared mode, Nook sends the Google account email you enter to Google only to grant that account access to the selected folder.
+- When you authorize an account, Nook sends the Google account email you enter to Google only to grant that account writer access to the vault folder. Removing an account asks Google to revoke that access. Google may email the invited account about the shared folder.
 - Google's handling of your account is governed by [Google's Privacy Policy](https://policies.google.com/privacy).
 - Nook sends **ciphertext only** to Google Drive, not plaintext secrets.
 

@@ -94,8 +94,8 @@ flowchart LR
   end
   E --> L[Local IndexedDB event store]
   E --> G[GitHub user/nook]
-  E --> D[Google Drive private appData]
-  E --> S[Google Drive shared folder]
+  E --> D[Google Drive vault folder]
+  E --> S[iCloud share]
 ```
 
 Many **sync providers**, one **`store_id`** per active vault. Provider files are immutable event records; **`store_id` + causal event heads** drive reconciliation.

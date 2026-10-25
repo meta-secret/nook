@@ -46,7 +46,8 @@ cross-installation enrollment, and revocation remain target architecture. See
 `replication_type` and its derived `onboarding_type` are legacy implementation
 concepts. Provider account ownership or sharing capability belongs to an
 individual provider connection; it does not alter the vault's cryptographic
-access model.
+access model. Google Drive and iCloud invites always use the credential-free
+shared grant, whatever the vault's `replication_type`.
 
 ## Creation and Import UX
 
@@ -172,29 +173,26 @@ credentials grant storage access only.
 ## Provider Capabilities
 
 - Provider capability affects only storage setup and transport.
-  - Examples include app-private storage, shared-folder grants, and binding a
-    connection to an external account identity.
+  - Examples include a shared provider target, the provider's authorized
+    accounts, and binding a connection to an external account identity.
   - Unsupported provider operations fail closed in Rust.
   - Provider capabilities do not create a `personal` or `shared` vault mode.
 
-- **Google Drive:** The `private` / `shared` choice is independent of vault
-  architecture.
-  - Private mode uses app-private storage (`drive.appdata`).
-  - Shared mode uses a visible folder and this grant flow:
+- **Google Drive:** Every provider is shared, independently of vault
+  architecture. It syncs under one visible My Drive vault folder
+  (`drive.file` plus `drive.readonly`).
 
-    1. The owner creates a folder and grants the joiner's external identity
-       (`drive.file` plus `permissions.create` when the token allows it).
-    2. The connection records the folder target without embedding owner tokens.
-    3. The joiner uses its own OAuth account to access the same encrypted
-       replica.
+    1. The owner creates or connects the vault folder. Creating it shares the
+       folder with no other account.
+    2. The owner authorizes another Google account on the folder
+       (`permissions.create`, writer role) in the Authorized accounts panel.
+    3. A device invite names that authorized account and the folder target
+       without embedding owner tokens.
+    4. The joiner signs in with that account and its own OAuth token to reach
+       the same encrypted replica.
 
-  - If automatic grant cannot run because the owner token is missing, lacks
-    `drive.file`, or encounters a Drive API error, return
-    `ManualGrantRequired`.
-  - Show localized manual-share instructions and permit binding an
-    already-created `folderId`.
-  - See [auth-providers.md](auth-providers.md#google-drive-modes).
-
+  - The folder's Drive permissions are the authorized-account list.
+  - See [auth-providers.md](auth-providers.md#authorized-accounts).
   - Never use this provider-account flow as Sentinel membership or quorum.
 
 - **Google Drive live coverage:** The smoke test outside Playwright Drive stubs
@@ -205,9 +203,11 @@ credentials grant storage access only.
   - Use optional `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` to prove joiner access
     under that folder.
 
-- **iCloud:** Expose the same provider-level private/shared choice through
-  CloudKit instead of a directory ACL.
+- **iCloud:** Every provider is shared through a CloudKit share instead of a
+  directory ACL.
   - The owner creates a custom-zone root share.
+  - The share's participants are the authorized-account list. Apple's sharing
+    sheet adds and removes them.
   - A participant accepts its stable share identifier with a separate Apple
     sign-in.
   - The persisted provider target carries CloudKit zone/root routing but no
