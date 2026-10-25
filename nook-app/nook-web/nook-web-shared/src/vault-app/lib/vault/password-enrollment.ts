@@ -1,15 +1,9 @@
+import { select_shared_grant_provider } from "$app-wasm";
 import {
-  select_shared_grant_provider,
-  should_flush_shared_storage_grant,
-  type SharedStorageGrantCredential,
-} from "$app-wasm";
-import {
-  oauth_access_token,
   unselectedVaultScope,
   type OAuthFilePreset,
   type StorageProvider,
 } from "$lib/auth/providers";
-import type { SharedStorageGrantOutcome } from "$lib/vault/architecture-model";
 
 export enum SharedStorageTargetKind {
   NotBound = "not-bound",
@@ -40,11 +34,6 @@ export type SharedGrantProviderSearch = {
   readonly target: SharedStorageTarget;
 };
 
-export type SharedDriveGrantFlushAssessment = {
-  readonly grant: SharedStorageGrantOutcome;
-  readonly accessCredential: ReturnType<typeof oauth_access_token>;
-};
-
 export function findSharedGrantProvider({
   providers,
   preset,
@@ -59,15 +48,4 @@ export function findSharedGrantProvider({
         : { state: "create" },
   };
   return select_shared_grant_provider(selection);
-}
-
-export function shouldFlushSharedDriveGrant({
-  grant,
-  accessCredential,
-}: SharedDriveGrantFlushAssessment): boolean {
-  const credential: SharedStorageGrantCredential =
-    accessCredential.kind === "available"
-      ? { state: "accessToken", accessToken: accessCredential.token }
-      : { state: "unavailable" };
-  return should_flush_shared_storage_grant(grant, credential);
 }

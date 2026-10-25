@@ -800,42 +800,6 @@ mod wasm_tests {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::public_api::{AutomaticSharedGrantRoute, SharedDriveGrantPolicy};
-    use nook_core::{OauthFilePreset, ProviderOauthPreset, StorageProviderType};
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
-        assert!(!matches!(
-            (SharedDriveGrantPolicy {
-                provider_type: StorageProviderType::OauthFile,
-                oauth_preset: ProviderOauthPreset::NotApplicable
-            })
-            .automatic_grant_route(),
-            AutomaticSharedGrantRoute::GoogleDrive
-        ));
-        assert!(matches!(
-            (SharedDriveGrantPolicy {
-                provider_type: StorageProviderType::OauthFile,
-                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive)
-            })
-            .automatic_grant_route(),
-            AutomaticSharedGrantRoute::GoogleDrive
-        ));
-        assert!(!matches!(
-            (SharedDriveGrantPolicy {
-                provider_type: StorageProviderType::OauthFile,
-                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::ICloud)
-            })
-            .automatic_grant_route(),
-            AutomaticSharedGrantRoute::GoogleDrive
-        ));
-        Ok(())
-    }
-}
-
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_projection_tests {
     use super::*;

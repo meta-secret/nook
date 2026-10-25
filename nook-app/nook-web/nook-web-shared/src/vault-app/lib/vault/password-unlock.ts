@@ -28,7 +28,6 @@ import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 export {
   findSharedGrantProvider,
   SharedStorageTargetKind,
-  shouldFlushSharedDriveGrant,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import { JoinEnrollmentState } from "$app-wasm";

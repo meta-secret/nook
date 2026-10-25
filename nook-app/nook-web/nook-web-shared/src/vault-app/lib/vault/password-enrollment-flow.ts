@@ -20,13 +20,13 @@ import {
 export {
   findSharedGrantProvider,
   SharedStorageTargetKind,
-  shouldFlushSharedDriveGrant,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import {
   JoinEnrollmentState,
   OnboardingType,
   decrypt_enrollment_payload,
+  verify_joiner_account,
 } from "$app-wasm";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -51,12 +51,17 @@ import {
   providerPersistenceDefaults,
   storedGoogleDriveFolder,
   storedICloudShareTarget,
+  storedOAuthAccountEmail,
   storedOAuthRemoteFileName,
   type OAuthFilePreset,
   type OAuthFileConfig,
   type StorageProvider,
 } from "$lib/auth/providers";
-import { GoogleOAuthPrompt, googleOAuthSession } from "$lib/auth/google/oauth";
+import {
+  GoogleAccountIdentityKind,
+  GoogleOAuthPrompt,
+  googleOAuthSession,
+} from "$lib/auth/google/oauth";
 import {
   ICLOUD_SIGN_IN_TIMEOUT_MS,
   ICloudAccountNameKind,
@@ -312,10 +317,14 @@ export class PasswordEnrollmentActions {
                 );
                 return;
               }
+              // Google preselects the authorized account the link names; the
+              // folder's Drive permissions decide whether it can read the vault.
+              const invitedAccount = enrollmentProvider.sharedJoinerIdentity;
               const requestGoogleDriveSharedAccessArgs: Parameters<
                 typeof googleOAuthSession.requestGoogleDriveSharedAccess
               >[0] = {
                 prompt: GoogleOAuthPrompt.Consent,
+                accountHint: invitedAccount,
               };
               const tokens =
                 await googleOAuthSession.requestGoogleDriveSharedAccess(
@@ -323,6 +332,25 @@ export class PasswordEnrollmentActions {
                 );
               if (tokens.isErr()) {
                 state.errorMsg = state.t(tokens.error.translationKey);
+                return;
+              }
+              const signedIn = await googleOAuthSession.fetchGoogleAccountEmail(
+                tokens.value.accessToken,
+              );
+              if (signedIn.isErr()) {
+                state.errorMsg = state.t(signedIn.error.translationKey);
+                return;
+              }
+              const signedInAccount =
+                signedIn.value.kind === GoogleAccountIdentityKind.Available
+                  ? signedIn.value.label
+                  : "";
+              try {
+                verify_joiner_account(invitedAccount, signedInAccount);
+              } catch {
+                state.errorMsg = state.t(
+                  I18N_KEYS.ErrorsValidationJoinerAccountMismatch,
+                );
                 return;
               }
               const defaultOAuthFileConfigArgs2: Parameters<
@@ -333,7 +361,7 @@ export class PasswordEnrollmentActions {
                 folderId: storedGoogleDriveFolder(
                   storageTarget.storageTargetId,
                 ),
-                driveMode: "shared",
+                accountEmail: storedOAuthAccountEmail(signedInAccount),
               };
               const oauthTokensToConfigArgs: Parameters<
                 typeof googleOAuthSession.oauthTokensToConfig
@@ -420,7 +448,6 @@ export class PasswordEnrollmentActions {
               }
               const sharedConfig: OAuthFileConfig = {
                 ...existingConfig,
-                iCloudMode: "shared",
                 iCloudShareTarget: storedICloudShareTarget(
                   accepted.value.storageTargetId,
                 ),
@@ -611,7 +638,6 @@ export class PasswordEnrollmentActions {
             return;
           }
           // The mount the join went through becomes this app's identity mount.
-          state.providerSaveTarget = "adopted";
           const savedProvider = await state.ensureProviderSaved();
           if (savedProvider.isErr()) {
             state.errorMsg = state.t(savedProvider.error.translationKey);

@@ -47,20 +47,6 @@ impl DriveCandidateSelection {
         Self::Accepted(Box::new(event))
     }
 }
-struct DriveEventQuery<'a> {
-    url: &'a str,
-    parent: &'a DriveEventParent,
-}
-impl DriveEventQuery<'_> {
-    fn scoped_url(self) -> String {
-        match self.parent {
-            DriveEventParent::AppDataFolder | DriveEventParent::PrivateAppDataFolder { .. } => {
-                format!("{}&spaces=appDataFolder", self.url)
-            }
-            DriveEventParent::SharedFolder { .. } => self.url.to_owned(),
-        }
-    }
-}
 enum DrivePageRequest {
     FirstPage,
     Continuation(String),
@@ -208,21 +194,11 @@ impl DriveEventStore<'_> {
     }
 
     fn parent_query_fragment(parent: &DriveEventParent) -> String {
-        match parent {
-            DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
-            DriveEventParent::PrivateAppDataFolder { folder_id }
-            | DriveEventParent::SharedFolder { folder_id } => {
-                format!("'{}' in parents", folder_id.replace('\'', "\\'"))
-            }
-        }
+        format!("'{}' in parents", parent.folder_id.replace('\'', "\\'"))
     }
 
     fn parent_id_for_create(parent: &DriveEventParent) -> &str {
-        match parent {
-            DriveEventParent::AppDataFolder => "appDataFolder",
-            DriveEventParent::PrivateAppDataFolder { folder_id }
-            | DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
-        }
+        parent.folder_id.as_str()
     }
 
     pub(crate) async fn list_drive_event_ids(&self) -> Result<Vec<String>, NookError> {
@@ -237,7 +213,6 @@ impl DriveEventStore<'_> {
             "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
             urlencoding::encode(&query)
         );
-        let url = DriveEventQuery { url: &url, parent }.scoped_url();
         let client = Client::new();
         let mut event_ids = Vec::new();
         let mut page_token = DrivePageRequest::FirstPage;
@@ -325,11 +300,6 @@ impl DriveEventStore<'_> {
             "https://www.googleapis.com/drive/v3/files?q={}&fields=files(id)",
             urlencoding::encode(&query)
         );
-        let list_url = DriveEventQuery {
-            url: &list_url,
-            parent,
-        }
-        .scoped_url();
         let client = Client::new();
         let response = client
             .get(&list_url)
@@ -636,9 +606,7 @@ mod tests {
     )]
     fn multipart_upload_body_preserves_parent_event_id_and_yaml() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let parent = DriveEventParent::SharedFolder {
-            folder_id: "shared-folder".to_owned(),
-        };
+        let parent = DriveEventParent::shared_folder_id("shared-folder");
         let (boundary, body) =
             DriveEventStore::event_upload_body(&parent, &event_id, "event.yaml", "event: yaml")?;
         assert_eq!(boundary, "nook_event_boundary");
@@ -663,7 +631,7 @@ mod tests {
         let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let store = DriveEventStore {
             token: "",
-            parent: &DriveEventParent::AppDataFolder,
+            parent: &DriveEventParent::shared_folder_id("vault-folder"),
             location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
                 "store_abcdefghijk",
             )?),
@@ -686,57 +654,11 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn private_and_shared_queries_keep_their_original_scope() {
-        let private = DriveEventParent::AppDataFolder;
-        let private_child = DriveEventParent::PrivateAppDataFolder {
-            folder_id: "child-folder".to_owned(),
-        };
-        let shared = DriveEventParent::SharedFolder {
-            folder_id: "owner's-folder".to_owned(),
-        };
-        assert_eq!(
-            DriveEventStore::parent_query_fragment(&private),
-            "'appDataFolder' in parents"
-        );
-        assert_eq!(
-            DriveEventQuery {
-                url: "files?q=events",
-                parent: &private
-            }
-            .scoped_url(),
-            "files?q=events&spaces=appDataFolder"
-        );
-        assert_eq!(
-            DriveEventStore::parent_id_for_create(&private),
-            "appDataFolder"
-        );
-        assert_eq!(
-            DriveEventStore::parent_query_fragment(&private_child),
-            "'child-folder' in parents"
-        );
-        assert_eq!(
-            DriveEventQuery {
-                url: "files?q=events",
-                parent: &private_child
-            }
-            .scoped_url(),
-            "files?q=events&spaces=appDataFolder"
-        );
-        assert_eq!(
-            DriveEventStore::parent_id_for_create(&private_child),
-            "child-folder"
-        );
+    fn shared_folder_queries_scope_to_the_vault_folder() {
+        let shared = DriveEventParent::shared_folder_id("owner's-folder");
         assert_eq!(
             DriveEventStore::parent_query_fragment(&shared),
             "'owner\\'s-folder' in parents"
-        );
-        assert_eq!(
-            DriveEventQuery {
-                url: "files?q=events",
-                parent: &shared
-            }
-            .scoped_url(),
-            "files?q=events"
         );
         assert_eq!(
             DriveEventStore::parent_id_for_create(&shared),

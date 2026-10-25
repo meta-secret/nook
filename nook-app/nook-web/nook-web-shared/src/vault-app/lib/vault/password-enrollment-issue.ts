@@ -3,7 +3,6 @@ import {
   EnrollmentIssueRejection,
   type EnrollmentCodeIssueResult,
 } from "$lib/vault/enrollment-issue-failure";
-import { SharedStorageGrantFailure } from "$lib/auth/oauth-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
@@ -15,41 +14,22 @@ import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
-  SharedStorageTargetKind,
-  shouldFlushSharedDriveGrant,
-  type SharedStorageTarget,
-} from "$lib/vault/password-enrollment";
-import {
   NookEnrollmentIssueInput,
   type NookEnrollmentProvider,
   OnboardingType,
-  enrollment_icloud_shared_provider_for_architecture,
   enrollment_provider_for_architecture,
   enrollment_shared_provider_for_architecture,
   generate_id,
 } from "$app-wasm";
 import {
-  bind_google_drive_shared_folder,
-  configuredOAuthFile,
   githubPatValue,
   githubRepositoryValue,
   decodeStoredOAuthFileConfiguration,
   StoredOAuthFileConfigurationDecodeKind,
-  oauth_access_token,
   OAuthFilePresentation,
-  OAuthFileNameKind,
   type StorageProvider,
 } from "$lib/auth/providers";
-import {
-  prepare_shared_storage_grant,
-  createSharedStorageTarget,
-  existingSharedStorageTarget,
-  provider_onboarding_type,
-  provider_oauth_preset_for_provider,
-  sharedStorageGrantAccessToken,
-  suggestedSharedStorageTarget,
-  unavailableSharedStorageGrantCredential,
-} from "$lib/vault/architecture-model";
+import { provider_onboarding_type } from "$lib/vault/architecture-model";
 
 enum StorageChainReadinessKind {
   Idle = "idle",
@@ -71,7 +51,6 @@ type StorageChainReadinessRace = {
 
 type ProviderEventOutboxFlush = {
   readonly providerType: StorageProvider["type"];
-  readonly target: SharedStorageTarget;
 };
 
 const log = browserLogRuntime.createLogger("identity-enrollment");
@@ -165,27 +144,14 @@ export class IdentityEnrollmentIssue {
       const selectedOauthConfiguration = decodeStoredOAuthFileConfiguration(
         selectedProvider.oauthFile,
       );
+      // Google Drive and iCloud invites name one of the provider's authorized
+      // accounts and carry no provider credential; the account's access comes
+      // from the provider's own sharing list.
       const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
       const usesSharedProviderGrant =
         provider_onboarding_type(selectedProvider, state.vaultArchitecture) ===
         OnboardingType.SharedProviderGrant;
-      const usesSharedICloud =
-        usesSharedProviderGrant &&
-        selectedOauthConfiguration.kind ===
-          StoredOAuthFileConfigurationDecodeKind.Configured &&
-        selectedOauthConfiguration.config.preset === "icloud";
       log.info("enrollment provider selected");
-      if (
-        usesSharedProviderGrant &&
-        !usesSharedICloud &&
-        !sharedJoinerIdentity
-      ) {
-        return storageErr(
-          new EnrollmentIssueFailure(
-            EnrollmentIssueRejection.SharedIdentityRequired,
-          ),
-        );
-      }
       if (
         selectedProvider.type === "github" &&
         !usesSharedProviderGrant &&
@@ -198,10 +164,7 @@ export class IdentityEnrollmentIssue {
         );
       }
       state.sharedGrantInstructions = "";
-      let sharedStorageTarget: SharedStorageTarget = {
-        kind: SharedStorageTargetKind.NotBound,
-      };
-      let enrollmentProviderRow: StorageProvider = selectedProvider;
+      let provider: NookEnrollmentProvider;
       if (usesSharedProviderGrant) {
         if (
           selectedOauthConfiguration.kind !==
@@ -213,226 +176,70 @@ export class IdentityEnrollmentIssue {
             ),
           );
         }
-        const selectedOauth = selectedOauthConfiguration.config;
-        if (usesSharedICloud) {
-          if (selectedOauth.iCloudShareTarget.state === "personal") {
+        const presentation = new OAuthFilePresentation(
+          selectedOauthConfiguration.config,
+        );
+        if (selectedOauthConfiguration.config.preset === "icloud") {
+          if (!presentation.hasICloudShareTarget())
             return storageErr(
               new EnrollmentIssueFailure(
                 EnrollmentIssueRejection.ICloudTargetRequired,
               ),
             );
-          }
-          const targetId = selectedOauth.iCloudShareTarget.value;
-          sharedStorageTarget = {
-            kind: SharedStorageTargetKind.Bound,
-            storageTargetId: targetId,
-          };
-        } else {
-          const accessCredential = oauth_access_token(selectedOauth);
-          log.info("shared enrollment grant started");
-          const fileName = new OAuthFilePresentation(
-            selectedOauth,
-          ).oauthFileName();
-          const storageTargetHint =
-            fileName.kind === OAuthFileNameKind.Resolved
-              ? fileName.fileName
-              : githubRepo;
-          const folderId = selectedOauth.folderId;
-          const prepareSharedStorageGrantArgs: Parameters<
-            typeof prepare_shared_storage_grant
-          >[0] = {
-            providerType: selectedProvider.type,
-            oauthPreset: provider_oauth_preset_for_provider(selectedProvider),
-            joinerIdentityKind: "email",
-            joinerIdentity: sharedJoinerIdentity,
-            storageTargetHint: suggestedSharedStorageTarget(
-              storageTargetHint || "shared folder",
+        } else if (!presentation.hasGoogleDriveFolder()) {
+          return storageErr(
+            new EnrollmentIssueFailure(
+              EnrollmentIssueRejection.SharedTargetUnavailable,
             ),
-            storageTarget:
-              folderId.state === "folderId"
-                ? existingSharedStorageTarget(folderId.value)
-                : createSharedStorageTarget(),
-            credential:
-              accessCredential.kind === "available"
-                ? sharedStorageGrantAccessToken(accessCredential.token)
-                : unavailableSharedStorageGrantCredential(),
-          };
-          let grant;
+          );
+        }
+        if (!sharedJoinerIdentity) {
+          return storageErr(
+            new EnrollmentIssueFailure(
+              EnrollmentIssueRejection.SharedIdentityRequired,
+            ),
+          );
+        }
+        // The new device reads the vault from the shared target, so it must
+        // hold the current vault event log before the invite exists.
+        const targetArgs: ReturnType<typeof state.providerWasmArgs> =
+          state.providerWasmArgs(selectedProvider);
+        const flushed = await state.enqueueStorage(async () => {
+          const admittedManager = state.admitManager();
+          if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            grant = await prepare_shared_storage_grant(
-              prepareSharedStorageGrantArgs,
+            await admittedManager.value.flush_event_outbox_for_provider(
+              targetArgs.mode,
+              targetArgs.pat,
+              targetArgs.repo,
             );
-          } catch (failure) {
-            return storageErr(new NativeVaultStorageFailure(failure));
-          }
-          log.info("shared enrollment grant prepared");
-          if (grant.kind === "unsupported") {
-            return storageErr(new SharedStorageGrantFailure(grant));
-          }
-          const grantTarget = grant.target;
-          if (grant.kind === "granted") {
-            if (grantTarget.state === "unavailable") {
-              return storageErr(
-                new EnrollmentIssueFailure(
-                  EnrollmentIssueRejection.SharedTargetUnavailable,
-                ),
-              );
-            }
-            sharedStorageTarget = {
-              kind: SharedStorageTargetKind.Bound,
-              storageTargetId: grantTarget.storageTargetId,
+            const flush: ProviderEventOutboxFlush = {
+              providerType: selectedProvider.type,
             };
-            const tArgs2: Parameters<typeof state.t>[0] = {
-              key: grant.note,
-              replacements: {
-                email: sharedJoinerIdentity,
-                folder:
-                  grantTarget.state === "named"
-                    ? grantTarget.storageTargetName
-                    : grantTarget.storageTargetId,
-              },
-            };
-            state.sharedGrantInstructions = state.t(tArgs2);
-          } else if (grant.kind === "manual-grant-required") {
-            if (grantTarget.state !== "unavailable") {
-              sharedStorageTarget = {
-                kind: SharedStorageTargetKind.Bound,
-                storageTargetId: grantTarget.storageTargetId,
-              };
-            }
-            const tArgs: Parameters<typeof state.t>[0] = {
-              key: grant.instructionsKey,
-              replacements: {
-                email: grant.joinerIdentity,
-                folder:
-                  grantTarget.state === "named"
-                    ? grantTarget.storageTargetName
-                    : grantTarget.state === "identified"
-                      ? grantTarget.storageTargetId
-                      : "shared folder",
-              },
-            };
-            state.sharedGrantInstructions = state.t(tArgs);
+            return storageOk(flush);
+          } catch (nativeFailure) {
+            return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
-          if (sharedStorageTarget.kind === SharedStorageTargetKind.Bound) {
-            let updatedOauth;
-            try {
-              updatedOauth = bind_google_drive_shared_folder(
-                selectedOauth,
-                sharedStorageTarget.storageTargetId,
-              );
-            } catch (failure) {
-              return storageErr(new NativeVaultStorageFailure(failure));
-            }
-            enrollmentProviderRow = {
-              ...selectedProvider,
-              oauthFile: configuredOAuthFile(updatedOauth),
-            };
-            const providers = state.providers.map((row) =>
-              row.id === selectedProvider.id ? enrollmentProviderRow : row,
-            );
-            const persistenceOptions: Parameters<
-              typeof state.persistProviders
-            >[0] = { replace: false, providers };
-            const persistence =
-              await state.persistProviders(persistenceOptions);
-            if (persistence.isErr()) return storageErr(persistence.error);
-            state.configureOauthFile(updatedOauth);
-
-            if (
-              (() => {
-                const shouldFlushSharedDriveGrantArgs: Parameters<
-                  typeof shouldFlushSharedDriveGrant
-                >[0] = { grant, accessCredential };
-                return shouldFlushSharedDriveGrant(
-                  shouldFlushSharedDriveGrantArgs,
-                );
-              })()
-            ) {
-              // The target is not usable until it contains the current vault
-              // event log, even when collaborator access needs manual completion.
-              // Await Rust/WASM fan-out before issuing the enrollment code.
-              const targetArgs: ReturnType<typeof state.providerWasmArgs> =
-                state.providerWasmArgs(enrollmentProviderRow);
-              const flushed = await state.enqueueStorage(async () => {
-                const admittedManager = state.admitManager();
-                if (admittedManager.isErr())
-                  return storageErr(admittedManager.error);
-                try {
-                  await admittedManager.value.flush_event_outbox_for_provider(
-                    targetArgs.mode,
-                    targetArgs.pat,
-                    targetArgs.repo,
-                  );
-                  const flush: ProviderEventOutboxFlush = {
-                    providerType: selectedProvider.type,
-                    target: sharedStorageTarget,
-                  };
-                  return storageOk(flush);
-                } catch (nativeFailure) {
-                  return storageErr(
-                    new NativeVaultStorageFailure(nativeFailure),
-                  );
-                }
-              });
-              if (flushed.isErr()) return storageErr(flushed.error);
-            }
-          }
+        });
+        if (flushed.isErr()) return storageErr(flushed.error);
+        try {
+          provider = enrollment_shared_provider_for_architecture(
+            selectedProvider,
+            state.vaultArchitecture,
+            sharedJoinerIdentity,
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
         }
-        if (usesSharedICloud) {
-          const targetArgs: ReturnType<typeof state.providerWasmArgs> =
-            state.providerWasmArgs(enrollmentProviderRow);
-          const flushed = await state.enqueueStorage(async () => {
-            const admittedManager = state.admitManager();
-            if (admittedManager.isErr())
-              return storageErr(admittedManager.error);
-            try {
-              await admittedManager.value.flush_event_outbox_for_provider(
-                targetArgs.mode,
-                targetArgs.pat,
-                targetArgs.repo,
-              );
-              const flush: ProviderEventOutboxFlush = {
-                providerType: selectedProvider.type,
-                target: sharedStorageTarget,
-              };
-              return storageOk(flush);
-            } catch (nativeFailure) {
-              return storageErr(new NativeVaultStorageFailure(nativeFailure));
-            }
-          });
-          if (flushed.isErr()) return storageErr(flushed.error);
+      } else {
+        try {
+          provider = enrollment_provider_for_architecture(
+            selectedProvider,
+            state.vaultArchitecture,
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
         }
-      }
-      if (sharedStorageTarget.kind === SharedStorageTargetKind.Bound) {
-        // The shared target is a new identity mount: record it and publish
-        // the identity log there before the joiner reads it.
-        const mounted = await state.identityControl.syncWithMounts();
-        if (mounted.isErr()) return storageErr(mounted.error);
-      }
-      let provider: NookEnrollmentProvider;
-      try {
-        provider =
-          usesSharedProviderGrant &&
-          sharedStorageTarget.kind === SharedStorageTargetKind.Bound
-            ? usesSharedICloud
-              ? enrollment_icloud_shared_provider_for_architecture(
-                  enrollmentProviderRow,
-                  state.vaultArchitecture,
-                  sharedStorageTarget.storageTargetId,
-                )
-              : enrollment_shared_provider_for_architecture(
-                  enrollmentProviderRow,
-                  state.vaultArchitecture,
-                  sharedJoinerIdentity,
-                  sharedStorageTarget.storageTargetId,
-                )
-            : enrollment_provider_for_architecture(
-                enrollmentProviderRow,
-                state.vaultArchitecture,
-              );
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
       }
       log.info("enrollment provider payload prepared");
       let payload: NookEnrollmentIssueInput;

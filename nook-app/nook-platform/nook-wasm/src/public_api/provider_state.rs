@@ -10,8 +10,7 @@ use nook_core::{
 };
 use nook_core::{
     DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
-    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSaveSetup, ProviderSelection,
-    StagedStorageConnection,
+    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSelection, StagedStorageConnection,
 };
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -437,18 +436,11 @@ Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be
 )]
 pub fn draft_oauth_storage_args(
     config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-
-    setup: &tsify::Ts<ProviderSaveSetup>,
 ) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
     let config = config
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let setup = setup
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
-        let config = config.with_provider_save_setup(setup);
         DraftStorageConnection::OAuth(OAuthStorageDraft {
             preset: config.preset,
             credential: &config.access_token,
@@ -698,14 +690,11 @@ mod tests {
         assert_eq!(github_args.pat, "pat");
         assert_eq!(github_args.repo, "owner/repo");
         assert_eq!(
-            draft_oauth_storage_args(
-                &Tsify::into_ts(&(config))?,
-                &Tsify::into_ts(&(ProviderSaveSetup::Existing))?
-            )
-            .and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-            .mode,
+            draft_oauth_storage_args(&Tsify::into_ts(&(config))?)
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
+                .mode,
             "google-drive"
         );
 
@@ -728,9 +717,8 @@ mod browser_tests {
     use nook_core::OAuthAccessToken;
     use nook_core::OauthFilePreset;
     use nook_core::StorageConnectArgs;
-    use nook_core::StorageProviderType;
     use nook_core::StoredGithubPat;
-    use nook_core::StoredGoogleDrivePrivateTarget;
+    use nook_core::StoredGoogleDriveFolder;
     use nook_core::StoredOAuthAccessCredential;
     use nook_core::StoredOAuthRemoteFileId;
     use nook_core::StoredOAuthRemoteFileName;
@@ -864,94 +852,53 @@ mod browser_tests {
         assert_eq!(github.mode, "github");
         assert_eq!(github.pat, "pat");
         assert_eq!(github.repo, "owner/repo");
-        let oauth = draft_oauth_storage_args(
-            &Tsify::into_ts(&(configured.clone()))?,
-            &Tsify::into_ts(&(ProviderSaveSetup::Existing))?,
-        )
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
+        let oauth = draft_oauth_storage_args(&Tsify::into_ts(&(configured.clone()))?).and_then(
+            |value| {
+                value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded."))
+            },
+        )?;
         assert_eq!(oauth.mode, "google-drive");
 
-        let new_provider_setup = ProviderSaveSetup::New(StorageProviderType::OauthFile);
-        let new_private = nook_core::OAuthFileConfigData {
+        let drive = nook_core::OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("token".into()),
             file_id: StoredOAuthRemoteFileId::FileId("old-file-id".into()),
             file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
+            folder_id: StoredGoogleDriveFolder::FolderId("vault-folder".into()),
             ..Default::default()
         };
-        let draft_args = draft_oauth_storage_args(
-            &Tsify::into_ts(&(new_private.clone()))?,
-            &Tsify::into_ts(&(new_provider_setup))?,
-        )
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
-        assert_eq!(draft_args.repo, "private-folder-v2:pending\tVault.yaml");
-        let staged_args = public_api::staged_oauth_remote_storage_args(
-            &Tsify::into_ts(&(new_private.clone()))?,
-            &Tsify::into_ts(&(new_provider_setup))?,
-        )?;
+        let draft_args =
+            draft_oauth_storage_args(&Tsify::into_ts(&(drive.clone()))?).and_then(|value| {
+                value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded."))
+            })?;
+        assert_eq!(draft_args.repo, "shared:vault-folder\tVault.yaml");
+        let staged_args =
+            public_api::staged_oauth_remote_storage_args(&Tsify::into_ts(&(drive.clone()))?)?;
         assert_eq!(
             staged_args
                 .args()?
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))?
                 .repo,
-            "private-folder-v2:pending\tVault.yaml"
+            "shared:vault-folder\tVault.yaml"
         );
-        let updated_new_provider = public_api::update_oauth_remote_ref(
-            &Tsify::into_ts(&(new_private.clone()))?,
-            &Tsify::into_ts(&(new_provider_setup))?,
-            "private-folder-v2:stable-folder-id",
-        )?;
-        let updated_config = updated_new_provider
+        let updated =
+            public_api::update_oauth_remote_ref(&Tsify::into_ts(&(drive.clone()))?, "file-1")?;
+        let updated_config = updated
             .config()?
             .to_rust()
             .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert_eq!(
-            updated_config.drive_private_target,
-            StoredGoogleDrivePrivateTarget::FolderId("stable-folder-id".into())
+            updated_config.folder_id,
+            StoredGoogleDriveFolder::FolderId("vault-folder".into())
         );
         assert_eq!(
             updated_config.file_id,
-            StoredOAuthRemoteFileId::FileId("old-file-id".into())
-        );
-
-        let updated_existing_provider = public_api::update_oauth_remote_ref(
-            &Tsify::into_ts(&(new_private.clone()))?,
-            &Tsify::into_ts(&(ProviderSaveSetup::Existing))?,
-            "file-1",
-        )?;
-        let updated_existing_config = updated_existing_provider
-            .config()?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
-        assert_eq!(
-            updated_existing_config.drive_private_target,
-            StoredGoogleDrivePrivateTarget::Pending
-        );
-        assert_eq!(
-            updated_existing_config.file_id,
             StoredOAuthRemoteFileId::FileId("file-1".into())
-        );
-
-        let existing_staged = public_api::staged_oauth_remote_storage_args(
-            &Tsify::into_ts(&(new_private))?,
-            &Tsify::into_ts(&(ProviderSaveSetup::Existing))?,
-        )?;
-        assert_eq!(
-            existing_staged
-                .args()?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .repo,
-            "private-folder-v2:pending\tVault.yaml"
         );
         Ok(())
     }

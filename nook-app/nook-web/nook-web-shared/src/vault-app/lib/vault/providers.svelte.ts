@@ -40,7 +40,7 @@ import {
   OAuthFilePresentation,
   OAuthFileNameKind,
   oauthConfigurationNotApplicable,
-  personalICloudShareTarget,
+  unboundICloudShareTarget,
   rootGoogleDriveFolder,
   signedOutOAuthCredential,
   storedOAuthRemoteFileName,
@@ -235,7 +235,6 @@ export class VaultProviderActions {
     ) {
       return draft_oauth_storage_args(
         $state.snapshot(state.oauthFileDraft.config),
-        providerSaveSetup(state.loginSetup),
       );
     }
     return draft_local_storage_args();
@@ -274,7 +273,6 @@ export class VaultProviderActions {
             state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? staged_oauth_remote_storage_args(
               $state.snapshot(state.oauthFileDraft.config),
-              providerSaveSetup(state.loginSetup),
             )
           : staged_local_remote_storage_args();
     try {
@@ -369,7 +367,6 @@ export class VaultProviderActions {
     try {
       updated = update_oauth_remote_ref(
         $state.snapshot(draft.config),
-        providerSaveSetup(state.loginSetup),
         manager.value.storage_remote_ref,
       );
     } catch (failure) {
@@ -631,10 +628,8 @@ export class VaultProviderActions {
         fileId: unresolvedOAuthRemoteFileId(),
         fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
         accountEmail: unknownOAuthAccountIdentity(),
-        driveMode: "private",
         folderId: rootGoogleDriveFolder(),
-        iCloudMode: "private",
-        iCloudShareTarget: personalICloudShareTarget(),
+        iCloudShareTarget: unboundICloudShareTarget(),
       };
       state.configureOauthFile(configureOauthFileArgs);
     } else {
@@ -662,7 +657,6 @@ export class VaultProviderActions {
     const state = this.state;
     this.resetICloudSignInState();
     state.addProviderOpen = false;
-    state.providerSaveTarget = "fresh";
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
     state.applyActiveProviderCredentials();
@@ -838,7 +832,6 @@ export class ProviderPersistenceActions {
       localFolder,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
-      remoteTarget: state.providerSaveTarget,
     };
     const outcome = apply_provider_save_policy(request);
     try {
@@ -875,8 +868,7 @@ export class ProviderPersistenceActions {
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
-      state.providerSaveTarget = "fresh";
-      state.addProviderOpen = false;
+        state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
       return storageOk(ProviderSaveOutcome.Saved);

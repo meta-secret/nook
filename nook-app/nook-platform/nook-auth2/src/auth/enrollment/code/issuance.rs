@@ -378,6 +378,7 @@ mod tests {
         .to_owned();
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
+                "member@icloud.com".to_owned(),
                 storage_target_id.clone(),
             )),
             identity: EnrollmentIdentityTarget::fixture("Shared iCloud vault"),

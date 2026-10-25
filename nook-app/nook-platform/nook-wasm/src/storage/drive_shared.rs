@@ -1,9 +1,9 @@
-//! Shared Google Drive vault folder helpers (`drive.file` writes plus
+//! Google Drive vault folder helpers (`drive.file` writes plus
 //! `drive.readonly` for cross-account event reads).
 //!
-//! Private providers keep using `drive.appdata`. Shared providers create a
-//! dedicated My Drive folder, share it with another account, and sync event
-//! files under that parent.
+//! Every Drive provider syncs under one My Drive folder. Its Drive
+//! permissions are the provider's authorized accounts: sharing the folder
+//! with an account lets a device signed in as that account join the vault.
 
 use crate::DriveStorageClient;
 use nook_core::i18n_keys;
@@ -182,7 +182,7 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Grant writer access on a shared vault folder to the joiner email.
+/// Grant writer access on the vault folder to one more authorized account.
 impl DriveStorageClient<'_> {
     pub(crate) async fn share_folder_with_email(
         &self,
@@ -221,6 +221,108 @@ impl DriveStorageClient<'_> {
                 role: "writer",
                 email_address: email,
             })
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(DriveStorageClient::shared_drive_error(
+                DriveStorageClientSharedDriveError {
+                    status,
+                    body: &body,
+                },
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DrivePermissionListResponse {
+    #[serde(default)]
+    permissions: Vec<nook_core::DrivePermissionObservation>,
+    #[serde(default)]
+    next_page_token: Option<String>,
+}
+
+/// Read and revoke the vault folder's Drive permissions: its authorized
+/// accounts. Requires `drive.file` on a folder this app created.
+impl DriveStorageClient<'_> {
+    pub(crate) async fn list_folder_permissions(
+        &self,
+        folder_id: &str,
+    ) -> Result<Vec<nook_core::DrivePermissionObservation>, NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
+        let url = format!(
+            "https://www.googleapis.com/drive/v3/files/{}/permissions",
+            urlencoding::encode(folder_id.as_str())
+        );
+        let mut page_token: Option<String> = None;
+        let mut permissions = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get(&url)
+                .query(&[
+                    (
+                        "fields",
+                        "nextPageToken,permissions(id,type,role,emailAddress,deleted)",
+                    ),
+                    ("pageSize", "100"),
+                    ("supportsAllDrives", "true"),
+                ])
+                .header("Authorization", format!("Bearer {}", token.as_ref()));
+            if let Some(page) = page_token.as_deref() {
+                request = request.query(&[("pageToken", page)]);
+            }
+            let response = request.send().await?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(DriveStorageClient::shared_drive_error(
+                    DriveStorageClientSharedDriveError {
+                        status,
+                        body: &body,
+                    },
+                ));
+            }
+            let parsed: DrivePermissionListResponse = response.json().await.map_err(|error| {
+                NookError::Serialization(format!("Failed to parse Drive permissions: {error}"))
+            })?;
+            permissions.extend(parsed.permissions);
+            page_token = parsed.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(permissions)
+    }
+
+    pub(crate) async fn delete_folder_permission(
+        &self,
+        folder_id: &str,
+        permission_id: &str,
+    ) -> Result<(), NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
+        let permission_id = permission_id.trim();
+        if permission_id.is_empty() {
+            return Err(NookError::Drive(
+                "Drive permission id is required to revoke access.".to_owned(),
+            ));
+        }
+        let url = format!(
+            "https://www.googleapis.com/drive/v3/files/{}/permissions/{}",
+            urlencoding::encode(folder_id.as_str()),
+            urlencoding::encode(permission_id)
+        );
+        let response = self
+            .client
+            .delete(&url)
+            .query(&[("supportsAllDrives", "true")])
+            .header("Authorization", format!("Bearer {}", token.as_ref()))
             .send()
             .await?;
         if !response.status().is_success() {

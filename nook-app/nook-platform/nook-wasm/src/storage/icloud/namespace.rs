@@ -10,7 +10,7 @@ use super::wire::{
 };
 use super::{ICLOUD_EVENT_RECORD_TYPE, ICLOUD_LOCATION_FIELD, ICloudEventStore};
 use crate::NookError;
-use nook_core::{EventLogNamespaceKind, ICloudEventTarget};
+use nook_core::{EventLogNamespaceKind, ICloudSharedTarget};
 
 /// `CloudKit` accepts at most 200 operations per modify request.
 const DELETE_BATCH: usize = 200;
@@ -18,7 +18,7 @@ const DELETE_BATCH: usize = 200;
 /// Named values required by `ICloudEventStore::query_records`.
 struct RecordQuery<'a> {
     web_auth_token: &'a str,
-    target: &'a ICloudEventTarget,
+    target: &'a ICloudSharedTarget,
     comparator: &'static str,
     location: &'a str,
 }
@@ -85,7 +85,7 @@ impl ICloudEventStore<'_> {
     /// Ids of every namespace of one kind with a log on this target.
     pub(crate) async fn list_icloud_namespace_ids(
         web_auth_token: &str,
-        target: &ICloudEventTarget,
+        target: &ICloudSharedTarget,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<String>, NookError> {
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
@@ -200,7 +200,7 @@ mod fetch_tests {
         ])?;
         let ids = ICloudEventStore::list_icloud_namespace_ids(
             "web-token",
-            &ICloudEventTarget::Private,
+            &super::super::owner_share_fixture()?,
             EventLogNamespaceKind::Vault,
         )
         .await?;
@@ -212,7 +212,7 @@ mod fetch_tests {
         assert!(
             ICloudEventStore::list_icloud_namespace_ids(
                 "web-token",
-                &ICloudEventTarget::Private,
+                &super::super::owner_share_fixture()?,
                 EventLogNamespaceKind::Identity,
             )
             .await
@@ -221,7 +221,7 @@ mod fetch_tests {
         assert!(
             ICloudEventStore::list_icloud_namespace_ids(
                 "",
-                &ICloudEventTarget::Private,
+                &super::super::owner_share_fixture()?,
                 EventLogNamespaceKind::Identity,
             )
             .await
@@ -243,7 +243,7 @@ mod fetch_tests {
         let tag = location.namespace_tag();
         let store = ICloudEventStore {
             web_auth_token: "web-token",
-            target: &ICloudEventTarget::Private,
+            target: &super::super::owner_share_fixture()?,
             location: &location,
         };
         let records = format!(

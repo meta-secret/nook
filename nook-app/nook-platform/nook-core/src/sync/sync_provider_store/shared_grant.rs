@@ -1,8 +1,18 @@
 //! Full provider selection avoids a second host lookup after Rust grants eligibility.
 use super::{AuthProvidersSnapshotData, SharedGrantProviderSelection, StorageProviderData};
-use crate::{OAuthFilePreset, SharedStorageTargetSelection};
+use crate::OAuthFilePreset;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+
+/// A shared target a saved provider credential may reach: any target of the
+/// preset, or one exact Drive folder or `CloudKit` share.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", content = "storageTargetId", rename_all = "camelCase")]
+pub enum SharedStorageTargetSelection {
+    #[default]
+    Create,
+    Existing(String),
+}
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]

@@ -183,7 +183,7 @@ impl NookVaultManager {
         }
         let parent = (DriveNamespace {
             token: &self.storage.access_token,
-            parent: &self.storage.drive_event_parent,
+            parent: self.storage.drive_event_parent.parent()?,
             location,
         })
         .resolve()
@@ -219,7 +219,7 @@ impl NookVaultManager {
             StorageMode::ICloud => {
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
-                    target: &self.storage.icloud_event_target,
+                    target: self.storage.icloud_event_target.target()?,
                     location,
                 })
                 .list_icloud_event_ids()
@@ -268,7 +268,7 @@ impl NookVaultManager {
             StorageMode::ICloud => {
                 match (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
-                    target: &self.storage.icloud_event_target,
+                    target: self.storage.icloud_event_target.target()?,
                     location,
                 })
                 .fetch_icloud_event(event_id)
@@ -315,7 +315,7 @@ impl NookVaultManager {
             StorageMode::ICloud => {
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
-                    target: &self.storage.icloud_event_target,
+                    target: self.storage.icloud_event_target.target()?,
                     location,
                 })
                 .put_icloud_event_if_absent(event_id, bytes)
@@ -343,7 +343,7 @@ impl NookVaultManager {
             StorageMode::GoogleDrive => {
                 (DriveNamespace {
                     token: &self.storage.access_token,
-                    parent: &self.storage.drive_event_parent,
+                    parent: self.storage.drive_event_parent.parent()?,
                     location,
                 })
                 .delete()
@@ -351,7 +351,7 @@ impl NookVaultManager {
             }
             StorageMode::ICloud => Ok((ICloudEventStore {
                 web_auth_token: &self.storage.access_token,
-                target: &self.storage.icloud_event_target,
+                target: self.storage.icloud_event_target.target()?,
                 location,
             })
             .delete_icloud_namespace()
@@ -379,7 +379,7 @@ impl NookVaultManager {
             StorageMode::GoogleDrive => {
                 DriveNamespace::list_ids(
                     &self.storage.access_token,
-                    &self.storage.drive_event_parent,
+                    self.storage.drive_event_parent.parent()?,
                     kind,
                 )
                 .await
@@ -387,7 +387,7 @@ impl NookVaultManager {
             StorageMode::ICloud => {
                 ICloudEventStore::list_icloud_namespace_ids(
                     &self.storage.access_token,
-                    &self.storage.icloud_event_target,
+                    self.storage.icloud_event_target.target()?,
                     kind,
                 )
                 .await

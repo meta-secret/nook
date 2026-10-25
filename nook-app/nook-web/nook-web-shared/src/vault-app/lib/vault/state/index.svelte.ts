@@ -70,7 +70,6 @@ const providerKeys = [
   "activateLoginSetup",
   "clearLoginSetup",
   "loginRequiresExistingVault",
-  "providerSaveTarget",
   "remoteVaultChoices",
   "recoveryDiscovery",
   "recordExistingVaultRecovery",
@@ -239,7 +238,6 @@ class VaultStateSlicesImplementation {
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
   declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
-  declare providerSaveTarget: VaultProviderState["providerSaveTarget"];
   declare remoteVaultChoices: VaultProviderState["remoteVaultChoices"];
   declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];

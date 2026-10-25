@@ -1,9 +1,5 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
-type UnsupportedSharedStorageGrant = {
-  readonly reasonKey: string;
-};
-
 export enum OAuthFailureKind {
   GoogleConfiguration = "google-configuration",
   GoogleScript = "google-script",
@@ -94,13 +90,5 @@ export class OAuthFailure {
       case OAuthFailureKind.ProviderPersistence:
         return I18N_KEYS.ProviderSetupIcloudSignInFailed;
     }
-  }
-}
-
-/** Preserves the Rust-owned rejection projection without converting it to an exception. */
-export class SharedStorageGrantFailure {
-  constructor(private readonly rejection: UnsupportedSharedStorageGrant) {}
-  get translationKey() {
-    return this.rejection.reasonKey;
   }
 }

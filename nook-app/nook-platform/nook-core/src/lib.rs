@@ -54,8 +54,8 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
-    vault_sync_session, vault_sync_state, vault_sync_store,
+    authorized_accounts, sync_provider_credentials, sync_provider_store, validation, vault_sync,
+    vault_sync_conflict, vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -320,13 +320,13 @@ pub use nook_event_log::{
     VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use nook_event_log::{
-    DriveMountTarget, EventLogLocation, EventLogNamespaceKind, ICloudMountTarget,
-    IdentityApprovalRequest, IdentityControlInsertion, IdentityControlLog, IdentityControlMember,
-    IdentityControlOperation, IdentityControlRejection, IdentityControlState, IdentityControlVault,
-    IdentityEvent, IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion,
-    IdentityEventSigning, IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue,
-    IdentityInviteJoin, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    EventLogLocation, EventLogNamespaceKind, IdentityApprovalRequest, IdentityControlInsertion,
+    IdentityControlLog, IdentityControlMember, IdentityControlOperation, IdentityControlRejection,
+    IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
+    IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
+    IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
+    IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget, IdentityProviderMount,
+    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
     IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, ProviderMountId,
     VaultAuthorizedRoster, VaultRosterMember,
 };
@@ -341,6 +341,11 @@ pub use password_envelope::{
     VaultUnlock,
 };
 
+pub use authorized_accounts::{
+    AuthorizedAccount, AuthorizedAccountEmail, AuthorizedAccountList, AuthorizedAccountRole,
+    AuthorizedAccountStatus, DrivePermissionObservation, ICloudParticipantObservation,
+    ICloudShareObservation, JoinerAccountCheck,
+};
 pub use secrets::SecretRecordFilter;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
@@ -361,27 +366,25 @@ pub use sync_provider_store::{
     OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
     OAuthRemoteStorageReference, OAuthStorageDraft, OAuthStorageReference,
     ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId, ProviderLabelLabels,
-    ProviderReplicationTarget, ProviderRows, ProviderSaveOutcome, ProviderSaveRemoteTarget,
-    ProviderSaveRequest, ProviderSaveSetup, ProviderSelection, ProviderSelectionPolicy,
-    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
-    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
-    RemoteEventFlushProviderRequest, SharedGoogleEnrollmentAudience, SharedGrantProviderSelection,
+    ProviderReplicationTarget, ProviderRows, ProviderSaveOutcome, ProviderSaveRequest,
+    ProviderSaveSetup, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
+    ProviderStorageDetailLabels, ProviderSyncCheckpoint, ProviderSyncRevision,
+    ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
+    RemoteEventFlushProviderRequest, SharedEnrollmentAudience, SharedGrantProviderSelection,
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
     StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredGoogleDrivePrivateTarget,
-    StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
-    StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-    StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, VaultStorageConnection,
+    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    StoredOAuthTokenExpiry, VaultStorageConnection,
 };
 pub use validation::{
     ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
-    DRIVE_PRIVATE_FOLDER_PENDING_REF, DRIVE_PRIVATE_FOLDER_REF_PREFIX,
     DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
-    DriveStorageTargetRef, ExistingVaultProviderReadiness, GithubPat, GithubPatMask,
-    GithubRepoName, GithubSyncTarget, GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget,
-    ICloudMode, ICloudShareRole, ICloudSharedTarget, LocalFolderSyncTarget, OAuthFilePreset,
-    OAuthProviderLabel, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
+    ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
+    GoogleDriveFolderId, ICloudShareRole, ICloudSharedTarget, LocalFolderSyncTarget,
+    OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
     ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel, ProviderTargetKey,
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
     SyncProviderTargetIdentity,
@@ -399,9 +402,7 @@ pub use vault_access_diagnostics::{
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
     ProviderReplicationCapability, ReplicationType, SentinelConfiguration, SentinelPolicy,
-    SharedJoinerIdentityKind, SharedStorageGrantCredential, SharedStorageGrantOutcome,
-    SharedStorageGrantRequest, SharedStorageGrantTarget, SharedStorageTargetHint,
-    SharedStorageTargetSelection, VaultApplication, VaultArchitecture, VaultConnectIntent,
+    SharedJoinerIdentityKind, VaultApplication, VaultArchitecture, VaultConnectIntent,
     VaultType,
 };
 pub use vault_client_policy::{
@@ -589,7 +590,9 @@ pub use sync_provider_store::{
     EnrollmentOAuthConfigurationError, EnrollmentOAuthConfigurationRequest,
 };
 
-pub use sync_provider_store::{SharedGrantProviderOutcome, SharedGrantProviderRequest};
+pub use sync_provider_store::{
+    SharedGrantProviderOutcome, SharedGrantProviderRequest, SharedStorageTargetSelection,
+};
 
 pub use nook_companion_core::BackupCodeCandidatePresence;
 

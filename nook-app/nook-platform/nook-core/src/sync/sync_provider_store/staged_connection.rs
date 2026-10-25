@@ -1,9 +1,8 @@
 //! Staged connections preserve provider-specific configuration and readiness.
 use super::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OauthFilePreset,
-    ProviderSaveSetup, ProviderSyncCheckpoint, ProviderVaultScope, StorageConnectArgs, StorageMode,
-    StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-    StoredGoogleDriveFolder, StoredGoogleDrivePrivateTarget, StoredLocalFolderConfiguration,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OauthFilePreset, ProviderSyncCheckpoint,
+    ProviderVaultScope, StorageConnectArgs, StorageMode, StorageProviderData, StorageProviderType,
+    StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
     StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
     ValidationResult,
 };
@@ -14,7 +13,6 @@ pub struct StagedGithubConnection<'a> {
 pub struct StagedOAuthConnection<'a> {
     pub configuration: &'a StoredOAuthFileConfiguration,
     pub file_name: &'a StoredOAuthRemoteFileName,
-    pub setup: ProviderSaveSetup,
 }
 pub enum StagedRemoteConnection<'a> {
     Local,
@@ -69,46 +67,17 @@ impl StagedRemoteConnection<'_> {
                     StoredOAuthRemoteFileName::Unresolved
                     | StoredOAuthRemoteFileName::FileName(_) => DEFAULT_DRIVE_BACKUP_NAME,
                 };
-                let file_name = match (
-                    draft.setup,
-                    config.preset,
-                    config.resolved_google_drive_mode(),
-                    &config.drive_private_target,
-                    &config.folder_id,
-                    &draft.file_name,
-                ) {
-                    (
-                        ProviderSaveSetup::Existing,
-                        OauthFilePreset::GoogleDrive,
-                        GoogleDriveMode::Private,
-                        StoredGoogleDrivePrivateTarget::Pending
-                        | StoredGoogleDrivePrivateTarget::FolderId(_),
-                        _,
-                        _,
-                    )
-                    | (_, OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared, _, _, _) => {
-                        stored_name
-                    }
-                    (
-                        _,
-                        OauthFilePreset::GoogleDrive,
-                        _,
-                        _,
-                        StoredGoogleDriveFolder::FolderId(id),
-                        _,
-                    ) if !id.trim().is_empty() => stored_name,
-                    (_, _, _, _, _, StoredOAuthRemoteFileName::FileName(name))
+                // Drive events live in the vault folder under the stored backup
+                // name; an iCloud draft may rename its event file.
+                let file_name = match (config.preset, draft.file_name) {
+                    (OauthFilePreset::ICloud, StoredOAuthRemoteFileName::FileName(name))
                         if !name.trim().is_empty() =>
                     {
                         name.trim()
                     }
-                    (
-                        ..,
-                        StoredOAuthRemoteFileName::Unresolved
-                        | StoredOAuthRemoteFileName::FileName(_),
-                    ) => stored_name,
+                    (OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud, _) => stored_name,
                 };
-                let mut oauth = config.with_provider_save_setup(draft.setup);
+                let mut oauth = config.as_ref().clone();
                 oauth.access_token = StoredOAuthAccessCredential::AccessToken(token.to_owned());
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(file_name.to_owned());
                 StorageProviderData {

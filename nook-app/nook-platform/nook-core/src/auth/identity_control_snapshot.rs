@@ -7,8 +7,7 @@
 
 use nook_auth2::{AppId, IdentityId};
 use nook_event_log::{
-    DriveMountTarget, ICloudMountTarget, IdentityControlState, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekLookup,
+    IdentityControlState, IdentityMountTarget, IdentityProviderMount, IdentityVaultDekLookup,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -95,20 +94,12 @@ impl IdentityMountView {
             IdentityMountTarget::Github { repository } => {
                 (IdentityMountProvider::Github, repository.clone())
             }
-            IdentityMountTarget::GoogleDrive { drive } => (
-                IdentityMountProvider::GoogleDrive,
-                match drive {
-                    DriveMountTarget::Private { folder_name } => folder_name.clone(),
-                    DriveMountTarget::Shared { folder_id } => folder_id.clone(),
-                },
-            ),
-            IdentityMountTarget::ICloud { icloud } => (
-                IdentityMountProvider::ICloud,
-                match icloud {
-                    ICloudMountTarget::Private => String::new(),
-                    ICloudMountTarget::Shared { share_target } => share_target.clone(),
-                },
-            ),
+            IdentityMountTarget::GoogleDrive { folder_id } => {
+                (IdentityMountProvider::GoogleDrive, folder_id.clone())
+            }
+            IdentityMountTarget::ICloud { share_target } => {
+                (IdentityMountProvider::ICloud, share_target.clone())
+            }
             IdentityMountTarget::LocalFolder { directory_name } => {
                 (IdentityMountProvider::LocalFolder, directory_name.clone())
             }

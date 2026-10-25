@@ -29,10 +29,10 @@ use crate::NookError;
 use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
-    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, DriveStorageTargetRef,
-    ICloudEventTarget, MultiDeviceError, SelfRosterSync, SentinelGenesisPhase, StorageMode,
-    SymmetricKey, VaultCrypto, VaultNameRef, VaultSessionProjection, VaultStoreIdentityRef,
-    VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
+    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudSharedTarget, MultiDeviceError,
+    SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
+    VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
+    i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState};
 use std::mem;
@@ -94,8 +94,8 @@ mod grant_authority;
 
 pub(in crate::manager) use session::{
     CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
-    SearchCatalogRestore, SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState,
-    VaultNameState, VaultSessionState,
+    PreparedDriveFolder, PreparedICloudShare, SearchCatalogRestore, SearchCatalogState,
+    StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -578,8 +578,8 @@ impl NookVaultManager {
         match mode {
             StorageMode::Local => {
                 self.storage.access_token = String::new();
-                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
-                self.storage.icloud_event_target = ICloudEventTarget::Private;
+                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
+                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
             }
             StorageMode::Github => {
                 self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
@@ -594,8 +594,8 @@ impl NookVaultManager {
                 }
                 self.storage.remote_ref = new_repo;
                 self.storage.remote_path.clear();
-                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
-                self.storage.icloud_event_target = ICloudEventTarget::Private;
+                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
+                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
                 drop(self.status.tx.send("GITHUB_REPO_ENSURE".to_owned()));
                 GitHubStorageClient::new(&self.storage.access_token)
                     .ensure_github_repo_exists(&self.storage.remote_ref)
@@ -604,53 +604,30 @@ impl NookVaultManager {
             StorageMode::GoogleDrive => {
                 self.storage.access_token =
                     nook_core::OauthAccessToken::parse(github_pat)?.to_string();
-                let (known_file_id, file_name) =
+                let (known_folder, file_name) =
                     nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
+                // Every Drive provider targets its shareable vault folder.
+                let parent = DriveEventParent::parse_storage_id(&known_folder)?;
                 self.storage.remote_path = file_name.to_string();
                 drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
                     .await?;
-                // A private provider resolves its own child folder under appData;
-                // shared Drive targets the configured My Drive folder.
-                self.storage.drive_event_parent =
-                    match DriveStorageTargetRef::parse(&known_file_id)? {
-                        DriveStorageTargetRef::SharedFolder { folder_id } => {
-                            DriveEventParent::SharedFolder { folder_id }
-                        }
-                        DriveStorageTargetRef::PendingPrivateFolder => {
-                            let folder_id = DriveStorageClient::new(&self.storage.access_token)
-                                .ensure_private_event_folder(&file_name)
-                                .await?;
-                            DriveEventParent::PrivateAppDataFolder { folder_id }
-                        }
-                        DriveStorageTargetRef::PrivateFolder { folder_id } => {
-                            DriveEventParent::PrivateAppDataFolder { folder_id }
-                        }
-                    };
-                self.storage.remote_ref = match &self.storage.drive_event_parent {
-                    DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
-                    DriveEventParent::AppDataFolder
-                    | DriveEventParent::PrivateAppDataFolder { .. } => {
-                        self.storage.drive_event_parent.encode_storage_id()
-                    }
-                };
-                self.storage.icloud_event_target = ICloudEventTarget::Private;
+                self.storage.remote_ref = parent.folder_id.clone();
+                self.storage.drive_event_parent = PreparedDriveFolder::Folder(parent);
+                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
             }
             StorageMode::ICloud => {
                 self.storage.access_token =
                     nook_core::OauthAccessToken::parse(github_pat)?.to_string();
                 let (known_target, file_name) =
                     nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
+                // Every iCloud provider targets its `CloudKit` share.
+                let target = ICloudSharedTarget::from_storage_id(&known_target)?;
                 self.storage.remote_path = file_name.to_string();
-                self.storage.icloud_event_target =
-                    ICloudEventTarget::from_storage_id(&known_target)?;
-                self.storage.remote_ref = if known_target.is_empty() {
-                    file_name.to_string()
-                } else {
-                    known_target
-                };
-                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
+                self.storage.remote_ref = known_target;
+                self.storage.icloud_event_target = PreparedICloudShare::Share(target);
+                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
             }
         }
 
@@ -846,16 +823,14 @@ mod tests {
         );
 
         manager.storage.mode = StorageMode::GoogleDrive;
-        manager.storage.drive_event_parent = DriveEventParent::PrivateAppDataFolder {
-            folder_id: "private-folder-a".to_owned(),
-        };
-        manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
-        let first_private_cache = manager.local_cache_ref();
-        manager.storage.drive_event_parent = DriveEventParent::PrivateAppDataFolder {
-            folder_id: "private-folder-b".to_owned(),
-        };
-        manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
-        assert_ne!(first_private_cache, manager.local_cache_ref());
+        manager.storage.drive_event_parent =
+            PreparedDriveFolder::Folder(DriveEventParent::shared_folder_id("folder-a"));
+        manager.storage.remote_ref = "folder-a".to_owned();
+        let first_folder_cache = manager.local_cache_ref();
+        manager.storage.drive_event_parent =
+            PreparedDriveFolder::Folder(DriveEventParent::shared_folder_id("folder-b"));
+        manager.storage.remote_ref = "folder-b".to_owned();
+        assert_ne!(first_folder_cache, manager.local_cache_ref());
     }
 
     #[wasm_bindgen_test]

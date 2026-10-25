@@ -2,7 +2,7 @@ use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, EventGraph, EventLogLocation, ICloudEventTarget, SentinelConfiguration,
+    DriveEventParent, EventGraph, EventLogLocation, ICloudSharedTarget, SentinelConfiguration,
     SentinelGenesisPhase, SentinelPolicy, StorageMode, StoreId, StoredSecretRecord,
     VaultArchitecture, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
     VaultSessionProjection, VaultType, VaultUnlock, VaultUserRecordBatch,
@@ -23,6 +23,44 @@ pub(in crate::manager) enum ChosenProviderVault {
     Chosen(StoreId),
 }
 
+/// The shared Drive vault folder of the prepared Google Drive provider.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::manager) enum PreparedDriveFolder {
+    #[default]
+    Unprepared,
+    Folder(DriveEventParent),
+}
+
+impl PreparedDriveFolder {
+    pub(in crate::manager) fn parent(&self) -> Result<&DriveEventParent, NookError> {
+        match self {
+            Self::Folder(parent) => Ok(parent),
+            Self::Unprepared => Err(NookError::Drive(
+                "Google Drive vault folder is not prepared.".to_owned(),
+            )),
+        }
+    }
+}
+
+/// The `CloudKit` share of the prepared iCloud provider.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::manager) enum PreparedICloudShare {
+    #[default]
+    Unprepared,
+    Share(ICloudSharedTarget),
+}
+
+impl PreparedICloudShare {
+    pub(in crate::manager) fn target(&self) -> Result<&ICloudSharedTarget, NookError> {
+        match self {
+            Self::Share(target) => Ok(target),
+            Self::Unprepared => Err(NookError::ICloud(
+                "iCloud share is not prepared.".to_owned(),
+            )),
+        }
+    }
+}
+
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
     /// The vault to open when the prepared provider holds several.
@@ -32,8 +70,8 @@ pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) access_token: String,
     pub(in crate::manager) remote_ref: String,
     pub(in crate::manager) remote_path: String,
-    pub(in crate::manager) drive_event_parent: nook_core::DriveEventParent,
-    pub(in crate::manager) icloud_event_target: nook_core::ICloudEventTarget,
+    pub(in crate::manager) drive_event_parent: PreparedDriveFolder,
+    pub(in crate::manager) icloud_event_target: PreparedICloudShare,
     pub(in crate::manager) github_root_empty: bool,
     pub(in crate::manager) use_local_cache_for_connect: bool,
 }
@@ -73,8 +111,8 @@ impl Default for StorageSession {
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),
-            drive_event_parent: DriveEventParent::AppDataFolder,
-            icloud_event_target: ICloudEventTarget::Private,
+            drive_event_parent: PreparedDriveFolder::Unprepared,
+            icloud_event_target: PreparedICloudShare::Unprepared,
             github_root_empty: false,
             use_local_cache_for_connect: false,
         }

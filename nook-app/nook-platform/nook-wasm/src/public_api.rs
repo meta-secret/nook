@@ -12,9 +12,7 @@ use nook_core::ProviderCredentialReadiness;
 use nook_core::SecretId;
 use nook_core::StorageProviderData;
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
-use nook_core::{
-    ProviderSaveSetup, StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection,
-};
+use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
 use nook_core::{
     StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
     StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
@@ -42,8 +40,8 @@ mod companion_heuristics;
 pub use companion_heuristics::*;
 mod vault_event_log;
 pub use vault_event_log::*;
-mod shared_storage_grant;
-pub use shared_storage_grant::*;
+mod authorized_accounts;
+pub use authorized_accounts::*;
 
 #[wasm_bindgen]
 #[must_use]
@@ -397,24 +395,12 @@ pub fn oauth_remote_storage_ref(
 pub fn update_oauth_remote_ref(
     config: &tsify::Ts<nook_core::OAuthFileConfigData>,
 
-    setup: &tsify::Ts<ProviderSaveSetup>,
-
     remote_ref: &str,
 ) -> Result<NookOAuthRemoteConfigurationUpdate, wasm_bindgen::JsError> {
     let config = config
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let setup = setup
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let result = {
-        NookOAuthRemoteConfigurationUpdate::new(
-            config
-                .with_provider_save_setup(setup)
-                .with_remote_ref(remote_ref),
-        )
-    };
+    let result = { NookOAuthRemoteConfigurationUpdate::new(config.with_remote_ref(remote_ref)) };
     Ok(result)
 }
 
@@ -440,22 +426,15 @@ pub fn update_oauth_remote_ref(
 )]
 pub fn staged_oauth_remote_storage_args(
     oauth_file: &tsify::Ts<nook_core::OAuthFileConfigData>,
-
-    setup: &tsify::Ts<ProviderSaveSetup>,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     let oauth_file = oauth_file
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
-    let setup = setup
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
             configuration: &StoredOAuthFileConfiguration::configured(oauth_file.clone()),
             file_name: &StoredOAuthRemoteFileName::Unresolved,
-            setup,
         })
         .project()?,
     ))
@@ -509,11 +488,11 @@ mod browser_tests {
     use nook_core::SharedGrantProviderOutcome;
     use nook_core::SharedStorageTargetSelection;
     use nook_core::{
-        GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
-        ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
-        StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-        StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+        OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, ReplicationType,
+        StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+        StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+        StoredOAuthRemoteFileName,
     };
     use serde::{Serialize, de::DeserializeOwned};
     use serde_wasm_bindgen::Serializer;
@@ -527,7 +506,6 @@ mod browser_tests {
     -> Result<(), JsError> {
         let config = OAuthFileConfigData::default();
         let config_wire = ProviderFixture::wire(&config)?;
-        let setup = ProviderFixture::wire(&ProviderSaveSetup::Existing)?;
         assert!(
             super::generate_password(&Ts::new_unchecked(
                 Option::<bool>::None.serialize(&Serializer::json_compatible())?
@@ -556,35 +534,17 @@ mod browser_tests {
         assert!(
             super::update_oauth_remote_ref(
                 &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?),
-                &setup,
                 "unchanged"
             )
             .is_err()
         );
         assert!(
-            super::update_oauth_remote_ref(
-                &config_wire,
-                &Ts::new_unchecked(Option::<bool>::None.serialize(&Serializer::json_compatible())?),
-                "unchanged"
-            )
-            .is_err()
-        );
-        assert!(
-            super::staged_oauth_remote_storage_args(
-                &Ts::new_unchecked(Option::<bool>::None.serialize(&Serializer::json_compatible())?),
-                &setup
-            )
-            .is_err()
-        );
-        assert!(
-            super::staged_oauth_remote_storage_args(
-                &config_wire,
-                &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?)
-            )
+            super::staged_oauth_remote_storage_args(&Ts::new_unchecked(
+                Option::<bool>::None.serialize(&Serializer::json_compatible())?
+            ))
             .is_err()
         );
         assert!(config_wire.to_rust()? == config);
-        assert!(setup.to_rust()? == ProviderSaveSetup::Existing);
         assert!(super::oauth_remote_storage_ref(&config_wire).is_ok());
         Ok(())
     }
@@ -629,7 +589,6 @@ mod browser_tests {
                         ),
                         file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
                         folder_id: StoredGoogleDriveFolder::FolderId("target-1".into()),
-                        drive_mode: GoogleDriveMode::Shared,
                         ..Default::default()
                     },
                 ),
@@ -647,9 +606,7 @@ mod browser_tests {
                     preset: OauthFilePreset::ICloud,
                     access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
                     file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
-                    drive_mode: GoogleDriveMode::Private,
                     folder_id: StoredGoogleDriveFolder::Root,
-                    icloud_mode: ICloudMode::Shared,
                     icloud_share_target: StoredICloudShareTarget::SharedTarget(
                         ICloudSharedTarget::new(
                             ICloudShareRole::Owner,
@@ -768,16 +725,12 @@ mod browser_tests {
 
         let oauth = OAuthFileConfigData::default();
         let remote = super::oauth_remote_storage_ref(&ProviderFixture::wire(&oauth)?)?;
-        // A private Drive row always has its own folder, pending until created.
-        assert_eq!(remote.value()?, "private-folder-v2:pending");
+        // A Drive row without its vault folder has no connect target.
+        assert!(remote.value().is_err());
         assert!(
-            super::update_oauth_remote_ref(
-                &ProviderFixture::wire(&oauth)?,
-                &ProviderFixture::wire(&ProviderSaveSetup::Existing)?,
-                "file-1"
-            )?
-            .config()
-            .is_ok()
+            super::update_oauth_remote_ref(&ProviderFixture::wire(&oauth)?, "file-1")?
+                .config()
+                .is_ok()
         );
         assert_eq!(
             super::staged_github_remote_storage_args("pat", "owner/repo")?.state(),
@@ -788,11 +741,7 @@ mod browser_tests {
             NookStagedStorageArgsState::Incomplete
         );
         assert_eq!(
-            super::staged_oauth_remote_storage_args(
-                &ProviderFixture::wire(&oauth)?,
-                &ProviderFixture::wire(&ProviderSaveSetup::Existing)?
-            )?
-            .state(),
+            super::staged_oauth_remote_storage_args(&ProviderFixture::wire(&oauth)?)?.state(),
             NookStagedStorageArgsState::Incomplete
         );
 
@@ -880,17 +829,6 @@ mod browser_tests {
             SharedGrantProviderOutcome::AuthorizationRequired
         ));
 
-        let updated_drive = ProviderFixture::decode(super::set_google_drive_provider_mode(
-            &ProviderFixture::wire(&OAuthFileConfigData::default())?,
-            &ProviderFixture::wire(&GoogleDriveMode::Shared)?,
-        )?)?;
-        assert_eq!(updated_drive.drive_mode, GoogleDriveMode::Shared);
-        let updated_icloud = ProviderFixture::decode(super::set_icloud_provider_mode(
-            &ProviderFixture::wire(&OAuthFileConfigData::default())?,
-            &ProviderFixture::wire(&ICloudMode::Shared)?,
-        )?)?;
-        assert_eq!(updated_icloud.icloud_mode, ICloudMode::Shared);
-
         let target = super::create_icloud_shared_storage_target(
             "owner",
             "zone",
@@ -946,15 +884,16 @@ mod browser_tests {
             &ProviderFixture::wire(&ProviderFixture::shared_oauth_provider())?,
             &architecture,
             "alice@example.test",
-            "target-1",
         )?;
         assert!(shared.is_shared_provider_grant());
-        let icloud_shared = super::enrollment_icloud_shared_provider_for_architecture(
+        assert_eq!(shared.shared_storage_target_id()?, "target-1");
+        let icloud_shared = super::enrollment_shared_provider_for_architecture(
             &ProviderFixture::wire(&ProviderFixture::shared_icloud_provider()?)?,
             &architecture,
-            "target-2",
+            "bob@example.test",
         )?;
         assert!(icloud_shared.is_shared_provider_grant());
+        assert_eq!(icloud_shared.shared_joiner_identity()?, "bob@example.test");
         Ok(())
     }
 }

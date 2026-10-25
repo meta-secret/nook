@@ -161,16 +161,15 @@ impl AuthProviderDatabase {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
     use nook_core::{
-        ActiveVaultScope, GoogleDriveMode, ProviderCredentialEncoding, ProviderSyncCheckpoint,
-        ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredGoogleDriveFolder, StoredGoogleDrivePrivateTarget, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+        ActiveVaultScope, ProviderCredentialEncoding, ProviderSyncCheckpoint, ProviderVaultScope,
+        StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
+        StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
+        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
     };
 
     use super::*;
-    use nook_core::{ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData};
+    use nook_core::{OAuthFileConfigData, OauthFilePreset, StorageProviderData};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -220,11 +219,8 @@ mod wasm_idb_tests {
                         file_id: StoredOAuthRemoteFileId::Unresolved,
                         file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
                         account_email: StoredOAuthAccountIdentity::Unknown,
-                        drive_mode: GoogleDriveMode::Private,
-                        folder_id: StoredGoogleDriveFolder::Root,
-                        drive_private_target: StoredGoogleDrivePrivateTarget::Pending,
-                        icloud_mode: ICloudMode::Private,
-                        icloud_share_target: StoredICloudShareTarget::Personal,
+                        folder_id: StoredGoogleDriveFolder::FolderId("vault-folder".to_owned()),
+                        icloud_share_target: StoredICloudShareTarget::Unbound,
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,

@@ -7,10 +7,9 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
  * Access tokens are short-lived (~1h); silent refresh uses requestAccessToken
  * while the user's Google session is still active.
  *
- * Scopes:
- * - Private provider mode: `drive.appdata` (hidden application data folder).
- * - Shared provider mode: `drive.file` for writes plus `drive.readonly` so a
- *   collaborator can read the owner-created folder and immutable event files.
+ * Scope: `drive.file` for writes plus `drive.readonly`, so every authorized
+ * account reads the vault folder and the immutable event files other accounts
+ * created there.
  */
 
 import type {
@@ -23,16 +22,12 @@ import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 
-export const DRIVE_APPDATA_SCOPE =
-  "https://www.googleapis.com/auth/drive.appdata";
-
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
 export enum GoogleDriveOAuthScope {
-  AppData = "appdata",
   Shared = "shared",
 }
 
@@ -81,6 +76,8 @@ type GoogleTokenClientConfig = {
 
 export type GoogleTokenPromptRequest = {
   readonly prompt: string;
+  /** The account Google preselects; empty lets the user choose. */
+  readonly login_hint: string;
 };
 
 type TokenClient = {
@@ -90,10 +87,13 @@ type TokenClient = {
 export type GoogleAccessTokenRequest = {
   readonly prompt: GoogleOAuthPrompt;
   readonly scope: GoogleDriveOAuthScope;
+  readonly accountHint: string;
 };
 
 export type GoogleSharedDriveAccessRequest = {
   readonly prompt: GoogleOAuthPrompt;
+  /** The authorized account an onboarding link names. */
+  readonly accountHint: string;
 };
 
 export type GoogleOAuthConfigurationUpdate = {
@@ -175,8 +175,6 @@ class GoogleOAuthSession {
     switch (scope) {
       case GoogleDriveOAuthScope.Shared:
         return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
-      case GoogleDriveOAuthScope.AppData:
-        return DRIVE_APPDATA_SCOPE;
     }
   }
 
@@ -281,13 +279,6 @@ class GoogleOAuthSession {
     }
   }
 
-  async initGoogleAuth(): Promise<
-    Result<GoogleOAuthInitializationOutcome, OAuthFailure>
-  > {
-    return (await this.tokenClientForScope(GoogleDriveOAuthScope.AppData)).map(
-      () => GoogleOAuthInitializationOutcome.Initialized,
-    );
-  }
   async initGoogleSharedDriveAuth(): Promise<
     Result<GoogleOAuthInitializationOutcome, OAuthFailure>
   > {
@@ -338,6 +329,7 @@ class GoogleOAuthSession {
       try {
         const promptRequest: GoogleTokenPromptRequest = {
           prompt: request.prompt,
+          login_hint: request.accountHint.trim(),
         };
         slot.client.requestAccessToken(promptRequest);
       } catch {
@@ -353,6 +345,7 @@ class GoogleOAuthSession {
     const accessRequest: GoogleAccessTokenRequest = {
       prompt: request.prompt,
       scope: GoogleDriveOAuthScope.Shared,
+      accountHint: request.accountHint,
     };
     return this.requestGoogleAccessToken(accessRequest);
   }
@@ -391,10 +384,9 @@ class GoogleOAuthSession {
     if (!this.isOAuthAccessTokenExpired(expiryAssessment)) return ok(config);
     const accessRequest: GoogleAccessTokenRequest = {
       prompt: GoogleOAuthPrompt.Default,
-      scope:
-        config.driveMode === "shared" || config.folderId.state === "folderId"
-          ? GoogleDriveOAuthScope.Shared
-          : GoogleDriveOAuthScope.AppData,
+      scope: GoogleDriveOAuthScope.Shared,
+      accountHint:
+        config.accountEmail.state === "email" ? config.accountEmail.value : "",
     };
     const refreshed = await this.requestGoogleAccessToken(accessRequest);
     return refreshed.andThen((tokens) => {

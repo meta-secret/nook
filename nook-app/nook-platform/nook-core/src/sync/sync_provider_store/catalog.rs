@@ -14,7 +14,7 @@ use crate::{
 
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
-    GithubSyncTarget, ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
+    GithubSyncTarget, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
     ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
     StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, SyncProviderTarget,
 };
@@ -208,14 +208,12 @@ impl StorageProviderData {
                     let preset = oauth.preset;
                     SyncProviderTarget::OauthFile(OauthFileSyncTarget {
                         preset,
-                        file_id: if preset == OauthFilePreset::ICloud
-                            && oauth.resolved_icloud_mode() == ICloudMode::Shared
-                        {
+                        file_id: if preset == OauthFilePreset::ICloud {
                             match &oauth.icloud_share_target {
                                 StoredICloudShareTarget::SharedTarget(target) => {
                                     StoredOAuthRemoteFileId::FileId(target.clone())
                                 }
-                                StoredICloudShareTarget::Personal => {
+                                StoredICloudShareTarget::Unbound => {
                                     StoredOAuthRemoteFileId::Unresolved
                                 }
                             }
@@ -369,10 +367,9 @@ mod tests {
     use std::slice;
 
     use crate::{
-        AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, GoogleDriveMode,
-        LocalFolderConfigData, OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels,
-        ProviderStorageDetailLabels, ProviderSyncCheckpoint, StorageProviderData,
-        StorageProviderType,
+        AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, LocalFolderConfigData,
+        OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels, ProviderStorageDetailLabels,
+        ProviderSyncCheckpoint, StorageProviderData, StorageProviderType,
     };
 
     use super::{
@@ -602,7 +599,7 @@ mod tests {
             .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "folder-a"));
 
         let mut private = OAuthCatalogFixture {
-            id: "drive-private",
+            id: "drive-personal",
             preset: OauthFilePreset::GoogleDrive,
             file_id: StoredOAuthRemoteFileId::Unresolved,
             file_name: "events",
@@ -611,10 +608,10 @@ mod tests {
         (match &mut private.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Ok(config),
             StoredOAuthFileConfiguration::NotApplicable => {
-                Err(IoError::other("private OAuth config must exist"))
+                Err(IoError::other("personal OAuth config must exist"))
             }
         })?
-        .drive_mode = GoogleDriveMode::Private;
+        .folder_id = StoredGoogleDriveFolder::FolderId("folder-personal".to_owned());
         let mut shared = OAuthCatalogFixture {
             id: "drive-shared",
             preset: OauthFilePreset::GoogleDrive,
@@ -628,7 +625,6 @@ mod tests {
                 Err(IoError::other("shared OAuth config must exist"))
             }
         })?;
-        shared_oauth.drive_mode = GoogleDriveMode::Shared;
         shared_oauth.folder_id = StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];
         assert!(matches!(DuplicateProviderSelection {
@@ -636,7 +632,7 @@ mod tests {
                 candidate: &private,
                 policy: DuplicateCandidatePolicy::IncludeAll
             }
-            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-private"));
+            .find(), DuplicateSyncProvider::Duplicate { provider } if provider.id == "drive-personal"));
         assert!(matches!(DuplicateProviderSelection {
                 providers: &providers,
                 candidate: &shared,

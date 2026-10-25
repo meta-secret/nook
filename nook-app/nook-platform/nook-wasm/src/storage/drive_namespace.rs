@@ -58,27 +58,11 @@ impl DriveNamespace<'_> {
     }
 
     fn parent_id(parent: &DriveEventParent) -> &str {
-        match parent {
-            DriveEventParent::AppDataFolder => "appDataFolder",
-            DriveEventParent::PrivateAppDataFolder { folder_id }
-            | DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
-        }
+        parent.folder_id.as_str()
     }
 
-    fn child_parent(parent: &DriveEventParent, folder_id: String) -> DriveEventParent {
-        match parent {
-            DriveEventParent::AppDataFolder | DriveEventParent::PrivateAppDataFolder { .. } => {
-                DriveEventParent::PrivateAppDataFolder { folder_id }
-            }
-            DriveEventParent::SharedFolder { .. } => DriveEventParent::SharedFolder { folder_id },
-        }
-    }
-
-    fn in_app_data(parent: &DriveEventParent) -> bool {
-        matches!(
-            parent,
-            DriveEventParent::AppDataFolder | DriveEventParent::PrivateAppDataFolder { .. }
-        )
+    fn child_parent(folder_id: String) -> DriveEventParent {
+        DriveEventParent { folder_id }
     }
 
     fn query(parent: &DriveEventParent, name: &str) -> String {
@@ -117,9 +101,6 @@ impl DriveNamespace<'_> {
                     ("fields", "nextPageToken,files(id,name,mimeType)"),
                     ("pageSize", "1000"),
                 ]);
-            if Self::in_app_data(self.parent) {
-                request = request.query(&[("spaces", "appDataFolder")]);
-            }
             if let Some(page) = page_token.as_deref() {
                 request = request.query(&[("pageToken", page)]);
             }
@@ -186,7 +167,7 @@ impl DriveNamespace<'_> {
         let query = format!(
             "name contains '{prefix}' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and '{escaped_parent}' in parents and trashed = false"
         );
-        let mut request = client
+        let request = client
             .get("https://www.googleapis.com/drive/v3/files")
             .header("Authorization", format!("Bearer {}", token.trim()))
             .query(&[
@@ -194,9 +175,6 @@ impl DriveNamespace<'_> {
                 ("fields", "files(id,name,mimeType)"),
                 ("pageSize", "1000"),
             ]);
-        if Self::in_app_data(parent) {
-            request = request.query(&[("spaces", "appDataFolder")]);
-        }
         let response = request.send().await?;
         if !response.status().is_success() {
             return Err(NookError::Drive(format!(
@@ -256,13 +234,13 @@ impl DriveNamespace<'_> {
         let tag = self.location.namespace_tag();
         let name = Self::folder_name(&tag);
         if let Some(folder_id) = Self::select(&self.list(&name).await?)? {
-            return Ok(Self::child_parent(self.parent, folder_id));
+            return Ok(Self::child_parent(folder_id));
         }
         let created = self.create(&name).await?;
         // A second lookup catches a concurrent creation before any write picks
         // one of two ambiguous parents.
         let folder_id = Self::select(&self.list(&name).await?)?.unwrap_or(created);
-        Ok(Self::child_parent(self.parent, folder_id))
+        Ok(Self::child_parent(folder_id))
     }
 }
 
@@ -286,20 +264,10 @@ mod tests {
             DriveNamespace::folder_name(&tag),
             "nook-identity-idn_abcdefghijk"
         );
-        let shared = DriveEventParent::SharedFolder {
-            folder_id: "shared-root".to_owned(),
-        };
+        let shared = DriveEventParent::shared_folder_id("shared-root");
         assert_eq!(
-            DriveNamespace::child_parent(&shared, "child".to_owned()),
-            DriveEventParent::SharedFolder {
-                folder_id: "child".to_owned()
-            }
-        );
-        assert_eq!(
-            DriveNamespace::child_parent(&DriveEventParent::AppDataFolder, "child".to_owned()),
-            DriveEventParent::PrivateAppDataFolder {
-                folder_id: "child".to_owned()
-            }
+            DriveNamespace::child_parent("child".to_owned()),
+            DriveEventParent::shared_folder_id("child")
         );
         assert_eq!(
             DriveNamespace::query(&shared, "nook-o'neil"),
@@ -353,24 +321,19 @@ mod fetch_tests {
         ])?;
         let resolved = DriveNamespace {
             token: "drive-token",
-            parent: &DriveEventParent::AppDataFolder,
+            parent: &DriveEventParent::shared_folder_id("vault-folder"),
             location: &location,
         }
         .resolve()
         .await?;
-        assert_eq!(
-            resolved,
-            DriveEventParent::PrivateAppDataFolder {
-                folder_id: "existing".to_owned()
-            }
-        );
+        assert_eq!(resolved, DriveEventParent::shared_folder_id("existing"));
         let calls = stub.calls();
         assert_eq!(calls.len(), 2);
         assert!(calls[1].contains("pageToken=page-2"));
         assert!(
             calls
                 .iter()
-                .all(|call| call.contains("spaces=appDataFolder"))
+                .all(|call| !call.contains("spaces=appDataFolder"))
         );
         Ok(())
     }
@@ -386,9 +349,7 @@ mod fetch_tests {
     async fn resolve_creates_a_missing_folder_and_rechecks_it() -> anyhow::Result<()> {
         let location = location()?;
         let name = DriveNamespace::folder_name(&location.namespace_tag());
-        let shared = DriveEventParent::SharedFolder {
-            folder_id: "shared-root".to_owned(),
-        };
+        let shared = DriveEventParent::shared_folder_id("shared-root");
         let stub = FetchStub::install(vec![
             FetchRoute::ok("GET", LIST, &listing(&[])),
             FetchRoute::ok("POST", FILES, &folder("created", &name)),
@@ -401,12 +362,7 @@ mod fetch_tests {
         }
         .resolve()
         .await?;
-        assert_eq!(
-            resolved,
-            DriveEventParent::SharedFolder {
-                folder_id: "created".to_owned()
-            }
-        );
+        assert_eq!(resolved, DriveEventParent::shared_folder_id("created"));
         assert_eq!(stub.calls().len(), 3);
 
         drop(stub);
@@ -440,7 +396,7 @@ mod fetch_tests {
         let name = DriveNamespace::folder_name(&location.namespace_tag());
         let namespace = DriveNamespace {
             token: "drive-token",
-            parent: &DriveEventParent::AppDataFolder,
+            parent: &DriveEventParent::shared_folder_id("vault-folder"),
             location: &location,
         };
         let stub = FetchStub::install(vec![FetchRoute::ok(
@@ -483,19 +439,19 @@ mod fetch_tests {
         )])?;
         let ids = DriveNamespace::list_ids(
             "drive-token",
-            &DriveEventParent::AppDataFolder,
+            &DriveEventParent::shared_folder_id("vault-folder"),
             EventLogNamespaceKind::Vault,
         )
         .await?;
         assert_eq!(ids, ["store_a", "store_b"]);
-        assert!(stub.calls()[0].contains("spaces=appDataFolder"));
+        assert!(stub.calls()[0].contains("vault-folder"));
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", LIST, 401)])?;
         assert!(
             DriveNamespace::list_ids(
                 "drive-token",
-                &DriveEventParent::AppDataFolder,
+                &DriveEventParent::shared_folder_id("vault-folder"),
                 EventLogNamespaceKind::Identity,
             )
             .await
@@ -517,7 +473,7 @@ mod fetch_tests {
         let name = DriveNamespace::folder_name(&location.namespace_tag());
         let namespace = DriveNamespace {
             token: "drive-token",
-            parent: &DriveEventParent::AppDataFolder,
+            parent: &DriveEventParent::shared_folder_id("vault-folder"),
             location: &location,
         };
         let stub = FetchStub::install(vec![

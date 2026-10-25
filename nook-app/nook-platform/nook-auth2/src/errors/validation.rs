@@ -141,6 +141,21 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_INVALID)]
     SharedStorageTargetInvalid,
 
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_MISSING)]
+    AuthorizedAccountMissing,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_READ_ONLY)]
+    AuthorizedAccountReadOnly,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_EXISTS)]
+    AuthorizedAccountExists,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_OWNER)]
+    AuthorizedAccountOwner,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH)]
+    JoinerAccountMismatch,
+
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,
 

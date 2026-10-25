@@ -143,36 +143,24 @@ pub struct IdentityVaultDekGrant {
     pub members_key_ciphertext: AgeArmoredCiphertext,
 }
 
-/// Google Drive routing for an identity mount. Each installation signs in
-/// with its own Google account; no OAuth token enters the control log.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "mode", rename_all = "kebab-case")]
-pub enum DriveMountTarget {
-    Private { folder_name: String },
-    Shared { folder_id: String },
-}
-
-/// iCloud routing for an identity mount. Credential-free by construction.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "mode", rename_all = "kebab-case")]
-pub enum ICloudMountTarget {
-    Private,
-    Shared { share_target: String },
-}
-
 /// Credential-free replication target of an identity mount.
+///
+/// Google Drive and iCloud mounts are always shared: each installation signs
+/// in with its own authorized account, and no OAuth token enters the log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum IdentityMountTarget {
     Github {
         repository: String,
     },
+    /// The vault My Drive folder whose permissions list authorized accounts.
     GoogleDrive {
-        drive: DriveMountTarget,
+        folder_id: String,
     },
+    /// The `CloudKit` share whose participants are authorized accounts.
     #[serde(rename = "icloud")]
     ICloud {
-        icloud: ICloudMountTarget,
+        share_target: String,
     },
     /// Each installation chooses its own directory; only the name replicates.
     LocalFolder {

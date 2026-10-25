@@ -1,4 +1,4 @@
-//! iCloud `CloudKit` private/shared-database adapter for immutable event records.
+//! iCloud `CloudKit` shared-zone adapter for immutable event records.
 
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
@@ -12,12 +12,12 @@ use std::collections;
 use std::str;
 
 use crate::NookError;
-use nook_core::{EventId, EventLogLocation, ICloudEventTarget, ICloudShareRole};
+use nook_core::{EventId, EventLogLocation, ICloudShareRole, ICloudSharedTarget};
 use serde::Serialize;
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
-    pub(crate) target: &'a ICloudEventTarget,
+    pub(crate) target: &'a ICloudSharedTarget,
     /// The identity log or vault these records belong to.
     pub(crate) location: &'a EventLogLocation,
 }
@@ -29,7 +29,7 @@ mod wire;
 use wire::{
     EventIdentity, FieldText, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage,
     ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
-    QueryCompletion, QueryContinuation, RecordLookup, ZoneSelection,
+    QueryCompletion, QueryContinuation, RecordLookup,
 };
 #[cfg(test)]
 use wire::{ICloudFieldValue, ICloudRecord, RecordFields};
@@ -54,40 +54,38 @@ const ICLOUD_EVENT_ID_FIELD: &str = "event_id";
 const ICLOUD_LOCATION_FIELD: &str = "location";
 const ICLOUD_LOG_BODY_PREVIEW_CHARS: usize = 2000;
 
+/// An owner share every adapter test routes through.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+fn owner_share_fixture() -> Result<ICloudSharedTarget, nook_core::ValidationError> {
+    ICloudSharedTarget::new(ICloudShareRole::Owner, "zone", "owner", "root", "guid")
+}
+
 struct CloudKitRecordQuery<'a> {
     web_auth_token: &'a str,
-    target: &'a ICloudEventTarget,
+    target: &'a ICloudSharedTarget,
     record_name: &'a str,
 }
 impl ICloudEventStore<'_> {
-    fn icloud_database_url(target: &ICloudEventTarget, path: &str) -> String {
-        let database = match target {
-            ICloudEventTarget::Private
-            | ICloudEventTarget::Shared(nook_core::ICloudSharedTarget {
-                role: ICloudShareRole::Owner,
-                ..
-            }) => "private",
-            ICloudEventTarget::Shared(nook_core::ICloudSharedTarget {
-                role: ICloudShareRole::Participant,
-                ..
-            }) => "shared",
+    /// The share owner reaches its zone through its private database; every
+    /// participant reaches it through its shared database.
+    fn icloud_database_url(target: &ICloudSharedTarget, path: &str) -> String {
+        let database = match target.role {
+            ICloudShareRole::Owner => "private",
+            ICloudShareRole::Participant => "shared",
         };
         format!(
             "https://api.apple-cloudkit.com/database/1/{ICLOUD_CONTAINER_ID}/{ICLOUD_ENVIRONMENT}/{database}/{path}"
         )
     }
 
-    fn icloud_zone_id(target: &ICloudEventTarget) -> ZoneSelection {
-        match target {
-            ICloudEventTarget::Private => ZoneSelection::DefaultZone,
-            ICloudEventTarget::Shared(shared) => ZoneSelection::Named(ICloudZone {
-                zone_name: shared.zone_name.clone(),
-                owner_record_name: shared.owner_record_name.clone(),
-            }),
+    fn icloud_zone_id(target: &ICloudSharedTarget) -> ICloudZone {
+        ICloudZone {
+            zone_name: target.zone_name.clone(),
+            owner_record_name: target.owner_record_name.clone(),
         }
     }
 
-    fn with_icloud_zone<T: Serialize>(payload: T, target: &ICloudEventTarget) -> ICloudRequest<T> {
+    fn with_icloud_zone<T: Serialize>(payload: T, target: &ICloudSharedTarget) -> ICloudRequest<T> {
         ICloudRequest {
             payload,
             zone: Self::icloud_zone_id(target),
@@ -340,17 +338,17 @@ mod tests {
     use nook_core::ICloudSharedTarget;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    struct SharedTargetFixture(ICloudEventTarget);
+    struct SharedTargetFixture(ICloudSharedTarget);
 
     impl SharedTargetFixture {
         fn new(role: ICloudShareRole) -> anyhow::Result<Self> {
-            Ok(Self(ICloudEventTarget::Shared(ICloudSharedTarget::new(
+            Ok(Self(ICloudSharedTarget::new(
                 role,
                 "shared-zone",
                 "owner-record",
                 "shared-root",
                 "share-guid",
-            )?)))
+            )?))
         }
     }
 
@@ -363,10 +361,6 @@ mod tests {
         )
     )]
     fn shared_database_scope_depends_on_account_role() -> anyhow::Result<()> {
-        assert!(
-            ICloudEventStore::icloud_database_url(&ICloudEventTarget::Private, "records/query")
-                .contains("/private/records/query")
-        );
         assert!(
             ICloudEventStore::icloud_database_url(
                 &SharedTargetFixture::new(ICloudShareRole::Owner)?.0,
@@ -395,15 +389,8 @@ mod tests {
     fn icloud_helpers_cover_digest_scope_query_and_record_projection() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
 
-        let private = ICloudEventTarget::Private;
-        assert_eq!(
-            ICloudEventStore::icloud_zone_id(&private),
-            ZoneSelection::DefaultZone
-        );
         let shared = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
-        let ZoneSelection::Named(zone) = ICloudEventStore::icloud_zone_id(&shared) else {
-            anyhow::bail!("missing shared zone")
-        };
+        let zone = ICloudEventStore::icloud_zone_id(&shared);
         assert_eq!(zone.zone_name, "shared-zone");
         assert_eq!(zone.owner_record_name, "owner-record");
         let zoned = ICloudEventStore::with_icloud_zone(
@@ -414,16 +401,7 @@ mod tests {
             },
             &shared,
         );
-        assert_eq!(zoned.zone, ZoneSelection::Named(zone));
-        let private_request = ICloudEventStore::with_icloud_zone(
-            ICloudLookup {
-                records: [ICloudRecordReference {
-                    record_name: "record".to_owned(),
-                }],
-            },
-            &private,
-        );
-        assert!(matches!(private_request.zone, ZoneSelection::DefaultZone));
+        assert_eq!(zoned.zone, zone);
 
         let query = ICloudEventStore::icloud_auth_query("  web-token  ");
         assert_eq!(query[0].0, "ckAPIToken");
@@ -494,7 +472,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn empty_icloud_token_is_rejected_before_network_access() -> anyhow::Result<()> {
-        let target = ICloudEventTarget::Private;
+        let target = super::owner_share_fixture()?;
         let location = EventLogLocation::Vault(nook_core::StoreId::parse("store_abcdefghijk")?);
         let store = ICloudEventStore {
             web_auth_token: "  ",
@@ -564,7 +542,7 @@ mod fetch_tests {
         ])?;
         let store = ICloudEventStore {
             web_auth_token: "web-token",
-            target: &ICloudEventTarget::Private,
+            target: &super::owner_share_fixture()?,
             location: &location,
         };
         assert_eq!(
@@ -591,7 +569,7 @@ mod fetch_tests {
         let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
         let store = ICloudEventStore {
             web_auth_token: "web-token",
-            target: &ICloudEventTarget::Private,
+            target: &super::owner_share_fixture()?,
             location: &location,
         };
         let wanted = event_id('A')?;

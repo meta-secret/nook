@@ -256,11 +256,6 @@ pub const ARCHITECTURE_MODES_SENTINEL_UNLOCK_START: &str =
     "architecture_modes.sentinel_unlock_start";
 pub const ARCHITECTURE_MODES_SENTINEL_UNLOCK_TITLE: &str =
     "architecture_modes.sentinel_unlock_title";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS: &str =
-    "architecture_modes.shared_grant_manual_instructions";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS: &str = "architecture_modes.shared_grant_success";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED: &str =
-    "architecture_modes.shared_grant_unsupported";
 pub const ARCHITECTURE_MODES_VAULT_TYPE_SENTINEL_DESCRIPTION: &str =
     "architecture_modes.vault_type_sentinel_description";
 pub const ARCHITECTURE_MODES_VAULT_TYPE_SENTINEL_TITLE: &str =
@@ -396,6 +391,29 @@ pub const AUTH_STORAGE_SYNC_SETUP_DESC: &str = "auth_storage.sync_setup_desc";
 pub const AUTH_STORAGE_SYNC_STORE_ID_MISMATCH: &str = "auth_storage.sync_store_id_mismatch";
 pub const AUTH_STORAGE_SYNC_UP_TO_DATE: &str = "auth_storage.sync_up_to_date";
 pub const AUTH_STORAGE_THIS_DEVICE: &str = "auth_storage.this_device";
+pub const AUTHORIZED_ACCOUNTS_ADD: &str = "authorized_accounts.add";
+pub const AUTHORIZED_ACCOUNTS_ADD_FAILED: &str = "authorized_accounts.add_failed";
+pub const AUTHORIZED_ACCOUNTS_ADD_LABEL: &str = "authorized_accounts.add_label";
+pub const AUTHORIZED_ACCOUNTS_ADD_PLACEHOLDER: &str = "authorized_accounts.add_placeholder";
+pub const AUTHORIZED_ACCOUNTS_ADDING: &str = "authorized_accounts.adding";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_DESCRIPTION: &str = "authorized_accounts.drive_description";
+pub const AUTHORIZED_ACCOUNTS_EMPTY: &str = "authorized_accounts.empty";
+pub const AUTHORIZED_ACCOUNTS_ICLOUD_DESCRIPTION: &str = "authorized_accounts.icloud_description";
+pub const AUTHORIZED_ACCOUNTS_LOAD_FAILED: &str = "authorized_accounts.load_failed";
+pub const AUTHORIZED_ACCOUNTS_LOADING: &str = "authorized_accounts.loading";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_FAILED: &str = "authorized_accounts.manage_failed";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_ICLOUD: &str = "authorized_accounts.manage_icloud";
+pub const AUTHORIZED_ACCOUNTS_PICK_DESCRIPTION: &str = "authorized_accounts.pick_description";
+pub const AUTHORIZED_ACCOUNTS_REFRESH: &str = "authorized_accounts.refresh";
+pub const AUTHORIZED_ACCOUNTS_REMOVE: &str = "authorized_accounts.remove";
+pub const AUTHORIZED_ACCOUNTS_REMOVE_FAILED: &str = "authorized_accounts.remove_failed";
+pub const AUTHORIZED_ACCOUNTS_ROLE_OWNER: &str = "authorized_accounts.role_owner";
+pub const AUTHORIZED_ACCOUNTS_ROLE_READER: &str = "authorized_accounts.role_reader";
+pub const AUTHORIZED_ACCOUNTS_ROLE_WRITER: &str = "authorized_accounts.role_writer";
+pub const AUTHORIZED_ACCOUNTS_SIGN_IN_REQUIRED: &str = "authorized_accounts.sign_in_required";
+pub const AUTHORIZED_ACCOUNTS_STATUS_INVITED: &str = "authorized_accounts.status_invited";
+pub const AUTHORIZED_ACCOUNTS_TARGET_REQUIRED: &str = "authorized_accounts.target_required";
+pub const AUTHORIZED_ACCOUNTS_TITLE: &str = "authorized_accounts.title";
 pub const BITWARDEN_IMPORT_BUTTON: &str = "bitwarden_import.button";
 pub const BITWARDEN_IMPORT_DESCRIPTION: &str = "bitwarden_import.description";
 pub const BITWARDEN_IMPORT_EXPORT_HINT: &str = "bitwarden_import.export_hint";
@@ -678,6 +696,14 @@ pub const ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID: &str =
     "errors.validation.authenticator_secret_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID: &str =
     "errors.validation.authenticator_uri_invalid";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_EXISTS: &str =
+    "errors.validation.authorized_account_exists";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_MISSING: &str =
+    "errors.validation.authorized_account_missing";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_OWNER: &str =
+    "errors.validation.authorized_account_owner";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_READ_ONLY: &str =
+    "errors.validation.authorized_account_read_only";
 pub const ERRORS_VALIDATION_BIP39_EMPTY: &str = "errors.validation.bip39_empty";
 pub const ERRORS_VALIDATION_BIP39_INVALID: &str = "errors.validation.bip39_invalid";
 pub const ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID: &str =
@@ -717,6 +743,8 @@ pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED: &str =
     "errors.validation.international_account_iban_required";
 pub const ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET: &str =
     "errors.validation.invalid_sentinel_share_set";
+pub const ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH: &str =
+    "errors.validation.joiner_account_mismatch";
 pub const ERRORS_VALIDATION_LOCAL_DATA_CHANGED_IN_ANOTHER_TAB: &str =
     "errors.validation.local_data_changed_in_another_tab";
 pub const ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY: &str =
@@ -2018,10 +2046,6 @@ pub const ONBOARD_DEVICE_SENTINEL_STEP_APPROVE: &str = "onboard_device.sentinel_
 pub const ONBOARD_DEVICE_SENTINEL_STEP_CONNECT: &str = "onboard_device.sentinel_step_connect";
 pub const ONBOARD_DEVICE_SENTINEL_TITLE: &str = "onboard_device.sentinel_title";
 pub const ONBOARD_DEVICE_SHARE_PASSWORD: &str = "onboard_device.share_password";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_HINT: &str = "onboard_device.shared_identity_hint";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_LABEL: &str = "onboard_device.shared_identity_label";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_PLACEHOLDER: &str =
-    "onboard_device.shared_identity_placeholder";
 pub const ONBOARD_DEVICE_SHARED_IDENTITY_REQUIRED: &str = "onboard_device.shared_identity_required";
 pub const ONBOARD_DEVICE_SYNC_PROVIDER: &str = "onboard_device.sync_provider";
 pub const ONBOARD_DEVICE_TITLE: &str = "onboard_device.title";
@@ -2121,8 +2145,6 @@ pub const PROVIDER_SETUP_CREATE_TOKEN_GITHUB: &str = "provider_setup.create_toke
 pub const PROVIDER_SETUP_DRIVE_EVENT_LOG_DESC: &str = "provider_setup.drive_event_log_desc";
 pub const PROVIDER_SETUP_DRIVE_FILE_NAME: &str = "provider_setup.drive_file_name";
 pub const PROVIDER_SETUP_DRIVE_FOLDER_NAME: &str = "provider_setup.drive_folder_name";
-pub const PROVIDER_SETUP_DRIVE_SHARED_EVENT_LOG_DESC: &str =
-    "provider_setup.drive_shared_event_log_desc";
 pub const PROVIDER_SETUP_EVENT_LOG_DESC: &str = "provider_setup.event_log_desc";
 pub const PROVIDER_SETUP_GITHUB_CONNECTION_SUBTITLE: &str =
     "provider_setup.github_connection_subtitle";
@@ -2130,22 +2152,8 @@ pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_MODE: &str = "provider_setup.google_drive_mode";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_PRIVATE: &str = "provider_setup.google_drive_private";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_PRIVATE_DESC: &str =
-    "provider_setup.google_drive_private_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED: &str = "provider_setup.google_drive_shared";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED_DESC: &str = "provider_setup.google_drive_shared_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED_MODE_DESC: &str =
-    "provider_setup.google_drive_shared_mode_desc";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_DESC: &str =
-    "provider_setup.google_shared_account_desc";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_EMAIL: &str =
-    "provider_setup.google_shared_account_email";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_PLACEHOLDER: &str =
-    "provider_setup.google_shared_account_placeholder";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_CONNECT_FAILED: &str =
     "provider_setup.google_shared_connect_failed";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE: &str = "provider_setup.google_shared_create";
@@ -2186,13 +2194,9 @@ pub const PROVIDER_SETUP_ICLOUD_CONNECTION_SUBTITLE: &str =
     "provider_setup.icloud_connection_subtitle";
 pub const PROVIDER_SETUP_ICLOUD_DESC: &str = "provider_setup.icloud_desc";
 pub const PROVIDER_SETUP_ICLOUD_EVENT_LOG_DESC: &str = "provider_setup.icloud_event_log_desc";
-pub const PROVIDER_SETUP_ICLOUD_MODE: &str = "provider_setup.icloud_mode";
 pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
     "provider_setup.icloud_oauth_unconfigured";
 pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
-pub const PROVIDER_SETUP_ICLOUD_PRIVATE: &str = "provider_setup.icloud_private";
-pub const PROVIDER_SETUP_ICLOUD_PRIVATE_DESC: &str = "provider_setup.icloud_private_desc";
-pub const PROVIDER_SETUP_ICLOUD_SHARED: &str = "provider_setup.icloud_shared";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECT_FAILED: &str =
     "provider_setup.icloud_shared_connect_failed";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECTED: &str = "provider_setup.icloud_shared_connected";
@@ -2204,7 +2208,6 @@ pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_DESC: &str =
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_FAILED: &str =
     "provider_setup.icloud_shared_create_failed";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATED: &str = "provider_setup.icloud_shared_created";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_DESC: &str = "provider_setup.icloud_shared_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_IDENTIFIER_MISSING: &str =
     "provider_setup.icloud_shared_identifier_missing";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_JOIN: &str = "provider_setup.icloud_shared_join";
@@ -2216,7 +2219,6 @@ pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_REQUIRED: &str =
     "provider_setup.icloud_shared_link_required";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_LOCATION_MISSING: &str =
     "provider_setup.icloud_shared_location_missing";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_MODE_DESC: &str = "provider_setup.icloud_shared_mode_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_SIGN_IN_FIRST: &str =
     "provider_setup.icloud_shared_sign_in_first";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_READY: &str =

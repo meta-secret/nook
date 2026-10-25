@@ -265,20 +265,20 @@ fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Resul
         reason = "the test intentionally observes and then inspects the mismatch issue"
     )
 )]
-fn private_drive_folder_target_keeps_store_id_mismatch_fail_closed() -> anyhow::Result<()> {
+fn drive_vault_folder_target_keeps_store_id_mismatch_fail_closed() -> anyhow::Result<()> {
     let mut manager = NookVaultManager::new();
     manager.storage.mode = StorageMode::GoogleDrive;
-    manager.storage.drive_event_parent = nook_core::DriveEventParent::PrivateAppDataFolder {
-        folder_id: "stable-private-folder".to_owned(),
-    };
-    manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
+    manager.storage.drive_event_parent = crate::manager::PreparedDriveFolder::Folder(
+        nook_core::DriveEventParent::shared_folder_id("stable-vault-folder"),
+    );
+    manager.storage.remote_ref = "stable-vault-folder".to_owned();
     let classification = RemoteEventLogClassification::DifferentStore {
         local_store_id: "store_local12345".to_owned(),
         remote_store_id: "store_remote1234".to_owned(),
     };
 
     let Err(error) = manager.guard_remote_event_log_classification("Drive", &classification) else {
-        anyhow::bail!("a private Drive target must not bypass the store_id guard");
+        anyhow::bail!("a Drive vault folder must not bypass the store_id guard");
     };
     assert!(matches!(
         error,

@@ -5,7 +5,6 @@ import initNookWasm, {
   OnboardingType,
   ReplicationType,
   VaultType,
-  enrollment_icloud_shared_provider_for_architecture,
   enrollment_provider_for_architecture,
   enrollment_shared_provider_for_architecture,
 } from '$app-wasm'
@@ -46,7 +45,7 @@ beforeAll(async () => {
   await initNookWasm()
 })
 
-function googleDriveProvider(): StorageProvider {
+function googleDriveProvider(folderId = ''): StorageProvider {
   return {
     ...providerPersistenceDefaults(),
     id: 'drive-1',
@@ -60,6 +59,7 @@ function googleDriveProvider(): StorageProvider {
       accessToken: storedOAuthCredential('ya29.test'),
       fileName: storedOAuthRemoteFileName('nook.yaml'),
       accountEmail: storedOAuthAccountEmail('alex@example.com'),
+      ...(folderId ? { folderId: storedGoogleDriveFolder(folderId) } : {}),
     }),
     syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-08T00:00:00.000Z',
@@ -94,8 +94,6 @@ function sharedICloudProvider(): StorageProvider {
         fileName: DEFAULT_DRIVE_BACKUP_NAME,
       }),
       accessToken: storedOAuthCredential('cloudkit-web-token'),
-      driveMode: 'private',
-      iCloudMode: 'shared',
       iCloudShareTarget: storedICloudShareTarget(ICLOUD_SHARED_TARGET),
     }),
     syncCheckpoint: { state: 'neverSynced' },
@@ -103,10 +101,10 @@ function sharedICloudProvider(): StorageProvider {
   }
 }
 
-function privateICloudProvider(): StorageProvider {
+function unsharedICloudProvider(): StorageProvider {
   return {
     ...sharedICloudProvider(),
-    id: 'icloud-private-1',
+    id: 'icloud-unshared-1',
     oauthFile: configuredOAuthFile({
       ...defaultOAuthFileConfig({
         preset: 'icloud',
@@ -159,9 +157,9 @@ describe('vault architecture adapter', () => {
     }
   })
 
-  test('private provider enrollment exposes the credential-transfer mode', () => {
+  test('the companion handoff transfers the Drive session for the vault folder', () => {
     const enrollmentProvider = enrollment_provider_for_architecture(
-      googleDriveProvider(),
+      googleDriveProvider('vault-folder'),
       default_vault_architecture(),
     )
 
@@ -304,8 +302,8 @@ describe('vault architecture adapter', () => {
     ).toEqual({ kind: CompatibleProviderSelectionKind.Unavailable })
   })
 
-  test('private iCloud rows require shared setup before shared onboarding', () => {
-    const privateICloud = privateICloudProvider()
+  test('iCloud rows without a share cannot carry shared onboarding', () => {
+    const privateICloud = unsharedICloudProvider()
     const sharedICloud = sharedICloudProvider()
 
     expect(
@@ -345,15 +343,13 @@ describe('vault architecture adapter', () => {
         provider,
         architecture,
         'joiner@example.com',
-        '',
       ),
     ).toThrow(/shared_storage_target_required/)
 
     const enrollmentProvider = enrollment_shared_provider_for_architecture(
-      provider,
+      googleDriveProvider('shared-folder-abc'),
       architecture,
       'joiner@example.com',
-      'shared-folder-abc',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
@@ -362,7 +358,7 @@ describe('vault architecture adapter', () => {
     expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
   })
 
-  test('shared Drive provider mode overrides personal credential transfer', () => {
+  test('Drive invites never transfer credentials, even in a personal vault', () => {
     const architecture = default_vault_architecture()
     const baseProvider = googleDriveProvider()
     const baseConfiguration = decodeStoredOAuthFileConfiguration(
@@ -378,7 +374,6 @@ describe('vault architecture adapter', () => {
       ...baseProvider,
       oauthFile: configuredOAuthFile({
         ...baseConfiguration.config,
-        driveMode: 'shared',
         folderId: storedGoogleDriveFolder('persisted-shared-folder'),
       }),
     }
@@ -390,7 +385,6 @@ describe('vault architecture adapter', () => {
       provider,
       architecture,
       'joiner@example.com',
-      'persisted-shared-folder',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
@@ -410,7 +404,7 @@ describe('vault architecture adapter', () => {
     ).toThrow()
   })
 
-  test('shared iCloud enrollment sends only the CloudKit target', () => {
+  test('shared iCloud enrollment sends the CloudKit target and the invited account', () => {
     const provider = sharedICloudProvider()
     const architecture = default_vault_architecture()
     const capability = provider_replication_capability(provider)
@@ -421,18 +415,17 @@ describe('vault architecture adapter', () => {
     expect(provider_onboarding_type(provider, architecture)).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    const enrollmentProvider =
-      enrollment_icloud_shared_provider_for_architecture(
-        provider,
-        architecture,
-        ICLOUD_SHARED_TARGET,
-      )
+    const enrollmentProvider = enrollment_shared_provider_for_architecture(
+      provider,
+      architecture,
+      'member@icloud.com',
+    )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,
     )
     expect(enrollmentProvider.oauthPreset).toBe('icloud')
-    expect(() => enrollmentProvider.sharedJoinerIdentity).toThrow()
+    expect(enrollmentProvider.sharedJoinerIdentity).toBe('member@icloud.com')
     expect(enrollmentProvider.sharedStorageTargetId).toBe(ICLOUD_SHARED_TARGET)
     expect(() => enrollmentProvider.oauthAccessToken).toThrow()
   })

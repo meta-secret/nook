@@ -108,8 +108,8 @@ pub(super) mod tests {
         drive_events::DriveEventStore, github_events::GitHubEventStore, icloud::ICloudEventStore,
     };
     use nook_core::{
-        DriveEventParent, Ed25519Signature, GenesisImportPayload, ICloudEventTarget, IsoTimestamp,
-        SigningIdentity, StoreId, ValidationError,
+        DriveEventParent, Ed25519Signature, GenesisImportPayload, ICloudShareRole,
+        ICloudSharedTarget, IsoTimestamp, SigningIdentity, StoreId, ValidationError,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -234,16 +234,18 @@ pub(super) mod tests {
                 "store_abcdefghijk",
             )?),
         };
+        let share =
+            ICloudSharedTarget::new(ICloudShareRole::Owner, "zone", "owner", "root", "guid")?;
         let drive = DriveEventStore {
             token: "",
-            parent: &DriveEventParent::AppDataFolder,
+            parent: &DriveEventParent::shared_folder_id("vault-folder"),
             location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
                 "store_abcdefghijk",
             )?),
         };
         let cloud = ICloudEventStore {
             web_auth_token: "fixture-token",
-            target: &ICloudEventTarget::Private,
+            target: &share,
             location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
                 "store_abcdefghijk",
             )?),
@@ -281,7 +283,7 @@ pub(super) mod tests {
         }
         let no_token = ICloudEventStore {
             web_auth_token: " ",
-            target: &ICloudEventTarget::Private,
+            target: &share,
             location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
                 "store_abcdefghijk",
             )?),
