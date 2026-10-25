@@ -548,8 +548,9 @@ mod tests {
                 "access-token".into(),
                 OAuthRefreshCredential::Token("refresh-token".into()),
                 OAuthTokenExpiry::ExpiresAt("2030-01-01".into()),
+                // A companion code carries the shared Drive folder in the file slot.
                 OAuthRemoteFile::Identified {
-                    file_id: "file-1".into(),
+                    file_id: "shared:folder-1".into(),
                     file_name: "vault.json".into(),
                 },
                 OAuthAccountIdentity::Email("owner@example.com".into()),
@@ -572,9 +573,10 @@ mod tests {
             config.expires_at,
             StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
         );
+        assert_eq!(config.file_id, StoredOAuthRemoteFileId::Unresolved);
         assert_eq!(
-            config.file_id,
-            StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
+            config.folder_id,
+            nook_core::StoredGoogleDriveFolder::FolderId(("folder-1").to_owned())
         );
         assert_eq!(
             config.file_name,
