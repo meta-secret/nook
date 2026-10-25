@@ -86,7 +86,18 @@ test("a page on the extension's key switches to this browser's passkey to add a 
     "Nook is using the key your browser extension holds, and that key hasn't joined",
   )
   const useBrowserKey = page.getByTestId('add-device-use-browser-key')
-  await expect(useBrowserKey).toBeVisible()
+  // What offers the switch: the extension's key in use, a passkey on this
+  // browser, and the open vault to return to.
+  const offer = await page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('vault-unavailable')
+    return {
+      keySource: vault.identityKeySource,
+      lockedStatus: vault.deviceProtectionLockedStatus,
+      activeVault: vault.activeVault.kind,
+    }
+  })
+  await expect(useBrowserKey, JSON.stringify(offer)).toBeVisible()
   await snapshot(page, '1-extension-key-not-member')
 
   // Only this page locks; this browser's passkey reopens the same vault and
