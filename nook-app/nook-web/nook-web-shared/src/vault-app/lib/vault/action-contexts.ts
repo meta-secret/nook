@@ -186,7 +186,7 @@ type ProviderStateFields = Pick<
 
 type ProviderRuntimeFields = Pick<
   VaultRuntimeState,
-  "clientPolicy" | "errorMsg" | "isVerifying"
+  "clientPolicy" | "errorMsg" | "isVerifying" | "providerConnectionPhase"
 >;
 
 type ProviderSessionFields = Pick<

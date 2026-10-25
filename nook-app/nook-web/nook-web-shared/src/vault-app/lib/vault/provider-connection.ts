@@ -31,6 +31,10 @@ import {
   type DiscoveryCompletion,
 } from "$lib/vault/vault-discovery-timeout";
 import { ProviderEventOutbox } from "$lib/vault/sync-operation-state";
+import {
+  ProviderConnectionPhase,
+  ProviderConnectionProgress,
+} from "$lib/vault/provider-connection-progress";
 
 const log = browserLogRuntime.createLogger("vault-provider-connection");
 
@@ -182,6 +186,7 @@ export class ProviderConnectionActions {
     const stagedRemoteArgs = state.stagedRemoteStorageArgs();
     try {
       if (stagedRemoteArgs.kind === StagedRemoteStorageKind.Available) {
+        await this.enterPhase(ProviderConnectionPhase.Checking);
         const accessStatus = await state.assessVaultConnectStatus(
           stagedRemoteArgs.args,
         );
@@ -207,6 +212,7 @@ export class ProviderConnectionActions {
           return;
       }
 
+      await this.enterPhase(ProviderConnectionPhase.Saving);
       const saved = await state.ensureProviderSaved();
       if (saved.isErr()) {
         state.errorMsg = state.t(saved.error.translationKey);
@@ -220,6 +226,7 @@ export class ProviderConnectionActions {
         return;
       }
       if (provider.type !== LOCAL_FOLDER_PROVIDER_TYPE) {
+        await this.enterPhase(ProviderConnectionPhase.Uploading);
         const request = new ProviderEventOutbox(provider).request();
         const flushed = await state.flushRemoteEventOutboxNow(request);
         if (flushed.isErr()) {
@@ -227,6 +234,7 @@ export class ProviderConnectionActions {
           return;
         }
       }
+      await this.enterPhase(ProviderConnectionPhase.Syncing);
       const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
         {
           providerId: provider.id,
@@ -269,6 +277,13 @@ export class ProviderConnectionActions {
       }
     } finally {
       state.isVerifying = false;
+      state.providerConnectionPhase = ProviderConnectionPhase.Idle;
     }
+  }
+
+  /** Show the next connection step, painted before its work begins. */
+  private async enterPhase(phase: ProviderConnectionPhase): Promise<void> {
+    this.state.providerConnectionPhase = phase;
+    await ProviderConnectionProgress.paint();
   }
 }

@@ -21,6 +21,8 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
+  import ProviderConnectionStatus from '$lib/components/ProviderConnectionStatus.svelte'
+  import { ProviderConnectionProgress } from '$lib/vault/provider-connection-progress'
   import type {
     OAuthFileConfig,
     ProviderSetupRequest,
@@ -151,6 +153,9 @@
     return new ProviderSyncStatusView(formatProviderSyncStatusArgs).text
   }
 
+  const connectionProgress = $derived(
+    new ProviderConnectionProgress(vault.providerConnectionPhase),
+  )
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   const addingProvider = $derived(addProviderOpen || showSetup)
   function setupIs(type: StorageProviderType): boolean {
@@ -246,6 +251,9 @@
   {/if}
 
   <div class="space-y-4">
+    {#if connectionProgress.active}
+      <ProviderConnectionStatus {vault} progress={connectionProgress} />
+    {/if}
     <form
       novalidate
       onsubmit={(e) => {

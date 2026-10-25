@@ -33,6 +33,7 @@ const runtimeKeys = [
   "clearScheduledSyncInvalidationAlert",
   "successMsg",
   "isVerifying",
+  "providerConnectionPhase",
   "isSaving",
   "isInitializing",
 ] as const satisfies readonly (keyof VaultRuntimeState)[];
@@ -205,6 +206,7 @@ class VaultStateSlicesImplementation {
   declare clearScheduledSyncInvalidationAlert: VaultRuntimeState["clearScheduledSyncInvalidationAlert"];
   declare successMsg: VaultRuntimeState["successMsg"];
   declare isVerifying: VaultRuntimeState["isVerifying"];
+  declare providerConnectionPhase: VaultRuntimeState["providerConnectionPhase"];
   declare isSaving: VaultRuntimeState["isSaving"];
   declare isInitializing: VaultRuntimeState["isInitializing"];
 

@@ -6,6 +6,7 @@ import {
   NookVaultClientPolicy,
   type NookAppLocale,
 } from "$app-wasm";
+import { ProviderConnectionPhase } from "$lib/vault/provider-connection-progress";
 
 enum ScheduledSyncInvalidationAlertOwnershipKind {
   Unowned = "unowned",
@@ -97,6 +98,7 @@ export class VaultRuntimeState {
 
   successMsg = $state("");
   isVerifying = $state(false);
+  providerConnectionPhase = $state(ProviderConnectionPhase.Idle);
   isSaving = $state(false);
   isInitializing = $state(true);
 

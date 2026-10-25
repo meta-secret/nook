@@ -269,6 +269,19 @@ pub const AUTH_STORAGE_CHOOSE_DESC: &str = "auth_storage.choose_desc";
 pub const AUTH_STORAGE_CONFIGURE_DESC: &str = "auth_storage.configure_desc";
 pub const AUTH_STORAGE_CONFIRM_REMOVE: &str = "auth_storage.confirm_remove";
 pub const AUTH_STORAGE_CONNECT_AND_SYNC: &str = "auth_storage.connect_and_sync";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_CHECKING: &str = "auth_storage.connect_progress_checking";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_CHECKING_TITLE: &str =
+    "auth_storage.connect_progress_checking_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_HINT: &str = "auth_storage.connect_progress_hint";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SAVING: &str = "auth_storage.connect_progress_saving";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SAVING_TITLE: &str =
+    "auth_storage.connect_progress_saving_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SYNCING: &str = "auth_storage.connect_progress_syncing";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SYNCING_TITLE: &str =
+    "auth_storage.connect_progress_syncing_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_UPLOADING: &str = "auth_storage.connect_progress_uploading";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_UPLOADING_TITLE: &str =
+    "auth_storage.connect_progress_uploading_title";
 pub const AUTH_STORAGE_CONNECT_TO_TYPE: &str = "auth_storage.connect_to_type";
 pub const AUTH_STORAGE_DISCONNECT: &str = "auth_storage.disconnect";
 pub const AUTH_STORAGE_DUPLICATE_SYNC_PROVIDER: &str = "auth_storage.duplicate_sync_provider";
