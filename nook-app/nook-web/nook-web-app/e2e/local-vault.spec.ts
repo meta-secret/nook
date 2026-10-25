@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures'
 import {
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   addSecret,
   assertVaultReady,
   BIP39_SAMPLE_WORDS,
@@ -395,24 +396,30 @@ test.describe('local vault', () => {
     expect(remaining.sessionPresent).toBe(false)
     expect(remaining.caches).not.toContain('nook-cleanup-probe')
     expect(remaining.cookie).not.toContain('nook_cleanup_probe=')
+    // The other tab reloads as it drops its copy; an evaluation that the
+    // reload interrupts is read again from the reloaded page.
     await expect
-      .poll(() =>
-        otherTab.evaluate(async () => {
-          const vault = window.__nookVault
-          if (!vault || vault.isAuthenticated) return false
-          const cleanupProbe = sessionStorage
-            .getItem('nook_cleanup_probe')
-            ?.valueOf()
-          if (cleanupProbe) {
-            return false
-          }
-          try {
-            await vault.enqueueStorage(() => vault.admitManager())
-            return true
-          } catch {
-            return false
-          }
-        }),
+      .poll(
+        () =>
+          otherTab
+            .evaluate(async () => {
+              const vault = window.__nookVault
+              if (!vault || vault.isAuthenticated) return false
+              const cleanupProbe = sessionStorage
+                .getItem('nook_cleanup_probe')
+                ?.valueOf()
+              if (cleanupProbe) {
+                return false
+              }
+              try {
+                await vault.enqueueStorage(() => vault.admitManager())
+                return true
+              } catch {
+                return false
+              }
+            })
+            .catch(() => false),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .toBe(true)
     await otherTab.close()

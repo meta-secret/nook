@@ -153,9 +153,11 @@
     readonly sequence: number
     readonly result: Awaited<ReturnType<VaultState['loadSecretPage']>>
   }
+  type SecretSupersededPagePattern = {
+    readonly kind: Match.SafeRefinement<VaultOperationStaleKind.RequestSuperseded>
+  }
   type SecretStalePagePattern = {
     readonly kind: Match.SafeRefinement<
-      | VaultOperationStaleKind.RequestSuperseded
       | VaultOperationStaleKind.ContextReplaced
       | VaultOperationStaleKind.OwnerReleased
     >
@@ -352,9 +354,11 @@
   function settleCommittedSearchPage(
     snapshot: SecretPageRefreshSnapshot | VaultOperationStale,
   ): void {
+    const supersededPattern: SecretSupersededPagePattern = {
+      kind: Match.is(VaultOperationStaleKind.RequestSuperseded),
+    }
     const stalePattern: SecretStalePagePattern = {
       kind: Match.is(
-        VaultOperationStaleKind.RequestSuperseded,
         VaultOperationStaleKind.ContextReplaced,
         VaultOperationStaleKind.OwnerReleased,
       ),
@@ -363,6 +367,12 @@
       query: Match.string,
     }
     Match.value(snapshot).pipe(
+      // This list's latest request was replaced by one from elsewhere (an
+      // unlock or sync refreshing the page). Ask again, so reveal waits for
+      // the matching page instead of staying disabled with no request left.
+      Match.when(supersededPattern, () => {
+        reloadFirstPage()
+      }),
       Match.when(stalePattern, () => {
         return
       }),
