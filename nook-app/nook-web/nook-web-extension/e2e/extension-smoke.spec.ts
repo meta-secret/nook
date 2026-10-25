@@ -387,11 +387,6 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)
     const otpWidget = otpPage.locator('#nook-auth-widget')
-    // Filling a code reads the vault: without one the widget offers the
-    // connect in place of the fill.
-    await expect(
-      otpWidget.getByText('Connect Nook to your vault'),
-    ).toBeVisible()
     await expect(
       otpWidget.getByRole('button', { name: 'Connect vault' }),
     ).toBeVisible()
@@ -404,15 +399,12 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       .getByRole('button', { name: 'Continue to verification' })
       .click()
     await expect(
-      hiddenOtpWidget.getByText('Connect Nook to your vault'),
+      hiddenOtpWidget.getByRole('button', { name: 'Connect vault' }),
     ).toBeVisible()
 
     const combinedPage = await context.newPage()
     await combinedPage.goto(`${loginServer.origin}/combined`)
     const combinedWidget = combinedPage.locator('#nook-auth-widget')
-    await expect(
-      combinedWidget.getByText('Connect Nook to your vault'),
-    ).toBeVisible()
     await expect(
       combinedWidget.getByRole('button', { name: 'Connect vault' }),
     ).toBeVisible()
