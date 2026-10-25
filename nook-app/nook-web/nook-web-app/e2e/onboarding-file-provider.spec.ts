@@ -194,19 +194,24 @@ test.describe('Google Drive authorized accounts', () => {
     await expect(owner.getByTestId('google-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    // Every Drive provider gets the vault-folder step; there is no storage
-    // mode to choose first.
-    await expect(owner.getByTestId('google-shared-folder-step')).toBeVisible()
+    // There is no storage mode or folder to choose: Connect & sync creates
+    // the provider's ordinary My Drive folder, which accounts are shared into.
+    await expect(owner.getByTestId('google-setup-sync-step')).toBeVisible()
     // Folder display names are independent from the validated internal
     // event-log backup name and may contain normal Drive filename characters.
     await owner.getByTestId('drive-file-input').fill('Team Vault')
     await owner.getByTestId('google-sign-in-btn').click()
-    const createFolder = owner.getByTestId('google-create-shared-folder-btn')
-    await expect(createFolder).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await createFolder.click()
+    await expect(owner.getByTestId('google-folder-on-connect')).toContainText(
+      'Team Vault',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    const connectButton = owner.getByTestId('connect-provider-btn')
+    await expect(connectButton).toBeEnabled()
+    await connectButton.click()
+    await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await assertVaultReady(owner)
 
+    // The Sync page lists each provider's authorized accounts on its card.
     const accounts = owner.getByTestId('authorized-accounts')
     await expect(
       accounts.getByTestId(`authorized-account-${ownerEmail}`),
@@ -236,11 +241,6 @@ test.describe('Google Drive authorized accounts', () => {
       accounts.getByTestId(`authorized-account-remove-${collaboratorEmail}`),
     ).toBeVisible()
 
-    const connectButton = owner.getByTestId('connect-provider-btn')
-    await expect(connectButton).toBeEnabled()
-    await connectButton.click()
-    await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-    await assertVaultReady(owner)
     // The identity-namespaced row keeps each vault in its own child folder.
     await expect
       .poll(() => driveStub.getEventFileCount(), {
@@ -377,10 +377,10 @@ test.describe('iCloud provider setup', () => {
     await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    // Every iCloud provider syncs through a CloudKit share, so the share step
-    // is part of setup from the start and waits for sign-in.
-    await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
-    await expect(page.getByTestId('icloud-create-share-btn')).toHaveCount(0)
+    // Every iCloud provider syncs through a CloudKit share that Connect &
+    // sync creates; nothing asks for a share before sign-in.
+    await expect(page.getByTestId('icloud-setup-sync-step')).toBeVisible()
+    await expect(page.getByTestId('icloud-share-on-connect')).toHaveCount(0)
   })
 
   test('invites a device as one of the CloudKit share participants', async ({
@@ -451,15 +451,29 @@ test.describe('iCloud provider setup', () => {
     await expect(
       accounts.getByTestId(`authorized-account-pick-${viewerEmail}`),
     ).toBeDisabled()
-    // iCloud participants are managed in Apple's sharing sheet, not by email.
+    // The invite only picks. iCloud participants are managed in Apple's
+    // sharing sheet, reached from the Sync page, not by email.
     await expect(
       accounts.getByTestId('authorized-account-email-input'),
     ).toHaveCount(0)
-    await accounts.getByTestId('authorized-accounts-manage-icloud').click()
+    await accounts.getByTestId('authorized-accounts-manage-link').click()
+    const providerAccounts = page
+      .getByTestId('storage-providers-section')
+      .getByTestId('authorized-accounts')
+    await expect(
+      providerAccounts.getByTestId('authorized-account-email-input'),
+    ).toHaveCount(0)
+    await providerAccounts
+      .getByTestId('authorized-accounts-manage-icloud')
+      .click()
     await expect(page.locator('html')).toHaveAttribute(
       'data-e2e-cloudkit-share-ui',
       '1',
     )
+    await openOnboardDevicePanel(page)
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${memberEmail}`),
+    ).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
     const linkInput = await submitOnboardEnrollmentCode(
       page,

@@ -12,7 +12,6 @@
     Plus,
     ChevronLeft,
     Trash2,
-    Users,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
@@ -105,9 +104,6 @@
     }
     return localizeProviderLabel(labelRequest)
   }
-
-  /** The provider whose authorized accounts are open. */
-  let accountsProviderId = $state('')
 
   /** A saved Drive or iCloud provider with its shared target, whose
    * accounts can be managed. */
@@ -334,10 +330,9 @@
               {/if}
             </div>
           {:else}
-            <ul
-              class="divide-y divide-border/60"
-              data-testid="settings-providers-list"
-            >
+            <!-- Each provider is its own card; what belongs to it (its
+                 authorized accounts) sits recessed inside that card. -->
+            <ul class="grid gap-3" data-testid="settings-providers-list">
               {#each syncProviders as provider (provider.id)}
                 {@const supportsVaultReplication =
                   provider_supports_replication(
@@ -345,7 +340,7 @@
                     vault.vaultArchitecture.replication_type,
                   )}
                 {@const sharedConfig = sharedProviderConfig(provider)}
-                <li class="grid gap-2 py-2.5 first:pt-0 last:pb-0">
+                <li class="nk-panel grid gap-4 p-3 sm:p-4">
                   <div class="flex items-center gap-2">
                     <div
                       class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
@@ -451,26 +446,9 @@
                         <Trash2 class="size-4" />
                       </button>
                     {/if}
-                    {#if sharedConfig !== false}
-                      <button
-                        type="button"
-                        class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        aria-label={vault.t(I18N_KEYS.AuthorizedAccountsTitle)}
-                        aria-expanded={accountsProviderId === provider.id}
-                        title={vault.t(I18N_KEYS.AuthorizedAccountsTitle)}
-                        data-testid="authorized-accounts-toggle-{provider.id}"
-                        onclick={() =>
-                          (accountsProviderId =
-                            accountsProviderId === provider.id
-                              ? ''
-                              : provider.id)}
-                      >
-                        <Users class="size-4" />
-                      </button>
-                    {/if}
                   </div>
-                  {#if sharedConfig !== false && accountsProviderId === provider.id}
-                    <div class="border-l-2 border-border pl-3">
+                  {#if sharedConfig !== false}
+                    <div class="nk-subpanel-recessed p-3 sm:p-4">
                       <AuthorizedAccountsPanel
                         {vault}
                         config={sharedConfig}
@@ -481,18 +459,8 @@
                 </li>
               {/each}
             </ul>
-
-            {#if onBeginAddProvider}
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                data-testid="add-provider-btn"
-                onclick={() => onBeginAddProvider?.()}
-              >
-                <Plus class="size-4" />
-                {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-              </button>
-            {/if}
+            <!-- Adding a provider starts from the identity panel; this list
+                 manages the providers it has, with their accounts. -->
           {/if}
         </fieldset>
       {/if}

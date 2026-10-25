@@ -2,8 +2,8 @@
 The accounts authorized on a shared provider target: the Drive vault
 folder's permissions or the iCloud share's participants. Drive accounts are
 added and removed here; iCloud participants are managed in Apple's sharing
-sheet. With `selectable`, one account with write access is picked for a
-device invite.
+sheet. With `selectable`, the list only picks one account with write access
+for a device invite; accounts are managed on the Sync page it links to.
 -->
 <script lang="ts">
   import { untrack } from 'svelte'
@@ -30,6 +30,7 @@ device invite.
     selectable = false,
     selectedEmail = $bindable(''),
     disabled = false,
+    onManageAccounts,
   }: {
     vault: VaultState
     /** The saved provider whose shared target lists the accounts. */
@@ -40,6 +41,8 @@ device invite.
     selectable?: boolean
     selectedEmail?: string
     disabled?: boolean
+    /** Where a picker sends the user to authorize another account. */
+    onManageAccounts?: () => void
   } = $props()
 
   let panel = $state<PanelState>({ kind: PanelStateKind.Loading })
@@ -217,35 +220,37 @@ device invite.
 </script>
 
 <section class="grid gap-3" data-testid="authorized-accounts">
-  <header class="flex items-start gap-3">
-    <Users class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-    <div class="min-w-0 flex-1">
-      <p class="nk-label">{vault.t(I18N_KEYS.AuthorizedAccountsTitle)}</p>
-      <p class="mt-1 text-xs text-pretty text-muted-foreground">
-        {vault.t(
-          selectable
-            ? I18N_KEYS.AuthorizedAccountsPickDescription
-            : isICloud
-              ? I18N_KEYS.AuthorizedAccountsIcloudDescription
-              : I18N_KEYS.AuthorizedAccountsDriveDescription,
-        )}
-      </p>
+  <header class="grid gap-1.5">
+    <div class="flex items-center gap-2">
+      <h4 class="nk-subpanel-head min-w-0 flex-1">
+        <Users class="size-3.5 shrink-0" aria-hidden="true" />
+        {vault.t(I18N_KEYS.AuthorizedAccountsTitle)}
+      </h4>
+      <button
+        type="button"
+        class="grid size-7 shrink-0 place-items-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        disabled={busy || disabled || panel.kind === PanelStateKind.Loading}
+        aria-label={vault.t(I18N_KEYS.AuthorizedAccountsRefresh)}
+        title={vault.t(I18N_KEYS.AuthorizedAccountsRefresh)}
+        data-testid="authorized-accounts-refresh"
+        onclick={() => void load()}
+      >
+        <RefreshCw
+          class="size-3.5 {panel.kind === PanelStateKind.Loading
+            ? 'animate-spin'
+            : ''}"
+        />
+      </button>
     </div>
-    <button
-      type="button"
-      class="grid size-8 shrink-0 place-items-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-      disabled={busy || disabled || panel.kind === PanelStateKind.Loading}
-      aria-label={vault.t(I18N_KEYS.AuthorizedAccountsRefresh)}
-      title={vault.t(I18N_KEYS.AuthorizedAccountsRefresh)}
-      data-testid="authorized-accounts-refresh"
-      onclick={() => void load()}
-    >
-      <RefreshCw
-        class="size-4 {panel.kind === PanelStateKind.Loading
-          ? 'animate-spin'
-          : ''}"
-      />
-    </button>
+    <p class="text-xs text-pretty text-muted-foreground">
+      {vault.t(
+        selectable
+          ? I18N_KEYS.AuthorizedAccountsPickDescription
+          : isICloud
+            ? I18N_KEYS.AuthorizedAccountsIcloudDescription
+            : I18N_KEYS.AuthorizedAccountsDriveDescription,
+      )}
+    </p>
   </header>
 
   {#if panel.kind === PanelStateKind.Loading}
@@ -269,7 +274,7 @@ device invite.
       </p>
     {:else}
       <ul
-        class="grid divide-y divide-border border border-border"
+        class="grid divide-y divide-border/60 border-y border-border/60"
         role={selectable ? 'radiogroup' : 'list'}
         aria-label={vault.t(I18N_KEYS.AuthorizedAccountsTitle)}
         data-testid="authorized-accounts-list"
@@ -279,7 +284,7 @@ device invite.
           {@const selected =
             canPick &&
             selectedEmail.toLowerCase() === account.email.toLowerCase()}
-          <li class="flex items-center gap-3 px-3 py-2.5 text-sm">
+          <li class="flex min-h-11 items-center gap-3 py-1.5 text-sm">
             {#if selectable}
               <button
                 type="button"
@@ -316,7 +321,7 @@ device invite.
             >
               {accessLabel(account)}
             </span>
-            {#if !isICloud && account.role !== 'owner'}
+            {#if !selectable && !isICloud && account.role !== 'owner'}
               <button
                 type="button"
                 class="grid size-7 shrink-0 place-items-center text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
@@ -334,7 +339,18 @@ device invite.
       </ul>
     {/if}
 
-    {#if isICloud}
+    {#if selectable}
+      {#if onManageAccounts}
+        <button
+          type="button"
+          class="justify-self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          data-testid="authorized-accounts-manage-link"
+          onclick={onManageAccounts}
+        >
+          {vault.t(I18N_KEYS.AuthorizedAccountsManageLink)}
+        </button>
+      {/if}
+    {:else if isICloud}
       <Button
         type="button"
         size="sm"
@@ -356,12 +372,12 @@ device invite.
         }}
       >
         <label
-          class="text-xs font-medium text-foreground"
+          class="text-xs text-muted-foreground"
           for="authorized-account-email"
         >
           {vault.t(I18N_KEYS.AuthorizedAccountsAddLabel)}
         </label>
-        <div class="flex gap-2">
+        <div class="flex items-stretch gap-2">
           <input
             id="authorized-account-email"
             type="email"
@@ -375,7 +391,8 @@ device invite.
           <Button
             type="submit"
             size="sm"
-            class="h-9"
+            variant="outline"
+            class="h-9 shrink-0"
             disabled={busy || disabled || !newEmail.trim()}
             data-testid="authorized-account-add-btn"
           >

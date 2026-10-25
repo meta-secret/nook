@@ -32,10 +32,9 @@ export class EnrollmentIssueFailure {
         return I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired;
       case EnrollmentIssueRejection.GithubCredentialsRequired:
         return I18N_KEYS.ErrorsGithubEnrollmentCredentialsRequired;
-      case EnrollmentIssueRejection.ICloudTargetRequired:
-        return I18N_KEYS.ProviderSetupIcloudSharedTargetRequired;
       case EnrollmentIssueRejection.OAuthProviderRequired:
         return I18N_KEYS.ErrorsSharedProviderOauthRequired;
+      case EnrollmentIssueRejection.ICloudTargetRequired:
       case EnrollmentIssueRejection.SharedTargetUnavailable:
         return I18N_KEYS.ErrorsValidationSharedStorageTargetRequired;
     }

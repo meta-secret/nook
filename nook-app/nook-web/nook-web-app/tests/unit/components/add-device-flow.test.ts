@@ -80,6 +80,7 @@ function renderFlow(
     identityName: IDENTITY,
     onBack: vi.fn(),
     onOpenSync: vi.fn(),
+    onManageAccounts: vi.fn(),
   } satisfies ComponentProps<typeof AddDeviceFlow>
   render(AddDeviceFlow, props)
   return vault
@@ -141,6 +142,7 @@ describe('add a device', () => {
       identityName: IDENTITY,
       onBack: vi.fn(),
       onOpenSync: vi.fn(),
+      onManageAccounts: vi.fn(),
     })
 
     expect(screen.getByTestId('add-device-error').textContent).toContain(

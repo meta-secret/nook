@@ -31,10 +31,8 @@ import {
   type DiscoveryCompletion,
 } from "$lib/vault/vault-discovery-timeout";
 import { ProviderEventOutbox } from "$lib/vault/sync-operation-state";
-import {
-  ProviderConnectionPhase,
-  ProviderConnectionProgress,
-} from "$lib/vault/provider-connection-progress";
+import { ProviderConnectionPhase } from "$lib/vault/provider-connection-progress";
+import { PaintOpportunity } from "$lib/runtime/paint-opportunity";
 
 const log = browserLogRuntime.createLogger("vault-provider-connection");
 
@@ -284,6 +282,6 @@ export class ProviderConnectionActions {
   /** Show the next connection step, painted before its work begins. */
   private async enterPhase(phase: ProviderConnectionPhase): Promise<void> {
     this.state.providerConnectionPhase = phase;
-    await ProviderConnectionProgress.paint();
+    await PaintOpportunity.next();
   }
 }

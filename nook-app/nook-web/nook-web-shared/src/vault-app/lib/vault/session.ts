@@ -84,7 +84,6 @@ export class VaultSessionActions {
     state.sentinelGenesisRequest = "";
     state.clearSentinelGenesisStore();
     state.sharedJoinerIdentity = "";
-    state.sharedGrantInstructions = "";
   }
 
   markVaultUnlocked() {
@@ -183,7 +182,6 @@ export class VaultSessionActions {
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";
     state.sharedJoinerIdentity = "";
-    state.sharedGrantInstructions = "";
     state.workspaceSection = WorkspaceSection.Vault;
     state.enrollmentCode = "";
     state.errorMsg = "";

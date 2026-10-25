@@ -24,7 +24,7 @@ test('the vault page holds items; the identity card manages the rest', async ({
   // belong to the vault's panel beside the card, management to the card.
   await expect(page.getByTestId('vault-import-btn')).toHaveCount(0)
   await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
-  await expect(page.getByTestId('identity-menu')).toHaveCount(0)
+  await expect(page.getByTestId('identity-overview')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await openOpenVaultPanel(page)
@@ -64,20 +64,16 @@ test('the vault page holds items; the identity card manages the rest', async ({
     throw new Error('Protection and vault rows must have layout boxes')
   }
   expect(protectionBox.y).toBeLessThan(vaultRowBox.y)
-  await page.getByTestId('identity-manage').first().click()
-  const menu = page.getByTestId('identity-menu')
-  await expect(menu).toBeVisible()
-  for (const item of ['add-device', 'sync', 'vaults']) {
-    await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
-  }
-  await page.waitForTimeout(DEMO_BEAT_MS)
-
-  // Overview opens beside the card: devices, cloud copies, vaults and
-  // sign-in, each tile opening its page.
+  // The identity panel opens beside the card: its actions first, then the
+  // details (devices, keys, vaults, this browser), each opening its page.
   await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  for (const action of ['add-device', 'add-sync']) {
+    await expect(page.getByTestId(`identity-action-${action}`)).toBeVisible()
+  }
+  await page.waitForTimeout(DEMO_BEAT_MS)
   await page.getByTestId('overview-open-devices').first().click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({

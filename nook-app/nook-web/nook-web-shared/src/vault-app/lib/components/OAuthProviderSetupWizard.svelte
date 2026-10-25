@@ -1,14 +1,8 @@
 <script lang="ts">
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import {
-    FolderOpen,
-    FolderPlus,
-    RefreshCw,
-    ShieldCheck,
-  } from "@lucide/svelte";
+  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
-  import AuthorizedAccountsPanel from "$lib/components/AuthorizedAccountsPanel.svelte";
   import type { OAuthFilePreset } from "$lib/auth/providers";
   import {
     DEFAULT_DRIVE_BACKUP_NAME,
@@ -25,7 +19,6 @@
   import type { VaultState } from "$lib/vault.svelte";
   import * as oauthActions from "$lib/vault/oauth";
   import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
-  import { SharedFolderAction } from "./oauth-provider-setup-state";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
@@ -64,7 +57,7 @@
             vault.oauthFileDraft.config,
           ).hasGoogleDriveFolder()),
   );
-  const canConnect = $derived(oauthSignedIn && sharedTargetReady);
+  const canConnect = $derived(oauthSignedIn);
   const oauthAccount = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? new OAuthFilePresentation(
@@ -98,12 +91,16 @@
   });
 
   let connectionStepOpen = $state(true);
-  let sharedFolderStepOpen = $state(false);
   let syncStepOpen = $state(false);
   let icloudSignInPrepareStarted = $state(false);
-  let sharedFolderAction = $state(SharedFolderAction.Create);
-  let sharedFolderRef = $state("");
-  let sharedFolderBusy = $state(false);
+  let preparingTarget = $state(false);
+  const googleFolderOnConnect = $derived.by(() => {
+    const folderRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderSetupGoogleFolderOnConnect,
+      replacements: { folder: githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME },
+    };
+    return vault.t(folderRequest);
+  });
 
   const icloudSignInButtonClass = cn(
     "ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -118,52 +115,30 @@
     "w-full sm:w-auto",
   );
 
-  async function createSharedFolder() {
-    if (sharedFolderBusy) return;
-    sharedFolderBusy = true;
-    vault.errorMsg = "";
-    try {
-      const actions = new oauthActions.VaultOAuthActions(vault);
-      const creation = isICloud
-        ? await actions.createICloudSharedProvider()
-        : await actions.createGoogleVaultFolder();
-      if (creation.isErr()) {
-        vault.errorMsg = vault.t(creation.error.translationKey);
-        return;
+  /**
+   * Every Drive provider syncs under an ordinary My Drive folder (an iCloud
+   * provider under a CloudKit share) that authorized accounts are later
+   * shared into. Connecting creates it once; a retry reuses it.
+   */
+  async function connectWithVaultTarget() {
+    if (preparingTarget) return;
+    if (!sharedTargetReady) {
+      preparingTarget = true;
+      vault.errorMsg = "";
+      try {
+        const actions = new oauthActions.VaultOAuthActions(vault);
+        const creation = isICloud
+          ? await actions.createICloudSharedProvider()
+          : await actions.createGoogleVaultFolder();
+        if (creation.isErr()) {
+          vault.errorMsg = vault.t(creation.error.translationKey);
+          return;
+        }
+      } finally {
+        preparingTarget = false;
       }
-      // Keep the folder step open: it now shows the authorized accounts.
-      sharedFolderStepOpen = true;
-      syncStepOpen = true;
-    } finally {
-      sharedFolderBusy = false;
     }
-  }
-
-  async function useSharedFolder() {
-    if (sharedFolderBusy) return;
-    sharedFolderBusy = true;
-    vault.errorMsg = "";
-    try {
-      const actions = new oauthActions.VaultOAuthActions(vault);
-      const iCloudConnectionRequest: Parameters<
-        typeof actions.useICloudSharedProvider
-      >[0] = { shareReference: sharedFolderRef };
-      const googleConnectionRequest: Parameters<
-        typeof actions.useGoogleSharedFolder
-      >[0] = { folderRef: sharedFolderRef };
-      const connection = isICloud
-        ? await actions.useICloudSharedProvider(iCloudConnectionRequest)
-        : await actions.useGoogleSharedFolder(googleConnectionRequest);
-      if (connection.isErr()) {
-        vault.errorMsg = vault.t(connection.error.translationKey);
-        return;
-      }
-      // Keep the folder step open: it now shows the authorized accounts.
-      sharedFolderStepOpen = true;
-      syncStepOpen = true;
-    } finally {
-      sharedFolderBusy = false;
-    }
+    await onConnect();
   }
 
   function watchICloudSignInIntent(node: HTMLElement) {
@@ -223,8 +198,7 @@
   $effect(() => {
     if (oauthSignedIn) {
       connectionStepOpen = false;
-      sharedFolderStepOpen = true;
-      syncStepOpen = sharedTargetReady;
+      syncStepOpen = true;
     }
   });
 
@@ -452,199 +426,12 @@
 
     <SetupWizardStep
       stepNumber={2}
-      title={vault.t(
-        isICloud
-          ? I18N_KEYS.ProviderSetupIcloudSharedTargetStep
-          : I18N_KEYS.ProviderSetupGoogleSharedFolderStep,
-      )}
-      subtitle={oauthSignedIn
-        ? sharedTargetReady
-          ? vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedTargetReady
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderReady,
-            )
-          : vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedTargetSubtitle
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderSubtitle,
-            )
-        : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
-      disabled={!oauthSignedIn}
-      bind:open={sharedFolderStepOpen}
-      testId={isICloud
-        ? "icloud-shared-target-step"
-        : "google-shared-folder-step"}
-    >
-      <div
-        class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
-        role="radiogroup"
-        aria-label={vault.t(
-          isICloud
-            ? I18N_KEYS.ProviderSetupIcloudSharedTargetStep
-            : I18N_KEYS.ProviderSetupGoogleSharedFolderStep,
-        )}
-      >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={sharedFolderAction === SharedFolderAction.Create}
-          class="flex items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors {sharedFolderAction ===
-          SharedFolderAction.Create
-            ? 'bg-primary/[0.06] text-foreground'
-            : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
-          data-testid={isICloud
-            ? "icloud-shared-create-mode"
-            : "google-shared-folder-create-mode"}
-          onclick={() => (sharedFolderAction = SharedFolderAction.Create)}
-        >
-          <FolderPlus class="size-4 shrink-0" />
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupIcloudSharedCreate
-              : I18N_KEYS.ProviderSetupGoogleSharedCreate,
-          )}
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={sharedFolderAction === SharedFolderAction.Join}
-          class="flex items-center gap-2.5 border-t border-border/40 px-3 py-2.5 text-left text-sm transition-colors sm:border-t-0 sm:border-l {sharedFolderAction ===
-          SharedFolderAction.Join
-            ? 'bg-primary/[0.06] text-foreground'
-            : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
-          data-testid={isICloud
-            ? "icloud-shared-join-mode"
-            : "google-shared-folder-join-mode"}
-          onclick={() => (sharedFolderAction = SharedFolderAction.Join)}
-        >
-          <FolderOpen class="size-4 shrink-0" />
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupIcloudSharedJoin
-              : I18N_KEYS.ProviderSetupGoogleSharedJoin,
-          )}
-        </button>
-      </div>
-
-      {#if sharedFolderAction === SharedFolderAction.Create}
-        {#if isICloud}
-          <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)}
-          </p>
-        {/if}
-        <Button
-          type="button"
-          size="sm"
-          data-testid={isICloud
-            ? "icloud-create-share-btn"
-            : "google-create-shared-folder-btn"}
-          disabled={sharedFolderBusy}
-          onclick={() => void createSharedFolder()}
-        >
-          {#if sharedFolderBusy}
-            <RefreshCw class="size-4 animate-spin" />
-          {:else}
-            <FolderPlus class="size-4" />
-          {/if}
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupIcloudSharedCreateAndShare
-              : I18N_KEYS.ProviderSetupGoogleSharedCreateAndShare,
-          )}
-        </Button>
-      {:else}
-        <div class="space-y-1.5">
-          <label
-            class="text-xs font-medium text-foreground"
-            for="{idPrefix}-shared-folder-ref"
-          >
-            {vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedLink
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderLink,
-            )}
-          </label>
-          <input
-            id="{idPrefix}-shared-folder-ref"
-            type="text"
-            bind:value={sharedFolderRef}
-            autocomplete="off"
-            spellcheck="false"
-            data-testid={isICloud
-              ? "icloud-shared-ref"
-              : "google-shared-folder-ref"}
-            class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-            placeholder={vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedLinkPlaceholder
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderLinkPlaceholder,
-            )}
-          />
-          <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedLinkDesc
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderLinkDesc,
-            )}
-          </p>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          data-testid={isICloud
-            ? "icloud-use-share-btn"
-            : "google-use-shared-folder-btn"}
-          disabled={sharedFolderBusy || !sharedFolderRef.trim()}
-          onclick={() => void useSharedFolder()}
-        >
-          {#if sharedFolderBusy}
-            <RefreshCw class="size-4 animate-spin" />
-          {:else}
-            <FolderOpen class="size-4" />
-          {/if}
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupIcloudSharedUse
-              : I18N_KEYS.ProviderSetupGoogleSharedUseFolder,
-          )}
-        </Button>
-      {/if}
-
-      {#if vault.sharedGrantInstructions}
-        <p
-          class="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-          data-testid={isICloud
-            ? "icloud-shared-status"
-            : "google-shared-folder-status"}
-        >
-          {vault.sharedGrantInstructions}
-        </p>
-      {/if}
-
-      {#if sharedTargetReady && vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured}
-        <AuthorizedAccountsPanel
-          {vault}
-          config={vault.oauthFileDraft.config}
-          shareTitle={githubRepo}
-        />
-      {/if}
-    </SetupWizardStep>
-
-    <SetupWizardStep
-      stepNumber={3}
       title={vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
       subtitle={canConnect
         ? isICloud
           ? vault.t(I18N_KEYS.ProviderSetupIcloudSyncSubtitle)
           : vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)
-        : oauthSignedIn
-          ? vault.t(
-              isICloud
-                ? I18N_KEYS.ProviderSetupIcloudSharedTargetRequired
-                : I18N_KEYS.ProviderSetupGoogleSharedFolderRequired,
-            )
-          : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
+        : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
       disabled={!canConnect}
       bind:open={syncStepOpen}
       testId={isICloud ? "icloud-setup-sync-step" : "google-setup-sync-step"}
@@ -652,18 +439,33 @@
       <p class="text-sm text-muted-foreground text-pretty">
         {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
       </p>
+      {#if !sharedTargetReady}
+        <p
+          class="text-[11px] text-muted-foreground text-pretty"
+          data-testid={isICloud
+            ? "icloud-share-on-connect"
+            : "google-folder-on-connect"}
+        >
+          {isICloud
+            ? vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)
+            : googleFolderOnConnect}
+        </p>
+      {/if}
       <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
           class="sm:min-w-[180px]"
           data-testid="connect-provider-btn"
-          disabled={!canConnect || isVerifying || isInitializing}
-          onclick={() => void onConnect()}
+          disabled={!canConnect ||
+            isVerifying ||
+            isInitializing ||
+            preparingTarget}
+          onclick={() => void connectWithVaultTarget()}
         >
           {#if isInitializing}
             <RefreshCw class="size-4 animate-spin" />
             {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-          {:else if isVerifying}
+          {:else if isVerifying || preparingTarget}
             <RefreshCw class="size-4 animate-spin" />
             {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
           {:else}

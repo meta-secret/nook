@@ -26,20 +26,17 @@ export enum ManagePage {
   Import = 'import',
 }
 
-/** How each identity page opens from its card: an item in Manage, or a
- * tile in its Overview. The vault's own pages open from its panel. */
+/** How each identity page opens from the identity panel beside its card.
+ * The vault's own pages open from its panel. */
 const MANAGE_PAGE_OPENERS: Record<
   Exclude<ManagePage, ManagePage.Import | ManagePage.Passwords>,
-  { readonly viaDetails: boolean; readonly testId: string }
+  string
 > = {
-  [ManagePage.Sync]: { viaDetails: true, testId: 'overview-open-sync' },
-  [ManagePage.Devices]: { viaDetails: true, testId: 'overview-open-devices' },
-  [ManagePage.Vaults]: { viaDetails: false, testId: 'identity-menu-vaults' },
-  [ManagePage.Keys]: { viaDetails: true, testId: 'overview-keys' },
-  [ManagePage.Settings]: {
-    viaDetails: true,
-    testId: 'overview-browser-settings',
-  },
+  [ManagePage.Sync]: 'overview-open-sync',
+  [ManagePage.Devices]: 'overview-open-devices',
+  [ManagePage.Vaults]: 'overview-open-vaults',
+  [ManagePage.Keys]: 'overview-keys',
+  [ManagePage.Settings]: 'overview-browser-settings',
 }
 
 const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
@@ -152,33 +149,16 @@ export async function openManagePage(
     await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     return
   }
-  // Every identity page opens from Manage on the current identity's card.
-  if (!(await page.getByTestId('identities-hub').isVisible())) {
-    await openIdentitiesPage(page)
-  }
-  const opener = MANAGE_PAGE_OPENERS[target]
-  const currentCard =
-    '[data-testid="identity-card"]:not([data-status="inactive"])'
-  if (opener.viaDetails) {
-    // Overview on the card opens the identity's overview beside it.
-    const toggle = page
-      .locator(`${currentCard} [data-testid="identity-overview-toggle"]`)
-      .first()
-    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-      await toggle.click()
-    }
-    await expect(page.getByTestId('identity-overview')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-  } else {
-    const manage = page
-      .locator(`${currentCard} [data-testid="identity-manage"]`)
-      .first()
-    if ((await manage.getAttribute('aria-expanded')) !== 'true') {
-      await manage.click()
-    }
-  }
-  const navItem = page.getByTestId(opener.testId).first()
+  // Every identity page opens from the identity panel beside the card.
+  await openIdentityPanel(page)
+  // Without a sync provider the panel offers adding one, which opens Sync.
+  const navItem =
+    target === ManagePage.Sync
+      ? page
+          .getByTestId('overview-open-sync')
+          .or(page.getByTestId('identity-action-add-sync'))
+          .first()
+      : page.getByTestId(MANAGE_PAGE_OPENERS[target]).first()
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
   // Identity pages read the identity directory, which retries while the
@@ -195,24 +175,27 @@ export async function openKeysPage(page: Page): Promise<void> {
   await openManagePage(page, ManagePage.Keys)
 }
 
-/** Open Manage on the current identity's card. */
-export async function openManageMenu(page: Page): Promise<void> {
+/** Open the identity panel beside the current identity's card. */
+export async function openIdentityPanel(page: Page): Promise<void> {
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
   }
-  const manage = page
+  const toggle = page
     .locator(
-      '[data-testid="identity-card"]:not([data-status="inactive"]) [data-testid="identity-manage"]',
+      '[data-testid="identity-card"]:not([data-status="inactive"]) [data-testid="identity-overview-toggle"]',
     )
     .first()
-  if ((await manage.getAttribute('aria-expanded')) !== 'true') {
-    await manage.click()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
   }
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
-/** Open one item of Manage on the current identity's card. */
+/** Run one action of the identity panel. */
 async function openManageItem(page: Page, testId: string): Promise<void> {
-  await openManageMenu(page)
+  await openIdentityPanel(page)
   const item = page.getByTestId(testId).first()
   await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await item.click()
@@ -227,17 +210,17 @@ export async function beginAddSyncProvider(page: Page): Promise<void> {
   if (await add.isVisible()) {
     await add.click()
   } else {
-    await openManageItem(page, 'identity-menu-sync')
+    await openManageItem(page, 'identity-action-add-sync')
   }
   await expect(picker).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-/** Open the add-device flow from Manage on the current identity's card.
- * Without a cloud sync provider Manage locks the item, so the flow, whose
- * first step then asks for a provider, opens directly as its route would. */
+/** Open the add-device flow from the identity panel. Without a cloud sync
+ * provider the panel locks the action, so the flow, whose first step then
+ * asks for a provider, opens directly as its route would. */
 export async function openAddDevice(page: Page): Promise<void> {
-  await openManageMenu(page)
-  const item = page.getByTestId('identity-menu-add-device').first()
+  await openIdentityPanel(page)
+  const item = page.getByTestId('identity-action-add-device').first()
   await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
   if (await item.isEnabled()) {
     await item.click()

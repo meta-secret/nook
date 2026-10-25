@@ -307,38 +307,16 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
         if (errorText.kind === GoogleOAuthErrorStateKind.Visible) {
           throw new Error(`Google OAuth failed: ${errorText.message}`)
         }
-        // Signing in collapses the connection step and opens the vault-folder
-        // step, so its create button is the signed-in marker during setup.
+        // Signing in collapses the connection step and opens Connect & sync,
+        // so its button is the signed-in marker during setup.
         return (
           (await page.getByTestId('google-account-status').isVisible()) ||
-          (await page
-            .getByTestId('google-create-shared-folder-btn')
-            .isVisible()) ||
           (await page.getByTestId('connect-provider-btn').isVisible())
         )
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-}
-
-/**
- * Create the signed-in provider's My Drive vault folder from the setup
- * wizard. Every Google Drive provider syncs under one; connecting stays
- * disabled until it exists. The wizard then lists the folder's accounts.
- */
-export async function createGoogleDriveVaultFolder(page: Page) {
-  const create = page.getByTestId('google-create-shared-folder-btn')
-  await expect(create).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await create.click()
-  await expect(page.getByTestId('google-shared-folder-status')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(
-    page
-      .getByTestId('authorized-accounts')
-      .getByTestId('authorized-accounts-list'),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 /** Mock Google Identity Services token client for e2e (call before navigation). */

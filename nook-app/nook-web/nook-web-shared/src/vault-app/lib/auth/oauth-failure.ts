@@ -24,9 +24,6 @@ export enum OAuthFailureKind {
   InvalidConfiguration = "invalid-configuration",
   GoogleSharedSignInRequired = "google-shared-sign-in-required",
   GoogleSharedCreation = "google-shared-creation",
-  GoogleSharedConnection = "google-shared-connection",
-  GoogleSharedNotFolder = "google-shared-not-folder",
-  GoogleSharedNotWritable = "google-shared-not-writable",
   SharedLinkRequired = "shared-link-required",
   SharedLocationMissing = "shared-location-missing",
   SharedSignInRequired = "shared-sign-in-required",
@@ -56,12 +53,6 @@ export class OAuthFailure {
         return I18N_KEYS.ProviderSetupGoogleSharedSignInFirst;
       case OAuthFailureKind.GoogleSharedCreation:
         return I18N_KEYS.ProviderSetupGoogleSharedCreateFailed;
-      case OAuthFailureKind.GoogleSharedConnection:
-        return I18N_KEYS.ProviderSetupGoogleSharedConnectFailed;
-      case OAuthFailureKind.GoogleSharedNotFolder:
-        return I18N_KEYS.ProviderSetupGoogleSharedNotFolder;
-      case OAuthFailureKind.GoogleSharedNotWritable:
-        return I18N_KEYS.ProviderSetupGoogleSharedNotWritable;
       case OAuthFailureKind.SharedLinkRequired:
         return I18N_KEYS.ProviderSetupIcloudSharedLinkRequired;
       case OAuthFailureKind.SharedLocationMissing:

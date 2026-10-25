@@ -732,11 +732,23 @@ test.describe('vault architecture modes', () => {
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
 
-    // Authorize the joiner's account on the folder, then pick it.
-    await accounts
+    // The invite only picks: the joiner's account is authorized on the Sync
+    // page, and the invite then picks it.
+    await accounts.getByTestId('authorized-accounts-manage-link').click()
+    const providerAccounts = page
+      .getByTestId('storage-providers-section')
+      .getByTestId('authorized-accounts')
+    await providerAccounts
       .getByTestId('authorized-account-email-input')
       .fill(SHARED_JOINER_IDENTITY)
-    await accounts.getByTestId('authorized-account-add-btn').click()
+    await providerAccounts.getByTestId('authorized-account-add-btn').click()
+    await expect(
+      providerAccounts.getByTestId(
+        `authorized-account-${SHARED_JOINER_IDENTITY}`,
+      ),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await openOnboardDevicePanel(page)
+    await page.getByTestId('onboard-passphrase-input').fill(ONBOARD_PASSWORD)
     const joinerPick = accounts.getByTestId(
       `authorized-account-pick-${SHARED_JOINER_IDENTITY}`,
     )
@@ -871,16 +883,26 @@ test.describe('vault architecture modes', () => {
     await expect(accounts.getByTestId('authorized-accounts-list')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await accounts
+    // The invite only picks; accounts are authorized on the Sync page.
+    await expect(
+      accounts.getByTestId('authorized-account-email-input'),
+    ).toHaveCount(0)
+    await accounts.getByTestId('authorized-accounts-manage-link').click()
+    const providerAccounts = page
+      .getByTestId('storage-providers-section')
+      .getByTestId('authorized-accounts')
+    await providerAccounts
       .getByTestId('authorized-account-email-input')
       .fill(SHARED_JOINER_IDENTITY)
-    await accounts.getByTestId('authorized-account-add-btn').click()
+    await providerAccounts.getByTestId('authorized-account-add-btn').click()
 
     await expect(
-      accounts.getByTestId('authorized-accounts-action-error'),
+      providerAccounts.getByTestId('authorized-accounts-action-error'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(
-      accounts.getByTestId(`authorized-account-pick-${SHARED_JOINER_IDENTITY}`),
+      providerAccounts.getByTestId(
+        `authorized-account-${SHARED_JOINER_IDENTITY}`,
+      ),
     ).toHaveCount(0)
     const [sharedFolder] = driveStub.getSharedFolders()
     if (!sharedFolder) throw new Error('shared Drive folder was not available.')

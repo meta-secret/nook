@@ -80,8 +80,7 @@ test('iCloud setup shows the host gate and the CloudKit share step', async ({
     'opened iCloud URLs',
   )
   expect(openedUrls).toEqual([])
-  // Every iCloud provider syncs through a CloudKit share; the share step is
-  // part of setup from the start.
-  await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
+  // Connect & sync waits for sign-in; it creates the vault's CloudKit share.
+  await expect(page.getByTestId('icloud-setup-sync-step')).toBeVisible()
   await demoBeat(page)
 })

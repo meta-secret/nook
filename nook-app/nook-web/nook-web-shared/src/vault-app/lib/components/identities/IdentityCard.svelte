@@ -11,9 +11,9 @@ panel sits inside the card, which then spans the full row.
     PairedIdentityUnlockScope,
     type PairedIdentityUnlockTarget,
   } from '$lib/app/extension-identity-adoption'
-  import IdentityManageMenu from './IdentityManageMenu.svelte'
   import IdentityProtectionPanel from './IdentityProtectionPanel.svelte'
   import VaultPanel from './VaultPanel.svelte'
+  import VaultActivityStatus from './VaultActivityStatus.svelte'
   import {
     NookIdentityNudge,
     NookIdentityProtectionTaskState,
@@ -31,10 +31,8 @@ panel sits inside the card, which then spans the full row.
     LockOpen,
     Plus,
     Puzzle,
-    Settings2,
     ShieldAlert,
     UserRoundCheck,
-    X,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CipherStrip } from '$lib/components/ui/cipher'
@@ -207,7 +205,6 @@ panel sits inside the card, which then spans the full row.
   // card keeps only its header and vaults.
   const managesHere = $derived(Boolean(onManageSection) && !preview && live)
   const addsVault = $derived(canAddVault && live)
-  let menuOpen = $state(false)
   let protectionOpen = $state(false)
   /** The checklist row shows while the unlocked identity is at risk, and
    * leaves once both protections are done. */
@@ -235,15 +232,9 @@ panel sits inside the card, which then spans the full row.
     return vault.t(progressRequest)
   })
 
-  function selectFromMenu(section: WorkspaceSection): void {
-    menuOpen = false
-    onManageSection?.(section)
-  }
-
   /** One panel beside the card at a time: opening one closes the rest,
    * including what the page opened there (New vault, an import). */
   function closeOthers(): void {
-    menuOpen = false
     protectionOpen = false
     vault.vaultPanelStoreId = ''
     if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
@@ -254,12 +245,6 @@ panel sits inside the card, which then spans the full row.
     const opening = !overviewOpen
     closeOthers()
     if (opening) onManageSection?.(WorkspaceSection.Overview)
-  }
-
-  function toggleManage(): void {
-    const opening = !menuOpen
-    closeOthers()
-    menuOpen = opening
   }
 
   function toggleProtection(): void {
@@ -291,7 +276,6 @@ panel sits inside the card, which then spans the full row.
       unlockPanel ||
         overviewPanel ||
         requestPanel ||
-        (managesHere && menuOpen) ||
         (protection && protectionOpen) ||
         vaultOpenRow,
     ),
@@ -311,10 +295,6 @@ panel sits inside the card, which then spans the full row.
     if (live && row?.state === IdentityVaultRowState.Available && onUnlockVault)
       onUnlockVault(storeId)
     else onSelectVault?.(storeId)
-  }
-
-  function closeMenuOnEscape(event: KeyboardEvent): void {
-    if (menuOpen && event.key === 'Escape') menuOpen = false
   }
 
   const kindKey = $derived(
@@ -362,8 +342,6 @@ panel sits inside the card, which then spans the full row.
   }
 </script>
 
-<svelte:window onkeydown={closeMenuOnEscape} />
-
 {#snippet panelRow(
   testId: string,
   title: string,
@@ -394,13 +372,15 @@ panel sits inside the card, which then spans the full row.
 {/snippet}
 
 {#snippet overviewIcon()}<LayoutDashboard class="size-4" />{/snippet}
-{#snippet manageIcon()}<Settings2 class="size-4" />{/snippet}
 
+<!-- A panel opens beside the card as its own frame: the card keeps the size
+     of a closed card and the panel takes the rest of the row, each as tall as
+     its own content. On wide screens the card list lays both out
+     (nk-identity-cards), so other cards stack under this one. -->
 <article
-  class="nk-frame-keytag nk-frame-interactive min-w-0 {spread
-    ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
+  class="min-w-0 {spread
+    ? 'col-span-full grid grid-cols-1 items-start gap-1.5 lg:contents'
     : 'flex flex-col'}"
-  class:nk-frame-live={live}
   aria-label={card.label}
   data-testid="identity-card"
   data-spread={spread ? 'true' : 'false'}
@@ -408,14 +388,19 @@ panel sits inside the card, which then spans the full row.
   data-status={card.status}
   data-unlocking={unlockPanel ? 'true' : 'false'}
 >
-  <span class="nk-edge-glint" aria-hidden="true"></span>
-  {#if !preview && (card.status === IdentityCardStatus.Locked || card.status === IdentityCardStatus.Elsewhere)}
-    <!-- Locking folds what only an unlocked identity offers back into the
-         card: its header and vaults stay. -->
-    <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
-    ></span>
-  {/if}
-  <div class="relative flex min-w-0 flex-1 flex-col">
+  <div
+    class="nk-identity-card-frame nk-frame-keytag nk-frame-interactive flex min-w-0 flex-col {spread
+      ? ''
+      : 'flex-1'}"
+    class:nk-frame-live={live}
+  >
+    <span class="nk-edge-glint" aria-hidden="true"></span>
+    {#if !preview && (card.status === IdentityCardStatus.Locked || card.status === IdentityCardStatus.Elsewhere)}
+      <!-- Locking folds what only an unlocked identity offers back into the
+           card: its header and vaults stay. -->
+      <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
+      ></span>
+    {/if}
     <header class="flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
       <span class="relative inline-flex flex-none">
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
@@ -477,6 +462,10 @@ panel sits inside the card, which then spans the full row.
         </div>
       </div>
     </header>
+
+    {#if live && !preview}
+      <VaultActivityStatus {vault} />
+    {/if}
 
     {#if protection}
       <section class="border-t border-border px-2 py-2">
@@ -663,19 +652,11 @@ panel sits inside the card, which then spans the full row.
       >
         {@render panelRow(
           'identity-overview-toggle',
-          vault.t(I18N_KEYS.WorkspaceSectionOverview),
-          vault.t(I18N_KEYS.IdentityMenuDetailsHint),
+          vault.t(I18N_KEYS.IdentityOverviewEyebrow),
+          vault.t(I18N_KEYS.IdentityOverviewRowHint),
           overviewOpen,
           overviewIcon,
           toggleOverview,
-        )}
-        {@render panelRow(
-          'identity-manage',
-          vault.t(I18N_KEYS.WorkspaceManage),
-          vault.t(I18N_KEYS.IdentityMenuManageHint),
-          menuOpen,
-          manageIcon,
-          toggleManage,
         )}
       </section>
     {/if}
@@ -729,14 +710,14 @@ panel sits inside the card, which then spans the full row.
   </div>
   {#if unlockPanel}
     <div
-      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      class="nk-identity-card-panel nk-frame-tab min-w-0 p-5 sm:p-6 lg:px-7"
       data-testid="identity-card-unlock"
     >
       {@render unlockPanel()}
     </div>
   {:else if vaultOpenRow}
     <div
-      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      class="nk-identity-card-panel nk-frame-tab min-w-0 p-5 sm:p-6 lg:px-7"
       data-testid="identity-card-vault"
     >
       <VaultPanel
@@ -773,31 +754,9 @@ panel sits inside the card, which then spans the full row.
         onClose={() => (vault.vaultPanelStoreId = '')}
       />
     </div>
-  {:else if managesHere && menuOpen}
-    <div
-      class="grid min-w-0 content-start gap-4 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
-      data-testid="identity-card-manage"
-    >
-      <header class="flex items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold tracking-tight text-foreground">
-          {vault.t(I18N_KEYS.WorkspaceManage)}
-        </h2>
-        <button
-          type="button"
-          class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
-          title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
-          data-testid="identity-manage-close"
-          onclick={() => (menuOpen = false)}
-        >
-          <X class="size-4" aria-hidden="true" />
-        </button>
-      </header>
-      <IdentityManageMenu {vault} onSelect={selectFromMenu} />
-    </div>
   {:else if protection && protectionOpen}
     <div
-      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      class="nk-identity-card-panel nk-frame-tab min-w-0 p-5 sm:p-6 lg:px-7"
       data-testid="identity-card-protection"
     >
       <IdentityProtectionPanel
@@ -811,14 +770,14 @@ panel sits inside the card, which then spans the full row.
     </div>
   {:else if overviewPanel}
     <div
-      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      class="nk-identity-card-panel nk-frame-tab min-w-0 p-5 sm:p-6 lg:px-7"
       data-testid="identity-card-overview"
     >
       {@render overviewPanel()}
     </div>
   {:else if requestPanel}
     <div
-      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      class="nk-identity-card-panel nk-frame-tab min-w-0 p-5 sm:p-6 lg:px-7"
       data-testid="identity-card-request"
     >
       {@render requestPanel(card)}

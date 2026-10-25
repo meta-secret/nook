@@ -8,6 +8,7 @@ for the approval step that follows.
 <script lang="ts">
   import { ArrowRight, Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { Button } from '$lib/components/ui/button'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { ExtensionConsentScopeTranslation } from '../extension-connect-consent-state'
@@ -94,7 +95,38 @@ for the approval step that follows.
     </span>
   </header>
 
-  <dl class="grid gap-3 text-sm sm:grid-cols-2">
+  <!-- The one action leads, right under the request; what the request names
+       follows, recessed, for whoever wants to check it. -->
+  <section class="grid gap-2">
+    {#if approvalVault}
+      <Button
+        type="button"
+        size="lg"
+        class="w-full px-5 sm:w-auto sm:justify-self-start"
+        data-testid="extension-request-unlock"
+        data-store-id={approvalVault.storeId}
+        disabled={busy}
+        onclick={() => onConnect(approvalVault.storeId)}
+      >
+        {#if card.keyKind === IdentityKeyKind.Pin}
+          <KeyRound class="size-4" aria-hidden="true" />
+        {:else}
+          <Fingerprint class="size-4" aria-hidden="true" />
+        {/if}
+        {unlockLabel}
+        <ArrowRight class="size-4" aria-hidden="true" />
+      </Button>
+      <p class="text-xs text-muted-foreground">
+        {vault.t(I18N_KEYS.ExtensionRequestVaultAction)}
+      </p>
+    {:else}
+      <p class="text-sm text-muted-foreground">
+        {vault.t(I18N_KEYS.ExtensionRequestNoVaults)}
+      </p>
+    {/if}
+  </section>
+
+  <dl class="nk-subpanel-recessed grid gap-3 p-4 text-sm sm:grid-cols-2">
     <div class="grid gap-1">
       <dt
         class="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
@@ -123,46 +155,4 @@ for the approval step that follows.
       </dd>
     </div>
   </dl>
-
-  <section class="grid gap-3 border-t border-border pt-5">
-    <h3
-      class="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
-    >
-      {vault.t(I18N_KEYS.ExtensionRequestVaults)}
-    </h3>
-    {#if approvalVault}
-      <button
-        type="button"
-        class="nk-identity-menu-item nk-plate group w-full disabled:cursor-default disabled:opacity-45"
-        data-testid="extension-request-unlock"
-        data-store-id={approvalVault.storeId}
-        disabled={busy}
-        onclick={() => onConnect(approvalVault.storeId)}
-      >
-        <span class="nk-vault-icon" aria-hidden="true">
-          {#if card.keyKind === IdentityKeyKind.Pin}
-            <KeyRound class="size-4" />
-          {:else}
-            <Fingerprint class="size-4" />
-          {/if}
-        </span>
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span class="truncate text-sm font-medium text-foreground"
-            >{unlockLabel}</span
-          >
-          <span class="truncate text-xs text-muted-foreground"
-            >{vault.t(I18N_KEYS.ExtensionRequestVaultAction)}</span
-          >
-        </span>
-        <ArrowRight
-          class="size-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5"
-          aria-hidden="true"
-        />
-      </button>
-    {:else}
-      <p class="text-sm text-muted-foreground">
-        {vault.t(I18N_KEYS.ExtensionRequestNoVaults)}
-      </p>
-    {/if}
-  </section>
 </div>

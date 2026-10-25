@@ -24,7 +24,6 @@ import {
 } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
-  createGoogleDriveVaultFolder,
   disableVaultIdleLock,
   installGoogleOAuthMock,
   waitForGoogleOAuthSignedIn,
@@ -406,7 +405,7 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   await page.getByTestId('drive-file-input').fill(fileName)
   await page.getByTestId('google-sign-in-btn').click()
   await waitForGoogleOAuthSignedIn(page)
-  await createGoogleDriveVaultFolder(page)
+  // Connect & sync creates the provider's My Drive vault folder.
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   if (!options?.expectConflict) {

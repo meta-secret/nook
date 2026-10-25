@@ -13,9 +13,6 @@ export enum ProviderConnectionPhase {
   Syncing = "syncing",
 }
 
-/** Longer than one frame, so a rendering opportunity passes while idle. */
-const PAINT_DELAY_MS = 20;
-
 export type ProviderConnectionStep = {
   readonly phase: ProviderConnectionPhase;
   /** Short label for the step bar. */
@@ -62,14 +59,5 @@ export class ProviderConnectionProgress {
   /** Index of the running step; earlier steps are done. */
   get current(): number {
     return STEPS.findIndex((step) => step.phase === this.phase);
-  }
-
-  /**
-   * Let the browser paint the new phase before the next step starts. That
-   * step can hold the main thread in WASM encryption for many seconds; the
-   * progress card must already be on screen by then.
-   */
-  static async paint(): Promise<void> {
-    await new Promise<void>((resolve) => setTimeout(resolve, PAINT_DELAY_MS));
   }
 }

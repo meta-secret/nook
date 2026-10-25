@@ -119,7 +119,6 @@ const sessionKeys = [
   "enrollSecretsKey",
   "enrollMembersKey",
   "sharedJoinerIdentity",
-  "sharedGrantInstructions",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
@@ -286,7 +285,6 @@ class VaultStateSlicesImplementation {
   declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
   declare sharedJoinerIdentity: VaultSessionState["sharedJoinerIdentity"];
-  declare sharedGrantInstructions: VaultSessionState["sharedGrantInstructions"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];

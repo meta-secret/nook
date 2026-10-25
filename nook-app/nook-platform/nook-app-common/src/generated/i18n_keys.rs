@@ -416,6 +416,7 @@ pub const AUTHORIZED_ACCOUNTS_LOAD_FAILED: &str = "authorized_accounts.load_fail
 pub const AUTHORIZED_ACCOUNTS_LOADING: &str = "authorized_accounts.loading";
 pub const AUTHORIZED_ACCOUNTS_MANAGE_FAILED: &str = "authorized_accounts.manage_failed";
 pub const AUTHORIZED_ACCOUNTS_MANAGE_ICLOUD: &str = "authorized_accounts.manage_icloud";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_LINK: &str = "authorized_accounts.manage_link";
 pub const AUTHORIZED_ACCOUNTS_PICK_DESCRIPTION: &str = "authorized_accounts.pick_description";
 pub const AUTHORIZED_ACCOUNTS_REFRESH: &str = "authorized_accounts.refresh";
 pub const AUTHORIZED_ACCOUNTS_REMOVE: &str = "authorized_accounts.remove";
@@ -1088,7 +1089,6 @@ pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
 pub const EXTENSION_REQUEST_UNLOCK_IDENTITY: &str = "extension.request.unlock_identity";
 pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";
-pub const EXTENSION_REQUEST_VAULTS: &str = "extension.request.vaults";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =
     "extension.setup.browser_access_description";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_TITLE: &str = "extension.setup.browser_access_title";
@@ -1500,16 +1500,13 @@ pub const IDENTITY_MENU_ADD_DEVICE_NEEDS_CLOUD: &str = "identity_menu.add_device
 pub const IDENTITY_MENU_BROWSER: &str = "identity_menu.browser";
 pub const IDENTITY_MENU_BROWSER_HINT: &str = "identity_menu.browser_hint";
 pub const IDENTITY_MENU_DETAILS: &str = "identity_menu.details";
-pub const IDENTITY_MENU_DETAILS_HINT: &str = "identity_menu.details_hint";
-pub const IDENTITY_MENU_LABEL: &str = "identity_menu.label";
-pub const IDENTITY_MENU_MANAGE_HINT: &str = "identity_menu.manage_hint";
 pub const IDENTITY_MENU_SYNC_HINT: &str = "identity_menu.sync_hint";
 pub const IDENTITY_MENU_VAULTS_HINT: &str = "identity_menu.vaults_hint";
 pub const IDENTITY_OVERVIEW_ALL_SET: &str = "identity_overview.all_set";
 pub const IDENTITY_OVERVIEW_BROWSER_LINK: &str = "identity_overview.browser_link";
 pub const IDENTITY_OVERVIEW_CLOSE_PANEL: &str = "identity_overview.close_panel";
 pub const IDENTITY_OVERVIEW_COPIED_TO: &str = "identity_overview.copied_to";
-pub const IDENTITY_OVERVIEW_COPIES: &str = "identity_overview.copies";
+pub const IDENTITY_OVERVIEW_DETAILS_HEADING: &str = "identity_overview.details_heading";
 pub const IDENTITY_OVERVIEW_DEVICES_CAPTION: &str = "identity_overview.devices_caption";
 pub const IDENTITY_OVERVIEW_DEVICES_EMPTY: &str = "identity_overview.devices_empty";
 pub const IDENTITY_OVERVIEW_EYEBROW: &str = "identity_overview.eyebrow";
@@ -1518,8 +1515,11 @@ pub const IDENTITY_OVERVIEW_MORE: &str = "identity_overview.more";
 pub const IDENTITY_OVERVIEW_NEEDS_CLOUD: &str = "identity_overview.needs_cloud";
 pub const IDENTITY_OVERVIEW_OPENS_ON: &str = "identity_overview.opens_on";
 pub const IDENTITY_OVERVIEW_PROTECTION: &str = "identity_overview.protection";
+pub const IDENTITY_OVERVIEW_PROVIDERS_HEADING: &str = "identity_overview.providers_heading";
+pub const IDENTITY_OVERVIEW_RESILIENCE_HEADING: &str = "identity_overview.resilience_heading";
 pub const IDENTITY_OVERVIEW_RISK_LOCAL: &str = "identity_overview.risk_local";
 pub const IDENTITY_OVERVIEW_RISK_ONE_DEVICE: &str = "identity_overview.risk_one_device";
+pub const IDENTITY_OVERVIEW_ROW_HINT: &str = "identity_overview.row_hint";
 pub const IDENTITY_OVERVIEW_SECURITY: &str = "identity_overview.security";
 pub const IDENTITY_OVERVIEW_SYNC_CAPTION: &str = "identity_overview.sync_caption";
 pub const IDENTITY_OVERVIEW_SYNC_EMPTY: &str = "identity_overview.sync_empty";
@@ -2165,40 +2165,13 @@ pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
+pub const PROVIDER_SETUP_GOOGLE_FOLDER_ON_CONNECT: &str = "provider_setup.google_folder_on_connect";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CONNECT_FAILED: &str =
-    "provider_setup.google_shared_connect_failed";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE: &str = "provider_setup.google_shared_create";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE_AND_SHARE: &str =
-    "provider_setup.google_shared_create_and_share";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE_FAILED: &str =
     "provider_setup.google_shared_create_failed";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_CONNECTED: &str =
-    "provider_setup.google_shared_folder_connected";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_CREATED: &str =
-    "provider_setup.google_shared_folder_created";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK: &str =
-    "provider_setup.google_shared_folder_link";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK_DESC: &str =
-    "provider_setup.google_shared_folder_link_desc";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK_PLACEHOLDER: &str =
-    "provider_setup.google_shared_folder_link_placeholder";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_READY: &str =
-    "provider_setup.google_shared_folder_ready";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_REQUIRED: &str =
-    "provider_setup.google_shared_folder_required";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_STEP: &str =
-    "provider_setup.google_shared_folder_step";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_SUBTITLE: &str =
-    "provider_setup.google_shared_folder_subtitle";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_JOIN: &str = "provider_setup.google_shared_join";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER: &str = "provider_setup.google_shared_not_folder";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE: &str =
-    "provider_setup.google_shared_not_writable";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_SIGN_IN_FIRST: &str =
     "provider_setup.google_shared_sign_in_first";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_USE_FOLDER: &str = "provider_setup.google_shared_use_folder";
 pub const PROVIDER_SETUP_GOOGLE_SIGNED_IN_AS: &str = "provider_setup.google_signed_in_as";
 pub const PROVIDER_SETUP_GOOGLE_SIGNING_IN: &str = "provider_setup.google_signing_in";
 pub const PROVIDER_SETUP_GOOGLE_SYNC_SUBTITLE: &str = "provider_setup.google_sync_subtitle";
@@ -2212,37 +2185,18 @@ pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
 pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECT_FAILED: &str =
     "provider_setup.icloud_shared_connect_failed";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECTED: &str = "provider_setup.icloud_shared_connected";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE: &str = "provider_setup.icloud_shared_create";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_AND_SHARE: &str =
-    "provider_setup.icloud_shared_create_and_share";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_DESC: &str =
     "provider_setup.icloud_shared_create_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_FAILED: &str =
     "provider_setup.icloud_shared_create_failed";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATED: &str = "provider_setup.icloud_shared_created";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_IDENTIFIER_MISSING: &str =
     "provider_setup.icloud_shared_identifier_missing";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_JOIN: &str = "provider_setup.icloud_shared_join";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK: &str = "provider_setup.icloud_shared_link";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_DESC: &str = "provider_setup.icloud_shared_link_desc";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_PLACEHOLDER: &str =
-    "provider_setup.icloud_shared_link_placeholder";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_REQUIRED: &str =
     "provider_setup.icloud_shared_link_required";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_LOCATION_MISSING: &str =
     "provider_setup.icloud_shared_location_missing";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_SIGN_IN_FIRST: &str =
     "provider_setup.icloud_shared_sign_in_first";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_READY: &str =
-    "provider_setup.icloud_shared_target_ready";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_REQUIRED: &str =
-    "provider_setup.icloud_shared_target_required";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_STEP: &str =
-    "provider_setup.icloud_shared_target_step";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_SUBTITLE: &str =
-    "provider_setup.icloud_shared_target_subtitle";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_USE: &str = "provider_setup.icloud_shared_use";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_FAILED: &str = "provider_setup.icloud_sign_in_failed";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_LOADING: &str = "provider_setup.icloud_sign_in_loading";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_READY: &str = "provider_setup.icloud_sign_in_ready";
@@ -2720,6 +2674,9 @@ pub const WORKSPACE_STATUS_UNLOCKED_TITLE: &str = "workspace.status_unlocked_tit
 pub const WORKSPACE_UNLOCK: &str = "workspace.unlock";
 pub const WORKSPACE_UNLOCK_IDENTITY_TITLE: &str = "workspace.unlock_identity_title";
 pub const WORKSPACE_USE_IDENTITY: &str = "workspace.use_identity";
+pub const WORKSPACE_VAULT_ACTIVITY_HINT: &str = "workspace.vault_activity_hint";
+pub const WORKSPACE_VAULT_ACTIVITY_SYNCING: &str = "workspace.vault_activity_syncing";
+pub const WORKSPACE_VAULT_ACTIVITY_WORKING: &str = "workspace.vault_activity_working";
 pub const WORKSPACE_VAULT_DORMANT: &str = "workspace.vault_dormant";
 pub const WORKSPACE_VAULT_EYEBROW: &str = "workspace.vault_eyebrow";
 pub const WORKSPACE_VAULT_FALLBACK: &str = "workspace.vault_fallback";

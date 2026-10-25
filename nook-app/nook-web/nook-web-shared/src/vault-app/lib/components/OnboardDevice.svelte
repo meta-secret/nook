@@ -45,6 +45,7 @@ itself, so nothing here waits for it.
     onClearCode,
     manualJoin,
     done,
+    onManageAccounts,
   }: {
     vault: VaultState
     /** Remote provider rows that carry this identity's control log. */
@@ -57,6 +58,8 @@ itself, so nothing here waits for it.
     manualJoin: string
     /** Leaves the flow once the invite is out. */
     done: Snippet
+    /** Opens the Sync page, where a provider's accounts are authorized. */
+    onManageAccounts: () => void
   } = $props()
 
   let chosenProviderId = $state('')
@@ -300,6 +303,7 @@ itself, so nothing here waits for it.
           selectable
           bind:selectedEmail={vault.sharedJoinerIdentity}
           disabled={isBusy || isGenerating}
+          {onManageAccounts}
         />
       {/if}
 

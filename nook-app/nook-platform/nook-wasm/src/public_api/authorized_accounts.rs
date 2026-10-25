@@ -1,8 +1,8 @@
 //! Shared provider targets and the accounts authorized to reach them.
 //!
 //! Google Drive and iCloud providers are always shared. These exports create
-//! or connect the Drive vault folder and manage its authorized accounts; the
-//! account lists themselves are the providers' own sharing state.
+//! the Drive vault folder and manage its authorized accounts; the account
+//! lists themselves are the providers' own sharing state.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
 use crate::DriveStorageClientShareFolderWithEmail;
@@ -40,19 +40,6 @@ impl AccountListOutput<'_> {
 ) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
     let (id, name) = DriveStorageClient::new(access_token)
         .create_shared_vault_folder(folder_name)
-        .await?;
-    Ok(NookGoogleDriveFolder::new(id, name))
-}
-
-/// Resolve a shared Drive folder id/URL and verify write access for the current
-/// account before persisting the provider row.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn verify_shared_google_drive_folder(
-    access_token: &str,
-    folder_ref: &str,
-) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
-    let (id, name) = DriveStorageClient::new(access_token)
-        .verify_shared_vault_folder(folder_ref)
         .await?;
     Ok(NookGoogleDriveFolder::new(id, name))
 }

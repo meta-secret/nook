@@ -544,7 +544,6 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "selectPasswordEntry"
     | "sessionExpiredByIdle"
     | "sessionEpoch"
-    | "sharedGrantInstructions"
     | "sharedJoinerIdentity"
     | "vaultMembers"
   > &

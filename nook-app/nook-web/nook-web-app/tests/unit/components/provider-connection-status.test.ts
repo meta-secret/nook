@@ -42,6 +42,8 @@ describe('provider connection status', () => {
   test('renders nothing while no connection runs', () => {
     const { view } = renderPhase(ProviderConnectionPhase.Idle)
 
-    expect(view.queryByTestId('provider-connection-progress')).toBeNull()
+    expect(view.queryAllByTestId('provider-connection-progress')).toHaveLength(
+      0,
+    )
   })
 })

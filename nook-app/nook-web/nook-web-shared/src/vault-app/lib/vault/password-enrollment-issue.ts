@@ -163,7 +163,6 @@ export class IdentityEnrollmentIssue {
           ),
         );
       }
-      state.sharedGrantInstructions = "";
       let provider: NookEnrollmentProvider;
       if (usesSharedProviderGrant) {
         if (

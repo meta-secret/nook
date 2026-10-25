@@ -31,7 +31,7 @@ band, the scrolling page and the status line.
   import IdentityKeysPage from '$lib/components/identity-control/IdentityKeysPage.svelte'
   import VaultExtensionControl from './VaultExtensionControl.svelte'
   import IdentityPageFrame from '$lib/components/identity-control/IdentityPageFrame.svelte'
-  import IdentityDashboard from '$lib/components/identity-control/IdentityDashboard.svelte'
+  import IdentityPanel from '$lib/components/identity-control/IdentityPanel.svelte'
   import BrowserSettingsPanel from '$lib/components/settings/BrowserSettingsPanel.svelte'
   import IdentityDevicesPanel from '$lib/components/identity-control/IdentityDevicesPanel.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
@@ -93,7 +93,6 @@ band, the scrolling page and the status line.
     vault,
     extensionSetupState,
     identityHealth,
-    onExtensionConnect,
     onExtensionOpenPanel,
     onSettingsReconnect,
     onEditorOpenChange,
@@ -103,8 +102,7 @@ band, the scrolling page and the status line.
     extensionSetupState: ExtensionSetupOffer
     /** Day-2 health of the identity, assessed by nook-core. */
     identityHealth: NookIdentityHealth
-    onExtensionConnect: () => void
-    /** Show the connected extension's side panel. */
+    /** Show the installed extension's side panel. */
     onExtensionOpenPanel: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
@@ -501,12 +499,13 @@ band, the scrolling page and the status line.
   />
 {/snippet}
 
-<!-- The current identity's overview, opened beside its card on the hub. -->
+<!-- The current identity's panel, opened beside its card on the hub:
+     actions first, details after. -->
 {#snippet identityOverview()}
   <div class="grid gap-4">
     <header class="flex items-center justify-between gap-3">
       <h2 class="text-lg font-semibold tracking-tight text-foreground">
-        {vault.t(I18N_KEYS.WorkspaceSectionOverview)}
+        {vault.t(I18N_KEYS.IdentityOverviewEyebrow)}
       </h2>
       <button
         type="button"
@@ -519,7 +518,12 @@ band, the scrolling page and the status line.
         <X class="size-4" aria-hidden="true" />
       </button>
     </header>
-    <IdentityDashboard {vault} health={identityHealth} onOpen={openSection} />
+    <IdentityPanel
+      {vault}
+      health={identityHealth}
+      onOpen={openSection}
+      onAddSyncProvider={addSyncProvider}
+    />
   </div>
 {/snippet}
 
@@ -540,7 +544,6 @@ band, the scrolling page and the status line.
   <VaultExtensionControl
     {vault}
     offer={extensionSetupState}
-    onConnect={onExtensionConnect}
     onOpenPanel={onExtensionOpenPanel}
   />
 {/snippet}
@@ -637,6 +640,7 @@ band, the scrolling page and the status line.
     {identityName}
     onBack={() => openSection(WorkspaceSection.Identities)}
     onOpenSync={addSyncProvider}
+    onManageAccounts={() => openSection(WorkspaceSection.Sync)}
   />
 {:else}
   <div

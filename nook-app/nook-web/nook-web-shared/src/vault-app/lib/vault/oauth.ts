@@ -33,10 +33,7 @@ import {
   type OAuthFileConfig,
   type StoredOAuthFileConfiguration,
 } from "$lib/auth/providers";
-import {
-  create_google_drive_vault_folder,
-  verify_shared_google_drive_folder,
-} from "$app-wasm";
+import { create_google_drive_vault_folder } from "$app-wasm";
 import {
   GoogleAccountIdentityKind,
   GoogleDriveOAuthScope,
@@ -71,19 +68,10 @@ interface SharedICloudTargetBinding {
   readonly storageTargetId: string;
 }
 
-export interface ICloudSharedProviderAccess {
-  readonly shareReference: string;
-}
-
 export enum OAuthOperationOutcome {
   ICloudSharedProviderCreated = "iCloudSharedProviderCreated",
-  ICloudSharedProviderConnected = "iCloudSharedProviderConnected",
   ICloudTokensApplied = "iCloudTokensApplied",
   GoogleTokensApplied = "googleTokensApplied",
-}
-
-export interface GoogleSharedFolderAccess {
-  readonly folderRef: string;
 }
 
 interface ICloudTokenApplication {
@@ -272,37 +260,7 @@ export class VaultOAuthActions {
     const bound = this.bindSharedICloudTarget(targetBinding);
     if (bound.isErr()) return err(bound.error);
     state.configureOauthFile(bound.value);
-    state.sharedGrantInstructions = state.t(
-      I18N_KEYS.ProviderSetupIcloudSharedCreated,
-    );
     return ok(OAuthOperationOutcome.ICloudSharedProviderCreated);
-  }
-
-  async useICloudSharedProvider({
-    shareReference,
-  }: ICloudSharedProviderAccess): Promise<
-    Result<OAuthOperationOutcome, OAuthFailure>
-  > {
-    const state = this.state;
-    if (
-      state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-      oauth_access_token(state.oauthFileDraft.config).kind === "missing"
-    )
-      return err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired));
-    const target =
-      await iCloudOAuthSession.acceptICloudSharedVault(shareReference);
-    if (target.isErr()) return err(target.error);
-    const targetBinding: SharedICloudTargetBinding = {
-      config: state.oauthFileDraft.config,
-      storageTargetId: target.value.storageTargetId,
-    };
-    const bound = this.bindSharedICloudTarget(targetBinding);
-    if (bound.isErr()) return err(bound.error);
-    state.configureOauthFile(bound.value);
-    state.sharedGrantInstructions = state.t(
-      I18N_KEYS.ProviderSetupIcloudSharedConnected,
-    );
-    return ok(OAuthOperationOutcome.ICloudSharedProviderConnected);
   }
 
   async createGoogleVaultFolder(): Promise<Result<string, OAuthFailure>> {
@@ -337,54 +295,6 @@ export class VaultOAuthActions {
       return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
     state.configureOauthFile(bound);
-    const createdArgs: Parameters<typeof state.t>[0] = {
-      key: I18N_KEYS.ProviderSetupGoogleSharedFolderCreated,
-      replacements: { folder: folder.name },
-    };
-    state.sharedGrantInstructions = state.t(createdArgs);
-    return ok(folder.name);
-  }
-
-  async useGoogleSharedFolder({
-    folderRef,
-  }: GoogleSharedFolderAccess): Promise<Result<string, OAuthFailure>> {
-    const state = this.state;
-    if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) {
-      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
-    }
-    const config = state.oauthFileDraft.config;
-    const accessCredential = oauth_access_token(config);
-    if (accessCredential.kind === "missing") {
-      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
-    }
-    let folder;
-    try {
-      folder = await verify_shared_google_drive_folder(
-        accessCredential.token,
-        folderRef,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes(I18N_KEYS.ProviderSetupGoogleSharedNotFolder)) {
-        return err(new OAuthFailure(OAuthFailureKind.GoogleSharedNotFolder));
-      }
-      if (message.includes(I18N_KEYS.ProviderSetupGoogleSharedNotWritable)) {
-        return err(new OAuthFailure(OAuthFailureKind.GoogleSharedNotWritable));
-      }
-      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedConnection));
-    }
-    let bound;
-    try {
-      bound = bind_google_drive_shared_folder(config, folder.id);
-    } catch {
-      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
-    }
-    state.configureOauthFile(bound);
-    const tArgs3: Parameters<typeof state.t>[0] = {
-      key: I18N_KEYS.ProviderSetupGoogleSharedFolderConnected,
-      replacements: { folder: folder.name },
-    };
-    state.sharedGrantInstructions = state.t(tArgs3);
     return ok(folder.name);
   }
 
