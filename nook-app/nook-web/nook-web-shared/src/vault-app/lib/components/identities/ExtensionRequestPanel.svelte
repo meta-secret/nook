@@ -6,7 +6,7 @@ unlocks the identity; its selected vault (or first one here) opens behind it
 for the approval step that follows.
 -->
 <script lang="ts">
-  import { ArrowRight, Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
+  import { Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
@@ -99,22 +99,23 @@ for the approval step that follows.
        follows, recessed, for whoever wants to check it. -->
   <section class="grid gap-2">
     {#if approvalVault}
+      <!-- No arrow: the extension's side panel points here, at this button;
+           an arrow back toward the panel would contradict it. -->
       <Button
         type="button"
         size="lg"
-        class="w-full px-5 sm:w-auto sm:justify-self-start"
+        class="h-12 w-full px-6 text-base sm:max-w-md"
         data-testid="extension-request-unlock"
         data-store-id={approvalVault.storeId}
         disabled={busy}
         onclick={() => onConnect(approvalVault.storeId)}
       >
         {#if card.keyKind === IdentityKeyKind.Pin}
-          <KeyRound class="size-4" aria-hidden="true" />
+          <KeyRound class="size-5" aria-hidden="true" />
         {:else}
-          <Fingerprint class="size-4" aria-hidden="true" />
+          <Fingerprint class="size-5" aria-hidden="true" />
         {/if}
         {unlockLabel}
-        <ArrowRight class="size-4" aria-hidden="true" />
       </Button>
       <p class="text-xs text-muted-foreground">
         {vault.t(I18N_KEYS.ExtensionRequestVaultAction)}
