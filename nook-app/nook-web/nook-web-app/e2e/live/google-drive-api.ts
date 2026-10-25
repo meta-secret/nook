@@ -105,7 +105,76 @@ export async function createSharedVaultFolder(
   }
 }
 
-/** Grant writer access to joiner email (`permissions.create`). */
+/** One Drive permission on the vault folder: an authorized account. */
+export type LiveDrivePermission = {
+  readonly id: string
+  readonly type: string
+  readonly role: string
+  readonly emailAddress: string
+}
+
+/**
+ * The vault folder's authorized accounts, read with the request
+ * `list_google_drive_authorized_accounts` sends (`permissions.list`).
+ */
+export async function listFolderPermissions(
+  accessToken: string,
+  folderId: string,
+): Promise<LiveDrivePermission[]> {
+  const permissions: LiveDrivePermission[] = []
+  let pageToken = ''
+  do {
+    const url = new URL(
+      `${DRIVE_FILES}/${encodeURIComponent(folderId)}/permissions`,
+    )
+    url.searchParams.set(
+      'fields',
+      'nextPageToken,permissions(id,type,role,emailAddress,deleted)',
+    )
+    url.searchParams.set('pageSize', '100')
+    url.searchParams.set('supportsAllDrives', 'true')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+    const page = requireRecord(
+      await driveJson(accessToken, url.toString()),
+      'Drive permission list',
+    )
+    const listed: unknown[] = Array.isArray(page.permissions)
+      ? page.permissions
+      : []
+    for (const entry of listed) {
+      const permission = requireRecord(entry, 'Drive permission')
+      if (permission.deleted === true) continue
+      permissions.push({
+        id: readStringProperty(permission, 'id', 'Drive permission'),
+        type: typeof permission.type === 'string' ? permission.type : '',
+        role: typeof permission.role === 'string' ? permission.role : '',
+        emailAddress:
+          typeof permission.emailAddress === 'string'
+            ? permission.emailAddress
+            : '',
+      })
+    }
+    pageToken = typeof page.nextPageToken === 'string' ? page.nextPageToken : ''
+  } while (pageToken)
+  return permissions
+}
+
+/** Revoke one authorized account, as
+ * `remove_google_drive_authorized_account` does (`permissions.delete`). */
+export async function deleteFolderPermission(
+  accessToken: string,
+  folderId: string,
+  permissionId: string,
+): Promise<void> {
+  const url = new URL(
+    `${DRIVE_FILES}/${encodeURIComponent(folderId)}/permissions/${encodeURIComponent(permissionId)}`,
+  )
+  url.searchParams.set('supportsAllDrives', 'true')
+  await driveJson(accessToken, url.toString(), { method: 'DELETE' })
+}
+
+/** Authorize one more account on the vault folder as a writer, as
+ * `add_google_drive_authorized_account` does (`permissions.create`). */
 export async function shareFolderWithEmail(
   accessToken: string,
   folderId: string,

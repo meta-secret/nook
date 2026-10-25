@@ -25,6 +25,7 @@ import {
 } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
+  createGoogleDriveVaultFolder,
   disableVaultIdleLock,
   forceVaultQuiescentForE2e,
   installGoogleOAuthMock,
@@ -361,6 +362,46 @@ export async function expectNoVaultPasswords(
   })
 }
 
+/** Options for issuing a device invite from the add-device flow. */
+export type OnboardEnrollmentOptions = {
+  /** The authorized account a Google Drive or iCloud invite names. Without
+   * one, the first account with write access is picked. */
+  readonly inviteAccount?: string
+}
+
+/**
+ * Google Drive and iCloud invites name one account from the provider's own
+ * sharing list; other providers show no list. Pick the account before the
+ * invite is issued.
+ */
+export async function pickOnboardInviteAccount(
+  page: Page,
+  options?: OnboardEnrollmentOptions,
+) {
+  const panel = page
+    .getByTestId('onboard-device-panel')
+    .getByTestId('authorized-accounts')
+  if (!(await panel.isVisible())) return
+  const list = panel.getByTestId('authorized-accounts-list')
+  const failure = panel
+    .getByTestId('authorized-accounts-error')
+    .or(panel.getByTestId('authorized-accounts-empty'))
+  await expect(list.or(failure)).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await failure.isVisible()) {
+    throw new Error(
+      `Authorized accounts unavailable: ${(await failure.innerText()).trim()}`,
+    )
+  }
+  const account = options?.inviteAccount
+  const picker = account
+    ? panel.getByTestId(`authorized-account-pick-${account}`)
+    : panel.locator('[data-testid^="authorized-account-pick-"]:enabled').first()
+  await picker.click()
+  await expect(picker).toHaveAttribute('aria-checked', 'true')
+}
+
 /**
  * Issue an identity enrollment code with a one-time passphrase and return the
  * onboarding link input locator. The joining app enters the same passphrase.
@@ -368,6 +409,7 @@ export async function expectNoVaultPasswords(
 export async function submitOnboardEnrollmentCode(
   page: Page,
   passphrase: string,
+  options?: OnboardEnrollmentOptions,
 ) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
@@ -379,6 +421,7 @@ export async function submitOnboardEnrollmentCode(
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await pickOnboardInviteAccount(page, options)
   await page.getByTestId('onboard-passphrase-input').fill(passphrase)
   await page.getByTestId('onboard-device-submit').click()
 
@@ -480,6 +523,7 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   await page.getByTestId('drive-file-input').fill(fileName)
   await page.getByTestId('google-sign-in-btn').click()
   await waitForGoogleOAuthSignedIn(page)
+  await createGoogleDriveVaultFolder(page)
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   if (!options?.expectConflict) {

@@ -47,7 +47,9 @@ async function installCloudKitStub(page: Page) {
   })
 }
 
-test('choose private or shared iCloud vault storage', async ({ page }) => {
+test('iCloud setup shows the host gate and the CloudKit share step', async ({
+  page,
+}) => {
   await installCloudKitStub(page)
   await page.goto('/app/')
   await clearBrowserVault(page)
@@ -78,17 +80,8 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
     'opened iCloud URLs',
   )
   expect(openedUrls).toEqual([])
-  await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
-  await demoBeat(page)
-
-  await page.getByTestId('icloud-mode-shared').click()
-  await expect(page.getByTestId('icloud-mode-shared')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
+  // Every iCloud provider syncs through a CloudKit share; the share step is
+  // part of setup from the start.
   await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
   await demoBeat(page)
 })

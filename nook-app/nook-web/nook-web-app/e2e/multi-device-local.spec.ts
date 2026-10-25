@@ -49,11 +49,14 @@ test.describe('multi-device identity with a local sync provider', () => {
     const genesisYaml = await readLocalVaultYamlFromIdb(deviceA)
     stub = createLocalE2eFileSyncVaultStub(genesisYaml, fileName)
     await stub.install(deviceA, { fileName, vaultYaml: genesisYaml })
-    await stub.install(deviceB, { fileName, vaultYaml: genesisYaml })
-
-    await reloadUnlockLocalVaultWithSync(deviceA, stub, {
-      privateDriveFolderV2: true,
+    // The invite names the shared account; the joiner signs in as it.
+    await stub.install(deviceB, {
+      fileName,
+      vaultYaml: genesisYaml,
+      accessToken: E2E_SYNC_ONBOARD_PROVIDER.accessToken,
     })
+
+    await reloadUnlockLocalVaultWithSync(deviceA, stub)
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,

@@ -4,11 +4,14 @@ import {
   type BrowserContext,
   type Page,
 } from '@playwright/test'
+import {
+  E2E_GOOGLE_ACCOUNT_EMAIL,
+  installGoogleIdentityTokenMock,
+} from '../google-identity-stub'
 import { installMockPasskeyRuntime } from '../passkey-mock'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import { assertNoVaultErrors } from './github-sync'
-import { openLoginProviderSetup } from './vault-setup'
 import { openVaultPage } from './workspace-navigation'
 
 export async function clearBrowserVault(page: Page) {
@@ -259,20 +262,6 @@ export function uniqueSecretKey(prefix: string) {
   return `${prefix}-${Date.now()}`
 }
 
-export async function waitForEngine(page: Page) {
-  const button = page.getByTestId('connect-provider-btn')
-  await expect(button.first()).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(button.first()).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(button.first()).not.toContainText('Loading engine', {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  return button.first()
-}
-
 export async function assertGithubConnected(page: Page) {
   await assertNoVaultErrors(page, { allowTransient: true })
   if (!(await page.getByTestId('vault-panel').isVisible())) {
@@ -328,34 +317,23 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
     .toBe(true)
 }
 
-export async function setupGoogleDriveProvider(page: Page, fileName: string) {
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-oauth-file').click()
-  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
+/**
+ * Create the signed-in provider's My Drive vault folder from the setup
+ * wizard. Every Google Drive provider syncs under one; connecting stays
+ * disabled until it exists. The wizard then lists the folder's accounts.
+ */
+export async function createGoogleDriveVaultFolder(page: Page) {
+  const create = page.getByTestId('google-create-shared-folder-btn')
+  await expect(create).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await create.click()
+  await expect(page.getByTestId('google-shared-folder-status')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('drive-file-input').fill(fileName)
-  await page.getByTestId('google-sign-in-btn').click()
-  await waitForGoogleOAuthSignedIn(page)
-}
-
-export function installGoogleTokenClient(token: string) {
-  window.google = {
-    accounts: {
-      oauth2: {
-        initTokenClient: (config: {
-          callback: (response: {
-            access_token: string
-            expires_in: number
-          }) => void
-        }) => ({
-          requestAccessToken: () => {
-            config.callback({ access_token: token, expires_in: 3600 })
-          },
-        }),
-      },
-    },
-  }
+  await expect(
+    page
+      .getByTestId('authorized-accounts')
+      .getByTestId('authorized-accounts-list'),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 /** Mock Google Identity Services token client for e2e (call before navigation). */
@@ -363,16 +341,6 @@ export async function installGoogleOAuthMock(
   page: Page,
   accessToken = 'ya29.e2e_stub_access_token',
 ) {
-  const gisMockBody = `window.google=window.google||{};window.google.accounts=window.google.accounts||{};window.google.accounts.oauth2={initTokenClient:function(config){return{requestAccessToken:function(){config.callback({access_token:${JSON.stringify(accessToken)},expires_in:3600})}}}};`
-
-  await page.addInitScript(installGoogleTokenClient, accessToken)
-  await page.route('https://accounts.google.com/gsi/client', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/javascript',
-      body: gisMockBody,
-    })
-  })
   await page.route(
     'https://www.googleapis.com/drive/v3/about**',
     async (route) => {
@@ -380,12 +348,12 @@ export async function installGoogleOAuthMock(
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          user: { emailAddress: 'e2e-user@example.com' },
+          user: { emailAddress: E2E_GOOGLE_ACCOUNT_EMAIL },
         }),
       })
     },
   )
-  await page.evaluate(installGoogleTokenClient, accessToken)
+  await installGoogleIdentityTokenMock(page, accessToken)
 }
 
 export async function waitForVaultUnlocked(

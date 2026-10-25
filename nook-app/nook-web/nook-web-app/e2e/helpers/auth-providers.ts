@@ -5,14 +5,28 @@ import { expect, type Page } from '@playwright/test'
 import {
   type ActiveVaultScope,
   type AuthProvidersSnapshot,
-  type GoogleDriveMode,
-  type ICloudMode,
   type OAuthFileConfig,
-  type OAuthFilePreset,
   type StorageProvider,
 } from '$app-wasm'
+import { E2E_GOOGLE_ACCOUNT_EMAIL } from '../google-identity-stub'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
+
+type SeededOAuthFileCredentials = {
+  accessToken: string
+  refreshToken?: string
+  fileName: string
+  accountEmail?: string
+}
+
+/** Every Google Drive provider syncs under its own My Drive vault folder;
+ * every iCloud provider under a CloudKit share (`icloud-share-v1:{…}`). */
+export type SeededOAuthFile =
+  | (SeededOAuthFileCredentials & { preset: 'google-drive'; folderId: string })
+  | (SeededOAuthFileCredentials & {
+      preset: 'icloud'
+      iCloudShareTarget: string
+    })
 
 export type SeededAuthProvider = {
   id: string
@@ -20,19 +34,33 @@ export type SeededAuthProvider = {
   label: string
   githubRepo?: string
   githubPat?: string
-  oauthFile?: {
-    preset: OAuthFilePreset
-    accessToken: string
-    refreshToken?: string
-    fileName: string
-    driveMode: GoogleDriveMode
-    drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
-    iCloudMode: ICloudMode
-    accountEmail?: string
-    folderId?: string
-  }
+  oauthFile?: SeededOAuthFile
   storeId?: string
   createdAt?: string
+}
+
+/** The vault folder id a seeded Drive provider syncs under by default. The
+ * e2e Drive stubs register a seeded folder on first use. */
+export function e2eDriveFolderId(fileName: string): string {
+  return `e2e-folder-${fileName.replace(/[^A-Za-z0-9_-]/g, '-')}`
+}
+
+function seededSharedTarget(oauth: SeededOAuthFile): {
+  folderId: OAuthFileConfig['folderId']
+  iCloudShareTarget: OAuthFileConfig['iCloudShareTarget']
+} {
+  return oauth.preset === 'google-drive'
+    ? {
+        folderId: { state: 'folderId', value: oauth.folderId },
+        iCloudShareTarget: { state: 'unbound' },
+      }
+    : {
+        folderId: { state: 'root' },
+        iCloudShareTarget: {
+          state: 'sharedTarget',
+          value: oauth.iCloudShareTarget,
+        },
+      }
 }
 
 export enum AuthProviderSeedScopeKind {
@@ -140,16 +168,7 @@ function storedProvider(
             'accountEmail' in oauth && typeof oauth.accountEmail === 'string'
               ? { state: 'email', value: oauth.accountEmail }
               : { state: 'unknown' },
-          driveMode: oauth.driveMode,
-          ...(oauth.drivePrivateTarget
-            ? { drivePrivateTarget: oauth.drivePrivateTarget }
-            : {}),
-          folderId:
-            'folderId' in oauth && typeof oauth.folderId === 'string'
-              ? { state: 'folderId', value: oauth.folderId }
-              : { state: 'root' },
-          iCloudMode: oauth.iCloudMode,
-          iCloudShareTarget: { state: 'personal' },
+          ...seededSharedTarget(oauth),
         },
       },
     }
@@ -321,8 +340,8 @@ type SeededOauthFileProviderInput = {
   fileName: string
   accessToken: string
   accountEmail?: string
+  /** Defaults to `e2eDriveFolderId(fileName)`. */
   folderId?: string
-  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
 }
 
 async function seedOauthFileProviders(
@@ -331,17 +350,15 @@ async function seedOauthFileProviders(
   seedScope: AuthProviderSeedScope,
 ) {
   const providers: SeededAuthProvider[] = extras.map((provider) => {
-    const oauthFile: NonNullable<SeededAuthProvider['oauthFile']> = {
+    const oauthFile: SeededOAuthFile = {
       preset: 'google-drive',
       accessToken: provider.accessToken,
       fileName: provider.fileName,
-      driveMode: provider.folderId ? 'shared' : 'private',
-      iCloudMode: 'private',
+      folderId: ((v) => (v ? v : e2eDriveFolderId(provider.fileName)))(
+        provider.folderId,
+      ),
     }
     if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
-    if (provider.folderId) oauthFile.folderId = provider.folderId
-    if (provider.drivePrivateTarget)
-      oauthFile.drivePrivateTarget = provider.drivePrivateTarget
     return {
       id: provider.id,
       type: 'oauth-file',
@@ -363,6 +380,10 @@ export async function seedExtraOauthFileProviders(
   page: Page,
   extras: SeededOauthFileProviderInput[],
 ) {
+  await seedOauthFileProviders(page, extras, await activeVaultSeedScope(page))
+}
+
+async function activeVaultSeedScope(page: Page) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
   const storeIdMatch = vaultYaml.match(/^store_id:\s*(\S+)/m)
   if (!storeIdMatch) {
@@ -370,10 +391,44 @@ export async function seedExtraOauthFileProviders(
   }
   const storeId = storeIdMatch[1]
   if (!storeId) throw new Error('E2E OAuth provider store id is unavailable')
-  await seedOauthFileProviders(
+  return activeAuthProviderSeedScope(storeId)
+}
+
+/** One iCloud provider bound to a CloudKit share (`icloud-share-v1:{…}`). */
+export type SeededICloudProviderInput = {
+  id: string
+  label: string
+  fileName: string
+  /** CloudKit web auth token. */
+  accessToken: string
+  iCloudShareTarget: string
+}
+
+/** Add iCloud providers, each bound to its CloudKit share, to the active
+ * vault's saved auth snapshot. */
+export async function seedExtraICloudProviders(
+  page: Page,
+  extras: SeededICloudProviderInput[],
+) {
+  const providers: SeededAuthProvider[] = extras.map((provider) => ({
+    id: provider.id,
+    type: 'oauth-file',
+    label: provider.label,
+    oauthFile: {
+      preset: 'icloud',
+      accessToken: provider.accessToken,
+      fileName: provider.fileName,
+      iCloudShareTarget: provider.iCloudShareTarget,
+    },
+  }))
+  await appendSealedAuthProviders(
     page,
-    extras,
-    activeAuthProviderSeedScope(storeId),
+    providers,
+    await activeVaultSeedScope(page),
+  )
+  await waitForAuthProviderIds(
+    page,
+    extras.map((provider) => provider.id),
   )
 }
 
@@ -845,7 +900,7 @@ export const E2E_OAUTH_ONBOARD_PROVIDER = {
   label: 'File (e2e onboard)',
   fileName: 'nook-e2e-onboard',
   accessToken: 'ya29.e2e_file_sync_token',
-  accountEmail: 'file-sync-e2e@example.com',
+  accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
 }
 
 /** Alias for local sync provider used in multi-device / fan-out e2e. */
@@ -857,5 +912,5 @@ export type E2eOauthSyncProvider = {
   fileName: string
   accessToken: string
   accountEmail?: string
-  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
+  folderId?: string
 }

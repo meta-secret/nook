@@ -1,6 +1,7 @@
 import { ReplicationType } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { expect, test, type Page } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { E2E_GOOGLE_ACCOUNT_EMAIL } from './google-identity-stub'
 import {
   addSecret,
   expectIdentityMembers,
@@ -11,6 +12,7 @@ import {
   clearBrowserVault,
   createIsolatedContext,
   createLocalVaultOnLogin,
+  e2eDriveFolderId,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   SENTINEL_APP,
   enrollmentCodeFromLink,
@@ -49,7 +51,7 @@ const SHARED_PROVIDER = {
   label: 'Shared architecture drive',
   fileName: 'architecture-shared.yaml',
   accessToken: 'ya29.architecture-shared-provider-token',
-  accountEmail: 'owner@example.com',
+  accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
 }
 
 async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
@@ -657,7 +659,7 @@ test.describe('vault architecture modes', () => {
     ])
   })
 
-  test('grants shared storage, flushes it, and redeems the link in a second browser', async ({
+  test('authorizes the joiner on the vault folder, issues a credential-free invite, and redeems it in a second browser', async ({
     browser,
     page,
   }) => {
@@ -710,31 +712,52 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('onboarding-type-label')).toContainText(
       'Shared provider grant',
     )
-    await expect(page.getByTestId('shared-joiner-identity-input')).toBeVisible()
+    // The invite names one of the vault folder's accounts. Until one is
+    // picked, no link is issued.
+    const accounts = page
+      .getByTestId('onboard-device-panel')
+      .getByTestId('authorized-accounts')
+    await expect(
+      accounts.getByTestId(
+        `authorized-account-pick-${SHARED_PROVIDER.accountEmail}`,
+      ),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${SHARED_JOINER_IDENTITY}`),
+    ).toHaveCount(0)
     await page.getByTestId('onboard-passphrase-input').fill(ONBOARD_PASSWORD)
     await page.getByTestId('onboard-device-submit').click()
     await expect(page.getByTestId('onboard-error')).toContainText(
-      /joiner provider identity/i,
+      /choose the account/i,
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
 
-    await page
-      .getByTestId('shared-joiner-identity-input')
+    // Authorize the joiner's account on the folder, then pick it.
+    await accounts
+      .getByTestId('authorized-account-email-input')
       .fill(SHARED_JOINER_IDENTITY)
+    await accounts.getByTestId('authorized-account-add-btn').click()
+    const joinerPick = accounts.getByTestId(
+      `authorized-account-pick-${SHARED_JOINER_IDENTITY}`,
+    )
+    await expect(joinerPick).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const [sharedFolder] = driveStub.getSharedFolders()
+    if (!sharedFolder) throw new Error('shared Drive folder was not available.')
+    expect(sharedFolder.id).toBe(e2eDriveFolderId(SHARED_PROVIDER.fileName))
+    expect(sharedFolder.writers).toEqual([
+      SHARED_PROVIDER.accountEmail,
+      SHARED_JOINER_IDENTITY,
+    ])
+    await joinerPick.click()
+    await expect(joinerPick).toHaveAttribute('aria-checked', 'true')
     await page.getByTestId('onboard-device-submit').click()
 
     const linkInput = page.getByTestId('onboarding-link-url')
     await expect(linkInput).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(page.getByTestId('shared-grant-instructions')).toContainText(
-      SHARED_JOINER_IDENTITY,
-    )
-    await expect(page.getByTestId('shared-grant-instructions')).toContainText(
-      /Shared Drive folder|готова|ready/i,
-    )
-    expect(driveStub.getSharedFolders().length).toBeGreaterThan(0)
-    const sharedFolder = driveStub.getSharedFolders()[0]
-    if (!sharedFolder) throw new Error('shared Drive folder was not available.')
-    expect(sharedFolder.writers).toContain(SHARED_JOINER_IDENTITY)
+    // Issuing the invite grants nothing on Drive.
+    expect(driveStub.getSharedFolders()).toEqual([sharedFolder])
     await expect
       .poll(() => driveStub.getEventFileCountForParent(sharedFolder.id), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -765,6 +788,7 @@ test.describe('vault architecture modes', () => {
     try {
       await driveStub.install(joiner, {
         accessToken: SHARED_JOINER_TOKEN,
+        accountEmail: SHARED_JOINER_IDENTITY,
         fileName: SHARED_PROVIDER.fileName,
       })
       await joiner.goto('/app/')
@@ -773,6 +797,8 @@ test.describe('vault architecture modes', () => {
       ).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       })
+      // The joiner already holds a provider for the same folder, signed in
+      // as the invited account; the join reuses it.
       await seedUnscopedOauthFileProvidersForEnrollment(joiner, [
         {
           id: 'architecture-shared-joiner-provider',
@@ -810,7 +836,7 @@ test.describe('vault architecture modes', () => {
     }
   })
 
-  test('preserves and flushes the created folder when Drive sharing needs manual completion', async ({
+  test('keeps the folder accounts unchanged when Drive refuses to authorize one', async ({
     page,
   }) => {
     const driveStub = createLocalE2eGoogleDriveVaultStub(
@@ -824,7 +850,7 @@ test.describe('vault architecture modes', () => {
     })
 
     await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
-    await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
+    await createLocalVaultOnLogin(page, 'Refused shared grant architecture')
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
       [SHARED_PROVIDER],
@@ -832,36 +858,34 @@ test.describe('vault architecture modes', () => {
     )
     // The seeding helper installs its normal-success route after the initial
     // route. Reinstall the failure behavior last so Playwright dispatches the
-    // permission request through the manual-grant scenario.
+    // permission request through the refused-grant scenario.
     await driveStub.install(page, {
       accessToken: SHARED_PROVIDER.accessToken,
       fileName: SHARED_PROVIDER.fileName,
       sharedPermissionStatus: 403,
     })
     await openOnboardDevicePanel(page)
-    await page
-      .getByTestId('shared-joiner-identity-input')
-      .fill(SHARED_JOINER_IDENTITY)
-    await page.getByTestId('onboard-passphrase-input').fill(ONBOARD_PASSWORD)
-    await page.getByTestId('onboard-device-submit').click()
-
-    await expect(page.getByTestId('onboarding-link-url')).toBeVisible({
+    const accounts = page
+      .getByTestId('onboard-device-panel')
+      .getByTestId('authorized-accounts')
+    await expect(accounts.getByTestId('authorized-accounts-list')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const sharedFolder = driveStub.getSharedFolders()[0]
+    await accounts
+      .getByTestId('authorized-account-email-input')
+      .fill(SHARED_JOINER_IDENTITY)
+    await accounts.getByTestId('authorized-account-add-btn').click()
+
+    await expect(
+      accounts.getByTestId('authorized-accounts-action-error'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${SHARED_JOINER_IDENTITY}`),
+    ).toHaveCount(0)
+    const [sharedFolder] = driveStub.getSharedFolders()
     if (!sharedFolder) throw new Error('shared Drive folder was not available.')
-    expect(sharedFolder.writers).toEqual([])
-    await expect(page.getByTestId('shared-grant-instructions')).toContainText(
-      sharedFolder.name,
-    )
-    await expect(page.getByTestId('shared-grant-instructions')).toContainText(
-      SHARED_JOINER_IDENTITY,
-    )
-    await expect
-      .poll(() => driveStub.getEventFileCountForParent(sharedFolder.id), {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      .toBeGreaterThan(0)
+    expect(sharedFolder.writers).toEqual([SHARED_PROVIDER.accountEmail])
+    await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
   })
 
   test.describe('mobile', () => {

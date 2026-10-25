@@ -7,6 +7,7 @@ import {
   forceVaultQuiescentForE2e,
   openIdentitiesPage,
   openVaultPage,
+  pickOnboardInviteAccount,
   seedSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
 } from '../helpers'
@@ -85,6 +86,8 @@ test('the identity card leads to adding a device in three steps', async ({
   )
   const create = page.getByTestId('onboard-device-submit')
   await expect(create).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  // The Drive invite names one of the vault folder's authorized accounts.
+  await pickOnboardInviteAccount(page)
   await snapshot(page, '5-ready-to-invite')
   await demoBeat(page)
 
