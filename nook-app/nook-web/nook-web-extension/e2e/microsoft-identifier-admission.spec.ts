@@ -133,10 +133,11 @@ for (const locked of [false, true]) {
       const page = await context.newPage()
       await page.goto(fixture.destination())
       const widget = page.locator('#nook-auth-widget')
-      // A locked vault offers Unlock in place of Sign in.
+      // A locked vault offers Unlock, and no vault offers Connect, in place
+      // of Sign in.
       await expect(
         widget.getByText(
-          locked ? 'Unlock Nook to continue' : 'Ready to sign in',
+          locked ? 'Unlock Nook to continue' : 'Connect Nook to your vault',
         ),
       ).toBeVisible()
       if (locked) {
@@ -174,8 +175,9 @@ for (const locked of [false, true]) {
         })
         return
       }
+      // Connect opens Nook to pair a vault; nothing is looked up or filled.
       const popupPromise = context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Connect vault' }).click()
       const popup = await popupPromise
       expect(
         await worker.evaluate(() => {
@@ -185,7 +187,7 @@ for (const locked of [false, true]) {
           )
           return count
         }),
-      ).toBe(1)
+      ).toBe(0)
       await expect(popup).toHaveURL(
         /chrome-extension:\/\/[^/]+\/popup\/index.html/u,
       )
@@ -210,7 +212,9 @@ test('production backup review extracts only after consent and clears on cancel'
   baseURL,
 }, testInfo) => {
   void baseURL
-  const context = await launchExtensionContext(testInfo.outputPath('profile'))
+  test.setTimeout(180_000)
+  // Saving backup codes writes to the vault, so the extension is paired.
+  const { context } = await launchPairedPinExtension(testInfo)
   await context.tracing.start({ screenshots: true, snapshots: true })
   try {
     const worker = await getServiceWorker(context)
