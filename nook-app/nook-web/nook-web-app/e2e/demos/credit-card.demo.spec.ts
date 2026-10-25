@@ -48,4 +48,28 @@ test('add a credit card and reveal the card number', async ({ page }) => {
   )
   await expect(row.getByTestId('credit-card-cvv-value')).toContainText('123')
   await demoBeat(page)
+
+  // A sync refreshing the list while Personal data opens leaves reveal usable.
+  await openVaultSection(page, VaultSection.Secrets)
+  await page.getByTestId('vault-section-personal-data').click()
+  await page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('vault-unavailable')
+    void vault.loadSecretPage({ query: vault.secretQuery, requestedOffset: 0 })
+  })
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const toggle = row.getByTestId('secret-row-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  const reveal = row.getByTestId('reveal-secret-btn')
+  await expect(reveal).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  if ((await reveal.getAttribute('aria-pressed')) !== 'true') {
+    await reveal.click()
+  }
+  await expect(row.getByTestId('credit-card-number-value')).toContainText(
+    '4111111111111111',
+    { timeout: UI_TIMEOUT_MS },
+  )
+  await demoBeat(page)
 })
