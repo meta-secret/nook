@@ -372,6 +372,14 @@ panel sits inside the card, which then spans the full row.
 {/snippet}
 
 {#snippet overviewIcon()}<LayoutDashboard class="size-4" />{/snippet}
+{#snippet unlockedStatus()}
+  <StatusTag
+    tone={StatusTone.Success}
+    label={statusLabel}
+    title={vault.t(I18N_KEYS.WorkspaceStatusUnlockedTitle)}
+    testId="identity-card-status"
+  />
+{/snippet}
 
 <!-- A panel opens beside the card as its own frame: the card keeps the size
      of a closed card and the panel takes the rest of the row, each as tall as
@@ -401,7 +409,7 @@ panel sits inside the card, which then spans the full row.
       <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
       ></span>
     {/if}
-    <header class="flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
+    <header class="relative flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
       <span class="relative inline-flex flex-none">
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
           {card.monogram}
@@ -428,13 +436,10 @@ panel sits inside the card, which then spans the full row.
           {keysLine}
         </p>
         <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          {#if live}
-            <StatusTag
-              tone={StatusTone.Success}
-              label={statusLabel}
-              title={vault.t(I18N_KEYS.WorkspaceStatusUnlockedTitle)}
-              testId="identity-card-status"
-            />
+          {#if live && !preview}
+            <VaultActivityStatus {vault} idle={unlockedStatus} />
+          {:else if live}
+            {@render unlockedStatus()}
           {:else}
             <StatusTag
               mark={StatusMark.Icon}
@@ -462,10 +467,6 @@ panel sits inside the card, which then spans the full row.
         </div>
       </div>
     </header>
-
-    {#if live && !preview}
-      <VaultActivityStatus {vault} />
-    {/if}
 
     {#if protection}
       <section class="border-t border-border px-2 py-2">
