@@ -38,8 +38,6 @@ export enum E2eCloudKitPermission {
 
 export enum E2eCloudKitAcceptance {
   Accepted = 'ACCEPTED',
-  Invited = 'INVITED',
-  Pending = 'PENDING',
 }
 
 export type E2eICloudShareParticipant = {
