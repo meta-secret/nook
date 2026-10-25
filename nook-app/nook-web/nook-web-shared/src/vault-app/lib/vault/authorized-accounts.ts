@@ -38,10 +38,7 @@ const ACCOUNT_RULE_KEYS: readonly I18nKey[] = [
 ];
 
 export class AuthorizedAccountsFailure {
-  constructor(
-    readonly kind: AuthorizedAccountsFailureKind,
-    private readonly ruleKey: I18nKey = I18N_KEYS.AuthorizedAccountsLoadFailed,
-  ) {}
+  constructor(readonly kind: AuthorizedAccountsFailureKind) {}
 
   get translationKey(): I18nKey {
     switch (this.kind) {
@@ -58,24 +55,37 @@ export class AuthorizedAccountsFailure {
       case AuthorizedAccountsFailureKind.Manage:
         return I18N_KEYS.AuthorizedAccountsManageFailed;
       case AuthorizedAccountsFailureKind.Rejected:
-        return this.ruleKey;
+        return I18N_KEYS.AuthorizedAccountsLoadFailed;
     }
   }
 }
 
-/** A Rust account-rule rejection keeps its message; anything else is `kind`. */
-function accountFailure(
-  failure: unknown,
-  kind: AuthorizedAccountsFailureKind,
-): AuthorizedAccountsFailure {
-  const message = failure instanceof Error ? failure.message : String(failure);
-  const ruleKey = ACCOUNT_RULE_KEYS.find((key) => message.includes(key));
-  return ruleKey
-    ? new AuthorizedAccountsFailure(
-        AuthorizedAccountsFailureKind.Rejected,
-        ruleKey,
-      )
-    : new AuthorizedAccountsFailure(kind);
+/** A Rust account rule rejected the change; its own message explains why. */
+class AuthorizedAccountRuleFailure extends AuthorizedAccountsFailure {
+  constructor(private readonly ruleKey: I18nKey) {
+    super(AuthorizedAccountsFailureKind.Rejected);
+  }
+
+  override get translationKey(): I18nKey {
+    return this.ruleKey;
+  }
+}
+
+/** Maps a native WASM failure of one operation to its UI failure. */
+class AccountFailureMapping {
+  constructor(private readonly kind: AuthorizedAccountsFailureKind) {}
+
+  /** A Rust account-rule rejection keeps its message; anything else is `kind`. */
+  from<NativeCause = Error | string>(
+    failure: NativeCause,
+  ): AuthorizedAccountsFailure {
+    const message =
+      failure instanceof Error ? failure.message : String(failure);
+    const ruleKey = ACCOUNT_RULE_KEYS.find((key) => message.includes(key));
+    return ruleKey
+      ? new AuthorizedAccountRuleFailure(ruleKey)
+      : new AuthorizedAccountsFailure(this.kind);
+  }
 }
 
 export enum AuthorizedAccountsSource {
@@ -144,9 +154,8 @@ class AuthorizedAccountsClient {
           AuthorizedAccountsFailureKind.TargetRequired,
         ),
       );
-    const refreshed = await googleOAuthSession.ensureValidOAuthFileConfig(
-      config,
-    );
+    const refreshed =
+      await googleOAuthSession.ensureValidOAuthFileConfig(config);
     if (refreshed.isErr())
       return err(
         new AuthorizedAccountsFailure(
@@ -182,7 +191,7 @@ class AuthorizedAccountsClient {
       try {
         return ok(icloud_authorized_accounts(share.value));
       } catch (failure) {
-        return err(accountFailure(failure, AuthorizedAccountsFailureKind.Load));
+        return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(failure));
       }
     }
     try {
@@ -193,7 +202,7 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(accountFailure(failure, AuthorizedAccountsFailureKind.Load));
+      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Load).from(failure));
     }
   }
 
@@ -217,7 +226,7 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(accountFailure(failure, AuthorizedAccountsFailureKind.Add));
+      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Add).from(failure));
     }
   }
 
@@ -241,7 +250,7 @@ class AuthorizedAccountsClient {
         ),
       );
     } catch (failure) {
-      return err(accountFailure(failure, AuthorizedAccountsFailureKind.Remove));
+      return err(new AccountFailureMapping(AuthorizedAccountsFailureKind.Remove).from(failure));
     }
   }
 
@@ -274,7 +283,7 @@ class AuthorizedAccountsClient {
       return ok(authorized_invite_account(accounts, email));
     } catch (failure) {
       return err(
-        accountFailure(failure, AuthorizedAccountsFailureKind.Rejected),
+        new AccountFailureMapping(AuthorizedAccountsFailureKind.Rejected).from(failure),
       );
     }
   }

@@ -312,6 +312,8 @@ describe('portable vault client policy', () => {
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
     })
     Object.defineProperty(invalidConfig, 'preset', { value: '' })
-    expect(() => staged_oauth_remote_storage_args(invalidConfig)).toThrow('Invalid typed WASM input.')
+    expect(() => staged_oauth_remote_storage_args(invalidConfig)).toThrow(
+      'Invalid typed WASM input.',
+    )
   })
 })

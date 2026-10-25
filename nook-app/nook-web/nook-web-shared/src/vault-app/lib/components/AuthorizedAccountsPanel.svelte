@@ -7,7 +7,11 @@ device invite.
 -->
 <script lang="ts" module>
   import type { AuthorizedAccountList as PanelAccountList } from '$app-wasm'
-  import type { AuthorizedAccountsAccess as PanelAccess } from '$lib/vault/authorized-accounts'
+  import type {
+    AuthorizedAccountsAccess as PanelAccess,
+    AuthorizedAccountsFailure,
+  } from '$lib/vault/authorized-accounts'
+  import type { Result } from 'neverthrow'
 
   enum PanelStateKind {
     Loading = 'loading',
@@ -23,6 +27,12 @@ device invite.
         accounts: PanelAccountList
       }
     | { kind: PanelStateKind.Failed; message: string }
+
+  /** A refreshed provider access list and the target it came from. */
+  type AccountListRefresh = {
+    readonly listed: Result<PanelAccountList, AuthorizedAccountsFailure>
+    readonly access: PanelAccess
+  }
 </script>
 
 <script lang="ts">
@@ -30,16 +40,13 @@ device invite.
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, UserMinus, UserPlus, Users } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { AuthorizedAccount, AuthorizedAccountList } from '$app-wasm'
+  import type { AuthorizedAccount } from '$app-wasm'
   import type { OAuthFileConfig } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     AuthorizedAccountsSource,
     authorizedAccountsClient,
-    type AuthorizedAccountsAccess,
-    type AuthorizedAccountsFailure,
   } from '$lib/vault/authorized-accounts'
-  import type { Result } from 'neverthrow'
 
   let {
     vault,
@@ -97,18 +104,15 @@ device invite.
   }
 
   /** Keep the picked account only while the refreshed list still allows it. */
-  function settle(
-    result: Result<AuthorizedAccountList, AuthorizedAccountsFailure>,
-    access: AuthorizedAccountsAccess,
-  ) {
-    if (result.isErr()) {
-      actionError = vault.t(result.error.translationKey)
+  function settle({ listed, access }: AccountListRefresh) {
+    if (listed.isErr()) {
+      actionError = vault.t(listed.error.translationKey)
       return
     }
-    panel = { kind: PanelStateKind.Ready, access, accounts: result.value }
+    panel = { kind: PanelStateKind.Ready, access, accounts: listed.value }
     if (!selectable) return
     const choice: Parameters<typeof authorizedAccountsClient.inviteAccount>[0] =
-      { accounts: result.value, email: selectedEmail }
+      { accounts: listed.value, email: selectedEmail }
     const kept = selectedEmail.trim()
       ? authorizedAccountsClient.inviteAccount(choice)
       : false
@@ -134,7 +138,8 @@ device invite.
       }
       return
     }
-    settle(listed, access.value)
+    const refresh: AccountListRefresh = { listed, access: access.value }
+    settle(refresh)
   }
 
   async function addAccount() {
@@ -148,7 +153,8 @@ device invite.
         email: newEmail,
       }
       const added = await authorizedAccountsClient.add(change)
-      settle(added, access)
+      const refresh: AccountListRefresh = { listed: added, access }
+      settle(refresh)
       if (added.isOk()) newEmail = ''
     } finally {
       busy = false
@@ -165,7 +171,11 @@ device invite.
         access,
         email: account.email,
       }
-      settle(await authorizedAccountsClient.remove(change), access)
+      const refresh: AccountListRefresh = {
+        listed: await authorizedAccountsClient.remove(change),
+        access,
+      }
+      settle(refresh)
     } finally {
       busy = false
     }
@@ -178,9 +188,14 @@ device invite.
     busy = true
     actionError = ''
     try {
-      const request: Parameters<typeof authorizedAccountsClient.manageICloud>[0] =
-        { target: access.target, title: shareTitle }
-      settle(await authorizedAccountsClient.manageICloud(request), access)
+      const request: Parameters<
+        typeof authorizedAccountsClient.manageICloud
+      >[0] = { target: access.target, title: shareTitle }
+      const refresh: AccountListRefresh = {
+        listed: await authorizedAccountsClient.manageICloud(request),
+        access,
+      }
+      settle(refresh)
     } finally {
       busy = false
     }
@@ -238,7 +253,10 @@ device invite.
   </header>
 
   {#if panel.kind === PanelStateKind.Loading}
-    <p class="text-xs text-muted-foreground" data-testid="authorized-accounts-loading">
+    <p
+      class="text-xs text-muted-foreground"
+      data-testid="authorized-accounts-loading"
+    >
       {vault.t(I18N_KEYS.AuthorizedAccountsLoading)}
     </p>
   {:else if panel.kind === PanelStateKind.Failed}
@@ -247,7 +265,10 @@ device invite.
     </p>
   {:else}
     {#if accounts.length === 0}
-      <p class="text-xs text-muted-foreground" data-testid="authorized-accounts-empty">
+      <p
+        class="text-xs text-muted-foreground"
+        data-testid="authorized-accounts-empty"
+      >
         {vault.t(I18N_KEYS.AuthorizedAccountsEmpty)}
       </p>
     {:else}
@@ -260,7 +281,8 @@ device invite.
         {#each accounts as account (account.accessId)}
           {@const canPick = selectable && invitable(account)}
           {@const selected =
-            canPick && selectedEmail.toLowerCase() === account.email.toLowerCase()}
+            canPick &&
+            selectedEmail.toLowerCase() === account.email.toLowerCase()}
           <li class="flex items-center gap-3 px-3 py-2.5 text-sm">
             {#if selectable}
               <button
@@ -282,15 +304,20 @@ device invite.
                     <span class="size-2 rounded-full bg-foreground"></span>
                   {/if}
                 </span>
-                <span class="min-w-0 flex-1 truncate text-foreground">{account.email}</span>
+                <span class="min-w-0 flex-1 truncate text-foreground"
+                  >{account.email}</span
+                >
               </button>
             {:else}
               <span
                 class="min-w-0 flex-1 truncate text-foreground"
-                data-testid="authorized-account-{account.email}">{account.email}</span
+                data-testid="authorized-account-{account.email}"
+                >{account.email}</span
               >
             {/if}
-            <span class="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span
+              class="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground"
+            >
               {account.status === 'invited'
                 ? vault.t(I18N_KEYS.AuthorizedAccountsStatusInvited)
                 : roleLabel(account)}
@@ -334,7 +361,10 @@ device invite.
           void addAccount()
         }}
       >
-        <label class="text-xs font-medium text-foreground" for="authorized-account-email">
+        <label
+          class="text-xs font-medium text-foreground"
+          for="authorized-account-email"
+        >
           {vault.t(I18N_KEYS.AuthorizedAccountsAddLabel)}
         </label>
         <div class="flex gap-2">
@@ -368,7 +398,10 @@ device invite.
     {/if}
 
     {#if actionError}
-      <p class="text-xs text-destructive" data-testid="authorized-accounts-action-error">
+      <p
+        class="text-xs text-destructive"
+        data-testid="authorized-accounts-action-error"
+      >
         {actionError}
       </p>
     {/if}

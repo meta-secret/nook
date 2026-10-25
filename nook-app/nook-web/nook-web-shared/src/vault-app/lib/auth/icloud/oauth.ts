@@ -692,7 +692,8 @@ class ICloudOAuthSession {
           type: participant.type || "",
           permission: participant.permission || "",
           acceptanceStatus: participant.acceptanceStatus || "",
-          emailAddress: participant.userIdentity?.lookupInfo?.emailAddress || "",
+          emailAddress:
+            participant.userIdentity?.lookupInfo?.emailAddress || "",
         }),
       ),
     };

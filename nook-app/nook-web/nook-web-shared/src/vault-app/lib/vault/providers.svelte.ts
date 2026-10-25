@@ -868,7 +868,7 @@ export class ProviderPersistenceActions {
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
-        state.addProviderOpen = false;
+      state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
       return storageOk(ProviderSaveOutcome.Saved);

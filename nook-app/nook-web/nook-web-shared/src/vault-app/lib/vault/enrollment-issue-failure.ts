@@ -44,7 +44,5 @@ export class EnrollmentIssueFailure {
 
 export type EnrollmentCodeIssueResult = Result<
   string,
-  | EnrollmentIssueFailure
-  | OAuthFailure
-  | VaultStorageFailure
+  EnrollmentIssueFailure | OAuthFailure | VaultStorageFailure
 >;
