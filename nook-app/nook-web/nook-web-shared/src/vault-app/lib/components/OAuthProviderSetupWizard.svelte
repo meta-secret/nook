@@ -131,7 +131,8 @@
         vault.errorMsg = vault.t(creation.error.translationKey);
         return;
       }
-      sharedFolderStepOpen = false;
+      // Keep the folder step open: it now shows the authorized accounts.
+      sharedFolderStepOpen = true;
       syncStepOpen = true;
     } finally {
       sharedFolderBusy = false;
@@ -157,7 +158,8 @@
         vault.errorMsg = vault.t(connection.error.translationKey);
         return;
       }
-      sharedFolderStepOpen = false;
+      // Keep the folder step open: it now shows the authorized accounts.
+      sharedFolderStepOpen = true;
       syncStepOpen = true;
     } finally {
       sharedFolderBusy = false;
