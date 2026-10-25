@@ -63,6 +63,13 @@ export async function openFirstVaultSetup(page: Page) {
   }
 }
 
+/** The open vault's row on its identity card. The first-run setup renders
+ * inside the identities hub and the cards follow it, so the row, not the
+ * hub, shows that setup has finished. */
+export function openVaultRow(page: Page): Locator {
+  return page.locator('[data-testid="identity-vault-row"][data-state="open"]')
+}
+
 /** Leave the first-run backup step for the new vault when it shows. */
 export async function skipFirstRunBackup(
   page: Page,
@@ -81,8 +88,7 @@ export async function skipFirstRunBackup(
  * then open the new vault from its row there. */
 export async function expectFirstVaultOpen(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
-  const hub = page.getByTestId('identities-hub')
-  await skipFirstRunBackup(page, vaultPanel.or(hub).first())
+  await skipFirstRunBackup(page, vaultPanel.or(openVaultRow(page)).first())
   await openVaultPage(page)
 }
 
@@ -151,12 +157,10 @@ export async function createLocalVaultOnLogin(
     }
   }
 
-  await skipFirstRunBackup(
-    page,
-    readySurface.or(page.getByTestId('identities-hub')).first(),
-  )
+  await skipFirstRunBackup(page, readySurface.or(openVaultRow(page)).first())
   // The first vault's setup ends on the identities; the vault opens there.
-  if (readyTestId === 'vault-panel') await openVaultPage(page)
+  if (readyTestId === 'vault-panel' || readyTestId === 'authenticated-shell')
+    await openVaultPage(page)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -327,11 +327,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await website.page.close()
     }
 
+    // Reopened from its address, the paired extension unlocks the vault.
     await leaveFirstRunReady(simplePage)
-    await expect(simplePage).toHaveURL((url) =>
-      url.pathname.endsWith('/identities'),
-    )
-    await expect(simplePage.getByTestId('identities-hub')).toBeVisible()
+    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
     // Whether the reused tab's connect-route load adopts before the spec
     // navigates it away is timing-dependent, so later counts are relative.
     await flushNookLogPersistQueue(simplePage)

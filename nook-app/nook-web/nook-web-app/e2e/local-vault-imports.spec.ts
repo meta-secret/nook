@@ -499,7 +499,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('bitwarden-import-submit').click()
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
-      'Imported 1 item',
+      'Imported 1 records',
     )
 
     await openPasswordManagerImport(page, 'onepassword')
@@ -510,7 +510,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 1 item',
+      'Imported 1 records',
     )
 
     await openVaultPage(page)
@@ -530,7 +530,7 @@ test.describe('local vault', () => {
     })
     await page.getByTestId('onepassword-import-submit').click()
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
-      'Imported 1 item',
+      'Imported 1 records',
     )
     await openVaultPage(page)
     rows = page.getByTestId('secret-row').filter({ hasText: 'shared-alice' })

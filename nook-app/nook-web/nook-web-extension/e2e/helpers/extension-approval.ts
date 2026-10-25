@@ -53,17 +53,21 @@ export async function waitForExtensionPairingReady(
  * A vault created while pairing is the browser's first vault, so its
  * first-run "ready" screen (with the sync offer) follows the approval.
  * Leave it the way a person declining the offer would; the page then lands
- * on the identities hub, which renders no authenticated vault shell.
+ * on the identities hub, which renders no authenticated vault shell. The
+ * first-run steps render inside the hub, so the open vault's row on its card
+ * shows that setup has finished.
  */
 export async function leaveFirstRunReady(vaultPage: Page): Promise<void> {
   const shell = vaultPage.getByTestId('authenticated-shell')
-  const hub = vaultPage.getByTestId('identities-hub')
+  const openRow = vaultPage.locator(
+    '[data-testid="identity-vault-row"][data-state="open"]',
+  )
   const ready = vaultPage.getByTestId('first-run-backup-step')
-  await expect(shell.or(hub).or(ready).first()).toBeVisible({
+  await expect(shell.or(openRow).or(ready).first()).toBeVisible({
     timeout: 30_000,
   })
   if (await ready.isVisible()) {
     await vaultPage.getByTestId('first-run-backup-skip').click()
   }
-  await expect(shell.or(hub).first()).toBeVisible({ timeout: 30_000 })
+  await expect(shell.or(openRow).first()).toBeVisible({ timeout: 30_000 })
 }
