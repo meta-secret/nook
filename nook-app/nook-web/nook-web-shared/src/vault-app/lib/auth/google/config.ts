@@ -10,9 +10,8 @@
  *   https://simple.nokey.sh, https://sentinel.nokey.sh,
  *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh
  * - OAuth consent screen scopes:
- *   - Private provider mode: https://www.googleapis.com/auth/drive.appdata
- *   - Shared provider mode: https://www.googleapis.com/auth/drive.file
- *   - Shared cross-account reads: https://www.googleapis.com/auth/drive.readonly
+ *   - Vault folder writes: https://www.googleapis.com/auth/drive.file
+ *   - Reads of events other authorized accounts created: https://www.googleapis.com/auth/drive.readonly
  *
  * Redirect URIs are not used by the GIS token client flow.
  */
