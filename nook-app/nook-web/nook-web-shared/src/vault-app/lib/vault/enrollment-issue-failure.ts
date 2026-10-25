@@ -1,9 +1,6 @@
 import type { Result } from "neverthrow";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
-import type {
-  OAuthFailure,
-  SharedStorageGrantFailure,
-} from "$lib/auth/oauth-failure";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 
 export enum EnrollmentIssueRejection {
@@ -35,20 +32,16 @@ export class EnrollmentIssueFailure {
         return I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired;
       case EnrollmentIssueRejection.GithubCredentialsRequired:
         return I18N_KEYS.ErrorsGithubEnrollmentCredentialsRequired;
-      case EnrollmentIssueRejection.ICloudTargetRequired:
-        return I18N_KEYS.ProviderSetupIcloudSharedTargetRequired;
       case EnrollmentIssueRejection.OAuthProviderRequired:
         return I18N_KEYS.ErrorsSharedProviderOauthRequired;
+      case EnrollmentIssueRejection.ICloudTargetRequired:
       case EnrollmentIssueRejection.SharedTargetUnavailable:
-        return I18N_KEYS.ProviderSetupGoogleSharedCreateFailed;
+        return I18N_KEYS.ErrorsValidationSharedStorageTargetRequired;
     }
   }
 }
 
 export type EnrollmentCodeIssueResult = Result<
   string,
-  | EnrollmentIssueFailure
-  | SharedStorageGrantFailure
-  | OAuthFailure
-  | VaultStorageFailure
+  EnrollmentIssueFailure | OAuthFailure | VaultStorageFailure
 >;

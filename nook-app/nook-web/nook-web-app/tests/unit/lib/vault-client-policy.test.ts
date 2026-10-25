@@ -13,7 +13,6 @@ import {
   VaultSyncTimerStartDecision,
   VaultSyncTimerTickDecision,
   active_vault_providers,
-  existing_provider_save_setup,
   providers_visible_while_device_locked,
   staged_oauth_remote_storage_args,
   sync_providers_for_active_vault,
@@ -313,11 +312,8 @@ describe('portable vault client policy', () => {
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
     })
     Object.defineProperty(invalidConfig, 'preset', { value: '' })
-    expect(() =>
-      staged_oauth_remote_storage_args(
-        invalidConfig,
-        existing_provider_save_setup(),
-      ),
-    ).toThrow('Invalid typed WASM input.')
+    expect(() => staged_oauth_remote_storage_args(invalidConfig)).toThrow(
+      'Invalid typed WASM input.',
+    )
   })
 })

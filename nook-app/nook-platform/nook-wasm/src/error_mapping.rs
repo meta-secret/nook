@@ -60,6 +60,11 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::SharedJoinerIdentityInvalid
             | ValidationError::SharedStorageTargetRequired
             | ValidationError::SharedStorageTargetInvalid
+            | ValidationError::AuthorizedAccountMissing
+            | ValidationError::AuthorizedAccountReadOnly
+            | ValidationError::AuthorizedAccountExists
+            | ValidationError::AuthorizedAccountOwner
+            | ValidationError::JoinerAccountMismatch
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }
             | ValidationError::UnknownVaultType { .. }

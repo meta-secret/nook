@@ -55,7 +55,7 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   const gateTop = ((v) => (v ? v : 0))((await gate.boundingBox())?.y)
   const previewTop = ((v) => (v ? v : 0))((await preview.boundingBox())?.y)
   expect(gateTop).toBeLessThan(previewTop)
-  await expect(preview.getByTestId('identity-manage')).toHaveCount(0)
+  await expect(preview.getByTestId('identity-overview-toggle')).toHaveCount(0)
   await expect(preview.getByTestId('identity-unlock')).toHaveCount(0)
   await demoBeat(page)
 
@@ -71,17 +71,9 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Manage on the card drops a short list of actions over it.
+  // The identity panel opens beside the card: its actions first, then the
+  // details, each opening its page.
   await page.getByTestId('header-identities-btn').click()
-  const manage = page.getByTestId('identity-manage').first()
-  await manage.click()
-  await expect(manage).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByTestId('identity-menu')).toBeVisible()
-  await expectNoSidewaysScroll(page)
-  await demoBeat(page)
-
-  // Overview opens beside the card: what the identity has, each tile
-  // opening its page.
   await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

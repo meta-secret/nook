@@ -6,6 +6,7 @@ use crate::AuthProviderDatabase;
 use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
+use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare};
 #[cfg(test)]
 use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::identity_record::{
@@ -13,7 +14,7 @@ use crate::storage::identity_record::{
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
 use crate::{NookDatabase, NookError};
-use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, DriveEventParent, StorageMode};
+use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, StorageMode};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -42,7 +43,8 @@ impl NookVaultManager {
         self.storage.access_token.zeroize();
         self.storage.remote_ref.clear();
         self.storage.remote_path.clear();
-        self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
+        self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
+        self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
         self.storage.mode = StorageMode::Local;
     }
 

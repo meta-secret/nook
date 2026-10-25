@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OAuthAccessTokenRef,
-    OAuthFilePreset, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
-    StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-    StoredGoogleDrivePrivateTarget, StoredLocalFolderConfiguration, StoredOAuthAccountIdentity,
-    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OAuthAccessTokenRef, OAuthFilePreset,
+    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
+    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+    StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
 };
 
 use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
@@ -44,19 +44,6 @@ impl ProviderSaveSetup {
     }
 }
 
-/// Whether a saved provider row starts its own remote target or adopts one
-/// another app of the identity already uses.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub enum ProviderSaveRemoteTarget {
-    /// A provider added on this app resolves its own private Drive folder.
-    #[default]
-    Fresh,
-    /// A provider adopted from an enrollment code keeps the issuer's folder,
-    /// so both apps read the same identity log and vault events.
-    Adopted,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSaveRequest {
@@ -72,8 +59,6 @@ pub struct ProviderSaveRequest {
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,
-    #[serde(default)]
-    pub remote_target: ProviderSaveRemoteTarget,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
@@ -132,8 +117,6 @@ impl ProviderSaveRequest {
         let request = self;
         if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
             && config.preset == OauthFilePreset::GoogleDrive
-            && (config.drive_mode == GoogleDriveMode::Shared
-                || matches!(config.folder_id, StoredGoogleDriveFolder::FolderId(_)))
         {
             return match &config.file_name {
                 StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
@@ -201,12 +184,6 @@ impl ProviderSaveRequest {
                 };
                 oauth.preset = request.oauth_preset;
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
-                if oauth.preset == OauthFilePreset::GoogleDrive
-                    && oauth.resolved_google_drive_mode() == GoogleDriveMode::Private
-                    && request.remote_target == ProviderSaveRemoteTarget::Fresh
-                {
-                    oauth.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
-                }
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
                     label: ProviderLabel::OAuth(crate::OAuthProviderLabel {
@@ -265,12 +242,9 @@ impl ActiveOAuthMerge<'_> {
                 StoredGoogleDriveFolder::FolderId(_) => active.folder_id.clone(),
                 StoredGoogleDriveFolder::Root => persisted.folder_id.clone(),
             },
-            drive_private_target: active.drive_private_target.clone(),
-            drive_mode: active.drive_mode,
-            icloud_mode: active.icloud_mode,
             icloud_share_target: match active.icloud_share_target {
                 StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
-                StoredICloudShareTarget::Personal => persisted.icloud_share_target.clone(),
+                StoredICloudShareTarget::Unbound => persisted.icloud_share_target.clone(),
             },
             file_name: match (&persisted.file_name, &active.file_name) {
                 (StoredOAuthRemoteFileName::FileName(name), _) if !name.trim().is_empty() => {
@@ -468,11 +442,11 @@ impl ProviderSaveRequest {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ActiveVaultScope, GoogleDriveMode, LocalFolderConfigData, OauthFilePreset,
-        ProviderVaultScope, StorageProviderType, StoredGoogleDriveFolder,
-        StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-        StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
-        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        ActiveVaultScope, LocalFolderConfigData, OauthFilePreset, ProviderVaultScope,
+        StorageProviderType, StoredGoogleDriveFolder, StoredLocalFolderConfiguration,
+        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName,
     };
     use crate::{StoredGithubPat, StoredGithubRepository};
 
@@ -497,7 +471,6 @@ mod tests {
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
-                remote_target: super::ProviderSaveRemoteTarget::Fresh,
             }
         }
     }
@@ -533,14 +506,13 @@ mod tests {
     }
 
     #[test]
-    fn a_private_drive_row_keeps_the_folder_its_draft_names() -> Result<(), &'static str> {
+    fn a_drive_row_keeps_the_backup_name_its_draft_names() -> Result<(), &'static str> {
         let named = |file_name: &str| {
             let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
             request.github_repo = super::DEFAULT_DRIVE_BACKUP_NAME.to_owned();
             request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset: OauthFilePreset::GoogleDrive,
                 file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
-                drive_mode: GoogleDriveMode::Private,
                 ..OAuthFileConfigData::default()
             });
             let snapshot = request.apply().saved()?;
@@ -572,38 +544,27 @@ mod tests {
     }
 
     #[test]
-    fn adopted_private_drive_rows_keep_the_issuers_event_folder() -> Result<(), &'static str> {
-        let oauth = OAuthFileConfigData {
+    fn saved_drive_rows_keep_the_shared_vault_folder() -> Result<(), &'static str> {
+        let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+        request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("token".to_owned()),
             file_id: StoredOAuthRemoteFileId::Unresolved,
-            drive_private_target: crate::StoredGoogleDrivePrivateTarget::Pending,
-            drive_mode: GoogleDriveMode::Private,
+            folder_id: StoredGoogleDriveFolder::FolderId("issuer-folder".to_owned()),
             ..OAuthFileConfigData::default()
-        };
-        let saved_target = |remote_target| {
-            let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-            request.oauth_file = StoredOAuthFileConfiguration::configured(oauth.clone());
-            request.remote_target = remote_target;
-            let snapshot = request.apply().saved()?;
-            snapshot
-                .providers
-                .iter()
-                .find_map(|row| match &row.oauth_file {
-                    StoredOAuthFileConfiguration::Configured(config) => {
-                        Some(config.drive_private_target.clone())
-                    }
-                    StoredOAuthFileConfiguration::NotApplicable => None,
-                })
-                .ok_or("expected a saved Drive row")
-        };
+        });
+        let snapshot = request.apply().saved()?;
+        let folder = snapshot
+            .providers
+            .iter()
+            .find_map(|row| match &row.oauth_file {
+                StoredOAuthFileConfiguration::Configured(config) => Some(config.folder_id.clone()),
+                StoredOAuthFileConfiguration::NotApplicable => None,
+            })
+            .ok_or("expected a saved Drive row")?;
         assert_eq!(
-            saved_target(super::ProviderSaveRemoteTarget::Adopted)?,
-            crate::StoredGoogleDrivePrivateTarget::Pending
-        );
-        assert_eq!(
-            saved_target(super::ProviderSaveRemoteTarget::Fresh)?,
-            crate::StoredGoogleDrivePrivateTarget::Pending
+            folder,
+            StoredGoogleDriveFolder::FolderId("issuer-folder".to_owned())
         );
         Ok(())
     }
@@ -718,7 +679,6 @@ mod tests {
             access_token: StoredOAuthAccessCredential::AccessToken("fresh-access".to_owned()),
             file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
             file_name: StoredOAuthRemoteFileName::FileName("events".to_owned()),
-            drive_mode: GoogleDriveMode::Shared,
             folder_id: StoredGoogleDriveFolder::FolderId("folder".to_owned()),
             ..OAuthFileConfigData::default()
         };
@@ -868,9 +828,7 @@ mod tests {
 
     #[test]
     fn active_merge_retains_persisted_metadata_and_adopts_active_targets() {
-        use crate::{
-            ICloudMode, StoredICloudShareTarget, StoredOAuthAccountIdentity, StoredOAuthTokenExpiry,
-        };
+        use crate::{StoredICloudShareTarget, StoredOAuthAccountIdentity, StoredOAuthTokenExpiry};
         let persisted = OAuthFileConfigData {
             file_name: StoredOAuthRemoteFileName::FileName(" stored ".to_owned()),
             account_email: StoredOAuthAccountIdentity::Email("stored-account".to_owned()),
@@ -885,8 +843,6 @@ mod tests {
             account_email: StoredOAuthAccountIdentity::Email("active-account".to_owned()),
             expires_at: StoredOAuthTokenExpiry::ExpiresAt("active-expiry".to_owned()),
             file_id: StoredOAuthRemoteFileId::FileId("active-file".to_owned()),
-            drive_mode: GoogleDriveMode::Shared,
-            icloud_mode: ICloudMode::Shared,
             ..OAuthFileConfigData::default()
         };
         let merged = ActiveOAuthMerge {
@@ -897,8 +853,6 @@ mod tests {
         .merge();
         assert_eq!(merged.access_token, active.access_token);
         assert_eq!(merged.file_id, active.file_id);
-        assert_eq!(merged.drive_mode, active.drive_mode);
-        assert_eq!(merged.icloud_mode, active.icloud_mode);
         assert_eq!(merged.file_name, persisted.file_name);
         assert_eq!(merged.account_email, persisted.account_email);
         assert_eq!(merged.expires_at, persisted.expires_at);

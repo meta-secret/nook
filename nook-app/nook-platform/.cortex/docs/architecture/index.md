@@ -10,7 +10,7 @@
   - Description: Provider-free Sentinel reverse onboarding, threshold policy, and atomic genesis
   - Status: Implemented
 - **[auth-providers.md](auth-providers.md)**
-  - Description: Login gate, `nook_auth` sync-provider credentials, OAuth origins
+  - Description: Login gate, `nook_auth` sync-provider credentials, shared Drive/iCloud targets and authorized accounts, OAuth origins
   - Status: Active
 - **[identity-vault-architecture.md](identity-vault-architecture.md)**
   - Description: Identity and vault ownership boundaries

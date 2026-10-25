@@ -2,7 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 
 /**
- * CloudKit JS web auth for iCloud private-database vault storage.
+ * CloudKit JS web auth for iCloud shared-zone vault storage.
  *
  * Browser-only — no server, no client secret. After sign-in, the web auth
  * token is passed to wasm for CloudKit REST calls.
@@ -22,6 +22,8 @@ import {
   default as initNookWasm,
   create_icloud_shared_storage_target,
   parse_icloud_shared_storage_target,
+  type ICloudParticipantObservation,
+  type ICloudShareObservation,
   type ICloudSharedTarget,
 } from "$app-wasm";
 import {
@@ -45,7 +47,9 @@ import {
   type CloudKitGlobal,
   type CloudKitRecordInfosResponse,
   type CloudKitAuthSetupOptions,
+  type CloudKitDatabase,
   type CloudKitRecord,
+  type CloudKitRecordFetchOptions,
   type CloudKitRecordSaveOptions,
   type CloudKitSharePresentationOptions,
   type CloudKitZoneID,
@@ -142,6 +146,33 @@ type CloudKitRecordPreview =
       kind: CloudKitRecordPreviewKind.Available;
       response: CloudKitRecordInfosResponse;
     };
+
+type ICloudShareLocation = {
+  readonly container: CloudKitContainer;
+  readonly target: ICloudSharedTarget;
+};
+
+type ICloudShareRecordRequest = {
+  readonly database: CloudKitDatabase;
+  readonly target: ICloudSharedTarget;
+  readonly recordName: string;
+};
+
+type ICloudShareRoot = {
+  readonly database: CloudKitDatabase;
+  readonly root: CloudKitRecord;
+};
+
+type CloudKitRecordName = { readonly recordName: string };
+
+export type ICloudShareManagementRequest = {
+  readonly target: ICloudSharedTarget;
+  readonly title: string;
+};
+
+export enum ICloudShareManagement {
+  Presented = "presented",
+}
 
 enum CloudKitSignInResidency {
   Active = "active",
@@ -572,6 +603,128 @@ class ICloudOAuthSession {
         ),
       };
       return ok(storageTarget);
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
+    }
+  }
+  /** The database through which this account reaches the share's zone. */
+  private shareDatabase({
+    container,
+    target,
+  }: ICloudShareLocation): Result<CloudKitDatabase, OAuthFailure> {
+    const database =
+      target.role === "owner"
+        ? container.privateCloudDatabase
+        : container.sharedCloudDatabase;
+    return database
+      ? ok(database)
+      : err(new OAuthFailure(OAuthFailureKind.SharedConnection));
+  }
+  private async fetchShareRecord({
+    database,
+    target,
+    recordName,
+  }: ICloudShareRecordRequest): Promise<Result<CloudKitRecord, OAuthFailure>> {
+    const options: CloudKitRecordFetchOptions = {
+      zoneID: {
+        zoneName: target.zoneName,
+        ownerRecordName: target.ownerRecordName,
+      },
+    };
+    const reference: CloudKitRecordName = { recordName };
+    try {
+      const fetched = await database.fetchRecords([reference], options);
+      const record = fetched.records[0];
+      return record
+        ? ok(record)
+        : err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
+    }
+  }
+  private async shareRoot(
+    target: ICloudSharedTarget,
+  ): Promise<Result<ICloudShareRoot, OAuthFailure>> {
+    const admitted = await this.sharedContainer();
+    if (admitted.isErr()) return err(admitted.error);
+    const location: ICloudShareLocation = { container: admitted.value, target };
+    const database = this.shareDatabase(location);
+    if (database.isErr()) return err(database.error);
+    const rootRequest: ICloudShareRecordRequest = {
+      database: database.value,
+      target,
+      recordName: target.rootRecordName,
+    };
+    const root = await this.fetchShareRecord(rootRequest);
+    if (root.isErr()) return err(root.error);
+    const shareRoot: ICloudShareRoot = {
+      database: database.value,
+      root: root.value,
+    };
+    return ok(shareRoot);
+  }
+  /**
+   * The share's participants as CloudKit reports them. Rust turns them into
+   * the provider's authorized-account list.
+   */
+  async fetchShareParticipants(
+    target: ICloudSharedTarget,
+  ): Promise<Result<ICloudShareObservation, OAuthFailure>> {
+    const shareRoot = await this.shareRoot(target);
+    if (shareRoot.isErr()) return err(shareRoot.error);
+    const shareName = shareRoot.value.root.share?.recordName?.trim();
+    if (!shareName)
+      return err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
+    const shareRequest: ICloudShareRecordRequest = {
+      database: shareRoot.value.database,
+      target,
+      recordName: shareName,
+    };
+    const share = await this.fetchShareRecord(shareRequest);
+    if (share.isErr()) return err(share.error);
+    const participants = share.value.participants;
+    if (!participants)
+      return err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
+    const observation: ICloudShareObservation = {
+      participants: participants.map(
+        (participant): ICloudParticipantObservation => ({
+          participantId: participant.participantId || "",
+          type: participant.type || "",
+          permission: participant.permission || "",
+          acceptanceStatus: participant.acceptanceStatus || "",
+          emailAddress:
+            participant.userIdentity?.lookupInfo?.emailAddress || "",
+        }),
+      ),
+    };
+    return ok(observation);
+  }
+  /**
+   * Apple's sharing sheet adds and removes the share's participants; CloudKit
+   * JS has no call that invites an iCloud account by email directly.
+   */
+  async manageICloudShare({
+    target,
+    title,
+  }: ICloudShareManagementRequest): Promise<
+    Result<ICloudShareManagement, OAuthFailure>
+  > {
+    const shareRoot = await this.shareRoot(target);
+    if (shareRoot.isErr()) return err(shareRoot.error);
+    const shareOptions: CloudKitSharePresentationOptions = {
+      record: shareRoot.value.root,
+      zoneID: {
+        zoneName: target.zoneName,
+        ownerRecordName: target.ownerRecordName,
+      },
+      shareTitle: title.trim() || "Nook",
+      shareType: "com.meta-secret.nook.vault",
+      supportedAccess: [CloudKitShareAccess.Private],
+      supportedPermissions: [CloudKitSharePermission.ReadWrite],
+    };
+    try {
+      await shareRoot.value.database.shareWithUI(shareOptions);
+      return ok(ICloudShareManagement.Presented);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
     }

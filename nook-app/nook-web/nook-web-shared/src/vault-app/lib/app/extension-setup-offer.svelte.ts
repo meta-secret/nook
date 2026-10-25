@@ -50,10 +50,6 @@ export class ExtensionSetupOfferModel {
   }
 
   /** Pair this vault from its page; Devices owns install and its errors. */
-  async connect(): Promise<void> {
-    await extensionSetupBrowser.connectInstalledExtension();
-  }
-
   /** Show the connected extension's side panel beside this vault, or say
    * why it did not open. */
   async openSidePanel(): Promise<void> {

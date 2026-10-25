@@ -19,14 +19,12 @@ import {
 import {
   beginAddSyncProvider,
   ManagePage,
-  openAddDevice,
   openManagePage,
   pressIfReady,
 } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
   disableVaultIdleLock,
-  forceVaultQuiescentForE2e,
   installGoogleOAuthMock,
   waitForGoogleOAuthSignedIn,
   waitForVaultOperationsIdle,
@@ -361,79 +359,6 @@ export async function expectNoVaultPasswords(
   })
 }
 
-/**
- * Issue an identity enrollment code with a one-time passphrase and return the
- * onboarding link input locator. The joining app enters the same passphrase.
- */
-export async function submitOnboardEnrollmentCode(
-  page: Page,
-  passphrase: string,
-) {
-  await assertVaultReady(page)
-  await waitForVaultOperationsIdle(page)
-  await forceVaultQuiescentForE2e(page)
-  await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await dismissSyncConflictIfVisible(page)
-  await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await page.getByTestId('onboard-passphrase-input').fill(passphrase)
-  await page.getByTestId('onboard-device-submit').click()
-
-  const linkInput = page.getByTestId('onboarding-link-url')
-  const generating = page.getByTestId('onboard-generating')
-  const error = page.getByTestId('onboard-error')
-  await expect(linkInput.or(error).or(generating)).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  if (await error.isVisible()) {
-    throw new Error(
-      `Onboard enrollment failed: ${((...[v = 'unknown error']) => v)((await error.textContent())?.trim())}`,
-    )
-  }
-  await expect(linkInput).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  return linkInput
-}
-
-/** Raw enrollment payload from a full onboarding URL or hash link. */
-export function enrollmentCodeFromLink(link: string): string {
-  const trimmed = link.trim()
-  const hashIndex = trimmed.indexOf('#enroll=')
-  if (hashIndex >= 0) {
-    return decodeURIComponent(trimmed.slice(hashIndex + '#enroll='.length))
-  }
-  return trimmed
-}
-
-/** Exercise a generated public app link against the Playwright preview host. */
-export function localizeAppLinkForE2e(page: Page, link: string): string {
-  const previewUrl = new URL(page.url())
-  const appUrl = new URL(link)
-  appUrl.protocol = previewUrl.protocol
-  appUrl.host = previewUrl.host
-  return appUrl.toString()
-}
-
-/** Open the add-device flow with sync timers paused for e2e. */
-export async function openOnboardDevicePanel(page: Page) {
-  await assertVaultReady(page)
-  await waitForVaultOperationsIdle(page)
-  await forceVaultQuiescentForE2e(page)
-  await openAddDevice(page)
-  // With a cloud copy the invite form shows; without one, step one asks
-  // for a sync provider.
-  await expect(
-    page
-      .getByTestId('onboard-device-panel')
-      .or(page.getByTestId('onboard-no-identity-mount'))
-      .first(),
-  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-}
-
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectSyncVault(page: Page) {
   await page.goto('/app/')
@@ -480,6 +405,7 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   await page.getByTestId('drive-file-input').fill(fileName)
   await page.getByTestId('google-sign-in-btn').click()
   await waitForGoogleOAuthSignedIn(page)
+  // Connect & sync creates the provider's My Drive vault folder.
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   if (!options?.expectConflict) {

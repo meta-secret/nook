@@ -59,24 +59,11 @@ pub enum StoredGoogleDriveFolder {
     FolderId(String),
 }
 
-/// Private Google Drive event folder of a provider.
-///
-/// A private Drive provider uses `Pending` until the adapter resolves or
-/// creates its named child folder under appData, then persists the folder's
-/// stable Drive ID.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", content = "value", rename_all = "camelCase")]
-pub enum StoredGoogleDrivePrivateTarget {
-    #[default]
-    Pending,
-    FolderId(String),
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum StoredICloudShareTarget {
     #[default]
-    Personal,
+    Unbound,
     SharedTarget(String),
 }
 

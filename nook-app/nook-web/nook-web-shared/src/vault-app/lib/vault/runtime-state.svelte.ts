@@ -19,8 +19,6 @@ import {
 import {
   activeVaultScope,
   unselectedVaultScope,
-  type GoogleDriveMode,
-  type ICloudMode,
   type StorageProvider,
 } from "$lib/auth/providers";
 import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
@@ -283,28 +281,6 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return new oauthActions.VaultOAuthActions(
       this.completeVaultState(),
     ).ensureOAuthTokensFresh();
-  }
-
-  selectGoogleDriveMode(mode: GoogleDriveMode): void {
-    const request: Parameters<
-      oauthActions.VaultOAuthActions["selectGoogleDriveMode"]
-    >[0] = {
-      mode,
-    };
-    new oauthActions.VaultOAuthActions(
-      this.completeVaultState(),
-    ).selectGoogleDriveMode(request);
-  }
-
-  selectICloudMode(mode: ICloudMode): void {
-    const request: Parameters<
-      oauthActions.VaultOAuthActions["selectICloudMode"]
-    >[0] = {
-      mode,
-    };
-    new oauthActions.VaultOAuthActions(
-      this.completeVaultState(),
-    ).selectICloudMode(request);
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<

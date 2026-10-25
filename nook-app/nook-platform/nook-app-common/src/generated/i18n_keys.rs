@@ -256,11 +256,6 @@ pub const ARCHITECTURE_MODES_SENTINEL_UNLOCK_START: &str =
     "architecture_modes.sentinel_unlock_start";
 pub const ARCHITECTURE_MODES_SENTINEL_UNLOCK_TITLE: &str =
     "architecture_modes.sentinel_unlock_title";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS: &str =
-    "architecture_modes.shared_grant_manual_instructions";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS: &str = "architecture_modes.shared_grant_success";
-pub const ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED: &str =
-    "architecture_modes.shared_grant_unsupported";
 pub const ARCHITECTURE_MODES_VAULT_TYPE_SENTINEL_DESCRIPTION: &str =
     "architecture_modes.vault_type_sentinel_description";
 pub const ARCHITECTURE_MODES_VAULT_TYPE_SENTINEL_TITLE: &str =
@@ -274,6 +269,19 @@ pub const AUTH_STORAGE_CHOOSE_DESC: &str = "auth_storage.choose_desc";
 pub const AUTH_STORAGE_CONFIGURE_DESC: &str = "auth_storage.configure_desc";
 pub const AUTH_STORAGE_CONFIRM_REMOVE: &str = "auth_storage.confirm_remove";
 pub const AUTH_STORAGE_CONNECT_AND_SYNC: &str = "auth_storage.connect_and_sync";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_CHECKING: &str = "auth_storage.connect_progress_checking";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_CHECKING_TITLE: &str =
+    "auth_storage.connect_progress_checking_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_HINT: &str = "auth_storage.connect_progress_hint";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SAVING: &str = "auth_storage.connect_progress_saving";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SAVING_TITLE: &str =
+    "auth_storage.connect_progress_saving_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SYNCING: &str = "auth_storage.connect_progress_syncing";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_SYNCING_TITLE: &str =
+    "auth_storage.connect_progress_syncing_title";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_UPLOADING: &str = "auth_storage.connect_progress_uploading";
+pub const AUTH_STORAGE_CONNECT_PROGRESS_UPLOADING_TITLE: &str =
+    "auth_storage.connect_progress_uploading_title";
 pub const AUTH_STORAGE_CONNECT_TO_TYPE: &str = "auth_storage.connect_to_type";
 pub const AUTH_STORAGE_DISCONNECT: &str = "auth_storage.disconnect";
 pub const AUTH_STORAGE_DUPLICATE_SYNC_PROVIDER: &str = "auth_storage.duplicate_sync_provider";
@@ -396,6 +404,30 @@ pub const AUTH_STORAGE_SYNC_SETUP_DESC: &str = "auth_storage.sync_setup_desc";
 pub const AUTH_STORAGE_SYNC_STORE_ID_MISMATCH: &str = "auth_storage.sync_store_id_mismatch";
 pub const AUTH_STORAGE_SYNC_UP_TO_DATE: &str = "auth_storage.sync_up_to_date";
 pub const AUTH_STORAGE_THIS_DEVICE: &str = "auth_storage.this_device";
+pub const AUTHORIZED_ACCOUNTS_ADD: &str = "authorized_accounts.add";
+pub const AUTHORIZED_ACCOUNTS_ADD_FAILED: &str = "authorized_accounts.add_failed";
+pub const AUTHORIZED_ACCOUNTS_ADD_LABEL: &str = "authorized_accounts.add_label";
+pub const AUTHORIZED_ACCOUNTS_ADD_PLACEHOLDER: &str = "authorized_accounts.add_placeholder";
+pub const AUTHORIZED_ACCOUNTS_ADDING: &str = "authorized_accounts.adding";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_DESCRIPTION: &str = "authorized_accounts.drive_description";
+pub const AUTHORIZED_ACCOUNTS_EMPTY: &str = "authorized_accounts.empty";
+pub const AUTHORIZED_ACCOUNTS_ICLOUD_DESCRIPTION: &str = "authorized_accounts.icloud_description";
+pub const AUTHORIZED_ACCOUNTS_LOAD_FAILED: &str = "authorized_accounts.load_failed";
+pub const AUTHORIZED_ACCOUNTS_LOADING: &str = "authorized_accounts.loading";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_FAILED: &str = "authorized_accounts.manage_failed";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_ICLOUD: &str = "authorized_accounts.manage_icloud";
+pub const AUTHORIZED_ACCOUNTS_MANAGE_LINK: &str = "authorized_accounts.manage_link";
+pub const AUTHORIZED_ACCOUNTS_PICK_DESCRIPTION: &str = "authorized_accounts.pick_description";
+pub const AUTHORIZED_ACCOUNTS_REFRESH: &str = "authorized_accounts.refresh";
+pub const AUTHORIZED_ACCOUNTS_REMOVE: &str = "authorized_accounts.remove";
+pub const AUTHORIZED_ACCOUNTS_REMOVE_FAILED: &str = "authorized_accounts.remove_failed";
+pub const AUTHORIZED_ACCOUNTS_ROLE_OWNER: &str = "authorized_accounts.role_owner";
+pub const AUTHORIZED_ACCOUNTS_ROLE_READER: &str = "authorized_accounts.role_reader";
+pub const AUTHORIZED_ACCOUNTS_ROLE_WRITER: &str = "authorized_accounts.role_writer";
+pub const AUTHORIZED_ACCOUNTS_SIGN_IN_REQUIRED: &str = "authorized_accounts.sign_in_required";
+pub const AUTHORIZED_ACCOUNTS_STATUS_INVITED: &str = "authorized_accounts.status_invited";
+pub const AUTHORIZED_ACCOUNTS_TARGET_REQUIRED: &str = "authorized_accounts.target_required";
+pub const AUTHORIZED_ACCOUNTS_TITLE: &str = "authorized_accounts.title";
 pub const BITWARDEN_IMPORT_BUTTON: &str = "bitwarden_import.button";
 pub const BITWARDEN_IMPORT_DESCRIPTION: &str = "bitwarden_import.description";
 pub const BITWARDEN_IMPORT_EXPORT_HINT: &str = "bitwarden_import.export_hint";
@@ -678,6 +710,14 @@ pub const ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID: &str =
     "errors.validation.authenticator_secret_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID: &str =
     "errors.validation.authenticator_uri_invalid";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_EXISTS: &str =
+    "errors.validation.authorized_account_exists";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_MISSING: &str =
+    "errors.validation.authorized_account_missing";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_OWNER: &str =
+    "errors.validation.authorized_account_owner";
+pub const ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_READ_ONLY: &str =
+    "errors.validation.authorized_account_read_only";
 pub const ERRORS_VALIDATION_BIP39_EMPTY: &str = "errors.validation.bip39_empty";
 pub const ERRORS_VALIDATION_BIP39_INVALID: &str = "errors.validation.bip39_invalid";
 pub const ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID: &str =
@@ -717,6 +757,8 @@ pub const ERRORS_VALIDATION_INTERNATIONAL_ACCOUNT_IBAN_REQUIRED: &str =
     "errors.validation.international_account_iban_required";
 pub const ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET: &str =
     "errors.validation.invalid_sentinel_share_set";
+pub const ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH: &str =
+    "errors.validation.joiner_account_mismatch";
 pub const ERRORS_VALIDATION_LOCAL_DATA_CHANGED_IN_ANOTHER_TAB: &str =
     "errors.validation.local_data_changed_in_another_tab";
 pub const ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY: &str =
@@ -1047,7 +1089,6 @@ pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
 pub const EXTENSION_REQUEST_UNLOCK_IDENTITY: &str = "extension.request.unlock_identity";
 pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";
-pub const EXTENSION_REQUEST_VAULTS: &str = "extension.request.vaults";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =
     "extension.setup.browser_access_description";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_TITLE: &str = "extension.setup.browser_access_title";
@@ -1459,16 +1500,13 @@ pub const IDENTITY_MENU_ADD_DEVICE_NEEDS_CLOUD: &str = "identity_menu.add_device
 pub const IDENTITY_MENU_BROWSER: &str = "identity_menu.browser";
 pub const IDENTITY_MENU_BROWSER_HINT: &str = "identity_menu.browser_hint";
 pub const IDENTITY_MENU_DETAILS: &str = "identity_menu.details";
-pub const IDENTITY_MENU_DETAILS_HINT: &str = "identity_menu.details_hint";
-pub const IDENTITY_MENU_LABEL: &str = "identity_menu.label";
-pub const IDENTITY_MENU_MANAGE_HINT: &str = "identity_menu.manage_hint";
 pub const IDENTITY_MENU_SYNC_HINT: &str = "identity_menu.sync_hint";
 pub const IDENTITY_MENU_VAULTS_HINT: &str = "identity_menu.vaults_hint";
 pub const IDENTITY_OVERVIEW_ALL_SET: &str = "identity_overview.all_set";
 pub const IDENTITY_OVERVIEW_BROWSER_LINK: &str = "identity_overview.browser_link";
 pub const IDENTITY_OVERVIEW_CLOSE_PANEL: &str = "identity_overview.close_panel";
 pub const IDENTITY_OVERVIEW_COPIED_TO: &str = "identity_overview.copied_to";
-pub const IDENTITY_OVERVIEW_COPIES: &str = "identity_overview.copies";
+pub const IDENTITY_OVERVIEW_DETAILS_HEADING: &str = "identity_overview.details_heading";
 pub const IDENTITY_OVERVIEW_DEVICES_CAPTION: &str = "identity_overview.devices_caption";
 pub const IDENTITY_OVERVIEW_DEVICES_EMPTY: &str = "identity_overview.devices_empty";
 pub const IDENTITY_OVERVIEW_EYEBROW: &str = "identity_overview.eyebrow";
@@ -1477,8 +1515,11 @@ pub const IDENTITY_OVERVIEW_MORE: &str = "identity_overview.more";
 pub const IDENTITY_OVERVIEW_NEEDS_CLOUD: &str = "identity_overview.needs_cloud";
 pub const IDENTITY_OVERVIEW_OPENS_ON: &str = "identity_overview.opens_on";
 pub const IDENTITY_OVERVIEW_PROTECTION: &str = "identity_overview.protection";
+pub const IDENTITY_OVERVIEW_PROVIDERS_HEADING: &str = "identity_overview.providers_heading";
+pub const IDENTITY_OVERVIEW_RESILIENCE_HEADING: &str = "identity_overview.resilience_heading";
 pub const IDENTITY_OVERVIEW_RISK_LOCAL: &str = "identity_overview.risk_local";
 pub const IDENTITY_OVERVIEW_RISK_ONE_DEVICE: &str = "identity_overview.risk_one_device";
+pub const IDENTITY_OVERVIEW_ROW_HINT: &str = "identity_overview.row_hint";
 pub const IDENTITY_OVERVIEW_SECURITY: &str = "identity_overview.security";
 pub const IDENTITY_OVERVIEW_SYNC_CAPTION: &str = "identity_overview.sync_caption";
 pub const IDENTITY_OVERVIEW_SYNC_EMPTY: &str = "identity_overview.sync_empty";
@@ -2018,10 +2059,6 @@ pub const ONBOARD_DEVICE_SENTINEL_STEP_APPROVE: &str = "onboard_device.sentinel_
 pub const ONBOARD_DEVICE_SENTINEL_STEP_CONNECT: &str = "onboard_device.sentinel_step_connect";
 pub const ONBOARD_DEVICE_SENTINEL_TITLE: &str = "onboard_device.sentinel_title";
 pub const ONBOARD_DEVICE_SHARE_PASSWORD: &str = "onboard_device.share_password";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_HINT: &str = "onboard_device.shared_identity_hint";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_LABEL: &str = "onboard_device.shared_identity_label";
-pub const ONBOARD_DEVICE_SHARED_IDENTITY_PLACEHOLDER: &str =
-    "onboard_device.shared_identity_placeholder";
 pub const ONBOARD_DEVICE_SHARED_IDENTITY_REQUIRED: &str = "onboard_device.shared_identity_required";
 pub const ONBOARD_DEVICE_SYNC_PROVIDER: &str = "onboard_device.sync_provider";
 pub const ONBOARD_DEVICE_TITLE: &str = "onboard_device.title";
@@ -2121,8 +2158,6 @@ pub const PROVIDER_SETUP_CREATE_TOKEN_GITHUB: &str = "provider_setup.create_toke
 pub const PROVIDER_SETUP_DRIVE_EVENT_LOG_DESC: &str = "provider_setup.drive_event_log_desc";
 pub const PROVIDER_SETUP_DRIVE_FILE_NAME: &str = "provider_setup.drive_file_name";
 pub const PROVIDER_SETUP_DRIVE_FOLDER_NAME: &str = "provider_setup.drive_folder_name";
-pub const PROVIDER_SETUP_DRIVE_SHARED_EVENT_LOG_DESC: &str =
-    "provider_setup.drive_shared_event_log_desc";
 pub const PROVIDER_SETUP_EVENT_LOG_DESC: &str = "provider_setup.event_log_desc";
 pub const PROVIDER_SETUP_GITHUB_CONNECTION_SUBTITLE: &str =
     "provider_setup.github_connection_subtitle";
@@ -2130,54 +2165,13 @@ pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_MODE: &str = "provider_setup.google_drive_mode";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_PRIVATE: &str = "provider_setup.google_drive_private";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_PRIVATE_DESC: &str =
-    "provider_setup.google_drive_private_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED: &str = "provider_setup.google_drive_shared";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED_DESC: &str = "provider_setup.google_drive_shared_desc";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_SHARED_MODE_DESC: &str =
-    "provider_setup.google_drive_shared_mode_desc";
+pub const PROVIDER_SETUP_GOOGLE_FOLDER_ON_CONNECT: &str = "provider_setup.google_folder_on_connect";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_DESC: &str =
-    "provider_setup.google_shared_account_desc";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_EMAIL: &str =
-    "provider_setup.google_shared_account_email";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_ACCOUNT_PLACEHOLDER: &str =
-    "provider_setup.google_shared_account_placeholder";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CONNECT_FAILED: &str =
-    "provider_setup.google_shared_connect_failed";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE: &str = "provider_setup.google_shared_create";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE_AND_SHARE: &str =
-    "provider_setup.google_shared_create_and_share";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE_FAILED: &str =
     "provider_setup.google_shared_create_failed";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_CONNECTED: &str =
-    "provider_setup.google_shared_folder_connected";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_CREATED: &str =
-    "provider_setup.google_shared_folder_created";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK: &str =
-    "provider_setup.google_shared_folder_link";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK_DESC: &str =
-    "provider_setup.google_shared_folder_link_desc";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_LINK_PLACEHOLDER: &str =
-    "provider_setup.google_shared_folder_link_placeholder";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_READY: &str =
-    "provider_setup.google_shared_folder_ready";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_REQUIRED: &str =
-    "provider_setup.google_shared_folder_required";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_STEP: &str =
-    "provider_setup.google_shared_folder_step";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_FOLDER_SUBTITLE: &str =
-    "provider_setup.google_shared_folder_subtitle";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_JOIN: &str = "provider_setup.google_shared_join";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER: &str = "provider_setup.google_shared_not_folder";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE: &str =
-    "provider_setup.google_shared_not_writable";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_SIGN_IN_FIRST: &str =
     "provider_setup.google_shared_sign_in_first";
-pub const PROVIDER_SETUP_GOOGLE_SHARED_USE_FOLDER: &str = "provider_setup.google_shared_use_folder";
 pub const PROVIDER_SETUP_GOOGLE_SIGNED_IN_AS: &str = "provider_setup.google_signed_in_as";
 pub const PROVIDER_SETUP_GOOGLE_SIGNING_IN: &str = "provider_setup.google_signing_in";
 pub const PROVIDER_SETUP_GOOGLE_SYNC_SUBTITLE: &str = "provider_setup.google_sync_subtitle";
@@ -2186,48 +2180,23 @@ pub const PROVIDER_SETUP_ICLOUD_CONNECTION_SUBTITLE: &str =
     "provider_setup.icloud_connection_subtitle";
 pub const PROVIDER_SETUP_ICLOUD_DESC: &str = "provider_setup.icloud_desc";
 pub const PROVIDER_SETUP_ICLOUD_EVENT_LOG_DESC: &str = "provider_setup.icloud_event_log_desc";
-pub const PROVIDER_SETUP_ICLOUD_MODE: &str = "provider_setup.icloud_mode";
 pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
     "provider_setup.icloud_oauth_unconfigured";
 pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
-pub const PROVIDER_SETUP_ICLOUD_PRIVATE: &str = "provider_setup.icloud_private";
-pub const PROVIDER_SETUP_ICLOUD_PRIVATE_DESC: &str = "provider_setup.icloud_private_desc";
-pub const PROVIDER_SETUP_ICLOUD_SHARED: &str = "provider_setup.icloud_shared";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECT_FAILED: &str =
     "provider_setup.icloud_shared_connect_failed";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CONNECTED: &str = "provider_setup.icloud_shared_connected";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE: &str = "provider_setup.icloud_shared_create";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_AND_SHARE: &str =
-    "provider_setup.icloud_shared_create_and_share";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_DESC: &str =
     "provider_setup.icloud_shared_create_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATE_FAILED: &str =
     "provider_setup.icloud_shared_create_failed";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_CREATED: &str = "provider_setup.icloud_shared_created";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_DESC: &str = "provider_setup.icloud_shared_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_IDENTIFIER_MISSING: &str =
     "provider_setup.icloud_shared_identifier_missing";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_JOIN: &str = "provider_setup.icloud_shared_join";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK: &str = "provider_setup.icloud_shared_link";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_DESC: &str = "provider_setup.icloud_shared_link_desc";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_PLACEHOLDER: &str =
-    "provider_setup.icloud_shared_link_placeholder";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_LINK_REQUIRED: &str =
     "provider_setup.icloud_shared_link_required";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_LOCATION_MISSING: &str =
     "provider_setup.icloud_shared_location_missing";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_MODE_DESC: &str = "provider_setup.icloud_shared_mode_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED_SIGN_IN_FIRST: &str =
     "provider_setup.icloud_shared_sign_in_first";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_READY: &str =
-    "provider_setup.icloud_shared_target_ready";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_REQUIRED: &str =
-    "provider_setup.icloud_shared_target_required";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_STEP: &str =
-    "provider_setup.icloud_shared_target_step";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_TARGET_SUBTITLE: &str =
-    "provider_setup.icloud_shared_target_subtitle";
-pub const PROVIDER_SETUP_ICLOUD_SHARED_USE: &str = "provider_setup.icloud_shared_use";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_FAILED: &str = "provider_setup.icloud_sign_in_failed";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_LOADING: &str = "provider_setup.icloud_sign_in_loading";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_READY: &str = "provider_setup.icloud_sign_in_ready";
@@ -2705,6 +2674,9 @@ pub const WORKSPACE_STATUS_UNLOCKED_TITLE: &str = "workspace.status_unlocked_tit
 pub const WORKSPACE_UNLOCK: &str = "workspace.unlock";
 pub const WORKSPACE_UNLOCK_IDENTITY_TITLE: &str = "workspace.unlock_identity_title";
 pub const WORKSPACE_USE_IDENTITY: &str = "workspace.use_identity";
+pub const WORKSPACE_VAULT_ACTIVITY_HINT: &str = "workspace.vault_activity_hint";
+pub const WORKSPACE_VAULT_ACTIVITY_SYNCING: &str = "workspace.vault_activity_syncing";
+pub const WORKSPACE_VAULT_ACTIVITY_WORKING: &str = "workspace.vault_activity_working";
 pub const WORKSPACE_VAULT_DORMANT: &str = "workspace.vault_dormant";
 pub const WORKSPACE_VAULT_EYEBROW: &str = "workspace.vault_eyebrow";
 pub const WORKSPACE_VAULT_FALLBACK: &str = "workspace.vault_fallback";

@@ -14,14 +14,16 @@ import {
   disableVaultIdleLock,
   expandSettingsSection,
   installGoogleOAuthMock,
+  invokeInitializedVaultProviderReload,
   localizeAppLinkForE2e,
   openLoginProviderSetup,
   openOnboardDevicePanel,
   openStorageSettings,
   revealSecretValue,
+  seedExtraICloudProviders,
   submitOnboardEnrollmentCode,
   uniqueSecretKey,
-  waitForEngine,
+  waitForLoadedSyncProviders,
   waitForVaultOperationsIdle,
   waitForSecretOnDevice,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -37,6 +39,15 @@ import {
   type SyncE2eTarget,
 } from './sync-provider'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import {
+  createLocalE2eICloudVaultStub,
+  E2eCloudKitAcceptance,
+  E2eCloudKitParticipantType,
+  E2eCloudKitPermission,
+  e2eICloudShareTarget,
+  installCloudKitShareStub,
+} from './icloud-stub'
+import { E2E_GOOGLE_ACCOUNT_EMAIL } from './google-identity-stub'
 import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import ruLocale from '../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
@@ -77,7 +88,7 @@ test.describe('file sync provider onboarding', () => {
     await contextB?.close()
   })
 
-  test('enrolls a clean browser through the file sync provider without IndexedDB seeding', async () => {
+  test('enrolls a clean browser through the vault folder without IndexedDB seeding', async () => {
     let googleDriveFallbackCount = 0
     await deviceA.route('https://www.googleapis.com/**', async (route) => {
       googleDriveFallbackCount += 1
@@ -103,9 +114,13 @@ test.describe('file sync provider onboarding', () => {
     }, target.pat)
     expect(unsupportedStatus).toBe(404)
     expect(googleDriveFallbackCount).toBe(0)
-    const privateFolderIds = target.stub.getPrivateFolderIds()
-    expect(privateFolderIds).toHaveLength(1)
-    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
+    // The provider syncs under the one My Drive folder it created; only the
+    // signed-in account can open it.
+    const [vaultFolder, ...otherFolders] = target.stub.getSharedFolders()
+    if (!vaultFolder) throw new Error('the provider did not create a folder')
+    expect(otherFolders).toHaveLength(0)
+    expect(vaultFolder.name).toBe(target.repoName)
+    expect(vaultFolder.writers).toEqual([E2E_GOOGLE_ACCOUNT_EMAIL])
     await assertVaultReady(deviceA)
     await disableVaultIdleLock(deviceA)
 
@@ -116,19 +131,21 @@ test.describe('file sync provider onboarding', () => {
       target,
       (snapshot) => snapshot.secretIds.length >= 1,
     )
-    expect(target.stub.getPrivateFolderIds()).toEqual(privateFolderIds)
-    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
     expect(target.stub.getEventFileCount()).toBeGreaterThan(0)
 
+    // The invite names the folder's own account; no provider credential or
+    // folder permission travels with it.
     await openOnboardDevicePanel(deviceA)
     const linkInput = await submitOnboardEnrollmentCode(
       deviceA,
       E2E_IDENTITY_PASSPHRASE,
+      { inviteAccount: E2E_GOOGLE_ACCOUNT_EMAIL },
     )
     const enrollmentLink = (await linkInput.inputValue()).trim()
     expect(enrollmentLink).toContain('#enroll=')
+    expect(target.stub.getSharedFolders()).toEqual([vaultFolder])
 
-    await connectCleanBrowserToFileProvider(deviceB, target)
+    await openCleanBrowserSignedInToFileProvider(deviceB, target)
     const localEnrollmentLink = localizeAppLinkForE2e(deviceB, enrollmentLink)
     await deviceB.goto('about:blank')
     await deviceB.goto(localEnrollmentLink)
@@ -136,22 +153,25 @@ test.describe('file sync provider onboarding', () => {
     await expectIdentityMembers(deviceA, 2)
     await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
-    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
+    // The joining device syncs through the same folder instead of creating one.
+    expect(target.stub.getSharedFolders()).toEqual([vaultFolder])
     await waitForSecretOnDevice(deviceB, secretKey)
     expect(await revealSecretValue(deviceB, secretKey)).toBe(secretValue)
   })
 })
 
-test.describe('Google Drive provider modes', () => {
+test.describe('Google Drive authorized accounts', () => {
   test.setTimeout(180_000)
 
-  test('shares one Drive folder across independently signed-in accounts', async ({
+  test('authorizes a second account on the vault folder and invites a device signed in as it', async ({
     browser,
     page: owner,
   }) => {
     const ownerToken = 'ya29.e2e_shared_owner'
+    const ownerEmail = 'owner@example.com'
     const collaboratorToken = 'ya29.e2e_shared_collaborator'
     const collaboratorEmail = 'collaborator@example.com'
+    const strangerToken = 'ya29.e2e_shared_stranger'
     const driveStub = createLocalE2eGoogleDriveVaultStub(
       '',
       'shared-provider-events',
@@ -159,6 +179,7 @@ test.describe('Google Drive provider modes', () => {
     await installGoogleOAuthMock(owner, ownerToken)
     await driveStub.install(owner, {
       accessToken: ownerToken,
+      accountEmail: ownerEmail,
       fileName: 'shared-provider-events',
     })
     await owner.goto('/app/')
@@ -173,46 +194,53 @@ test.describe('Google Drive provider modes', () => {
     await expect(owner.getByTestId('google-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(
-      owner.getByTestId('google-drive-mode-private'),
-    ).toHaveAttribute('aria-checked', 'true')
-    await owner.getByTestId('google-drive-mode-shared').click()
-    await expect(owner.getByTestId('google-drive-mode-shared')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    // Shared folder display names are independent from the validated internal
+    // There is no storage mode or folder to choose: Connect & sync creates
+    // the provider's ordinary My Drive folder, which accounts are shared into.
+    await expect(owner.getByTestId('google-setup-sync-step')).toBeVisible()
+    // Folder display names are independent from the validated internal
     // event-log backup name and may contain normal Drive filename characters.
     await owner.getByTestId('drive-file-input').fill('Team Vault')
     await owner.getByTestId('google-sign-in-btn').click()
-    await expect(owner.getByTestId('google-shared-account-email')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await owner
-      .getByTestId('google-shared-account-email')
-      .fill(collaboratorEmail)
-    await owner.getByTestId('google-create-shared-folder-btn').click()
-
-    await expect
-      .poll(
-        () =>
-          ((v) => (v ? v : false))(
-            driveStub
-              .getSharedFolders()[0]
-              ?.writers.includes(collaboratorEmail),
-          ),
-        { timeout: UI_TIMEOUT_MS },
-      )
-      .toBe(true)
-
-    const [sharedFolder] = driveStub.getSharedFolders()
-    if (!sharedFolder) throw new Error('Drive stub did not create a folder')
-    expect(sharedFolder.name).toBe('Team Vault')
+    await expect(owner.getByTestId('google-folder-on-connect')).toContainText(
+      'Team Vault',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
     const connectButton = owner.getByTestId('connect-provider-btn')
     await expect(connectButton).toBeEnabled()
     await connectButton.click()
     await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(owner)
+
+    // The Sync page lists each provider's authorized accounts on its card.
+    const accounts = owner.getByTestId('authorized-accounts')
+    await expect(
+      accounts.getByTestId(`authorized-account-${ownerEmail}`),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    const [sharedFolder] = driveStub.getSharedFolders()
+    if (!sharedFolder) throw new Error('Drive stub did not create a folder')
+    expect(sharedFolder.name).toBe('Team Vault')
+    // Creating the folder shares it with nobody.
+    expect(sharedFolder.writers).toEqual([ownerEmail])
+
+    await accounts
+      .getByTestId('authorized-account-email-input')
+      .fill(collaboratorEmail)
+    await accounts.getByTestId('authorized-account-add-btn').click()
+    await expect(
+      accounts.getByTestId(`authorized-account-${collaboratorEmail}`),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    expect(driveStub.getSharedFolders()[0]?.writers).toEqual([
+      ownerEmail,
+      collaboratorEmail,
+    ])
+    // The owner's own access belongs to the folder and cannot be removed.
+    await expect(
+      accounts.getByTestId(`authorized-account-remove-${ownerEmail}`),
+    ).toHaveCount(0)
+    await expect(
+      accounts.getByTestId(`authorized-account-remove-${collaboratorEmail}`),
+    ).toBeVisible()
+
     // The identity-namespaced row keeps each vault in its own child folder.
     await expect
       .poll(() => driveStub.getEventFileCount(), {
@@ -227,24 +255,63 @@ test.describe('Google Drive provider modes', () => {
     await addSecret(owner, secretKey, secretValue)
     await openOnboardDevicePanel(owner)
     await expect(owner.getByTestId('onboarding-type-label')).toContainText(
-      'Shared provider grant',
+      enLocale.architecture_modes[
+        'onboarding_type_shared-provider-grant_title'
+      ],
     )
+    const picker = owner
+      .getByTestId('onboard-device-panel')
+      .getByTestId('authorized-accounts')
     await expect(
-      owner.getByTestId('onboarding-type-description'),
-    ).toContainText('signs in with their own provider identity')
+      picker.getByTestId(`authorized-account-pick-${ownerEmail}`),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(
-      owner.getByTestId('shared-joiner-identity-input'),
-    ).toBeVisible()
-    await owner
-      .getByTestId('shared-joiner-identity-input')
-      .fill(collaboratorEmail)
+      picker.getByTestId(`authorized-account-pick-${collaboratorEmail}`),
+    ).toBeEnabled()
     const linkInput = await submitOnboardEnrollmentCode(
       owner,
       E2E_IDENTITY_PASSPHRASE,
+      { inviteAccount: collaboratorEmail },
     )
     const enrollmentLink = (await linkInput.inputValue()).trim()
     expect(enrollmentLink).toContain('#enroll=')
+    // Issuing the invite changes no Drive permission.
     expect(driveStub.getSharedFolders()).toHaveLength(1)
+    expect(driveStub.getSharedFolders()[0]?.writers).toEqual([
+      ownerEmail,
+      collaboratorEmail,
+    ])
+
+    // A browser signed in as an account the link does not name is refused.
+    const strangerContext = await createIsolatedContext(browser)
+    const stranger = await strangerContext.newPage()
+    try {
+      await installGoogleOAuthMock(stranger, strangerToken)
+      await driveStub.install(stranger, {
+        accessToken: strangerToken,
+        accountEmail: 'stranger@example.com',
+        fileName: 'shared-provider-events',
+      })
+      await stranger.goto('/app/')
+      await clearBrowserVault(stranger)
+      await stranger.goto('about:blank')
+      await stranger.goto(localizeAppLinkForE2e(stranger, enrollmentLink))
+      await expect(stranger.getByTestId('join-this-device')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await stranger
+        .getByTestId('enrollment-password-input')
+        .fill(E2E_IDENTITY_PASSPHRASE)
+      await stranger.getByTestId('submit-enrollment-code-btn').click()
+      await expect(stranger.getByTestId('vault-error')).toContainText(
+        enLocale.errors.validation.joiner_account_mismatch,
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      await expect(stranger.getByTestId('identity-join-ready')).toHaveCount(0)
+    } finally {
+      await stranger.close()
+      await strangerContext.close()
+    }
 
     const collaboratorContext = await createIsolatedContext(browser)
     const collaborator = await collaboratorContext.newPage()
@@ -252,6 +319,7 @@ test.describe('Google Drive provider modes', () => {
       await installGoogleOAuthMock(collaborator, collaboratorToken)
       await driveStub.install(collaborator, {
         accessToken: collaboratorToken,
+        accountEmail: collaboratorEmail,
         fileName: 'shared-provider-events',
       })
       await collaborator.goto('/app/')
@@ -265,9 +333,6 @@ test.describe('Google Drive provider modes', () => {
       await expect(collaborator.getByTestId('join-this-device')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      await expect(
-        collaborator.getByTestId('enrollment-icloud-auth-toggle'),
-      ).toBeVisible()
       await redeemIdentityEnrollmentCode(collaborator, E2E_IDENTITY_PASSPHRASE)
       await expectIdentityMembers(owner, 2)
       await openVaultAfterIdentityJoin(collaborator)
@@ -279,6 +344,8 @@ test.describe('Google Drive provider modes', () => {
       await expect(
         collaborator.getByTestId('settings-provider-oauth-file'),
       ).toBeVisible()
+      // The collaborator synced through the owner's folder.
+      expect(driveStub.getSharedFolders()).toHaveLength(1)
     } finally {
       await collaborator.close()
       await collaboratorContext.close()
@@ -286,10 +353,8 @@ test.describe('Google Drive provider modes', () => {
   })
 })
 
-test.describe('iCloud provider modes', () => {
-  test('switches from private CloudKit storage to a shared target', async ({
-    page,
-  }) => {
+test.describe('iCloud provider setup', () => {
+  test('always offers the CloudKit share step', async ({ page }) => {
     await page.addInitScript(() => {
       const container = {
         setUpAuth: async () => {},
@@ -312,18 +377,110 @@ test.describe('iCloud provider modes', () => {
     await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
+    // Every iCloud provider syncs through a CloudKit share that Connect &
+    // sync creates; nothing asks for a share before sign-in.
+    await expect(page.getByTestId('icloud-setup-sync-step')).toBeVisible()
+    await expect(page.getByTestId('icloud-share-on-connect')).toHaveCount(0)
+  })
 
-    await page.getByTestId('icloud-mode-shared').click()
+  test('invites a device as one of the CloudKit share participants', async ({
+    page,
+  }) => {
+    const ownerEmail = 'owner@icloud.example'
+    const memberEmail = 'member@icloud.example'
+    const viewerEmail = 'viewer@icloud.example'
+    await installCloudKitShareStub(page, [
+      {
+        email: ownerEmail,
+        type: E2eCloudKitParticipantType.Owner,
+        permission: E2eCloudKitPermission.ReadWrite,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
+      },
+      {
+        email: memberEmail,
+        type: E2eCloudKitParticipantType.PrivateUser,
+        permission: E2eCloudKitPermission.ReadWrite,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
+      },
+      {
+        email: viewerEmail,
+        type: E2eCloudKitParticipantType.PrivateUser,
+        permission: E2eCloudKitPermission.ReadOnly,
+        acceptanceStatus: E2eCloudKitAcceptance.Accepted,
+      },
+    ])
+    const iCloudStub = createLocalE2eICloudVaultStub('', 'icloud-share-events')
+    await iCloudStub.install(page)
+    await page.goto('/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await createLocalVaultOnLogin(page, 'iCloud share vault')
+    await seedExtraICloudProviders(page, [
+      {
+        id: 'e2e-icloud-share-owner',
+        label: 'iCloud share',
+        fileName: 'icloud-share-events',
+        accessToken: 'ck-web-auth-e2e-share-owner',
+        iCloudShareTarget: e2eICloudShareTarget('owner'),
+      },
+    ])
+    await invokeInitializedVaultProviderReload(page)
+    await waitForLoadedSyncProviders(page, 1)
 
-    await expect(page.getByTestId('icloud-mode-shared')).toHaveAttribute(
-      'aria-checked',
-      'true',
+    await openOnboardDevicePanel(page)
+    await expect(page.getByTestId('onboarding-type-label')).toContainText(
+      enLocale.architecture_modes[
+        'onboarding_type_shared-provider-grant_title'
+      ],
     )
-    await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
+    const accounts = page
+      .getByTestId('onboard-device-panel')
+      .getByTestId('authorized-accounts')
+    // The owner reads its share's participants through its private database.
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${memberEmail}`),
+    ).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-e2e-cloudkit-share-database',
+      'private',
+    )
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${ownerEmail}`),
+    ).toBeEnabled()
+    // A view-only participant cannot sync a device.
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${viewerEmail}`),
+    ).toBeDisabled()
+    // The invite only picks. iCloud participants are managed in Apple's
+    // sharing sheet, reached from the Sync page, not by email.
+    await expect(
+      accounts.getByTestId('authorized-account-email-input'),
+    ).toHaveCount(0)
+    await accounts.getByTestId('authorized-accounts-manage-link').click()
+    const providerAccounts = page
+      .getByTestId('storage-providers-section')
+      .getByTestId('authorized-accounts')
+    await expect(
+      providerAccounts.getByTestId('authorized-account-email-input'),
+    ).toHaveCount(0)
+    await providerAccounts
+      .getByTestId('authorized-accounts-manage-icloud')
+      .click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-e2e-cloudkit-share-ui',
+      '1',
+    )
+    await openOnboardDevicePanel(page)
+    await expect(
+      accounts.getByTestId(`authorized-account-pick-${memberEmail}`),
+    ).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+    const linkInput = await submitOnboardEnrollmentCode(
+      page,
+      E2E_IDENTITY_PASSPHRASE,
+      { inviteAccount: memberEmail },
+    )
+    expect((await linkInput.inputValue()).trim()).toContain('#enroll=')
   })
 
   test('opens one Apple sign-in tab from the prepared CloudKit control', async ({
@@ -508,7 +665,9 @@ test.describe('iCloud provider modes', () => {
   })
 })
 
-async function connectCleanBrowserToFileProvider(
+/** A clean browser whose Google sign-in returns the file provider's account.
+ * It reaches the vault only through the onboarding link. */
+async function openCleanBrowserSignedInToFileProvider(
   page: Page,
   target: SyncE2eTarget,
 ) {
@@ -517,27 +676,4 @@ async function connectCleanBrowserToFileProvider(
   await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
-
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-oauth-file').click()
-  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('drive-file-input').fill(target.repoName)
-  await page.getByTestId('google-sign-in-btn').click()
-
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await waitForVaultOperationsIdle(page)
-
-  const dialog = page.getByTestId('join-enrollment-dialog')
-  if (await dialog.isVisible()) {
-    await page.getByTestId('join-enrollment-close').click()
-    await expect(dialog).not.toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-  }
-  await expect(page.getByTestId('login-gate')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
 }

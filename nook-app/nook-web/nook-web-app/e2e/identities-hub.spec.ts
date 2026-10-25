@@ -112,10 +112,9 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // A locked card keeps only its header and vaults: Overview, Manage and
+    // A locked card keeps only its header and vaults: the identity panel and
     // New vault return once the identity is unlocked.
     await expect(current.getByTestId('identity-overview-toggle')).toHaveCount(0)
-    await expect(current.getByTestId('identity-manage')).toHaveCount(0)
     await expect(current.getByTestId('identity-new-vault')).toHaveCount(0)
     await current.getByTestId('identity-unlock').click()
     await expect(current).toHaveAttribute('data-status', 'unlocked', {
@@ -151,7 +150,7 @@ test.describe('identities hub', () => {
     await expect(work.getByTestId('identity-card-keys')).toContainText('PIN')
     await expect(first).toHaveAttribute('data-status', 'inactive')
     // An identity not in use offers only to switch to it.
-    await expect(first.getByTestId('identity-manage')).toHaveCount(0)
+    await expect(first.getByTestId('identity-overview-toggle')).toHaveCount(0)
 
     // The first identity unlocks with its own passkey.
     await first.getByTestId('identity-use').click()

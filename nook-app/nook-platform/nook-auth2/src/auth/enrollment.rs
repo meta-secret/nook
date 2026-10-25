@@ -96,15 +96,20 @@ pub enum SharedEnrollmentProviderData {
         sync_provider_type: String,
         oauth_preset: String,
         joiner_identity_kind: String,
+        /// Authorized Google account (email) the joining device signs in with.
+        /// Drive access comes from the folder's permissions, not from this field.
         joiner_identity: String,
         /// Shared Drive folder id the joiner syncs under with their own OAuth token.
         storage_target_id: String,
     },
     /// Credential-free `CloudKit` share handoff. The target contains only the
-    /// stable share/zone location; the recipient authenticates with their own
-    /// iCloud account before accepting it.
+    /// stable share/zone location; the recipient authenticates with the
+    /// authorized iCloud account named by `joiner_identity` before accepting it.
     #[serde(rename = "icloud-shared")]
-    ICloud { storage_target_id: String },
+    ICloud {
+        joiner_identity: String,
+        storage_target_id: String,
+    },
 }
 
 impl enrollment_state_sealed::Sealed for PersonalCredentialTransfer {}
@@ -210,9 +215,12 @@ impl SharedEnrollmentProvider {
     }
 
     #[must_use]
-    pub fn icloud(storage_target_id: String) -> Self {
+    pub fn icloud(joiner_identity: String, storage_target_id: String) -> Self {
         Self {
-            provider: SharedEnrollmentProviderData::ICloud { storage_target_id },
+            provider: SharedEnrollmentProviderData::ICloud {
+                joiner_identity,
+                storage_target_id,
+            },
             state: PhantomData,
         }
     }
@@ -478,8 +486,16 @@ impl EnrollmentProvider {
                     }
                     Ok(())
                 }
-                SharedEnrollmentProviderData::ICloud { storage_target_id } => {
-                    if storage_target_id.trim().is_empty()
+                SharedEnrollmentProviderData::ICloud {
+                    joiner_identity,
+                    storage_target_id,
+                } => {
+                    if (EnrollmentEmail {
+                        value: joiner_identity,
+                    })
+                    .check_plausibility()
+                    .is_err()
+                        || storage_target_id.trim().is_empty()
                         || !storage_target_id.trim().starts_with("icloud-share-v1:")
                     {
                         return Err(EnrollmentError::MalformedSharedProviderGrant);
@@ -569,14 +585,25 @@ mod tests {
         ));
         // Enrollment checks this prefix; parsing the share target belongs elsewhere.
         EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
+            "member@icloud.com".to_owned(),
             "  icloud-share-v1:anything  ".to_owned(),
         ))
         .validate()?;
         let wrong_case = EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
+            "member@icloud.com".to_owned(),
             "ICloud-share-v1:anything".to_owned(),
         ));
         assert!(matches!(
             wrong_case.validate(),
+            Err(EnrollmentError::MalformedSharedProviderGrant)
+        ));
+        // The invite names the authorized iCloud account the new device uses.
+        let missing_account = EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
+            " ".to_owned(),
+            "icloud-share-v1:anything".to_owned(),
+        ));
+        assert!(matches!(
+            missing_account.validate(),
             Err(EnrollmentError::MalformedSharedProviderGrant)
         ));
         Ok(())

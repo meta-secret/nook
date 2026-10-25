@@ -27,6 +27,7 @@ import {
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
+import { ProviderConnectionPhase } from '$lib/vault/provider-connection-progress'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
@@ -247,5 +248,34 @@ describe('local-folder provider connection', () => {
     )
     expect(scenario.state.loginSetup.kind).toBe(LoginSetupKind.Active)
     expect(scenario.state.addProviderOpen).toBe(true)
+    expect(scenario.state.providerConnectionPhase).toBe(
+      ProviderConnectionPhase.Idle,
+    )
+  })
+
+  test('shows each running connection step and clears it when done', async () => {
+    const seen: ProviderConnectionPhase[] = []
+    const scenario = providerConnectionScenario((state) => {
+      seen.push(state.providerConnectionPhase)
+      return ok(ProviderSyncOutcome.Synced)
+    })
+    const saved: Pick<ProviderActionsContext, 'ensureProviderSaved'> = {
+      ensureProviderSaved: async () => {
+        seen.push(scenario.state.providerConnectionPhase)
+        return ok(ProviderSaveOutcome.Saved)
+      },
+    }
+    Object.assign(scenario.state, saved)
+
+    await scenario.actions.connectAndSyncStagedProvider()
+
+    // A local folder has no remote outbox to upload.
+    expect(seen).toEqual([
+      ProviderConnectionPhase.Saving,
+      ProviderConnectionPhase.Syncing,
+    ])
+    expect(scenario.state.providerConnectionPhase).toBe(
+      ProviderConnectionPhase.Idle,
+    )
   })
 })

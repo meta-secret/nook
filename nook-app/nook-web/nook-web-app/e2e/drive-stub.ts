@@ -5,32 +5,23 @@ import {
   parseEventMultipart as parseMultipartEvent,
   EventMultipartParseKind,
 } from './event-log-stub'
+import {
+  createDriveVaultFolders,
+  DRIVE_FOLDER_MIME_TYPE,
+} from './drive-folder-stub'
+import {
+  E2E_GOOGLE_ACCOUNT_EMAIL,
+  installGoogleIdentityTokenMock,
+} from './google-identity-stub'
 import { parseJson, requireRecord } from './helpers/guards'
 
 const DEFAULT_FILE_NAME = 'nook-events'
-const PRIVATE_EVENT_FOLDER_PREFIX = 'nook-events-v2-'
-const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 
-type PrivateFolderResource = {
+type NamespaceFolderResource = {
   id: string
   name: string
   mimeType: string
   parents: string[]
-}
-
-function isPrivateFolderLookup(requestUrl: string, fileName: string): boolean {
-  const expectedName = `${PRIVATE_EVENT_FOLDER_PREFIX}${fileName}`
-  const escapedName = expectedName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-  const expectedQuery = `name = '${escapedName}' and mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and 'appDataFolder' in parents and trashed = false`
-  const search = new URL(requestUrl).searchParams
-  const queryValues = search.getAll('q')
-  const spaces = search.getAll('spaces')
-  return (
-    queryValues.length === 1 &&
-    queryValues[0] === expectedQuery &&
-    spaces.length === 1 &&
-    spaces[0] === 'appDataFolder'
-  )
 }
 
 const NAMESPACE_FOLDER_PREFIX = 'nook-'
@@ -44,12 +35,6 @@ const NAMESPACE_LISTING_PATTERN =
 
 function unescapeDriveQueryValue(value: string): string {
   return value.replace(/\\(.)/g, '$1')
-}
-
-function privateFolderHasAppDataParent(value: unknown): boolean {
-  return (
-    Array.isArray(value) && value.length === 1 && value[0] === 'appDataFolder'
-  )
 }
 
 enum DriveEventFileIdParseKind {
@@ -75,7 +60,8 @@ type DriveEventUploadParse =
       parentId: string
     }
 
-/** In-memory Google Drive stub (Drive v3 REST) for appDataFolder + shared folders. */
+/** In-memory Google Drive stub (Drive v3 REST): vault folders, their
+ * permissions, event-log namespace folders, and event files. */
 export function createLocalE2eGoogleDriveVaultStub(
   initialYaml = '',
   fileName = DEFAULT_FILE_NAME,
@@ -84,11 +70,10 @@ export function createLocalE2eGoogleDriveVaultStub(
   let vaultFileExists = initialYaml.trim().length > 0
   let fileId = `e2e-drive-file-${fileName.replace(/\W/g, '-')}`
   let md5Checksum = 'e2e-stub-md5'
-  /** parentId → digest → yaml content. `appDataFolder` is the personal root. */
+  /** parentId → digest → yaml content. */
   const eventFilesByParent = new Map<string, Map<string, string>>()
-  const sharedFolders = new Map<string, { name: string; writers: string[] }>()
-  let privateFolders: PrivateFolderResource[] = []
-  let sharedFolderSeq = 0
+  const vaultFolders = createDriveVaultFolders('e2e-drive')
+  let namespaceFolders: NamespaceFolderResource[] = []
 
   function eventFilesFor(parentId: string) {
     let map = eventFilesByParent.get(parentId)
@@ -101,7 +86,7 @@ export function createLocalE2eGoogleDriveVaultStub(
 
   function identityFolderIds() {
     return new Set(
-      privateFolders
+      namespaceFolders
         .filter((folder) =>
           folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX),
         )
@@ -133,16 +118,13 @@ export function createLocalE2eGoogleDriveVaultStub(
   }
 
   function parentFromQuery(decoded: string): string {
-    const shared = decoded.match(/'([^']+)' in parents/)
-    if (shared?.[1] && shared[1] !== 'appDataFolder') {
-      return shared[1]
-    }
-    return 'appDataFolder'
+    return ((v) => (v ? v : ''))(decoded.match(/'([^']+)' in parents/)?.[1])
   }
 
   function parseParentsFromBody(body: string): string {
-    const match = body.match(/"parents"\s*:\s*\[\s*"([^"]+)"/)
-    return ((...[v = 'appDataFolder']) => v)(match?.[1])
+    return ((v) => (v ? v : ''))(
+      body.match(/"parents"\s*:\s*\[\s*"([^"]+)"/)?.[1],
+    )
   }
 
   function eventFileId(digest: string) {
@@ -209,7 +191,7 @@ export function createLocalE2eGoogleDriveVaultStub(
     getEventFileCountForParent: (parentId: string) =>
       [
         parentId,
-        ...privateFolders
+        ...namespaceFolders
           .filter(
             (folder) =>
               folder.parents.includes(parentId) &&
@@ -221,8 +203,13 @@ export function createLocalE2eGoogleDriveVaultStub(
     clearEventFiles: () => {
       eventFilesByParent.clear()
     },
+    /** Vault folders on the stub with the emails that can write to them. */
     getSharedFolders: () =>
-      [...sharedFolders.entries()].map(([id, value]) => ({ id, ...value })),
+      vaultFolders.list().map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        writers: vaultFolders.writers(folder.id),
+      })),
     getFileName: () => fileName,
     async install(
       page: Page,
@@ -230,6 +217,8 @@ export function createLocalE2eGoogleDriveVaultStub(
         vaultYaml?: string
         fileName?: string
         accessToken?: string
+        /** The Google account this page is signed in as. */
+        accountEmail?: string
         sharedPermissionStatus?: number
       },
     ) {
@@ -244,6 +233,11 @@ export function createLocalE2eGoogleDriveVaultStub(
         fileName = opts.fileName
       }
       const accessToken = opts?.accessToken
+      const [accountEmail = E2E_GOOGLE_ACCOUNT_EMAIL] = [opts?.accountEmail]
+      const [permissionStatus = 200] = [opts?.sharedPermissionStatus]
+      if (accessToken) {
+        await installGoogleIdentityTokenMock(page, accessToken)
+      }
 
       await page.route('https://www.googleapis.com/**', async (route) => {
         const request = route.request()
@@ -253,7 +247,8 @@ export function createLocalE2eGoogleDriveVaultStub(
             status: 204,
             headers: {
               'access-control-allow-origin': '*',
-              'access-control-allow-methods': 'GET, POST, PATCH, OPTIONS',
+              'access-control-allow-methods':
+                'GET, POST, PATCH, DELETE, OPTIONS',
               'access-control-allow-headers': 'Authorization, Content-Type',
             },
           })
@@ -278,13 +273,24 @@ export function createLocalE2eGoogleDriveVaultStub(
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              user: { emailAddress: 'e2e-user@example.com' },
+              user: { emailAddress: accountEmail },
             }),
           })
           return
         }
 
-        // Folder metadata POSTs cover private appData targets and shared folders.
+        const folderRequest: Parameters<typeof vaultFolders.handle>[0] = {
+          route,
+          url,
+          fullUrl,
+          method,
+          bodyText,
+          accountEmail,
+          permissionStatus,
+        }
+        if (await vaultFolders.handle(folderRequest)) return
+
+        // Event-log namespace folders below a vault folder.
         if (
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'POST'
@@ -295,166 +301,44 @@ export function createLocalE2eGoogleDriveVaultStub(
           } catch {
             parsed = {}
           }
-          if (parsed.mimeType === DRIVE_FOLDER_MIME_TYPE) {
-            const folderName =
-              typeof parsed.name === 'string' ? parsed.name : ''
-            const [folderParent = ''] = Array.isArray(parsed.parents)
-              ? parsed.parents.flatMap((parent) =>
-                  typeof parent === 'string' ? [parent] : [],
-                )
-              : []
-            if (
-              folderName.startsWith(NAMESPACE_FOLDER_PREFIX) &&
-              folderParent.length > 0 &&
-              folderParent !== 'appDataFolder'
-            ) {
-              // Event-log namespaces below a private or shared event parent.
-              const folder: PrivateFolderResource = {
-                id: `e2e-drive-namespace-${Buffer.from(`${folderParent}/${folderName}`).toString('base64url')}`,
-                name: folderName,
-                mimeType: DRIVE_FOLDER_MIME_TYPE,
-                parents: [folderParent],
-              }
-              privateFolders = privateFolders
-                .filter((existing) => existing.id !== folder.id)
-                .concat(folder)
-              await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                headers: { 'access-control-allow-origin': '*' },
-                body: JSON.stringify({
-                  id: folder.id,
-                  name: folder.name,
-                  mimeType: folder.mimeType,
-                }),
-              })
-              return
+          const folderName = typeof parsed.name === 'string' ? parsed.name : ''
+          const [folderParent = ''] = Array.isArray(parsed.parents)
+            ? parsed.parents.flatMap((parent) =>
+                typeof parent === 'string' ? [parent] : [],
+              )
+            : []
+          if (
+            parsed.mimeType === DRIVE_FOLDER_MIME_TYPE &&
+            folderName.startsWith(NAMESPACE_FOLDER_PREFIX) &&
+            folderParent.length > 0
+          ) {
+            const folder: NamespaceFolderResource = {
+              id: `e2e-drive-namespace-${Buffer.from(`${folderParent}/${folderName}`).toString('base64url')}`,
+              name: folderName,
+              mimeType: DRIVE_FOLDER_MIME_TYPE,
+              parents: [folderParent],
             }
-            if (
-              privateFolderHasAppDataParent(parsed.parents) &&
-              folderName.length > 0
-            ) {
-              const folder: PrivateFolderResource = {
-                id: `e2e-drive-private-folder-${Buffer.from(folderName).toString('base64url')}`,
-                name: folderName,
-                mimeType: DRIVE_FOLDER_MIME_TYPE,
-                parents: ['appDataFolder'],
-              }
-              privateFolders = privateFolders
-                .filter((existing) => existing.name !== folderName)
-                .concat(folder)
-              await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                headers: { 'access-control-allow-origin': '*' },
-                body: JSON.stringify({
-                  id: folder.id,
-                  name: folder.name,
-                  mimeType: folder.mimeType,
-                }),
-              })
-              return
-            }
-            if (privateFolderHasAppDataParent(parsed.parents)) {
-              await route.fulfill({
-                status: 400,
-                contentType: 'application/json',
-                headers: { 'access-control-allow-origin': '*' },
-                body: JSON.stringify({
-                  error: { message: 'Invalid e2e Drive folder metadata' },
-                }),
-              })
-              return
-            }
-            sharedFolderSeq += 1
-            const folderId = `e2e-shared-folder-${sharedFolderSeq}`
-            const name =
-              typeof parsed.name === 'string'
-                ? parsed.name.trim() || 'Nook shared vault'
-                : 'Nook shared vault'
-            sharedFolders.set(folderId, { name, writers: [] })
+            namespaceFolders = namespaceFolders
+              .filter((existing) => existing.id !== folder.id)
+              .concat(folder)
             await route.fulfill({
               status: 200,
               contentType: 'application/json',
-              body: JSON.stringify({ id: folderId, name }),
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify({
+                id: folder.id,
+                name: folder.name,
+                mimeType: folder.mimeType,
+              }),
             })
             return
           }
-        }
-
-        // permissions.create for shared folder writer grant
-        const permissionsMatch = url.match(
-          /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/([^/]+)\/permissions$/,
-        )
-        if (permissionsMatch && method === 'POST') {
-          const encodedFolderId = permissionsMatch[1]
-          if (!encodedFolderId) {
-            throw new Error('Drive permission folder id is missing.')
-          }
-          const folderId = decodeURIComponent(encodedFolderId)
-          let email: string
-          try {
-            const parsed = requireRecord(
-              parseJson(bodyText),
-              'Drive permission metadata',
-            )
-            email =
-              typeof parsed.emailAddress === 'string'
-                ? parsed.emailAddress.trim()
-                : ''
-          } catch {
-            email = ''
-          }
-          if (
-            opts?.sharedPermissionStatus &&
-            (opts.sharedPermissionStatus < 200 ||
-              opts.sharedPermissionStatus >= 300)
-          ) {
-            await route.fulfill({
-              status: opts.sharedPermissionStatus,
-              contentType: 'application/json',
-              body: JSON.stringify({ error: { message: 'permission failed' } }),
-            })
-            return
-          }
-          const folder = sharedFolders.get(folderId)
-          if (folder && email) {
-            folder.writers.push(email)
-          }
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              id: `e2e-perm-${folderId}`,
-              type: 'user',
-              role: 'writer',
-              emailAddress: email,
-            }),
-          })
-          return
         }
 
         if (
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'GET'
         ) {
-          if (isPrivateFolderLookup(fullUrl, fileName)) {
-            const expectedName = `${PRIVATE_EVENT_FOLDER_PREFIX}${fileName}`
-            const files = privateFolders
-              .filter(
-                (folder) =>
-                  folder.name === expectedName &&
-                  folder.parents.includes('appDataFolder'),
-              )
-              .map(({ id, name, mimeType }) => ({ id, name, mimeType }))
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              headers: { 'access-control-allow-origin': '*' },
-              body: JSON.stringify({ files }),
-            })
-            return
-          }
           const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
           const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
           const namespaceListing = query.match(NAMESPACE_LISTING_PATTERN)
@@ -465,7 +349,7 @@ export function createLocalE2eGoogleDriveVaultStub(
             const listedPrefix = ((v) => (v ? v : ''))(namespaceListing?.[1])
             const name = unescapeDriveQueryValue(rawName)
             const parent = unescapeDriveQueryValue(rawParent)
-            const files = privateFolders
+            const files = namespaceFolders
               .filter(
                 (folder) =>
                   folder.parents.includes(parent) &&
@@ -548,22 +432,6 @@ export function createLocalE2eGoogleDriveVaultStub(
         }
 
         if (driveFileId && method === 'GET') {
-          const sharedFolder = sharedFolders.get(
-            decodeURIComponent(driveFileId),
-          )
-          if (sharedFolder) {
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              body: JSON.stringify({
-                id: decodeURIComponent(driveFileId),
-                name: sharedFolder.name,
-                mimeType: 'application/vnd.google-apps.folder',
-                capabilities: { canAddChildren: true },
-              }),
-            })
-            return
-          }
           const eventFile = parseEventFileId(driveFileId)
           if (eventFile.kind === DriveEventFileIdParseKind.Event) {
             if (!allEventFiles().has(eventFile.digest)) {

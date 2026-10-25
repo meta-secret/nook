@@ -19,14 +19,21 @@
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
+  import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
+  import ProviderConnectionStatus from '$lib/components/ProviderConnectionStatus.svelte'
+  import { ProviderConnectionProgress } from '$lib/vault/provider-connection-progress'
   import type {
+    OAuthFileConfig,
     ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
+    decodeStoredOAuthFileConfiguration,
     GITHUB_PROVIDER_TYPE,
+    OAuthFilePresentation,
+    StoredOAuthFileConfigurationDecodeKind,
     LocalFolderPresentation,
     LocalFolderHandleKind,
     localizedProviderStorageDetail,
@@ -90,6 +97,29 @@
     onRemoveProvider?: (id: string) => void | Promise<void>
   } = $props()
 
+  function providerTitle(provider: StorageProvider): string {
+    const labelRequest: Parameters<typeof localizeProviderLabel>[0] = {
+      label: provider.label,
+      t: vault.t,
+    }
+    return localizeProviderLabel(labelRequest)
+  }
+
+  /** A saved Drive or iCloud provider with its shared target, whose
+   * accounts can be managed. */
+  function sharedProviderConfig(
+    provider: StorageProvider,
+  ): OAuthFileConfig | false {
+    const decoded = decodeStoredOAuthFileConfiguration(provider.oauthFile)
+    if (decoded.kind !== StoredOAuthFileConfigurationDecodeKind.Configured)
+      return false
+    const presentation = new OAuthFilePresentation(decoded.config)
+    return presentation.hasGoogleDriveFolder() ||
+      presentation.hasICloudShareTarget()
+      ? decoded.config
+      : false
+  }
+
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
     const tArgs: Parameters<typeof vault.t>[0] = {
@@ -119,6 +149,9 @@
     return new ProviderSyncStatusView(formatProviderSyncStatusArgs).text
   }
 
+  const connectionProgress = $derived(
+    new ProviderConnectionProgress(vault.providerConnectionPhase),
+  )
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   const addingProvider = $derived(addProviderOpen || showSetup)
   function setupIs(type: StorageProviderType): boolean {
@@ -214,6 +247,9 @@
   {/if}
 
   <div class="space-y-4">
+    {#if connectionProgress.active}
+      <ProviderConnectionStatus {vault} progress={connectionProgress} />
+    {/if}
     <form
       novalidate
       onsubmit={(e) => {
@@ -294,134 +330,137 @@
               {/if}
             </div>
           {:else}
-            <ul
-              class="divide-y divide-border/60"
-              data-testid="settings-providers-list"
-            >
+            <!-- Each provider is its own card; what belongs to it (its
+                 authorized accounts) sits recessed inside that card. -->
+            <ul class="grid gap-3" data-testid="settings-providers-list">
               {#each syncProviders as provider (provider.id)}
                 {@const supportsVaultReplication =
                   provider_supports_replication(
                     provider,
                     vault.vaultArchitecture.replication_type,
                   )}
-                <li class="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
-                  <div
-                    class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
-                    data-testid="settings-provider-{provider.type}"
-                  >
-                    {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
-                      <Cloud class="size-4 shrink-0 text-primary" />
-                    {:else}
-                      <HardDrive class="size-4 shrink-0 text-primary" />
+                {@const sharedConfig = sharedProviderConfig(provider)}
+                <li class="nk-panel grid gap-4 p-3 sm:p-4">
+                  <div class="flex items-center gap-2">
+                    <div
+                      class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
+                      data-testid="settings-provider-{provider.type}"
+                    >
+                      {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
+                        <Cloud class="size-4 shrink-0 text-primary" />
+                      {:else}
+                        <HardDrive class="size-4 shrink-0 text-primary" />
+                      {/if}
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium text-sm">
+                          {(() => {
+                            const localizeProviderLabelArgs: Parameters<
+                              typeof localizeProviderLabel
+                            >[0] = { label: provider.label, t: vault.t }
+                            return localizeProviderLabel(
+                              localizeProviderLabelArgs,
+                            )
+                          })()}
+                        </span>
+                        <span
+                          class="block truncate text-xs text-muted-foreground"
+                        >
+                          {(() => {
+                            const localizedProviderStorageDetailRequest: Parameters<
+                              typeof localizedProviderStorageDetail
+                            >[0] = { provider, t: vault.t }
+                            return localizedProviderStorageDetail(
+                              localizedProviderStorageDetailRequest,
+                            )
+                          })()}
+                        </span>
+                        <span
+                          class="block truncate text-[11px] text-muted-foreground"
+                          data-testid="sync-status-{provider.id}"
+                        >
+                          {formatSyncStatus(provider)}
+                        </span>
+                        <span
+                          class="block text-[11px] {supportsVaultReplication
+                            ? 'text-muted-foreground'
+                            : 'text-amber-700 dark:text-amber-300'}"
+                          data-testid="provider-capability-{provider.id}"
+                        >
+                          {vault.t(providerCapabilityLabelKey(provider))}
+                          {#if !supportsVaultReplication}
+                            · {vault.t(
+                              I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
+                            )}
+                          {/if}
+                        </span>
+                      </span>
+                    </div>
+                    {#if onSyncProvider}
+                      {@const providerSyncing =
+                        manualProviderSync.state ===
+                          NookManualProviderSyncState.Running &&
+                        manualProviderSync.providerId === provider.id}
+                      <button
+                        {...!supportsVaultReplication
+                          ? {
+                              title: vault.t(
+                                I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
+                              ),
+                            }
+                          : {}}
+                        type="button"
+                        class="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+                        data-testid="sync-provider-{provider.id}"
+                        disabled={isVerifying ||
+                          isInitializing ||
+                          !supportsVaultReplication ||
+                          manualProviderSync.state ===
+                            NookManualProviderSyncState.Running}
+                        aria-busy={providerSyncing}
+                        onclick={() => void onSyncProvider(provider.id)}
+                      >
+                        {#if providerSyncing}
+                          <RefreshCw class="size-3.5 animate-spin" />
+                        {:else}
+                          <RefreshCw class="size-3.5" />
+                        {/if}
+                        {vault.t(I18N_KEYS.AuthStorageSyncNow)}
+                      </button>
                     {/if}
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate font-medium text-sm">
-                        {(() => {
-                          const localizeProviderLabelArgs: Parameters<
+                    {#if onRemoveProvider}
+                      <button
+                        type="button"
+                        class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        aria-label="{vault.t(I18N_KEYS.CommonRemove)} {(() => {
+                          const localizeProviderLabelArgs2: Parameters<
                             typeof localizeProviderLabel
                           >[0] = { label: provider.label, t: vault.t }
                           return localizeProviderLabel(
-                            localizeProviderLabelArgs,
+                            localizeProviderLabelArgs2,
                           )
-                        })()}
-                      </span>
-                      <span
-                        class="block truncate text-xs text-muted-foreground"
+                        })()}"
+                        data-testid="remove-provider-{provider.id}"
+                        disabled={isVerifying || isInitializing}
+                        onclick={() => confirmRemoveProvider(provider)}
                       >
-                        {(() => {
-                          const localizedProviderStorageDetailRequest: Parameters<
-                            typeof localizedProviderStorageDetail
-                          >[0] = { provider, t: vault.t }
-                          return localizedProviderStorageDetail(
-                            localizedProviderStorageDetailRequest,
-                          )
-                        })()}
-                      </span>
-                      <span
-                        class="block truncate text-[11px] text-muted-foreground"
-                        data-testid="sync-status-{provider.id}"
-                      >
-                        {formatSyncStatus(provider)}
-                      </span>
-                      <span
-                        class="block text-[11px] {supportsVaultReplication
-                          ? 'text-muted-foreground'
-                          : 'text-amber-700 dark:text-amber-300'}"
-                        data-testid="provider-capability-{provider.id}"
-                      >
-                        {vault.t(providerCapabilityLabelKey(provider))}
-                        {#if !supportsVaultReplication}
-                          · {vault.t(
-                            I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
-                          )}
-                        {/if}
-                      </span>
-                    </span>
+                        <Trash2 class="size-4" />
+                      </button>
+                    {/if}
                   </div>
-                  {#if onSyncProvider}
-                    {@const providerSyncing =
-                      manualProviderSync.state ===
-                        NookManualProviderSyncState.Running &&
-                      manualProviderSync.providerId === provider.id}
-                    <button
-                      {...!supportsVaultReplication
-                        ? {
-                            title: vault.t(
-                              I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
-                            ),
-                          }
-                        : {}}
-                      type="button"
-                      class="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
-                      data-testid="sync-provider-{provider.id}"
-                      disabled={isVerifying ||
-                        isInitializing ||
-                        !supportsVaultReplication ||
-                        manualProviderSync.state ===
-                          NookManualProviderSyncState.Running}
-                      aria-busy={providerSyncing}
-                      onclick={() => void onSyncProvider(provider.id)}
-                    >
-                      {#if providerSyncing}
-                        <RefreshCw class="size-3.5 animate-spin" />
-                      {:else}
-                        <RefreshCw class="size-3.5" />
-                      {/if}
-                      {vault.t(I18N_KEYS.AuthStorageSyncNow)}
-                    </button>
-                  {/if}
-                  {#if onRemoveProvider}
-                    <button
-                      type="button"
-                      class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                      aria-label="{vault.t(I18N_KEYS.CommonRemove)} {(() => {
-                        const localizeProviderLabelArgs2: Parameters<
-                          typeof localizeProviderLabel
-                        >[0] = { label: provider.label, t: vault.t }
-                        return localizeProviderLabel(localizeProviderLabelArgs2)
-                      })()}"
-                      data-testid="remove-provider-{provider.id}"
-                      disabled={isVerifying || isInitializing}
-                      onclick={() => confirmRemoveProvider(provider)}
-                    >
-                      <Trash2 class="size-4" />
-                    </button>
+                  {#if sharedConfig !== false}
+                    <div class="nk-subpanel-recessed p-3 sm:p-4">
+                      <AuthorizedAccountsPanel
+                        {vault}
+                        config={sharedConfig}
+                        shareTitle={providerTitle(provider)}
+                      />
+                    </div>
                   {/if}
                 </li>
               {/each}
             </ul>
-
-            {#if onBeginAddProvider}
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                data-testid="add-provider-btn"
-                onclick={() => onBeginAddProvider?.()}
-              >
-                <Plus class="size-4" />
-                {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-              </button>
-            {/if}
+            <!-- Adding a provider starts from the identity panel; this list
+                 manages the providers it has, with their accounts. -->
           {/if}
         </fieldset>
       {/if}

@@ -29,9 +29,9 @@ pub enum StorageMode {
     Local,
     /// GitHub repository (authenticated with a PAT).
     Github,
-    /// Google Drive app-data folder (authenticated with OAuth access token).
+    /// Shareable Google Drive folder (authenticated with OAuth access token).
     GoogleDrive,
-    /// iCloud private `CloudKit` database (authenticated with `CloudKit` web auth token).
+    /// Shared `CloudKit` record zone (authenticated with `CloudKit` web auth token).
     ICloud,
 }
 
@@ -186,73 +186,6 @@ pub enum OAuthFilePreset {
 
 pub type OauthFilePreset = OAuthFilePreset;
 
-/// Google Drive storage visibility selected for one provider connection.
-///
-/// This is intentionally independent from vault membership/replication policy:
-/// a Simple or Sentinel vault may use either a private app-data replica or a
-/// folder shared through Google Drive ACLs.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-pub enum GoogleDriveMode {
-    #[default]
-    Private,
-    Shared,
-}
-
-impl GoogleDriveMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Private => "private",
-            Self::Shared => "shared",
-        }
-    }
-
-    pub fn parse(value: &str) -> ValidationResult<Self> {
-        match value.trim() {
-            "private" => Ok(Self::Private),
-            "shared" => Ok(Self::Shared),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: format!("google-drive:{other}"),
-            }),
-        }
-    }
-}
-
-/// iCloud storage visibility selected for one provider connection.
-///
-/// Private providers continue to use the current user's default private
-/// `CloudKit` zone. Shared providers use a custom record hierarchy: owners write
-/// through their private database while participants write through their
-/// shared database with their own `CloudKit` web-auth token.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-pub enum ICloudMode {
-    #[default]
-    Private,
-    Shared,
-}
-
-impl ICloudMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Private => "private",
-            Self::Shared => "shared",
-        }
-    }
-
-    pub fn parse(value: &str) -> ValidationResult<Self> {
-        match value.trim() {
-            "private" => Ok(Self::Private),
-            "shared" => Ok(Self::Shared),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: format!("icloud:{other}"),
-            }),
-        }
-    }
-}
-
 /// Which `CloudKit` database exposes a shared record hierarchy to this account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
@@ -323,27 +256,6 @@ impl ICloudSharedTarget {
             &target.root_record_name,
             &target.short_guid,
         )
-    }
-}
-
-/// `CloudKit` routing for immutable event records.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub enum ICloudEventTarget {
-    #[default]
-    Private,
-    Shared(ICloudSharedTarget),
-}
-
-impl ICloudEventTarget {
-    pub fn from_storage_id(value: &str) -> ValidationResult<Self> {
-        if value.trim().starts_with("icloud-share-v1:") {
-            ICloudSharedTarget::from_storage_id(value).map(Self::Shared)
-        } else {
-            // Private CloudKit providers historically persisted an ordinary
-            // file/remote ref in this slot. Only the versioned share prefix
-            // opts a provider into shared-database routing.
-            Ok(Self::Private)
-        }
     }
 }
 
@@ -594,67 +506,39 @@ mod tests {
             StorageMode::GoogleDrive.cache_ref("file-id", ""),
             "drive:file-id"
         );
-        let first_private_target = DriveEventParent::PrivateAppDataFolder {
-            folder_id: "folder-a".to_owned(),
-        }
-        .encode_storage_id();
-        let second_private_target = DriveEventParent::PrivateAppDataFolder {
-            folder_id: "folder-b".to_owned(),
-        }
-        .encode_storage_id();
+        let first_target = DriveEventParent::shared_folder_id("folder-a").encode_storage_id();
+        let second_target = DriveEventParent::shared_folder_id("folder-b").encode_storage_id();
         assert_ne!(
-            StorageMode::GoogleDrive.cache_ref(&first_private_target, "vault.yaml"),
-            StorageMode::GoogleDrive.cache_ref(&second_private_target, "vault.yaml")
+            StorageMode::GoogleDrive.cache_ref(&first_target, "vault.yaml"),
+            StorageMode::GoogleDrive.cache_ref(&second_target, "vault.yaml")
         );
         Ok(())
     }
 
     #[test]
-    fn drive_target_refs_without_a_folder_resolve_the_private_folder() -> anyhow::Result<()> {
-        for unnamed in ["", "file-id"] {
-            assert_eq!(
-                DriveStorageTargetRef::parse(unnamed)?,
-                DriveStorageTargetRef::PendingPrivateFolder
-            );
+    fn drive_target_refs_require_the_shared_folder() -> anyhow::Result<()> {
+        assert_eq!(
+            DriveEventParent::parse_storage_id(" shared: my-drive-folder ")?,
+            DriveEventParent::shared_folder_id("my-drive-folder")
+        );
+        // Every Drive provider is shared: no ref falls back to a hidden folder.
+        for unnamed in [
+            "",
+            "file-id",
+            "shared:",
+            "private-folder-v2:child-folder-id",
+        ] {
+            assert!(DriveEventParent::parse_storage_id(unnamed).is_err());
         }
-        assert_eq!(
-            DriveStorageTargetRef::parse(DRIVE_PRIVATE_FOLDER_PENDING_REF)?,
-            DriveStorageTargetRef::PendingPrivateFolder
-        );
-        assert_eq!(
-            DriveStorageTargetRef::parse("private-folder-v2:child-folder-id")?,
-            DriveStorageTargetRef::PrivateFolder {
-                folder_id: "child-folder-id".to_owned(),
-            }
-        );
-        assert_eq!(
-            DriveStorageTargetRef::parse("shared:my-drive-folder")?,
-            DriveStorageTargetRef::SharedFolder {
-                folder_id: "my-drive-folder".to_owned(),
-            }
-        );
-        assert!(DriveStorageTargetRef::parse("private-folder-v2:").is_err());
         Ok(())
     }
 
     #[test]
     fn drive_event_parents_encode_their_target_prefix() -> anyhow::Result<()> {
         assert_eq!(
-            DriveEventParent::SharedFolder {
-                folder_id: "folder-xyz".to_owned(),
-            }
-            .encode_storage_id(),
+            DriveEventParent::shared_folder_id(" folder-xyz ").encode_storage_id(),
             "shared:folder-xyz"
         );
-        Ok(())
-    }
-
-    #[test]
-    fn google_drive_mode_requires_an_explicit_current_value() -> anyhow::Result<()> {
-        assert_eq!(GoogleDriveMode::parse("private")?, GoogleDriveMode::Private);
-        assert_eq!(GoogleDriveMode::parse("shared")?, GoogleDriveMode::Shared);
-        assert!(GoogleDriveMode::parse("").is_err());
-        assert!(GoogleDriveMode::parse("public").is_err());
         Ok(())
     }
 
@@ -670,33 +554,10 @@ mod tests {
         let storage_id = owner.to_storage_id()?;
         assert!(storage_id.starts_with("icloud-share-v1:"));
         assert_eq!(ICloudSharedTarget::from_storage_id(&storage_id)?, owner);
-        assert_eq!(
-            ICloudEventTarget::from_storage_id("")?,
-            ICloudEventTarget::Private
-        );
-        assert_eq!(
-            ICloudEventTarget::from_storage_id("nook-events")?,
-            ICloudEventTarget::Private
-        );
-        assert_eq!(
-            ICloudEventTarget::from_storage_id("legacy-private-record-ref")?,
-            ICloudEventTarget::Private
-        );
-        assert_eq!(
-            ICloudEventTarget::from_storage_id(&storage_id)?,
-            ICloudEventTarget::Shared(owner)
-        );
-        assert!(ICloudEventTarget::from_storage_id("icloud-share-v1:{}").is_err());
+        // Every iCloud provider is shared: a plain record ref is not a target.
+        assert!(ICloudSharedTarget::from_storage_id("").is_err());
+        assert!(ICloudSharedTarget::from_storage_id("nook-events").is_err());
         assert!(ICloudSharedTarget::from_storage_id("icloud-share-v1:{}").is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn icloud_mode_requires_an_explicit_current_value() -> anyhow::Result<()> {
-        assert_eq!(ICloudMode::parse("private")?, ICloudMode::Private);
-        assert_eq!(ICloudMode::parse("shared")?, ICloudMode::Shared);
-        assert!(ICloudMode::parse("").is_err());
-        assert!(ICloudMode::parse("public").is_err());
         Ok(())
     }
 

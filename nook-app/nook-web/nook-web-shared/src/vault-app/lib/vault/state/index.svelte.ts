@@ -33,6 +33,7 @@ const runtimeKeys = [
   "clearScheduledSyncInvalidationAlert",
   "successMsg",
   "isVerifying",
+  "providerConnectionPhase",
   "isSaving",
   "isInitializing",
 ] as const satisfies readonly (keyof VaultRuntimeState)[];
@@ -70,7 +71,6 @@ const providerKeys = [
   "activateLoginSetup",
   "clearLoginSetup",
   "loginRequiresExistingVault",
-  "providerSaveTarget",
   "remoteVaultChoices",
   "recoveryDiscovery",
   "recordExistingVaultRecovery",
@@ -119,7 +119,6 @@ const sessionKeys = [
   "enrollSecretsKey",
   "enrollMembersKey",
   "sharedJoinerIdentity",
-  "sharedGrantInstructions",
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
@@ -206,6 +205,7 @@ class VaultStateSlicesImplementation {
   declare clearScheduledSyncInvalidationAlert: VaultRuntimeState["clearScheduledSyncInvalidationAlert"];
   declare successMsg: VaultRuntimeState["successMsg"];
   declare isVerifying: VaultRuntimeState["isVerifying"];
+  declare providerConnectionPhase: VaultRuntimeState["providerConnectionPhase"];
   declare isSaving: VaultRuntimeState["isSaving"];
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
@@ -239,7 +239,6 @@ class VaultStateSlicesImplementation {
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
   declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
-  declare providerSaveTarget: VaultProviderState["providerSaveTarget"];
   declare remoteVaultChoices: VaultProviderState["remoteVaultChoices"];
   declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
@@ -286,7 +285,6 @@ class VaultStateSlicesImplementation {
   declare enrollSecretsKey: VaultSessionState["enrollSecretsKey"];
   declare enrollMembersKey: VaultSessionState["enrollMembersKey"];
   declare sharedJoinerIdentity: VaultSessionState["sharedJoinerIdentity"];
-  declare sharedGrantInstructions: VaultSessionState["sharedGrantInstructions"];
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];

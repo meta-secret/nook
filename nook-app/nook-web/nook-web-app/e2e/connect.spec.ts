@@ -18,6 +18,7 @@ import {
   waitForVaultOperationsIdle,
   waitForVaultInitialized,
   waitForVaultSyncIdle,
+  openIdentityPanel,
   openManagePage,
   ManagePage,
 } from './helpers'
@@ -267,8 +268,9 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    // Without a provider, Sync opens from the identity panel's "Add a sync
+    // provider", so the picker is already open.
     await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await beginAddSyncProvider(page)
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
@@ -277,8 +279,10 @@ test.describe('vault connect flow', () => {
     // Adding a provider is its own page: Back leaves it unsaved.
     await page.getByTestId('identity-page-back').click()
     await expect(page.getByTestId('provider-picker-list')).toHaveCount(0)
-    await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
+    await openIdentityPanel(page)
+    await expect(
+      page.getByTestId('identity-panel-provider-github'),
+    ).toHaveCount(0)
   })
 
   test('unlocks the vault after passkey authorization on reload', async ({

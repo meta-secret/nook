@@ -1,10 +1,7 @@
 use super::{NookProviderSelection, wasm_bindgen};
 use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
 use nook_core::StoredOAuthFileConfiguration;
-use nook_core::{
-    EnrollmentAudience, ProviderEnrollmentRequest, SharedGoogleEnrollmentAudience,
-    SharedStorageTargetSelection,
-};
+use nook_core::{EnrollmentAudience, ProviderEnrollmentRequest, SharedEnrollmentAudience};
 use nook_core::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
     OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
@@ -104,52 +101,6 @@ pub fn parse_icloud_shared_storage_target(
     let result =
         Ok::<_, wasm_bindgen::JsError>(ICloudSharedTarget::from_storage_id(storage_target_id)?)?;
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn set_google_drive_provider_mode(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-
-    mode: &tsify::Ts<nook_core::GoogleDriveMode>,
-) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let mode = mode
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    let result = Ok::<_, wasm_bindgen::JsError>(config.with_google_drive_mode(mode))?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn set_icloud_provider_mode(
-    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-
-    mode: &tsify::Ts<nook_core::ICloudMode>,
-) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
-    let config = config
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let mode = mode
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-
-    let result = Ok::<_, wasm_bindgen::JsError>(config.with_icloud_mode(mode))?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -391,6 +342,9 @@ pub fn enrollment_provider_for_architecture(
     ))
 }
 
+/// Credential-free device invite for a shared Google Drive or iCloud provider.
+/// `joiner_identity` is the authorized account (email) picked from the
+/// provider's access list; the target comes from the saved provider row.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
@@ -400,8 +354,7 @@ pub fn enrollment_provider_for_architecture(
 pub fn enrollment_shared_provider_for_architecture(
     provider: &tsify::Ts<nook_core::StorageProviderData>,
     architecture: &NookVaultArchitecture,
-    shared_joiner_identity: &str,
-    shared_storage_target_id: &str,
+    joiner_identity: &str,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let provider = provider
         .to_rust()
@@ -412,38 +365,7 @@ pub fn enrollment_shared_provider_for_architecture(
         ProviderEnrollmentRequest {
             provider: &provider,
             architecture: &architecture,
-            audience: EnrollmentAudience::SharedGoogle(SharedGoogleEnrollmentAudience {
-                joiner_identity: shared_joiner_identity,
-                target: SharedStorageTargetSelection::Existing(shared_storage_target_id.to_owned()),
-            }),
-        }
-        .build()?,
-    ))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn enrollment_icloud_shared_provider_for_architecture(
-    provider: &tsify::Ts<nook_core::StorageProviderData>,
-    architecture: &NookVaultArchitecture,
-    shared_storage_target_id: &str,
-) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
-    let provider = provider
-        .to_rust()
-        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
-
-    let architecture = architecture.to_core();
-    Ok(NookEnrollmentProvider::from_core(
-        ProviderEnrollmentRequest {
-            provider: &provider,
-            architecture: &architecture,
-            audience: EnrollmentAudience::SharedICloud(SharedStorageTargetSelection::Existing(
-                shared_storage_target_id.to_owned(),
-            )),
+            audience: EnrollmentAudience::Shared(SharedEnrollmentAudience { joiner_identity }),
         }
         .build()?,
     ))

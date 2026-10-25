@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  DRIVE_APPDATA_SCOPE,
   DRIVE_FILE_SCOPE,
   DRIVE_READONLY_SCOPE,
   GoogleDriveOAuthScope,
@@ -68,7 +67,7 @@ describe('google-oauth', () => {
     )
   })
 
-  it('settles concurrent token requests independently by scope', async () => {
+  it('requests the shared Drive scope with the invited account preselected', async () => {
     const callbacks = new Map<
       string,
       (response: {
@@ -103,50 +102,31 @@ describe('google-oauth', () => {
       },
     })
 
-    const appDataRequest: GoogleAccessTokenRequest = {
-      scope: GoogleDriveOAuthScope.AppData,
-      prompt: GoogleOAuthPrompt.Default,
-    }
-    const appdataToken =
-      googleOAuthSession.requestGoogleAccessToken(appDataRequest)
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
     const sharedRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.Shared,
-      prompt: GoogleOAuthPrompt.Default,
+      prompt: GoogleOAuthPrompt.Consent,
+      accountHint: ' member@example.com ',
     }
-    const fileToken = googleOAuthSession.requestGoogleAccessToken(sharedRequest)
+    const token = googleOAuthSession.requestGoogleAccessToken(sharedRequest)
 
     await vi.waitFor(() => {
-      expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()
       expect(requests.get(sharedScope)).toHaveBeenCalledOnce()
     })
-    const defaultPromptRequest: GoogleTokenPromptRequest = {
-      prompt: GoogleOAuthPrompt.Default,
+    // Every Drive provider is shared: no app-data token client exists.
+    expect([...requests.keys()]).toEqual([sharedScope])
+    const promptRequest: GoogleTokenPromptRequest = {
+      prompt: GoogleOAuthPrompt.Consent,
+      login_hint: 'member@example.com',
     }
-    expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledWith(
-      defaultPromptRequest,
-    )
-    expect(requests.get(sharedScope)).toHaveBeenCalledWith(defaultPromptRequest)
-    const fileCallback = callbacks.get(sharedScope)
-    const appDataCallback = callbacks.get(DRIVE_APPDATA_SCOPE)
-    if (!fileCallback || !appDataCallback) {
-      throw new Error('expected Google token callbacks')
-    }
-    fileCallback({
-      access_token: 'file-token',
-      expires_in: 3600,
-    })
-    appDataCallback({
-      access_token: 'appdata-token',
-      expires_in: 3600,
-    })
+    expect(requests.get(sharedScope)).toHaveBeenCalledWith(promptRequest)
+    const callback = callbacks.get(sharedScope)
+    if (!callback) throw new Error('expected a Google token callback')
+    callback({ access_token: 'shared-token', expires_in: 3600 })
 
-    const file = await fileToken
-    const appData = await appdataToken
-    expect(file.isOk()).toBe(true)
-    expect(appData.isOk()).toBe(true)
-    if (file.isErr() || appData.isErr()) return
-    expect(file.value.accessToken).toBe('file-token')
-    expect(appData.value.accessToken).toBe('appdata-token')
+    const shared = await token
+    expect(shared.isOk()).toBe(true)
+    if (shared.isErr()) return
+    expect(shared.value.accessToken).toBe('shared-token')
   })
 })

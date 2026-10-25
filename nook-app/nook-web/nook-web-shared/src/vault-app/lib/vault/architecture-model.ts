@@ -13,15 +13,11 @@ import {
   provider_oauth_preset_for_provider,
   provider_replication_capability,
   provider_supports_replication,
-  prepare_shared_storage_grant,
   provider_onboarding_type,
   validate_provider_replication,
   validate_vault_architecture,
   vault_architecture_can_create_secret,
   vault_architecture_onboarding_type,
-  type SharedStorageGrantCredential,
-  type SharedStorageTargetHint,
-  type SharedStorageTargetSelection,
 } from "$app-wasm";
 import {
   unselectedVaultScope,
@@ -30,8 +26,6 @@ import {
 
 export type {
   NookProviderReplicationCapability as ProviderReplicationCapability,
-  SharedStorageGrantOutcome,
-  SharedStorageGrantRequest,
   NookVaultArchitecture as VaultArchitecture,
 } from "$app-wasm";
 
@@ -48,35 +42,8 @@ export {
   provider_oauth_preset_for_provider,
   provider_replication_capability,
   provider_supports_replication,
-  prepare_shared_storage_grant,
   validate_provider_replication,
 };
-
-export function suggestedSharedStorageTarget(
-  name: string,
-): SharedStorageTargetHint {
-  return { state: "suggested", hint: name };
-}
-
-export function createSharedStorageTarget(): SharedStorageTargetSelection {
-  return { state: "create" };
-}
-
-export function existingSharedStorageTarget(
-  storageTargetId: string,
-): SharedStorageTargetSelection {
-  return { state: "existing", storageTargetId };
-}
-
-export function sharedStorageGrantAccessToken(
-  accessToken: string,
-): SharedStorageGrantCredential {
-  return { state: "accessToken", accessToken };
-}
-
-export function unavailableSharedStorageGrantCredential(): SharedStorageGrantCredential {
-  return { state: "unavailable" };
-}
 
 export type VaultArchitectureDraft = {
   device_mode: DeviceMode;

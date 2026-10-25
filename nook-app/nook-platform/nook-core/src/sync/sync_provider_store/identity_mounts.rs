@@ -8,19 +8,15 @@
 
 use nook_auth2::{IdentityId, StoreId};
 use nook_event_log::{
-    DriveMountTarget, EventLogLocation, ICloudMountTarget, IdentityMountTarget,
-    IdentityProviderMount, ProviderMountId,
+    EventLogLocation, IdentityMountTarget, IdentityProviderMount, ProviderMountId,
 };
 
 use super::{
     ProviderRows, StorageProviderData, StoredGithubRepository, StoredGoogleDriveFolder,
     StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
-    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    StoredOAuthFileConfiguration,
 };
-use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
-    OAuthFilePreset, StorageProviderType,
-};
+use crate::{DEFAULT_GITHUB_REPO_NAME, OAuthFilePreset, StorageProviderType};
 
 /// Whether a provider row can carry an identity's control log.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,48 +95,27 @@ impl StorageProviderData {
             },
             StorageProviderType::OauthFile => match &self.oauth_file {
                 StoredOAuthFileConfiguration::Configured(config) => match config.preset {
-                    OAuthFilePreset::GoogleDrive => {
-                        IdentityMountCapability::Mountable(IdentityMountTarget::GoogleDrive {
-                            drive: match (config.resolved_google_drive_mode(), &config.folder_id) {
-                                (
-                                    GoogleDriveMode::Shared,
-                                    StoredGoogleDriveFolder::FolderId(id),
-                                ) => DriveMountTarget::Shared {
-                                    folder_id: id.clone(),
-                                },
-                                (GoogleDriveMode::Shared, StoredGoogleDriveFolder::Root) => {
-                                    return IdentityMountCapability::Unconfigured;
-                                }
-                                (GoogleDriveMode::Private, _) => DriveMountTarget::Private {
-                                    folder_name: match &config.file_name {
-                                        StoredOAuthRemoteFileName::FileName(name) => name.clone(),
-                                        StoredOAuthRemoteFileName::Unresolved => {
-                                            DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-                                        }
-                                    },
-                                },
-                            },
-                        })
-                    }
-                    OAuthFilePreset::ICloud => {
-                        IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
-                            icloud: match (
-                                config.resolved_icloud_mode(),
-                                &config.icloud_share_target,
-                            ) {
-                                (
-                                    ICloudMode::Shared,
-                                    StoredICloudShareTarget::SharedTarget(target),
-                                ) => ICloudMountTarget::Shared {
-                                    share_target: target.clone(),
-                                },
-                                (ICloudMode::Shared, StoredICloudShareTarget::Personal) => {
-                                    return IdentityMountCapability::Unconfigured;
-                                }
-                                (ICloudMode::Private, _) => ICloudMountTarget::Private,
-                            },
-                        })
-                    }
+                    OAuthFilePreset::GoogleDrive => match &config.folder_id {
+                        StoredGoogleDriveFolder::FolderId(id) if !id.trim().is_empty() => {
+                            IdentityMountCapability::Mountable(IdentityMountTarget::GoogleDrive {
+                                folder_id: id.trim().to_owned(),
+                            })
+                        }
+                        StoredGoogleDriveFolder::FolderId(_) | StoredGoogleDriveFolder::Root => {
+                            IdentityMountCapability::Unconfigured
+                        }
+                    },
+                    OAuthFilePreset::ICloud => match &config.icloud_share_target {
+                        StoredICloudShareTarget::SharedTarget(target)
+                            if !target.trim().is_empty() =>
+                        {
+                            IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
+                                share_target: target.trim().to_owned(),
+                            })
+                        }
+                        StoredICloudShareTarget::SharedTarget(_)
+                        | StoredICloudShareTarget::Unbound => IdentityMountCapability::Unconfigured,
+                    },
                 },
                 StoredOAuthFileConfiguration::NotApplicable => {
                     IdentityMountCapability::Unconfigured
@@ -274,6 +249,7 @@ mod tests {
                 id,
                 OAuthFileConfig {
                     preset: OAuthFilePreset::ICloud,
+                    icloud_share_target: StoredICloudShareTarget::SharedTarget("share".to_owned()),
                     ..OAuthFileConfig::default()
                 },
             )
@@ -311,7 +287,7 @@ mod tests {
             "drive",
             OAuthFileConfig {
                 preset: OAuthFilePreset::GoogleDrive,
-                drive_mode: GoogleDriveMode::Private,
+                folder_id: StoredGoogleDriveFolder::FolderId("vault-folder".to_owned()),
                 ..OAuthFileConfig::default()
             },
         )
@@ -396,18 +372,17 @@ mod tests {
     }
 
     #[test]
-    fn icloud_mounts_carry_their_share_and_need_one_when_shared() {
+    fn oauth_mounts_carry_their_shared_target_and_need_one() {
         assert_eq!(
             Row::icloud("icloud").0.identity_mount_capability(),
             IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
-                icloud: ICloudMountTarget::Private
+                share_target: "share".to_owned()
             })
         );
         let unshared = Row::oauth(
             "icloud",
             OAuthFileConfig {
                 preset: OAuthFilePreset::ICloud,
-                icloud_mode: ICloudMode::Shared,
                 ..OAuthFileConfig::default()
             },
         );
@@ -415,21 +390,29 @@ mod tests {
             unshared.0.identity_mount_capability(),
             IdentityMountCapability::Unconfigured
         );
-        let shared = Row::oauth(
-            "icloud",
+        let unbound_drive = Row::oauth(
+            "drive",
             OAuthFileConfig {
-                preset: OAuthFilePreset::ICloud,
-                icloud_mode: ICloudMode::Shared,
-                icloud_share_target: StoredICloudShareTarget::SharedTarget("share".to_owned()),
+                preset: OAuthFilePreset::GoogleDrive,
                 ..OAuthFileConfig::default()
             },
         );
         assert_eq!(
-            shared.0.identity_mount_capability(),
-            IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
-                icloud: ICloudMountTarget::Shared {
-                    share_target: "share".to_owned()
-                }
+            unbound_drive.0.identity_mount_capability(),
+            IdentityMountCapability::Unconfigured
+        );
+        let drive = Row::oauth(
+            "drive",
+            OAuthFileConfig {
+                preset: OAuthFilePreset::GoogleDrive,
+                folder_id: StoredGoogleDriveFolder::FolderId(" vault-folder ".to_owned()),
+                ..OAuthFileConfig::default()
+            },
+        );
+        assert_eq!(
+            drive.0.identity_mount_capability(),
+            IdentityMountCapability::Mountable(IdentityMountTarget::GoogleDrive {
+                folder_id: "vault-folder".to_owned()
             })
         );
     }
@@ -456,7 +439,7 @@ mod tests {
                     repository: "owner/identity".to_owned()
                 },
                 &IdentityMountTarget::ICloud {
-                    icloud: ICloudMountTarget::Private
+                    share_target: "share".to_owned()
                 },
             ]
         );

@@ -1,9 +1,5 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
-type UnsupportedSharedStorageGrant = {
-  readonly reasonKey: string;
-};
-
 export enum OAuthFailureKind {
   GoogleConfiguration = "google-configuration",
   GoogleScript = "google-script",
@@ -28,9 +24,6 @@ export enum OAuthFailureKind {
   InvalidConfiguration = "invalid-configuration",
   GoogleSharedSignInRequired = "google-shared-sign-in-required",
   GoogleSharedCreation = "google-shared-creation",
-  GoogleSharedConnection = "google-shared-connection",
-  GoogleSharedNotFolder = "google-shared-not-folder",
-  GoogleSharedNotWritable = "google-shared-not-writable",
   SharedLinkRequired = "shared-link-required",
   SharedLocationMissing = "shared-location-missing",
   SharedSignInRequired = "shared-sign-in-required",
@@ -60,12 +53,6 @@ export class OAuthFailure {
         return I18N_KEYS.ProviderSetupGoogleSharedSignInFirst;
       case OAuthFailureKind.GoogleSharedCreation:
         return I18N_KEYS.ProviderSetupGoogleSharedCreateFailed;
-      case OAuthFailureKind.GoogleSharedConnection:
-        return I18N_KEYS.ProviderSetupGoogleSharedConnectFailed;
-      case OAuthFailureKind.GoogleSharedNotFolder:
-        return I18N_KEYS.ProviderSetupGoogleSharedNotFolder;
-      case OAuthFailureKind.GoogleSharedNotWritable:
-        return I18N_KEYS.ProviderSetupGoogleSharedNotWritable;
       case OAuthFailureKind.SharedLinkRequired:
         return I18N_KEYS.ProviderSetupIcloudSharedLinkRequired;
       case OAuthFailureKind.SharedLocationMissing:
@@ -94,13 +81,5 @@ export class OAuthFailure {
       case OAuthFailureKind.ProviderPersistence:
         return I18N_KEYS.ProviderSetupIcloudSignInFailed;
     }
-  }
-}
-
-/** Preserves the Rust-owned rejection projection without converting it to an exception. */
-export class SharedStorageGrantFailure {
-  constructor(private readonly rejection: UnsupportedSharedStorageGrant) {}
-  get translationKey() {
-    return this.rejection.reasonKey;
   }
 }

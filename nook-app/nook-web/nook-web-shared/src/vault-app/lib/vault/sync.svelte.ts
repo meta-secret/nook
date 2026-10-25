@@ -58,6 +58,7 @@ import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
 import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
+import { PaintOpportunity } from "$lib/runtime/paint-opportunity";
 
 export { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
 
@@ -298,6 +299,7 @@ export class VaultSyncActions {
     if (!shouldSync) return storageOk(ProviderSyncOutcome.Skipped);
     state.isSyncing = true;
     try {
+      await PaintOpportunity.next();
       const synchronized = await this.synchronizeProviders(visibility);
       if (synchronized.isErr()) return synchronized;
       if (state.isAuthenticated) {
@@ -706,6 +708,7 @@ export class VaultSyncActions {
     }
     state.isSyncing = true;
     try {
+      await PaintOpportunity.next();
       if (
         decision === VaultStorageSyncDecision.SyncFirstProviderUnauthenticated
       ) {
@@ -805,6 +808,7 @@ export class VaultSyncActions {
     }
     state.isSyncing = true;
     try {
+      await PaintOpportunity.next();
       const initialized = await state.initDeviceIdentity();
       if (initialized.isErr()) return storageErr(initialized.error);
       if (state.syncProviders.length === 0) {

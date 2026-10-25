@@ -30,8 +30,6 @@ import {
   provider_default_label_without_detail,
   provider_storage_detail,
   seal_auth_providers_for_device_public_key,
-  set_google_drive_provider_mode,
-  set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
   NookStoredOAuthFileConfigurationState,
   NookStoredLocalFolderConfigurationState,
@@ -68,8 +66,6 @@ await initNookWasm();
 export type {
   AuthProvidersSnapshot,
   ActiveVaultScope,
-  GoogleDriveMode,
-  ICloudMode,
   LocalFolderConfig,
   OAuthFileConfig,
   OAuthFilePreset,
@@ -96,8 +92,6 @@ export {
   bind_google_drive_shared_folder,
   delete_auth_providers_db,
   seal_auth_providers_for_device_public_key,
-  set_google_drive_provider_mode,
-  set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
 };
 
@@ -289,8 +283,8 @@ export function storedGoogleDriveFolder(
   return { state: "folderId", value: folderId };
 }
 
-export function personalICloudShareTarget(): StoredICloudShareTarget {
-  return { state: "personal" };
+export function unboundICloudShareTarget(): StoredICloudShareTarget {
+  return { state: "unbound" };
 }
 
 export function storedICloudShareTarget(
@@ -357,10 +351,8 @@ export function defaultOAuthFileConfig({
     fileId: unresolvedOAuthRemoteFileId(),
     fileName: storedOAuthRemoteFileName(fileName),
     accountEmail: unknownOAuthAccountIdentity(),
-    driveMode: "private",
     folderId: rootGoogleDriveFolder(),
-    iCloudMode: "private",
-    iCloudShareTarget: personalICloudShareTarget(),
+    iCloudShareTarget: unboundICloudShareTarget(),
   };
 }
 

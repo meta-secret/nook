@@ -85,16 +85,16 @@ describe('identity card rows that need the unlocked identity', () => {
     const view = renderCurrent(IdentityCardStatus.Locked)
 
     expect(view.queryByTestId('identity-overview-toggle')).not.toBeTruthy()
-    expect(view.queryByTestId('identity-manage')).not.toBeTruthy()
     expect(view.queryByTestId('identity-new-vault')).not.toBeTruthy()
     expect(view.getByTestId('identity-vault-row')).toBeTruthy()
   })
 
-  test('an unlocked card offers Overview, Manage and New vault', () => {
+  test('an unlocked card offers one Identity panel and New vault', () => {
     const view = renderCurrent(IdentityCardStatus.Unlocked)
 
     expect(view.getByTestId('identity-overview-toggle')).toBeTruthy()
-    expect(view.getByTestId('identity-manage')).toBeTruthy()
+    // Overview and Manage are one panel now: no separate menu row.
+    expect(view.queryAllByTestId('identity-manage')).toHaveLength(0)
     expect(view.getByTestId('identity-new-vault')).toBeTruthy()
   })
 })

@@ -1,5 +1,4 @@
 import { expect, test, type Browser } from '../fixtures'
-import { Effect } from 'effect'
 import {
   connectLocalVault,
   openOpenVaultPanel,
@@ -9,13 +8,13 @@ import {
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
-  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
   type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionSidePanelSignalType,
+  type ExtensionSidePanelSignal,
+} from '../../../nook-web-shared/src/extension/side-panel-signal-message'
 import type {
   CompanionIdentityDiscoveryObservation,
   CompanionIdentityStatus,
@@ -30,10 +29,10 @@ type ExtensionInstallDemoDiscoveryMessage = Omit<
 }
 
 type ExtensionInstallDemoMessage =
-  ExtensionInstallDemoDiscoveryMessage | OpenCompanionLauncherMessage
+  ExtensionInstallDemoDiscoveryMessage | ExtensionSidePanelSignal
 
 type ExtensionInstallDemoMessageTypes = {
-  openCompanionLauncher: OpenCompanionLauncherMessageType
+  openSidePanel: ExtensionSidePanelSignalType
   pairedVaultIdentityDiscovery: ExtensionPairedVaultIdentityDiscoveryMessageType
 }
 
@@ -49,8 +48,7 @@ type ExtensionInstallDemoChromeRuntime = {
 }
 
 const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
-  openCompanionLauncher:
-    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  openSidePanel: ExtensionSidePanelSignalType.NookOpenSidePanel,
   pairedVaultIdentityDiscovery:
     ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
 }
@@ -142,7 +140,7 @@ test("offer the browser extension from the open vault's panel", async ({
             ? message.payload.request
             : { requestId: '', vaultStoreId: '' }
         callback(
-          type === messageTypes.openCompanionLauncher
+          type === messageTypes.openSidePanel
             ? { ok: true }
             : type === messageTypes.pairedVaultIdentityDiscovery
               ? {
@@ -177,32 +175,12 @@ test("offer the browser extension from the open vault's panel", async ({
     /nook:extension-paired-vault-identity-discovery/,
   )
   await connect.click()
-  // Concrete companion request and response domains must preserve the exact
-  // message envelope while the browser boundary rejects unnamed value bags.
+  // The vault asks the extension for its side panel, where the vault
+  // connects in place.
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
-    JSON.stringify({
-      type: 'nook:open-companion-launcher',
-      payload: { intent: OpenCompanionLauncherIntent.Pair },
-    }),
+    JSON.stringify({ type: ExtensionSidePanelSignalType.NookOpenSidePanel }),
   )
-  const encodedLauncherMessage = await page
-    .locator('html')
-    .getAttribute('data-demo-extension-message')
-  if (typeof encodedLauncherMessage !== 'string') {
-    throw new Error('Companion launcher message was not recorded.')
-  }
-  const launcherMessage = Effect.runSync(
-    Effect.result(
-      OpenCompanionLauncherMessageGuard.decode(
-        parseJson(encodedLauncherMessage),
-      ),
-    ),
-  )
-  if (launcherMessage._tag === 'Failure') {
-    throw new Error('Companion launcher message was malformed.')
-  }
-  expect(launcherMessage.success.intent).toBe(OpenCompanionLauncherIntent.Pair)
   const routedTypesAttribute = await page
     .locator('html')
     .evaluate(
@@ -218,9 +196,9 @@ test("offer the browser extension from the open vault's panel", async ({
   )
   expect(routedTypes).toEqual([
     'nook:extension-paired-vault-identity-discovery',
-    'nook:open-companion-launcher',
+    'nook:open-side-panel',
   ])
-  // Launching the session-owned pairing operation must not optimistically
+  // Opening the side panel, where the vault connects, must not optimistically
   // mark this vault connected before a new grant is accepted.
   await expect(connect).toBeVisible()
   await expect(page.getByTestId('vault-extension-connected')).toHaveCount(0)

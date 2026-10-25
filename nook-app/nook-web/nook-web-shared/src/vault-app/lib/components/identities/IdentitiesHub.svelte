@@ -12,6 +12,7 @@ join) sit between the hero and the cards.
   import type { VaultState } from '$lib/vault.svelte'
   import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
+  import { Button } from '$lib/components/ui/button'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
@@ -448,11 +449,31 @@ join) sit between the hero and the cards.
         {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryFailed)}
       </p>
     {:else if loader.state.kind === IdentityDirectoryLoadKind.Ready}
+      <div class="flex items-center gap-3">
+        <h2 class="nk-subpanel-head flex-1">
+          {vault.t(I18N_KEYS.WorkspaceCardsLabel)}
+        </h2>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          class="shrink-0"
+          data-testid="identity-new"
+          title={vault.t(I18N_KEYS.WorkspaceNewIdentityDescription)}
+          disabled={busy}
+          onclick={onNewIdentity}
+        >
+          <Plus class="size-4" aria-hidden="true" />
+          {vault.t(I18N_KEYS.WorkspaceNewIdentityTitle)}
+        </Button>
+      </div>
       <!-- Cards keep one regular width; as many sit in a row as the page's
            own space holds, so a browser side panel narrows the row, not the
-           cards. A card with a panel open spreads across the whole row. -->
+           cards. While a card has a panel open, the others stack under it
+           and the panel spans their rows (nk-identity-cards). -->
       <section
-        class="flex min-w-0 flex-wrap items-stretch gap-4 [&>*]:w-[min(100%,22rem)] [&>[data-spread=true]]:w-full"
+        class="nk-identity-cards"
+        style:--nk-card-rows={cards.length}
         aria-label={vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         data-testid="identity-cards"
       >
@@ -530,26 +551,6 @@ join) sit between the hero and the cards.
             {...requestPanel && card.current ? { requestPanel } : {}}
           />
         {/each}
-        <button
-          type="button"
-          class="nk-frame-keytag nk-new-tile sm:min-h-40 md:min-h-60"
-          data-testid="identity-new"
-          disabled={busy}
-          onclick={onNewIdentity}
-        >
-          <span
-            class="grid size-11 place-items-center border border-border text-foreground"
-            aria-hidden="true"
-          >
-            <Plus class="size-5" />
-          </span>
-          <span class="text-[0.9375rem] font-semibold text-foreground">
-            {vault.t(I18N_KEYS.WorkspaceNewIdentityTitle)}
-          </span>
-          <span class="max-w-[24ch] text-[0.8125rem]">
-            {vault.t(I18N_KEYS.WorkspaceNewIdentityDescription)}
-          </span>
-        </button>
       </section>
       {#if extensionNote}
         <p

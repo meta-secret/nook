@@ -1,22 +1,20 @@
 import { expect, test } from '../fixtures'
-import { Effect } from 'effect'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  parseJson,
   openIdentitiesPage,
   openOpenVaultPanel,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
-  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
   type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionSidePanelSignalType,
+  type ExtensionSidePanelSignal,
+} from '../../../nook-web-shared/src/extension/side-panel-signal-message'
 import type {
   CompanionIdentityDiscoveryObservation,
   CompanionIdentityStatus,
@@ -30,10 +28,10 @@ type VaultSwitcherDiscoveryMessage = Omit<
 }
 
 type VaultSwitcherDemoMessage =
-  VaultSwitcherDiscoveryMessage | OpenCompanionLauncherMessage
+  VaultSwitcherDiscoveryMessage | ExtensionSidePanelSignal
 
 type VaultSwitcherDemoMessageTypes = {
-  openCompanionLauncher: OpenCompanionLauncherMessageType
+  openSidePanel: ExtensionSidePanelSignalType
   pairedVaultIdentityDiscovery: ExtensionPairedVaultIdentityDiscoveryMessageType
 }
 
@@ -72,8 +70,7 @@ type VisibleInViewportRequest = {
 }
 
 const vaultSwitcherDemoMessageTypes: VaultSwitcherDemoMessageTypes = {
-  openCompanionLauncher:
-    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  openSidePanel: ExtensionSidePanelSignalType.NookOpenSidePanel,
   pairedVaultIdentityDiscovery:
     ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
 }
@@ -171,7 +168,7 @@ test('list every vault on its identity card and pair the open vault with the com
             ? message.payload.request
             : { requestId: '', vaultStoreId: '' }
         callback(
-          type === simulation.messageTypes.openCompanionLauncher
+          type === simulation.messageTypes.openSidePanel
             ? { ok: true }
             : type === simulation.messageTypes.pairedVaultIdentityDiscovery
               ? {
@@ -241,26 +238,6 @@ test('list every vault on its identity card and pair the open vault with the com
   await page.getByTestId('vault-pair-extension-btn').click()
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
-    JSON.stringify({
-      type: 'nook:open-companion-launcher',
-      payload: { intent: OpenCompanionLauncherIntent.Pair },
-    }),
+    JSON.stringify({ type: ExtensionSidePanelSignalType.NookOpenSidePanel }),
   )
-  const encodedLauncherMessage = await page
-    .locator('html')
-    .getAttribute('data-demo-extension-message')
-  if (typeof encodedLauncherMessage !== 'string') {
-    throw new Error('Companion launcher message was not recorded.')
-  }
-  const launcherMessage = Effect.runSync(
-    Effect.result(
-      OpenCompanionLauncherMessageGuard.decode(
-        parseJson(encodedLauncherMessage),
-      ),
-    ),
-  )
-  if (launcherMessage._tag === 'Failure') {
-    throw new Error('Companion launcher message was malformed.')
-  }
-  expect(launcherMessage.success.intent).toBe(OpenCompanionLauncherIntent.Pair)
 })

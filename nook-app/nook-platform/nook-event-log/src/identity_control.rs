@@ -24,10 +24,9 @@ pub use projection::{
     IdentityVaultDekLookup, IdentityVaultEpochDeks,
 };
 pub use wire::{
-    DriveMountTarget, ICloudMountTarget, IdentityControlOperation, IdentityEvent,
-    IdentityEventBody, IdentityEventSchemaVersion, IdentityInvite, IdentityInviteProof,
-    IdentityMemberKeys, IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant,
-    MemberVaultDek, ProviderMountId,
+    IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
+    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekGrant, MemberVaultDek, ProviderMountId,
 };
 
 #[cfg(test)]

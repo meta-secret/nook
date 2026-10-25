@@ -43,8 +43,7 @@ describe('icloud-oauth', () => {
       state: 'email',
       value: 'Apple User',
     })
-    expect(config.value.driveMode).toBe('private')
-    expect(config.value.iCloudMode).toBe('private')
+    expect(config.value.iCloudShareTarget).toEqual({ state: 'unbound' })
   })
 
   describe('shared CloudKit target', () => {
@@ -87,6 +86,7 @@ describe('icloud-oauth', () => {
           saveRecordZones,
           saveRecords,
           shareWithUI,
+          fetchRecords: vi.fn(),
         },
       })
 
@@ -138,6 +138,7 @@ describe('icloud-oauth', () => {
           saveRecordZones,
           saveRecords: vi.fn(),
           shareWithUI: vi.fn(),
+          fetchRecords: vi.fn(),
         },
       })
 
@@ -147,6 +148,125 @@ describe('icloud-oauth', () => {
         err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired)),
       )
       expect(saveRecordZones).not.toHaveBeenCalled()
+    })
+
+    it('reads share participants through the database that owns the zone', async () => {
+      const fetchRecords = vi
+        .fn()
+        .mockResolvedValueOnce({
+          records: [
+            {
+              recordType: 'NookLogEvent',
+              recordName: 'shared-root',
+              share: { recordName: 'share-record' },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          records: [
+            {
+              recordType: 'cloudkit.share',
+              recordName: 'share-record',
+              participants: [
+                {
+                  participantId: 'owner-participant',
+                  type: 'OWNER',
+                  permission: 'READ_WRITE',
+                  acceptanceStatus: 'ACCEPTED',
+                  userIdentity: {
+                    lookupInfo: { emailAddress: 'owner@icloud.com' },
+                  },
+                },
+                {
+                  participantId: 'member-participant',
+                  type: 'PRIVATE_USER',
+                  permission: 'READ_WRITE',
+                  acceptanceStatus: 'INVITED',
+                },
+              ],
+            },
+          ],
+        })
+      ICloudOAuthTestFixture.useContainer({
+        setUpAuth: vi.fn(),
+        whenUserSignsIn: vi.fn(),
+        privateCloudDatabase: {
+          saveRecordZones: vi.fn(),
+          saveRecords: vi.fn(),
+          shareWithUI: vi.fn(),
+          fetchRecords,
+        },
+      })
+
+      const share = await iCloudOAuthSession.fetchShareParticipants({
+        role: 'owner',
+        zoneName: 'shared-zone',
+        ownerRecordName: 'owner-record',
+        rootRecordName: 'shared-root',
+        shortGuid: 'share-guid',
+      })
+
+      const zone = {
+        zoneID: { zoneName: 'shared-zone', ownerRecordName: 'owner-record' },
+      }
+      expect(fetchRecords).toHaveBeenNthCalledWith(
+        1,
+        [{ recordName: 'shared-root' }],
+        zone,
+      )
+      expect(fetchRecords).toHaveBeenNthCalledWith(
+        2,
+        [{ recordName: 'share-record' }],
+        zone,
+      )
+      expect(share).toEqual(
+        ok({
+          participants: [
+            {
+              participantId: 'owner-participant',
+              type: 'OWNER',
+              permission: 'READ_WRITE',
+              acceptanceStatus: 'ACCEPTED',
+              emailAddress: 'owner@icloud.com',
+            },
+            {
+              participantId: 'member-participant',
+              type: 'PRIVATE_USER',
+              permission: 'READ_WRITE',
+              acceptanceStatus: 'INVITED',
+              emailAddress: '',
+            },
+          ],
+        }),
+      )
+    })
+
+    it('fails visibly when the share root has no share record', async () => {
+      const fetchRecords = vi.fn().mockResolvedValue({
+        records: [{ recordType: 'NookLogEvent', recordName: 'shared-root' }],
+      })
+      ICloudOAuthTestFixture.useContainer({
+        setUpAuth: vi.fn(),
+        whenUserSignsIn: vi.fn(),
+        sharedCloudDatabase: {
+          saveRecordZones: vi.fn(),
+          saveRecords: vi.fn(),
+          shareWithUI: vi.fn(),
+          fetchRecords,
+        },
+      })
+
+      await expect(
+        iCloudOAuthSession.fetchShareParticipants({
+          role: 'participant',
+          zoneName: 'shared-zone',
+          ownerRecordName: 'owner-record',
+          rootRecordName: 'shared-root',
+          shortGuid: 'share-guid',
+        }),
+      ).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing)),
+      )
     })
 
     it('accepts the share and persists participant shared-database routing', async () => {

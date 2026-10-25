@@ -1,13 +1,9 @@
-import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   configuredOAuthFile,
   defaultOAuthFileConfig,
-  missing_oauth_access_token,
-  oauth_access_token,
   providerPersistenceDefaults,
-  rootGoogleDriveFolder,
   storedGoogleDriveFolder,
   storedOAuthCredential,
   type StorageProvider,
@@ -15,27 +11,16 @@ import {
 import {
   findSharedGrantProvider,
   SharedStorageTargetKind,
-  shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
 
-function driveProvider(
-  id: string,
-  folderId: string,
-  includePendingPrivateTarget = !folderId,
-): StorageProvider {
+function driveProvider(id: string, folderId: string): StorageProvider {
   const config = {
     ...defaultOAuthFileConfig({
       preset: 'google-drive',
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
     }),
     accessToken: storedOAuthCredential(`token-${id}`),
-    folderId: folderId
-      ? storedGoogleDriveFolder(folderId)
-      : rootGoogleDriveFolder(),
-    driveMode: folderId ? ('shared' as const) : ('private' as const),
-    ...(includePendingPrivateTarget
-      ? { drivePrivateTarget: { state: 'pending' as const } }
-      : {}),
+    folderId: storedGoogleDriveFolder(folderId),
   }
   return {
     ...providerPersistenceDefaults(),
@@ -50,12 +35,9 @@ function driveProvider(
 
 describe('shared enrollment provider selection', () => {
   test('never reuses a token saved for another Drive folder', () => {
-    const privateDrive = driveProvider('private', '')
-    const otherSharedDrive = driveProvider('other', 'folder-other')
-
     expect(
       findSharedGrantProvider({
-        providers: [privateDrive, otherSharedDrive],
+        providers: [driveProvider('other', 'folder-other')],
         preset: 'google-drive',
         target: {
           kind: SharedStorageTargetKind.Bound,
@@ -65,13 +47,8 @@ describe('shared enrollment provider selection', () => {
     ).toEqual({ kind: 'authorizationRequired' })
   })
 
-  test('reuses only the provider saved for the granted target', () => {
+  test('reuses only the provider saved for the invited folder', () => {
     const matchingDrive = driveProvider('matching', 'folder-required')
-    const expectedMatchingDrive = driveProvider(
-      'matching',
-      'folder-required',
-      true,
-    )
 
     expect(
       findSharedGrantProvider({
@@ -82,63 +59,6 @@ describe('shared enrollment provider selection', () => {
           storageTargetId: 'folder-required',
         },
       }),
-    ).toEqual({
-      kind: 'existing',
-      provider: expectedMatchingDrive,
-    })
-  })
-
-  test('flushes every created Drive target when the owner token is usable', () => {
-    const available = oauth_access_token({
-      ...defaultOAuthFileConfig({
-        preset: 'google-drive',
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-      accessToken: storedOAuthCredential('token-owner'),
-    })
-    const missing = missing_oauth_access_token()
-    expect(
-      shouldFlushSharedDriveGrant({
-        grant: {
-          kind: 'granted',
-          note: 'architecture_modes.shared_grant_created',
-          target: {
-            state: 'identified',
-            storageTargetId: 'folder-required',
-          },
-        },
-        accessCredential: available,
-      }),
-    ).toBe(true)
-    expect(
-      shouldFlushSharedDriveGrant({
-        grant: {
-          kind: 'manual-grant-required',
-          instructionsKey:
-            I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
-          joinerIdentity: 'joiner@example.com',
-          target: {
-            state: 'identified',
-            storageTargetId: 'folder-required',
-          },
-        },
-        accessCredential: available,
-      }),
-    ).toBe(true)
-    expect(
-      shouldFlushSharedDriveGrant({
-        grant: {
-          kind: 'manual-grant-required',
-          instructionsKey:
-            I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
-          joinerIdentity: 'joiner@example.com',
-          target: {
-            state: 'identified',
-            storageTargetId: 'folder-required',
-          },
-        },
-        accessCredential: missing,
-      }),
-    ).toBe(false)
+    ).toEqual({ kind: 'existing', provider: matchingDrive })
   })
 })

@@ -37,6 +37,7 @@ import {
 } from "$lib/vault/state/provider.svelte";
 import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
+import { PaintOpportunity } from "$lib/runtime/paint-opportunity";
 
 const log = browserLogRuntime.createLogger("vault-local");
 
@@ -449,6 +450,7 @@ export class VaultLoginActions {
     let creationState = LocalVaultCreationState.Pending;
 
     try {
+      await PaintOpportunity.next();
       const identityInitialization = await state.initDeviceIdentity();
       if (identityInitialization.isErr()) {
         state.errorMsg = state.t(identityInitialization.error.translationKey);

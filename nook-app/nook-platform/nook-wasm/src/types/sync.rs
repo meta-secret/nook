@@ -42,9 +42,9 @@ impl NookEnrollmentProvider {
 
     #[wasm_bindgen]
     #[must_use]
-    pub fn icloud_shared(storage_target_id: String) -> Self {
+    pub fn icloud_shared(joiner_identity: String, storage_target_id: String) -> Self {
         Self(EnrollmentProvider::shared(
-            SharedEnrollmentProvider::icloud(storage_target_id),
+            SharedEnrollmentProvider::icloud(joiner_identity, storage_target_id),
         ))
     }
 
@@ -157,10 +157,14 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
     pub fn shared_joiner_identity(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
-                joiner_identity,
-                ..
-            }) => Ok(joiner_identity.clone()),
+            EnrollmentProviderDataRef::Shared(
+                SharedEnrollmentProviderData::GoogleDrive {
+                    joiner_identity, ..
+                }
+                | SharedEnrollmentProviderData::ICloud {
+                    joiner_identity, ..
+                },
+            ) => Ok(joiner_identity.clone()),
             _ => Err(JsError::new(
                 "enrollment provider does not carry a shared joiner identity",
             )),
@@ -174,7 +178,9 @@ impl NookEnrollmentProvider {
                 SharedEnrollmentProviderData::GoogleDrive {
                     storage_target_id, ..
                 }
-                | SharedEnrollmentProviderData::ICloud { storage_target_id },
+                | SharedEnrollmentProviderData::ICloud {
+                    storage_target_id, ..
+                },
             ) => Ok(storage_target_id.clone()),
             EnrollmentProviderDataRef::Personal(_) => Err(JsError::new(
                 "enrollment provider is not a shared provider grant",
@@ -542,8 +548,9 @@ mod tests {
                 "access-token".into(),
                 OAuthRefreshCredential::Token("refresh-token".into()),
                 OAuthTokenExpiry::ExpiresAt("2030-01-01".into()),
+                // A companion code carries the shared Drive folder in the file slot.
                 OAuthRemoteFile::Identified {
-                    file_id: "file-1".into(),
+                    file_id: "shared:folder-1".into(),
                     file_name: "vault.json".into(),
                 },
                 OAuthAccountIdentity::Email("owner@example.com".into()),
@@ -566,9 +573,10 @@ mod tests {
             config.expires_at,
             StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
         );
+        assert_eq!(config.file_id, StoredOAuthRemoteFileId::Unresolved);
         assert_eq!(
-            config.file_id,
-            StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
+            config.folder_id,
+            nook_core::StoredGoogleDriveFolder::FolderId(("folder-1").to_owned())
         );
         assert_eq!(
             config.file_name,
@@ -588,10 +596,11 @@ mod tests {
         assert_eq!(drive.shared_storage_target_id()?, "folder-1");
         assert!(drive.oauth_access_token().is_err());
 
-        let icloud = NookEnrollmentProvider::icloud_shared("share-1".into());
+        let icloud =
+            NookEnrollmentProvider::icloud_shared("member@icloud.com".into(), "share-1".into());
         assert_eq!(icloud.oauth_preset()?, "icloud");
         assert_eq!(icloud.shared_storage_target_id()?, "share-1");
-        assert!(icloud.shared_joiner_identity().is_err());
+        assert_eq!(icloud.shared_joiner_identity()?, "member@icloud.com");
         Ok(())
     }
 

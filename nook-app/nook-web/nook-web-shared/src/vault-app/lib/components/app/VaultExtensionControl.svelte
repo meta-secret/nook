@@ -1,9 +1,9 @@
 <!--
 The browser extension, seen from a vault: it fills passwords from vaults,
 so it is one of the open vault's own items beside its card. Not installed:
-install it. Installed without this vault: connect this vault too (the
-extension serves several vaults). Connected: the item opens the extension's
-side panel beside the vault.
+install it. Installed: the item opens the extension's side panel beside the
+vault, where a vault not yet connected connects in place (the extension
+serves several vaults).
 -->
 <script lang="ts">
   import {
@@ -26,14 +26,11 @@ side panel beside the vault.
   let {
     vault,
     offer,
-    onConnect,
     onOpenPanel,
   }: {
     vault: VaultState;
     offer: ExtensionSetupOffer;
-    /** Ask the installed extension to connect the open vault. */
-    onConnect: () => void;
-    /** Show the connected extension's side panel in this window. */
+    /** Show the installed extension's side panel in this window. */
     onOpenPanel: () => void;
   } = $props();
 
@@ -90,7 +87,7 @@ side panel beside the vault.
         ? "vault-extension-install"
         : "vault-pair-extension-btn"}
       disabled={notInstalled ? installing : vault.isVerifying}
-      onclick={() => (notInstalled ? void install() : onConnect())}
+      onclick={() => (notInstalled ? void install() : onOpenPanel())}
     >
       <span class="nk-vault-icon" aria-hidden="true">
         <Puzzle class="size-4" />

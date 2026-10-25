@@ -1,5 +1,6 @@
 //! Sync-provider configuration, validation, credentials, and reconciliation.
 
+pub(crate) mod authorized_accounts;
 pub(crate) mod sync_provider_credentials;
 pub(crate) mod sync_provider_store;
 pub(crate) mod validation;

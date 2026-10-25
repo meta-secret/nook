@@ -20,17 +20,12 @@ use wasm_bindgen::prelude::wasm_bindgen;
 mod application;
 mod device_mode;
 mod provider_replication;
-mod shared_storage_grant;
 
 pub use application::{VaultApplication, VaultConnectIntent};
 pub use device_mode::DeviceMode;
 pub use provider_replication::{
     ProviderJoinerIdentity, ProviderOauthPreset, ProviderReplicationCapability,
     SharedJoinerIdentityKind,
-};
-pub use shared_storage_grant::{
-    SharedStorageGrantCredential, SharedStorageGrantOutcome, SharedStorageGrantRequest,
-    SharedStorageGrantTarget, SharedStorageTargetHint, SharedStorageTargetSelection,
 };
 
 #[wasm_bindgen]

@@ -27,6 +27,7 @@ import {
   readStringProperty,
   requireRecord,
   openOnboardDevicePanel,
+  pickOnboardInviteAccount,
   reloadUnlockLocalVaultWithSync,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
@@ -176,6 +177,7 @@ test.describe('vault password envelope (local)', () => {
 
     await openOnboardDevicePanel(page)
     await waitForStorageChainIdle(page)
+    await pickOnboardInviteAccount(page)
     await page.getByTestId('onboard-passphrase-input').fill('short')
     await page.getByTestId('onboard-device-submit').click({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -306,8 +308,10 @@ test.describe('enrollment link deep link (local)', () => {
 
     const contextB = await createIsolatedContext(browser)
     const pageB = await contextB.newPage()
+    // The invite names the shared account; the joiner signs in as it.
     await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
+      accessToken: E2E_SYNC_ONBOARD_PROVIDER.accessToken,
     })
     await pageB.goto(localizeAppLinkForE2e(pageA, issued.link))
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
@@ -356,8 +360,10 @@ test.describe('enrollment link deep link (local)', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     const pageB = await contextB.newPage()
+    // The invite names the shared account; the joiner signs in as it.
     await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
+      accessToken: E2E_SYNC_ONBOARD_PROVIDER.accessToken,
     })
     await pageB.goto(localizeAppLinkForE2e(pageA, link))
 

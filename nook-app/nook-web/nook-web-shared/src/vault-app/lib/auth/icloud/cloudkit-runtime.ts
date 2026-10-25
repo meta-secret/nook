@@ -92,7 +92,26 @@ export type CloudKitRecord = {
   createShortGUID?: boolean;
   shortGUID?: string;
   fields?: Record<string, { value: CloudKitRecordFieldValue }>;
+  /** Set on a shared root record: the share record that lists participants. */
+  share?: CloudKitRecordReference;
+  /** Set on a `cloudkit.share` record. */
+  participants?: CloudKitShareParticipant[];
 };
+
+export type CloudKitShareParticipant = {
+  participantId?: string;
+  type?: string;
+  permission?: string;
+  acceptanceStatus?: string;
+  userIdentity?: CloudKitUserIdentity;
+};
+
+export type CloudKitRecordFetchOptions = { zoneID: CloudKitZoneID };
+
+type CloudKitRecordFetchInput = readonly [
+  records: readonly { recordName: string }[],
+  options: CloudKitRecordFetchOptions,
+];
 
 export type CloudKitRecordsResponse = {
   records: CloudKitRecord[];
@@ -141,6 +160,9 @@ export type CloudKitDatabase = {
     ...input: CloudKitRecordSaveInput
   ) => Promise<CloudKitRecordsResponse>;
   shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<void>;
+  fetchRecords: (
+    ...input: CloudKitRecordFetchInput
+  ) => Promise<CloudKitRecordsResponse>;
 };
 
 export type CloudKitAuthError = {

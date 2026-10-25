@@ -26,8 +26,8 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    // Overview on the current identity's card opens beside it; each tile
-    // opens a page with its own address, and Back returns to the overview.
+    // The identity panel opens beside the current card; each action and
+    // detail opens a page with its own address, and Back returns to it.
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
     await page.getByTestId('identity-overview-toggle').first().click()
@@ -36,7 +36,11 @@ test.describe('persistent workspace routing', () => {
     for (const [row, address, marker] of [
       ['overview-keys', /\/identity\/keys$/, 'identity-keys'],
       ['overview-open-devices', /\/identity\/devices$/, 'vault-devices-panel'],
-      ['overview-open-sync', /\/identity\/sync$/, 'storage-providers-section'],
+      [
+        'identity-action-add-sync',
+        /\/identity\/sync$/,
+        'storage-providers-section',
+      ],
     ] as const) {
       await page.getByTestId(row).first().click()
       await expect(page).toHaveURL(address)

@@ -92,10 +92,6 @@ class ExtensionSetupBrowser {
     extensionInstallationBrowser.openExtensionInstallTarget(target);
   }
 
-  async connectInstalledExtension(): Promise<boolean> {
-    return extensionConnectionBrowser.openInstalledExtension();
-  }
-
   async openExtensionSidePanel(): Promise<boolean> {
     return extensionConnectionBrowser.openExtensionSidePanel();
   }

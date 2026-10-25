@@ -5,6 +5,7 @@ import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableLoginAutoUnlock,
+  e2eDriveFolderId,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   saveAuthProvidersInBrowser,
@@ -16,6 +17,7 @@ import {
   ManagePage,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { E2E_GOOGLE_ACCOUNT_EMAIL } from './google-identity-stub'
 
 type LocalVaultRegistryEntry = {
   store_id?: string
@@ -137,9 +139,8 @@ async function seedScopedSyncProviders(
             preset: 'google-drive',
             accessToken: 'ya29.e2e_file_sync_token',
             fileName: 'nook-multi-vault-a.yaml',
-            driveMode: 'private',
-            iCloudMode: 'private',
-            accountEmail: 'file-sync-e2e@example.com',
+            folderId: e2eDriveFolderId('nook-multi-vault-a.yaml'),
+            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
           },
           storeId: storeA,
           createdAt: new Date().toISOString(),
@@ -152,9 +153,8 @@ async function seedScopedSyncProviders(
             preset: 'google-drive',
             accessToken: 'ya29.e2e_file_sync_token',
             fileName: 'nook-multi-vault-b.yaml',
-            driveMode: 'private',
-            iCloudMode: 'private',
-            accountEmail: 'file-sync-e2e@example.com',
+            folderId: e2eDriveFolderId('nook-multi-vault-b.yaml'),
+            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
           },
           storeId: storeB,
           createdAt: new Date().toISOString(),

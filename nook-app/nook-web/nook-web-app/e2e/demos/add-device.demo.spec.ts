@@ -7,6 +7,7 @@ import {
   forceVaultQuiescentForE2e,
   openIdentitiesPage,
   openVaultPage,
+  pickOnboardInviteAccount,
   seedSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
 } from '../helpers'
@@ -40,30 +41,29 @@ test('the identity card leads to adding a device in three steps', async ({
     { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
   )
   await snapshot(page, '1-hub-health')
-  await page.getByTestId('identity-manage').first().click()
-  await expect(page.getByTestId('identity-menu')).toBeVisible()
-  await snapshot(page, '2-manage-menu')
+  await page.getByTestId('identity-overview-toggle').first().click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await snapshot(page, '2-identity-panel')
   await demoBeat(page)
 
-  // Without a cloud copy, Manage leads with a sync provider and holds adding
-  // a device until one exists.
-  const addDeviceItem = page.getByTestId('identity-menu-add-device')
+  // Without a cloud copy, the panel leads with a sync provider and holds
+  // adding a device until one exists.
+  const addDeviceItem = page.getByTestId('identity-action-add-device')
   await expect(addDeviceItem).toBeDisabled()
-  await expect(addDeviceItem).toContainText('Add a cloud sync provider first')
-  await expect(
-    page.getByTestId('identity-menu').getByRole('menuitem').first(),
-  ).toHaveAttribute('data-testid', 'identity-menu-sync')
+  await expect(page.getByTestId('identity-panel-devices')).toContainText(
+    'Add a cloud sync provider first',
+  )
+  await expect(page.getByTestId('identity-action-add-sync')).toHaveAttribute(
+    'data-lead',
+    'true',
+  )
   await snapshot(page, '3-needs-cloud')
   await demoBeat(page)
 
   // With a cloud copy and one device, the card's protection checklist
   // offers a second device.
-  await page.getByTestId('identity-overview-toggle').first().click()
-  await expect(page.getByTestId('identity-overview')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('overview-open-sync')).toBeVisible()
-  await snapshot(page, '3b-details-no-cloud')
   await openVaultPage(page)
   await seedSyncProvidersWhileUnlocked(page)
   await forceVaultQuiescentForE2e(page)
@@ -85,6 +85,8 @@ test('the identity card leads to adding a device in three steps', async ({
   )
   const create = page.getByTestId('onboard-device-submit')
   await expect(create).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  // The Drive invite names one of the vault folder's authorized accounts.
+  await pickOnboardInviteAccount(page)
   await snapshot(page, '5-ready-to-invite')
   await demoBeat(page)
 
@@ -139,7 +141,7 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '7-devices-page')
   await demoBeat(page)
 
-  // Back returns to the details; on a phone its tiles stack.
+  // Back returns to the identity panel; on a phone it stacks.
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTestId('identity-page-back').click()
   await expect(page.getByTestId('identity-overview')).toBeVisible()

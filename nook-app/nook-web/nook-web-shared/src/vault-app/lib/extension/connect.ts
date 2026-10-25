@@ -83,15 +83,12 @@ import {
   ExtensionSessionLockedNotice,
   ExtensionPairedVaultUnlockRequestMessageType,
   ExtensionIdentityHandoffRequestMessageType,
-  OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
   type ExtensionIdentityHandoffRequestMessage,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultLockRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
-  type OpenCompanionLauncherMessage,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
@@ -358,36 +355,6 @@ class ExtensionConnectionBrowser {
     return delivery.kind === ExtensionMessageDeliveryKind.Received
       ? this.pairingDeliveryFromResponse(delivery.response)
       : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
-  }
-
-  async openInstalledExtension(): Promise<boolean> {
-    const installedExtension = this.readInstalledExtensionRuntimeId();
-    if (
-      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
-    ) {
-      return false;
-    }
-
-    const message: OpenCompanionLauncherMessage = {
-      type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-      payload: { intent: OpenCompanionLauncherIntent.Pair },
-    };
-    const sendExtensionMessageArgs: Parameters<
-      ExtensionMessageChannel["send"]
-    >[0] = {
-      extensionId: installedExtension.extensionRuntimeId,
-      message,
-      responseWait: {
-        kind: ExtensionMessageResponseWaitKind.Bounded,
-        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-      },
-    };
-    const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
-    if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
-    const decoded = Effect.runSync(
-      Effect.result(companionResponseDecoder.decodeLauncher(delivery.response)),
-    );
-    return decoded._tag === "Success";
   }
 
   /** Ask the installed extension to show its side panel in this window.

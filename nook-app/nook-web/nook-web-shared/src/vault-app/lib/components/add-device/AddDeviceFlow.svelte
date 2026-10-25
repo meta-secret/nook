@@ -33,6 +33,7 @@ Every place that offers "Add a device" opens this.
     identityName,
     onBack,
     onOpenSync,
+    onManageAccounts,
   }: {
     vault: VaultState;
     identityName: string;
@@ -40,6 +41,8 @@ Every place that offers "Add a device" opens this.
     onBack: () => void;
     /** Add a sync provider so the identity has a cloud copy. */
     onOpenSync: () => void;
+    /** Authorize another account on a sync provider. */
+    onManageAccounts: () => void;
   } = $props();
 
   const control = $derived(vault.identityControl);
@@ -271,6 +274,7 @@ Every place that offers "Add a device" opens this.
           onIssueCode={(issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0]) =>
             vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
+          {onManageAccounts}
         />
       {/if}
     </div>

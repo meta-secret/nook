@@ -12,8 +12,8 @@ pub(super) struct ICloudZone {
 pub(super) struct ICloudRequest<T: Serialize> {
     #[serde(flatten)]
     pub(super) payload: T,
-    #[serde(rename = "zoneID", skip_serializing_if = "ZoneSelection::is_default")]
-    pub(super) zone: ZoneSelection,
+    #[serde(rename = "zoneID")]
+    pub(super) zone: ICloudZone,
 }
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,8 +73,8 @@ pub(super) struct ICloudCreateRecord {
     pub(super) record_type: &'static str,
     pub(super) record_name: String,
     pub(super) fields: ICloudEventFields,
-    #[serde(skip_serializing_if = "RecordHierarchy::is_root")]
-    pub(super) parent: RecordHierarchy,
+    /// Every event record is a child of the share root, so it joins the share.
+    pub(super) parent: ICloudRecordReference,
 }
 #[derive(Serialize)]
 pub(super) struct ICloudEventFields {
@@ -87,18 +87,6 @@ pub(super) struct ICloudTextField {
     pub(super) value: String,
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub(super) enum ZoneSelection {
-    Named(ICloudZone),
-    #[default]
-    DefaultZone,
-}
-impl ZoneSelection {
-    pub(super) fn is_default(&self) -> bool {
-        matches!(self, Self::DefaultZone)
-    }
-}
 #[derive(Clone, Serialize)]
 #[serde(untagged)]
 pub(super) enum QueryContinuation {
@@ -108,18 +96,6 @@ pub(super) enum QueryContinuation {
 impl QueryContinuation {
     pub(super) fn is_first(&self) -> bool {
         matches!(self, Self::FirstPage)
-    }
-}
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub(super) enum RecordHierarchy {
-    Child(ICloudRecordReference),
-    #[default]
-    Root,
-}
-impl RecordHierarchy {
-    pub(super) fn is_root(&self) -> bool {
-        matches!(self, Self::Root)
     }
 }
 #[derive(Default, Deserialize)]

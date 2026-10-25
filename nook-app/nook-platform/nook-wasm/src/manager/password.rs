@@ -484,11 +484,19 @@ mod metadata_tests {
             )?
             .into_inner();
 
+        let share_target = nook_core::ICloudSharedTarget::new(
+            nook_core::ICloudShareRole::Owner,
+            "zone",
+            "owner",
+            "root",
+            "guid",
+        )?
+        .to_storage_id()?;
         manager
             .prepare_storage_preserving_vault_metadata(
                 "icloud",
                 "oauth_token_for_metadata_test",
-                "private-target\twork-vault.yaml",
+                &format!("{share_target}\twork-vault.yaml"),
             )
             .await?;
         manager

@@ -13,12 +13,12 @@ use std::str;
 use super::wire::{
     FieldText, ICloudCreate, ICloudCreateOperation, ICloudCreateRecord, ICloudEventFields,
     ICloudRecord, ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField,
-    RecordHierarchy, RecordLookup,
+    RecordLookup,
 };
 use super::{CloudKitRecordQuery, ICLOUD_EVENT_RECORD_TYPE, ICloudEventStore};
 use crate::NookError;
 use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
-use nook_core::{EventId, ICloudEventTarget};
+use nook_core::{EventId, ICloudSharedTarget};
 
 impl ICloudEventStore<'_> {
     fn existing_icloud_event_matches(
@@ -43,7 +43,7 @@ enum ExistingEventPolicy {
 impl ICloudEventStore<'_> {
     async fn resolve_existing_icloud_event(
         token: &str,
-        target: &ICloudEventTarget,
+        target: &ICloudSharedTarget,
         event_id: &EventId,
         record_name: &str,
         checked: &CheckedEventWrite<'_>,
@@ -102,17 +102,14 @@ impl ICloudEventStore<'_> {
     }
 
     fn icloud_event_create_body(
-        target: &ICloudEventTarget,
+        target: &ICloudSharedTarget,
         namespace: &str,
         event_id: &EventId,
         record_name: &str,
         content: &str,
     ) -> ICloudRequest<ICloudCreate> {
-        let parent = match target {
-            ICloudEventTarget::Private => RecordHierarchy::Root,
-            ICloudEventTarget::Shared(shared) => RecordHierarchy::Child(ICloudRecordReference {
-                record_name: shared.root_record_name.clone(),
-            }),
+        let parent = ICloudRecordReference {
+            record_name: target.root_record_name.clone(),
         };
         Self::with_icloud_zone(
             ICloudCreate {
@@ -259,7 +256,7 @@ impl ICloudEventStore<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::wire::{ICloudFieldValue, ZoneSelection};
+    use super::super::wire::{ICloudFieldValue, ICloudRecordReference, ICloudZone};
     use super::super::{ICLOUD_CONTENT_FIELD, ICLOUD_LOCATION_FIELD};
     use super::*;
     use nook_core::{ICloudShareRole, ICloudSharedTarget};
@@ -270,8 +267,7 @@ mod tests {
     #[derive(Deserialize)]
     struct CreateBody {
         #[serde(rename = "zoneID")]
-        #[serde(default)]
-        zone: ZoneSelection,
+        zone: ICloudZone,
         operations: Vec<CreateOperation>,
     }
 
@@ -282,22 +278,21 @@ mod tests {
 
     #[derive(Deserialize)]
     struct CreateRecord {
-        #[serde(default)]
-        parent: RecordHierarchy,
+        parent: ICloudRecordReference,
         fields: collections::HashMap<String, ICloudFieldValue>,
     }
 
-    struct SharedTargetFixture(ICloudEventTarget);
+    struct SharedTargetFixture(ICloudSharedTarget);
 
     impl SharedTargetFixture {
         fn new(role: ICloudShareRole) -> anyhow::Result<Self> {
-            Ok(Self(ICloudEventTarget::Shared(ICloudSharedTarget::new(
+            Ok(Self(ICloudSharedTarget::new(
                 role,
                 "shared-zone",
                 "owner-record",
                 "shared-root",
                 "share-guid",
-            )?)))
+            )?))
         }
     }
 
@@ -321,9 +316,7 @@ mod tests {
         );
 
         let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
-        let ZoneSelection::Named(zone) = body.zone else {
-            anyhow::bail!("missing shared zone")
-        };
+        let zone = body.zone;
         assert_eq!(zone.zone_name, "shared-zone");
         assert_eq!(zone.owner_record_name, "owner-record");
         let record = &body
@@ -331,9 +324,7 @@ mod tests {
             .first()
             .ok_or_else(|| anyhow::anyhow!("shared event operation must be present"))?
             .record;
-        let RecordHierarchy::Child(parent) = &record.parent else {
-            anyhow::bail!("missing parent")
-        };
+        let parent = &record.parent;
         assert_eq!(parent.record_name, "shared-root");
         assert_eq!(
             record
@@ -353,34 +344,6 @@ mod tests {
                 .value,
             FieldText::Text("vault:store_abcdefghijk".to_owned())
         );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn private_event_create_keeps_the_existing_default_zone_shape() -> anyhow::Result<()> {
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let body = ICloudEventStore::icloud_event_create_body(
-            &ICloudEventTarget::Private,
-            "identity:idn_abcdefghijk",
-            &event_id,
-            "nook-event-test",
-            "encrypted-event",
-        );
-
-        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
-        assert!(matches!(body.zone, ZoneSelection::DefaultZone));
-        let operation = body
-            .operations
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("private event operation must be present"))?;
-        assert!(matches!(operation.record.parent, RecordHierarchy::Root));
         Ok(())
     }
 }
@@ -422,7 +385,7 @@ mod fetch_tests {
         let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
         let store = ICloudEventStore {
             web_auth_token: "web-token",
-            target: &ICloudEventTarget::Private,
+            target: &super::super::owner_share_fixture()?,
             location: &location,
         };
         let stub = FetchStub::install(vec![
@@ -474,7 +437,7 @@ mod fetch_tests {
         let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
         let store = ICloudEventStore {
             web_auth_token: "web-token",
-            target: &ICloudEventTarget::Private,
+            target: &super::super::owner_share_fixture()?,
             location: &location,
         };
         let content = str::from_utf8(&fixture.bytes)?;

@@ -1,17 +1,13 @@
-//! Shared Google Drive vault folder helpers (`drive.file` writes plus
+//! Google Drive vault folder helpers (`drive.file` writes plus
 //! `drive.readonly` for cross-account event reads).
 //!
-//! Private providers keep using `drive.appdata`. Shared providers create a
-//! dedicated My Drive folder, share it with another account, and sync event
-//! files under that parent.
+//! Every Drive provider syncs under one My Drive folder. Its Drive
+//! permissions are the provider's authorized accounts: sharing the folder
+//! with an account lets a device signed in as that account join the vault.
 
 use crate::DriveStorageClient;
-use nook_core::i18n_keys;
 
-use super::drive::wire::{
-    AppendPermission, CapabilityReport, FileIdentity, FileName,
-    FolderCapabilities as DriveFolderCapabilities, MediaType,
-};
+use super::drive::wire::{FileIdentity, FileName};
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
@@ -36,19 +32,6 @@ struct DriveFileCreateResponse {
     id: FileIdentity,
     #[serde(default)]
     name: FileName,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DriveFolderMetadataResponse {
-    #[serde(default)]
-    id: FileIdentity,
-    #[serde(default)]
-    name: FileName,
-    #[serde(default)]
-    mime_type: MediaType,
-    #[serde(default)]
-    capabilities: CapabilityReport,
 }
 
 pub(crate) struct DriveStorageClientShareFolderWithEmail<'a> {
@@ -104,43 +87,6 @@ impl DriveStorageClient<'_> {
     }
 }
 
-impl DriveStorageClient<'_> {
-    fn verify_folder_projection(
-        request: DriveStorageClientVerifyFolderProjection,
-    ) -> Result<(String, String), NookError> {
-        let DriveStorageClientVerifyFolderProjection {
-            parsed,
-            fallback_id,
-        } = request;
-        if !matches!(&parsed.mime_type, MediaType::Declared(value) if value == "application/vnd.google-apps.folder")
-        {
-            return Err(NookError::Drive(
-                i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
-            ));
-        }
-        if !matches!(
-            parsed.capabilities,
-            CapabilityReport::Reported(DriveFolderCapabilities {
-                can_add_children: AppendPermission::Reported(true)
-            })
-        ) {
-            return Err(NookError::Drive(
-                i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
-            ));
-        }
-        Ok((
-            match parsed.id {
-                FileIdentity::Reported(id) if !id.trim().is_empty() => id,
-                _ => fallback_id,
-            },
-            match parsed.name {
-                FileName::Reported(name) if !name.trim().is_empty() => name,
-                _ => "Nook shared vault".to_owned(),
-            },
-        ))
-    }
-}
-
 /// Create a My Drive folder for a shared vault. Requires `drive.file` scope.
 impl DriveStorageClient<'_> {
     pub(crate) async fn create_shared_vault_folder(
@@ -182,7 +128,7 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Grant writer access on a shared vault folder to the joiner email.
+/// Grant writer access on the vault folder to one more authorized account.
 impl DriveStorageClient<'_> {
     pub(crate) async fn share_folder_with_email(
         &self,
@@ -237,27 +183,91 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Verify that the signed-in account can append events to an existing shared
-/// Drive folder. The input may be a raw id or a standard Drive folder URL.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DrivePermissionListResponse {
+    #[serde(default)]
+    permissions: Vec<nook_core::DrivePermissionObservation>,
+    #[serde(default)]
+    next_page_token: Option<String>,
+}
+
+/// Read and revoke the vault folder's Drive permissions: its authorized
+/// accounts. Requires `drive.file` on a folder this app created.
 impl DriveStorageClient<'_> {
-    pub(crate) async fn verify_shared_vault_folder(
+    pub(crate) async fn list_folder_permissions(
         &self,
-        folder_ref: &str,
-    ) -> Result<(String, String), NookError> {
-        let access_token = self.as_str();
-        let token = nook_core::OauthAccessToken::parse(access_token)?;
-        let folder_id = nook_core::GoogleDriveFolderId::parse(folder_ref)?;
-        let client = &self.client;
+        folder_id: &str,
+    ) -> Result<Vec<nook_core::DrivePermissionObservation>, NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
         let url = format!(
-            "https://www.googleapis.com/drive/v3/files/{}",
+            "https://www.googleapis.com/drive/v3/files/{}/permissions",
             urlencoding::encode(folder_id.as_str())
         );
-        let response = client
-            .get(&url)
-            .query(&[
-                ("fields", "id,name,mimeType,capabilities(canAddChildren)"),
-                ("supportsAllDrives", "true"),
-            ])
+        let mut page_token: Option<String> = None;
+        let mut permissions = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get(&url)
+                .query(&[
+                    (
+                        "fields",
+                        "nextPageToken,permissions(id,type,role,emailAddress,deleted)",
+                    ),
+                    ("pageSize", "100"),
+                    ("supportsAllDrives", "true"),
+                ])
+                .header("Authorization", format!("Bearer {}", token.as_ref()));
+            if let Some(page) = page_token.as_deref() {
+                request = request.query(&[("pageToken", page)]);
+            }
+            let response = request.send().await?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(DriveStorageClient::shared_drive_error(
+                    DriveStorageClientSharedDriveError {
+                        status,
+                        body: &body,
+                    },
+                ));
+            }
+            let parsed: DrivePermissionListResponse = response.json().await.map_err(|error| {
+                NookError::Serialization(format!("Failed to parse Drive permissions: {error}"))
+            })?;
+            permissions.extend(parsed.permissions);
+            page_token = parsed.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(permissions)
+    }
+
+    pub(crate) async fn delete_folder_permission(
+        &self,
+        folder_id: &str,
+        permission_id: &str,
+    ) -> Result<(), NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let folder_id = nook_core::GoogleDriveFolderId::parse(folder_id)?;
+        let permission_id = permission_id.trim();
+        if permission_id.is_empty() {
+            return Err(NookError::Drive(
+                "Drive permission id is required to revoke access.".to_owned(),
+            ));
+        }
+        let url = format!(
+            "https://www.googleapis.com/drive/v3/files/{}/permissions/{}",
+            urlencoding::encode(folder_id.as_str()),
+            urlencoding::encode(permission_id)
+        );
+        let response = self
+            .client
+            .delete(&url)
+            .query(&[("supportsAllDrives", "true")])
             .header("Authorization", format!("Bearer {}", token.as_ref()))
             .send()
             .await?;
@@ -271,13 +281,7 @@ impl DriveStorageClient<'_> {
                 },
             ));
         }
-        let parsed: DriveFolderMetadataResponse = response.json().await.map_err(|error| {
-            NookError::Serialization(format!("Failed to parse Drive folder metadata: {error}"))
-        })?;
-        DriveStorageClient::verify_folder_projection(DriveStorageClientVerifyFolderProjection {
-            parsed,
-            fallback_id: folder_id.into_inner(),
-        })
+        Ok(())
     }
 }
 
@@ -307,25 +311,6 @@ mod tests {
         assert_eq!(created.id, FileIdentity::Reported("folder-1".to_owned()));
         assert_eq!(created.name, FileName::Reported("Shared".to_owned()));
 
-        let metadata: DriveFolderMetadataResponse = serde_json::from_str(
-            r#"{"id":"folder-1","name":"Shared","mimeType":"application/vnd.google-apps.folder","capabilities":{"canAddChildren":true}}"#,
-        )?;
-        assert_eq!(metadata.id, FileIdentity::Reported("folder-1".to_owned()));
-        assert_eq!(metadata.name, FileName::Reported("Shared".to_owned()));
-        assert_eq!(
-            metadata.mime_type,
-            MediaType::Declared("application/vnd.google-apps.folder".to_owned())
-        );
-        assert!(matches!(
-            metadata.capabilities,
-            CapabilityReport::Reported(DriveFolderCapabilities {
-                can_add_children: AppendPermission::Reported(true)
-            })
-        ));
-
-        let missing: DriveFolderMetadataResponse = serde_json::from_str("{}")?;
-        assert!(matches!(missing.id, FileIdentity::Unreported));
-        assert!(matches!(missing.capabilities, CapabilityReport::Unreported));
         Ok(())
     }
 
@@ -368,66 +353,6 @@ mod tests {
         assert_eq!(projected, ("folder-1".to_owned(), "Fallback".to_owned()));
         Ok(())
     }
-
-    #[wasm_bindgen_test]
-    fn verify_folder_projection_enforces_folder_and_write_capability() -> anyhow::Result<()> {
-        let Err(not_folder) = DriveStorageClient::verify_folder_projection(
-            DriveStorageClientVerifyFolderProjection {
-                parsed: DriveFolderMetadataResponse {
-                    id: FileIdentity::Reported("folder-1".to_owned()),
-                    name: FileName::Reported("Shared".to_owned()),
-                    mime_type: MediaType::Declared("text/plain".to_owned()),
-                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
-                        can_add_children: AppendPermission::Reported(true),
-                    }),
-                },
-                fallback_id: "fallback".to_owned(),
-            },
-        ) else {
-            anyhow::bail!("non-folder metadata must be rejected");
-        };
-        assert!(
-            matches!(not_folder, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER)
-        );
-
-        let Err(not_writable) = DriveStorageClient::verify_folder_projection(
-            DriveStorageClientVerifyFolderProjection {
-                parsed: DriveFolderMetadataResponse {
-                    id: FileIdentity::Reported("folder-1".to_owned()),
-                    name: FileName::Reported("Shared".to_owned()),
-                    mime_type: MediaType::Declared("application/vnd.google-apps.folder".to_owned()),
-                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
-                        can_add_children: AppendPermission::Reported(false),
-                    }),
-                },
-                fallback_id: "fallback".to_owned(),
-            },
-        ) else {
-            anyhow::bail!("non-writable folders must be rejected");
-        };
-        assert!(
-            matches!(not_writable, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE)
-        );
-
-        let projected = DriveStorageClient::verify_folder_projection(
-            DriveStorageClientVerifyFolderProjection {
-                parsed: DriveFolderMetadataResponse {
-                    id: FileIdentity::Unreported,
-                    name: FileName::Unreported,
-                    mime_type: MediaType::Declared("application/vnd.google-apps.folder".to_owned()),
-                    capabilities: CapabilityReport::Reported(DriveFolderCapabilities {
-                        can_add_children: AppendPermission::Reported(true),
-                    }),
-                },
-                fallback_id: "fallback".to_owned(),
-            },
-        )?;
-        assert_eq!(
-            projected,
-            ("fallback".to_owned(), "Nook shared vault".to_owned())
-        );
-        Ok(())
-    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -463,12 +388,6 @@ mod browser_tests {
                 .await
                 .is_err()
         );
-        assert!(
-            DriveStorageClient::new("ya29.test")
-                .verify_shared_vault_folder("")
-                .await
-                .is_err()
-        );
         Ok(())
     }
 }
@@ -482,10 +401,4 @@ pub(crate) struct DriveStorageClientSharedDriveError<'a> {
 pub(crate) struct DriveStorageClientCreateFolderProjection<'a> {
     parsed: DriveFileCreateResponse,
     pub(crate) fallback_name: &'a str,
-}
-
-/// Named values required by `DriveStorageClient::verify_folder_projection`.
-pub(crate) struct DriveStorageClientVerifyFolderProjection {
-    parsed: DriveFolderMetadataResponse,
-    pub(crate) fallback_id: String,
 }

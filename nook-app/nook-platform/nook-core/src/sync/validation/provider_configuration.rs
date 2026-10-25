@@ -161,79 +161,42 @@ impl DriveBackupName {
     }
 }
 
-/// Prefix used in Drive storage refs for shared My Drive folder parents.
+/// Prefix used in Drive storage refs for the vault's shareable folder.
 pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
-/// Prefix used in Drive storage refs for schema-2 private appData child folders.
-pub const DRIVE_PRIVATE_FOLDER_REF_PREFIX: &str = "private-folder-v2:";
-/// Explicit pre-resolution marker for newly created private Drive targets.
-pub const DRIVE_PRIVATE_FOLDER_PENDING_REF: &str = "private-folder-v2:pending";
 
-/// Parsed Drive target reference from the existing storage-ref ID slot.
+/// The shareable My Drive folder that holds a vault's Google Drive event files.
+///
+/// Every Google Drive provider is shared: Nook writes app-created files with
+/// `drive.file` and reads files created by other authorized accounts with
+/// `drive.readonly`. Access is managed through the folder's Drive permissions.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DriveStorageTargetRef {
-    SharedFolder { folder_id: String },
-    PendingPrivateFolder,
-    PrivateFolder { folder_id: String },
-}
-
-impl DriveStorageTargetRef {
-    /// Parse the Drive reference slot. A ref that names no folder resolves the
-    /// provider's own private folder.
-    pub fn parse(storage_id: &str) -> ValidationResult<Self> {
-        let trimmed = storage_id.trim();
-        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX) {
-            let folder_id = folder_id.trim();
-            if folder_id.is_empty() {
-                return Err(ValidationError::SharedStorageTargetRequired);
-            }
-            return Ok(Self::SharedFolder {
-                folder_id: folder_id.to_owned(),
-            });
-        }
-        if trimmed == DRIVE_PRIVATE_FOLDER_PENDING_REF {
-            return Ok(Self::PendingPrivateFolder);
-        }
-        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_PRIVATE_FOLDER_REF_PREFIX) {
-            let folder_id = GoogleDriveFolderId::parse(folder_id)?;
-            return Ok(Self::PrivateFolder {
-                folder_id: folder_id.into_inner(),
-            });
-        }
-        Ok(Self::PendingPrivateFolder)
-    }
-}
-
-/// Where Google Drive event files live for the current vault.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DriveEventParent {
-    /// The application data root, before a Drive target is prepared.
-    AppDataFolder,
-    /// Private provider mode: the provider's child folder under appData.
-    PrivateAppDataFolder { folder_id: String },
-    /// Shared provider mode: a My Drive folder written with `drive.file` and
-    /// read across collaborator accounts with `drive.readonly`.
-    SharedFolder { folder_id: String },
+pub struct DriveEventParent {
+    pub folder_id: String,
 }
 
 impl DriveEventParent {
     #[must_use]
     pub fn shared_folder_id(folder_id: &str) -> Self {
-        Self::SharedFolder {
+        Self {
             folder_id: folder_id.trim().to_owned(),
         }
     }
 
+    /// Parse the `shared:<folderId>` reference slot of Drive connect args.
+    /// A reference without a folder is not connectable.
+    pub fn parse_storage_id(storage_id: &str) -> ValidationResult<Self> {
+        let folder_id = storage_id
+            .trim()
+            .strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX)
+            .map(str::trim)
+            .filter(|folder_id| !folder_id.is_empty())
+            .ok_or(ValidationError::SharedStorageTargetRequired)?;
+        Ok(Self::shared_folder_id(folder_id))
+    }
+
     #[must_use]
     pub fn encode_storage_id(&self) -> String {
-        match self {
-            Self::AppDataFolder => String::new(),
-            Self::PrivateAppDataFolder { folder_id } => {
-                format!("{DRIVE_PRIVATE_FOLDER_REF_PREFIX}{}", folder_id.trim())
-            }
-            Self::SharedFolder { folder_id } => {
-                format!("{DRIVE_SHARED_FOLDER_REF_PREFIX}{}", folder_id.trim())
-            }
-        }
+        format!("{DRIVE_SHARED_FOLDER_REF_PREFIX}{}", self.folder_id.trim())
     }
 }
 

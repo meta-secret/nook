@@ -176,7 +176,6 @@ type ProviderStateFields = Pick<
   | "selectOauthSetupPreset"
   | "openActiveVault"
   | "providers"
-  | "providerSaveTarget"
   | "remoteVaultChoices"
   | "providersLoaded"
   | "hasSelectedLoginVaultStore"
@@ -187,7 +186,7 @@ type ProviderStateFields = Pick<
 
 type ProviderRuntimeFields = Pick<
   VaultRuntimeState,
-  "clientPolicy" | "errorMsg" | "isVerifying"
+  "clientPolicy" | "errorMsg" | "isVerifying" | "providerConnectionPhase"
 >;
 
 type ProviderSessionFields = Pick<
@@ -304,7 +303,6 @@ export type ProviderSaveContext = Pick<
   | "oauthSetupSelection"
   | "persistProviders"
   | "providers"
-  | "providerSaveTarget"
   | "admitManager"
   | "selectedLoginVault"
   | "storageMode"
@@ -546,7 +544,6 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "selectPasswordEntry"
     | "sessionExpiredByIdle"
     | "sessionEpoch"
-    | "sharedGrantInstructions"
     | "sharedJoinerIdentity"
     | "vaultMembers"
   > &

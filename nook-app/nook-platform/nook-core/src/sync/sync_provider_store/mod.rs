@@ -11,9 +11,9 @@ use tsify::Tsify;
 
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
-    ICloudSharedTarget, OAuthFilePreset, OauthFilePreset, ProviderReplicationCapability,
-    ReplicationType, StorageMode, StorageProviderType,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, ICloudSharedTarget, OAuthFilePreset,
+    OauthFilePreset, ProviderReplicationCapability, ReplicationType, StorageMode,
+    StorageProviderType,
 };
 
 mod active_credentials;
@@ -50,16 +50,14 @@ pub use catalog::{
     LocalProviderRowOutcome, LocalProviderRowRequest,
 };
 pub use enrollment::{
-    EnrollmentAudience, ProviderEnrollmentRequest, SharedGoogleEnrollmentAudience,
+    EnrollmentAudience, ProviderEnrollmentRequest, SharedEnrollmentAudience,
     SharedGrantProviderSelection,
 };
 pub use oauth::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
     OAuthRemoteStorageReference, OAuthStorageReference,
 };
-pub use save::{
-    ProviderSaveOutcome, ProviderSaveRemoteTarget, ProviderSaveRequest, ProviderSaveSetup,
-};
+pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
 pub use scope::{
     ActiveVaultProviderRows, LocalProviderSelection, ProviderEventFlushTarget, ProviderRows,
     RemoteEventFlushProviderRequest,
@@ -69,10 +67,14 @@ pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, Storage
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
 ///
+/// Every OAuth-file provider is shared: Google Drive uses one visible folder
+/// whose Drive permissions list the authorized accounts, and iCloud uses one
+/// `CloudKit` share whose participants are the authorized accounts. Each
+/// account signs in with its own token; tokens are never transferred.
+///
 /// Field names are `camelCase` on the wire to match the structured-clone object
 /// the web layer and e2e seeders read/write directly in `IndexedDB`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify, Deserialize)]
-#[serde(from = "OAuthFileConfigWire")]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthFileConfig {
     pub preset: OAuthFilePreset,
@@ -82,64 +84,13 @@ pub struct OAuthFileConfig {
     pub file_id: StoredOAuthRemoteFileId,
     pub file_name: StoredOAuthRemoteFileName,
     pub account_email: StoredOAuthAccountIdentity,
-    /// Explicit Google Drive provider mode.
-    pub drive_mode: GoogleDriveMode,
-    /// Shared-mode My Drive folder id (`drive.file` writes plus cross-account
-    /// `drive.readonly`). Private-mode
-    /// providers leave this unset and continue using `drive.appdata`.
+    /// Vault My Drive folder id (`drive.file` writes plus cross-account
+    /// `drive.readonly`). `Root` until the folder is created or connected.
     pub folder_id: StoredGoogleDriveFolder,
-    /// Versioned private event target. Schema-1 rows map to the legacy
-    /// `appDataFolder` root; newly created private Drive rows resolve to a
-    /// stable child-folder ID before event sync.
-    #[serde(default)]
-    #[tsify(optional)]
-    pub drive_private_target: StoredGoogleDrivePrivateTarget,
-    /// Explicit iCloud provider mode.
-    #[serde(rename = "iCloudMode")]
-    pub icloud_mode: ICloudMode,
     /// Opaque, validated `ICloudSharedTarget` storage id. It contains `CloudKit`
     /// share/zone routing only and never contains an account credential.
     #[serde(rename = "iCloudShareTarget")]
     pub icloud_share_target: StoredICloudShareTarget,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OAuthFileConfigWire {
-    preset: OauthFilePreset,
-    access_token: StoredOAuthAccessCredential,
-    refresh_token: StoredOAuthRefreshCredential,
-    expires_at: StoredOAuthTokenExpiry,
-    file_id: StoredOAuthRemoteFileId,
-    file_name: StoredOAuthRemoteFileName,
-    account_email: StoredOAuthAccountIdentity,
-    drive_mode: GoogleDriveMode,
-    folder_id: StoredGoogleDriveFolder,
-    #[serde(default)]
-    drive_private_target: StoredGoogleDrivePrivateTarget,
-    #[serde(rename = "iCloudMode")]
-    icloud_mode: ICloudMode,
-    #[serde(default, rename = "iCloudShareTarget", alias = "icloudShareTarget")]
-    icloud_share_target: StoredICloudShareTarget,
-}
-
-impl From<OAuthFileConfigWire> for OAuthFileConfig {
-    fn from(wire: OAuthFileConfigWire) -> Self {
-        Self {
-            preset: wire.preset,
-            access_token: wire.access_token,
-            refresh_token: wire.refresh_token,
-            expires_at: wire.expires_at,
-            file_id: wire.file_id,
-            file_name: wire.file_name,
-            account_email: wire.account_email,
-            drive_mode: wire.drive_mode,
-            folder_id: wire.folder_id,
-            drive_private_target: wire.drive_private_target,
-            icloud_mode: wire.icloud_mode,
-            icloud_share_target: wire.icloud_share_target,
-        }
-    }
 }
 
 pub type OAuthFileConfigData = OAuthFileConfig;
@@ -176,16 +127,6 @@ pub enum OAuthAccessTokenRef<'a> {
 }
 
 impl OAuthFileConfigData {
-    #[must_use]
-    pub const fn resolved_google_drive_mode(&self) -> GoogleDriveMode {
-        self.drive_mode
-    }
-
-    #[must_use]
-    pub const fn resolved_icloud_mode(&self) -> ICloudMode {
-        self.icloud_mode
-    }
-
     #[must_use]
     pub fn usable_access_token(&self) -> OAuthAccessTokenRef<'_> {
         match &self.access_token {
@@ -302,9 +243,8 @@ pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 mod tests {
     use crate::{
         ProviderOauthPreset, ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
-        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
-    use serde_json::Error;
 
     use std::io;
 
@@ -339,32 +279,6 @@ mod tests {
             provider.sync_checkpoint,
             ProviderSyncCheckpoint::NeverSynced
         );
-        Ok(())
-    }
-
-    #[test]
-    fn legacy_oauth_config_defaults_icloud_target_but_serializes_explicit_state()
-    -> serde_json::Result<()> {
-        #[derive(Deserialize)]
-        struct SerializedTarget {
-            #[serde(rename = "iCloudShareTarget")]
-            target: crate::StoredICloudShareTarget,
-        }
-
-        let mut legacy = serde_json::to_value(OAuthFileConfigData::default())?;
-        let object = legacy
-            .as_object_mut()
-            .ok_or_else(|| Error::io(io::Error::other("expected object")))?;
-        object.remove("iCloudShareTarget");
-
-        let migrated: OAuthFileConfigData = serde_json::from_value(legacy)?;
-        assert_eq!(
-            migrated.icloud_share_target,
-            StoredICloudShareTarget::Personal
-        );
-
-        let current: SerializedTarget = serde_json::from_value(serde_json::to_value(migrated)?)?;
-        assert_eq!(current.target, StoredICloudShareTarget::Personal);
         Ok(())
     }
 

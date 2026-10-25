@@ -20,8 +20,10 @@ itself, so nothing here waits for it.
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
   import { enrollmentBrowser } from '$lib/enrollment/code'
+  import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
   import {
-    StorageProviderPresentation,
+    StoredOAuthFileConfigurationDecodeKind,
+    decodeStoredOAuthFileConfiguration,
     localizeProviderLabel,
     localizedProviderStorageDetail,
     type StorageProvider,
@@ -43,6 +45,7 @@ itself, so nothing here waits for it.
     onClearCode,
     manualJoin,
     done,
+    onManageAccounts,
   }: {
     vault: VaultState
     /** Remote provider rows that carry this identity's control log. */
@@ -55,6 +58,8 @@ itself, so nothing here waits for it.
     manualJoin: string
     /** Leaves the flow once the invite is out. */
     done: Snippet
+    /** Opens the Sync page, where a provider's accounts are authorized. */
+    onManageAccounts: () => void
   } = $props()
 
   let chosenProviderId = $state('')
@@ -91,10 +96,19 @@ itself, so nothing here waits for it.
       ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription
       : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
   )
-  const requiresSharedJoinerIdentity = $derived(
-    usesSharedGrant &&
-      selectedProvider !== false &&
-      !new StorageProviderPresentation(selectedProvider).isICloudProvider(),
+  // Google Drive and iCloud invites name one of the provider's authorized
+  // accounts, picked from the provider's own sharing list.
+  const sharedProviderConfig = $derived.by(() => {
+    if (!usesSharedGrant || selectedProvider === false) return false
+    const decoded = decodeStoredOAuthFileConfiguration(
+      selectedProvider.oauthFile,
+    )
+    return decoded.kind === StoredOAuthFileConfigurationDecodeKind.Configured
+      ? decoded.config
+      : false
+  })
+  const sharedProviderTitle = $derived(
+    selectedProvider === false ? '' : providerLabel(selectedProvider),
   )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -163,7 +177,7 @@ itself, so nothing here waits for it.
       localError = vault.t(I18N_KEYS.IdentityControlErrorProviderNotMount)
       return
     }
-    if (requiresSharedJoinerIdentity && !vault.sharedJoinerIdentity.trim()) {
+    if (usesSharedGrant && !vault.sharedJoinerIdentity.trim()) {
       localError = vault.t(I18N_KEYS.OnboardDeviceSharedIdentityRequired)
       return
     }
@@ -281,28 +295,16 @@ itself, so nothing here waits for it.
         </div>
       </div>
 
-      {#if requiresSharedJoinerIdentity}
-        <div class="space-y-2">
-          <label
-            for="shared-joiner-identity"
-            class="text-xs font-medium text-foreground"
-          >
-            {vault.t(I18N_KEYS.OnboardDeviceSharedIdentityLabel)}
-          </label>
-          <input
-            id="shared-joiner-identity"
-            type="email"
-            class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
-            bind:value={vault.sharedJoinerIdentity}
-            autocomplete="email"
-            disabled={isBusy || isGenerating}
-            placeholder={vault.t(I18N_KEYS.OnboardDeviceSharedIdentityPlaceholder)}
-            data-testid="shared-joiner-identity-input"
-          />
-          <p class="text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.OnboardDeviceSharedIdentityHint)}
-          </p>
-        </div>
+      {#if usesSharedGrant && sharedProviderConfig !== false}
+        <AuthorizedAccountsPanel
+          {vault}
+          config={sharedProviderConfig}
+          shareTitle={sharedProviderTitle}
+          selectable
+          bind:selectedEmail={vault.sharedJoinerIdentity}
+          disabled={isBusy || isGenerating}
+          {onManageAccounts}
+        />
       {/if}
 
       {#if localError}
@@ -447,15 +449,6 @@ itself, so nothing here waits for it.
         </li>
       </ol>
     </div>
-
-    {#if vault.sharedGrantInstructions}
-      <div
-        class="nk-banner nk-banner-warning p-3 text-sm text-foreground"
-        data-testid="shared-grant-instructions"
-      >
-        {vault.sharedGrantInstructions}
-      </div>
-    {/if}
 
     {@render done()}
 

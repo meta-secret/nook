@@ -112,10 +112,9 @@ test('the vault panel names its passphrases and keeps a failed unlock and its re
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Sync reached from the overview, not only from Manage, can add a provider.
+  // Adding a sync provider from the identity panel opens the picker.
   await page.getByTestId('identity-overview-toggle').click()
-  await page.getByTestId('overview-open-sync').click()
-  await page.getByTestId('add-provider-btn').click()
+  await page.getByTestId('identity-action-add-sync').click()
   await expect(page.getByTestId('provider-picker-list')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
