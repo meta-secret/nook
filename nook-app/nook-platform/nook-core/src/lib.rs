@@ -402,8 +402,7 @@ pub use vault_access_diagnostics::{
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
     ProviderReplicationCapability, ReplicationType, SentinelConfiguration, SentinelPolicy,
-    SharedJoinerIdentityKind, VaultApplication, VaultArchitecture, VaultConnectIntent,
-    VaultType,
+    SharedJoinerIdentityKind, VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
 };
 pub use vault_client_policy::{
     ActiveVaultStore, CompanionProviderPresence, DeviceIdentityInitializationMode,

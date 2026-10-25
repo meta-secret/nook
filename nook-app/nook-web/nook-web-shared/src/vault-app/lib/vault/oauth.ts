@@ -550,10 +550,13 @@ export class VaultOAuthActions {
           : defaultOAuthFileConfig(fallbackRequest);
       const configuration: Parameters<typeof configuredOAuthFile>[0] = {
         ...previous,
+        // During setup the name typed into the folder field wins; a re-sign-in
+        // of a saved provider keeps its name.
         fileName:
-          previous.fileName.state === "fileName"
-            ? previous.fileName
-            : storedOAuthRemoteFileName(fallbackFileName),
+          state.loginSetup.kind === LoginSetupKind.Active ||
+          previous.fileName.state !== "fileName"
+            ? storedOAuthRemoteFileName(fallbackFileName)
+            : previous.fileName,
         accountEmail:
           email.value.kind === GoogleAccountIdentityKind.Available
             ? storedOAuthAccountEmail(email.value.label)
@@ -577,7 +580,11 @@ export class VaultOAuthActions {
     state.selectOauthSetupPreset("google-drive");
     state.configureOauthFile(config);
     state.githubPat = "";
-    state.githubRepo = sharedFolderName || DEFAULT_DRIVE_BACKUP_NAME;
+    const name = new OAuthFilePresentation(config).oauthFileName();
+    state.githubRepo =
+      name.kind === OAuthFileNameKind.Resolved
+        ? name.fileName
+        : DEFAULT_DRIVE_BACKUP_NAME;
     return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 }

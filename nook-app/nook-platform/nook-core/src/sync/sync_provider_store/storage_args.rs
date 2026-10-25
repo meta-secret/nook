@@ -550,8 +550,8 @@ mod tests {
                 configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("draft-name").to_owned()),
             })
-            .project(),
-            Err(ValidationError::SharedStorageTargetRequired)
+            .project()?,
+            StagedStorageConnection::Incomplete
         );
         // Drive events stay under the stored backup name in the vault folder.
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
@@ -620,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_oauth_precedes_malformed_target_and_preserves_input() -> anyhow::Result<()> {
+    fn oauth_without_a_shared_target_stays_incomplete_and_preserves_input() -> anyhow::Result<()> {
         let mut oauth = OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
             icloud_share_target: StoredICloudShareTarget::SharedTarget(" ".to_owned()),
@@ -644,8 +644,8 @@ mod tests {
                 configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::Unresolved,
             })
-            .project(),
-            Err(ValidationError::SharedStorageTargetRequired)
+            .project()?,
+            StagedStorageConnection::Incomplete
         );
         assert_eq!(oauth, before);
         Ok(())

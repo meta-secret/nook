@@ -446,15 +446,6 @@ itself, so nothing here waits for it.
       </ol>
     </div>
 
-    {#if vault.sharedGrantInstructions}
-      <div
-        class="nk-banner nk-banner-warning p-3 text-sm text-foreground"
-        data-testid="shared-grant-instructions"
-      >
-        {vault.sharedGrantInstructions}
-      </div>
-    {/if}
-
     {@render done()}
 
     <footer

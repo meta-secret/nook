@@ -1,10 +1,10 @@
 //! Staged connections preserve provider-specific configuration and readiness.
 use super::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OauthFilePreset, ProviderSyncCheckpoint,
-    ProviderVaultScope, StorageConnectArgs, StorageMode, StorageProviderData, StorageProviderType,
-    StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-    StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
-    ValidationResult,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OAuthRemoteStorageReference,
+    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageConnectArgs, StorageMode,
+    StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+    StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
+    StoredOAuthRemoteFileName, ValidationResult,
 };
 pub struct StagedGithubConnection<'a> {
     pub credential: &'a StoredGithubPat,
@@ -58,6 +58,11 @@ impl StagedRemoteConnection<'_> {
                 };
                 let token = token.trim();
                 if token.is_empty() {
+                    return Ok(StagedStorageConnection::Incomplete);
+                }
+                // A signed-in provider is not connectable until its Drive folder or
+                // `CloudKit` share exists.
+                if config.remote_storage_ref() == OAuthRemoteStorageReference::Unresolved {
                     return Ok(StagedStorageConnection::Incomplete);
                 }
                 let stored_name = match &config.file_name {

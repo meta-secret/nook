@@ -60,12 +60,18 @@ describe('provider storage wiring', () => {
     }
   })
 
-  test('a Drive provider without its vault folder has no connect target', () => {
+  test('a signed-in Drive provider stays incomplete until its vault folder exists', () => {
     const config: OAuthFileConfig = {
       ...driveConfig(),
       folderId: { state: 'root' },
     }
-    expect(() => staged_oauth_remote_storage_args(config)).toThrow()
+    const state = VaultStateTestFixture.create()
+    state.storageMode = OAUTH_FILE_PROVIDER_TYPE
+    state.activateLoginSetup(OAUTH_FILE_PROVIDER_TYPE)
+    state.configureOauthFile(config)
+    expect(new VaultProviderActions(state).stagedRemoteStorageArgs()).toEqual({
+      kind: StagedRemoteStorageKind.Unavailable,
+    })
   })
 
   test('keeps the vault folder when the manager reports the connected folder', () => {
