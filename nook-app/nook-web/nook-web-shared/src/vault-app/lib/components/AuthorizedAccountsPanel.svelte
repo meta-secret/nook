@@ -214,8 +214,19 @@ device invite.
     selectedEmail = picked.value
   }
 
+  // Reload only when the shared target changes, not on every parent render.
+  const targetKey = $derived(
+    config.preset === 'icloud'
+      ? config.iCloudShareTarget.state === 'sharedTarget'
+        ? config.iCloudShareTarget.value
+        : ''
+      : config.folderId.state === 'folderId'
+        ? config.folderId.value
+        : '',
+  )
+
   $effect(() => {
-    void config
+    void targetKey
     untrack(() => void load())
   })
 </script>
