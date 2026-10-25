@@ -5,38 +5,13 @@ added and removed here; iCloud participants are managed in Apple's sharing
 sheet. With `selectable`, one account with write access is picked for a
 device invite.
 -->
-<script lang="ts" module>
-  import type { AuthorizedAccountList as PanelAccountList } from '$app-wasm'
-  import type {
-    AuthorizedAccountsAccess as PanelAccess,
-    AuthorizedAccountsFailure,
-  } from '$lib/vault/authorized-accounts'
-  import type { Result } from 'neverthrow'
-
-  enum PanelStateKind {
-    Loading = 'loading',
-    Ready = 'ready',
-    Failed = 'failed',
-  }
-
-  type PanelState =
-    | { kind: PanelStateKind.Loading }
-    | {
-        kind: PanelStateKind.Ready
-        access: PanelAccess
-        accounts: PanelAccountList
-      }
-    | { kind: PanelStateKind.Failed; message: string }
-
-  /** A refreshed provider access list and the target it came from. */
-  type AccountListRefresh = {
-    readonly listed: Result<PanelAccountList, AuthorizedAccountsFailure>
-    readonly access: PanelAccess
-  }
-</script>
-
 <script lang="ts">
   import { untrack } from 'svelte'
+  import {
+    PanelStateKind,
+    type AccountListRefresh,
+    type PanelState,
+  } from './authorized-accounts-panel-state'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, UserMinus, UserPlus, Users } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
