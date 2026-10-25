@@ -95,10 +95,6 @@ test("a page on the extension's key switches to this browser's passkey to add a 
       keySource: vault.identityKeySource,
       lockedStatus: vault.deviceProtectionLockedStatus,
       activeVault: vault.activeVault.kind,
-      stage: document
-        .querySelector('[data-testid="add-device-stage"]')
-        ?.outerHTML.replace(/<svg[\s\S]*?<\/svg>/g, '')
-        .slice(0, 1200),
     }
   })
   await expect(useBrowserKey, JSON.stringify(offer)).toBeVisible()
