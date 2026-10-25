@@ -536,13 +536,14 @@ export class VaultOAuthActions {
       tokens.accessToken,
     );
     if (email.isErr()) return err(email.error);
-    const sharedFolderName = state.githubRepo.trim();
-    const fallbackFileName = sharedFolderName || DEFAULT_DRIVE_BACKUP_NAME;
+    // The setup field names the Drive folder. The event-log backup name is
+    // validated separately and keeps its saved value or the default.
+    const folderName = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
     let existing: StoredOAuthFileConfiguration;
     try {
       const fallbackRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
         preset: "google-drive",
-        fileName: fallbackFileName,
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
       };
       const previous =
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
@@ -550,13 +551,10 @@ export class VaultOAuthActions {
           : defaultOAuthFileConfig(fallbackRequest);
       const configuration: Parameters<typeof configuredOAuthFile>[0] = {
         ...previous,
-        // During setup the name typed into the folder field wins; a re-sign-in
-        // of a saved provider keeps its name.
         fileName:
-          state.loginSetup.kind === LoginSetupKind.Active ||
-          previous.fileName.state !== "fileName"
-            ? storedOAuthRemoteFileName(fallbackFileName)
-            : previous.fileName,
+          previous.fileName.state === "fileName"
+            ? previous.fileName
+            : storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
         accountEmail:
           email.value.kind === GoogleAccountIdentityKind.Available
             ? storedOAuthAccountEmail(email.value.label)
@@ -580,11 +578,7 @@ export class VaultOAuthActions {
     state.selectOauthSetupPreset("google-drive");
     state.configureOauthFile(config);
     state.githubPat = "";
-    const name = new OAuthFilePresentation(config).oauthFileName();
-    state.githubRepo =
-      name.kind === OAuthFileNameKind.Resolved
-        ? name.fileName
-        : DEFAULT_DRIVE_BACKUP_NAME;
+    state.githubRepo = folderName;
     return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 }

@@ -55,11 +55,11 @@ function mockGoogleTokenApplication() {
 describe('Google OAuth provider name persistence', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  test('keeps a new Drive name through OAuth, folder creation, and save', async () => {
+  test('names the new Drive folder from the setup field and keeps the default backup name', async () => {
     mockGoogleTokenApplication()
     wasm.createGoogleDriveVaultFolder.mockResolvedValue({
       id: 'vault-folder',
-      name: 'onboarding-file-test',
+      name: 'Onboarding Vault',
     })
     const state = VaultStateTestFixture.create()
     const providerActions = new VaultProviderActions(state)
@@ -69,7 +69,8 @@ describe('Google OAuth provider name persistence', () => {
         oauthPreset: 'google-drive',
       },
     })
-    const requestedName = 'onboarding-file-test'
+    // Folder names may contain characters the backup name rejects.
+    const requestedName = 'Onboarding Vault'
     state.githubRepo = requestedName
 
     const oauthActions = new VaultOAuthActions(state)
@@ -82,7 +83,7 @@ describe('Google OAuth provider name persistence', () => {
     expect(state.oauthFileDraft).toMatchObject({
       kind: OAuthFileDraftKind.Configured,
       config: {
-        fileName: storedOAuthRemoteFileName(requestedName),
+        fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
       },
     })
     expect(state.githubRepo).toBe(requestedName)
@@ -101,7 +102,9 @@ describe('Google OAuth provider name persistence', () => {
     const staged = providerActions.stagedRemoteStorageArgs()
     expect(staged.kind).toBe(StagedRemoteStorageKind.Available)
     if (staged.kind === StagedRemoteStorageKind.Available) {
-      expect(staged.args.repo).toBe(`shared:vault-folder\t${requestedName}`)
+      expect(staged.args.repo).toBe(
+        `shared:vault-folder\t${DEFAULT_DRIVE_BACKUP_NAME}`,
+      )
     }
 
     vi.spyOn(state, 'persistProviders').mockImplementation(async (opts) => {
@@ -118,13 +121,13 @@ describe('Google OAuth provider name persistence', () => {
     expect(savedProvider?.oauthFile).toMatchObject({
       state: 'configured',
       config: {
-        fileName: storedOAuthRemoteFileName(requestedName),
+        fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
         folderId: { state: 'folderId', value: 'vault-folder' },
       },
     })
   })
 
-  test('keeps an existing provider name when OAuth tokens are refreshed', async () => {
+  test('keeps a saved backup name and the folder field when OAuth tokens are refreshed', async () => {
     mockGoogleTokenApplication()
     const state = VaultStateTestFixture.create()
     state.storageMode = OAUTH_FILE_PROVIDER_TYPE
@@ -145,6 +148,6 @@ describe('Google OAuth provider name persistence', () => {
       kind: OAuthFileDraftKind.Configured,
       config: { fileName: storedOAuthRemoteFileName(configuredName) },
     })
-    expect(state.githubRepo).toBe(configuredName)
+    expect(state.githubRepo).toBe(DEFAULT_DRIVE_BACKUP_NAME)
   })
 })
