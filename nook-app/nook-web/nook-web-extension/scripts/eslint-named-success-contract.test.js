@@ -15,6 +15,10 @@ import { CompileContractFixture } from './compile-contract-fixture.js'
 // static, lint, and unit gate in parallel in one container, where that can
 // take well over fifteen seconds.
 setDefaultTimeout(60_000)
+// These contracts write fixture files and lint them in one long-lived
+// process. With CI=true typescript-eslint infers a single run and builds its
+// program once, before the fixtures exist; keep the per-file programs.
+process.env.TSESTREE_SINGLE_RUN = 'false'
 afterAll(() => CompileContractFixture.remove())
 
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
