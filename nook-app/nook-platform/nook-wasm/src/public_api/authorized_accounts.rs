@@ -22,10 +22,13 @@ impl DriveStorageClient<'_> {
     }
 }
 
-fn encode_accounts(
-    accounts: &AuthorizedAccountList,
-) -> Result<tsify::Ts<AuthorizedAccountList>, JsError> {
-    Tsify::into_ts(accounts).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+/// The typed account list every export returns to the web layer.
+struct AccountListOutput<'a>(&'a AuthorizedAccountList);
+
+impl AccountListOutput<'_> {
+    fn encode(self) -> Result<tsify::Ts<AuthorizedAccountList>, JsError> {
+        Tsify::into_ts(self.0).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    }
 }
 
 /// Create the My Drive folder a new Google Drive provider syncs under. Only
@@ -63,7 +66,7 @@ fn encode_accounts(
     let accounts = DriveStorageClient::new(access_token)
         .authorized_accounts(folder_id)
         .await?;
-    encode_accounts(&accounts)
+    AccountListOutput(&accounts).encode()
 }
 
 /// Share the vault folder with one more Google account as a writer, then
@@ -82,7 +85,7 @@ fn encode_accounts(
             email: email.as_str(),
         })
         .await?;
-    encode_accounts(&client.authorized_accounts(folder_id).await?)
+    AccountListOutput(&client.authorized_accounts(folder_id).await?).encode()
 }
 
 /// Revoke one account's access to the vault folder, then return the
@@ -99,7 +102,7 @@ fn encode_accounts(
     client
         .delete_folder_permission(folder_id, &account.access_id)
         .await?;
-    encode_accounts(&client.authorized_accounts(folder_id).await?)
+    AccountListOutput(&client.authorized_accounts(folder_id).await?).encode()
 }
 
 /// The iCloud accounts a fetched `CloudKit` share names.
@@ -115,9 +118,10 @@ pub fn icloud_authorized_accounts(
     let share = share
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    encode_accounts(&AuthorizedAccountList::from_icloud_participants(
+    AccountListOutput(&AuthorizedAccountList::from_icloud_participants(
         &share.participants,
     ))
+    .encode()
 }
 
 /// The account a device invite names, checked against the provider's list.
@@ -165,10 +169,16 @@ mod tests {
                 deleted: false,
             }]);
         assert_eq!(
-            authorized_invite_account(&encode_accounts(&accounts)?, " MEMBER@example.com ")?,
+            authorized_invite_account(
+                &AccountListOutput(&accounts).encode()?,
+                " MEMBER@example.com "
+            )?,
             "member@example.com"
         );
-        assert!(authorized_invite_account(&encode_accounts(&accounts)?, "x@example.com").is_err());
+        assert!(
+            authorized_invite_account(&AccountListOutput(&accounts).encode()?, "x@example.com")
+                .is_err()
+        );
         assert!(verify_joiner_account("member@example.com", "Member@Example.com").is_ok());
         assert!(verify_joiner_account("member@example.com", "other@example.com").is_err());
 

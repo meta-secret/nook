@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn every_oauth_provider_routes_only_through_its_shared_target() -> anyhow::Result<()> {
+    fn every_oauth_provider_routes_only_through_its_shared_target() {
         let mut google = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
             file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
@@ -296,7 +296,6 @@ mod tests {
             icloud.remote_storage_ref(),
             OAuthRemoteStorageReference::Resolved("icloud-share-v1:{}".into())
         );
-        Ok(())
     }
 
     #[test]

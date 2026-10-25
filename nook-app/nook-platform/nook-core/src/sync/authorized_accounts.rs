@@ -16,10 +16,24 @@ use nook_auth2::EnrollmentEmail;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-/// A plausible account email, compared case-insensitively.
+/// A plausible account email, compared case-insensitively. Values crossing the
+/// web boundary are validated again when they are deserialized.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct AuthorizedAccountEmail(String);
+
+impl TryFrom<String> for AuthorizedAccountEmail {
+    type Error = ValidationError;
+    fn try_from(value: String) -> ValidationResult<Self> {
+        Self::parse(&value)
+    }
+}
+
+impl From<AuthorizedAccountEmail> for String {
+    fn from(email: AuthorizedAccountEmail) -> Self {
+        email.0
+    }
+}
 
 impl AuthorizedAccountEmail {
     pub fn parse(value: &str) -> ValidationResult<Self> {
@@ -190,7 +204,7 @@ impl AuthorizedAccountList {
     }
 }
 
-/// One participant of a `CloudKit` share as CloudKit JS reports it.
+/// One participant of a `CloudKit` share as `CloudKit` JS reports it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ICloudParticipantObservation {
@@ -331,7 +345,12 @@ mod tests {
                 .iter()
                 .all(|account| account.status == AuthorizedAccountStatus::Active)
         );
-        assert_eq!(list.accounts[1].access_id, "w1");
+        assert_eq!(
+            list.accounts
+                .get(1)
+                .map(|account| account.access_id.as_str()),
+            Some("w1")
+        );
     }
 
     #[test]
@@ -347,8 +366,14 @@ mod tests {
             emails(&list),
             vec!["owner@icloud.com", "new@icloud.com", "viewer@icloud.com"]
         );
-        assert_eq!(list.accounts[1].status, AuthorizedAccountStatus::Invited);
-        assert_eq!(list.accounts[2].role, AuthorizedAccountRole::Reader);
+        assert_eq!(
+            list.accounts.get(1).map(|account| account.status),
+            Some(AuthorizedAccountStatus::Invited)
+        );
+        assert_eq!(
+            list.accounts.get(2).map(|account| account.role),
+            Some(AuthorizedAccountRole::Reader)
+        );
     }
 
     #[test]
@@ -402,6 +427,30 @@ mod tests {
             list.removal("stranger@example.com"),
             Err(ValidationError::AuthorizedAccountMissing)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn deserialized_lists_reject_implausible_emails() -> anyhow::Result<()> {
+        let valid = serde_json::json!({
+            "accounts": [{
+                "email": "member@example.com",
+                "role": "writer",
+                "status": "active",
+                "accessId": "w"
+            }]
+        });
+        let list: AuthorizedAccountList = serde_json::from_value(valid)?;
+        assert_eq!(emails(&list), vec!["member@example.com"]);
+        let forged = serde_json::json!({
+            "accounts": [{
+                "email": "not-an-email",
+                "role": "owner",
+                "status": "active",
+                "accessId": "o"
+            }]
+        });
+        assert!(serde_json::from_value::<AuthorizedAccountList>(forged).is_err());
         Ok(())
     }
 
