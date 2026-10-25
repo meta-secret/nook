@@ -307,8 +307,13 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
         if (errorText.kind === GoogleOAuthErrorStateKind.Visible) {
           throw new Error(`Google OAuth failed: ${errorText.message}`)
         }
+        // Signing in collapses the connection step and opens the vault-folder
+        // step, so its create button is the signed-in marker during setup.
         return (
           (await page.getByTestId('google-account-status').isVisible()) ||
+          (await page
+            .getByTestId('google-create-shared-folder-btn')
+            .isVisible()) ||
           (await page.getByTestId('connect-provider-btn').isVisible())
         )
       },
