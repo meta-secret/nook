@@ -227,7 +227,7 @@ test('frees an in-flight reveal when the search changes and never renders the st
   expect(view.queryByText('revealed-password')).toBeFalsy()
 })
 
-test('loads the page again when a refresh from elsewhere supersedes it, then enables reveal', async () => {
+test('enables reveal when a refresh from elsewhere supersedes the page, without replacing that refresh', async () => {
   vi.useFakeTimers()
   const fixture = new SecretVaultSearchFixture()
   const view = fixture.render()
@@ -240,19 +240,15 @@ test('loads the page again when a refresh from elsewhere supersedes it, then ena
   await vi.advanceTimersByTimeAsync(200)
   expect(fixture.loadPage).toHaveBeenCalledTimes(1)
   const reveal = view.getByTestId('reveal-secret-btn')
+  expect(reveal.hasAttribute('disabled')).toBe(true)
 
-  // A sync's own page refresh replaced the search: nothing in the list is
-  // still loading, so the list asks for its page again.
+  // A sync's own page refresh replaced the search: no request of the list
+  // is left, so reveal is usable again and the refresh is not replaced.
   fixture.finishStaleSearch()
   await tick()
   await tick()
-  expect(fixture.loadPage).toHaveBeenCalledTimes(2)
-  expect(reveal.hasAttribute('disabled')).toBe(true)
-
-  fixture.finishFilter()
-  await tick()
-  await tick()
   expect(reveal.hasAttribute('disabled')).toBe(false)
+  expect(fixture.loadPage).toHaveBeenCalledTimes(1)
 })
 
 test('keeps reveal disabled when a pending filter supersedes the search page', async () => {

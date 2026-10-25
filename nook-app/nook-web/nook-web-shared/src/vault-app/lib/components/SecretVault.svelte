@@ -368,10 +368,11 @@
     }
     Match.value(snapshot).pipe(
       // This list's latest request was replaced by one from elsewhere (an
-      // unlock or sync refreshing the page). Ask again, so reveal waits for
-      // the matching page instead of staying disabled with no request left.
+      // unlock or sync refreshing the page), which publishes the page itself.
+      // No request of the list is left, so the list is ready again; asking
+      // again would replace that refresh, and its flow stops on a stale page.
       Match.when(supersededPattern, () => {
-        reloadFirstPage()
+        pageInteraction = SecretPageInteractionKind.Ready
       }),
       Match.when(stalePattern, () => {
         return
