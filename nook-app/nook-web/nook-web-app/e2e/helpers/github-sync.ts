@@ -243,6 +243,26 @@ export async function assertNoVaultError(page: Page) {
   }
 }
 
+function vaultIsSyncing(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const vault = window.__nookVault
+    return vault ? vault.isSyncing : false
+  })
+}
+
+/** When the vault last finished a sync, or 0 before its first one. */
+function lastSyncedAt(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) return 0
+    try {
+      return vault.lastSync.syncedAtUnixMilliseconds
+    } catch {
+      return 0
+    }
+  })
+}
+
 /** Click the vault sync refresh control when available. */
 export async function triggerVaultSyncRefresh(page: Page) {
   await keepVaultIdleLockDisabled(page)
@@ -261,18 +281,15 @@ export async function triggerVaultSyncRefresh(page: Page) {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
+  const syncedBefore = await lastSyncedAt(page)
   await refresh.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  // A fast sync can start and finish between two polls, so a new last-sync
+  // time proves it ran as well as a sync still in progress does.
   await expect
     .poll(
       async () =>
-        page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: { isSyncing?: boolean }
-            }
-          ).__nookVault
-          return vault ? Boolean(vault.isSyncing) : false
-        }),
+        (await vaultIsSyncing(page)) ||
+        (await lastSyncedAt(page)) !== syncedBefore,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)

@@ -285,6 +285,15 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
       '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"]',
     ),
   )
+  // An identity that the paired extension restores while its vault panel
+  // is open loses the panel's Unlock, and its vault opens only as a panel
+  // opens on the unlocked identity: close that panel to open it again.
+  const liveOpenRow = row.and(
+    vaultPage.locator(
+      '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"][aria-expanded="true"]',
+    ),
+  )
+  const gettingAccess = vaultPage.getByTestId('vault-panel-getting-access')
   // The restored identity may unlock itself while its old button disappears.
   await expect
     .poll(
@@ -304,6 +313,18 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
         switch (await pressIfReady(liveClosedRow)) {
           case true:
             return VaultPanelUnlockProgress.Requested
+          case false:
+            break
+        }
+        switch (await gettingAccess.isVisible()) {
+          case true:
+            return VaultPanelUnlockProgress.Waiting
+          case false:
+            break
+        }
+        switch (await pressIfReady(liveOpenRow)) {
+          case true:
+            return VaultPanelUnlockProgress.Waiting
           case false:
             break
         }

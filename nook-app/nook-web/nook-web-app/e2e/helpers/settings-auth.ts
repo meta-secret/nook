@@ -514,6 +514,10 @@ export async function revealSecretInRow(
   const revealButton = row.getByTestId('reveal-secret-btn')
   await expect(revealButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
   if ((await revealButton.getAttribute('aria-pressed')) !== 'true') {
+    // Reveal waits while the page saves or syncs the secret.
+    await expect(revealButton).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await revealButton.click()
   }
   await expect(revealButton).toHaveAttribute('aria-pressed', 'true', {
