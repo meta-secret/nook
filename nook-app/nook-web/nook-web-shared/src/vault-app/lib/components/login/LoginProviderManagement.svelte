@@ -2,13 +2,13 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ChevronDown,
-    ChevronLeft,
     Cloud,
     HardDrive,
     Plus,
     Settings2,
   } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import type {
     ProviderSetupRequest,
     StorageProvider,
@@ -70,15 +70,11 @@
 {#if isSetup}
   <div class="space-y-4" data-testid="login-provider-setup">
     {#if addingProvider && onCancelAddProvider}
-      <button
-        type="button"
-        class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        data-testid="cancel-add-provider-btn"
-        onclick={() => onCancelAddProvider()}
-      >
-        <ChevronLeft class="size-3.5" />
-        {vault.t(I18N_KEYS.LoginWizardBackToUnlock)}
-      </button>
+      <BackButton
+        label={vault.t(I18N_KEYS.LoginWizardBackToUnlock)}
+        testId="cancel-add-provider-btn"
+        onBack={() => onCancelAddProvider()}
+      />
     {/if}
 
     <div class="space-y-1">

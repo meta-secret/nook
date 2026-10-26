@@ -1,7 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS, type I18nKey } from "../../../../generated/i18n-keys";
   import {
-    ArrowLeft,
     Check,
     Copy,
     Cpu,
@@ -9,6 +8,7 @@
     RefreshCw,
     ShieldCheck,
   } from "@lucide/svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
   import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
   import {
     SentinelRequestClipboard as RequestClipboard,
@@ -261,14 +261,11 @@
       </div>
 
       {#if status === SentinelGenesisPhase.Inactive}
-        <button
-          class="flex h-10 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
-          data-testid="sentinel-dashboard-back"
-          onclick={onBack}
-        >
-          <ArrowLeft class="size-4" aria-hidden="true" />
-          {t(I18N_KEYS.LoginSentinelDashboardChange)}
-        </button>
+        <BackButton
+          label={t(I18N_KEYS.LoginSentinelDashboardChange)}
+          testId="sentinel-dashboard-back"
+          {onBack}
+        />
       {/if}
     </header>
 
@@ -688,15 +685,12 @@
             </div>
 
             <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
-                data-testid="sentinel-onboarding-policy-back"
-                onclick={() =>
+              <BackButton
+                label={t(I18N_KEYS.CommonBack)}
+                testId="sentinel-onboarding-policy-back"
+                onBack={() =>
                   (onboardingStage = SentinelCardOnboardingStage.Name)}
-              >
-                {t(I18N_KEYS.CommonBack)}
-              </button>
+              />
               <button
                 disabled={!policyValid || isBusy || actionBusy}
                 class="rounded-full bg-[#46e56f] px-5 py-3 text-[10px] font-bold tracking-wide text-[#112218] uppercase shadow-[0_8px_24px_rgb(45_225_99/0.18)] transition hover:bg-[#6bed8c] disabled:cursor-not-allowed disabled:opacity-25"

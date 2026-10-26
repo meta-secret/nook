@@ -147,7 +147,7 @@
       data-testid="app-shell-content"
     >
       {#if logsPage}
-        <LogsPage onClose={onNavigateHome} />
+        <LogsPage {vault} onClose={onNavigateHome} />
       {:else if legalPageState.kind === LegalRouteKind.Legal}
         <LegalDocumentPage
           {vault}
