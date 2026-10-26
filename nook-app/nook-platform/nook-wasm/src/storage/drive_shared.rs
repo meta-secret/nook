@@ -1,10 +1,11 @@
-//! Google Drive vault folder helpers. Opening, creating, and sharing the
-//! folder need only `drive.file`; reading events other authorized accounts
-//! created there also needs `drive.readonly`.
+//! Google Drive Nook root helpers. Opening, creating, and sharing the root
+//! need only `drive.file`; reading events other authorized accounts created
+//! there also needs `drive.readonly`.
 //!
-//! Every Drive provider syncs under one My Drive folder. Its Drive
-//! permissions are the provider's authorized accounts: sharing the folder
-//! with an account lets a device signed in as that account join the vault.
+//! Every Drive provider syncs under the account's one `Nook` root folder in
+//! My Drive, each identity and vault in its own subfolder. The root's Drive
+//! permissions are the provider's authorized accounts: sharing it with an
+//! account lets a device signed in as that account join the vault.
 
 use crate::DriveStorageClient;
 
@@ -80,15 +81,6 @@ impl DriveStorageClient<'_> {
             nook_core::DRIVE_FOLDER_MIME_TYPE
         )
     }
-
-    fn shared_folder_name(name: &str) -> &str {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            "Nook shared vault"
-        } else {
-            trimmed
-        }
-    }
 }
 
 impl DriveStorageClient<'_> {
@@ -115,21 +107,24 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Open the My Drive vault folder with this name, creating it only when none
+/// Open the account's one Nook root folder, creating it only when none
 /// exists. Requires `drive.file` scope.
 impl DriveStorageClient<'_> {
+    /// The account's Nook root, looked up without creating it.
+    pub(crate) async fn find_vault_folder(
+        &self,
+    ) -> Result<nook_core::DriveVaultFolderSelection, NookError> {
+        let folders = self.list_vault_folders().await?;
+        Ok(nook_core::DriveVaultFolderLookup { folders: &folders }.select()?)
+    }
+
     pub(crate) async fn connect_vault_folder(
         &self,
-        name: &str,
     ) -> Result<DriveVaultFolderConnection, NookError> {
-        let folder_name = DriveStorageClient::shared_folder_name(name);
-        let folders = self.list_vault_folders(folder_name).await?;
-        let selection = nook_core::DriveVaultFolderLookup {
-            name: folder_name,
-            folders: &folders,
-        }
-        .select()?;
-        if let nook_core::DriveVaultFolderSelection::Existing(folder_id) = selection {
+        let folder_name = nook_core::DriveVaultFolderLookup::root_name();
+        if let nook_core::DriveVaultFolderSelection::Existing(folder_id) =
+            self.find_vault_folder().await?
+        {
             return Ok(DriveVaultFolderConnection {
                 id: folder_id.into_inner(),
                 name: folder_name.to_owned(),
@@ -146,10 +141,10 @@ impl DriveStorageClient<'_> {
 
     async fn list_vault_folders(
         &self,
-        folder_name: &str,
     ) -> Result<Vec<nook_core::DriveVaultFolderObservation>, NookError> {
         let token = nook_core::OauthAccessToken::parse(self.as_str())?;
-        let query = DriveStorageClient::vault_folder_query(folder_name);
+        let query =
+            DriveStorageClient::vault_folder_query(nook_core::DriveVaultFolderLookup::root_name());
         let mut page_token: Option<String> = None;
         let mut folders = Vec::new();
         loop {
@@ -429,18 +424,6 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn shared_folder_name_trims_and_defaults() {
-        assert_eq!(
-            DriveStorageClient::shared_folder_name("  Family vault  "),
-            "Family vault"
-        );
-        assert_eq!(
-            DriveStorageClient::shared_folder_name("\t"),
-            "Nook shared vault"
-        );
-    }
-
-    #[wasm_bindgen_test]
     fn create_folder_projection_requires_id_and_falls_back_to_name() -> anyhow::Result<()> {
         let Err(missing_id) = DriveStorageClient::create_folder_projection(
             DriveStorageClientCreateFolderProjection {
@@ -480,7 +463,7 @@ mod browser_tests {
     async fn shared_drive_input_guards_fail_before_network_access() -> anyhow::Result<()> {
         assert!(
             DriveStorageClient::new("")
-                .connect_vault_folder("Shared")
+                .connect_vault_folder()
                 .await
                 .is_err()
         );

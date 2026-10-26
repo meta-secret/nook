@@ -390,7 +390,6 @@ export async function reconnectSyncVault(page: Page) {
 /** Add and connect a local sync provider from vault settings (vault must be unlocked). */
 export async function connectGoogleDriveSyncProviderFromSettings(
   page: Page,
-  fileName: string,
   accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
   options?: { expectConflict?: boolean },
 ) {
@@ -402,10 +401,9 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await page.getByTestId('drive-file-input').fill(fileName)
   await page.getByTestId('google-sign-in-btn').click()
   await waitForGoogleOAuthSignedIn(page)
-  // Connect & sync creates the provider's My Drive vault folder.
+  // Connect & sync opens or creates the account's one Nook root folder.
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   if (!options?.expectConflict) {

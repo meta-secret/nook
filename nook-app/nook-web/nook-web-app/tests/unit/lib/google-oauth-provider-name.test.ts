@@ -35,11 +35,13 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const wasm = vi.hoisted(() => ({
   connectGoogleDriveVaultFolder: vi.fn(),
+  listGoogleDriveVaults: vi.fn(),
 }))
 
 vi.mock('$app-wasm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$app-wasm')>()),
   connect_google_drive_vault_folder: wasm.connectGoogleDriveVaultFolder,
+  list_google_drive_vaults: wasm.listGoogleDriveVaults,
 }))
 
 const GOOGLE_TOKENS = {
@@ -60,23 +62,22 @@ function mockGoogleTokenApplication() {
   return tokenRequest
 }
 
-function signedInDriveSetup(folderName: string) {
+function signedInDriveSetup() {
   const state = VaultStateTestFixture.create()
   new VaultProviderActions(state).beginProviderSetup({
     request: { type: OAUTH_FILE_PROVIDER_TYPE, oauthPreset: 'google-drive' },
   })
-  state.githubRepo = folderName
   return state
 }
 
 describe('Google OAuth provider name persistence', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  test('names the new Drive folder from the setup field and keeps the default backup name', async () => {
+  test('connects the fixed Nook root and keeps the default backup name', async () => {
     const tokenRequest = mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'vault-folder',
-      name: 'Onboarding Vault',
+      name: 'Nook',
       existed: false,
     })
     const state = VaultStateTestFixture.create()
@@ -87,10 +88,6 @@ describe('Google OAuth provider name persistence', () => {
         oauthPreset: 'google-drive',
       },
     })
-    // Folder names may contain characters the backup name rejects.
-    const requestedName = 'Onboarding Vault'
-    state.githubRepo = requestedName
-
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
@@ -113,18 +110,17 @@ describe('Google OAuth provider name persistence', () => {
         fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
       },
     })
-    expect(state.githubRepo).toBe(requestedName)
     // Signed in, but no vault folder yet: nothing to connect to.
     expect(providerActions.stagedRemoteStorageArgs().kind).toBe(
       StagedRemoteStorageKind.Unavailable,
     )
 
     await expect(oauthActions.connectGoogleVaultFolder()).resolves.toEqual(
-      ok({ name: requestedName, origin: GoogleVaultFolderOrigin.Created }),
+      ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Created }),
     )
+    // Only the token: every account's root has the same fixed name.
     expect(wasm.connectGoogleDriveVaultFolder).toHaveBeenCalledWith(
       GOOGLE_TOKENS.accessToken,
-      requestedName,
     )
     const staged = providerActions.stagedRemoteStorageArgs()
     expect(staged.kind).toBe(StagedRemoteStorageKind.Available)
@@ -154,19 +150,19 @@ describe('Google OAuth provider name persistence', () => {
     })
   })
 
-  test('binds an existing Drive folder and reports that it existed', async () => {
+  test('binds the existing Nook root and reports that it existed', async () => {
     mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'existing-folder',
-      name: 'nook-events',
+      name: 'Nook',
       existed: true,
     })
-    const state = signedInDriveSetup('nook-events')
+    const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
     await expect(oauthActions.connectGoogleVaultFolder()).resolves.toEqual(
-      ok({ name: 'nook-events', origin: GoogleVaultFolderOrigin.Existing }),
+      ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
     )
     expect(state.oauthFileDraft).toMatchObject({
       kind: OAuthFileDraftKind.Configured,
@@ -174,12 +170,12 @@ describe('Google OAuth provider name persistence', () => {
     })
   })
 
-  test('refuses to pick between several Drive folders with the setup name', async () => {
+  test('refuses to pick between duplicated Nook roots', async () => {
     mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockRejectedValue(
       new Error(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous),
     )
-    const state = signedInDriveSetup('nook-events')
+    const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
@@ -195,14 +191,44 @@ describe('Google OAuth provider name persistence', () => {
     })
   })
 
+  test('lists the Nook root with the token and the open vault, failing visibly', async () => {
+    mockGoogleTokenApplication()
+    const state = signedInDriveSetup()
+    const oauthActions = new VaultOAuthActions(state)
+    await oauthActions.signInWithGoogle()
+    const closed: Parameters<typeof oauthActions.listGoogleDriveVaults>[0] = {
+      state: 'closed',
+    }
+    wasm.listGoogleDriveVaults.mockResolvedValue({ root: 'absent' })
+
+    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+      ok({ root: 'absent' }),
+    )
+    expect(wasm.listGoogleDriveVaults).toHaveBeenCalledWith(
+      GOOGLE_TOKENS.accessToken,
+      closed,
+    )
+
+    wasm.listGoogleDriveVaults.mockRejectedValue(
+      new Error(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous),
+    )
+    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+      err(new OAuthFailure(OAuthFailureKind.GoogleVaultFolderAmbiguous)),
+    )
+    wasm.listGoogleDriveVaults.mockRejectedValue(new Error('status 500'))
+    await expect(oauthActions.listGoogleDriveVaults(closed)).resolves.toEqual(
+      err(new OAuthFailure(OAuthFailureKind.GoogleVaultListing)),
+    )
+  })
+
   test('keeps the wider grant from authorizing an account on the saved provider', async () => {
     mockGoogleTokenApplication()
     wasm.connectGoogleDriveVaultFolder.mockResolvedValue({
       id: 'vault-folder',
-      name: 'nook-events',
+      name: 'Nook',
       existed: false,
     })
-    const state = signedInDriveSetup('nook-events')
+    const state = signedInDriveSetup()
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
     await oauthActions.connectGoogleVaultFolder()

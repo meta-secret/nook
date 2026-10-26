@@ -42,6 +42,8 @@ mod vault_event_log;
 pub use vault_event_log::*;
 mod authorized_accounts;
 pub use authorized_accounts::*;
+mod provider_vault_listing;
+pub use provider_vault_listing::*;
 
 #[wasm_bindgen]
 #[must_use]

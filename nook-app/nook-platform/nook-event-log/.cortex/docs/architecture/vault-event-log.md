@@ -227,18 +227,56 @@ The active provider adapters are GitHub, Google Drive, and iCloud.
 Google Drive and iCloud providers always sync under one shared target. The
 provider-settings wire version is independent of the vault event schema.
 
-- **Google Drive:** Events live below the vault folder named by the
-  provider's `folderId` (connect reference `shared:{folderId}`). The identity
-  log and each vault use their own namespace folder inside it. A Drive
-  reference without a folder fails closed; no hidden app-data root exists.
+- **Google Drive:** Events live below the account's one Nook root folder,
+  named by the provider's `folderId` (connect reference `shared:{folderId}`).
+  A Drive reference without a folder fails closed; no hidden app-data root
+  exists.
 - **iCloud:** Event records are children of the CloudKit share root named by
   the provider's `icloud-share-v1:` target. The owner queries its private
   database and each participant queries its shared database.
 
+Every target keeps one namespace per identity log and per vault:
+
+- **Path-addressed targets:** each vault is its own
+  `nook-log/v1/vaults/{store_id}/` subdirectory.
+- **Google Drive:** each vault is its own `nook-vault-{store_id}` subfolder
+  of the Nook root.
+- **iCloud:** each record's queryable `location` names its namespace.
+
+The events of different vaults never share a namespace. Several vaults, of
+one identity or of different identities, therefore coexist in one target.
+[Identity control log](identity-control-log.md#store-the-log-once-per-provider-mount)
+owns the identity namespace.
+
 No event files are automatically moved, renamed, or deleted. The event
-classification guard still runs inside each target: a different `store_id`,
-multiple store IDs, unreadable files, or invalid event bytes fail closed
-before any writes.
+classification guard still runs inside each namespace: a different
+`store_id`, multiple store IDs, unreadable files, or invalid event bytes fail
+closed before any writes.
+
+### Provider vault listing
+
+Setup and recovery list the vaults a target holds before anything is written.
+Each listed namespace becomes a `ProviderVaultSummary` computed in Rust from
+transport metadata only. Nothing is downloaded or decrypted, so plaintext
+vault names appear only after unlock.
+
+- **Short id:** the first eight characters of the store token.
+- **Event count:** the number of event files in the namespace. Duplicate
+  Drive files of one event count once.
+- **Created:** the earliest reported time of the namespace or its events.
+- **Last activity:** the latest reported event time, or the namespace time
+  when it holds no events.
+
+Transports report what their listings carry cheaply:
+
+- **Google Drive:** the `createdTime` of each namespace folder and event
+  file. A malformed timestamp fails the listing closed.
+- **GitHub, iCloud, local folder:** the event count and short id only. Their
+  times stay `Unreported` and the UI omits them.
+
+A namespace duplicated by hand fails the listing closed, as sync does. How
+setup classifies and acts on each listed vault is owned by
+[auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md#what-the-provider-already-holds).
 
 ### Provider synchronization
 

@@ -48,6 +48,7 @@ ciborium = "0.2.2"
 coset = "0.4.2"
 url = "2.5.8"
 psl = "2.1.189"
+time = { version = "0.3.55", default-features = false, features = ["parsing"] }
 
 [dev-dependencies]
 anyhow = "1.0.104"

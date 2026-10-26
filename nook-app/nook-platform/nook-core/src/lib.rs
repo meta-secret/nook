@@ -54,9 +54,9 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, sync_provider_credentials, sync_provider_store,
-    validation, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
-    vault_sync_store,
+    authorized_accounts, drive_vault_folder, provider_vault_listing, sync_provider_credentials,
+    sync_provider_store, validation, vault_sync, vault_sync_conflict, vault_sync_session,
+    vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -350,6 +350,12 @@ pub use authorized_accounts::{
 pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
+};
+pub use provider_vault_listing::{
+    EmptyVaultReplacement, IdentityAppCount, LocalVaultItemCount, LocalVaultOccupancy,
+    NOOK_PROVIDER_ROOT_NAME, ProviderEventCount, ProviderInstant, ProviderVaultListing,
+    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultRelation,
+    ProviderVaultSummary, ProviderVaultTime,
 };
 pub use secrets::SecretRecordFilter;
 pub use session::{

@@ -362,6 +362,20 @@ impl OpenedLocalFolder {
         records.sort_by(|left, right| left.event_id.cmp(&right.event_id));
         Ok(records)
     }
+    /// How many event files one namespace holds, without reading them.
+    pub(crate) async fn count_events(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Result<usize, NookError> {
+        let FolderDirectory::Opened(dir) = FolderObject::new(&self.root)
+            .event_directory(location, ChildLookup::Existing)
+            .await?
+        else {
+            return Ok(0);
+        };
+        Ok(FolderObject::new(&dir).event_entries().await?.len())
+    }
+
     /// Ids of every namespace of one kind written to this folder.
     pub(crate) async fn list_namespace_ids(
         &self,

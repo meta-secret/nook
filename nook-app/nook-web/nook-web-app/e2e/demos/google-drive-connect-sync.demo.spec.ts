@@ -28,7 +28,7 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('Google Drive setup names its vault folder behind the demo-origin gate and lists an existing folder provider', async ({
+test('Google Drive setup uses the fixed Nook folder behind the demo-origin gate and lists an existing folder provider', async ({
   page,
 }) => {
   await page.goto('/app/')
@@ -45,13 +45,10 @@ test('Google Drive setup names its vault folder behind the demo-origin gate and 
     timeout: UI_TIMEOUT_MS,
   })
   await expect(page.getByTestId('cancel-provider-setup')).toBeVisible()
-  // Connect & sync waits for sign-in; it reuses the named My Drive vault
-  // folder and creates it only when none exists.
+  // Connect & sync waits for sign-in; it reuses the account's one Nook root
+  // folder and creates it only when none exists. There is no name to enter.
   await expect(page.getByTestId('google-setup-sync-step')).toBeVisible()
-  await page.getByTestId('drive-file-input').fill('Nook Demo Vault')
-  await expect(page.getByTestId('drive-file-input')).toHaveValue(
-    'Nook Demo Vault',
-  )
+  await expect(page.getByTestId('drive-file-input')).toHaveCount(0)
   // UI demos run on 127.0.0.1:5183, which is outside Google's authorized origins.
   await expect(page.getByTestId('google-origin-unsupported')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

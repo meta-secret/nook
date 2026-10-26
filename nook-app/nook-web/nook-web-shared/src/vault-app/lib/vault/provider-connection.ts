@@ -104,7 +104,7 @@ export class ProviderConnectionActions {
                   handle.handleId,
                 );
               state.remoteVaultChoices =
-                discovered.state === "several" ? discovered.storeIds : [];
+                discovered.state === "several" ? discovered.vaults : [];
               return storageOk(
                 discovered.state === "found" ? discovered.storeId : "",
               );
@@ -128,7 +128,7 @@ export class ProviderConnectionActions {
               args.repo,
             );
             state.remoteVaultChoices =
-              discovered.state === "several" ? discovered.storeIds : [];
+              discovered.state === "several" ? discovered.vaults : [];
             return storageOk(
               discovered.state === "found" ? discovered.storeId : "",
             );

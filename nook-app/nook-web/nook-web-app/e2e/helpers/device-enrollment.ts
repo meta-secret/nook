@@ -97,7 +97,7 @@ export async function connectGoogleDriveVault(
   }
   await page.goto('/app/')
   await createLocalVaultOnLogin(page)
-  await connectGoogleDriveSyncProviderFromSettings(page, fileName, accessToken)
+  await connectGoogleDriveSyncProviderFromSettings(page, accessToken)
   await waitForSyncRemoteVaultState(
     ((...[v = createLocalE2eGoogleDriveVaultStub('', fileName)]) => v)(stub),
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,

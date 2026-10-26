@@ -388,6 +388,7 @@ export class VaultState extends VaultRuntimeState {
 
   cancelExistingVaultOpen() {
     this.loginRequiresExistingVault = false;
+    this.forgetEmptyVaultReplacement();
     this.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
     this.errorMsg = "";
   }

@@ -4,11 +4,8 @@
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type { OAuthFilePreset } from "$lib/auth/providers";
-  import {
-    DEFAULT_DRIVE_BACKUP_NAME,
-    OAuthFilePresentation,
-    oauth_access_token,
-  } from "$lib/auth/providers";
+  import { OAuthFilePresentation, oauth_access_token } from "$lib/auth/providers";
+  import GoogleDriveVaultInventory from "$lib/components/provider-vaults/GoogleDriveVaultInventory.svelte";
   import { browserLogRuntime } from "$lib/runtime/log";
   import {
     BrowserOAuthProvider,
@@ -19,13 +16,16 @@
   import type { VaultState } from "$lib/vault.svelte";
   import * as oauthActions from "$lib/vault/oauth";
   import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
+  import {
+    ProviderVaultActions,
+    ProviderVaultImportStart,
+    type EmptyVaultSwap,
+  } from "$lib/vault/provider-vaults";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
   let {
     vault,
-    githubRepo = $bindable(DEFAULT_DRIVE_BACKUP_NAME),
-    idPrefix = "provider",
     preset = "google-drive" as OAuthFilePreset,
     isVerifying,
     isInitializing,
@@ -33,8 +33,6 @@
     onConnect,
   }: {
     vault: VaultState;
-    githubRepo?: string;
-    idPrefix?: string;
     preset?: OAuthFilePreset;
     isVerifying: boolean;
     isInitializing: boolean;
@@ -96,12 +94,12 @@
   let preparingTarget = $state(false);
   /** Set once Connect & sync bound the provider to a folder that existed. */
   let existingFolderNotice = $state("");
-  const googleFolderOnConnect = $derived.by(() => {
-    const folderRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.ProviderSetupGoogleFolderOnConnect,
-      replacements: { folder: githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME },
-    };
-    return vault.t(folderRequest);
+  /** The signed-in Drive account's token: listing its Nook folder needs it. */
+  const driveAccessToken = $derived.by(() => {
+    if (isICloud || vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured)
+      return "";
+    const credential = oauth_access_token(vault.oauthFileDraft.config);
+    return credential.kind === "available" ? credential.token : "";
   });
 
   // Sign-in controls are plain elements for the providers' SDKs, so they
@@ -118,10 +116,10 @@
   const googleSignInButtonClass = cn(signInButtonClass, "w-full sm:w-auto");
 
   /**
-   * Every Drive provider syncs under an ordinary My Drive folder (an iCloud
-   * provider under a CloudKit share) that authorized accounts are later
-   * shared into. Connecting opens the folder with the setup name, creating
-   * it only when none exists; a retry reuses the bound folder.
+   * Every Drive provider syncs under the account's one Nook root folder (an
+   * iCloud provider under a CloudKit share) that authorized accounts are
+   * later shared into. Connecting opens the root, creating it only when the
+   * account has none; a retry reuses the bound folder.
    */
   async function connectWithVaultTarget() {
     if (preparingTarget) return;
@@ -161,6 +159,20 @@
     // The wizard usually closes once connected; the notice outlives it.
     if (existingFolderNotice && !vault.errorMsg)
       vault.showSuccess(existingFolderNotice);
+  }
+
+  /** Import another identity's vault from the listing as a separate vault. */
+  async function importProviderVault(storeId: string) {
+    const start = new ProviderVaultActions(vault).importSeparately(storeId);
+    if (start === ProviderVaultImportStart.ConnectNow)
+      await connectWithVaultTarget();
+  }
+
+  /** Swap the empty open vault for a listed one, once confirmed. */
+  async function replaceEmptyVault(swap: EmptyVaultSwap) {
+    const start = new ProviderVaultActions(vault).replaceEmptyVault(swap);
+    if (start === ProviderVaultImportStart.ConnectNow)
+      await connectWithVaultTarget();
   }
 
   function watchICloudSignInIntent(node: HTMLElement) {
@@ -317,36 +329,6 @@
         )}
       </p>
 
-      <div class="space-y-1.5">
-        <label
-          class="text-xs font-medium text-foreground"
-          for="{idPrefix}-drive-file"
-        >
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupDriveFileName
-              : I18N_KEYS.ProviderSetupDriveFolderName,
-          )}
-        </label>
-        <input
-          id="{idPrefix}-drive-file"
-          type="text"
-          bind:value={githubRepo}
-          placeholder={DEFAULT_DRIVE_BACKUP_NAME}
-          autocomplete="off"
-          spellcheck="false"
-          data-testid="drive-file-input"
-          class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-        />
-        <p class="text-[11px] text-muted-foreground text-pretty">
-          {vault.t(
-            isICloud
-              ? I18N_KEYS.ProviderSetupIcloudEventLogDesc
-              : I18N_KEYS.ProviderSetupDriveEventLogDesc,
-          )}
-        </p>
-      </div>
-
       {#if isICloud}
         <div
           class={cn(
@@ -462,17 +444,22 @@
       <p class="text-sm text-muted-foreground text-pretty">
         {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
       </p>
-      {#if !sharedTargetReady}
+      {#if isICloud && !sharedTargetReady}
         <p
           class="text-[11px] text-muted-foreground text-pretty"
-          data-testid={isICloud
-            ? "icloud-share-on-connect"
-            : "google-folder-on-connect"}
+          data-testid="icloud-share-on-connect"
         >
-          {isICloud
-            ? vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)
-            : googleFolderOnConnect}
+          {vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)}
         </p>
+      {:else if driveAccessToken}
+        <!-- What the account's Nook folder already holds, before Connect & sync. -->
+        <GoogleDriveVaultInventory
+          {vault}
+          accessToken={driveAccessToken}
+          busy={isVerifying || isInitializing || preparingTarget}
+          onImport={importProviderVault}
+          onReplace={replaceEmptyVault}
+        />
       {/if}
       {#if existingFolderNotice}
         <p

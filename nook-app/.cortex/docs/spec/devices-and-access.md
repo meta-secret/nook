@@ -55,9 +55,9 @@ See
    It does not replace identity or app-key unlock.
 7. Sync providers are replication transports mounted on the identity.
    They never grant identity membership or vault decryption by themselves.
-   A Google Drive or iCloud mount records only its shared target: the vault
-   folder or CloudKit share. The provider's sharing state lists the accounts
-   authorized to reach it.
+   A Google Drive or iCloud mount records only its shared target: the
+   account's Nook root folder or CloudKit share. The provider's sharing
+   state lists the accounts authorized to reach it.
 8. Passwords and other secret items are vault content, not identity state.
 
 ## Evidence and provenance

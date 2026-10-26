@@ -33,7 +33,13 @@ import {
   type OAuthFileConfig,
   type StoredOAuthFileConfiguration,
 } from "$lib/auth/providers";
-import { connect_google_drive_vault_folder } from "$app-wasm";
+import {
+  connect_google_drive_vault_folder,
+  list_google_drive_vaults,
+  nook_provider_root_name,
+  type LocalVaultOccupancy,
+  type NookGoogleDriveVaultListing,
+} from "$app-wasm";
 import {
   GoogleAccountIdentityKind,
   GoogleDriveOAuthScope,
@@ -96,6 +102,12 @@ export enum GoogleVaultFolderOrigin {
 interface GoogleVaultFolderConnection {
   readonly name: string;
   readonly origin: GoogleVaultFolderOrigin;
+}
+
+/** A failed Drive root request: its message and the failure it otherwise is. */
+interface DriveRootFailureReport {
+  readonly message: string;
+  readonly kind: OAuthFailureKind;
 }
 
 interface GoogleProviderTokenAdoption {
@@ -271,8 +283,9 @@ export class VaultOAuthActions {
       oauth_access_token(state.oauthFileDraft.config).kind === "missing"
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedSignInRequired));
+    // The share is titled like every provider account's Nook root.
     const target = await iCloudOAuthSession.createICloudSharedVault(
-      state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME,
+      nook_provider_root_name(),
     );
     if (target.isErr()) return err(target.error);
     const targetBinding: SharedICloudTargetBinding = {
@@ -286,8 +299,9 @@ export class VaultOAuthActions {
   }
 
   /**
-   * Bind the draft to the My Drive folder named in setup: the one existing
-   * folder with that name, or a new one when none exists.
+   * Bind the draft to the account's one Nook root folder in My Drive: the
+   * existing root, or a new one when the account has none. Every identity
+   * and vault syncs in its own subfolder of it.
    */
   async connectGoogleVaultFolder(): Promise<
     Result<GoogleVaultFolderConnection, OAuthFailure>
@@ -301,30 +315,15 @@ export class VaultOAuthActions {
     if (accessCredential.kind === "missing") {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
     }
-    const remoteFileName = new OAuthFilePresentation(oauthFile).oauthFileName();
-    const folderName = state.githubRepo.trim()
-      ? state.githubRepo.trim()
-      : remoteFileName.kind === OAuthFileNameKind.Resolved
-        ? remoteFileName.fileName
-        : DEFAULT_DRIVE_BACKUP_NAME;
     let folder;
     try {
-      folder = await connect_google_drive_vault_folder(
-        accessCredential.token,
-        folderName,
-      );
+      folder = await connect_google_drive_vault_folder(accessCredential.token);
     } catch (failure) {
-      const message =
-        failure instanceof Error ? failure.message : String(failure);
-      return err(
-        new OAuthFailure(
-          message.includes(
-            I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous,
-          )
-            ? OAuthFailureKind.GoogleVaultFolderAmbiguous
-            : OAuthFailureKind.GoogleSharedCreation,
-        ),
-      );
+      const report: DriveRootFailureReport = {
+        message: failure instanceof Error ? failure.message : String(failure),
+        kind: OAuthFailureKind.GoogleSharedCreation,
+      };
+      return err(this.driveRootFailure(report));
     }
     let bound;
     try {
@@ -340,6 +339,47 @@ export class VaultOAuthActions {
         : GoogleVaultFolderOrigin.Created,
     };
     return ok(connection);
+  }
+
+  /**
+   * What the signed-in account's Nook root already holds, read without
+   * creating it: each vault's created and last-activity times, event count,
+   * short id, and whether it belongs to this identity. Nothing is decrypted.
+   */
+  async listGoogleDriveVaults(
+    localVault: LocalVaultOccupancy,
+  ): Promise<Result<NookGoogleDriveVaultListing, OAuthFailure>> {
+    const state = this.state;
+    if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured)
+      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
+    const accessCredential = oauth_access_token(state.oauthFileDraft.config);
+    if (accessCredential.kind === "missing")
+      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
+    try {
+      return ok(
+        await list_google_drive_vaults(accessCredential.token, localVault),
+      );
+    } catch (failure) {
+      const report: DriveRootFailureReport = {
+        message: failure instanceof Error ? failure.message : String(failure),
+        kind: OAuthFailureKind.GoogleVaultListing,
+      };
+      return err(this.driveRootFailure(report));
+    }
+  }
+
+  /** A duplicated Nook root keeps its own message; anything else is `kind`. */
+  private driveRootFailure({
+    message,
+    kind,
+  }: DriveRootFailureReport): OAuthFailure {
+    return new OAuthFailure(
+      message.includes(
+        I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous,
+      )
+        ? OAuthFailureKind.GoogleVaultFolderAmbiguous
+        : kind,
+    );
   }
 
   /**
@@ -542,9 +582,8 @@ export class VaultOAuthActions {
       tokens.accessToken,
     );
     if (email.isErr()) return err(email.error);
-    // The setup field names the Drive folder. The event-log backup name is
-    // validated separately and keeps its saved value or the default.
-    const folderName = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+    // The event-log backup name keeps its saved value or the default; the
+    // Drive folder is always the account's fixed Nook root.
     let existing: StoredOAuthFileConfiguration;
     try {
       const fallbackRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
@@ -584,7 +623,6 @@ export class VaultOAuthActions {
     state.selectOauthSetupPreset("google-drive");
     state.configureOauthFile(config);
     state.githubPat = "";
-    state.githubRepo = folderName;
     return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 }

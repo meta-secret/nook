@@ -95,11 +95,11 @@ authorizes a wire format change.
 - **`accessToken`, `refreshToken`**
   - **Notes:** Sealed at rest
 - **`expiresAt`, `fileId`, `fileName`, `accountEmail`**
-  - **Notes:** Non-secret metadata; `fileName` names the event file or the
-    default vault-folder name
+  - **Notes:** Non-secret metadata; `fileName` is the internal event-log
+    backup name, never a Drive folder name
 - **`folderId`**
-  - **Notes:** Google Drive vault folder; unset until the folder is created or
-    connected
+  - **Notes:** The account's Google Drive Nook root; unset until the root is
+    created or connected
 - **`iCloudShareTarget`**
   - **Notes:** iCloud share target; credential-free CloudKit routing, unbound
     until the share is created or accepted
@@ -135,9 +135,13 @@ wasm; the web shim is adapters + i18n only.
   - **Home:** WASM binding + thin TypeScript wrapper
 - **Seal providers with `seal_auth_providers_for_device_public_key`**
   - **Home:** WASM binding + thin TypeScript wrapper
-- **Create or connect the Drive vault folder and manage authorized accounts**
+- **Create or connect the Drive Nook root and manage authorized accounts**
   - **Home:** `nook-app/nook-platform/nook-wasm/src/public_api/authorized_accounts.rs`,
     wrapped by [`vault/authorized-accounts.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/authorized-accounts.ts)
+- **List and classify the vaults a provider holds**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/provider_vault_listing.rs`,
+    exported by `nook-app/nook-platform/nook-wasm/src/public_api/provider_vault_listing.rs`
+    and routed by [`vault/provider-vaults.ts`](../../../../nook-web/nook-web-shared/src/vault-app/lib/vault/provider-vaults.ts)
 
 **Enrollment and web presentation**
 
@@ -196,14 +200,17 @@ TypeScript owns browser integration:
   - Backup-password lists must reflect the remote vault for that provider, never
     a previous provider's in-memory session.
 
-### Google Drive vault folder
+### Google Drive Nook root
 
-Every Google Drive provider is shared. It syncs under one visible My Drive
-folder, the vault folder, independently of vault replication or membership.
-Writes remain limited to app-created files below the vault folder.
+Every Google Drive provider is shared. Each Google account holds one
+app-owned Nook root folder in My Drive, always named `Nook`
+(`NOOK_PROVIDER_ROOT_NAME` in `nook-core`). The identity log and every vault
+sync in their own namespace subfolder of that root, independently of vault
+replication or membership. Writes remain limited to app-created files below
+the root.
 
 - **Scopes:** Sign-in and silent refresh request only the non-sensitive
-  `drive.file` scope. It opens, creates, and shares the vault folder and
+  `drive.file` scope. It opens, creates, and shares the Nook root and
   reads and writes the event files this app created for the account.
 - **Cross-account reads:** Drive authorizes `drive.file` per user, so an
   account cannot read event files another account created. The restricted
@@ -222,19 +229,22 @@ Writes remain limited to app-created files below the vault folder.
   `drive.readonly` shows the "Google hasn't verified this app" warning. The
   single-account path never shows it.
 
-- **Target:** The row persists the folder's stable Drive ID in `folderId`.
-  Its connect reference is `shared:{folderId}`. The identity log and each vault
-  live in their own namespace folder inside it.
-- **Setup:** Setup step 2 connects the folder named in setup with
-  `connect_google_drive_vault_folder`. It looks up the account's owned,
-  untrashed My Drive root folders with that name. With `drive.file` alone,
-  Drive reports only folders Nook created.
-  - No match creates the folder. A new folder is shared with no other account.
-  - One match reuses that folder. Sync keeps its encrypted events: event
+- **Target:** The row persists the root's stable Drive ID in `folderId`.
+  Its connect reference is `shared:{folderId}`.
+- **Setup:** The wizard has no folder-name field. Setup step 2 connects the
+  root with `connect_google_drive_vault_folder`. It looks up the account's
+  owned, untrashed My Drive root folders named `Nook`. With `drive.file`
+  alone, Drive reports only folders Nook created.
+  - No match creates the root. A new root is shared with no other account.
+  - One match reuses that root. Sync keeps its encrypted events: event
     writes add content-addressed files only when absent, and the setup wizard
-    tells the user it found the existing folder.
-  - Several matches fail with `GoogleDriveVaultFolderAmbiguous` rather than
-    guessing. Rust `DriveVaultFolderLookup` owns this decision.
+    tells the user it found the existing root.
+  - Several matches exist only when the user duplicated the root by hand.
+    They fail with `GoogleDriveVaultFolderAmbiguous` rather than guessing,
+    and the translated error shows in the open step. Rust
+    `DriveVaultFolderLookup` owns this decision.
+  - Folders with any other name, such as the per-connect `nook-events`
+    folders of earlier builds, are ignored. Nothing migrates them.
 - **Incomplete rows:** A signed-in Drive provider without a folder is not
   connectable. Its staged connection reports `Incomplete`, and connect
   arguments for a saved row fail with `SharedStorageTargetRequired`.
@@ -244,8 +254,59 @@ Writes remain limited to app-created files below the vault folder.
 **Prohibited:** keep a Drive provider's events in the hidden `appDataFolder`
 under a `drive.appdata` token because no other account needs them yet.
 
-**Required:** create or connect the vault folder before the provider syncs.
-The folder's Drive permissions decide which accounts can reach it.
+**Required:** create or connect the Nook root before the provider syncs.
+The root's Drive permissions decide which accounts can reach it.
+
+### What the provider already holds
+
+After sign-in, step 2 shows what the account's Nook root holds before
+anything is written. `list_google_drive_vaults` looks the root up without
+creating it. Rust lists its vault namespaces from Drive metadata, as
+[the vault event log](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md#provider-vault-listing)
+describes. No vault is downloaded or decrypted, so vault names stay hidden
+until unlock.
+
+Rust `ProviderVaultListingRequest` relates each listed vault to this device:
+
+1. A vault the selected local identity holds is **this identity's**. It
+   simply syncs through the identity mount; the row offers no action.
+2. Any other vault is **another identity's**. Its only action is **Import as a
+   separate vault**, which runs the existing import and recovery flow with
+   that vault chosen. On the login screen the import continues there. From
+   the unlocked workspace the identity locks first, as **Import from sync
+   provider** does. A vault this device cannot open fails visibly in that
+   flow.
+3. **Connect & sync** stays available beside the list. Vaults coexist safely
+   because each keeps its own namespace subfolder.
+
+The recovery picker for a provider with several vaults shows the same
+summaries for every transport.
+
+An open local vault is never merged into another vault:
+
+- **Empty open vault:** When the open vault holds no items and the identity
+  has no other app, the listing offers `EmptyVaultReplacement::Offered`. The
+  row then also offers **Use this vault instead**. After an explicit
+  confirmation, the chosen vault is imported as a separate vault. Once it is
+  open, the empty vault is deleted from the identity everywhere. Cancelling
+  the import forgets the replacement. The offer needs the vault open: a
+  locked local vault on the login screen reports no occupancy, so only
+  import is offered there.
+- **Open vault with records:** Nothing replaces it. The provider's other
+  vaults import beside it, because an identity can own several vaults.
+
+**Prohibited:** treat a provider's other vault as this vault's history and
+union its events into the open vault.
+
+**Required:** import it as a separate vault; only an empty vault may give way,
+after the user confirms.
+
+Future work, not implemented:
+
+- **Request access via join request:** a vault this device cannot open could
+  ask its owner for access instead of failing.
+- **Copy items into another vault:** a separate explicit action, never sync
+  behavior.
 
 ### iCloud share target
 
@@ -264,18 +325,30 @@ owner's private database or accepts an existing share.
 - **Credentials:** The target never contains the owner's CloudKit web-auth
   token. Each account signs into Apple and accepts the share with its own
   account before sync.
+- **Setup:** The wizard has no name field; the share is titled `Nook`, like
+  every account's root. Creating a share still adds a new custom zone on
+  each owner setup.
+- **Not yet one root per account:** Finding an existing Nook zone needs a
+  CloudKit zone and share lookup that cannot be verified without Apple
+  sign-in, so it remains future work. The same per-namespace layout already
+  keeps vaults apart inside one share.
 
 ### Authorized accounts
 
 The provider's own sharing state is the authorized-account list. Nook keeps no
 second copy of it in `nook_auth`, the identity log, or a vault log.
 
-- **Google Drive:** The list contains the vault folder's individual `user`
+- **Google Drive:** The list contains the Nook root's individual `user`
   permissions. Domain, group, link, and deleted permissions name no account a
   device can use, so the list omits them.
 - **iCloud:** The list contains the share participants that CloudKit names by
   email. Accepted participants are active. `INVITED` and `PENDING`
   participants are shown as invited.
+- **Known limitation:** Sharing stays at the root. An authorized account can
+  see the encrypted files and listing metadata of every vault in the root,
+  not only the vaults it was invited to use. It still cannot decrypt a vault
+  without that vault's key. Per-vault sharing of namespace subfolders is
+  follow-up work.
 
 Rust `AuthorizedAccountList` owns the account rules:
 

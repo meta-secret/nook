@@ -279,7 +279,9 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
 - **Open a vault from elsewhere**
   - **Correct action:** Login → **Connect sync provider** or **Import as new vault**
 - **Provider or folder holds several vaults**
-  - **Correct action:** Login → connect it; Nook lists the vaults it holds and opens the one chosen
+  - **Correct action:** Login → connect it; Nook lists the vaults it holds, with their created and last-activity times, event counts, and short ids, and opens the one chosen
+- **Provider holds another identity's vault**
+  - **Correct action:** Import it as a separate vault; only an empty open vault may give way after confirmation. See [auth-providers.md](auth-providers.md#what-the-provider-already-holds)
 
 A second vault of the identity writes beside the first in its own namespace
 (`nook-log/v1/vaults/{store_id}/`); Nook never merges unrelated vaults. See

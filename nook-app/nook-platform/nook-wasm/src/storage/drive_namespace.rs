@@ -13,6 +13,7 @@ use nook_core::{DriveEventParent, EventLogLocation, EventLogNamespaceKind};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+use super::drive::wire::CreatedTime;
 use crate::NookError;
 
 const DRIVE_FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
@@ -35,6 +36,16 @@ struct NamespaceFolder {
     name: String,
     #[serde(default)]
     mime_type: String,
+    #[serde(default)]
+    created_time: CreatedTime,
+}
+
+/// One namespace subdirectory listed under a provider's Nook root.
+pub(crate) struct ListedNamespaceFolder {
+    /// The namespace's id: a store id or an identity id.
+    pub(crate) namespace_id: String,
+    pub(crate) folder: DriveEventParent,
+    pub(crate) created: CreatedTime,
 }
 
 #[derive(Serialize)]
@@ -155,49 +166,81 @@ impl DriveNamespace<'_> {
         Ok(created.id.trim().to_owned())
     }
 
-    /// Ids of every namespace of one kind with a folder under `parent`.
-    pub(crate) async fn list_ids(
+    /// Every namespace subdirectory of one kind under `parent`, with the
+    /// time Drive created it. Each identity and each vault has its own.
+    pub(crate) async fn list_folders(
         token: &str,
         parent: &DriveEventParent,
         kind: EventLogNamespaceKind,
-    ) -> Result<Vec<String>, NookError> {
+    ) -> Result<Vec<ListedNamespaceFolder>, NookError> {
         let client = Client::new();
         let escaped_parent = Self::parent_id(parent).replace('\'', "\\'");
         let prefix = Self::folder_name(kind.tag_prefix());
         let query = format!(
             "name contains '{prefix}' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and '{escaped_parent}' in parents and trashed = false"
         );
-        let request = client
-            .get("https://www.googleapis.com/drive/v3/files")
-            .header("Authorization", format!("Bearer {}", token.trim()))
-            .query(&[
-                ("q", query.as_str()),
-                ("fields", "files(id,name,mimeType)"),
-                ("pageSize", "1000"),
-            ]);
-        let response = request.send().await?;
-        if !response.status().is_success() {
-            return Err(NookError::Drive(format!(
-                "Google Drive namespace lookup failed with status {}",
-                response.status()
-            )));
-        }
-        let body: NamespaceFolderList = response
-            .json()
-            .await
-            .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let mut ids = body
-            .files
-            .into_iter()
-            .filter_map(|folder| {
-                folder
+        let mut page_token: Option<String> = None;
+        let mut folders = Vec::new();
+        loop {
+            let mut request = client
+                .get("https://www.googleapis.com/drive/v3/files")
+                .header("Authorization", format!("Bearer {}", token.trim()))
+                .query(&[
+                    ("q", query.as_str()),
+                    (
+                        "fields",
+                        "nextPageToken,files(id,name,mimeType,createdTime)",
+                    ),
+                    ("pageSize", "1000"),
+                ]);
+            if let Some(page) = page_token.as_deref() {
+                request = request.query(&[("pageToken", page)]);
+            }
+            let response = request.send().await?;
+            if !response.status().is_success() {
+                return Err(NookError::Drive(format!(
+                    "Google Drive namespace lookup failed with status {}",
+                    response.status()
+                )));
+            }
+            let body: NamespaceFolderList = response
+                .json()
+                .await
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            folders.extend(body.files.into_iter().filter_map(|folder| {
+                let namespace_id = folder
                     .name
                     .strip_prefix(prefix.as_str())
-                    .filter(|id| !id.is_empty())
-                    .map(str::to_owned)
-            })
+                    .filter(|id| !id.is_empty())?
+                    .to_owned();
+                let folder_id = folder.id.trim();
+                (folder.mime_type == DRIVE_FOLDER_MIME_TYPE && !folder_id.is_empty()).then(|| {
+                    ListedNamespaceFolder {
+                        namespace_id,
+                        folder: Self::child_parent(folder_id.to_owned()),
+                        created: folder.created_time,
+                    }
+                })
+            }));
+            page_token = body.next_page_token;
+            if page_token.is_none() {
+                folders.sort_by(|left, right| left.namespace_id.cmp(&right.namespace_id));
+                return Ok(folders);
+            }
+        }
+    }
+
+    /// Ids of every namespace of one kind with a folder under `parent`.
+    pub(crate) async fn list_ids(
+        token: &str,
+        parent: &DriveEventParent,
+        kind: EventLogNamespaceKind,
+    ) -> Result<Vec<String>, NookError> {
+        let mut ids = Self::list_folders(token, parent, kind)
+            .await?
+            .into_iter()
+            .map(|folder| folder.namespace_id)
             .collect::<Vec<_>>();
-        ids.sort();
         ids.dedup();
         Ok(ids)
     }

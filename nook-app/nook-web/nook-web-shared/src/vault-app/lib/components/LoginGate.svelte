@@ -795,8 +795,6 @@
         {:else if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
-            bind:githubRepo
-            idPrefix="login"
             preset={oauthPreset}
             {isVerifying}
             {isInitializing}

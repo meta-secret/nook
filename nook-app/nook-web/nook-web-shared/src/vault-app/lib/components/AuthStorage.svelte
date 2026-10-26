@@ -260,8 +260,6 @@
         {#if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
-            bind:githubRepo
-            idPrefix="settings"
             preset={oauthPreset}
             {isVerifying}
             {isInitializing}

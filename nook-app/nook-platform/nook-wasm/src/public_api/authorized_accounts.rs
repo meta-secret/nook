@@ -31,17 +31,17 @@ impl AccountListOutput<'_> {
     }
 }
 
-/// Open the My Drive folder a new Google Drive provider syncs under: the one
-/// folder with this name when it exists, otherwise a new folder only the
-/// signed-in account can reach until accounts are authorized. Several folders
-/// with the name fail with `GoogleDriveVaultFolderAmbiguous`.
+/// Open the signed-in account's one Nook root folder in My Drive: the existing
+/// root when there is one, otherwise a new root only that account can reach
+/// until accounts are authorized. Every identity and vault syncs in its own
+/// subdirectory of it. A root duplicated by hand fails with
+/// `GoogleDriveVaultFolderAmbiguous`.
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn connect_google_drive_vault_folder(
     access_token: &str,
-    folder_name: &str,
 ) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
     let folder = DriveStorageClient::new(access_token)
-        .connect_vault_folder(folder_name)
+        .connect_vault_folder()
         .await?;
     Ok(NookGoogleDriveFolder::new(folder.id, folder.name, folder.existed))
 }

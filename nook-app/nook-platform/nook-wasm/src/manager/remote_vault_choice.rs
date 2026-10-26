@@ -1,21 +1,31 @@
 //! Which vault an import opens when its provider holds several.
 //!
 //! A provider target replicates every vault of an identity, each in its own
-//! namespace. Importing from it discovers those vaults; when there are several
-//! the user picks one, and that choice holds for the following connect.
+//! namespace subdirectory. Importing from it discovers those vaults; when
+//! there are several the user picks one from their summaries (created, last
+//! activity, event count, short id — never a decrypted name), and that
+//! choice holds for the following connect.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::{StorageMode, StoreId};
+use nook_core::{
+    EventLogLocation, LocalVaultOccupancy, ProviderVaultObservation, ProviderVaultSummary,
+    StorageMode, StoreId,
+};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::event_log::VaultDiscovery;
 use super::{ChosenProviderVault, NookVaultManager};
+use crate::NookError;
+use crate::storage::local_folder::LocalFolderHandles;
+use crate::storage::provider_vault_listing::{
+    CountedVaultNamespace, DriveVaultListing, LocalVaultClassification,
+};
 
 /// The vaults a staged sync provider holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -28,16 +38,80 @@ pub enum NookRemoteVaultDiscovery {
     Found { store_id: String },
     /// The provider holds several vaults; choose one and discover again.
     #[serde(rename_all = "camelCase")]
-    Several { store_ids: Vec<String> },
+    Several { vaults: Vec<ProviderVaultSummary> },
 }
-impl NookRemoteVaultDiscovery {
-    fn several(store_ids: &[StoreId]) -> Self {
-        Self::Several {
-            store_ids: store_ids
-                .iter()
-                .map(|store_id| store_id.as_str().to_owned())
-                .collect(),
+
+/// Where the several vaults of a discovery were listed.
+enum DiscoveredVaultSource<'a> {
+    CurrentProvider,
+    BackupFolder(&'a str),
+}
+
+impl NookVaultManager {
+    /// Transport observations for the discovered vaults of one source.
+    async fn discovered_vault_observations(
+        &self,
+        source: &DiscoveredVaultSource<'_>,
+        store_ids: &[StoreId],
+    ) -> Result<Vec<ProviderVaultObservation>, NookError> {
+        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
+            (source, self.storage.mode)
+        {
+            let observations = DriveVaultListing {
+                token: &self.storage.access_token,
+                root: self.storage.drive_event_parent.parent()?,
+            }
+            .observations()
+            .await?;
+            return Ok(observations
+                .into_iter()
+                .filter(|observation| store_ids.contains(&observation.store_id))
+                .collect());
         }
+        let mut observations = Vec::new();
+        for store_id in store_ids {
+            let location = EventLogLocation::Vault(store_id.clone());
+            let event_count = match source {
+                DiscoveredVaultSource::CurrentProvider => {
+                    self.list_provider_event_ids_at(&location).await?.len()
+                }
+                DiscoveredVaultSource::BackupFolder(handle_id) => {
+                    LocalFolderHandles::current()
+                        .open_folder(handle_id)
+                        .await?
+                        .count_events(&location)
+                        .await?
+                }
+            };
+            observations.push(
+                CountedVaultNamespace {
+                    store_id: store_id.clone(),
+                    event_count,
+                }
+                .observation(),
+            );
+        }
+        Ok(observations)
+    }
+
+    /// The several vaults a discovery found, summarized and related to the
+    /// local identity. Discovery runs with no vault open.
+    async fn several_discovered_vaults(
+        &self,
+        source: DiscoveredVaultSource<'_>,
+        store_ids: &[StoreId],
+    ) -> Result<NookRemoteVaultDiscovery, NookError> {
+        let observations = self
+            .discovered_vault_observations(&source, store_ids)
+            .await?;
+        let listing = LocalVaultClassification {
+            local_vault: &LocalVaultOccupancy::Closed,
+        }
+        .listing(observations)
+        .await?;
+        Ok(NookRemoteVaultDiscovery::Several {
+            vaults: listing.vaults,
+        })
     }
 }
 
@@ -66,7 +140,13 @@ impl NookVaultManager {
                         store_id: self.vault.store_id.clone(),
                     }
                 }
-                VaultDiscovery::Several(store_ids) => NookRemoteVaultDiscovery::several(&store_ids),
+                VaultDiscovery::Several(store_ids) => {
+                    self.several_discovered_vaults(
+                        DiscoveredVaultSource::CurrentProvider,
+                        &store_ids,
+                    )
+                    .await?
+                }
             }
         };
         Tsify::into_ts(&discovery)
@@ -89,7 +169,13 @@ impl NookVaultManager {
                     store_id: self.vault.store_id.clone(),
                 }
             }
-            VaultDiscovery::Several(store_ids) => NookRemoteVaultDiscovery::several(&store_ids),
+            VaultDiscovery::Several(store_ids) => {
+                self.several_discovered_vaults(
+                    DiscoveredVaultSource::BackupFolder(handle_id),
+                    &store_ids,
+                )
+                .await?
+            }
         };
         Tsify::into_ts(&discovery)
             .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
@@ -172,19 +258,36 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    fn several_vaults_are_listed_by_store_id() -> Result<(), JsError> {
-        let store_ids = [
-            StoreId::parse("store_abcdefghijk")?,
-            StoreId::parse("store_bcdefghijkl")?,
-        ];
+    fn several_vaults_are_listed_as_summaries() -> anyhow::Result<()> {
+        let store_id = StoreId::parse("store_abcdefghijk")?;
+        let listing = nook_core::ProviderVaultListingRequest {
+            observations: vec![
+                CountedVaultNamespace {
+                    store_id,
+                    event_count: 2,
+                }
+                .observation(),
+            ],
+            identity_vaults: &[],
+            local_vault: &LocalVaultOccupancy::Closed,
+        }
+        .listing();
+        let discovery = NookRemoteVaultDiscovery::Several {
+            vaults: listing.vaults,
+        };
         assert_eq!(
-            NookRemoteVaultDiscovery::several(&store_ids),
-            NookRemoteVaultDiscovery::Several {
-                store_ids: vec![
-                    "store_abcdefghijk".to_owned(),
-                    "store_bcdefghijkl".to_owned()
-                ]
-            }
+            serde_json::to_value(&discovery)?,
+            serde_json::json!({
+                "state": "several",
+                "vaults": [{
+                    "storeId": "store_abcdefghijk",
+                    "shortId": "abcdefgh",
+                    "created": { "state": "unreported" },
+                    "lastActivity": { "state": "unreported" },
+                    "eventCount": 2,
+                    "relation": "other",
+                }],
+            })
         );
         Ok(())
     }

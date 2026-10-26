@@ -10,10 +10,11 @@
 use nook_core::GenesisImportRequest;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
+use std::collections::BTreeMap;
 use std::str;
 
 use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest, ParsedLogEvent};
-use super::drive::wire::{FileIdentity, FileName, PageCompletion};
+use super::drive::wire::{CreatedTime, FileIdentity, FileName, PageCompletion};
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
 
@@ -78,6 +79,8 @@ struct DriveEventFile {
     name: FileName,
     #[serde(default)]
     app_properties: EventAttestation,
+    #[serde(default)]
+    created_time: CreatedTime,
 }
 /// Drive listings can contain unrelated or malformed files. Only admitted rows
 /// participate; strict write metadata below remains a separate contract.
@@ -135,16 +138,23 @@ impl DriveEventStore<'_> {
             ListedEvent::Unrelated
         }
     }
-    fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
-        let mut ids = Vec::new();
+    fn listed_events_from_response(body: &DriveEventListResponse) -> Vec<(String, CreatedTime)> {
+        let mut events = Vec::new();
         for row in &body.files {
             if let DriveEventListRow::File(file) = row
                 && let ListedEvent::Event(id) = Self::drive_listed_event_id(file)
             {
-                ids.push(id);
+                events.push((id, file.created_time.clone()));
             }
         }
-        ids
+        events
+    }
+    #[cfg(test)]
+    fn list_event_ids_from_response(body: &DriveEventListResponse) -> Vec<String> {
+        Self::listed_events_from_response(body)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
     }
     fn list_page_token(body: &DriveEventListResponse) -> PageCompletion {
         body.next_page_token.clone()
@@ -202,6 +212,28 @@ impl DriveEventStore<'_> {
     }
 
     pub(crate) async fn list_drive_event_ids(&self) -> Result<Vec<String>, NookError> {
+        Ok(self
+            .list_drive_events()
+            .await?
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect())
+    }
+
+    /// When Drive created each event file in this namespace: one entry per
+    /// event, read from the listing alone. Duplicate files of one event
+    /// count once.
+    pub(crate) async fn list_drive_event_times(
+        &self,
+    ) -> Result<Vec<nook_core::ProviderVaultTime>, NookError> {
+        let mut events = BTreeMap::new();
+        for (event_id, created) in self.list_drive_events().await? {
+            events.entry(event_id).or_insert(created);
+        }
+        events.values().map(CreatedTime::provider_time).collect()
+    }
+
+    async fn list_drive_events(&self) -> Result<Vec<(String, CreatedTime)>, NookError> {
         let token = self.token;
         let parent = self.parent;
         let token = token.trim();
@@ -210,7 +242,7 @@ impl DriveEventStore<'_> {
             Self::parent_query_fragment(parent)
         );
         let url = format!(
-            "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
+            "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties,createdTime)&pageSize=1000",
             urlencoding::encode(&query)
         );
         let client = Client::new();
@@ -238,7 +270,7 @@ impl DriveEventStore<'_> {
                 .json()
                 .await
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
-            event_ids.extend(Self::list_event_ids_from_response(&body));
+            event_ids.extend(Self::listed_events_from_response(&body));
             page_token = match Self::list_page_token(&body) {
                 PageCompletion::Complete => break,
                 PageCompletion::Continue(token) => DrivePageRequest::Continuation(token),
@@ -682,6 +714,7 @@ mod tests {
             app_properties: EventAttestation::Declared(DriveEventProperties {
                 event_id: format!("sha256u:{digest}"),
             }),
+            created_time: CreatedTime::Unreported,
         };
         assert_eq!(
             DriveEventStore::drive_listed_event_id(&file),
