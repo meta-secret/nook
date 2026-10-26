@@ -315,13 +315,13 @@ for a device invite; accounts are managed on the Sync page it links to.
                 onclick={() => pick(account)}
               >
                 <span
-                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                  class="inline-flex size-[18px] shrink-0 items-center justify-center border-2 {selected
                     ? 'border-foreground'
                     : 'border-muted-foreground/35'}"
                   aria-hidden="true"
                 >
                   {#if selected}
-                    <span class="size-2 rounded-full bg-foreground"></span>
+                    <span class="size-2 bg-foreground"></span>
                   {/if}
                 </span>
                 <span class="min-w-0 flex-1 truncate text-foreground"

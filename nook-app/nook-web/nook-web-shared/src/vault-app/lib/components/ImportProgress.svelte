@@ -30,11 +30,11 @@
         </p>
       </div>
       <div
-        class="h-1.5 overflow-hidden rounded-full bg-primary/20"
+        class="h-1.5 overflow-hidden bg-primary/20"
         role="progressbar"
         aria-label={vault.t(I18N_KEYS.CommonImportProgressTitle)}
       >
-        <div class="h-full w-2/3 animate-pulse rounded-full bg-primary"></div>
+        <div class="h-full w-2/3 animate-pulse bg-primary"></div>
       </div>
     </div>
   </div>

@@ -734,9 +734,13 @@
                 replacements: {
                   provider: setupIs('github')
                     ? 'GitHub'
-                    : setupIs('local-folder')
-                      ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                      : vault.t(I18N_KEYS.OnboardingLocalStorage),
+                    : setupIs('oauth-file')
+                      ? oauthPreset === 'icloud'
+                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
+                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                      : setupIs('local-folder')
+                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                        : vault.t(I18N_KEYS.OnboardingLocalStorage),
                 },
               }
               return vault.t(tArgs)
@@ -756,6 +760,10 @@
         {:else if showSetup && setupIs('github')}
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.OnboardingGithubDescription)}
+          </p>
+        {:else if showSetup && setupIs('oauth-file')}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
           </p>
         {:else if showSetup}
           <p class="text-sm text-pretty text-muted-foreground">

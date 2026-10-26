@@ -24,16 +24,16 @@
 </script>
 
 <section
-  class="overflow-hidden rounded-xl border transition-colors {open
-    ? 'border-primary/25 bg-background shadow-sm sm:border-primary/30'
-    : 'border-border/35 bg-muted/15 sm:border-border/60'}"
+  class="overflow-hidden transition-colors {open
+    ? 'nk-panel'
+    : 'border border-border/60 bg-muted/15'}"
   data-testid={testId}
 >
   <button
     type="button"
-    class="flex w-full items-center gap-3 border-l-2 px-3.5 py-2.5 text-left transition-colors {open
-      ? 'border-l-primary'
-      : 'border-l-transparent hover:bg-muted/25'}"
+    class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none {open
+      ? ''
+      : 'hover:bg-muted/25'}"
     aria-expanded={open}
     {disabled}
     onclick={onToggle}
@@ -62,7 +62,7 @@
 
   {#if open}
     <div
-      class="border-t border-border/25 px-4 pb-4 pt-3 sm:border-border/40 sm:px-5 sm:pb-5 sm:pt-4"
+      class="border-t border-border/60 px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4"
     >
       {@render children?.()}
     </div>

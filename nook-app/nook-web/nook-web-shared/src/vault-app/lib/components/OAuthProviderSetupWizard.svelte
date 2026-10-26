@@ -1,7 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import { RefreshCw, ShieldCheck } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, buttonVariants } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type { OAuthFilePreset } from "$lib/auth/providers";
   import {
@@ -104,18 +104,18 @@
     return vault.t(folderRequest);
   });
 
+  // Sign-in controls are plain elements for the providers' SDKs, so they
+  // take the primary Button's classes rather than the component.
+  const signInButtonVariant: Parameters<typeof buttonVariants>[0] = {
+    variant: "default",
+    size: "sm",
+  };
+  const signInButtonClass = buttonVariants(signInButtonVariant);
   const icloudSignInButtonClass = cn(
-    "ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-    "bg-primary text-primary-foreground hover:bg-primary/90",
-    "h-9 rounded-md px-3",
+    signInButtonClass,
     "absolute inset-0 w-full sm:w-auto",
   );
-  const googleSignInButtonClass = cn(
-    "ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-    "bg-primary text-primary-foreground hover:bg-primary/90",
-    "h-9 rounded-md px-3",
-    "w-full sm:w-auto",
-  );
+  const googleSignInButtonClass = cn(signInButtonClass, "w-full sm:w-auto");
 
   /**
    * Every Drive provider syncs under an ordinary My Drive folder (an iCloud

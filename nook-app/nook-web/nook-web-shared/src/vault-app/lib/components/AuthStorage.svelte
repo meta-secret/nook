@@ -215,7 +215,9 @@
                   type: setupIs('github')
                     ? vault.t(I18N_KEYS.AuthStorageGithub)
                     : setupIs('oauth-file')
-                      ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                      ? oauthPreset === 'icloud'
+                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
+                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
                       : setupIs('local-folder')
                         ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                         : vault.t(I18N_KEYS.AuthStorageThisDevice),

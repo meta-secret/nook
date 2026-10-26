@@ -16,7 +16,7 @@
   --destructive-fg: oklch(0.85 0.08 30);
   --accent: oklch(0.25 0.007 260);
   --success: oklch(0.8 0.05 220);
-  --radius: 0.1875rem;
+  --radius: 0;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   color: var(--foreground);
@@ -389,7 +389,7 @@ body {
   width: fit-content;
   margin: -4px 0 0;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--secondary);
   color: var(--muted-foreground);
   font-size: 12px;
@@ -400,7 +400,7 @@ body {
 .destination-origin {
   margin: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--secondary);
   color: var(--foreground);
   font-size: 13px;
@@ -695,7 +695,7 @@ button:disabled {
   grid-column: 1 / -1;
   margin: 0;
   border: 1px solid var(--destructive-border);
-  border-radius: calc(var(--radius) + 2px);
+  border-radius: var(--radius);
   background: var(--destructive-bg);
   color: var(--destructive-fg);
   font-size: 12px;

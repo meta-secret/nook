@@ -113,7 +113,7 @@
       </p>
     {/if}
     <div
-      class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
+      class="nk-tile nk-tile-lg mx-auto text-foreground"
     >
       {#if needsSetup}
         <ShieldCheck class="size-6" />
