@@ -94,9 +94,14 @@ describe('Google OAuth provider name persistence', () => {
     const oauthActions = new VaultOAuthActions(state)
     await oauthActions.signInWithGoogle()
 
-    // First sign-in asks only for the non-sensitive `drive.file` scope.
+    // First sign-in asks only for the non-sensitive `drive.file` scope and
+    // leaves out earlier grants, so a past `drive.readonly` consent does not
+    // bring back the unverified-app warning.
     expect(tokenRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: GoogleDriveOAuthScope.VaultFolder }),
+      expect.objectContaining({
+        scope: GoogleDriveOAuthScope.VaultFolder,
+        includeGrantedScopes: false,
+      }),
     )
     expect(state.loginSetup).toEqual({
       kind: LoginSetupKind.Active,

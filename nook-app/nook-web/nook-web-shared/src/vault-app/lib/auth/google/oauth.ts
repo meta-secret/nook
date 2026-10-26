@@ -16,9 +16,11 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
  *   the owner authorizing another account. Until Google verifies Nook, that
  *   consent shows the "Google hasn't verified this app" warning.
  *
- * GIS token clients default `include_granted_scopes` to true, so a later
- * `VaultFolder` refresh returns a token that still covers `drive.readonly`
- * once the account granted it.
+ * A new provider sign-in sends `include_granted_scopes: false`: an account
+ * that granted `drive.readonly` earlier would otherwise fold that restricted
+ * grant back into the consent and get the unverified-app warning again. A
+ * silent refresh and the shared requests keep earlier grants, so a refreshed
+ * token still covers `drive.readonly` once the account granted it.
  */
 
 import type {
@@ -90,6 +92,8 @@ export type GoogleTokenPromptRequest = {
   readonly prompt: string;
   /** The account Google preselects; empty lets the user choose. */
   readonly login_hint: string;
+  /** False asks Google for exactly the requested scopes, without earlier grants. */
+  readonly include_granted_scopes: boolean;
 };
 
 type TokenClient = {
@@ -100,6 +104,8 @@ export type GoogleAccessTokenRequest = {
   readonly prompt: GoogleOAuthPrompt;
   readonly scope: GoogleDriveOAuthScope;
   readonly accountHint: string;
+  /** Whether the token also carries scopes the account granted before. */
+  readonly includeGrantedScopes: boolean;
 };
 
 export type GoogleSharedDriveAccessRequest = {
@@ -344,6 +350,7 @@ class GoogleOAuthSession {
         const promptRequest: GoogleTokenPromptRequest = {
           prompt: request.prompt,
           login_hint: request.accountHint.trim(),
+          include_granted_scopes: request.includeGrantedScopes,
         };
         slot.client.requestAccessToken(promptRequest);
       } catch {
@@ -360,6 +367,7 @@ class GoogleOAuthSession {
       prompt: request.prompt,
       scope: GoogleDriveOAuthScope.Shared,
       accountHint: request.accountHint,
+      includeGrantedScopes: true,
     };
     return this.requestGoogleAccessToken(accessRequest);
   }
@@ -403,6 +411,7 @@ class GoogleOAuthSession {
       scope: GoogleDriveOAuthScope.VaultFolder,
       accountHint:
         config.accountEmail.state === "email" ? config.accountEmail.value : "",
+      includeGrantedScopes: true,
     };
     const refreshed = await this.requestGoogleAccessToken(accessRequest);
     return refreshed.andThen((tokens) => {

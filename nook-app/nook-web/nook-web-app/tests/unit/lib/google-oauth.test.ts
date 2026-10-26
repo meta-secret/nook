@@ -128,6 +128,7 @@ describe('google-oauth', () => {
     const promptRequest: GoogleTokenPromptRequest = {
       prompt: GoogleOAuthPrompt.Default,
       login_hint: 'owner@example.com',
+      include_granted_scopes: true,
     }
     expect(requests.get(DRIVE_FILE_SCOPE)).toHaveBeenCalledWith(promptRequest)
     const callback = callbacks.get(DRIVE_FILE_SCOPE)
@@ -162,6 +163,7 @@ describe('google-oauth', () => {
     const promptRequest: GoogleTokenPromptRequest = {
       prompt: GoogleOAuthPrompt.Consent,
       login_hint: 'member@example.com',
+      include_granted_scopes: true,
     }
     expect(requests.get(sharedScope)).toHaveBeenCalledWith(promptRequest)
     const callback = callbacks.get(sharedScope)

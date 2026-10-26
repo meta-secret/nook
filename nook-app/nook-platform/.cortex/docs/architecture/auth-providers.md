@@ -211,9 +211,13 @@ Writes remain limited to app-created files below the vault folder.
   only when it is needed: a joiner accepting an onboarding link, and the
   owner authorizing another account. The owner's provider keeps the token
   that grant returns.
-- **Refresh:** GIS token clients default `include_granted_scopes` to true.
-  A `drive.file` refresh therefore still covers `drive.readonly` once the
-  account granted it, without another consent screen.
+- **Earlier grants:** A new provider sign-in sends
+  `include_granted_scopes: false`. Otherwise an account that once granted
+  `drive.readonly` folds that restricted grant back into the consent and
+  sees the unverified-app warning again. Silent refresh and the shared
+  requests send `true`, so a `drive.file` refresh still covers
+  `drive.readonly` once the account granted it, without another consent
+  screen.
 - **Verification:** Until Google verifies Nook, consenting to
   `drive.readonly` shows the "Google hasn't verified this app" warning. The
   single-account path never shows it.

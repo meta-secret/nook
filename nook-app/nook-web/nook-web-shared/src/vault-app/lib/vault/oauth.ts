@@ -242,6 +242,8 @@ export class VaultOAuthActions {
         // account joins or is authorized.
         scope: GoogleDriveOAuthScope.VaultFolder,
         accountHint: "",
+        // Earlier `drive.readonly` grants would bring back the warning.
+        includeGrantedScopes: false,
       };
       const tokens =
         await googleOAuthSession.requestGoogleAccessToken(tokenRequest);
