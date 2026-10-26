@@ -45,7 +45,8 @@ test('Google Drive setup names its vault folder behind the demo-origin gate and 
     timeout: UI_TIMEOUT_MS,
   })
   await expect(page.getByTestId('cancel-provider-setup')).toBeVisible()
-  // Connect & sync waits for sign-in; it creates the My Drive vault folder.
+  // Connect & sync waits for sign-in; it reuses the named My Drive vault
+  // folder and creates it only when none exists.
   await expect(page.getByTestId('google-setup-sync-step')).toBeVisible()
   await page.getByTestId('drive-file-input').fill('Nook Demo Vault')
   await expect(page.getByTestId('drive-file-input')).toHaveValue(
