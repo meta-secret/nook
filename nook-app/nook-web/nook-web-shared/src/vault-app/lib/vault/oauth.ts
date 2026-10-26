@@ -33,7 +33,7 @@ import {
   type OAuthFileConfig,
   type StoredOAuthFileConfiguration,
 } from "$lib/auth/providers";
-import { create_google_drive_vault_folder } from "$app-wasm";
+import { connect_google_drive_vault_folder } from "$app-wasm";
 import {
   GoogleAccountIdentityKind,
   GoogleDriveOAuthScope,
@@ -83,6 +83,24 @@ interface OAuthOriginRequirement {
 }
 
 interface GoogleTokenApplication {
+  readonly tokens: GoogleOAuthTokens;
+}
+
+export enum GoogleVaultFolderOrigin {
+  /** Connect & sync created the folder. */
+  Created = "created",
+  /** The folder already existed; sync keeps the encrypted events in it. */
+  Existing = "existing",
+}
+
+interface GoogleVaultFolderConnection {
+  readonly name: string;
+  readonly origin: GoogleVaultFolderOrigin;
+}
+
+interface GoogleProviderTokenAdoption {
+  /** The saved provider the tokens were granted for. */
+  readonly config: OAuthFileConfig;
   readonly tokens: GoogleOAuthTokens;
 }
 
@@ -220,7 +238,9 @@ export class VaultOAuthActions {
         typeof googleOAuthSession.requestGoogleAccessToken
       >[0] = {
         prompt: GoogleOAuthPrompt.Consent,
-        scope: GoogleDriveOAuthScope.Shared,
+        // Least privilege: `drive.readonly` is requested only when another
+        // account joins or is authorized.
+        scope: GoogleDriveOAuthScope.VaultFolder,
         accountHint: "",
       };
       const tokens =
@@ -263,7 +283,13 @@ export class VaultOAuthActions {
     return ok(OAuthOperationOutcome.ICloudSharedProviderCreated);
   }
 
-  async createGoogleVaultFolder(): Promise<Result<string, OAuthFailure>> {
+  /**
+   * Bind the draft to the My Drive folder named in setup: the one existing
+   * folder with that name, or a new one when none exists.
+   */
+  async connectGoogleVaultFolder(): Promise<
+    Result<GoogleVaultFolderConnection, OAuthFailure>
+  > {
     const state = this.state;
     if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) {
       return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
@@ -281,12 +307,22 @@ export class VaultOAuthActions {
         : DEFAULT_DRIVE_BACKUP_NAME;
     let folder;
     try {
-      folder = await create_google_drive_vault_folder(
+      folder = await connect_google_drive_vault_folder(
         accessCredential.token,
         folderName,
       );
-    } catch {
-      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedCreation));
+    } catch (failure) {
+      const message =
+        failure instanceof Error ? failure.message : String(failure);
+      return err(
+        new OAuthFailure(
+          message.includes(
+            I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous,
+          )
+            ? OAuthFailureKind.GoogleVaultFolderAmbiguous
+            : OAuthFailureKind.GoogleSharedCreation,
+        ),
+      );
     }
     let bound;
     try {
@@ -295,7 +331,65 @@ export class VaultOAuthActions {
       return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
     state.configureOauthFile(bound);
-    return ok(folder.name);
+    const connection: GoogleVaultFolderConnection = {
+      name: folder.name,
+      origin: folder.existed
+        ? GoogleVaultFolderOrigin.Existing
+        : GoogleVaultFolderOrigin.Created,
+    };
+    return ok(connection);
+  }
+
+  /**
+   * Keep tokens an incremental Drive grant returned on the provider they were
+   * granted for, so its sync reads other accounts' events at once.
+   */
+  async adoptGoogleProviderTokens({
+    config,
+    tokens,
+  }: GoogleProviderTokenAdoption): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure | VaultStorageFailure>
+  > {
+    const state = this.state;
+    const update: Parameters<typeof googleOAuthSession.oauthTokensToConfig>[0] =
+      { tokens, existing: configuredOAuthFile(config) };
+    const converted = googleOAuthSession.oauthTokensToConfig(update);
+    if (converted.isErr()) return err(converted.error);
+    const refreshed = converted.value;
+    const savedProviderLookup: Parameters<typeof findDuplicateSyncProvider>[0] =
+      {
+        providers: state.syncProviders,
+        candidate: {
+          ...providerPersistenceDefaults(),
+          id: "oauth-grant-target",
+          type: OAUTH_FILE_PROVIDER_TYPE,
+          label: "",
+          oauthFile: configuredOAuthFile(refreshed),
+          createdAt: "",
+        },
+      };
+    const saved = findDuplicateSyncProvider(savedProviderLookup);
+    if (saved.state === "duplicate") {
+      const persistence: Parameters<typeof state.persistProviders>[0] = {
+        replace: false,
+        providers: state.providers.map((provider) =>
+          provider.id === saved.provider.id
+            ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
+            : provider,
+        ),
+      };
+      const persisted = await state.persistProviders(persistence);
+      if (persisted.isErr()) return err(persisted.error);
+    }
+    const draft = state.oauthFileDraft;
+    if (
+      draft.kind === OAuthFileDraftKind.Configured &&
+      draft.config.folderId.state === "folderId" &&
+      config.folderId.state === "folderId" &&
+      draft.config.folderId.value === config.folderId.value
+    )
+      state.configureOauthFile(refreshed);
+    return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 
   async signInWithICloud({

@@ -180,10 +180,11 @@ credentials grant storage access only.
 
 - **Google Drive:** Every provider is shared, independently of vault
   architecture. It syncs under one visible My Drive vault folder
-  (`drive.file` plus `drive.readonly`).
+  (`drive.file`; `drive.readonly` only for reads across accounts).
 
-    1. The owner creates or connects the vault folder. Creating it shares the
-       folder with no other account.
+    1. The owner connects the vault folder: an existing folder with the setup
+       name is reused, otherwise it is created and shared with no other
+       account.
     2. The owner authorizes another Google account on the folder
        (`permissions.create`, writer role) in the Authorized accounts panel.
     3. A device invite names that authorized account and the folder target

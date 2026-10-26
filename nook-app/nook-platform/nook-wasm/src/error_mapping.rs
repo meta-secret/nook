@@ -64,6 +64,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AuthorizedAccountReadOnly
             | ValidationError::AuthorizedAccountExists
             | ValidationError::AuthorizedAccountOwner
+            | ValidationError::GoogleDriveVaultFolderAmbiguous
             | ValidationError::JoinerAccountMismatch
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }

@@ -200,18 +200,37 @@ TypeScript owns browser integration:
 
 Every Google Drive provider is shared. It syncs under one visible My Drive
 folder, the vault folder, independently of vault replication or membership.
-Provider setup requests `drive.file` for app-created writes plus
-`drive.readonly`. Drive authorizes `drive.file` per user, so authorized
-accounts need read access to folders and event files created by another
-account. Writes remain limited to app-created files below the vault folder.
+Writes remain limited to app-created files below the vault folder.
+
+- **Scopes:** Sign-in and silent refresh request only the non-sensitive
+  `drive.file` scope. It opens, creates, and shares the vault folder and
+  reads and writes the event files this app created for the account.
+- **Cross-account reads:** Drive authorizes `drive.file` per user, so an
+  account cannot read event files another account created. The restricted
+  `drive.readonly` scope is requested incrementally, from the user's click,
+  only when it is needed: a joiner accepting an onboarding link, and the
+  owner authorizing another account. The owner's provider keeps the token
+  that grant returns.
+- **Refresh:** GIS token clients default `include_granted_scopes` to true.
+  A `drive.file` refresh therefore still covers `drive.readonly` once the
+  account granted it, without another consent screen.
+- **Verification:** Until Google verifies Nook, consenting to
+  `drive.readonly` shows the "Google hasn't verified this app" warning. The
+  single-account path never shows it.
 
 - **Target:** The row persists the folder's stable Drive ID in `folderId`.
   Its connect reference is `shared:{folderId}`. The identity log and each vault
   live in their own namespace folder inside it.
-- **Setup:** Setup step 2 either creates the folder with
-  `create_google_drive_vault_folder` or connects an existing folder ID or URL
-  with `verify_shared_google_drive_folder`. Creating the folder shares it with
-  no other account.
+- **Setup:** Setup step 2 connects the folder named in setup with
+  `connect_google_drive_vault_folder`. It looks up the account's owned,
+  untrashed My Drive root folders with that name. With `drive.file` alone,
+  Drive reports only folders Nook created.
+  - No match creates the folder. A new folder is shared with no other account.
+  - One match reuses that folder. Sync keeps its encrypted events: event
+    writes add content-addressed files only when absent, and the setup wizard
+    tells the user it found the existing folder.
+  - Several matches fail with `GoogleDriveVaultFolderAmbiguous` rather than
+    guessing. Rust `DriveVaultFolderLookup` owns this decision.
 - **Incomplete rows:** A signed-in Drive provider without a folder is not
   connectable. Its staged connection reports `Incomplete`, and connect
   arguments for a saved row fail with `SharedStorageTargetRequired`.

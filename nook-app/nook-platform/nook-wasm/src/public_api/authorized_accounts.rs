@@ -1,7 +1,7 @@
 //! Shared provider targets and the accounts authorized to reach them.
 //!
-//! Google Drive and iCloud providers are always shared. These exports create
-//! the Drive vault folder and manage its authorized accounts; the account
+//! Google Drive and iCloud providers are always shared. These exports open or
+//! create the Drive vault folder and manage its authorized accounts; the account
 //! lists themselves are the providers' own sharing state.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
@@ -31,17 +31,19 @@ impl AccountListOutput<'_> {
     }
 }
 
-/// Create the My Drive folder a new Google Drive provider syncs under. Only
-/// the signed-in account has access until accounts are authorized.
+/// Open the My Drive folder a new Google Drive provider syncs under: the one
+/// folder with this name when it exists, otherwise a new folder only the
+/// signed-in account can reach until accounts are authorized. Several folders
+/// with the name fail with `GoogleDriveVaultFolderAmbiguous`.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn create_google_drive_vault_folder(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn connect_google_drive_vault_folder(
     access_token: &str,
     folder_name: &str,
 ) -> Result<NookGoogleDriveFolder, wasm_bindgen::JsError> {
-    let (id, name) = DriveStorageClient::new(access_token)
-        .create_shared_vault_folder(folder_name)
+    let folder = DriveStorageClient::new(access_token)
+        .connect_vault_folder(folder_name)
         .await?;
-    Ok(NookGoogleDriveFolder::new(id, name))
+    Ok(NookGoogleDriveFolder::new(folder.id, folder.name, folder.existed))
 }
 
 /// The individual Google accounts the vault folder is shared with.

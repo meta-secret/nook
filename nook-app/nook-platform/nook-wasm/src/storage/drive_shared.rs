@@ -1,5 +1,6 @@
-//! Google Drive vault folder helpers (`drive.file` writes plus
-//! `drive.readonly` for cross-account event reads).
+//! Google Drive vault folder helpers. Opening, creating, and sharing the
+//! folder need only `drive.file`; reading events other authorized accounts
+//! created there also needs `drive.readonly`.
 //!
 //! Every Drive provider syncs under one My Drive folder. Its Drive
 //! permissions are the provider's authorized accounts: sharing the folder
@@ -24,6 +25,23 @@ struct DriveFolderPermissionRequest<'a> {
     permission_type: &'static str,
     role: &'static str,
     email_address: &'a str,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveVaultFolderListResponse {
+    #[serde(default)]
+    files: Vec<nook_core::DriveVaultFolderObservation>,
+    #[serde(default)]
+    next_page_token: Option<String>,
+}
+
+/// The vault folder Connect & sync bound the provider to.
+pub(crate) struct DriveVaultFolderConnection {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    /// The folder existed before this connect; its events are kept.
+    pub(crate) existed: bool,
 }
 
 #[derive(Deserialize)]
@@ -53,6 +71,16 @@ impl DriveStorageClient<'_> {
 }
 
 impl DriveStorageClient<'_> {
+    /// My Drive root folders this account owns with exactly this name. With
+    /// `drive.file` alone Drive reports only folders Nook created.
+    fn vault_folder_query(name: &str) -> String {
+        let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
+        format!(
+            "name = '{escaped_name}' and mimeType = '{}' and 'root' in parents and 'me' in owners and trashed = false",
+            nook_core::DRIVE_FOLDER_MIME_TYPE
+        )
+    }
+
     fn shared_folder_name(name: &str) -> &str {
         let trimmed = name.trim();
         if trimmed.is_empty() {
@@ -87,15 +115,81 @@ impl DriveStorageClient<'_> {
     }
 }
 
-/// Create a My Drive folder for a shared vault. Requires `drive.file` scope.
+/// Open the My Drive vault folder with this name, creating it only when none
+/// exists. Requires `drive.file` scope.
 impl DriveStorageClient<'_> {
-    pub(crate) async fn create_shared_vault_folder(
+    pub(crate) async fn connect_vault_folder(
         &self,
         name: &str,
-    ) -> Result<(String, String), NookError> {
-        let access_token = self.as_str();
-        let token = nook_core::OauthAccessToken::parse(access_token)?;
+    ) -> Result<DriveVaultFolderConnection, NookError> {
         let folder_name = DriveStorageClient::shared_folder_name(name);
+        let folders = self.list_vault_folders(folder_name).await?;
+        let selection = nook_core::DriveVaultFolderLookup {
+            name: folder_name,
+            folders: &folders,
+        }
+        .select()?;
+        if let nook_core::DriveVaultFolderSelection::Existing(folder_id) = selection {
+            return Ok(DriveVaultFolderConnection {
+                id: folder_id.into_inner(),
+                name: folder_name.to_owned(),
+                existed: true,
+            });
+        }
+        let (id, name) = self.create_vault_folder(folder_name).await?;
+        Ok(DriveVaultFolderConnection {
+            id,
+            name,
+            existed: false,
+        })
+    }
+
+    async fn list_vault_folders(
+        &self,
+        folder_name: &str,
+    ) -> Result<Vec<nook_core::DriveVaultFolderObservation>, NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
+        let query = DriveStorageClient::vault_folder_query(folder_name);
+        let mut page_token: Option<String> = None;
+        let mut folders = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get("https://www.googleapis.com/drive/v3/files")
+                .query(&[
+                    ("q", query.as_str()),
+                    ("fields", "nextPageToken,files(id,name,mimeType)"),
+                    ("pageSize", "100"),
+                    ("spaces", "drive"),
+                ])
+                .header("Authorization", format!("Bearer {}", token.as_ref()));
+            if let Some(page) = page_token.as_deref() {
+                request = request.query(&[("pageToken", page)]);
+            }
+            let response = request.send().await?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(DriveStorageClient::shared_drive_error(
+                    DriveStorageClientSharedDriveError {
+                        status,
+                        body: &body,
+                    },
+                ));
+            }
+            let parsed: DriveVaultFolderListResponse = response.json().await.map_err(|error| {
+                NookError::Serialization(format!("Failed to parse Drive folder list: {error}"))
+            })?;
+            folders.extend(parsed.files);
+            page_token = parsed.next_page_token;
+            if page_token.is_none() {
+                return Ok(folders);
+            }
+        }
+    }
+
+    async fn create_vault_folder(&self, folder_name: &str) -> Result<(String, String), NookError> {
+        let token = nook_core::OauthAccessToken::parse(self.as_str())?;
         let client = &self.client;
         let response = client
             .post("https://www.googleapis.com/drive/v3/files")
@@ -104,7 +198,7 @@ impl DriveStorageClient<'_> {
             .header("Content-Type", "application/json")
             .json(&DriveFolderCreateRequest {
                 name: folder_name,
-                mime_type: "application/vnd.google-apps.folder",
+                mime_type: nook_core::DRIVE_FOLDER_MIME_TYPE,
             })
             .send()
             .await?;
@@ -315,6 +409,26 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    fn vault_folder_lookup_scopes_to_owned_root_folders_and_escapes_the_name() {
+        assert_eq!(
+            DriveStorageClient::vault_folder_query("Bob's \\ vault"),
+            "name = 'Bob\\'s \\\\ vault' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and 'me' in owners and trashed = false"
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn vault_folder_list_response_accepts_missing_fields() -> anyhow::Result<()> {
+        let listed: DriveVaultFolderListResponse = serde_json::from_str(
+            r#"{"files":[{"id":"folder-1","name":"nook-events","mimeType":"application/vnd.google-apps.folder"}],"nextPageToken":"next"}"#,
+        )?;
+        assert_eq!(listed.files.len(), 1);
+        assert_eq!(listed.next_page_token.as_deref(), Some("next"));
+        let empty: DriveVaultFolderListResponse = serde_json::from_str("{}")?;
+        assert!(empty.files.is_empty() && empty.next_page_token.is_none());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn shared_folder_name_trims_and_defaults() {
         assert_eq!(
             DriveStorageClient::shared_folder_name("  Family vault  "),
@@ -366,7 +480,7 @@ mod browser_tests {
     async fn shared_drive_input_guards_fail_before_network_access() -> anyhow::Result<()> {
         assert!(
             DriveStorageClient::new("")
-                .create_shared_vault_folder("Shared")
+                .connect_vault_folder("Shared")
                 .await
                 .is_err()
         );

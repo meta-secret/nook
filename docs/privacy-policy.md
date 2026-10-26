@@ -44,8 +44,8 @@ If you self-host or deploy Nook, **you** control the hosting environment. This p
 
 If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token** with these scopes:
 
-- `https://www.googleapis.com/auth/drive.file` — Nook creates or connects a dedicated **vault folder** in your My Drive and syncs encrypted event files under that folder. Nook writes only app-created files in that folder.
-- `https://www.googleapis.com/auth/drive.readonly` — required because Google authorizes `drive.file` per user, so an authorized account cannot otherwise read files created by another account.
+- `https://www.googleapis.com/auth/drive.file` — requested at sign-in. Nook opens an existing dedicated **vault folder** in your My Drive, or creates it when none exists, and syncs encrypted event files under that folder. Nook writes only app-created files in that folder.
+- `https://www.googleapis.com/auth/drive.readonly` — requested only when the vault folder is shared across Google accounts: when you authorize another account, or when a device joins with an onboarding link. Google authorizes `drive.file` per user, so an authorized account cannot otherwise read files created by another account. Until Google verifies Nook, Google shows an unverified-app warning for this step.
 
 The vault folder is **visible in your Google Drive**. Nook shares it only with the Google accounts you authorize. Nook reads the folder's sharing permissions, including the email addresses of accounts with access, to show and manage authorized accounts.
 

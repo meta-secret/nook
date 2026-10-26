@@ -10,8 +10,11 @@
  *   https://simple.nokey.sh, https://sentinel.nokey.sh,
  *   https://simple.dev.nokey.sh, https://sentinel.dev.nokey.sh
  * - OAuth consent screen scopes:
- *   - Vault folder writes: https://www.googleapis.com/auth/drive.file
- *   - Reads of events other authorized accounts created: https://www.googleapis.com/auth/drive.readonly
+ *   - Sign-in and refresh, the vault folder and the files Nook created
+ *     (non-sensitive): https://www.googleapis.com/auth/drive.file
+ *   - Requested only when another account joins or is authorized, to read
+ *     events that account created (restricted; shows the unverified-app
+ *     warning until Google verifies Nook): https://www.googleapis.com/auth/drive.readonly
  *
  * Redirect URIs are not used by the GIS token client flow.
  */

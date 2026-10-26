@@ -153,6 +153,10 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHORIZED_ACCOUNT_OWNER)]
     AuthorizedAccountOwner,
 
+    /// Several My Drive folders carry the vault-folder name; Nook does not guess.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_GOOGLE_DRIVE_VAULT_FOLDER_AMBIGUOUS)]
+    GoogleDriveVaultFolderAmbiguous,
+
     #[error("{}", i18n_keys::ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH)]
     JoinerAccountMismatch,
 

@@ -410,6 +410,10 @@ pub const AUTHORIZED_ACCOUNTS_ADD_LABEL: &str = "authorized_accounts.add_label";
 pub const AUTHORIZED_ACCOUNTS_ADD_PLACEHOLDER: &str = "authorized_accounts.add_placeholder";
 pub const AUTHORIZED_ACCOUNTS_ADDING: &str = "authorized_accounts.adding";
 pub const AUTHORIZED_ACCOUNTS_DRIVE_DESCRIPTION: &str = "authorized_accounts.drive_description";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_READ_ACCESS_HINT: &str =
+    "authorized_accounts.drive_read_access_hint";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_READ_ACCESS_REQUIRED: &str =
+    "authorized_accounts.drive_read_access_required";
 pub const AUTHORIZED_ACCOUNTS_EMPTY: &str = "authorized_accounts.empty";
 pub const AUTHORIZED_ACCOUNTS_ICLOUD_DESCRIPTION: &str = "authorized_accounts.icloud_description";
 pub const AUTHORIZED_ACCOUNTS_LOAD_FAILED: &str = "authorized_accounts.load_failed";
@@ -743,6 +747,8 @@ pub const ERRORS_VALIDATION_GITHUB_PAT_EMPTY: &str = "errors.validation.github_p
 pub const ERRORS_VALIDATION_GITHUB_REPO_CHARS: &str = "errors.validation.github_repo_chars";
 pub const ERRORS_VALIDATION_GITHUB_REPO_INVALID: &str = "errors.validation.github_repo_invalid";
 pub const ERRORS_VALIDATION_GITHUB_REPO_LENGTH: &str = "errors.validation.github_repo_length";
+pub const ERRORS_VALIDATION_GOOGLE_DRIVE_VAULT_FOLDER_AMBIGUOUS: &str =
+    "errors.validation.google_drive_vault_folder_ambiguous";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_DATE_INVALID: &str =
     "errors.validation.identity_document_date_invalid";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE: &str =
@@ -2165,6 +2171,7 @@ pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
+pub const PROVIDER_SETUP_GOOGLE_FOLDER_EXISTING: &str = "provider_setup.google_folder_existing";
 pub const PROVIDER_SETUP_GOOGLE_FOLDER_ON_CONNECT: &str = "provider_setup.google_folder_on_connect";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";

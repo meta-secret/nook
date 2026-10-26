@@ -1049,6 +1049,7 @@
       "authorized_account_read_only": "That account can only read the vault. Give it write access before adding a device with it.",
       "authorized_account_exists": "That account already has access.",
       "authorized_account_owner": "The owner's access cannot be removed.",
+      "google_drive_vault_folder_ambiguous": "Your Google Drive has more than one Nook vault folder with this name. Rename or remove the extra folders, or enter a different folder name, then try again.",
       "joiner_account_mismatch": "Sign in with the account named in the onboarding link.",
       "unknown_vault_application": "Unknown vault application: {application}",
       "vault_application_type_mismatch": "The {application} application cannot open a {vault_type} vault.",
@@ -1608,8 +1609,9 @@
     "google_signed_in_as": "Signed in as {account}",
     "google_tokens_local_desc": "OAuth tokens stay in this browser only, like a saved GitHub token.",
     "google_shared_sign_in_first": "Sign in with Google before configuring the vault folder.",
-    "google_shared_create_failed": "Could not create the Google Drive vault folder.",
-    "google_folder_on_connect": "Connect & sync creates the folder “{folder}” in your Google Drive and keeps the encrypted vault there. Share it later by authorizing more Google accounts.",
+    "google_shared_create_failed": "Could not open or create the Google Drive vault folder.",
+    "google_folder_on_connect": "Connect & sync uses the folder “{folder}” in your Google Drive, creating it only if it does not exist yet, and keeps the encrypted vault there. Share it later by authorizing more Google accounts.",
+    "google_folder_existing": "Nook found your existing Google Drive folder “{folder}” and syncs with the encrypted vault data already in it. Syncing only adds new encrypted records; it never overwrites the data there.",
     "google_oauth_unconfigured": "Google sign-in is not configured. Set GOOGLE_OAUTH_CLIENT_ID in auth/google/config.ts.",
     "oauth_preview_origin_unsupported": "OAuth sign-in is disabled on PR preview origin {origin}. Google and Apple require exact registered origins; use production or local dev to test this provider.",
     "oauth_origin_unsupported": "OAuth sign-in is not enabled for {origin}. Add this exact origin to the provider console before testing this provider here.",
@@ -2495,6 +2497,8 @@
     "remove_failed": "Could not remove that account's access.",
     "manage_failed": "Could not open the iCloud sharing sheet.",
     "sign_in_required": "Sign in to this provider again to manage its accounts.",
+    "drive_read_access_hint": "Authorizing an account asks Google to let Nook read the vault files that account adds to this folder. Until Google verifies Nook, Google shows an unverified-app warning for this step.",
+    "drive_read_access_required": "Approve Google's request to read the vault files other accounts add to this folder, then authorize the account again.",
     "target_required": "Create or connect the vault folder before authorizing accounts."
   }
 }

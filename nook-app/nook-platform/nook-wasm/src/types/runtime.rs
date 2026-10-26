@@ -115,11 +115,12 @@ pub type NookStorageConnectArgs = nook_core::StorageConnectArgs;
 pub struct NookGoogleDriveFolder {
     id: String,
     name: String,
+    existed: bool,
 }
 
 impl NookGoogleDriveFolder {
-    pub(crate) fn new(id: String, name: String) -> Self {
-        Self { id, name }
+    pub(crate) fn new(id: String, name: String, existed: bool) -> Self {
+        Self { id, name, existed }
     }
 }
 
@@ -135,6 +136,13 @@ impl NookGoogleDriveFolder {
     #[must_use]
     pub fn name(&self) -> String {
         self.name.clone()
+    }
+
+    /// The folder existed before Connect & sync; its encrypted events stay.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn existed(&self) -> bool {
+        self.existed
     }
 }
 
@@ -324,9 +332,10 @@ mod tests {
         assert_eq!(args.pat, "");
         assert_eq!(args.repo, "");
 
-        let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned());
+        let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned(), true);
         assert_eq!(folder.id(), "folder-1");
         assert_eq!(folder.name(), "Vault");
+        assert!(folder.existed());
         Ok(())
     }
 
@@ -397,9 +406,10 @@ mod browser_tests {
         assert_eq!(args.pat, "pat");
         assert_eq!(args.repo, "owner/repo");
 
-        let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into());
+        let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into(), false);
         assert_eq!(folder.id(), "folder");
         assert_eq!(folder.name(), "Vault");
+        assert!(!folder.existed());
 
         for (mode, local, dev, prod) in [
             (NookClientRunMode::Local, true, false, false),

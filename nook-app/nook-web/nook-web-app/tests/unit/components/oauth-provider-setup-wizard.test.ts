@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
+import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import {
@@ -9,7 +10,8 @@ import {
   storedOAuthCredential,
   type OAuthFileConfig,
 } from '$lib/auth/providers'
-import { VaultOAuthActions } from '$lib/vault/oauth'
+import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
 
 afterEach(() => vi.restoreAllMocks())
@@ -37,15 +39,17 @@ function renderWizard(config: OAuthFileConfig) {
     onCancelSetup: vi.fn(),
     onConnect,
   } satisfies ComponentProps<typeof OAuthProviderSetupWizard>
-  return { view: render(OAuthProviderSetupWizard, props), onConnect }
+  return { view: render(OAuthProviderSetupWizard, props), onConnect, vault }
 }
 
 describe('Google Drive provider setup', () => {
-  test('offers no folder choice; connecting creates the vault folder first', async () => {
-    const create = vi
-      .spyOn(VaultOAuthActions.prototype, 'createGoogleVaultFolder')
-      .mockResolvedValue(ok('Team Vault'))
-    const { view, onConnect } = renderWizard(signedInDrive())
+  test('offers no folder choice; connecting opens or creates the vault folder first', async () => {
+    const connect = vi
+      .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
+      .mockResolvedValue(
+        ok({ name: 'Team Vault', origin: GoogleVaultFolderOrigin.Created }),
+      )
+    const { view, onConnect, vault } = renderWizard(signedInDrive())
 
     expect(view.queryAllByRole('radio')).toHaveLength(0)
     expect(view.getByTestId('google-folder-on-connect').textContent).toContain(
@@ -54,13 +58,60 @@ describe('Google Drive provider setup', () => {
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
-    expect(create).toHaveBeenCalledOnce()
+    expect(connect).toHaveBeenCalledOnce()
+    expect(view.queryAllByTestId('google-folder-existing')).toHaveLength(0)
+    expect(vault.successMsg).toBe('')
+  })
+
+  test('says it found the existing folder and syncs with its data', async () => {
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'connectGoogleVaultFolder',
+    ).mockResolvedValue(
+      ok({ name: 'nook-events', origin: GoogleVaultFolderOrigin.Existing }),
+    )
+    const { view, onConnect, vault } = renderWizard(signedInDrive())
+    const noticeRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderSetupGoogleFolderExisting,
+      replacements: { folder: 'nook-events' },
+    }
+    const notice = vault.t(noticeRequest)
+
+    await fireEvent.click(view.getByTestId('connect-provider-btn'))
+
+    await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(view.getByTestId('google-folder-existing').textContent).toBe(
+        notice,
+      ),
+    )
+    // The notice outlives the wizard once the provider is connected.
+    expect(vault.successMsg).toBe(notice)
+  })
+
+  test('shows why it will not choose between several folders', async () => {
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'connectGoogleVaultFolder',
+    ).mockResolvedValue(
+      err(new OAuthFailure(OAuthFailureKind.GoogleVaultFolderAmbiguous)),
+    )
+    const { view, onConnect, vault } = renderWizard(signedInDrive())
+
+    await fireEvent.click(view.getByTestId('connect-provider-btn'))
+
+    await vi.waitFor(() =>
+      expect(vault.errorMsg).toBe(
+        vault.t(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous),
+      ),
+    )
+    expect(onConnect).not.toHaveBeenCalled()
   })
 
   test('reuses the vault folder the provider already has', async () => {
     const create = vi.spyOn(
       VaultOAuthActions.prototype,
-      'createGoogleVaultFolder',
+      'connectGoogleVaultFolder',
     )
     const { view, onConnect } = renderWizard(
       signedInDriveWithFolder('vault-folder'),

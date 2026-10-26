@@ -54,8 +54,9 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, sync_provider_credentials, sync_provider_store, validation, vault_sync,
-    vault_sync_conflict, vault_sync_session, vault_sync_state, vault_sync_store,
+    authorized_accounts, drive_vault_folder, sync_provider_credentials, sync_provider_store,
+    validation, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
+    vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -345,6 +346,10 @@ pub use authorized_accounts::{
     AuthorizedAccount, AuthorizedAccountEmail, AuthorizedAccountList, AuthorizedAccountRole,
     AuthorizedAccountStatus, DrivePermissionObservation, ICloudParticipantObservation,
     ICloudShareObservation, JoinerAccountCheck,
+};
+pub use drive_vault_folder::{
+    DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
+    DriveVaultFolderSelection,
 };
 pub use secrets::SecretRecordFilter;
 pub use session::{

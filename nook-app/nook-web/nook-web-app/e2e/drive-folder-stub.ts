@@ -47,6 +47,9 @@ const PERMISSIONS_URL_PATTERN =
   /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/([^/]+)\/permissions(?:\/([^/]+))?$/
 const FOLDER_URL_PATTERN =
   /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/([^/]+)$/
+/** Connect & sync looking up the owned My Drive root folder by name. */
+const VAULT_FOLDER_LOOKUP_PATTERN =
+  /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and 'root' in parents and 'me' in owners and trashed = false$/
 
 function sameAccount(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase()
@@ -98,6 +101,14 @@ export function createDriveVaultFolders(idPrefix: string) {
       headers: CORS_HEADERS,
       body: JSON.stringify(body),
     })
+  }
+
+  function isOwner(folder: DriveVaultFolder, accountEmail: string) {
+    return folder.permissions.some(
+      (permission) =>
+        permission.role === DriveFolderRole.Owner &&
+        sameAccount(permission.emailAddress, accountEmail),
+    )
   }
 
   async function notFound(route: Route) {
@@ -219,6 +230,23 @@ export function createDriveVaultFolders(idPrefix: string) {
      */
     async handle(request: DriveFolderRequest): Promise<boolean> {
       const { route, url, fullUrl, method, accountEmail } = request
+      if (url === DRIVE_FILES_URL && method === 'GET') {
+        const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
+        const lookup = query.match(VAULT_FOLDER_LOOKUP_PATTERN)
+        if (!lookup) return false
+        const name = ((v) => (v ? v : ''))(lookup[1]).replace(/\\(.)/g, '$1')
+        const files = [...folders.values()]
+          .filter(
+            (folder) => folder.name === name && isOwner(folder, accountEmail),
+          )
+          .map((folder) => ({
+            id: folder.id,
+            name: folder.name,
+            mimeType: DRIVE_FOLDER_MIME_TYPE,
+          }))
+        await fulfillJson(route, 200, { files })
+        return true
+      }
       if (url === DRIVE_FILES_URL && method === 'POST') {
         const name = folderCreation(request.bodyText)
         if (name === false) return false

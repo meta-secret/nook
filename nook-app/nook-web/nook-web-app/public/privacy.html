@@ -261,14 +261,16 @@
         <h2>5. Google Drive optional sync</h2>
         <p>
           If you choose Sign in with Google, Nook uses Google Identity Services
-          in the browser to obtain an OAuth access token. Nook uses
-          <code>https://www.googleapis.com/auth/drive.file</code> to create or
-          connect a dedicated vault folder in your My Drive and write
-          app-created encrypted event files there, and
+          in the browser to obtain an OAuth access token. At sign-in Nook
+          requests <code>https://www.googleapis.com/auth/drive.file</code> to
+          open an existing dedicated vault folder in your My Drive, or create it
+          when none exists, and write app-created encrypted event files there.
+          Only when the folder is shared across Google accounts (when you
+          authorize another account, or a device joins with an onboarding link)
+          Nook also requests
           <code>https://www.googleapis.com/auth/drive.readonly</code> so each
-          authorized account can read the folder and encrypted event files
-          created by another account. Nook writes only app-created files in the
-          vault folder.
+          authorized account can read encrypted event files created by another
+          account. Nook writes only app-created files in the vault folder.
         </p>
         <p>
           The vault folder is visible in your Google Drive. Nook shares it only

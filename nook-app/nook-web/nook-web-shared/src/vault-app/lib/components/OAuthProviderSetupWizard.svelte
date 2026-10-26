@@ -94,6 +94,8 @@
   let syncStepOpen = $state(false);
   let icloudSignInPrepareStarted = $state(false);
   let preparingTarget = $state(false);
+  /** Set once Connect & sync bound the provider to a folder that existed. */
+  let existingFolderNotice = $state("");
   const googleFolderOnConnect = $derived.by(() => {
     const folderRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderSetupGoogleFolderOnConnect,
@@ -118,7 +120,8 @@
   /**
    * Every Drive provider syncs under an ordinary My Drive folder (an iCloud
    * provider under a CloudKit share) that authorized accounts are later
-   * shared into. Connecting creates it once; a retry reuses it.
+   * shared into. Connecting opens the folder with the setup name, creating
+   * it only when none exists; a retry reuses the bound folder.
    */
   async function connectWithVaultTarget() {
     if (preparingTarget) return;
@@ -127,18 +130,37 @@
       vault.errorMsg = "";
       try {
         const actions = new oauthActions.VaultOAuthActions(vault);
-        const creation = isICloud
-          ? await actions.createICloudSharedProvider()
-          : await actions.createGoogleVaultFolder();
-        if (creation.isErr()) {
-          vault.errorMsg = vault.t(creation.error.translationKey);
-          return;
+        if (isICloud) {
+          const creation = await actions.createICloudSharedProvider();
+          if (creation.isErr()) {
+            vault.errorMsg = vault.t(creation.error.translationKey);
+            return;
+          }
+        } else {
+          const connection = await actions.connectGoogleVaultFolder();
+          if (connection.isErr()) {
+            vault.errorMsg = vault.t(connection.error.translationKey);
+            return;
+          }
+          if (
+            connection.value.origin ===
+            oauthActions.GoogleVaultFolderOrigin.Existing
+          ) {
+            const noticeRequest: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.ProviderSetupGoogleFolderExisting,
+              replacements: { folder: connection.value.name },
+            };
+            existingFolderNotice = vault.t(noticeRequest);
+          }
         }
       } finally {
         preparingTarget = false;
       }
     }
     await onConnect();
+    // The wizard usually closes once connected; the notice outlives it.
+    if (existingFolderNotice && !vault.errorMsg)
+      vault.showSuccess(existingFolderNotice);
   }
 
   function watchICloudSignInIntent(node: HTMLElement) {
@@ -449,6 +471,14 @@
           {isICloud
             ? vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)
             : googleFolderOnConnect}
+        </p>
+      {/if}
+      {#if existingFolderNotice}
+        <p
+          class="text-[11px] text-muted-foreground text-pretty"
+          data-testid="google-folder-existing"
+        >
+          {existingFolderNotice}
         </p>
       {/if}
       <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
