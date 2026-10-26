@@ -133,7 +133,8 @@ export default defineConfig({
   },
   use: {
     baseURL: `http://127.0.0.1:${webPort}`,
-    trace: 'on-first-retry',
+    // CI never retries, so keep the trace of every context a failed test used.
+    trace: isCi ? 'retain-on-failure' : 'on-first-retry',
     actionTimeout: 5_000,
     launchOptions: {
       ...(chromiumExecutablePath

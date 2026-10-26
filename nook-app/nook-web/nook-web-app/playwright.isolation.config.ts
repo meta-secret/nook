@@ -15,6 +15,9 @@ const commonEnvironment = {
 export default defineConfig({
   testDir: 'e2e',
   testMatch: playwrightGates.isolation.map((file) => `**/${file}`),
+  // Runs after the main suite in the same job; its own folder keeps the main
+  // suite's failure diagnostics for upload.
+  outputDir: 'test-results/isolation',
   timeout: 90_000,
   // Each test owns its browser state; use this process's available CPUs.
   workers: availableParallelism(),
