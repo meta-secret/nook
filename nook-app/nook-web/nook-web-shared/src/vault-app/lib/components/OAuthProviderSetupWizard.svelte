@@ -397,7 +397,8 @@
         </p>
       {/if}
 
-      {#if vault.errorMsg}
+      <!-- Errors show in the step that is open: Connect & sync once signed in. -->
+      {#if vault.errorMsg && !canConnect}
         <p
           class="text-xs text-destructive"
           data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
@@ -479,6 +480,15 @@
           data-testid="google-folder-existing"
         >
           {existingFolderNotice}
+        </p>
+      {/if}
+      {#if vault.errorMsg}
+        <p
+          class="text-xs text-destructive"
+          role="alert"
+          data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
+        >
+          {vault.errorMsg}
         </p>
       {/if}
       <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">

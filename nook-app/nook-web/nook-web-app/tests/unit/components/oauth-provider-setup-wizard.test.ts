@@ -100,11 +100,16 @@ describe('Google Drive provider setup', () => {
 
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
-    await vi.waitFor(() =>
-      expect(vault.errorMsg).toBe(
-        vault.t(I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous),
-      ),
+    const ambiguous = vault.t(
+      I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous,
     )
+    await vi.waitFor(() => expect(vault.errorMsg).toBe(ambiguous))
+    // The connection step has collapsed after sign-in, so the error shows
+    // in the open Connect & sync step, beside its button.
+    await vi.waitFor(() =>
+      expect(view.getByRole('alert').textContent?.trim()).toBe(ambiguous),
+    )
+    expect(view.getAllByTestId('google-oauth-error')).toHaveLength(1)
     expect(onConnect).not.toHaveBeenCalled()
   })
 
