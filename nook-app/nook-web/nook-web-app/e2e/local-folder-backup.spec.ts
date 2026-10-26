@@ -281,7 +281,9 @@ test.describe('local folder backup provider', () => {
 
     // This browser's passkey belongs to the identity that wrote last.
     await page
-      .locator(`[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`)
+      .locator(
+        `[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`,
+      )
       .getByTestId('remote-vault-choice-item')
       .click()
     await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0)
