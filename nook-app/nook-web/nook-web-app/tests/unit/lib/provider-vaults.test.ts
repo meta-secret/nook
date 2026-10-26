@@ -75,7 +75,7 @@ describe('provider vault actions', () => {
 
   test('the unlocked workspace locks and continues the import there', () => {
     const vault = unlockedOn(EMPTY)
-    const lock = vi.spyOn(vault, 'lockVault').mockResolvedValue(undefined)
+    const lock = vi.spyOn(vault, 'lockVault').mockResolvedValue()
 
     expect(new ProviderVaultActions(vault).importSeparately(CHOSEN)).toBe(
       ProviderVaultImportStart.AfterLock,
@@ -86,7 +86,7 @@ describe('provider vault actions', () => {
 
   test('the empty vault goes only once the chosen vault is open', async () => {
     const vault = unlockedOn(EMPTY)
-    vi.spyOn(vault, 'lockVault').mockResolvedValue(undefined)
+    vi.spyOn(vault, 'lockVault').mockResolvedValue()
     const deletion = vi
       .spyOn(vault.identityControl, 'deleteVaultEverywhere')
       .mockResolvedValue(ok(IdentityActionOutcome.Completed))
@@ -119,7 +119,7 @@ describe('provider vault actions', () => {
 
   test('cancelling the import forgets the replacement', () => {
     const vault = unlockedOn(EMPTY)
-    vi.spyOn(vault, 'lockVault').mockResolvedValue(undefined)
+    vi.spyOn(vault, 'lockVault').mockResolvedValue()
     new ProviderVaultActions(vault).replaceEmptyVault({
       emptyStoreId: EMPTY,
       replacementStoreId: CHOSEN,

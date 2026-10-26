@@ -119,7 +119,7 @@ test.describe('file sync provider onboarding', () => {
     const [vaultFolder, ...otherFolders] = target.stub.getSharedFolders()
     if (!vaultFolder) throw new Error('the provider did not create a folder')
     expect(otherFolders).toHaveLength(0)
-    expect(vaultFolder.name).toBe(target.repoName)
+    expect(vaultFolder.name).toBe('Nook')
     expect(vaultFolder.writers).toEqual([E2E_GOOGLE_ACCOUNT_EMAIL])
     await assertVaultReady(deviceA)
     await disableVaultIdleLock(deviceA)
