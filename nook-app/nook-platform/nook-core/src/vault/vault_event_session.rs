@@ -48,6 +48,8 @@ pub struct VaultSecurityEpochRotationInput<'a> {
     pub members_records: &'a [StoredSecretRecord],
     pub rotated_meta_records: Vec<StoredSecretRecord>,
     pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
+    /// The name the projection holds under the retiring key.
+    pub vault_name: &'a crate::ProjectedVaultName,
     pub created_at: &'a str,
     pub destination: EventPublicationDestination<'a>,
 }
@@ -348,6 +350,7 @@ impl VaultEventSession {
             members_records,
             rotated_meta_records,
             rewrapped_password_entries,
+            vault_name,
             created_at,
             destination,
         } = input;
@@ -355,6 +358,12 @@ impl VaultEventSession {
             let secrets =
                 SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
                     .reencrypt()?;
+            let vault_name = crate::VaultNameEpochReencryption::new(
+                vault_name,
+                old_secrets_key,
+                &new_keys.secrets_key,
+            )
+            .reencrypt()?;
             let members_checkpoint_hash =
                 Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
             let checkpoint = VaultOperation::EpochCheckpoint {
@@ -362,6 +371,7 @@ impl VaultEventSession {
                 members_checkpoint_hash,
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
                 password_entries: EpochPasswordState::Replace(rewrapped_password_entries),
+                vault_name,
             };
             let store_id = StoreId::parse(&self.store_id)?;
             let actor_id = self.actor_id()?;

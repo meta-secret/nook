@@ -110,6 +110,7 @@ impl<'a> VaultMetaOperationApplier<'a> {
             | VaultOperation::PasswordEnvelopeUpgraded { .. }
             | VaultOperation::PasswordRemoved { .. }
             | VaultOperation::VaultCleared
+            | VaultOperation::VaultNamed { .. }
             | VaultOperation::EpochCheckpoint {
                 rotated_meta_records: EpochMetadataState::LegacyRetain,
                 ..

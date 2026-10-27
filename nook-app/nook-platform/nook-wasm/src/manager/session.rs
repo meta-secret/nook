@@ -257,6 +257,9 @@ pub(in crate::manager) struct VaultSessionState {
     pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
     pub(in crate::manager) store_id: String,
     pub(in crate::manager) vault_name: VaultNameState,
+    /// The name the event log carries, still encrypted. Epoch rotation
+    /// re-encrypts it; it never holds the "Vault <id>" display fallback.
+    pub(in crate::manager) projected_name: nook_core::ProjectedVaultName,
     pub(in crate::manager) vault_version: u64,
     pub(in crate::manager) architecture: nook_core::VaultArchitecture,
     pub(in crate::manager) search_catalog: SearchCatalogState,
@@ -284,6 +287,7 @@ impl Default for VaultSessionState {
             password_entries: Vec::new(),
             store_id: String::new(),
             vault_name: VaultNameState::Unnamed,
+            projected_name: nook_core::ProjectedVaultName::Unnamed,
             vault_version: 0,
             architecture: VaultArchitecture::default(),
             search_catalog: SearchCatalogState::Unavailable,
@@ -370,6 +374,7 @@ impl VaultSessionState {
         self.password_entries.clear();
         self.store_id.clear();
         self.vault_name = VaultNameState::Unnamed;
+        self.projected_name = nook_core::ProjectedVaultName::Unnamed;
         self.vault_version = 0;
         self.architecture = architecture;
         self.search_catalog = SearchCatalogState::Unavailable;

@@ -107,6 +107,7 @@ impl NookVaultManager {
         self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = VaultMetaState::from_stored_records(&records)?;
         self.ensure_event_log_ready().await?;
+        self.adopt_vault_name_from_events().await?;
         if !self.vault.meta.auth.contains_key(&app_key.auth_id()) {
             self.persist_password_unlock_membership(&records, &app_key, &keys)
                 .await?;
@@ -119,6 +120,7 @@ impl NookVaultManager {
             let yaml = self.serialize_current_projection_yaml()?;
             NookDatabase::save_to_indexed_db(&yaml).await?;
         }
+        self.label_local_vault_with_projected_name().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
         self.reconcile_open_vault_with_identity_log().await?;
         let page = VerifiedVaultAccessFlow::Connect

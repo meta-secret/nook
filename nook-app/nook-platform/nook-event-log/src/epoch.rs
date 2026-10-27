@@ -95,7 +95,8 @@ impl VaultOperation {
             | VaultOperation::MemberRenamed { .. }
             | VaultOperation::PasswordAdded { .. }
             | VaultOperation::PasswordEnvelopeUpgraded { .. }
-            | VaultOperation::VaultCleared => EpochTransition::Unchanged,
+            | VaultOperation::VaultCleared
+            | VaultOperation::VaultNamed { .. } => EpochTransition::Unchanged,
         }
     }
 }

@@ -83,6 +83,9 @@ Checkpoint and visibility rules:
 
 - An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
   complete rewrapped `rotated_meta_records` and `password_entries` sets.
+- It also carries `vault_name`, the vault name re-encrypted under the new
+  `secrets_key`. A checkpoint without it leaves the vault unnamed in the new
+  epoch, because a name under the retired key is unreadable after rotation.
 - A schema `3` checkpoint is the event's sole operation. It has exactly one
   direct parent, that parent is a single security trigger, and its `key_epoch`
   equals the trigger event id. Invalid standalone or bundled checkpoints are
@@ -186,6 +189,8 @@ result for every permutation of the same valid event set.
   - **Semantics:** Both preserved
 - **Concurrent creates with the same login identity (same website+username, different secret ids / passwords)**
   - **Semantics:** Both preserved as separate live secrets — **no password merge, no LWW**; neither password may be dropped. Sync is not import enrich/dedup.
+- **`vault-named`**
+  - **Semantics:** The vault display name, encrypted under the epoch's `secrets_key`. The last name in topological order wins, so concurrent renames settle on one name on every device. Joined devices learn the name from it.
 - **`device-revoked` / password rotate/remove**
   - **Semantics:** Starts new **key epoch** with fresh vault keys and checkpoint
 - **Concurrent security epochs**

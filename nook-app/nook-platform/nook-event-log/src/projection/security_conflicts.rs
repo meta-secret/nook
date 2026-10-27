@@ -170,6 +170,7 @@ mod tests {
                 created_at: ProjectionFixtures::ts("2026-06-28T00:00:01Z"),
                 key_epoch: rotation_id,
                 operations: vec![VaultOperation::EpochCheckpoint {
+                    vault_name: None,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
                     rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
@@ -323,6 +324,7 @@ mod tests {
                 created_at: ProjectionFixtures::ts("2026-06-28T00:00:01Z"),
                 key_epoch: rotation_id.clone(),
                 operations: vec![VaultOperation::EpochCheckpoint {
+                    vault_name: None,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("1".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
@@ -335,6 +337,7 @@ mod tests {
             VaultEventBody {
                 created_at: ProjectionFixtures::ts("2026-06-28T00:00:02Z"),
                 operations: vec![VaultOperation::EpochCheckpoint {
+                    vault_name: None,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("2".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

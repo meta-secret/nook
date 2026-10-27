@@ -315,10 +315,11 @@ pub use nook_event_log::{
     LocalEventAppendOutcome, LocalEventBytes, LocalEventStore, LocalEventStoreRejection,
     LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved,
     LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
-    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity, SecretFingerprint,
-    SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
-    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectedVaultName, ProjectionEpoch,
+    RemoteEventBatch, RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity,
+    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
+    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+    VaultProjection,
 };
 pub use nook_event_log::{
     EventLogLocation, EventLogNamespaceKind, IdentityApprovalRequest, IdentityControlInsertion,
@@ -435,7 +436,7 @@ pub use vault_connect::{
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     MembersCheckpointHash, SecretEpochReencryption, VaultKeyRotation, VaultMetaRecordRewrap,
-    VaultMetaRewrap,
+    VaultMetaRewrap, VaultNameEpochReencryption,
 };
 pub use vault_event_session::{
     EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,

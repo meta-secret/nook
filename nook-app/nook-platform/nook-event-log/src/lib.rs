@@ -70,8 +70,8 @@ pub use location::{EventLogLocation, EventLogNamespaceKind};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
-    ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict, SecurityConflict,
-    VaultProjection,
+    ProjectedVaultName, ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict,
+    SecurityConflict, VaultProjection,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;

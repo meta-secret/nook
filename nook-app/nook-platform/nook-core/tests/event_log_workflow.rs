@@ -113,6 +113,7 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
     let result = match device
         .session
         .rotate_security_epoch(VaultSecurityEpochRotationInput {
+            vault_name: &nook_core::ProjectedVaultName::Unnamed,
             trigger,
             new_keys: &new_keys,
             user_records: &[],

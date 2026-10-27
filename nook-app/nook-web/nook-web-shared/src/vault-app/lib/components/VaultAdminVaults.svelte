@@ -387,24 +387,28 @@ belong to another identity stored here stay on that identity's card.
                   {vault.t(I18N_KEYS.VaultSwitcherOpenBadge)}
                 </span>
               {/if}
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                class="h-10"
-                data-testid="vault-admin-rename-btn"
-                data-store-id={entry.storeId}
-                disabled={isEditing ? !canSave(entry) : isBusy}
-                onclick={() =>
-                  isEditing ? void renameVault(entry) : beginRename(entry)}
-              >
-                {#if isEditing && renamingStoreId.kind === VaultRenameOperationKind.Renaming && renamingStoreId.storeId === entry.storeId}
-                  <RefreshCw class="size-4 animate-spin" />
-                {:else if !isEditing}
-                  <PencilLine class="size-4" />
-                {/if}
-                {vault.t(I18N_KEYS.CommonRename)}
-              </Button>
+              <!-- The name is written to the vault's own event log under its key,
+                   so only the open vault can be renamed. -->
+              {#if isActive}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  class="h-10"
+                  data-testid="vault-admin-rename-btn"
+                  data-store-id={entry.storeId}
+                  disabled={isEditing ? !canSave(entry) : isBusy}
+                  onclick={() =>
+                    isEditing ? void renameVault(entry) : beginRename(entry)}
+                >
+                  {#if isEditing && renamingStoreId.kind === VaultRenameOperationKind.Renaming && renamingStoreId.storeId === entry.storeId}
+                    <RefreshCw class="size-4 animate-spin" />
+                  {:else if !isEditing}
+                    <PencilLine class="size-4" />
+                  {/if}
+                  {vault.t(I18N_KEYS.CommonRename)}
+                </Button>
+              {/if}
               {#if !isEditing}
                 <Button
                   type="button"

@@ -311,6 +311,7 @@ mod tests {
                 vec![trigger_id.clone()],
                 trigger_id.clone(),
                 VaultOperation::EpochCheckpoint {
+                    vault_name: None,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
@@ -391,6 +392,7 @@ mod tests {
             vec![trigger.0.clone()],
             trigger.0.clone(),
             VaultOperation::EpochCheckpoint {
+                vault_name: None,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                 rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

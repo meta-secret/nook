@@ -336,6 +336,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         match device
             .session
             .rotate_security_epoch(VaultSecurityEpochRotationInput {
+                vault_name: &nook_core::ProjectedVaultName::Unnamed,
                 trigger: trigger.clone(),
                 new_keys: &new_keys,
                 user_records: &user_records,
@@ -362,6 +363,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     let rotated_keys = match device
         .session
         .rotate_security_epoch(VaultSecurityEpochRotationInput {
+            vault_name: &nook_core::ProjectedVaultName::Unnamed,
             trigger,
             new_keys: &new_keys,
             user_records: &user_records,

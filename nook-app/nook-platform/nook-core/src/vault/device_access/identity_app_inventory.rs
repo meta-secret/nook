@@ -181,6 +181,7 @@ impl VaultAppRoster {
             | VaultOperation::PasswordRemoved { .. }
             | VaultOperation::SentinelSharesIssued { .. }
             | VaultOperation::VaultCleared
+            | VaultOperation::VaultNamed { .. }
             | VaultOperation::EpochCheckpoint { .. } => {}
         }
         Ok(self)

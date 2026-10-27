@@ -5,7 +5,10 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::{ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, VaultProjection};
+use super::{
+    ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectedVaultName,
+    VaultProjection,
+};
 use crate::PasswordUnlockEntry;
 use crate::canonical::EventId;
 use crate::event::{EncryptedSecretPayload, VaultOperation};
@@ -34,9 +37,16 @@ impl VaultProjection {
             VaultOperation::EpochCheckpoint {
                 secrets,
                 password_entries,
+                vault_name,
                 ..
             } => {
                 self.secrets.clear();
+                // The checkpoint carries the name under the new key; a name
+                // under the retired key could not be read after the rotation.
+                self.vault_name = match vault_name {
+                    Some(name) => ProjectedVaultName::Named(name.clone()),
+                    None => ProjectedVaultName::Unnamed,
+                };
                 for secret in secrets {
                     self.insert_secret(event_id, secret, ProjectedSecretOrigin::Created);
                 }
@@ -89,6 +99,9 @@ impl VaultProjection {
                 if let Some(chosen) = self.secrets.get(chosen_secret_id) {
                     let _ = chosen;
                 }
+            }
+            VaultOperation::VaultNamed { name } => {
+                self.vault_name = ProjectedVaultName::Named(name.clone());
             }
             VaultOperation::VaultCleared => {
                 self.cleared = true;
@@ -394,6 +407,7 @@ mod tests {
         projection.apply_operation(
             &EventId::projection_fixture()?,
             &VaultOperation::EpochCheckpoint {
+                vault_name: None,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
@@ -425,6 +439,7 @@ mod tests {
         projection.apply_operation(
             &event,
             &VaultOperation::EpochCheckpoint {
+                vault_name: None,
                 secrets: vec![replacement.clone()],
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
@@ -457,6 +472,7 @@ mod tests {
         projection.apply_operation(
             &EventId::projection_fixture()?,
             &VaultOperation::EpochCheckpoint {
+                vault_name: None,
                 secrets: vec![replacement.clone()],
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
@@ -472,6 +488,51 @@ mod tests {
                 .contains_key(&SecretId::from_vault_record("secret_oldrecord1"))
         );
         assert!(projection.secrets.contains_key(&replacement.id));
+        Ok(())
+    }
+
+    #[test]
+    fn the_latest_name_wins_and_each_checkpoint_carries_it_forward() -> anyhow::Result<()> {
+        let mut projection = VaultProjection::default();
+        let mut replacements = BTreeMap::new();
+        let event = EventId::projection_fixture()?;
+        let name = |ciphertext: &str| OpaqueCiphertext::from_trusted(ciphertext.to_owned());
+        let checkpoint = |vault_name| VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+            rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
+            password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+            vault_name,
+        };
+        assert_eq!(projection.vault_name, ProjectedVaultName::Unnamed);
+
+        for ciphertext in ["cipher-personal", "cipher-family"] {
+            projection.apply_operation(
+                &event,
+                &VaultOperation::VaultNamed {
+                    name: name(ciphertext),
+                },
+                &mut replacements,
+            );
+        }
+        assert_eq!(
+            projection.vault_name,
+            ProjectedVaultName::Named(name("cipher-family"))
+        );
+
+        projection.apply_operation(
+            &event,
+            &checkpoint(Some(name("cipher-family-next-epoch"))),
+            &mut replacements,
+        );
+        assert_eq!(
+            projection.vault_name,
+            ProjectedVaultName::Named(name("cipher-family-next-epoch"))
+        );
+
+        // A name under the retired key is unreadable in the new epoch.
+        projection.apply_operation(&event, &checkpoint(None), &mut replacements);
+        assert_eq!(projection.vault_name, ProjectedVaultName::Unnamed);
         Ok(())
     }
 }

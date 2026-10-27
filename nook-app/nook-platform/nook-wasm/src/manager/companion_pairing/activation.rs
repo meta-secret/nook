@@ -422,6 +422,7 @@ mod tests {
                 key_epoch: &trigger_id,
                 created_at: &IsoTimestamp::parse("2026-09-08T00:00:08Z")?,
                 operations: vec![VaultOperation::EpochCheckpoint {
+                    vault_name: None,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(shares),

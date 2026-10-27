@@ -16,6 +16,7 @@ import {
   installGoogleOAuthMock,
   invokeInitializedVaultProviderReload,
   localizeAppLinkForE2e,
+  listLocalVaultEntries,
   openLoginProviderSetup,
   openOnboardDevicePanel,
   openStorageSettings,
@@ -153,6 +154,20 @@ test.describe('file sync provider onboarding', () => {
     await expectIdentityMembers(deviceA, 2)
     await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
+    // The vault name travels encrypted in the vault's event log, so the joined
+    // browser lists the vault under the name the first browser gave it.
+    const [founderVault] = await listLocalVaultEntries(deviceA)
+    if (!founderVault?.store_id)
+      throw new Error('the first browser lists no vault')
+    expect(founderVault.label).toBe('Test vault')
+    await expect
+      .poll(
+        async () =>
+          (await listLocalVaultEntries(deviceB)).find(
+            (entry) => entry.store_id === founderVault.store_id,
+          )?.label,
+      )
+      .toBe('Test vault')
     // The joining device syncs through the same folder instead of creating one.
     expect(target.stub.getSharedFolders()).toEqual([vaultFolder])
     await waitForSecretOnDevice(deviceB, secretKey)
