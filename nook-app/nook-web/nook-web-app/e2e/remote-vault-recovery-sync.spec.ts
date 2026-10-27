@@ -6,6 +6,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  keepVaultIdleLockDisabled,
   disableLoginAutoUnlock,
   removeE2eDummyGithubSyncProvider,
   reloadUnlockWithSyncProvider,
@@ -69,6 +70,9 @@ test.describe('remote vault recovery (local-first sync)', () => {
 
     await vaultPage.reload()
     await installSyncRemote(vaultPage, target)
+    // The reload drops the page's idle guard; a slow sync after unlock
+    // must not let the 2.5s e2e idle lock close the vault mid-test.
+    await keepVaultIdleLockDisabled(vaultPage)
 
     await expect(vaultPage.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
