@@ -114,17 +114,6 @@ export class RepositoryCommand {
     let result;
     try {
       switch (command) {
-        case RepositoryCommandExecutable.Bash:
-          switch (request.script) {
-            case RepositoryBashScript.UiDemoContract:
-              result = spawnSync(
-                'bash',
-                ['.github/scripts/ui-demo-contract.sh', ...request.args],
-                options,
-              );
-              break;
-          }
-          break;
         case RepositoryCommandExecutable.Bun:
           switch (request.script) {
             case RepositoryBunScript.Loom:
@@ -238,12 +227,6 @@ type RepositoryBunCommandRequest = RepositoryCommandLocation & {
   readonly args: readonly string[];
 };
 
-type RepositoryBashCommandRequest = RepositoryCommandLocation & {
-  readonly command: RepositoryCommandExecutable.Bash;
-  readonly script: RepositoryBashScript;
-  readonly args: readonly string[];
-};
-
 type RepositoryBunxCommandRequest = RepositoryCommandLocation & {
   readonly command: RepositoryCommandExecutable.Bunx;
   readonly executable: RepositoryBunxExecutable;
@@ -259,7 +242,6 @@ type RepositoryNodeCommandRequest = RepositoryCommandLocation & {
 type RepositoryHostCommandRequest = RepositoryCommandLocation & {
   readonly command: Exclude<
     RepositoryCommandExecutable,
-    | RepositoryCommandExecutable.Bash
     | RepositoryCommandExecutable.Bun
     | RepositoryCommandExecutable.Bunx
     | RepositoryCommandExecutable.Node
@@ -275,16 +257,11 @@ type RepositoryGitCommandRequest = RepositoryCommandLocation & {
 };
 
 export type RepositoryCommandRequest =
-  | RepositoryBashCommandRequest
   | RepositoryBunCommandRequest
   | RepositoryBunxCommandRequest
   | RepositoryNodeCommandRequest
   | RepositoryHostCommandRequest
   | RepositoryGitCommandRequest;
-
-export enum RepositoryBashScript {
-  UiDemoContract = 'uiDemoContract',
-}
 
 export enum RepositoryBunScript {
   Loom = 'loom',
@@ -301,7 +278,6 @@ export enum RepositoryNodeScript {
 }
 
 export enum RepositoryCommandExecutable {
-  Bash = 'bash',
   Bun = 'bun',
   Bunx = 'bunx',
   Cargo = 'cargo',

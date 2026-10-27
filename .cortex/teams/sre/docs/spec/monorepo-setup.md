@@ -163,8 +163,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     seeds, so a corrupted portable ref heals without manual deletion, and it
     keeps forced-zstd behavior.
   - Later browser E2E consumers remain read-only.
-  - Headless UI-demo execution and its browser-cache publication remain
-    implemented but temporarily disabled.
   - Development deploy waits on web verify, web e2e, and the portable WASM
     cache publication proof.
   - That includes browser E2E failures.

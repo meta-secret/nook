@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, test } from '../fixtures'
+import { expect, test } from './fixtures'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -9,20 +9,9 @@ import {
   openManagePage,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
-} from '../helpers'
+} from './helpers'
 
-const DEMO_BEAT_MS = 700
 const TRAVEL_PIN = '246810'
-
-async function demoBeat(page: Page) {
-  await page.waitForTimeout(DEMO_BEAT_MS)
-}
-
-async function snapshot(page: Page, name: string) {
-  const directory = process.env.NOOK_DEMO_SCREENSHOT_DIR
-  if (!directory) return
-  await page.screenshot({ path: `${directory}/${name}.png`, fullPage: true })
-}
 
 function parseStoreId(yaml: string): string {
   const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
@@ -53,8 +42,6 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   await expect(vaultAdminEntry(page, firstStoreId)).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await snapshot(page, '1-first-identity-vaults')
-  await demoBeat(page)
 
   // A second identity on this browser, protected with a PIN, gets its own
   // vault.
@@ -90,8 +77,6 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   await expect(page.getByTestId('identity-card')).toHaveCount(2, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await snapshot(page, '2-two-identities')
-  await demoBeat(page)
 
   // Travel's Vaults page lists Trip only: the first identity's vault is
   // stored on this browser too, but it is not Travel's to rename or delete
@@ -107,8 +92,6 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   ).toContainText('Trip')
   await expect(vaultAdminEntry(page, firstStoreId)).toHaveCount(0)
   await expect(page.getByTestId('vault-admin-entry')).toHaveCount(1)
-  await snapshot(page, '3-travel-vaults')
-  await demoBeat(page)
 
   // The open vault renames from its row; the name is recorded in the vault's
   // event log, so every device of the identity shows it.
@@ -127,6 +110,4 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
       `[data-testid="vault-admin-name"][data-store-id="${tripStoreId}"]`,
     ),
   ).toContainText('Trip 2026', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await snapshot(page, '4-renamed-open-vault')
-  await demoBeat(page)
 })

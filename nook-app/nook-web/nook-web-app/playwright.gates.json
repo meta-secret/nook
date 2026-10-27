@@ -26,6 +26,7 @@
     "sync-conflict-resolution.spec.ts",
     "event-log-sync.spec.ts",
     "multi-vault.spec.ts",
+    "vault-admin-ownership.spec.ts",
     "vault-password-device-key.spec.ts",
     "legal-pages.spec.ts",
     "logs-page.spec.ts",

@@ -456,20 +456,17 @@ impl PrDeliveryScenario<'_> {
             "historical release refs must use current workflow tooling against the immutable source root"
         );
         let main = (root).read(".github/workflows/main.yml");
-        let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
         for required in [
             "\n  rust:\n",
             "\n  web:\n",
             "\n  web-e2e:\n",
             "\n  extension-e2e:\n",
-            "\n  ui-demos:\n",
             "\n  deploy:\n",
             "if: ${{ !cancelled() && inputs.product_changed }}",
             "run: task preflight",
             "needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
             "task _ci:main:web:e2e-only",
             "task _extension:test:e2e",
-            "task _web:test:ui-demo",
             "runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}",
             "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
             // Re-run e2e jobs pull the image their producer attempt built; only
@@ -491,14 +488,9 @@ impl PrDeliveryScenario<'_> {
         assert_eq!(
         main.matches("image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}")
             .count(),
-        3,
+        2,
         "every Main browser consumer pulls the e2e image its web attempt built"
     );
-        assert!(
-            main_ui_demo_job.contains("name: UI demos\n    if: ${{ false }}")
-                && main_ui_demo_job.contains("task _web:test:ui-demo"),
-            "the disabled Main UI demo job must retain its implementation for later re-enable"
-        );
         assert!(
             !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
             "same-runner Main suite coordinator was replaced by multi-job consumers"

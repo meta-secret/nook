@@ -31,7 +31,7 @@ consistent.
 5. Exclude draft or speculative behavior until the owning specification marks
    it as implemented.
 6. When a Playwright suite partitions specifications across projects, require
-   every non-demo behavior specification to appear exactly once in the shared
+   every behavior specification to appear exactly once in the shared
    executable gate manifest. Suites that rely on default `testDir` discovery
    do not need a redundant manifest.
 

@@ -47,7 +47,7 @@ load the consumer team's complete graph.
 - Frontend state, accessibility, responsive behavior, motion, and visual
   hierarchy.
 - Safe adapters that consume typed Rust/WASM contracts.
-- Frontend unit, browser, accessibility, visual, and UI-demo evidence.
+- Frontend unit, browser, accessibility, and visual evidence.
 - Web product specifications, design docs, references, and skills.
 
 ## Forbidden responsibilities

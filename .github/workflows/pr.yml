@@ -74,9 +74,6 @@ jobs:
           echo "auth=$auth" >> "$GITHUB_OUTPUT"
           echo "validation=$validation" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
-          if [ "$validation" = true ]; then
-            bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-          fi
 
   prepare:
     name: Prepare browser artifacts

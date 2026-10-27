@@ -502,7 +502,6 @@ task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
 task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
-task ui:demo               # record dedicated headless Playwright demos to ui-demo-results/
 task extension:build       # browser extension package
 task extension:check:fast  # host-cached extension format/unit/manifest/security gate
 task extension:build:localhost # local-only identity targeting trusted HTTPS localhost
@@ -566,13 +565,8 @@ Schedule, manual, and labeled minds-only PR entry points stay in thin
 See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
 
-UI-facing pull requests must add or update a focused
-`e2e/demos/*.demo.spec.ts`. Headless demo execution and recording are
-temporarily disabled in GitHub workflows. The implementation and focused-spec
-requirement remain available for later re-enable. PR browser suites run directly in the validation runner; no PR-specific
-browser image is published. Demo specs may pause briefly
-at meaningful UI states; regression e2e remains full-speed. From `nook-app/`,
-`cargo ui-demo` is an alias for `task ui:demo`.
+PR browser suites run directly in the validation runner; no PR-specific
+browser image is published.
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 `nook-app/nook-web/nook-web-app/.env.test.local`; see

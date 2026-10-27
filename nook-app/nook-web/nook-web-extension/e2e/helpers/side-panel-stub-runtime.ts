@@ -24,8 +24,8 @@ import {
 import { extensionDir, simpleVaultBaseUrl } from './extension-smoke-runtime'
 
 /**
- * Runs the built side panel page on a stubbed browser runtime, the way the
- * UI demo does, so its behavior runs in the extension suite without a real
+ * Runs the built side panel page on a stubbed browser runtime, so its
+ * behavior runs in the extension suite without a real
  * side panel target (Playwright cannot reach one). The stub answers the
  * panel's requests from a state object the test changes between steps, and
  * fires the tab and visibility changes the panel follows.

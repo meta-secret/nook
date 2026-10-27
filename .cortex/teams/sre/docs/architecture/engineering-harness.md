@@ -111,15 +111,7 @@ legacy registered `nook` runner is not used.
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- The `Headless UI demo` job retains its WASM-handoff implementation.
-- Its PR execution and exact-head browser-cache publication are temporarily
-  disabled.
-- When re-enabled, Playwright must succeed before its retained cache-only target
-  publishes the isolated browser graph.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It retains the UI-demo job in `needs` so a skipped result remains observable.
-- It permits that skip while demos are disabled or not required.
-- An enabled, required UI-demo failure blocks preview.
 - It deploys from the exported host dist handoff.
 - Rust coverage floors run inside the native Docker/BuildKit verification solve.
 - No separate PR coverage handoff or reporting job is required.
@@ -161,7 +153,7 @@ legacy registered `nook` runner is not used.
 - The CI-only web target runs format, lint, check, and tests as a sibling of the production web/extension build.
 - It joins both successful branches into the same sealed image.
 - Verification is not serialized after the build.
-- `web-e2e-base` adds Playwright Chromium for Main, manual e2e, and changed PR demos.
+- `web-e2e-base` adds Playwright Chromium for Main and manual e2e.
 - It uses a separate `:web-e2e-*` cache.
 - Browser-free PR web solves never pull the browser layer.
 - Neither lineage contains Cargo or `target/`.

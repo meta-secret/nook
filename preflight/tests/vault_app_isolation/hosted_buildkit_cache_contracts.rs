@@ -325,7 +325,6 @@ impl MainProducerCacheContract<'_> {
         );
         let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
         let web = section(&main, "  web:\n", "\n  wasm-cache-proof:\n");
-        let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
         let rust_verify = rust
             .find("task ci:main:rust")
             .context("Main Rust job must verify")?;
@@ -368,9 +367,6 @@ impl MainProducerCacheContract<'_> {
         let web_browser_image = web
             .find("task web:e2e:kubernetes-image:artifacts")
             .context("Main web producer must publish the exact browser image")?;
-        let ui_demo_step = ui_demo
-            .find("- name: Headless UI demos")
-            .context("Main UI demo job must declare its verification step")?;
         let rust_verification_to_publish = rust
             .get(rust_verify..rust_publish)
             .context("Main Rust verification-to-publication section must have valid boundaries")?;
@@ -395,9 +391,6 @@ impl MainProducerCacheContract<'_> {
         let web_publish_section = web
             .get(web_publish..)
             .context("Main web publication section must have a valid boundary")?;
-        let ui_demo_verification = ui_demo
-            .get(ui_demo_step..)
-            .context("Main UI demo verification section must have a valid boundary")?;
         assert!(
         !main.contains("\n  preflight:\n")
             && main.matches("task preflight").count() == 2
@@ -483,12 +476,6 @@ impl MainProducerCacheContract<'_> {
             && web_verify < web_browser_image
             && web_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo.contains("needs: [web]")
-            && ui_demo.contains("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}")
-            && ui_demo.contains("${{ needs.web.outputs.e2e_image_attempt }}")
-            && ui_demo_verification.contains("task _web:test:ui-demo")
-            && !ui_demo.contains("nook-docker-setup")
-            && !ui_demo.contains("publish-web-e2e-cache")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
@@ -686,8 +673,7 @@ impl MainProducerCacheContract<'_> {
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task _ci:main:web:e2e-only")
             && main.contains("task _extension:test:e2e")
-            && main.contains("task _web:test:ui-demo")
-            && main.matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}").count() == 3
+            && main.matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}").count() == 2
             && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && !main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")

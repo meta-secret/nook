@@ -79,7 +79,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     }
 
     let ci = root.read("nook-app/ci/Taskfile.yml");
-    let web_host = section(&ci, "  _ci:pr:web:host:\n", "\n  ci:pr:ui-demo:");
+    let web_host = section(&ci, "  _ci:pr:web:host:\n", "\n  _ci:pr:host:");
     assert!(
         web_host.contains("task: docker:ci:web:build") && !web_host.contains("task: docker:task"),
         "hosted PR web verification must run inside the CI image build instead of serializing a second container"

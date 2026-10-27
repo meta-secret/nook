@@ -51,7 +51,6 @@ fn is_generated_repository_component(component: &OsStr) -> bool {
                 | "coverage"
                 | "test-results"
                 | "playwright-report"
-                | "ui-demo-results"
         )
     )
 }
@@ -300,7 +299,6 @@ fn inventory_prunes_generated_source_context_paths_and_preserves_tracked_files()
         PathBuf::from("nook-app/nook-platform/coverage"),
         PathBuf::from("nook-app/nook-platform/test-results"),
         PathBuf::from("nook-app/nook-platform/playwright-report"),
-        PathBuf::from("nook-app/nook-platform/ui-demo-results"),
     ];
     let generated_directories = [
         PathBuf::from("node_modules/package"),
@@ -312,7 +310,6 @@ fn inventory_prunes_generated_source_context_paths_and_preserves_tracked_files()
         PathBuf::from("nook-app/nook-platform/coverage/artifacts"),
         PathBuf::from("nook-app/nook-platform/test-results/chromium"),
         PathBuf::from("nook-app/nook-platform/playwright-report/data"),
-        PathBuf::from("nook-app/nook-platform/ui-demo-results/chromium"),
     ];
     for directory in &generated_directories {
         fs::create_dir_all(fixture.path().join(directory))?;

@@ -25,15 +25,11 @@ process.env.NOOK_GITHUB_POLL_MS = ((...[v = '3000']) => v)(
 )
 
 const isCi = !!process.env.CI
-const isUiDemo = process.env.NOOK_UI_DEMO === '1'
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
 const distDir = path.join(rootDir, 'dist')
-const [uiDemoOutputDir = path.join(rootDir, 'ui-demo-results')] = [
-  process.env.NOOK_UI_DEMO_OUTPUT_DIR,
-]
-const webPort = isUiDemo ? 5183 : 5173
+const webPort = 5173
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
 /** IndexedDB-only specs — fast manual/debug subset of the full e2e suite. */
@@ -70,23 +66,6 @@ const projectDefinitions: NonNullable<PlaywrightTestConfig['projects']> = [
     // Preserve ordering within each live-provider spec.
     fullyParallel: false,
     grepInvert: SENTINEL_APP_TESTS,
-  },
-  {
-    name: 'ui-demo',
-    testMatch: '**/demos/**/*.demo.spec.ts',
-    fullyParallel: false,
-    grepInvert: SENTINEL_APP_TESTS,
-    retries: 0,
-    outputDir: uiDemoOutputDir,
-    use: {
-      headless: true,
-      trace: 'retain-on-failure',
-      viewport: { width: 1280, height: 720 },
-      video: {
-        mode: 'on',
-        size: { width: 1280, height: 720 },
-      },
-    },
   },
 ]
 const debugProject = ((v) => (v ? v.trim() : ''))(process.env.E2E_PROJECT)
@@ -146,7 +125,7 @@ export default defineConfig({
     {
       command: webServerCommand,
       url: `http://127.0.0.1:${webPort}`,
-      reuseExistingServer: !isCi && !isUiDemo,
+      reuseExistingServer: !isCi,
       timeout: isCi ? 120_000 : 30_000,
       gracefulShutdown: {
         signal: 'SIGTERM',
@@ -178,22 +157,6 @@ export default defineConfig({
             ),
           },
     },
-    ...(isUiDemo
-      ? [
-          {
-            command: 'bun run dev -- --host 127.0.0.1 --port 5174',
-            cwd: '../nook-vault-simple',
-            url: 'http://127.0.0.1:5174',
-            reuseExistingServer: false,
-            timeout: isCi ? 120_000 : 30_000,
-            env: {
-              VITE_E2E_EXPOSE_VAULT: 'true',
-              VITE_VAULT_IDLE_TIMEOUT_MS: '300000',
-              VITE_VAULT_IDLE_WARNING_MS: '0',
-            },
-          },
-        ]
-      : []),
   ],
   projects: configuredProjects,
 })

@@ -64,12 +64,6 @@ It is a broad gate, not an agent local diagnostic target or a merge gate. See
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
-- Headless UI-demo execution is temporarily disabled in PR and Main workflows.
-- New UI-demo artifacts are not published.
-- Demo implementations and the UI-demo contract remain available for later
-  re-enable.
-- Browser E2E remains an independent validation path.
-
 ## Manual Windows Edge lane
 
 `e2e-windows.yml` is a separate `workflow_dispatch` lane for native Windows
@@ -90,7 +84,6 @@ binds each exception to that exact job and runner.
    - A PR must belong to this repository and must not be authored by Dependabot.
    - Select `all`, `stable`, `unstable`, `sync-live`, `isolation`, `extension`,
      or `research`. The default `all` runs these automated surfaces.
-   - Demonstration videos are excluded from `all`.
    - Use optional `spec` as a positional Playwright spec filter.
 2. Observe the Linux production-artifact job before the Windows consumer.
    - Source resolution records one immutable SHA for both checkouts.
@@ -311,9 +304,6 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    [pull requests](../../../docs/spec/pull-requests.md) when workflow
    behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
-   - UI-changing PRs must still add or update their focused headless demo specs.
-   - PR and Main UI-demo execution is temporarily disabled.
-   - New UI-demo artifacts are not published while execution is disabled.
    - PR Lifecycle requests Main-fix validation with `task pr:validate PR=<number> FULL_E2E=1`; CI/CD executes and observes the resulting label-triggered run, which contains the Main-equivalent deterministic browser suites before merge.
    - Main runs the same local-provider and extension **e2e**.
    - Reconcile every actionable unsuccessful Main run through the feature path.

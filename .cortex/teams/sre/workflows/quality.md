@@ -410,9 +410,6 @@ Use this workflow for quality, CI, and deployment changes.
       independent input-fingerprint and Main source refs as optional seeds, and
       it forces zstd compression.
     - Browser E2E validation remains read-only and receives no compiler-cache identity.
-    - Headless UI-demo execution is temporarily disabled.
-    - Its retained implementation does not publish the browser graph while
-      disabled.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 

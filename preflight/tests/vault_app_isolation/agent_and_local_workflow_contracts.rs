@@ -5,34 +5,6 @@ use super::*;
     clippy::unnecessary_wraps,
     reason = "integration contracts share a fallible test signature"
 )]
-fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let tasks = root.read("nook-app/nook-web/Taskfile.yml");
-    let ui_demo = section(
-        &tasks,
-        "  _web:test:ui-demo:\n",
-        "  _web:test:e2e:pr:parallel:\n",
-    );
-
-    assert!(ui_demo.contains("VITE_E2E_EXPOSE_VAULT: \"true\""));
-    assert!(
-        ui_demo.contains("VITE_VAULT_IDLE_TIMEOUT_MS: \"300000\""),
-        "human-paced UI demos must not lock the vault during intentional pauses"
-    );
-    assert!(
-        ui_demo.contains(
-            "- task: _web:e2e:build-if-needed\n        vars:\n          E2E_VAULT_IDLE_TIMEOUT_MS: \"300000\"",
-        ),
-        "UI demos must rebuild the production-seeded dist with test-only browser hooks"
-    );
-    Ok(())
-}
-
-#[test]
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "integration contracts share a fallible test signature"
-)]
 fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let app_tasks = root.read("nook-app/Taskfile.yml");

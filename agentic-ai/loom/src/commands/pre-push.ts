@@ -27,7 +27,6 @@ export class PrePushCommand {
 
 export type PrePushReport = {
   readonly formatOk: boolean;
-  readonly uiDemoOk: boolean;
   readonly baseSha: string;
   readonly staged: boolean;
   readonly messages: string[];
