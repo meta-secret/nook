@@ -359,9 +359,10 @@ pub use provider_vault_access::{
 };
 pub use provider_vault_join::ProviderVaultAccessRequest;
 pub use provider_vault_listing::{
-    EmptyVaultReplacement, IdentityAppCount, LocalVaultItemCount, LocalVaultOccupancy,
-    NOOK_PROVIDER_ROOT_NAME, ProviderEventCount, ProviderInstant, ProviderVaultListing,
-    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
+    EmptyVaultReplacement, IdentityAppCount, KnownVaultName, LocalVaultItemCount,
+    LocalVaultOccupancy, NOOK_PROVIDER_ROOT_NAME, ProviderEventCount, ProviderInstant,
+    ProviderVaultListing, ProviderVaultListingRequest, ProviderVaultName, ProviderVaultObservation,
+    ProviderVaultSummary, ProviderVaultTime,
 };
 pub use provider_vault_merge::{ProviderVaultGrantedOpening, ProviderVaultPasswordOpening};
 pub use secrets::SecretRecordFilter;

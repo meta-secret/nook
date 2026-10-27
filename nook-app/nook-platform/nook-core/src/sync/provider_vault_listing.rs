@@ -5,8 +5,9 @@
 //! of different vaults never share a folder and vaults coexist safely. A
 //! listing summarizes each vault namespace from transport metadata alone:
 //! when its files were created, how many event files it holds, and a short
-//! id. It then relates each vault to the identity on this device. Plaintext
-//! vault names stay inside the encrypted vault and appear only after unlock.
+//! id. It then relates each vault to the identity on this device. Vault names
+//! travel only encrypted under each vault's key, so a listed vault shows its
+//! name only when this browser already keeps it for a vault it holds.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -96,6 +97,38 @@ pub struct ProviderVaultObservation {
     pub events: Vec<ProviderVaultTime>,
 }
 
+/// A vault's name as this browser already keeps it, for a vault it holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KnownVaultName {
+    pub store_id: StoreId,
+    pub name: String,
+}
+
+/// What a listed vault is called. Its name is encrypted under the vault's
+/// own key, so only a vault this browser holds can be named here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum ProviderVaultName {
+    /// This browser does not know the name; the short id tells it apart.
+    Unknown,
+    Named {
+        name: String,
+    },
+}
+
+impl ProviderVaultName {
+    fn of(store_id: &StoreId, names: &[KnownVaultName]) -> Self {
+        names
+            .iter()
+            .find(|known| &known.store_id == store_id)
+            .map(|known| known.name.trim())
+            .filter(|name| !name.is_empty())
+            .map_or(Self::Unknown, |name| Self::Named {
+                name: name.to_owned(),
+            })
+    }
+}
+
 /// One vault a provider holds, as far as its listing tells without
 /// decryption.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -104,6 +137,8 @@ pub struct ProviderVaultSummary {
     pub store_id: StoreId,
     /// The first characters of the store token, to tell vaults apart.
     pub short_id: String,
+    /// What this browser calls it.
+    pub name: ProviderVaultName,
     pub created: ProviderVaultTime,
     pub last_activity: ProviderVaultTime,
     #[tsify(type = "number")]
@@ -127,6 +162,7 @@ impl ProviderVaultSummary {
     fn summarize(
         observation: ProviderVaultObservation,
         keys: &ProviderVaultKeyholding<'_>,
+        names: &[KnownVaultName],
         contents: OpenVaultContents,
     ) -> Self {
         let ProviderVaultObservation {
@@ -152,6 +188,7 @@ impl ProviderVaultSummary {
             .or_else(|| namespace_created.instant());
         Self {
             short_id: Self::short_id(&store_id),
+            name: ProviderVaultName::of(&store_id, names),
             store_id,
             created: ProviderVaultTime::from_instant(created),
             last_activity: ProviderVaultTime::from_instant(last_activity),
@@ -262,6 +299,8 @@ pub struct ProviderVaultListing {
 pub struct ProviderVaultListingRequest<'a> {
     pub observations: Vec<ProviderVaultObservation>,
     pub keys: ProviderVaultKeyholding<'a>,
+    /// The names this browser keeps for the vaults it holds.
+    pub names: &'a [KnownVaultName],
     pub local_vault: &'a LocalVaultOccupancy,
 }
 
@@ -275,12 +314,13 @@ impl ProviderVaultListingRequest<'_> {
         let Self {
             observations,
             keys,
+            names,
             local_vault,
         } = self;
         let contents = local_vault.contents();
         let mut vaults = observations
             .into_iter()
-            .map(|observation| ProviderVaultSummary::summarize(observation, &keys, contents))
+            .map(|observation| ProviderVaultSummary::summarize(observation, &keys, names, contents))
             .collect::<Vec<_>>();
         vaults.sort_by(ProviderVaultSummary::listing_order);
         let offers_replacement = vaults
@@ -381,6 +421,7 @@ mod tests {
                 ],
             }],
             keys: ProviderVaultKeyholding::NONE,
+            names: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -389,6 +430,7 @@ mod tests {
             [ProviderVaultSummary {
                 store_id,
                 short_id: "SMypl8K0".to_owned(),
+                name: ProviderVaultName::Unknown,
                 created: at("2024-01-01T00:00:00Z")?,
                 last_activity: at("2024-03-01T00:00:00Z")?,
                 event_count: ProviderEventCount(3),
@@ -409,6 +451,7 @@ mod tests {
                 events: vec![ProviderVaultTime::Unreported; 2],
             }],
             keys: ProviderVaultKeyholding::NONE,
+            names: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -430,6 +473,7 @@ mod tests {
                 events: vec![],
             }],
             keys: ProviderVaultKeyholding::NONE,
+            names: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -469,6 +513,7 @@ mod tests {
                 identity_in_use: true,
                 ..ProviderVaultKeyholding::NONE
             },
+            names: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -519,6 +564,7 @@ mod tests {
                     identity_in_use: true,
                     ..ProviderVaultKeyholding::NONE
                 },
+                names: &[],
                 local_vault: &occupancy,
             }
             .listing();
@@ -577,10 +623,57 @@ mod tests {
                 identity_vaults: &identity_vaults,
                 ..ProviderVaultKeyholding::NONE
             },
+            names: &[],
             local_vault: &open(&local, 0, 1),
         }
         .listing();
         assert_eq!(listing.replacement, EmptyVaultReplacement::Unavailable);
+        Ok(())
+    }
+
+    #[test]
+    fn a_vault_this_browser_keeps_a_name_for_is_listed_by_it() -> anyhow::Result<()> {
+        let own = store("store_ownvault001")?;
+        let other = store("store_othervault1")?;
+        let blank = store("store_blankname01")?;
+        let names = [
+            KnownVaultName {
+                store_id: own.clone(),
+                name: "  Family  ".to_owned(),
+            },
+            KnownVaultName {
+                store_id: blank.clone(),
+                name: "   ".to_owned(),
+            },
+        ];
+        let observation = |store_id: &StoreId| ProviderVaultObservation {
+            store_id: store_id.clone(),
+            namespace_created: ProviderVaultTime::Unreported,
+            events: vec![],
+        };
+        let listing = ProviderVaultListingRequest {
+            observations: vec![observation(&own), observation(&other), observation(&blank)],
+            keys: ProviderVaultKeyholding::NONE,
+            names: &names,
+            local_vault: &LocalVaultOccupancy::Closed,
+        }
+        .listing();
+        let name_of = |store_id: &StoreId| {
+            listing
+                .vaults
+                .iter()
+                .find(|vault| &vault.store_id == store_id)
+                .map(|vault| vault.name.clone())
+        };
+        assert_eq!(
+            name_of(&own),
+            Some(ProviderVaultName::Named {
+                name: "Family".to_owned()
+            })
+        );
+        // Another identity's vault keeps its name sealed; a blank name is none.
+        assert_eq!(name_of(&other), Some(ProviderVaultName::Unknown));
+        assert_eq!(name_of(&blank), Some(ProviderVaultName::Unknown));
         Ok(())
     }
 
@@ -590,6 +683,9 @@ mod tests {
             vaults: vec![ProviderVaultSummary {
                 store_id: store("store_abcdefghijk")?,
                 short_id: "abcdefgh".to_owned(),
+                name: ProviderVaultName::Named {
+                    name: "Family".to_owned(),
+                },
                 created: ProviderVaultTime::Unreported,
                 last_activity: ProviderVaultTime::Reported {
                     at: ProviderInstant(5),
@@ -606,6 +702,7 @@ mod tests {
                 "vaults": [{
                     "storeId": "store_abcdefghijk",
                     "shortId": "abcdefgh",
+                    "name": { "state": "named", "name": "Family" },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "reported", "at": 5 },
                     "eventCount": 1,

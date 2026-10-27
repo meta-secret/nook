@@ -249,11 +249,11 @@ adds this identity's vaults beside these.
       </p>
       <ProviderVaultList {vault} vaults={listing.vaults}>
         {#snippet action(summary: ProviderVaultSummary)}
-          {#each summary.actions as action, index (action)}
+          {#each summary.actions as action (action)}
             <Button
               type="button"
               size="sm"
-              variant={index === 0 ? 'default' : 'outline'}
+              variant="outline"
               data-testid={actionTestId(action)}
               data-store-id={summary.storeId}
               {disabled}

@@ -14,6 +14,7 @@ import {
   storedOAuthCredential,
   type OAuthFileConfig,
 } from '$lib/auth/providers'
+import { buttonVariants } from '$lib/components/ui/button/button-variants'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
 import {
   ProviderVaultAccessActions,
@@ -46,6 +47,7 @@ function summary(
   return {
     storeId,
     shortId: storeId.slice('store_'.length, 'store_'.length + 8),
+    name: { state: 'unknown' },
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
     eventCount: 4,
@@ -104,7 +106,10 @@ describe('Google Drive provider setup', () => {
       root: 'found',
       listing: {
         vaults: [
-          summary('store_ownvault001', { state: 'syncs' }, []),
+          {
+            ...summary('store_ownvault001', { state: 'syncs' }, []),
+            name: { state: 'named', name: 'Family' },
+          },
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
         replacement: { state: 'unavailable' },
@@ -118,6 +123,11 @@ describe('Google Drive provider setup', () => {
     expect(list).toHaveBeenCalledWith({ state: 'closed' })
     const [own, other] = view.getAllByTestId('provider-vault-row')
     expect(own?.dataset.access).toBe('syncs')
+    // A vault this browser keeps a name for is listed by it; another
+    // identity's vault keeps its name sealed and shows its short id.
+    expect(own?.textContent).toContain('Family')
+    expect(own?.textContent).not.toContain('ownvault')
+    expect(other?.textContent).toContain('othervau')
     expect(own?.textContent).toContain(
       vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
     )
@@ -136,7 +146,17 @@ describe('Google Drive provider setup', () => {
     expect(view.getAllByTestId('provider-vault-request-access')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
     expect(view.queryAllByTestId('provider-vault-use-instead')).toHaveLength(0)
-    expect(view.getByTestId('connect-provider-btn')).toBeTruthy()
+    // Connect & sync is the step's one primary action; a row's never competes.
+    const secondary: Parameters<typeof buttonVariants>[0] = {
+      variant: 'outline',
+      size: 'sm',
+    }
+    expect(view.getByTestId('provider-vault-request-access').className).toBe(
+      buttonVariants(secondary),
+    )
+    expect(view.getByTestId('connect-provider-btn').className).not.toContain(
+      'border-input',
+    )
   })
 
   test('imports another vault through the existing import flow', async () => {

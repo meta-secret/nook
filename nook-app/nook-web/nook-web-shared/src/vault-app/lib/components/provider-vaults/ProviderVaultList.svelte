@@ -1,8 +1,10 @@
 <!--
 The vaults a provider already holds, as its listing tells without
 decryption: a short id, how this device can open the vault, when its files
-were created and last written, and how many events it holds. Vault names
-appear only after unlock. Times a transport does not report are left out.
+were created and last written, and how many events it holds. A vault this
+browser keeps a name for is listed by it; any other vault's name is sealed
+under its key, so it shows its short id. Times a transport does not report
+are left out.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
@@ -50,6 +52,12 @@ appear only after unlock. Times a transport does not report are left out.
   }
 
   function nameLine(summary: ProviderVaultSummary): string {
+    switch (summary.name.state) {
+      case 'named':
+        return summary.name.name
+      case 'unknown':
+        break
+    }
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.FirstRunRestoreVaultItem,
       replacements: { id: summary.shortId },

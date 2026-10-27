@@ -1,4 +1,4 @@
-import { expect, type BrowserContext, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { pressIfReady } from '../../../nook-web-app/e2e/helpers/workspace-navigation'
 import { VaultPanelUnlockProgress } from '../../../nook-web-app/e2e/helpers/settings-auth'
 import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
@@ -343,16 +343,59 @@ export async function expectVaultOpened(
 ): Promise<void> {
   const shell = vaultPage.getByTestId('authenticated-shell')
   const open = vaultPage.getByTestId('vault-panel-open')
-  await expect
-    .poll(
-      async () => {
-        if (await shell.isVisible()) return true
-        await pressIfReady(open)
-        return false
-      },
-      { timeout },
-    )
-    .toBe(true)
+  try {
+    await expect
+      .poll(
+        async () => {
+          if (await shell.isVisible()) return true
+          await pressIfReady(open)
+          return false
+        },
+        { timeout },
+      )
+      .toBe(true)
+  } catch (error) {
+    const state = await describeVaultPage(vaultPage)
+    await test.info().attach('vault-page-at-open-timeout.png', {
+      body: await vaultPage.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    })
+    throw new Error(`Vault did not open: ${state}`, { cause: error })
+  }
+}
+
+/** The identity cards, vault rows and panel the open-vault poll reads. */
+async function describeVaultPage(page: Page): Promise<string> {
+  const state = await page.evaluate(() => {
+    const attributes = (element: Element, names: readonly string[]) =>
+      Object.fromEntries(
+        names.map((name) => [name, element.getAttribute(name)]),
+      )
+    const byTestId = (testId: string) =>
+      Array.from(document.querySelectorAll(`[data-testid="${testId}"]`))
+    return {
+      url: `${window.location.pathname}${window.location.search}`,
+      cards: byTestId('identity-card').map((card) =>
+        attributes(card, ['data-status']),
+      ),
+      rows: byTestId('identity-vault-row').map((row) => ({
+        ...attributes(row, ['data-state', 'aria-expanded']),
+        disabled: row.hasAttribute('disabled'),
+      })),
+      panel: byTestId('identity-card-vault').length > 0,
+      open: byTestId('vault-panel-open').map((button) => ({
+        disabled: button.hasAttribute('disabled'),
+      })),
+      alerts: Array.from(document.querySelectorAll('[role="alert"]')).map(
+        (alert) => (alert.textContent || '').trim().slice(0, 200),
+      ),
+      testIds: Array.from(document.querySelectorAll('[data-testid]'))
+        .map((element) => element.getAttribute('data-testid') || '')
+        .filter(Boolean)
+        .slice(0, 60),
+    }
+  })
+  return JSON.stringify(state)
 }
 
 export async function unlockPairedVaultThroughCompanion(

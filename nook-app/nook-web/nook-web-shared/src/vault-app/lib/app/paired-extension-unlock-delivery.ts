@@ -30,15 +30,37 @@ export type PairedExtensionUnlockDeliveryRequest = {
   readonly requester: PairedExtensionUnlockRequester;
 };
 
+/** One discovery of the paired extension and, when it is unlocked, the
+ * handoff of its identity to this page. */
+export type PairedExtensionResume = Promise<
+  Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>
+>;
+
 export type PairedExtensionUnlockPollRequest = {
   readonly storeId: string;
   readonly isAuthenticated: () => boolean;
-  readonly resumePairedVault: (
-    storeId: string,
-  ) => Promise<
-    Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>
-  >;
+  readonly resumePairedVault: (storeId: string) => PairedExtensionResume;
 };
+
+/** Resumes from the paired extension run one after another. The extension
+ * keeps one handoff endpoint, which each discovery replaces: a discovery
+ * made while an earlier resume still hands its identity over voids that
+ * handoff, and the page shows the handoff as failed. The card's unlock and
+ * the page's own resume both ask, so they wait their turn here. */
+export class PairedExtensionResumeQueue {
+  private tail: Promise<void> = Promise.resolve();
+
+  run(resume: () => PairedExtensionResume): PairedExtensionResume {
+    const turn = this.tail.then(resume);
+    // The next resume waits for this one to end, however it ends; its
+    // caller still receives the outcome.
+    this.tail = turn.then(
+      () => {},
+      () => {},
+    );
+    return turn;
+  }
+}
 
 /** A locked page waits for the person after an explicit lock in this
  * session (the Lock button, an idle lock): a paired extension that is still

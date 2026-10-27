@@ -264,8 +264,9 @@ Setup and recovery list the vaults a target holds before anything is written.
 Each listed namespace becomes a `ProviderVaultSummary` computed in Rust from
 transport metadata. Only the events of a vault no identity on this browser
 holds are downloaded, to read whether a backup password opens it and whether
-this app asked for or was granted access. Nothing is decrypted, so plaintext
-vault names appear only after unlock.
+this app asked for or was granted access. Nothing is decrypted. A vault this
+browser registered shows the name its vault registry keeps; any other vault's
+name stays sealed under that vault's key, so the row shows its short id.
 
 - **Short id:** the first eight characters of the store token.
 - **Event count:** the number of event files in the namespace. Duplicate

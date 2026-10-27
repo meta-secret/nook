@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Effect, Fiber } from 'effect'
-  import { err, ok, type Result } from 'neverthrow'
+  import { err, ok } from 'neverthrow'
   import {
     VaultStorageFailure,
     VaultStorageFailureKind,
@@ -33,12 +33,10 @@
     EnrollmentCodeUseRequest,
     ExistingVaultPasswordUnlock,
     PairedExtensionDiscoveryRetry,
-    PairedExtensionResumeStatus,
   } from '$lib/app/app-interaction-types'
   import {
     ExtensionIdentityRequestSource,
     extensionConnectionBrowser as connectionBrowser,
-    type PairedExtensionDiscoveryFailure,
   } from '$lib/extension/connect'
   import {
     LoginVaultExtensionPairingStatusKind,
@@ -94,6 +92,8 @@
     pairedExtensionUnlockWasAccepted,
     pairedResumeStatusWhileBusy,
     pairedResumeStatusWhileRetrying,
+    type PairedExtensionResume,
+    PairedExtensionResumeQueue,
     requestPairedExtensionUnlockIfEligible,
     type PairedExtensionUnlockDeliveryRequest,
     type PairedExtensionUnlockPollRequest,
@@ -164,6 +164,7 @@
     vault.identityKeySource === VaultIdentityKeySource.PairedCompanion,
   )
   let extensionDiscoveryStoreId = $state('')
+  const pairedResumes = new PairedExtensionResumeQueue()
   const extensionSetupOfferSource: ExtensionSetupOfferSource = {
     vault: untrack(() => vault),
     supported: SUPPORTS_EXTENSION,
@@ -595,15 +596,16 @@
     await vault.connectWithEnrollmentCode(enrollmentConnectionRequest)
   }
 
-  async function resumePairedExtensionVault(
+  function resumePairedExtensionVault(storeId: string): PairedExtensionResume {
+    extensionDiscoveryStoreId = storeId
+    return pairedResumes.run(() => resumeDiscoveredPairedVault(storeId))
+  }
+  async function resumeDiscoveredPairedVault(
     storeId: string,
-  ): Promise<
-    Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>
-  > {
+  ): PairedExtensionResume {
     const discoveringStagedImport =
       vault.loginRequiresExistingVault &&
       vault.loginSetup.kind === LoginSetupKind.Active
-    extensionDiscoveryStoreId = storeId
     const admission =
       await connectionBrowser.discoverAdmittedPairedExtensionIdentity(storeId)
     if (admission.isErr()) {

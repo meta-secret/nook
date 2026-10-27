@@ -140,6 +140,7 @@ describe('recovery choice between several vaults', () => {
       {
         storeId: CHOSEN,
         shortId: 'otherva',
+        name: { state: 'unknown' },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
         eventCount: 7,
@@ -169,6 +170,7 @@ describe('recovery choice between several vaults', () => {
       {
         storeId: CHOSEN,
         shortId: 'otherva',
+        name: { state: 'unknown' },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
         eventCount: 7,
