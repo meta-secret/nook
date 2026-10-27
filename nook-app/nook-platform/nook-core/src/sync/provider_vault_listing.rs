@@ -16,17 +16,17 @@
 
 use std::cmp::Ordering;
 
-use crate::StoreId;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::provider_vault_access::{
     OpenVaultContents, ProviderVaultAccess, ProviderVaultAction, ProviderVaultKeyholding,
 };
+use crate::{IdentityId, StoreId};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use tsify::Tsify;
 
-/// The fixed name of the one app-owned Nook root each provider account holds.
-pub const NOOK_PROVIDER_ROOT_NAME: &str = "Nook";
+/// The fixed name of the one app-owned root each provider account holds.
+pub const NOOK_PROVIDER_ROOT_NAME: &str = nook_event_log::PROVIDER_ROOT_DIR;
 
 /// Characters of a store token shown as a vault's short id.
 const SHORT_ID_LENGTH: usize = 8;
@@ -91,6 +91,8 @@ impl ProviderEventCount {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProviderVaultObservation {
     pub store_id: StoreId,
+    /// The identity whose folder files the vault.
+    pub identity: IdentityId,
     /// When the namespace subdirectory was created, where reported.
     pub namespace_created: ProviderVaultTime,
     /// One entry per event file in the namespace.
@@ -129,6 +131,68 @@ impl ProviderVaultName {
     }
 }
 
+/// An identity's label as this browser keeps it, for an identity it holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KnownIdentityName {
+    pub identity_id: IdentityId,
+    pub name: String,
+}
+
+/// The names this browser keeps for the vaults and identities it holds.
+#[derive(Clone, Copy, Debug)]
+pub struct BrowserNames<'a> {
+    pub vaults: &'a [KnownVaultName],
+    pub identities: &'a [KnownIdentityName],
+}
+
+impl BrowserNames<'_> {
+    /// A browser that holds no vault and no identity.
+    pub const NONE: BrowserNames<'static> = BrowserNames {
+        vaults: &[],
+        identities: &[],
+    };
+}
+
+/// The identity whose folder files a listed vault: the vault came from it,
+/// whichever identities share the vault since.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct FilingIdentity {
+    #[tsify(type = "string")]
+    pub identity_id: IdentityId,
+    /// The first characters of the identity token, to tell identities apart.
+    pub short_id: String,
+    /// Its label when an identity on this browser is that identity.
+    pub name: ProviderVaultName,
+}
+
+impl FilingIdentity {
+    fn of(identity_id: IdentityId, names: &[KnownIdentityName]) -> Self {
+        let raw = identity_id.as_str();
+        let short_id = raw
+            .strip_prefix("idn_")
+            .unwrap_or(raw)
+            .chars()
+            .take(SHORT_ID_LENGTH)
+            .collect();
+        let name = names
+            .iter()
+            .find(|known| known.identity_id == identity_id)
+            .map(|known| known.name.trim())
+            .filter(|name| !name.is_empty())
+            .map_or(ProviderVaultName::Unknown, |name| {
+                ProviderVaultName::Named {
+                    name: name.to_owned(),
+                }
+            });
+        Self {
+            identity_id,
+            short_id,
+            name,
+        }
+    }
+}
+
 /// One vault a provider holds, as far as its listing tells without
 /// decryption.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -139,6 +203,8 @@ pub struct ProviderVaultSummary {
     pub short_id: String,
     /// What this browser calls it.
     pub name: ProviderVaultName,
+    /// The identity whose folder files it.
+    pub identity: FilingIdentity,
     pub created: ProviderVaultTime,
     pub last_activity: ProviderVaultTime,
     #[tsify(type = "number")]
@@ -162,11 +228,12 @@ impl ProviderVaultSummary {
     fn summarize(
         observation: ProviderVaultObservation,
         keys: &ProviderVaultKeyholding<'_>,
-        names: &[KnownVaultName],
+        names: BrowserNames<'_>,
         contents: OpenVaultContents,
     ) -> Self {
         let ProviderVaultObservation {
             store_id,
+            identity,
             namespace_created,
             events,
         } = observation;
@@ -188,7 +255,8 @@ impl ProviderVaultSummary {
             .or_else(|| namespace_created.instant());
         Self {
             short_id: Self::short_id(&store_id),
-            name: ProviderVaultName::of(&store_id, names),
+            name: ProviderVaultName::of(&store_id, names.vaults),
+            identity: FilingIdentity::of(identity, names.identities),
             store_id,
             created: ProviderVaultTime::from_instant(created),
             last_activity: ProviderVaultTime::from_instant(last_activity),
@@ -299,8 +367,8 @@ pub struct ProviderVaultListing {
 pub struct ProviderVaultListingRequest<'a> {
     pub observations: Vec<ProviderVaultObservation>,
     pub keys: ProviderVaultKeyholding<'a>,
-    /// The names this browser keeps for the vaults it holds.
-    pub names: &'a [KnownVaultName],
+    /// The names this browser keeps for the vaults and identities it holds.
+    pub names: BrowserNames<'a>,
     pub local_vault: &'a LocalVaultOccupancy,
 }
 
@@ -352,6 +420,11 @@ mod tests {
 
     fn store(token: &str) -> anyhow::Result<StoreId> {
         Ok(StoreId::parse(token)?)
+    }
+
+    /// The identity whose folder files every listed test vault.
+    fn filer() -> anyhow::Result<IdentityId> {
+        Ok(IdentityId::parse("idn_filerfilerf")?)
     }
 
     fn open(store_id: &StoreId, items: u32, apps: u32) -> LocalVaultOccupancy {
@@ -413,6 +486,7 @@ mod tests {
         let listing = ProviderVaultListingRequest {
             observations: vec![ProviderVaultObservation {
                 store_id: store_id.clone(),
+                identity: filer()?,
                 namespace_created: at("2024-01-02T00:00:00Z")?,
                 events: vec![
                     at("2024-03-01T00:00:00Z")?,
@@ -421,7 +495,7 @@ mod tests {
                 ],
             }],
             keys: ProviderVaultKeyholding::NONE,
-            names: &[],
+            names: BrowserNames::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -431,6 +505,11 @@ mod tests {
                 store_id,
                 short_id: "SMypl8K0".to_owned(),
                 name: ProviderVaultName::Unknown,
+                identity: FilingIdentity {
+                    identity_id: filer()?,
+                    short_id: "filerfil".to_owned(),
+                    name: ProviderVaultName::Unknown,
+                },
                 created: at("2024-01-01T00:00:00Z")?,
                 last_activity: at("2024-03-01T00:00:00Z")?,
                 event_count: ProviderEventCount(3),
@@ -447,11 +526,12 @@ mod tests {
         let listing = ProviderVaultListingRequest {
             observations: vec![ProviderVaultObservation {
                 store_id: store("store_abcdefghijk")?,
+                identity: filer()?,
                 namespace_created: ProviderVaultTime::Unreported,
                 events: vec![ProviderVaultTime::Unreported; 2],
             }],
             keys: ProviderVaultKeyholding::NONE,
-            names: &[],
+            names: BrowserNames::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -469,11 +549,12 @@ mod tests {
         let listing = ProviderVaultListingRequest {
             observations: vec![ProviderVaultObservation {
                 store_id: store("store_abcdefghijk")?,
+                identity: filer()?,
                 namespace_created: at("2024-01-02T00:00:00Z")?,
                 events: vec![],
             }],
             keys: ProviderVaultKeyholding::NONE,
-            names: &[],
+            names: BrowserNames::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -496,6 +577,7 @@ mod tests {
         let observation = |store_id: &StoreId, time: &str| -> anyhow::Result<_> {
             Ok(ProviderVaultObservation {
                 store_id: store_id.clone(),
+                identity: filer()?,
                 namespace_created: ProviderVaultTime::Unreported,
                 events: vec![at(time)?],
             })
@@ -513,7 +595,7 @@ mod tests {
                 identity_in_use: true,
                 ..ProviderVaultKeyholding::NONE
             },
-            names: &[],
+            names: BrowserNames::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -540,15 +622,18 @@ mod tests {
         use ProviderVaultAction::{ImportSeparately, MergeIntoOpen, RequestAccess, UseInstead};
         let local = store("store_localvault1")?;
         let other = store("store_othervault1")?;
+        let identity = filer()?;
         let observations = || {
             vec![
                 ProviderVaultObservation {
                     store_id: local.clone(),
+                    identity: identity.clone(),
                     namespace_created: ProviderVaultTime::Unreported,
                     events: vec![ProviderVaultTime::Unreported],
                 },
                 ProviderVaultObservation {
                     store_id: other.clone(),
+                    identity: identity.clone(),
                     namespace_created: ProviderVaultTime::Unreported,
                     events: vec![ProviderVaultTime::Unreported; 5],
                 },
@@ -564,7 +649,7 @@ mod tests {
                     identity_in_use: true,
                     ..ProviderVaultKeyholding::NONE
                 },
-                names: &[],
+                names: BrowserNames::NONE,
                 local_vault: &occupancy,
             }
             .listing();
@@ -616,6 +701,7 @@ mod tests {
         let listing = ProviderVaultListingRequest {
             observations: vec![ProviderVaultObservation {
                 store_id: local.clone(),
+                identity: filer()?,
                 namespace_created: ProviderVaultTime::Unreported,
                 events: vec![],
             }],
@@ -623,7 +709,7 @@ mod tests {
                 identity_vaults: &identity_vaults,
                 ..ProviderVaultKeyholding::NONE
             },
-            names: &[],
+            names: BrowserNames::NONE,
             local_vault: &open(&local, 0, 1),
         }
         .listing();
@@ -646,15 +732,20 @@ mod tests {
                 name: "   ".to_owned(),
             },
         ];
+        let identity = filer()?;
         let observation = |store_id: &StoreId| ProviderVaultObservation {
             store_id: store_id.clone(),
+            identity: identity.clone(),
             namespace_created: ProviderVaultTime::Unreported,
             events: vec![],
         };
         let listing = ProviderVaultListingRequest {
             observations: vec![observation(&own), observation(&other), observation(&blank)],
             keys: ProviderVaultKeyholding::NONE,
-            names: &names,
+            names: BrowserNames {
+                vaults: &names,
+                identities: &[],
+            },
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -678,6 +769,64 @@ mod tests {
     }
 
     #[test]
+    fn each_vault_names_the_identity_whose_folder_files_it() -> anyhow::Result<()> {
+        let mine = IdentityId::parse("idn_personalide")?;
+        let theirs = IdentityId::parse("idn_strangerabc")?;
+        let identities = [KnownIdentityName {
+            identity_id: mine.clone(),
+            name: " Personal ".to_owned(),
+        }];
+        let observation = |identity: &IdentityId, token: &str| -> anyhow::Result<_> {
+            Ok(ProviderVaultObservation {
+                store_id: store(token)?,
+                identity: identity.clone(),
+                namespace_created: ProviderVaultTime::Unreported,
+                events: vec![],
+            })
+        };
+        let listing = ProviderVaultListingRequest {
+            observations: vec![
+                observation(&mine, "store_ownvault001")?,
+                observation(&theirs, "store_othervault1")?,
+            ],
+            keys: ProviderVaultKeyholding::NONE,
+            names: BrowserNames {
+                vaults: &[],
+                identities: &identities,
+            },
+            local_vault: &LocalVaultOccupancy::Closed,
+        }
+        .listing();
+        let identity_of = |token: &str| {
+            listing
+                .vaults
+                .iter()
+                .find(|vault| vault.store_id.as_str() == token)
+                .map(|vault| vault.identity.clone())
+        };
+        assert_eq!(
+            identity_of("store_ownvault001"),
+            Some(FilingIdentity {
+                identity_id: mine,
+                short_id: "personal".to_owned(),
+                name: ProviderVaultName::Named {
+                    name: "Personal".to_owned()
+                },
+            })
+        );
+        // An identity this browser does not hold is told apart by its id.
+        assert_eq!(
+            identity_of("store_othervault1"),
+            Some(FilingIdentity {
+                identity_id: theirs,
+                short_id: "stranger".to_owned(),
+                name: ProviderVaultName::Unknown,
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
     fn listings_cross_the_web_boundary_as_tagged_values() -> anyhow::Result<()> {
         let json = serde_json::to_value(ProviderVaultListing {
             vaults: vec![ProviderVaultSummary {
@@ -685,6 +834,13 @@ mod tests {
                 short_id: "abcdefgh".to_owned(),
                 name: ProviderVaultName::Named {
                     name: "Family".to_owned(),
+                },
+                identity: FilingIdentity {
+                    identity_id: filer()?,
+                    short_id: "filerfil".to_owned(),
+                    name: ProviderVaultName::Named {
+                        name: "Personal".to_owned(),
+                    },
                 },
                 created: ProviderVaultTime::Unreported,
                 last_activity: ProviderVaultTime::Reported {
@@ -703,6 +859,11 @@ mod tests {
                     "storeId": "store_abcdefghijk",
                     "shortId": "abcdefgh",
                     "name": { "state": "named", "name": "Family" },
+                    "identity": {
+                        "identityId": "idn_filerfilerf",
+                        "shortId": "filerfil",
+                        "name": { "state": "named", "name": "Personal" },
+                    },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "reported", "at": 5 },
                     "eventCount": 1,

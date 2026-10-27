@@ -85,7 +85,7 @@ mod tests {
         )
     )]
     fn drive_listings_say_whether_the_root_exists() -> anyhow::Result<()> {
-        assert_eq!(nook_provider_root_name(), "Nook");
+        assert_eq!(nook_provider_root_name(), "meta-secret-nook");
         assert_eq!(
             serde_json::to_value(NookGoogleDriveVaultListing::Absent)?,
             serde_json::json!({ "root": "absent" })

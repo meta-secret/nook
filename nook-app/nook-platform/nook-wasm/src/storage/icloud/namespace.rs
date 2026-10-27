@@ -10,7 +10,14 @@ use super::wire::{
 };
 use super::{ICLOUD_EVENT_RECORD_TYPE, ICLOUD_LOCATION_FIELD, ICloudEventStore};
 use crate::NookError;
-use nook_core::{EventLogNamespaceKind, ICloudSharedTarget};
+use nook_core::{EventLogNamespaceKind, ICloudSharedTarget, PlacedNamespace, StoreId};
+
+/// Named values required by `ICloudEventStore::namespaces_tagged`.
+struct TaggedNamespaces<'a> {
+    web_auth_token: &'a str,
+    target: &'a ICloudSharedTarget,
+    prefix: &'a str,
+}
 
 /// `CloudKit` accepts at most 200 operations per modify request.
 const DELETE_BATCH: usize = 200;
@@ -83,29 +90,60 @@ impl ICloudEventStore<'_> {
     }
 
     /// Ids of every namespace of one kind with a log on this target.
-    pub(crate) async fn list_icloud_namespace_ids(
+    pub(crate) async fn list_icloud_namespaces(
         web_auth_token: &str,
         target: &ICloudSharedTarget,
         kind: EventLogNamespaceKind,
-    ) -> Result<Vec<String>, NookError> {
+    ) -> Result<Vec<PlacedNamespace>, NookError> {
+        Self::namespaces_tagged(TaggedNamespaces {
+            web_auth_token,
+            target,
+            prefix: PlacedNamespace::cloudkit_kind_prefix(kind),
+        })
+        .await
+    }
+
+    /// Where this target files one vault: every namespace whose tag names its
+    /// store id, whichever identity filed it.
+    pub(crate) async fn find_icloud_vault(
+        web_auth_token: &str,
+        target: &ICloudSharedTarget,
+        store_id: &StoreId,
+    ) -> Result<Vec<PlacedNamespace>, NookError> {
+        Self::namespaces_tagged(TaggedNamespaces {
+            web_auth_token,
+            target,
+            prefix: &PlacedNamespace::cloudkit_vault_prefix(store_id),
+        })
+        .await
+    }
+
+    async fn namespaces_tagged(
+        request: TaggedNamespaces<'_>,
+    ) -> Result<Vec<PlacedNamespace>, NookError> {
+        let TaggedNamespaces {
+            web_auth_token,
+            target,
+            prefix,
+        } = request;
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let records = Self::query_records(RecordQuery {
             web_auth_token: token.as_ref(),
             target,
             comparator: "BEGINS_WITH",
-            location: kind.tag_prefix(),
+            location: prefix,
         })
         .await?;
-        let mut ids = records
+        let mut placed = records
             .iter()
             .filter_map(|record| match record.location() {
-                FieldText::Text(location) => kind.id_from_tag(&location),
+                FieldText::Text(tag) => PlacedNamespace::from_cloudkit_tag(&tag),
                 FieldText::Unset => None,
             })
             .collect::<Vec<_>>();
-        ids.sort();
-        ids.dedup();
-        Ok(ids)
+        placed.sort();
+        placed.dedup();
+        Ok(placed)
     }
 
     /// Delete every record of this store's log. Returns how many went.
@@ -169,7 +207,7 @@ impl ICloudEventStore<'_> {
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use nook_core::{EventLogLocation, StoreId};
+    use nook_core::{IdentityId, PlacedNamespace, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const QUERY: &str = "records/query";
@@ -187,30 +225,48 @@ mod fetch_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn namespace_ids_page_through_matching_records() -> anyhow::Result<()> {
+    async fn namespaces_page_through_matching_records() -> anyhow::Result<()> {
         let first = format!(
-            r#"{{"records":[{},{},{{"recordName":"bare"}}],"continuationMarker":"next"}}"#,
-            record("r1", "vault:store_b"),
-            record("r2", "vault:store_a"),
+            r#"{{"records":[{},{},{},{{"recordName":"bare"}}],"continuationMarker":"next"}}"#,
+            record("r1", "vault:store_bbbbbbbbbbb:idn_bbbbbbbbbbb"),
+            record("r2", "vault:store_aaaaaaaaaaa:idn_aaaaaaaaaaa"),
+            record("r4", "vault:store_ccccccccccc"),
         );
-        let second = format!(r#"{{"records":[{}]}}"#, record("r3", "vault:store_a"));
+        let second = format!(
+            r#"{{"records":[{}]}}"#,
+            record("r3", "vault:store_aaaaaaaaaaa:idn_aaaaaaaaaaa")
+        );
         let stub = FetchStub::install(vec![
             FetchRoute::ok("POST", QUERY, &first),
             FetchRoute::ok("POST", QUERY, &second),
         ])?;
-        let ids = ICloudEventStore::list_icloud_namespace_ids(
+        let placed = ICloudEventStore::list_icloud_namespaces(
             "web-token",
             &super::super::owner_share_fixture()?,
             EventLogNamespaceKind::Vault,
         )
         .await?;
-        assert_eq!(ids, ["store_a", "store_b"]);
+        // Each vault is read back with the identity that filed it; a tag
+        // without one names no namespace.
+        assert_eq!(
+            placed,
+            [
+                PlacedNamespace::vault(
+                    IdentityId::parse("idn_aaaaaaaaaaa")?,
+                    StoreId::parse("store_aaaaaaaaaaa")?
+                ),
+                PlacedNamespace::vault(
+                    IdentityId::parse("idn_bbbbbbbbbbb")?,
+                    StoreId::parse("store_bbbbbbbbbbb")?
+                ),
+            ]
+        );
         assert_eq!(stub.calls().len(), 2);
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("POST", QUERY, 421)])?;
         assert!(
-            ICloudEventStore::list_icloud_namespace_ids(
+            ICloudEventStore::list_icloud_namespaces(
                 "web-token",
                 &super::super::owner_share_fixture()?,
                 EventLogNamespaceKind::Identity,
@@ -219,7 +275,7 @@ mod fetch_tests {
             .is_err()
         );
         assert!(
-            ICloudEventStore::list_icloud_namespace_ids(
+            ICloudEventStore::list_icloud_namespaces(
                 "",
                 &super::super::owner_share_fixture()?,
                 EventLogNamespaceKind::Identity,
@@ -239,12 +295,15 @@ mod fetch_tests {
         )
     )]
     async fn namespace_deletion_removes_every_record_or_fails() -> anyhow::Result<()> {
-        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
-        let tag = location.namespace_tag();
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_abcdefghijk")?,
+        );
+        let tag = location.cloudkit_tag();
         let store = ICloudEventStore {
             web_auth_token: "web-token",
             target: &super::super::owner_share_fixture()?,
-            location: &location,
+            placed: &location,
         };
         let records = format!(
             r#"{{"records":[{},{}]}}"#,

@@ -360,10 +360,13 @@ impl NookVaultManager {
         let store_ids = LocalFolderHandles::current()
             .open_folder(handle_id)
             .await?
-            .list_namespace_ids(EventLogNamespaceKind::Vault)
+            .list_namespaces(EventLogNamespaceKind::Vault)
             .await?
-            .iter()
-            .filter_map(|id| StoreId::parse(id).ok())
+            .into_iter()
+            .filter_map(|placed| match placed.location() {
+                nook_core::EventLogLocation::Vault(store_id) => Some(store_id.clone()),
+                nook_core::EventLogLocation::Identity(_) => None,
+            })
             .collect::<Vec<_>>();
         self.choose_discovered_vault(&store_ids).await
     }
@@ -492,19 +495,21 @@ impl NookVaultManager {
         handle_id: &str,
         location: &nook_core::EventLogLocation,
     ) -> Result<Vec<ExternalEventLogRecord>, NookError> {
-        LocalFolderHandles::current()
-            .open_folder(handle_id)
-            .await?
-            .read_events(location)
+        let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
+        let nook_core::VaultPlacement::Filed(placed) = folder.placement(location).await? else {
+            return Ok(Vec::new());
+        };
+        folder
+            .read_events(&placed)
             .await?
             .into_iter()
             .map(|file| {
-                Self::parse_event_log_storage_record(&file.event_id, &file.path, &file.content).map(
-                    |record| ExternalEventLogRecord {
+                Self::parse_event_log_storage_record(&file.event_id, &file.content).map(|record| {
+                    ExternalEventLogRecord {
                         event_id: record.event_id,
                         event: record.event,
-                    },
-                )
+                    }
+                })
             })
             .collect()
     }
@@ -620,11 +625,21 @@ impl NookVaultManager {
                 })
             })
             .collect::<Result<Vec<_>, NookError>>()?;
-        LocalFolderHandles::current()
-            .open_folder(handle_id)
-            .await?
-            .write_events(&location, &writes)
-            .await?;
+        let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
+        let placed = match (folder.placement(&location).await?, &location) {
+            (nook_core::VaultPlacement::Filed(placed), _) => placed,
+            (nook_core::VaultPlacement::Unfiled, nook_core::EventLogLocation::Vault(store_id)) => {
+                nook_core::VaultPlacement::Unfiled.for_writer(
+                    store_id.clone(),
+                    Self::current_identity_id(&self.unlocked_app_key()?).await?,
+                )
+            }
+            (
+                nook_core::VaultPlacement::Unfiled,
+                nook_core::EventLogLocation::Identity(identity),
+            ) => nook_core::PlacedNamespace::identity_log(identity.clone()),
+        };
+        folder.write_events(&placed, &writes).await?;
         Ok(match NookDatabase::load_from_indexed_db().await? {
             VaultSnapshotLookup::Stored(content) => content,
             VaultSnapshotLookup::NotStored => String::new(),

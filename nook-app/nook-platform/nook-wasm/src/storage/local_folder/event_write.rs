@@ -48,12 +48,12 @@ impl WrittenLocalFolderEvent {
 impl OpenedLocalFolder {
     pub(crate) async fn write_events(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
         records: &[LocalFolderEventWrite],
     ) -> Result<(), NookError> {
         let root = &self.root;
         let FolderDirectory::Opened(dir) = FolderObject::new(root)
-            .event_directory(location, ChildLookup::Create)
+            .event_directory(placed, ChildLookup::Create)
             .await?
         else {
             return Ok(());
@@ -117,8 +117,9 @@ pub(super) mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
     use web_sys::File as BrowserFile;
 
-    pub(crate) fn fixture_location() -> anyhow::Result<nook_core::EventLogLocation> {
-        Ok(nook_core::EventLogLocation::Vault(
+    pub(crate) fn fixture_location() -> anyhow::Result<nook_core::PlacedNamespace> {
+        Ok(nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
             nook_core::StoreId::parse("store_abcdefghijk")?,
         ))
     }

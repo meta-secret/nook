@@ -11,7 +11,7 @@ How Nook names and distinguishes **logical secret stores** (vault database files
 
 ## 1. Problem
 
-A user may connect several **storage providers** (local IndexedDB, GitHub repo A, GitHub repo B, Google Drive, …). Each provider holds immutable encrypted event files under `nook-log/v1/events/`.
+A user may connect several **storage providers** (local IndexedDB, GitHub repo A, GitHub repo B, Google Drive, …). Each provider holds immutable encrypted event files under `meta-secret-nook/{identity_id}/{store_id}/events/`.
 
 Future work replicates **one logical database** across multiple providers. To do that safely we must answer:
 
@@ -69,7 +69,7 @@ auth:
 - **Event log path**
   - **Identifier:** Provider config
   - **Scope:** Physical event location
-  - **Example:** `nook-log/v1/events/{digest}.yaml` in `user/nook`
+  - **Example:** `meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml` in `user/nook`
 
 **Rules**
 
@@ -90,11 +90,11 @@ auth:
 ```mermaid
 flowchart LR
   subgraph store["Vault store_id: store_SMypl8K0w9Y"]
-    E[nook-log/v1/events]
+    E["meta-secret-nook/{identity_id}/{store_id}/events"]
   end
   E --> L[Local IndexedDB event store]
   E --> G[GitHub user/nook]
-  E --> D[Google Drive Nook root]
+  E --> D[Google Drive meta-secret-nook root]
   E --> S[iCloud share]
 ```
 

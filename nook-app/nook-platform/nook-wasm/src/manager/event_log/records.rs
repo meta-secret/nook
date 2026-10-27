@@ -15,7 +15,6 @@ pub struct ExternalEventLogRecord {
 #[serde(rename_all = "camelCase")]
 pub struct EventLogStorageRecord {
     pub event_id: String,
-    pub path: String,
     pub event: VaultEvent,
 }
 

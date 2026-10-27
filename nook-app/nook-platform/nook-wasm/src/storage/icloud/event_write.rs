@@ -149,7 +149,7 @@ impl ICloudEventStore<'_> {
         let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
             bytes,
             event_id,
-            location: self.location,
+            location: self.placed.location(),
             provider: "CloudKit",
         })?;
         self.put_checked(checked, token.as_ref(), content).await
@@ -353,7 +353,6 @@ mod fetch_tests {
     use super::*;
     use crate::storage::checked_event_write::tests::EventFixture;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use nook_core::{EventLogLocation, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const LOOKUP: &str = "records/lookup";
@@ -382,11 +381,14 @@ mod fetch_tests {
     )]
     async fn put_creates_absent_events_and_accepts_identical_ones() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
-        let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_testtoken11")?,
+        );
         let store = ICloudEventStore {
             web_auth_token: "web-token",
             target: &super::super::owner_share_fixture()?,
-            location: &location,
+            placed: &location,
         };
         let stub = FetchStub::install(vec![
             FetchRoute::ok("POST", LOOKUP, r#"{"records":[]}"#),
@@ -434,11 +436,14 @@ mod fetch_tests {
     )]
     async fn create_conflicts_recheck_the_stored_record() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
-        let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_testtoken11")?,
+        );
         let store = ICloudEventStore {
             web_auth_token: "web-token",
             target: &super::super::owner_share_fixture()?,
-            location: &location,
+            placed: &location,
         };
         let content = str::from_utf8(&fixture.bytes)?;
         let conflict = FetchRoute {

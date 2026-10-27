@@ -13,7 +13,7 @@
 
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, DriveEventParent, EventId, EventLogLocation,
-    EventLogNamespaceKind, KnownVaultName, LocalEventWrite, LocalVaultOccupancy,
+    EventLogNamespaceKind, KnownIdentityName, KnownVaultName, LocalEventWrite, LocalVaultOccupancy,
     ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
     ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
     ProviderVaultTime, StoreId,
@@ -39,8 +39,7 @@ impl DriveVaultListing<'_> {
                 .await?;
         let mut observations: Vec<ProviderVaultObservation> = Vec::new();
         for folder in folders {
-            // A namespace name that is no store id is not a vault.
-            let Ok(store_id) = StoreId::parse(&folder.namespace_id) else {
+            let Some(store_id) = folder.store_id().cloned() else {
                 continue;
             };
             if observations
@@ -62,6 +61,7 @@ impl DriveVaultListing<'_> {
             .await?;
             observations.push(ProviderVaultObservation {
                 store_id,
+                identity: folder.placed.identity().clone(),
                 namespace_created: folder.created.provider_time()?,
                 events,
             });
@@ -73,6 +73,7 @@ impl DriveVaultListing<'_> {
 /// An observation for a transport that only counts a namespace's events.
 pub(crate) struct CountedVaultNamespace {
     pub(crate) store_id: StoreId,
+    pub(crate) identity: nook_core::IdentityId,
     pub(crate) event_count: usize,
 }
 
@@ -80,6 +81,7 @@ impl CountedVaultNamespace {
     pub(crate) fn observation(self) -> ProviderVaultObservation {
         ProviderVaultObservation {
             store_id: self.store_id,
+            identity: self.identity,
             namespace_created: ProviderVaultTime::Unreported,
             events: vec![ProviderVaultTime::Unreported; self.event_count],
         }
@@ -103,12 +105,23 @@ impl crate::DriveStorageClient<'_> {
 impl DriveVaultListing<'_> {
     /// The subfolder that holds one vault's events.
     async fn vault_folder(&self, store_id: &StoreId) -> Result<DriveEventParent, NookError> {
-        DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
-            .await?
-            .into_iter()
-            .find(|folder| StoreId::parse(&folder.namespace_id).is_ok_and(|id| &id == store_id))
-            .map(|folder| folder.folder)
-            .ok_or_else(|| NookError::Drive("The vault is not in this Nook folder.".to_owned()))
+        let mut folders =
+            DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
+                .await?
+                .into_iter()
+                .filter(|folder| folder.store_id() == Some(store_id))
+                .map(|folder| folder.folder)
+                .collect::<Vec<_>>();
+        match (folders.pop(), folders.is_empty()) {
+            (Some(folder), true) => Ok(folder),
+            (Some(_), false) => Err(NookError::Drive(
+                "Google Drive contains ambiguous namespace folders; sync stopped before choosing one."
+                    .to_owned(),
+            )),
+            (None, _) => Err(NookError::Drive(
+                "The vault is not in this Nook folder.".to_owned(),
+            )),
+        }
     }
 
     /// Write one event into a vault's subfolder the root already holds.
@@ -174,7 +187,7 @@ impl DriveVaultListing<'_> {
                 .await?;
         let mut inspected = InspectedVaults::default();
         for folder in folders {
-            let Ok(store_id) = StoreId::parse(&folder.namespace_id) else {
+            let Some(store_id) = folder.store_id().cloned() else {
                 continue;
             };
             if !store_ids.contains(&store_id) {
@@ -233,6 +246,8 @@ pub(crate) struct BrowserHeldVaults {
     pub(crate) app_id: Option<AppId>,
     /// The names this browser keeps for its registered vaults.
     pub(crate) names: Vec<KnownVaultName>,
+    /// The labels of the identities on this browser.
+    pub(crate) identity_names: Vec<KnownIdentityName>,
 }
 
 impl BrowserHeldVaults {
@@ -250,6 +265,14 @@ impl BrowserHeldVaults {
                 })
             })
             .collect::<Result<Vec<_>, NookError>>()?;
+        let identity_names = directory
+            .identities()
+            .iter()
+            .map(|identity| KnownIdentityName {
+                identity_id: identity.identity_id.clone(),
+                name: identity.label.clone(),
+            })
+            .collect();
         let keys = BrowserVaultKeys {
             directory: &directory,
             keyring: &keyring,
@@ -259,6 +282,7 @@ impl BrowserHeldVaults {
             other_identity_vaults: keys.other_identity_vaults(),
             app_id: keys.identity_app_id(),
             names,
+            identity_names,
         })
     }
 
@@ -296,7 +320,10 @@ impl LocalVaultClassification<'_> {
                 requested_vaults: &inspected.requested,
                 identity_in_use: held.app_id.is_some(),
             },
-            names: &held.names,
+            names: nook_core::BrowserNames {
+                vaults: &held.names,
+                identities: &held.identity_names,
+            },
             local_vault: self.local_vault,
         }
         .listing()

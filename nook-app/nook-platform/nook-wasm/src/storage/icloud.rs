@@ -12,14 +12,14 @@ use std::collections;
 use std::str;
 
 use crate::NookError;
-use nook_core::{EventId, EventLogLocation, ICloudShareRole, ICloudSharedTarget};
+use nook_core::{EventId, ICloudShareRole, ICloudSharedTarget, PlacedNamespace};
 use serde::Serialize;
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
     pub(crate) target: &'a ICloudSharedTarget,
     /// The identity log or vault these records belong to.
-    pub(crate) location: &'a EventLogLocation,
+    pub(crate) placed: &'a PlacedNamespace,
 }
 
 mod diagnostics;
@@ -96,7 +96,7 @@ impl ICloudEventStore<'_> {
 impl ICloudEventStore<'_> {
     /// The namespace tag every record of this store carries.
     fn namespace(&self) -> String {
-        self.location.namespace_tag()
+        self.placed.cloudkit_tag()
     }
 
     /// One record per event and log: the same event id never collides
@@ -473,11 +473,14 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn empty_icloud_token_is_rejected_before_network_access() -> anyhow::Result<()> {
         let target = super::owner_share_fixture()?;
-        let location = EventLogLocation::Vault(nook_core::StoreId::parse("store_abcdefghijk")?);
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_abcdefghijk")?,
+        );
         let store = ICloudEventStore {
             web_auth_token: "  ",
             target: &target,
-            location: &location,
+            placed: &location,
         };
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         assert!(store.list_icloud_event_ids().await.is_err());
@@ -496,7 +499,6 @@ mod browser_tests {
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use nook_core::StoreId;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const QUERY: &str = "records/query";
@@ -524,7 +526,10 @@ mod fetch_tests {
         )
     )]
     async fn event_ids_page_and_skip_undeclared_records() -> anyhow::Result<()> {
-        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_abcdefghijk")?,
+        );
         let (a, b) = (event_id('A')?, event_id('E')?);
         let first = format!(
             r#"{{"records":[{},{},{{"recordName":"bare"}}],"continuationMarker":"more"}}"#,
@@ -543,7 +548,7 @@ mod fetch_tests {
         let store = ICloudEventStore {
             web_auth_token: "web-token",
             target: &super::owner_share_fixture()?,
-            location: &location,
+            placed: &location,
         };
         assert_eq!(
             store.list_icloud_event_ids().await?,
@@ -566,11 +571,14 @@ mod fetch_tests {
         )
     )]
     async fn fetch_returns_content_only_for_the_named_event() -> anyhow::Result<()> {
-        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        let location = nook_core::PlacedNamespace::vault(
+            nook_core::IdentityId::parse("idn_abcdefghijk")?,
+            nook_core::StoreId::parse("store_abcdefghijk")?,
+        );
         let store = ICloudEventStore {
             web_auth_token: "web-token",
             target: &super::owner_share_fixture()?,
-            location: &location,
+            placed: &location,
         };
         let wanted = event_id('A')?;
         let other = event_id('E')?;

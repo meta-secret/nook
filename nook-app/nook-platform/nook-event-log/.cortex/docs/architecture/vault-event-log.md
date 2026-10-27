@@ -64,9 +64,9 @@ artifact for event-log vaults.
 - **Event ID**
   - **Rule:** SHA-256 of canonical body bytes (`sha256u:{base64url_no_pad}`)
 - **Remote path**
-  - **Rule:** `nook-log/v1/vaults/{store_id}/events/{digest}.yaml` on an
-    identity namespaced mount; `nook-log/v1/events/{digest}.yaml` on a legacy
-    vault root row. `EventLogLocation` owns both shapes.
+  - **Rule:** `meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml`,
+    in the folder of the identity that filed the vault. `PlacedNamespace` owns
+    the shape; see [the identity control log](identity-control-log.md).
 - **Writes**
   - **Rule:** append-only; `put_event_if_absent`
 - **Duplicate identical event**
@@ -232,21 +232,24 @@ The active provider adapters are GitHub, Google Drive, and iCloud.
 Google Drive and iCloud providers always sync under one shared target. The
 provider-settings wire version is independent of the vault event schema.
 
-- **Google Drive:** Events live below the account's one Nook root folder,
-  named by the provider's `folderId` (connect reference `shared:{folderId}`).
+- **Google Drive:** Events live below the account's one `meta-secret-nook`
+  root folder, named by the provider's `folderId` (connect reference
+  `shared:{folderId}`).
   A Drive reference without a folder fails closed; no hidden app-data root
   exists.
 - **iCloud:** Event records are children of the CloudKit share root named by
   the provider's `icloud-share-v1:` target. The owner queries its private
   database and each participant queries its shared database.
 
-Every target keeps one namespace per identity log and per vault:
+Every target keeps one namespace per identity log and per vault, each vault
+in the folder of the identity that filed it:
 
 - **Path-addressed targets:** each vault is its own
-  `nook-log/v1/vaults/{store_id}/` subdirectory.
-- **Google Drive:** each vault is its own `nook-vault-{store_id}` subfolder
-  of the Nook root.
-- **iCloud:** each record's queryable `location` names its namespace.
+  `meta-secret-nook/{identity_id}/{store_id}/` subdirectory.
+- **Google Drive:** each vault is its own `{store_id}` subfolder of its
+  identity's folder in the root.
+- **iCloud:** each record's queryable `location` names its namespace,
+  `vault:{store_id}:{identity_id}`.
 
 The events of different vaults never share a namespace. Several vaults, of
 one identity or of different identities, therefore coexist in one target.
@@ -269,6 +272,8 @@ browser registered shows the name its vault registry keeps; any other vault's
 name stays sealed under that vault's key, so the row shows its short id.
 
 - **Short id:** the first eight characters of the store token.
+- **Identity:** the identity whose folder files the vault, by its label when
+  an identity on this browser is it, otherwise by its short id.
 - **Event count:** the number of event files in the namespace. Duplicate
   Drive files of one event count once.
 - **Created:** the earliest reported time of the namespace or its events.

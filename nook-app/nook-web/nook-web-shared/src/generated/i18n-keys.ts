@@ -1868,6 +1868,7 @@ export const I18N_KEYS = {
   ProviderVaultsConnectExplainer: 'provider_vaults.connect_explainer',
   ProviderVaultsCreated: 'provider_vaults.created',
   ProviderVaultsEvents: 'provider_vaults.events',
+  ProviderVaultsFiledUnder: 'provider_vaults.filed_under',
   ProviderVaultsHintBackupPassword: 'provider_vaults.hint_backup_password',
   ProviderVaultsHintGranted: 'provider_vaults.hint_granted',
   ProviderVaultsHintLocked: 'provider_vaults.hint_locked',

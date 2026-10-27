@@ -14,6 +14,11 @@ pub enum EventError {
     #[error("local event {event_id} was quarantined: {reason}")]
     LocalAppendQuarantined { event_id: EventId, reason: String },
 
+    #[error(
+        "vault {store_id} sits in more than one identity folder; sync stopped before choosing one"
+    )]
+    VaultFiledTwice { store_id: String },
+
     #[error(transparent)]
     Validation(#[from] ValidationError),
 

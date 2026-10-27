@@ -1,10 +1,10 @@
 <!--
 The vaults a provider already holds, as its listing tells without
 decryption: a short id, how this device can open the vault, when its files
-were created and last written, and how many events it holds. A vault this
-browser keeps a name for is listed by it; any other vault's name is sealed
-under its key, so it shows its short id. Times a transport does not report
-are left out.
+were created and last written, how many events it holds, and the identity
+whose folder files it. A vault this browser keeps a name for is listed by it;
+any other vault's name is sealed under its key, so it shows its short id.
+Times a transport does not report are left out.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
@@ -61,6 +61,24 @@ are left out.
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.FirstRunRestoreVaultItem,
       replacements: { id: summary.shortId },
+    }
+    return vault.t(request)
+  }
+
+  /** The identity whose folder files the vault: its label when this browser
+   * holds it, else its short id. */
+  function identityLine(summary: ProviderVaultSummary): string {
+    let identity = summary.identity.shortId
+    switch (summary.identity.name.state) {
+      case 'named':
+        identity = summary.identity.name.name
+        break
+      case 'unknown':
+        break
+    }
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderVaultsFiledUnder,
+      replacements: { identity },
     }
     return vault.t(request)
   }
@@ -167,6 +185,10 @@ are left out.
           {access[1]}
         </p>
         <p class="nk-spec mt-1" data-testid="provider-vault-meta">
+          <span
+            data-testid="provider-vault-identity"
+            title={summary.identity.identityId}>{identityLine(summary)}</span
+          >
           {#if created}<span>{created}</span>{/if}
           {#if active}<span>{active}</span>{/if}
           <span>{eventLine(summary)}</span>

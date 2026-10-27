@@ -179,8 +179,9 @@ credentials grant storage access only.
   - Provider capabilities do not create a `personal` or `shared` vault mode.
 
 - **Google Drive:** Every provider is shared, independently of vault
-  architecture. It syncs under one visible My Drive folder named `Nook`
-  (`drive.file`; `drive.readonly` only for reads across accounts).
+  architecture. It syncs under one visible My Drive folder named
+  `meta-secret-nook` (`drive.file`; `drive.readonly` only for reads across
+  accounts).
 
     1. The owner connects the account's one Nook root folder: the existing
        root is reused, otherwise it is created and shared with no other

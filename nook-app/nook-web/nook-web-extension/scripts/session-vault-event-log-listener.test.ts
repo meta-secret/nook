@@ -45,7 +45,6 @@ class InstalledVaultEventLogListenerFixture {
   readonly records: ExtensionEventLogRecord[] = [
     {
       eventId: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-      path: 'events/passkey.json',
       event: {
         schema_version: 2,
         store_id: 'store_abcdefghijk',

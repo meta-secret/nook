@@ -88,10 +88,9 @@ impl NookVaultManager {
     pub fn parse_event_log_storage_record_js(
         &self,
         event_id: &str,
-        path: &str,
         content: &str,
     ) -> Result<NookEventLogStorageRecord, JsError> {
-        let record = Self::parse_event_log_storage_record(event_id, path, content)?;
+        let record = Self::parse_event_log_storage_record(event_id, content)?;
         Ok(NookEventLogStorageRecord(record))
     }
 
@@ -278,7 +277,6 @@ mod wasm_tests {
         let (event, event_id, content) = event_fixture()?;
         let records = NookEventLogRecords(vec![EventLogStorageRecord {
             event_id: event_id.clone(),
-            path: "events/fixture.yaml".to_owned(),
             event: event.clone(),
         }]);
         let array = Array::new();
@@ -294,16 +292,12 @@ mod wasm_tests {
         assert_eq!(array.length(), 1);
         let record: Object = array.get(0).unchecked_into();
         assert_eq!(get_string(&record, "eventId")?, event_id);
-        assert_eq!(get_string(&record, "path")?, "events/fixture.yaml");
         let event_object = get(&record, "event")?;
         assert_eq!(get_number(&event_object, "schema_version")?, 3.0);
 
         let manager = NookVaultManager::new();
-        let parsed = manager.parse_event_log_storage_record_js(
-            &get_string(&record, "eventId")?,
-            &get_string(&record, "path")?,
-            &content,
-        )?;
+        let parsed = manager
+            .parse_event_log_storage_record_js(&get_string(&record, "eventId")?, &content)?;
         assert_eq!(
             manager.serialize_event_log_storage_record_js(&parsed)?,
             content

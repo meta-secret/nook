@@ -70,7 +70,10 @@ pub use identity_control::{
     IdentityVaultEpochDeks, IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek,
     ProviderMountId,
 };
-pub use location::{EventLogLocation, EventLogNamespaceKind};
+pub use location::{
+    EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, PROVIDER_ROOT_DIR, PlacedNamespace,
+    VaultPlacement,
+};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,

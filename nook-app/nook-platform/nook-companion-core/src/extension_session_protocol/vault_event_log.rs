@@ -260,7 +260,6 @@ mod tests {
                 vault_store_id: store_id,
                 event_log_records: vec![ExtensionEventLogRecord {
                     event_id: event.id()?.as_str().to_owned(),
-                    path: "events/passkey.json".to_owned(),
                     event: event.into(),
                 }],
             })

@@ -89,7 +89,6 @@ impl NookVaultManager {
 
     pub(in crate::manager) fn parse_event_log_storage_record(
         event_id: &str,
-        path: &str,
         content: &str,
     ) -> Result<EventLogStorageRecord, NookError> {
         let event_id = EventId::parse(event_id)?;
@@ -97,7 +96,6 @@ impl NookVaultManager {
         Self::validate_event_record_id(&event_id, &event)?;
         Ok(EventLogStorageRecord {
             event_id: event_id.as_str().to_owned(),
-            path: path.to_owned(),
             event,
         })
     }

@@ -48,7 +48,6 @@ const WORK_STORE = 'store_bbbbbbbbbbb'
 
 const record: ExtensionEventLogRecord = {
   eventId: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-  path: 'events/work.json',
   event: {
     schema_version: 2,
     store_id: WORK_STORE,

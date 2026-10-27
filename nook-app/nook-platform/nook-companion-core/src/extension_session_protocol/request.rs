@@ -132,7 +132,6 @@ pub enum ExtensionStorageProviderType {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionEventLogRecord {
     pub event_id: String,
-    pub path: String,
     pub event: ExtensionVaultEventPayload,
 }
 
@@ -724,7 +723,6 @@ mod tests {
                 "providers": [{ "id": "provider", "type": "github" }],
                 "eventLogRecords": [{
                     "eventId": "event",
-                    "path": "path",
                     "event": valid_event,
                 }],
                 "queue": { "kind": "message-default" },

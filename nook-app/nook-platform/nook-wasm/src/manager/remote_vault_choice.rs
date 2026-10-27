@@ -73,21 +73,34 @@ impl NookVaultManager {
         let mut observations = Vec::new();
         for store_id in store_ids {
             let location = EventLogLocation::Vault(store_id.clone());
-            let event_count = match source {
-                DiscoveredVaultSource::CurrentProvider => {
-                    self.list_provider_event_ids_at(&location).await?.len()
-                }
+            let (placement, event_count) = match source {
+                DiscoveredVaultSource::CurrentProvider => (
+                    self.placed_at_current_provider(&location).await?,
+                    self.list_provider_event_ids_at(&location).await?.len(),
+                ),
                 DiscoveredVaultSource::BackupFolder(handle_id) => {
-                    LocalFolderHandles::current()
-                        .open_folder(handle_id)
-                        .await?
-                        .count_events(&location)
-                        .await?
+                    let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
+                    match folder.placement(&location).await? {
+                        nook_core::VaultPlacement::Filed(placed) => {
+                            let count = folder.count_events(&placed).await?;
+                            (nook_core::VaultPlacement::Filed(placed), count)
+                        }
+                        nook_core::VaultPlacement::Unfiled => {
+                            (nook_core::VaultPlacement::Unfiled, 0)
+                        }
+                    }
                 }
+            };
+            // Discovery lists only the vaults the target files somewhere.
+            let nook_core::VaultPlacement::Filed(placed) = placement else {
+                return Err(NookError::Database(format!(
+                    "Vault {store_id} disappeared from the provider during discovery."
+                )));
             };
             observations.push(
                 CountedVaultNamespace {
                     store_id: store_id.clone(),
+                    identity: placed.identity().clone(),
                     event_count,
                 }
                 .observation(),
@@ -319,12 +332,13 @@ mod tests {
             observations: vec![
                 CountedVaultNamespace {
                     store_id,
+                    identity: nook_core::IdentityId::parse("idn_abcdefghijk")?,
                     event_count: 2,
                 }
                 .observation(),
             ],
             keys: nook_core::ProviderVaultKeyholding::NONE,
-            names: &[],
+            names: nook_core::BrowserNames::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -338,7 +352,12 @@ mod tests {
                 "vaults": [{
                     "storeId": "store_abcdefghijk",
                     "shortId": "abcdefgh",
+                    "name": { "state": "unknown" },
+                    "identity": {
+                        "identityId": "idn_abcdefghijk",
+                        "shortId": "abcdefgh",
                         "name": { "state": "unknown" },
+                    },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "unreported" },
                     "eventCount": 2,

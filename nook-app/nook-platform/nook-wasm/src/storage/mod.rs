@@ -10,7 +10,7 @@ use crate::NookError;
 use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 pub(crate) mod auth_providers;
-mod checked_event_write;
+pub(crate) mod checked_event_write;
 pub(crate) mod device_access;
 pub(crate) mod drive;
 pub(crate) mod drive_events;

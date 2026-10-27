@@ -474,7 +474,6 @@ mod admission_tests {
         assert!(ExtensionEventLogRecord::DECL.contains("eventId"));
         let valid = serde_json::json!({
             "eventId": "event-1",
-            "path": "events/event-1.yaml",
             "event": {
                 "schema_version": 2,
                 "store_id": "store_testtoken11",
@@ -492,7 +491,7 @@ mod admission_tests {
         assert_eq!(decoded.event_id, "event-1");
         assert!(
             serde_json::from_str::<ExtensionEventLogRecordAdmission>(
-                r#"{"eventId":"event-1","path":"events/event-1.yaml","event":{"schema_version":2}}"#
+                r#"{"eventId":"event-1","event":{"schema_version":2}}"#
             )
             .is_err()
         );

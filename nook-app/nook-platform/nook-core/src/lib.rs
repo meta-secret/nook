@@ -323,15 +323,15 @@ pub use nook_event_log::{
     VaultProjection,
 };
 pub use nook_event_log::{
-    EventLogLocation, EventLogNamespaceKind, IdentityApprovalRequest, IdentityControlInsertion,
-    IdentityControlLog, IdentityControlMember, IdentityControlOperation, IdentityControlRejection,
-    IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
-    IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
+    EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, IdentityApprovalRequest,
+    IdentityControlInsertion, IdentityControlLog, IdentityControlMember, IdentityControlOperation,
+    IdentityControlRejection, IdentityControlState, IdentityControlVault, IdentityEvent,
+    IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
     IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget, IdentityProviderMount,
     IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, ProviderMountId,
-    VaultAuthorizedRoster, VaultRosterMember,
+    IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace,
+    ProviderMountId, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
@@ -359,10 +359,10 @@ pub use provider_vault_access::{
 };
 pub use provider_vault_join::ProviderVaultAccessRequest;
 pub use provider_vault_listing::{
-    EmptyVaultReplacement, IdentityAppCount, KnownVaultName, LocalVaultItemCount,
-    LocalVaultOccupancy, NOOK_PROVIDER_ROOT_NAME, ProviderEventCount, ProviderInstant,
-    ProviderVaultListing, ProviderVaultListingRequest, ProviderVaultName, ProviderVaultObservation,
-    ProviderVaultSummary, ProviderVaultTime,
+    BrowserNames, EmptyVaultReplacement, FilingIdentity, IdentityAppCount, KnownIdentityName,
+    KnownVaultName, LocalVaultItemCount, LocalVaultOccupancy, NOOK_PROVIDER_ROOT_NAME,
+    ProviderEventCount, ProviderInstant, ProviderVaultListing, ProviderVaultListingRequest,
+    ProviderVaultName, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
 };
 pub use provider_vault_merge::{ProviderVaultGrantedOpening, ProviderVaultPasswordOpening};
 pub use secrets::SecretRecordFilter;
