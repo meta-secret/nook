@@ -263,8 +263,9 @@ After sign-in, step 2 shows what the account's Nook root holds before
 anything is written. `list_google_drive_vaults` looks the root up without
 creating it. Rust lists its vault namespaces from Drive metadata, as
 [the vault event log](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md#provider-vault-listing)
-describes. No vault is downloaded or decrypted, so vault names stay hidden
-until unlock.
+describes. No vault is downloaded or decrypted. A vault this browser
+registered is named from its vault registry; every other vault's name is
+encrypted under its own key, so its row shows the short id instead.
 
 Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
 device can open it (`ProviderVaultAccess`) and what the user may do

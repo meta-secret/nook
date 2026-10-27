@@ -13,9 +13,10 @@
 
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, DriveEventParent, EventId, EventLogLocation,
-    EventLogNamespaceKind, LocalEventWrite, LocalVaultOccupancy, ProviderVaultEvents,
-    ProviderVaultKeyholding, ProviderVaultListing, ProviderVaultListingRequest,
-    ProviderVaultObservation, ProviderVaultStanding, ProviderVaultTime, StoreId,
+    EventLogNamespaceKind, KnownVaultName, LocalEventWrite, LocalVaultOccupancy,
+    ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
+    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
+    ProviderVaultTime, StoreId,
 };
 
 use super::drive_events::DriveEventStore;
@@ -230,12 +231,25 @@ pub(crate) struct BrowserHeldVaults {
     pub(crate) other_identity_vaults: Vec<BrowserIdentityVault>,
     /// This browser's app key under the identity in use.
     pub(crate) app_id: Option<AppId>,
+    /// The names this browser keeps for its registered vaults.
+    pub(crate) names: Vec<KnownVaultName>,
 }
 
 impl BrowserHeldVaults {
     pub(crate) async fn load() -> Result<Self, NookError> {
         let directory = NookDatabase::load_identity_directory().await?;
         let keyring = NookDatabase::load_keyring().await?;
+        let names = NookDatabase::load_vault_registry()
+            .await?
+            .vaults
+            .into_iter()
+            .map(|entry| {
+                Ok(KnownVaultName {
+                    store_id: StoreId::parse(&entry.store_id)?,
+                    name: entry.label,
+                })
+            })
+            .collect::<Result<Vec<_>, NookError>>()?;
         let keys = BrowserVaultKeys {
             directory: &directory,
             keyring: &keyring,
@@ -244,6 +258,7 @@ impl BrowserHeldVaults {
             identity_vaults: keys.identity_vaults(),
             other_identity_vaults: keys.other_identity_vaults(),
             app_id: keys.identity_app_id(),
+            names,
         })
     }
 
@@ -281,6 +296,7 @@ impl LocalVaultClassification<'_> {
                 requested_vaults: &inspected.requested,
                 identity_in_use: held.app_id.is_some(),
             },
+            names: &held.names,
             local_vault: self.local_vault,
         }
         .listing()

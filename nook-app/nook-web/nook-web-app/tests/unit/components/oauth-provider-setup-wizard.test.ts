@@ -47,6 +47,7 @@ function summary(
   return {
     storeId,
     shortId: storeId.slice('store_'.length, 'store_'.length + 8),
+    name: { state: 'unknown' },
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
     eventCount: 4,
@@ -105,7 +106,10 @@ describe('Google Drive provider setup', () => {
       root: 'found',
       listing: {
         vaults: [
-          summary('store_ownvault001', { state: 'syncs' }, []),
+          {
+            ...summary('store_ownvault001', { state: 'syncs' }, []),
+            name: { state: 'named', name: 'Family' },
+          },
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
         replacement: { state: 'unavailable' },
@@ -119,6 +123,11 @@ describe('Google Drive provider setup', () => {
     expect(list).toHaveBeenCalledWith({ state: 'closed' })
     const [own, other] = view.getAllByTestId('provider-vault-row')
     expect(own?.dataset.access).toBe('syncs')
+    // A vault this browser keeps a name for is listed by it; another
+    // identity's vault keeps its name sealed and shows its short id.
+    expect(own?.textContent).toContain('Family')
+    expect(own?.textContent).not.toContain('ownvault')
+    expect(other?.textContent).toContain('othervau')
     expect(own?.textContent).toContain(
       vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
     )

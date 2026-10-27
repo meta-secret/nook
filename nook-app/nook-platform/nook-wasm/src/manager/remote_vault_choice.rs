@@ -324,6 +324,7 @@ mod tests {
                 .observation(),
             ],
             keys: nook_core::ProviderVaultKeyholding::NONE,
+            names: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -337,6 +338,7 @@ mod tests {
                 "vaults": [{
                     "storeId": "store_abcdefghijk",
                     "shortId": "abcdefgh",
+                        "name": { "state": "unknown" },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "unreported" },
                     "eventCount": 2,

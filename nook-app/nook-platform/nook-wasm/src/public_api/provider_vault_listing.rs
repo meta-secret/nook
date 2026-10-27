@@ -2,7 +2,8 @@
 //!
 //! The listing reads transport metadata, plus the events of vaults no identity
 //! here holds to see whether a backup password opens them. Nothing is
-//! decrypted, so vault names stay hidden until a vault is unlocked.
+//! decrypted: a vault is named only from this browser's own vault registry,
+//! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
 use crate::storage::provider_vault_listing::{
