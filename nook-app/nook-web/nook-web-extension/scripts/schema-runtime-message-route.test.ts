@@ -3,9 +3,9 @@ import { Deferred, Effect, Schema } from 'effect'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   WebsiteFocusedLoginRevealMessage,
-  WebsiteFocusedLoginRevealMessageType,
   type WebsiteFocusedLoginFillResponse,
 } from '../src/lib/focused-login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from '../src/lib/focused-login-reveal-message-type'
 import { FocusedLoginMessageRoute } from '../src/background/service-worker/focused-login-message-route'
 import {
   OrderedBackgroundRuntimeMessageRouter,

@@ -237,7 +237,7 @@ describe('focused service-worker release route', () => {
         sendSessionMessage: fixture.sendSessionMessage.bind(fixture),
       }
     const { WebsiteFocusedLoginRevealMessageType } =
-      await import('../src/lib/focused-login-fill-messages')
+      await import('../src/lib/focused-login-reveal-message-type')
     const configuration: ConstructorParameters<
       typeof FocusedWebsiteLoginFillOperation
     >[0] = {

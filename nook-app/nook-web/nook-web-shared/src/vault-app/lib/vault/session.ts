@@ -19,7 +19,7 @@ import {
 import { VaultType } from "$lib/vault/architecture-model";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
-import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
+import { LocalLoginPreparationState } from "$lib/vault/state/local-login-preparation-state";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 
 const log = browserLogRuntime.createLogger("vault-session");

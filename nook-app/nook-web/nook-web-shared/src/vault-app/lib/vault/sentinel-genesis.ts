@@ -17,7 +17,7 @@ import {
 import type { VaultState } from "$lib/vault.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
-import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
+import { LocalLoginPreparationState } from "$lib/vault/state/local-login-preparation-state";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
 type ReplaceOwnedWasmValuesArgs<T extends { free: () => void }> = {

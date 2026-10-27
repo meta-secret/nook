@@ -63,7 +63,7 @@ vi.mock('$lib/auth/providers', async (importOriginal) => ({
 }))
 import { VaultLoginActions } from '$lib/vault/local-login'
 import { NookVaultManager } from '$app-wasm'
-import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
+import { LocalLoginPreparationState } from '$lib/vault/state/local-login-preparation-state'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 

@@ -7,9 +7,9 @@ import {
 import type { CompanionWasmFocusedRecognitionResponse } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   WebsiteFocusedLoginRevealMessage,
-  WebsiteFocusedLoginRevealMessageType,
   type WebsiteFocusedLoginFillResponse,
 } from '../../lib/focused-login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from '../../lib/focused-login-reveal-message-type'
 import {
   WebsiteLoginPickerOpenMessageType,
   LoginPickerCancelMessageType,
