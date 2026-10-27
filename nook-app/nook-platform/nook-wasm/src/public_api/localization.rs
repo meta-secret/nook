@@ -5,7 +5,7 @@ use crate::{
 };
 use nook_core::AuthenticationWorkflowMatch;
 use nook_core::SupportedAppLocale;
-use nook_core::{AppLocale, VaultRecoveryErrorKind};
+use nook_core::{AppLocale, ProviderFailureCause, VaultRecoveryErrorKind};
 use nook_core::{IdentityHealth, IdentityHealthAssessment};
 use nook_core::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
@@ -48,6 +48,12 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
     VaultRecoveryErrorKind::classify_vault_recovery_error(message)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_failure_cause(message: &str) -> String {
+    ProviderFailureCause::classify(message).label().to_owned()
 }
 
 #[wasm_bindgen]

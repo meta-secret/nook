@@ -1,5 +1,10 @@
-import type { LocalVaultOccupancy, StoreId } from "$app-wasm";
+import type { LocalVaultOccupancy, NookImportResult, StoreId } from "$app-wasm";
+import { err, ok, type Result } from "neverthrow";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 
@@ -107,5 +112,121 @@ export class ProviderVaultActions {
     );
     if (deleted.isOk())
       vault.showSuccess(vault.t(I18N_KEYS.ProviderVaultsReplaced));
+  }
+}
+
+export enum ProviderVaultAccessRequest {
+  /** The join request is in the vault's subfolder. */
+  Saved = "saved",
+}
+
+export enum ProviderVaultOpeningKind {
+  /** The vault's backup password, typed by the user. */
+  BackupPassword = "backup-password",
+  /** The key a member granted this device. */
+  GrantedKey = "granted-key",
+}
+
+/** How the user opens a provider vault to merge it. */
+export type ProviderVaultOpening =
+  | {
+      readonly kind: ProviderVaultOpeningKind.BackupPassword;
+      readonly password: string;
+    }
+  | { readonly kind: ProviderVaultOpeningKind.GrantedKey };
+
+/** One vault of the signed-in Google account's Nook folder. */
+export interface GoogleDriveVaultTarget {
+  readonly accessToken: string;
+  readonly storeId: StoreId;
+}
+
+export interface ProviderVaultMerge extends GoogleDriveVaultTarget {
+  readonly opening: ProviderVaultOpening;
+}
+
+/**
+ * Owns what this device does with a Nook-folder vault another identity
+ * holds: merge its records into the open vault, or ask its members for
+ * access. Rust opens and imports; this routes the calls through the
+ * storage queue and reports the outcome.
+ */
+export class ProviderVaultAccessActions {
+  constructor(private readonly vault: VaultState) {}
+
+  /** Copy the vault's records into the open vault; returns how many came in. */
+  async mergeIntoOpen(
+    request: ProviderVaultMerge,
+  ): Promise<Result<number, VaultStorageFailure>> {
+    const vault = this.vault;
+    vault.errorMsg = "";
+    vault.dismissSuccess();
+    vault.isSaving = true;
+    try {
+      const merged = await vault.enqueueStorage(async () => {
+        const manager = vault.admitManager();
+        if (manager.isErr()) return err(manager.error);
+        try {
+          const { accessToken, storeId, opening } = request;
+          const imported: NookImportResult =
+            opening.kind === ProviderVaultOpeningKind.BackupPassword
+              ? await manager.value.merge_google_drive_vault_with_password(
+                  accessToken,
+                  storeId,
+                  opening.password,
+                )
+              : await manager.value.merge_google_drive_vault_with_app_key(
+                  accessToken,
+                  storeId,
+                );
+          return ok(imported);
+        } catch (failure) {
+          return err(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (merged.isErr()) return err(merged.error);
+      const count = merged.value.imported;
+      merged.value.free();
+      const synchronized = await vault.runFanOutSyncAfterLocalSave();
+      if (synchronized.isErr()) return err(synchronized.error);
+      const refreshed = await vault.refreshSecretsFromSession();
+      if (refreshed.isErr()) return err(refreshed.error);
+      const toast: Parameters<typeof vault.t>[0] = {
+        key: I18N_KEYS.ProviderVaultsMerged,
+        replacements: { count: String(count) },
+      };
+      vault.showSuccess(vault.t(toast));
+      return ok(count);
+    } finally {
+      vault.isSaving = false;
+    }
+  }
+
+  /** Write this device's join request into the vault's subfolder. */
+  async requestAccess({
+    accessToken,
+    storeId,
+  }: GoogleDriveVaultTarget): Promise<
+    Result<ProviderVaultAccessRequest, VaultStorageFailure>
+  > {
+    const vault = this.vault;
+    vault.errorMsg = "";
+    vault.dismissSuccess();
+    const requested = await vault.enqueueStorage(async () => {
+      const manager = vault.admitManager();
+      if (manager.isErr()) return err(manager.error);
+      try {
+        await manager.value.request_google_drive_vault_access(
+          accessToken,
+          storeId,
+        );
+        return ok(ProviderVaultAccessRequest.Saved);
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (requested.isErr()) return err(requested.error);
+    vault.showSuccess(vault.t(I18N_KEYS.ProviderVaultsAccessRequestedToast));
+    return ok(ProviderVaultAccessRequest.Saved);
   }
 }

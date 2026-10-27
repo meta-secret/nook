@@ -31,6 +31,8 @@ pub(super) enum SecretImportSource {
     LastPass,
     OnePassword,
     ProtonPass,
+    /// Another vault in the provider, opened with its backup password.
+    ProviderVault,
 }
 
 impl SecretImportSource {
@@ -46,6 +48,7 @@ impl SecretImportSource {
             Self::LastPass => "IMPORT_LASTPASS_START",
             Self::OnePassword => "IMPORT_ONEPASSWORD_START",
             Self::ProtonPass => "IMPORT_PROTON_PASS_START",
+            Self::ProviderVault => "IMPORT_PROVIDER_VAULT_START",
         }
     }
 
@@ -61,6 +64,7 @@ impl SecretImportSource {
             Self::LastPass => "import-lastpass",
             Self::OnePassword => "import-onepassword",
             Self::ProtonPass => "import-proton-pass",
+            Self::ProviderVault => "import-provider-vault",
         }
     }
 
@@ -76,6 +80,7 @@ impl SecretImportSource {
             Self::LastPass => "LastPass",
             Self::OnePassword => "1Password",
             Self::ProtonPass => "Proton Pass",
+            Self::ProviderVault => "Sync provider vault",
         }
     }
 }
@@ -456,6 +461,12 @@ mod tests {
                 "IMPORT_PROTON_PASS_START",
                 "import-proton-pass",
                 "Proton Pass",
+            ),
+            (
+                SecretImportSource::ProviderVault,
+                "IMPORT_PROVIDER_VAULT_START",
+                "import-provider-vault",
+                "Sync provider vault",
             ),
         ];
 

@@ -1,7 +1,7 @@
 <!--
 Identity Devices page: the devices that open this identity. It reports;
 adding a device is in Manage on the card. Upgrade notices sit above when the
-identity needs one.
+identity needs one, and devices asking to open the open vault above the list.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -14,6 +14,7 @@ identity needs one.
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
   import IdentityStandingNotices from "./IdentityStandingNotices.svelte";
+  import VaultAccessRequests from "./VaultAccessRequests.svelte";
   import { IdentityStandingPresentation } from "./identity-standing";
 
   type VaultDevicesCardProps = ComponentProps<typeof VaultDevicesCard>;
@@ -63,6 +64,10 @@ identity needs one.
           : I18N_KEYS.AddDeviceSingleDevice,
       )}
     </p>
+  {/if}
+
+  {#if vault.pendingJoins.length > 0}
+    <VaultAccessRequests {vault} {isBusy} />
   {/if}
 
   <ManageSection

@@ -33,3 +33,23 @@ export type EmptyVaultConfirmation =
   | ({
       readonly kind: EmptyVaultConfirmationKind.Confirming;
     } & EmptyVaultConfirmationRequest);
+
+export enum MergeConfirmationKind {
+  Closed = "closed",
+  Confirming = "confirming",
+}
+
+/** The provider vault being merged into the open vault, and whether the
+ * user must type its backup password to open it. */
+export interface MergeConfirmationRequest {
+  readonly storeId: string;
+  readonly shortId: string;
+  readonly needsPassword: boolean;
+}
+
+/** The explicit confirmation before a provider vault's records come in. */
+export type MergeConfirmation =
+  | { readonly kind: MergeConfirmationKind.Closed }
+  | ({
+      readonly kind: MergeConfirmationKind.Confirming;
+    } & MergeConfirmationRequest);

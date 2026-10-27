@@ -6,7 +6,8 @@
 )]
 
 use nook_auth2::OpaqueCiphertext;
-use serde::Deserialize;
+use serde::ser::Error as _;
+use serde::{Deserialize, Serialize};
 
 /// The vault name re-encrypted under the new epoch's `secrets_key`. A
 /// checkpoint without one leaves the vault unnamed: a name under the
@@ -39,8 +40,8 @@ impl EpochVaultName {
         S: serde::Serializer,
     {
         match name {
-            EpochVaultName::Named(name) => serde::Serialize::serialize(name, serializer),
-            EpochVaultName::Unnamed => Err(serde::ser::Error::custom(
+            EpochVaultName::Named(name) => name.serialize(serializer),
+            EpochVaultName::Unnamed => Err(S::Error::custom(
                 "an unnamed checkpoint must omit its vault name",
             )),
         }
@@ -54,7 +55,7 @@ mod tests {
 
     #[test]
     fn a_named_checkpoint_round_trips_its_ciphertext() -> anyhow::Result<()> {
-        #[derive(serde::Serialize, Deserialize)]
+        #[derive(Serialize, Deserialize)]
         struct Checkpoint {
             #[serde(
                 default,

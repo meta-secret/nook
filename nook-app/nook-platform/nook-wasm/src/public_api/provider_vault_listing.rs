@@ -1,10 +1,13 @@
 //! What a provider already holds, for the setup and import screens.
 //!
-//! The listing reads transport metadata only: nothing is downloaded or
+//! The listing reads transport metadata, plus the events of vaults no identity
+//! here holds to see whether a backup password opens them. Nothing is
 //! decrypted, so vault names stay hidden until a vault is unlocked.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
-use crate::storage::provider_vault_listing::{DriveVaultListing, LocalVaultClassification};
+use crate::storage::provider_vault_listing::{
+    BrowserHeldVaults, DriveVaultListing, LocalVaultClassification,
+};
 use nook_core::{
     DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
 };
@@ -22,8 +25,8 @@ pub enum NookGoogleDriveVaultListing {
     Found { listing: ProviderVaultListing },
 }
 
-/// List the vaults in the account's Nook root without creating it, each
-/// related to this device's identity and open vault. A root the user
+/// List the vaults in the account's Nook root without creating it, each with
+/// how this device can open it and what the user may do with it. A root the user
 /// duplicated by hand fails with `GoogleDriveVaultFolderAmbiguous`.
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_google_drive_vaults(
@@ -40,18 +43,20 @@ pub enum NookGoogleDriveVaultListing {
         DriveVaultFolderSelection::Create => NookGoogleDriveVaultListing::Absent,
         DriveVaultFolderSelection::Existing(folder_id) => {
             let root = DriveEventParent::shared_folder_id(folder_id.as_str());
-            let observations = DriveVaultListing {
+            let drive = DriveVaultListing {
                 token: access_token,
                 root: &root,
-            }
-            .observations()
-            .await?;
+            };
+            let observations = drive.observations().await?;
+            let held = BrowserHeldVaults::load().await?;
+            let inspected = drive
+                .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
+                .await?;
             NookGoogleDriveVaultListing::Found {
                 listing: LocalVaultClassification {
                     local_vault: &local_vault,
                 }
-                .listing(observations)
-                .await?,
+                .listing(observations, &held, &inspected),
             }
         }
     };

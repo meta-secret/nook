@@ -186,6 +186,7 @@ export class ProviderSyncActions {
       {
         provider_type: provider.type,
         failure_kind: failure.kind,
+        cause: failure.cause,
       };
     const failureContext = ProviderFailureLogContext.from(failureRequest);
     const warningContext: Parameters<typeof log.warnWithContext>[0] = {

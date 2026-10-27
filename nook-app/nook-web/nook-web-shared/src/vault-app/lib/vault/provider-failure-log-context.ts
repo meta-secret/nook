@@ -8,11 +8,13 @@ enum ProviderFailureLogHttpStatusKind {
 type ProviderFailureLogContextRequest = {
   readonly provider_type: string;
   readonly failure_kind: VaultStorageFailureKind;
+  readonly cause: string;
 };
 
 type ProviderFailureLogContextRecordBase = {
   readonly provider_type: string;
   readonly failure_kind: VaultStorageFailureKind;
+  readonly cause: string;
 };
 
 type ProviderFailureLogContextRecord =
@@ -33,6 +35,7 @@ export class ProviderFailureLogContext {
     const base: ProviderFailureLogContextRecordBase = {
       provider_type: request.provider_type,
       failure_kind: request.failure_kind,
+      cause: request.cause,
     };
     switch (ProviderFailureLogContext.httpStatusKind(request.failure_kind)) {
       case ProviderFailureLogHttpStatusKind.Unauthorized: {

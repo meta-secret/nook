@@ -262,7 +262,9 @@ closed before any writes.
 
 Setup and recovery list the vaults a target holds before anything is written.
 Each listed namespace becomes a `ProviderVaultSummary` computed in Rust from
-transport metadata only. Nothing is downloaded or decrypted, so plaintext
+transport metadata. Only the events of a vault no identity on this browser
+holds are downloaded, to read whether a backup password opens it and whether
+this app asked for or was granted access. Nothing is decrypted, so plaintext
 vault names appear only after unlock.
 
 - **Short id:** the first eight characters of the store token.

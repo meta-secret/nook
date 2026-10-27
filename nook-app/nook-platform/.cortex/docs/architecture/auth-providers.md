@@ -266,40 +266,65 @@ creating it. Rust lists its vault namespaces from Drive metadata, as
 describes. No vault is downloaded or decrypted, so vault names stay hidden
 until unlock.
 
-Rust `ProviderVaultListingRequest` relates each listed vault to this device:
+Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
+device can open it (`ProviderVaultAccess`) and what the user may do
+(`ProviderVaultAction`, recommended action first). The row shows the access
+and one line that says what it means.
 
-1. A vault the selected local identity holds is **this identity's**. It
-   simply syncs through the identity mount; the row offers no action.
-2. Any other vault is **another identity's**. Its only action is **Import as a
-   separate vault**, which runs the existing import and recovery flow with
-   that vault chosen. On the login screen the import continues there. From
-   the unlocked workspace the identity locks first, as **Import from sync
-   provider** does. A vault this device cannot open fails visibly in that
-   flow.
-3. **Connect & sync** stays available beside the list. Vaults coexist safely
-   because each keeps its own namespace subfolder.
+- **Syncs:** the identity in use holds the vault. It syncs through the
+  identity mount; the row offers no action.
+- **Other identity here:** another identity on this browser holds the vault
+  and its app key here was granted it. It opens from that identity; the row
+  offers no action.
+- **Granted:** a member approved this app's access request, so its key opens
+  the vault.
+- **Backup password:** the vault's event log keeps a password envelope, so its
+  backup password opens it.
+- **Requested:** this app asked for access; a member approves it when its
+  device syncs the vault. The row offers no action.
+- **Unchecked:** no identity is in use on this browser, as on the login
+  screen after browser data was cleared. Nothing was checked, and the user's
+  passkey or backup password may still open it, so recovery stays offered.
+- **Locked:** nothing on this device opens it. The row says so and offers
+  **Request access**.
 
-The recovery picker for a provider with several vaults shows the same
-summaries for every transport.
+A vault that opens (granted or by backup password) offers actions by what the
+open vault holds:
 
-An open local vault is never merged into another vault:
+- **Empty open vault:** no items and no other app. **Use this vault instead**
+  comes first: after an explicit confirmation the chosen vault is imported as
+  a separate vault, and once it is open the empty vault is deleted from the
+  identity everywhere. **Import as a separate vault** is the alternative.
+- **Open vault with records:** **Merge into my vault** comes first. After an
+  explicit confirmation, and the backup password when that is how it opens,
+  Rust reads the vault's events, opens its keys, decrypts its live records,
+  and commits them through the open vault's import. Identical logins are
+  matched and different passwords stay separate items. The source vault stays
+  in the folder unchanged. **Import as a separate vault** is the alternative.
+- **No open vault (login screen):** only **Import as a separate vault**, the
+  recovery that tries the passkey or backup password.
 
-- **Empty open vault:** When the open vault holds no items and the identity
-  has no other app, the listing offers `EmptyVaultReplacement::Offered`. The
-  row then also offers **Use this vault instead**. After an explicit
-  confirmation, the chosen vault is imported as a separate vault. Once it is
-  open, the empty vault is deleted from the identity everywhere. Cancelling
-  the import forgets the replacement. The offer needs the vault open: a
-  locked local vault on the login screen reports no occupancy, so only
-  import is offered there.
-- **Open vault with records:** Nothing replaces it. The provider's other
-  vaults import beside it, because an identity can own several vaults.
+Around the list:
 
-**Prohibited:** treat a provider's other vault as this vault's history and
-union its events into the open vault.
+- **Request access:** writes a self-signed `join-requested` event, carrying
+  this app's public keys only, into the vault's subfolder on top of its
+  current heads and key epoch. A member's Devices page lists the open vault's
+  requests with **Approve** and **Deny**. Approval wraps the vault keys to the
+  requesting app; that app then lists the vault as granted.
+- **Connect & sync:** stays below the list and says what it does: it saves
+  the provider and syncs this identity's vaults into the Nook folder, each in
+  its own subfolder. The listed vaults stay as they are unless the user
+  chooses an action.
+- **Recovery picker:** a provider with several vaults shows the same access
+  for every transport and offers recovery only for a vault this device can
+  open.
 
-**Required:** import it as a separate vault; only an empty vault may give way,
-after the user confirms.
+**Prohibited:** union another vault's events into the open vault, or offer an
+action that needs keys this device does not hold.
+
+**Required:** merge decrypted records through the import pipeline, import a
+vault separately, or ask a member for access; only an empty vault may give
+way, after the user confirms.
 
 Future work, not implemented:
 

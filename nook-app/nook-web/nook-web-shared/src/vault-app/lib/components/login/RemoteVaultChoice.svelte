@@ -33,17 +33,20 @@ continues with it.
   </div>
   <ProviderVaultList {vault} vaults={vault.remoteVaultChoices}>
     {#snippet action(summary: ProviderVaultSummary)}
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        data-testid="remote-vault-choice-item"
-        disabled={busy}
-        onclick={() => void onChoose(summary.storeId)}
-      >
-        {vault.t(I18N_KEYS.ProviderVaultsRecover)}
-        <ArrowRight class="size-4" aria-hidden="true" />
-      </Button>
+      <!-- Only a vault this device may open can be recovered here. -->
+      {#if summary.actions.includes('importSeparately')}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="remote-vault-choice-item"
+          disabled={busy}
+          onclick={() => void onChoose(summary.storeId)}
+        >
+          {vault.t(I18N_KEYS.ProviderVaultsRecover)}
+          <ArrowRight class="size-4" aria-hidden="true" />
+        </Button>
+      {/if}
     {/snippet}
   </ProviderVaultList>
 </section>
