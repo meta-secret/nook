@@ -114,10 +114,23 @@ test('show paired and unpaired vault status before extension unlock', async ({
       configurable: true,
       value: { runtime },
     })
-    document.documentElement.setAttribute(
-      'data-nook-extension-runtime-id',
-      'demo-extension-id',
-    )
+    // The init script can run before the page has its root element; the
+    // extension's mark goes on it as soon as it exists, before the app reads it.
+    const mark = () =>
+      document.documentElement.setAttribute(
+        'data-nook-extension-runtime-id',
+        'demo-extension-id',
+      )
+    if (document.documentElement) {
+      mark()
+      return
+    }
+    const rootObserver = new MutationObserver(() => {
+      if (!document.documentElement) return
+      rootObserver.disconnect()
+      mark()
+    })
+    rootObserver.observe(document, { childList: true })
   }, simulation)
 
   await page.goto(
