@@ -70,36 +70,34 @@ export async function openVaultSection(
 /** Return to the open vault's secret list from any workspace page. */
 export async function openVaultPage(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
-  for (let step = 0; step < 3; step += 1) {
-    if (await vaultPanel.isVisible()) return
-    const openRow = page.locator(
-      '[data-testid="identity-vault-row"][data-state="open"]',
+  const openRow = page.locator(
+    '[data-testid="identity-vault-row"][data-state="open"]',
+  )
+  const collapsedOpenRow = openRow.and(
+    page.locator(':not([aria-expanded="true"])'),
+  )
+  const enter = page.getByTestId('vault-panel-open')
+  const pageBack = page.getByTestId('page-bar-back')
+  const flowBack = page
+    .getByTestId('add-device-back')
+    .or(page.getByTestId('identity-page-back'))
+  // The workspace re-renders as the hub's cards load, so a control seen a
+  // moment ago may be gone; re-read the page and press what is there now.
+  await expect
+    .poll(
+      async () => {
+        if (await vaultPanel.isVisible()) return true
+        // The open vault's row opens its panel, which leads into the vault.
+        if (await pressIfReady(enter)) return false
+        if (await pressIfReady(collapsedOpenRow)) return false
+        if (await openRow.isVisible()) return false
+        if (await pressIfReady(flowBack)) return false
+        await pressIfReady(pageBack)
+        return false
+      },
+      { timeout: UI_TIMEOUT_MS * 3 },
     )
-    // The hub's cards load after the page; wait for a way back to the vault.
-    const pageBack = page.getByTestId('page-bar-back')
-    const flowBack = page
-      .getByTestId('add-device-back')
-      .or(page.getByTestId('identity-page-back'))
-    await expect(
-      vaultPanel.or(openRow).or(pageBack).or(flowBack).first(),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    if (await vaultPanel.isVisible()) return
-    if (await openRow.isVisible()) {
-      // The open vault's row opens its panel, which leads into the vault.
-      if ((await openRow.getAttribute('aria-expanded')) !== 'true') {
-        await openRow.click()
-      }
-      const enter = page.getByTestId('vault-panel-open')
-      await expect(enter).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      await enter.click()
-    } else if (await flowBack.isVisible()) {
-      await flowBack.click()
-    } else {
-      await pageBack.click()
-    }
-    await page.waitForTimeout(50)
-  }
-  await expect(vaultPanel).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    .toBe(true)
 }
 
 /** Open the identities hub while a vault session is open. */
