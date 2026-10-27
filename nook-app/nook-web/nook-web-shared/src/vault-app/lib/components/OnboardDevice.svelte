@@ -239,13 +239,13 @@ itself, so nothing here waits for it.
               onclick={() => (chosenProviderId = provider.id)}
             >
               <span
-                class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                class="inline-flex size-[18px] shrink-0 items-center justify-center border-2 {selected
                   ? 'border-foreground'
                   : 'border-muted-foreground/35'}"
                 aria-hidden="true"
               >
                 {#if selected}
-                  <span class="size-2 rounded-full bg-foreground"></span>
+                  <span class="size-2 bg-foreground"></span>
                 {/if}
               </span>
               <Cloud class="size-4 shrink-0 opacity-80" />

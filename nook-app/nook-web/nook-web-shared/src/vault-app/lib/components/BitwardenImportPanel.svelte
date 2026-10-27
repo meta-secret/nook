@@ -9,7 +9,8 @@
   }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
+  import { FileJson, Upload } from '@lucide/svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
@@ -92,15 +93,11 @@
 
 <div class="space-y-4" data-testid="bitwarden-import-panel">
   {#if onClose}
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-      data-testid="bitwarden-import-back"
-      onclick={onClose}
-    >
-      <ArrowLeft class="size-4" />
-      {vault.t(I18N_KEYS.CommonBack)}
-    </button>
+    <BackButton
+      label={vault.t(I18N_KEYS.CommonBack)}
+      testId="bitwarden-import-back"
+      onBack={onClose}
+    />
   {/if}
 
   {#if !embedded}

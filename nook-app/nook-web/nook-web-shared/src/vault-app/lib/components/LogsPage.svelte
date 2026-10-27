@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ChevronLeft, RefreshCw, Trash2, Copy } from '@lucide/svelte'
+  import { RefreshCw, Trash2, Copy } from '@lucide/svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -11,7 +14,8 @@
   } from '$lib/components/ui/card'
   import { LogLevel, type LogEntry, browserLogRuntime } from '$lib/runtime/log'
 
-  let { onClose }: { onClose: () => void } = $props()
+  let { vault, onClose }: { vault: VaultState; onClose: () => void } =
+    $props()
 
   const LEVELS: LogLevel[] = [
     LogLevel.Error,
@@ -137,8 +141,13 @@
     <CardHeader
       class="border-b border-border/60 space-y-0 gap-0 px-4 pb-3 pt-3 sm:px-5"
     >
-      <div class="flex items-start justify-between gap-2">
-        <div class="space-y-0.5">
+      <div class="flex items-center gap-3">
+        <BackButton
+          label={vault.t(I18N_KEYS.CommonBack)}
+          testId="logs-back-btn"
+          onBack={onClose}
+        />
+        <div class="min-w-0 flex-1 space-y-0.5">
           <CardTitle
             class="text-base font-semibold tracking-tight text-foreground"
           >
@@ -149,17 +158,6 @@
             anywhere.
           </CardDescription>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="shrink-0 border-border"
-          data-testid="logs-back-btn"
-          onclick={onClose}
-        >
-          <ChevronLeft class="size-3.5" />
-          Back
-        </Button>
       </div>
 
       <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">

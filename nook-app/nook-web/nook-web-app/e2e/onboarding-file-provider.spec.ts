@@ -119,7 +119,7 @@ test.describe('file sync provider onboarding', () => {
     const [vaultFolder, ...otherFolders] = target.stub.getSharedFolders()
     if (!vaultFolder) throw new Error('the provider did not create a folder')
     expect(otherFolders).toHaveLength(0)
-    expect(vaultFolder.name).toBe(target.repoName)
+    expect(vaultFolder.name).toBe('Nook')
     expect(vaultFolder.writers).toEqual([E2E_GOOGLE_ACCOUNT_EMAIL])
     await assertVaultReady(deviceA)
     await disableVaultIdleLock(deviceA)
@@ -195,14 +195,12 @@ test.describe('Google Drive authorized accounts', () => {
       timeout: UI_TIMEOUT_MS,
     })
     // There is no storage mode or folder to choose: Connect & sync creates
-    // the provider's ordinary My Drive folder, which accounts are shared into.
+    // the account's one Nook root folder, which accounts are shared into.
     await expect(owner.getByTestId('google-setup-sync-step')).toBeVisible()
-    // Folder display names are independent from the validated internal
-    // event-log backup name and may contain normal Drive filename characters.
-    await owner.getByTestId('drive-file-input').fill('Team Vault')
+    await expect(owner.getByTestId('drive-file-input')).toHaveCount(0)
     await owner.getByTestId('google-sign-in-btn').click()
     await expect(owner.getByTestId('google-folder-on-connect')).toContainText(
-      'Team Vault',
+      'Nook',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     const connectButton = owner.getByTestId('connect-provider-btn')
@@ -218,7 +216,7 @@ test.describe('Google Drive authorized accounts', () => {
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     const [sharedFolder] = driveStub.getSharedFolders()
     if (!sharedFolder) throw new Error('Drive stub did not create a folder')
-    expect(sharedFolder.name).toBe('Team Vault')
+    expect(sharedFolder.name).toBe('Nook')
     // Creating the folder shares it with nobody.
     expect(sharedFolder.writers).toEqual([ownerEmail])
 
@@ -295,7 +293,7 @@ test.describe('Google Drive authorized accounts', () => {
       await stranger.goto('/app/')
       await clearBrowserVault(stranger)
       await stranger.goto('about:blank')
-      await stranger.goto(localizeAppLinkForE2e(stranger, enrollmentLink))
+      await stranger.goto(localizeAppLinkForE2e(owner, enrollmentLink))
       await expect(stranger.getByTestId('join-this-device')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })

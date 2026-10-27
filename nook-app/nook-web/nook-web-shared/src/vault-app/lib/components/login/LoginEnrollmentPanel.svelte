@@ -4,6 +4,7 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ChevronDown, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
 
   import type { VaultState } from "$lib/vault.svelte";
 
@@ -123,17 +124,15 @@
                 {vault.t(I18N_KEYS.LoginPasteDesc)}
               </p>
             </div>
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
-              onclick={() => {
+            <BackButton
+              label={vault.t(I18N_KEYS.CommonBack)}
+              testId="login-paste-link-back"
+              onBack={() => {
                 enrollmentCodeFormOpen = false;
                 enrollmentCodeInput = "";
                 enrollmentPasswordInput = "";
               }}
-            >
-              {vault.t(I18N_KEYS.CommonBack)}
-            </button>
+            />
           </div>
           <textarea
             rows="3"

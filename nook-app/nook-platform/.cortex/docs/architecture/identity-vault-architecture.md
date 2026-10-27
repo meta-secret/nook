@@ -197,6 +197,9 @@ identity may enroll.
     without rolling back event stores or active identity state.
 - **Existing-vault import:**
   - Use a distinct pending handoff state.
+  - Start from the provider listing in
+    [auth-providers.md](auth-providers.md#what-the-provider-already-holds):
+    another identity's vault is imported as a separate vault.
   - During verified connect, synthesize the vault owner from active signed
     envelopes and verify the extension signing key against the active event
     roster.
@@ -438,6 +441,8 @@ already one local identity's storage.
 - **Remote rows (GitHub, Google Drive, iCloud, local folder)**
   - Are identity mounts: each replicates the identity log and every vault the
     identity owns.
+  - Keep every vault in its own namespace, so vaults of other identities in
+    the same target coexist and are only imported, never merged.
   - Use the namespaced paths in
     [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount).
 - **Browser rows**

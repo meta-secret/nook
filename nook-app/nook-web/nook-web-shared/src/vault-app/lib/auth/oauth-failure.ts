@@ -24,6 +24,8 @@ export enum OAuthFailureKind {
   InvalidConfiguration = "invalid-configuration",
   GoogleSharedSignInRequired = "google-shared-sign-in-required",
   GoogleSharedCreation = "google-shared-creation",
+  GoogleVaultFolderAmbiguous = "google-vault-folder-ambiguous",
+  GoogleVaultListing = "google-vault-listing",
   SharedLinkRequired = "shared-link-required",
   SharedLocationMissing = "shared-location-missing",
   SharedSignInRequired = "shared-sign-in-required",
@@ -53,6 +55,10 @@ export class OAuthFailure {
         return I18N_KEYS.ProviderSetupGoogleSharedSignInFirst;
       case OAuthFailureKind.GoogleSharedCreation:
         return I18N_KEYS.ProviderSetupGoogleSharedCreateFailed;
+      case OAuthFailureKind.GoogleVaultFolderAmbiguous:
+        return I18N_KEYS.ErrorsValidationGoogleDriveVaultFolderAmbiguous;
+      case OAuthFailureKind.GoogleVaultListing:
+        return I18N_KEYS.ProviderSetupGoogleVaultsListFailed;
       case OAuthFailureKind.SharedLinkRequired:
         return I18N_KEYS.ProviderSetupIcloudSharedLinkRequired;
       case OAuthFailureKind.SharedLocationMissing:

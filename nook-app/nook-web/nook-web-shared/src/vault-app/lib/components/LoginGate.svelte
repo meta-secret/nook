@@ -24,7 +24,8 @@
   }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { ArrowLeft, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import IdentitiesHub from '$lib/components/identities/IdentitiesHub.svelte'
@@ -733,9 +734,13 @@
                 replacements: {
                   provider: setupIs('github')
                     ? 'GitHub'
-                    : setupIs('local-folder')
-                      ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                      : vault.t(I18N_KEYS.OnboardingLocalStorage),
+                    : setupIs('oauth-file')
+                      ? oauthPreset === 'icloud'
+                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
+                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                      : setupIs('local-folder')
+                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                        : vault.t(I18N_KEYS.OnboardingLocalStorage),
                 },
               }
               return vault.t(tArgs)
@@ -755,6 +760,10 @@
         {:else if showSetup && setupIs('github')}
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.OnboardingGithubDescription)}
+          </p>
+        {:else if showSetup && setupIs('oauth-file')}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
           </p>
         {:else if showSetup}
           <p class="text-sm text-pretty text-muted-foreground">
@@ -786,8 +795,6 @@
         {:else if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
-            bind:githubRepo
-            idPrefix="login"
             preset={oauthPreset}
             {isVerifying}
             {isInitializing}
@@ -864,19 +871,17 @@
         {/if}
       {:else if showProviderSetup}
         {#if (vault.vaultImportOpen || !vault.localVaultPresent) && !addProviderOpen}
-          <button
-            type="button"
-            class="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            data-testid="login-back-to-get-started"
-            onclick={() => {
-              vault.cancelExistingVaultOpen()
-              vault.vaultImportOpen = false
-              firstScreenRequested = true
-            }}
-          >
-            <ArrowLeft class="size-4" />
-            {vault.t(I18N_KEYS.FirstRunBack)}
-          </button>
+          <div class="mb-4">
+            <BackButton
+              label={vault.t(I18N_KEYS.FirstRunBack)}
+              testId="login-back-to-get-started"
+              onBack={() => {
+                vault.cancelExistingVaultOpen()
+                vault.vaultImportOpen = false
+                firstScreenRequested = true
+              }}
+            />
+          </div>
         {/if}
         <LoginProviderManagement
           {vault}

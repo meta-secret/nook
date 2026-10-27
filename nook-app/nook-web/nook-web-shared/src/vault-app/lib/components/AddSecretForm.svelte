@@ -17,7 +17,8 @@
   };
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { ArrowLeft, RefreshCw } from "@lucide/svelte";
+  import { RefreshCw } from "@lucide/svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
   import { SecretCategory } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -275,21 +276,16 @@
     <div
       class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border pb-3"
     >
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 items-center gap-3">
         {#if !isEditMode}
-          <button
-            type="button"
-            class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            data-testid="change-secret-type-btn"
-            onclick={() =>
+          <BackButton
+            label={vault.t(I18N_KEYS.AddSecretChangeType)}
+            testId="change-secret-type-btn"
+            onBack={() =>
               (selectedTypeState = {
                 kind: SecretTypeSelectionKind.ChoosingType,
               })}
-          >
-            <ArrowLeft class="size-3.5" />
-            {vault.t(I18N_KEYS.AddSecretChangeType)}
-          </button>
-          <span class="text-muted-foreground/50" aria-hidden="true">·</span>
+          />
         {/if}
         <h3 class="truncate text-base font-semibold text-foreground">
           {typeTitle}

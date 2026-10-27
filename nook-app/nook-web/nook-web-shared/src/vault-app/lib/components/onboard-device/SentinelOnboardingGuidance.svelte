@@ -26,7 +26,7 @@
 >
   <div class="flex items-start gap-3">
     <div
-      class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+      class="nk-tile nk-tile-sm text-foreground"
       aria-hidden="true"
     >
       <Users class="size-4.5" />
@@ -59,15 +59,13 @@
   <ol class="space-y-3 text-sm text-foreground">
     <li class="flex gap-3">
       <span
-        class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
-        >1</span
+        class="nk-step-index w-6 shrink-0 pt-0.5">01</span
       >
       <span>{vault.t(I18N_KEYS.OnboardDeviceSentinelStepConnect)}</span>
     </li>
     <li class="flex gap-3">
       <span
-        class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
-        >2</span
+        class="nk-step-index w-6 shrink-0 pt-0.5">02</span
       >
       <span>{vault.t(I18N_KEYS.OnboardDeviceSentinelStepApprove)}</span>
     </li>

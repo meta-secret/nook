@@ -7,13 +7,13 @@
   } from "$lib/vault/sentinel-genesis";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
-    ArrowLeft,
     Check,
     Copy,
     KeyRound,
     RefreshCw,
     Terminal,
   } from "@lucide/svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
   import { tick } from "svelte";
   import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
   import {
@@ -218,14 +218,13 @@
   tabindex="-1"
 >
   {#if status === SentinelGenesisPhase.Inactive}
-    <button
-      class="fixed top-5 left-5 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md sm:left-10"
-      data-testid="sentinel-dashboard-back"
-      onclick={onBack}
-    >
-      <ArrowLeft class="size-4" aria-hidden="true" />
-      {vault.t(I18N_KEYS.LoginSentinelDashboardChange)}
-    </button>
+    <div class="fixed top-5 left-5 z-50 sm:left-10">
+      <BackButton
+        label={vault.t(I18N_KEYS.LoginSentinelDashboardChange)}
+        testId="sentinel-dashboard-back"
+        {onBack}
+      />
+    </div>
   {/if}
 
   <section

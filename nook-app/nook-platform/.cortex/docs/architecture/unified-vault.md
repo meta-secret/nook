@@ -202,8 +202,10 @@ stateDiagram-v2
    existing vault** as sibling intents. Creation either creates a Simple vault
    locally (after deferred passkey) or starts Sentinel genesis without storage
    until the vault is atomically created. Opening connects a sync provider to
-   import an existing vault of the app's fixed type. See
-   [sentinel-genesis.md](sentinel-genesis.md).
+   import an existing vault of the app's fixed type. Setup first lists the
+   vaults the provider holds without decrypting them, as
+   [auth-providers.md](auth-providers.md#what-the-provider-already-holds)
+   describes. See [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate
    ([vault-session-and-lock.md](vault-session-and-lock.md)).

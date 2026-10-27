@@ -7,9 +7,20 @@ import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
  * Access tokens are short-lived (~1h); silent refresh uses requestAccessToken
  * while the user's Google session is still active.
  *
- * Scope: `drive.file` for writes plus `drive.readonly`, so every authorized
- * account reads the vault folder and the immutable event files other accounts
- * created there.
+ * Scopes (least privilege):
+ * - `VaultFolder` (`drive.file` only, non-sensitive) for sign-in and silent
+ *   refresh. It opens, creates, and shares the vault folder and reads and
+ *   writes the event files this app created.
+ * - `Shared` adds `drive.readonly`, a restricted scope, only where another
+ *   account's files must be read: a joiner accepting an onboarding link, and
+ *   the owner authorizing another account. Until Google verifies Nook, that
+ *   consent shows the "Google hasn't verified this app" warning.
+ *
+ * A new provider sign-in sends `include_granted_scopes: false`: an account
+ * that granted `drive.readonly` earlier would otherwise fold that restricted
+ * grant back into the consent and get the unverified-app warning again. A
+ * silent refresh and the shared requests keep earlier grants, so a refreshed
+ * token still covers `drive.readonly` once the account granted it.
  */
 
 import type {
@@ -28,6 +39,9 @@ export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
 export enum GoogleDriveOAuthScope {
+  /** `drive.file`: the vault folder and the files this app created. */
+  VaultFolder = "vault-folder",
+  /** `drive.file` plus `drive.readonly`: files other accounts created. */
   Shared = "shared",
 }
 
@@ -78,6 +92,8 @@ export type GoogleTokenPromptRequest = {
   readonly prompt: string;
   /** The account Google preselects; empty lets the user choose. */
   readonly login_hint: string;
+  /** False asks Google for exactly the requested scopes, without earlier grants. */
+  readonly include_granted_scopes: boolean;
 };
 
 type TokenClient = {
@@ -88,6 +104,8 @@ export type GoogleAccessTokenRequest = {
   readonly prompt: GoogleOAuthPrompt;
   readonly scope: GoogleDriveOAuthScope;
   readonly accountHint: string;
+  /** Whether the token also carries scopes the account granted before. */
+  readonly includeGrantedScopes: boolean;
 };
 
 export type GoogleSharedDriveAccessRequest = {
@@ -173,6 +191,8 @@ class GoogleOAuthSession {
 
   private scopeString(scope: GoogleDriveOAuthScope): string {
     switch (scope) {
+      case GoogleDriveOAuthScope.VaultFolder:
+        return DRIVE_FILE_SCOPE;
       case GoogleDriveOAuthScope.Shared:
         return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
     }
@@ -330,6 +350,7 @@ class GoogleOAuthSession {
         const promptRequest: GoogleTokenPromptRequest = {
           prompt: request.prompt,
           login_hint: request.accountHint.trim(),
+          include_granted_scopes: request.includeGrantedScopes,
         };
         slot.client.requestAccessToken(promptRequest);
       } catch {
@@ -346,6 +367,7 @@ class GoogleOAuthSession {
       prompt: request.prompt,
       scope: GoogleDriveOAuthScope.Shared,
       accountHint: request.accountHint,
+      includeGrantedScopes: true,
     };
     return this.requestGoogleAccessToken(accessRequest);
   }
@@ -382,11 +404,14 @@ class GoogleOAuthSession {
       skewMs: 60_000,
     };
     if (!this.isOAuthAccessTokenExpired(expiryAssessment)) return ok(config);
+    // A silent refresh never asks for a new scope; previously granted
+    // `drive.readonly` comes back through `include_granted_scopes`.
     const accessRequest: GoogleAccessTokenRequest = {
       prompt: GoogleOAuthPrompt.Default,
-      scope: GoogleDriveOAuthScope.Shared,
+      scope: GoogleDriveOAuthScope.VaultFolder,
       accountHint:
         config.accountEmail.state === "email" ? config.accountEmail.value : "",
+      includeGrantedScopes: true,
     };
     const refreshed = await this.requestGoogleAccessToken(accessRequest);
     return refreshed.andThen((tokens) => {

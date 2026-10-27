@@ -1,7 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
-    ArrowLeft,
     BookOpen,
     EllipsisVertical,
     Lock,
@@ -14,6 +13,7 @@
   } from '$app-wasm'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { LogoSize } from '$lib/components/nook-logo-state'
   import { Button } from '$lib/components/ui/button'
   import { ColorMode } from '$lib/app/theme'
@@ -302,31 +302,17 @@
       </a>
 
       {#if legalPageOpen || logsPage || extensionConnectRoute}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-          aria-label={vault.t(I18N_KEYS.AppBack)}
-          data-testid="legal-header-back"
-          onclick={onNavigateHome}
-        >
-          <ArrowLeft class="size-4" />
-          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AppBack)}</span>
-        </Button>
+        <BackButton
+          label={vault.t(I18N_KEYS.AppBack)}
+          testId="legal-header-back"
+          onBack={onNavigateHome}
+        />
       {:else if vault.helpOpen}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-          aria-label={vault.t(I18N_KEYS.AppBack)}
-          data-testid="help-header-close"
-          onclick={() => vault.closeHelp()}
-        >
-          <ArrowLeft class="size-4" />
-          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AppBack)}</span>
-        </Button>
+        <BackButton
+          label={vault.t(I18N_KEYS.AppBack)}
+          testId="help-header-close"
+          onBack={() => vault.closeHelp()}
+        />
       {:else}
         <Button
           type="button"

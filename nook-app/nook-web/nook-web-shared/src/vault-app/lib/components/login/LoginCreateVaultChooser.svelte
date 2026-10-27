@@ -25,6 +25,7 @@
     Users,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
   import LoginExistingVaultPaths from "$lib/components/login/LoginExistingVaultPaths.svelte";
   import FirstVaultStart from "$lib/components/login/FirstVaultStart.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
@@ -779,15 +780,12 @@
 
           {#if canGoBack && !sentinelDashboardActive}
             <div class="mt-8">
-              <Button
-                type="button"
-                variant="outline"
-                data-testid="create-vault-wizard-back"
+              <BackButton
+                label={vault.t(I18N_KEYS.CommonBack)}
+                testId="create-vault-wizard-back"
                 disabled={isBusy || sentinelActionBusy}
-                onclick={goBack}
-              >
-                {vault.t(I18N_KEYS.CommonBack)}
-              </Button>
+                onBack={goBack}
+              />
             </div>
           {/if}
         </div>

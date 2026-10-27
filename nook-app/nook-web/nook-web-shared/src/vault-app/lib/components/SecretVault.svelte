@@ -73,7 +73,6 @@
   } from '$app-wasm'
 
   import {
-    ArrowLeft,
     SearchX,
     TriangleAlert,
     Vault,
@@ -81,6 +80,7 @@
   } from '@lucide/svelte'
   import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
   import AddSecretForm from './AddSecretForm.svelte'
+  import BackButton from './workspace/BackButton.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
   import VaultListPagination from './vault/VaultListPagination.svelte'
   import VaultListToolbar from './vault/VaultListToolbar.svelte'
@@ -624,15 +624,11 @@
     >
       {#if formSelectedType.kind === SecretTypeSelectionKind.ChoosingType}
         <div class="mb-3">
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            data-testid="add-secret-back-btn"
-            onclick={closeAddSecret}
-          >
-            <ArrowLeft class="size-4" />
-            {vault.t(I18N_KEYS.CommonBack)}
-          </button>
+          <BackButton
+            label={vault.t(I18N_KEYS.CommonBack)}
+            testId="add-secret-back-btn"
+            onBack={closeAddSecret}
+          />
         </div>
       {/if}
 

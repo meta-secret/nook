@@ -1,6 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { ArrowLeft, KeyRound } from '@lucide/svelte'
+  import { KeyRound } from '@lucide/svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -19,17 +20,12 @@
   <div
     class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
   >
-    <div class="flex min-w-0 items-center gap-2">
-      <button
-        type="button"
-        class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        data-testid="change-secret-type-btn"
-        onclick={onBack}
-      >
-        <ArrowLeft class="size-3.5" />
-        {vault.t(I18N_KEYS.AddSecretChangeType)}
-      </button>
-      <span class="text-muted-foreground/50" aria-hidden="true">·</span>
+    <div class="flex min-w-0 items-center gap-3">
+      <BackButton
+        label={vault.t(I18N_KEYS.AddSecretChangeType)}
+        testId="change-secret-type-btn"
+        {onBack}
+      />
       <h3 class="truncate text-sm font-semibold text-foreground">
         {vault.t(I18N_KEYS.AddSecretTitleNewPasskey)}
       </h3>

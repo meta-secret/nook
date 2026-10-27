@@ -49,6 +49,8 @@ const uiKeys = [
   "vaultPanelStoreId",
   "unlockReturn",
   "vaultImportOpen",
+  "emptyVaultReplacement",
+  "forgetEmptyVaultReplacement",
   "identityDirectory",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
@@ -219,6 +221,8 @@ class VaultStateSlicesImplementation {
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
   declare readonly unlockReturn: VaultUiState["unlockReturn"];
   declare vaultImportOpen: VaultUiState["vaultImportOpen"];
+  declare emptyVaultReplacement: VaultUiState["emptyVaultReplacement"];
+  declare forgetEmptyVaultReplacement: VaultUiState["forgetEmptyVaultReplacement"];
   declare identityDirectory: VaultUiState["identityDirectory"];
 
   declare providers: VaultProviderState["providers"];

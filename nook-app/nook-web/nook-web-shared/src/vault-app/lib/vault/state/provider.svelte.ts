@@ -2,6 +2,7 @@ import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   is_local_folder_backup_supported,
   type NookLocalVaultEntry,
+  type ProviderVaultSummary,
   type StoreId,
   type VaultRecoverySummary,
 } from "$app-wasm";
@@ -182,7 +183,7 @@ export class VaultProviderState {
   }
   loginRequiresExistingVault = $state(false);
   /** Vaults the provider being imported holds when it holds several. */
-  remoteVaultChoices = $state<readonly string[]>([]);
+  remoteVaultChoices = $state<readonly ProviderVaultSummary[]>([]);
   private recoverySummaryState = $state<RecoveryDiscovery>({
     kind: RecoveryDiscoveryKind.NotFound,
   });

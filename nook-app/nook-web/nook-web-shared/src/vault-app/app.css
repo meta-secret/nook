@@ -17,7 +17,9 @@
  * the card's edge glint. Live state is the lit cutting edge (ice
  * blue) and warning is engraving gold. */
 :root {
-  --radius: 0.1875rem;
+  /* Square like a ground blade: the nk-* primitives cut corners with
+   * clip-path instead of rounding them. */
+  --radius: 0;
   --background: oklch(0.975 0.003 255);
   --foreground: oklch(0.16 0.008 260);
   --card: oklch(0.995 0.001 255);
@@ -96,10 +98,10 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -212,7 +214,7 @@
     width: 3rem;
     height: 3rem;
     border: 1px solid var(--border);
-    border-radius: calc(var(--radius) + 0.25rem);
+    border-radius: var(--radius);
     box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 9%);
   }
 

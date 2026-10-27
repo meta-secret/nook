@@ -410,6 +410,10 @@ pub const AUTHORIZED_ACCOUNTS_ADD_LABEL: &str = "authorized_accounts.add_label";
 pub const AUTHORIZED_ACCOUNTS_ADD_PLACEHOLDER: &str = "authorized_accounts.add_placeholder";
 pub const AUTHORIZED_ACCOUNTS_ADDING: &str = "authorized_accounts.adding";
 pub const AUTHORIZED_ACCOUNTS_DRIVE_DESCRIPTION: &str = "authorized_accounts.drive_description";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_READ_ACCESS_HINT: &str =
+    "authorized_accounts.drive_read_access_hint";
+pub const AUTHORIZED_ACCOUNTS_DRIVE_READ_ACCESS_REQUIRED: &str =
+    "authorized_accounts.drive_read_access_required";
 pub const AUTHORIZED_ACCOUNTS_EMPTY: &str = "authorized_accounts.empty";
 pub const AUTHORIZED_ACCOUNTS_ICLOUD_DESCRIPTION: &str = "authorized_accounts.icloud_description";
 pub const AUTHORIZED_ACCOUNTS_LOAD_FAILED: &str = "authorized_accounts.load_failed";
@@ -743,6 +747,8 @@ pub const ERRORS_VALIDATION_GITHUB_PAT_EMPTY: &str = "errors.validation.github_p
 pub const ERRORS_VALIDATION_GITHUB_REPO_CHARS: &str = "errors.validation.github_repo_chars";
 pub const ERRORS_VALIDATION_GITHUB_REPO_INVALID: &str = "errors.validation.github_repo_invalid";
 pub const ERRORS_VALIDATION_GITHUB_REPO_LENGTH: &str = "errors.validation.github_repo_length";
+pub const ERRORS_VALIDATION_GOOGLE_DRIVE_VAULT_FOLDER_AMBIGUOUS: &str =
+    "errors.validation.google_drive_vault_folder_ambiguous";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_DATE_INVALID: &str =
     "errors.validation.identity_document_date_invalid";
 pub const ERRORS_VALIDATION_IDENTITY_DOCUMENT_EXPIRY_BEFORE_ISSUE: &str =
@@ -2155,9 +2161,6 @@ pub const PROVIDER_PICKER_UNSUPPORTED_REPLICATION_DESC: &str =
 pub const PROVIDER_SETUP_CHANGE_PROVIDER: &str = "provider_setup.change_provider";
 pub const PROVIDER_SETUP_CHOOSE_LOCAL_FOLDER: &str = "provider_setup.choose_local_folder";
 pub const PROVIDER_SETUP_CREATE_TOKEN_GITHUB: &str = "provider_setup.create_token_github";
-pub const PROVIDER_SETUP_DRIVE_EVENT_LOG_DESC: &str = "provider_setup.drive_event_log_desc";
-pub const PROVIDER_SETUP_DRIVE_FILE_NAME: &str = "provider_setup.drive_file_name";
-pub const PROVIDER_SETUP_DRIVE_FOLDER_NAME: &str = "provider_setup.drive_folder_name";
 pub const PROVIDER_SETUP_EVENT_LOG_DESC: &str = "provider_setup.event_log_desc";
 pub const PROVIDER_SETUP_GITHUB_CONNECTION_SUBTITLE: &str =
     "provider_setup.github_connection_subtitle";
@@ -2165,7 +2168,7 @@ pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
-pub const PROVIDER_SETUP_GOOGLE_FOLDER_ON_CONNECT: &str = "provider_setup.google_folder_on_connect";
+pub const PROVIDER_SETUP_GOOGLE_FOLDER_EXISTING: &str = "provider_setup.google_folder_existing";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";
 pub const PROVIDER_SETUP_GOOGLE_SHARED_CREATE_FAILED: &str =
@@ -2176,10 +2179,11 @@ pub const PROVIDER_SETUP_GOOGLE_SIGNED_IN_AS: &str = "provider_setup.google_sign
 pub const PROVIDER_SETUP_GOOGLE_SIGNING_IN: &str = "provider_setup.google_signing_in";
 pub const PROVIDER_SETUP_GOOGLE_SYNC_SUBTITLE: &str = "provider_setup.google_sync_subtitle";
 pub const PROVIDER_SETUP_GOOGLE_TOKENS_LOCAL_DESC: &str = "provider_setup.google_tokens_local_desc";
+pub const PROVIDER_SETUP_GOOGLE_VAULTS_LIST_FAILED: &str =
+    "provider_setup.google_vaults_list_failed";
 pub const PROVIDER_SETUP_ICLOUD_CONNECTION_SUBTITLE: &str =
     "provider_setup.icloud_connection_subtitle";
 pub const PROVIDER_SETUP_ICLOUD_DESC: &str = "provider_setup.icloud_desc";
-pub const PROVIDER_SETUP_ICLOUD_EVENT_LOG_DESC: &str = "provider_setup.icloud_event_log_desc";
 pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
     "provider_setup.icloud_oauth_unconfigured";
 pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
@@ -2229,6 +2233,23 @@ pub const PROVIDER_SETUP_REPO_NAME: &str = "provider_setup.repo_name";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_GOOGLE: &str = "provider_setup.sign_in_with_google";
 pub const PROVIDER_SETUP_SIGN_IN_WITH_ICLOUD: &str = "provider_setup.sign_in_with_icloud";
 pub const PROVIDER_SETUP_STORED_LOCALLY_DESC: &str = "provider_setup.stored_locally_desc";
+pub const PROVIDER_VAULTS_COEXIST_NOTE: &str = "provider_vaults.coexist_note";
+pub const PROVIDER_VAULTS_CREATED: &str = "provider_vaults.created";
+pub const PROVIDER_VAULTS_EVENTS: &str = "provider_vaults.events";
+pub const PROVIDER_VAULTS_IMPORT_SEPARATELY: &str = "provider_vaults.import_separately";
+pub const PROVIDER_VAULTS_LAST_ACTIVITY: &str = "provider_vaults.last_activity";
+pub const PROVIDER_VAULTS_LIST_TITLE: &str = "provider_vaults.list_title";
+pub const PROVIDER_VAULTS_LOADING: &str = "provider_vaults.loading";
+pub const PROVIDER_VAULTS_OTHER_IDENTITY: &str = "provider_vaults.other_identity";
+pub const PROVIDER_VAULTS_RECOVER: &str = "provider_vaults.recover";
+pub const PROVIDER_VAULTS_REPLACE_CONFIRM: &str = "provider_vaults.replace_confirm";
+pub const PROVIDER_VAULTS_REPLACE_CONFIRM_BODY: &str = "provider_vaults.replace_confirm_body";
+pub const PROVIDER_VAULTS_REPLACE_CONFIRM_TITLE: &str = "provider_vaults.replace_confirm_title";
+pub const PROVIDER_VAULTS_REPLACED: &str = "provider_vaults.replaced";
+pub const PROVIDER_VAULTS_ROOT_ABSENT: &str = "provider_vaults.root_absent";
+pub const PROVIDER_VAULTS_ROOT_EMPTY: &str = "provider_vaults.root_empty";
+pub const PROVIDER_VAULTS_THIS_IDENTITY: &str = "provider_vaults.this_identity";
+pub const PROVIDER_VAULTS_USE_INSTEAD: &str = "provider_vaults.use_instead";
 pub const SESSION_EXPIRED_IDLE: &str = "session.expired_idle";
 pub const SESSION_IDLE_WARNING: &str = "session.idle_warning";
 pub const SESSION_PAIRED_EXTENSION_LOCK_FAILED: &str = "session.paired_extension_lock_failed";

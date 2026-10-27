@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
+import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   defaultOAuthFileConfig,
   storedGoogleDriveFolder,
   storedICloudShareTarget,
+  storedOAuthAccountEmail,
   storedOAuthCredential,
   type OAuthFileConfig,
 } from '$lib/auth/providers'
-import { googleOAuthSession } from '$lib/auth/google/oauth'
+import { GoogleOAuthPrompt, googleOAuthSession } from '$lib/auth/google/oauth'
 import { iCloudOAuthSession } from '$lib/auth/icloud/oauth'
 import {
   AuthorizedAccountsFailureKind,
@@ -35,11 +37,27 @@ function driveConfig(): OAuthFileConfig {
     ...defaultOAuthFileConfig({ preset: 'google-drive', fileName: 'vault' }),
     accessToken: storedOAuthCredential('drive-token'),
     folderId: storedGoogleDriveFolder('vault-folder'),
+    accountEmail: storedOAuthAccountEmail('owner@example.com'),
   }
 }
 
+const SHARED_TOKENS = {
+  accessToken: 'shared-token',
+  expiresAt: '2030-01-01T00:00:00.000Z',
+}
+
+const DRIVE_ACCESS = {
+  source: AuthorizedAccountsSource.GoogleDrive,
+  accessToken: 'drive-token',
+  folderId: 'vault-folder',
+  accountHint: 'owner@example.com',
+} as const
+
 describe('authorized accounts client', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    wasm.addGoogleDriveAuthorizedAccount.mockReset()
+  })
 
   test('needs the vault folder before it can list Drive accounts', async () => {
     const unbound: OAuthFileConfig = {
@@ -70,6 +88,7 @@ describe('authorized accounts client', () => {
         source: AuthorizedAccountsSource.GoogleDrive,
         accessToken: 'drive-token',
         folderId: 'vault-folder',
+        accountHint: 'owner@example.com',
       }),
     )
     if (access.isErr()) return
@@ -82,16 +101,66 @@ describe('authorized accounts client', () => {
     )
   })
 
+  test('asks the owner for drive.readonly from the click, then shares with that grant', async () => {
+    const grant = vi
+      .spyOn(googleOAuthSession, 'requestGoogleDriveSharedAccess')
+      .mockResolvedValue(ok(SHARED_TOKENS))
+    const accounts = { accounts: [] }
+    wasm.addGoogleDriveAuthorizedAccount.mockResolvedValue(accounts)
+
+    const added = await authorizedAccountsClient.add({
+      access: DRIVE_ACCESS,
+      email: 'member@example.com',
+    })
+
+    expect(grant).toHaveBeenCalledWith({
+      prompt: GoogleOAuthPrompt.Default,
+      accountHint: 'owner@example.com',
+    })
+    expect(wasm.addGoogleDriveAuthorizedAccount).toHaveBeenCalledWith(
+      'shared-token',
+      'vault-folder',
+      'member@example.com',
+    )
+    expect(added).toEqual(
+      ok({
+        accounts,
+        access: { ...DRIVE_ACCESS, accessToken: 'shared-token' },
+        tokens: SHARED_TOKENS,
+      }),
+    )
+  })
+
+  test('authorizes no account when the owner declines the read grant', async () => {
+    vi.spyOn(
+      googleOAuthSession,
+      'requestGoogleDriveSharedAccess',
+    ).mockResolvedValue(err(new OAuthFailure(OAuthFailureKind.GoogleCancelled)))
+
+    const added = await authorizedAccountsClient.add({
+      access: DRIVE_ACCESS,
+      email: 'member@example.com',
+    })
+
+    expect(added.isErr()).toBe(true)
+    if (added.isOk()) return
+    expect(added.error.kind).toBe(AuthorizedAccountsFailureKind.ReadAccess)
+    expect(added.error.translationKey).toBe(
+      I18N_KEYS.AuthorizedAccountsDriveReadAccessRequired,
+    )
+    expect(wasm.addGoogleDriveAuthorizedAccount).not.toHaveBeenCalled()
+  })
+
   test('shows the Rust rule when an account already has access', async () => {
+    vi.spyOn(
+      googleOAuthSession,
+      'requestGoogleDriveSharedAccess',
+    ).mockResolvedValue(ok(SHARED_TOKENS))
     wasm.addGoogleDriveAuthorizedAccount.mockRejectedValue(
       new Error(I18N_KEYS.ErrorsValidationAuthorizedAccountExists),
     )
     const added = await authorizedAccountsClient.add({
-      access: {
-        source: AuthorizedAccountsSource.GoogleDrive,
-        accessToken: 'drive-token',
-        folderId: 'vault-folder',
-      },
+      access: DRIVE_ACCESS,
       email: 'member@example.com',
     })
     expect(added.isErr()).toBe(true)
@@ -104,11 +173,7 @@ describe('authorized accounts client', () => {
       new Error('Google Drive API responded with status 403'),
     )
     const failed = await authorizedAccountsClient.add({
-      access: {
-        source: AuthorizedAccountsSource.GoogleDrive,
-        accessToken: 'drive-token',
-        folderId: 'vault-folder',
-      },
+      access: DRIVE_ACCESS,
       email: 'member@example.com',
     })
     expect(failed.isErr()).toBe(true)

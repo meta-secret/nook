@@ -11,7 +11,11 @@ import {
   type ICloudSharedTarget,
 } from "$app-wasm";
 import { oauth_access_token, type OAuthFileConfig } from "$lib/auth/providers";
-import { googleOAuthSession } from "$lib/auth/google/oauth";
+import {
+  GoogleOAuthPrompt,
+  googleOAuthSession,
+  type GoogleOAuthTokens,
+} from "$lib/auth/google/oauth";
 import {
   iCloudOAuthSession,
   type ICloudShareManagementRequest,
@@ -23,6 +27,7 @@ export enum AuthorizedAccountsFailureKind {
   Load = "load",
   Add = "add",
   Remove = "remove",
+  ReadAccess = "read-access",
   Manage = "manage",
   Rejected = "rejected",
 }
@@ -52,6 +57,8 @@ export class AuthorizedAccountsFailure {
         return I18N_KEYS.AuthorizedAccountsAddFailed;
       case AuthorizedAccountsFailureKind.Remove:
         return I18N_KEYS.AuthorizedAccountsRemoveFailed;
+      case AuthorizedAccountsFailureKind.ReadAccess:
+        return I18N_KEYS.AuthorizedAccountsDriveReadAccessRequired;
       case AuthorizedAccountsFailureKind.Manage:
         return I18N_KEYS.AuthorizedAccountsManageFailed;
       case AuthorizedAccountsFailureKind.Rejected:
@@ -97,6 +104,8 @@ type GoogleDriveAccess = {
   readonly source: AuthorizedAccountsSource.GoogleDrive;
   readonly accessToken: string;
   readonly folderId: string;
+  /** The signed-in owner account Google preselects for a new grant. */
+  readonly accountHint: string;
 };
 
 type ICloudAccess = {
@@ -110,6 +119,15 @@ export type AuthorizedAccountsAccess = GoogleDriveAccess | ICloudAccess;
 type AccountChange = {
   readonly access: AuthorizedAccountsAccess;
   readonly email: string;
+};
+
+/** An account authorized on the Drive folder with the grant that allowed it. */
+type AuthorizedAccountAddition = {
+  readonly accounts: AuthorizedAccountList;
+  /** The access to keep using; its token also covers `drive.readonly`. */
+  readonly access: AuthorizedAccountsAccess;
+  /** The incremental grant, for the saved provider to keep. */
+  readonly tokens: GoogleOAuthTokens;
 };
 
 type InviteAccountChoice = {
@@ -173,6 +191,10 @@ class AuthorizedAccountsClient {
       source: AuthorizedAccountsSource.GoogleDrive,
       accessToken: credential.token,
       folderId: config.folderId.value,
+      accountHint:
+        refreshed.value.accountEmail.state === "email"
+          ? refreshed.value.accountEmail.value
+          : "",
     };
     return ok(access);
   }
@@ -214,25 +236,48 @@ class AuthorizedAccountsClient {
     }
   }
 
-  /** Share the Drive vault folder with one more account. */
+  /**
+   * Share the Drive vault folder with one more account. That account's
+   * events are files this one did not create, so Google is first asked, from
+   * the user's click, to add `drive.readonly` to this account's grant.
+   */
   async add({
     access,
     email,
   }: AccountChange): Promise<
-    Result<AuthorizedAccountList, AuthorizedAccountsFailure>
+    Result<AuthorizedAccountAddition, AuthorizedAccountsFailure>
   > {
     if (access.source !== AuthorizedAccountsSource.GoogleDrive)
       return err(
         new AuthorizedAccountsFailure(AuthorizedAccountsFailureKind.Add),
       );
+    const grantRequest: Parameters<
+      typeof googleOAuthSession.requestGoogleDriveSharedAccess
+    >[0] = {
+      prompt: GoogleOAuthPrompt.Default,
+      accountHint: access.accountHint,
+    };
+    const granted =
+      await googleOAuthSession.requestGoogleDriveSharedAccess(grantRequest);
+    if (granted.isErr())
+      return err(
+        new AuthorizedAccountsFailure(AuthorizedAccountsFailureKind.ReadAccess),
+      );
+    const sharedAccess: GoogleDriveAccess = {
+      ...access,
+      accessToken: granted.value.accessToken,
+    };
     try {
-      return ok(
-        await add_google_drive_authorized_account(
-          access.accessToken,
-          access.folderId,
+      const addition: AuthorizedAccountAddition = {
+        accounts: await add_google_drive_authorized_account(
+          sharedAccess.accessToken,
+          sharedAccess.folderId,
           email,
         ),
-      );
+        access: sharedAccess,
+        tokens: granted.value,
+      };
+      return ok(addition);
     } catch (failure) {
       return err(
         new AccountFailureMapping(AuthorizedAccountsFailureKind.Add).from(

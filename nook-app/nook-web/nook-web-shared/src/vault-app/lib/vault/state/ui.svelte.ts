@@ -7,6 +7,10 @@
 
 import { UnlockReturn } from "$lib/app/unlock-return";
 import {
+  EmptyVaultReplacementKind,
+  type EmptyVaultReplacementPlan,
+} from "$lib/vault/provider-vaults";
+import {
   IdentityDirectoryLoadKind,
   type IdentityDirectoryLoadState,
 } from "$lib/components/devices-access/identity-directory-view";
@@ -101,6 +105,15 @@ export class VaultUiState {
    * under New vault). The unlocked workspace sets it before locking, so
    * the locked identities page continues the import on the card. */
   vaultImportOpen = $state(false);
+  /** An empty vault the user chose to swap for one a provider holds. It
+   * survives the lock that starts the import, then goes once the chosen
+   * vault is open. */
+  emptyVaultReplacement = $state<EmptyVaultReplacementPlan>({
+    kind: EmptyVaultReplacementKind.Idle,
+  });
+  forgetEmptyVaultReplacement(): void {
+    this.emptyVaultReplacement = { kind: EmptyVaultReplacementKind.Idle };
+  }
   /** The identity directory as last read, shared by every identities hub:
    * the workspace that replaces the login screen as a vault opens shows the
    * same cards at once and reads them again behind them. */

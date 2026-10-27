@@ -1,3 +1,8 @@
+<!--
+One step of a provider setup wizard: a square panel with a mono step index.
+The open step is the panel the user acts in, so it carries the heavy left
+edge (nk-panel); closed and unavailable steps stay flat.
+-->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import { ChevronDown } from '@lucide/svelte'
@@ -19,22 +24,24 @@
     testId?: string
     children?: Snippet
   } = $props()
+
+  const stepIndex = $derived(String(stepNumber).padStart(2, '0'))
 </script>
 
 <section
-  class="overflow-hidden rounded-xl border transition-colors {disabled
-    ? 'border-border/40 bg-muted/10'
+  class="overflow-hidden transition-colors {disabled
+    ? 'border border-border/40 bg-muted/10'
     : open
-      ? 'border-primary/25 bg-background shadow-sm sm:border-primary/30'
-      : 'border-border/50 bg-muted/15 sm:border-border/60'}"
+      ? 'nk-panel'
+      : 'border border-border/60 bg-muted/15'}"
   data-testid={testId}
 >
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors {disabled
+    class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none {disabled
       ? 'cursor-default'
       : open
-        ? 'bg-muted/10'
+        ? ''
         : 'hover:bg-muted/25'}"
     {disabled}
     aria-expanded={open && !disabled}
@@ -45,13 +52,11 @@
     }}
   >
     <span
-      class="flex size-7 shrink-0 items-center justify-center rounded-full border text-sm font-semibold {disabled
-        ? 'border-border/50 text-muted-foreground'
-        : open
-          ? 'border-primary/40 bg-primary/10 text-primary'
-          : 'border-border/70 text-foreground'}"
+      class="nk-step-index w-6 shrink-0 {open && !disabled
+        ? 'text-foreground'
+        : ''}"
     >
-      {stepNumber}
+      {stepIndex}
     </span>
     <span class="min-w-0 flex-1">
       <span
@@ -75,7 +80,7 @@
   </button>
 
   {#if open && !disabled}
-    <div class="space-y-4 border-t border-border/40 px-3.5 py-4">
+    <div class="space-y-4 border-t border-border/60 px-4 py-4">
       {@render children?.()}
     </div>
   {/if}

@@ -94,7 +94,7 @@ flowchart LR
   end
   E --> L[Local IndexedDB event store]
   E --> G[GitHub user/nook]
-  E --> D[Google Drive vault folder]
+  E --> D[Google Drive Nook root]
   E --> S[iCloud share]
 ```
 

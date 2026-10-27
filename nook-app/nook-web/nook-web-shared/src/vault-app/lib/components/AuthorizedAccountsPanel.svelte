@@ -7,6 +7,7 @@ for a device invite; accounts are managed on the Sync page it links to.
 -->
 <script lang="ts">
   import { untrack } from 'svelte'
+  import { err, ok } from 'neverthrow'
   import {
     PanelStateKind,
     type AccountListRefresh,
@@ -22,6 +23,7 @@ for a device invite; accounts are managed on the Sync page it links to.
     AuthorizedAccountsSource,
     authorizedAccountsClient,
   } from '$lib/vault/authorized-accounts'
+  import { VaultOAuthActions } from '$lib/vault/oauth'
 
   let {
     vault,
@@ -141,9 +143,26 @@ for a device invite; accounts are managed on the Sync page it links to.
         email: newEmail,
       }
       const added = await authorizedAccountsClient.add(change)
-      const refresh: AccountListRefresh = { listed: added, access }
+      if (added.isErr()) {
+        const failed: AccountListRefresh = { listed: err(added.error), access }
+        settle(failed)
+        return
+      }
+      const refresh: AccountListRefresh = {
+        listed: ok(added.value.accounts),
+        access: added.value.access,
+      }
       settle(refresh)
-      if (added.isOk()) newEmail = ''
+      newEmail = ''
+      // Keep the wider grant so this provider's sync reads the new
+      // account's events without waiting for the next token refresh.
+      const adoption: Parameters<
+        VaultOAuthActions['adoptGoogleProviderTokens']
+      >[0] = { config, tokens: added.value.tokens }
+      const kept = await new VaultOAuthActions(vault).adoptGoogleProviderTokens(
+        adoption,
+      )
+      if (kept.isErr()) actionError = vault.t(kept.error.translationKey)
     } finally {
       busy = false
     }
@@ -296,13 +315,13 @@ for a device invite; accounts are managed on the Sync page it links to.
                 onclick={() => pick(account)}
               >
                 <span
-                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                  class="inline-flex size-[18px] shrink-0 items-center justify-center border-2 {selected
                     ? 'border-foreground'
                     : 'border-muted-foreground/35'}"
                   aria-hidden="true"
                 >
                   {#if selected}
-                    <span class="size-2 rounded-full bg-foreground"></span>
+                    <span class="size-2 bg-foreground"></span>
                   {/if}
                 </span>
                 <span class="min-w-0 flex-1 truncate text-foreground"
@@ -405,6 +424,12 @@ for a device invite; accounts are managed on the Sync page it links to.
             {/if}
           </Button>
         </div>
+        <p
+          class="text-[11px] text-pretty text-muted-foreground"
+          data-testid="authorized-accounts-read-access-hint"
+        >
+          {vault.t(I18N_KEYS.AuthorizedAccountsDriveReadAccessHint)}
+        </p>
       </form>
     {/if}
 

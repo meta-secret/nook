@@ -1,8 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { ChevronLeft } from '@lucide/svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import MarkdownContent from '$lib/components/MarkdownContent.svelte'
-  import { Button } from '$lib/components/ui/button'
   import {
     Card,
     CardContent,
@@ -47,8 +46,13 @@
     <CardHeader
       class="border-b border-border/60 space-y-0 gap-0 px-4 pb-2 pt-3 sm:px-5"
     >
-      <div class="flex items-start justify-between gap-2">
-        <div class="space-y-0.5">
+      <div class="flex items-center gap-3">
+        <BackButton
+          label={vault.t(I18N_KEYS.CommonBack)}
+          testId="legal-document-back-btn"
+          onBack={onClose}
+        />
+        <div class="min-w-0 flex-1 space-y-0.5">
           <CardTitle
             class="text-base font-semibold tracking-tight text-foreground"
           >
@@ -58,17 +62,6 @@
             {vault.t(I18N_KEYS.LegalManagerDescription)}
           </CardDescription>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="shrink-0 border-border"
-          data-testid="legal-document-back-btn"
-          onclick={onClose}
-        >
-          <ChevronLeft class="size-3.5" />
-          {vault.t(I18N_KEYS.CommonBack)}
-        </Button>
       </div>
     </CardHeader>
 

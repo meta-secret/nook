@@ -86,7 +86,7 @@ an owner-issued invitation URL. Sync-provider import remains a secondary
   - **Transition:** Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM.
 - **Import**
   - **Choice or state:** Detected vault type
-  - **Transition:** Fetch from a provider, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel.
+  - **Transition:** List the provider's vaults without decrypting them, fetch the chosen one, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel. See [what the provider already holds](auth-providers.md#what-the-provider-already-holds).
 - **Unlocked provider management / Onboard**
   - **Choice or state:** Sync provider
   - **Transition:** Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists.
@@ -179,19 +179,20 @@ credentials grant storage access only.
   - Provider capabilities do not create a `personal` or `shared` vault mode.
 
 - **Google Drive:** Every provider is shared, independently of vault
-  architecture. It syncs under one visible My Drive vault folder
-  (`drive.file` plus `drive.readonly`).
+  architecture. It syncs under one visible My Drive folder named `Nook`
+  (`drive.file`; `drive.readonly` only for reads across accounts).
 
-    1. The owner creates or connects the vault folder. Creating it shares the
-       folder with no other account.
-    2. The owner authorizes another Google account on the folder
+    1. The owner connects the account's one Nook root folder: the existing
+       root is reused, otherwise it is created and shared with no other
+       account. Each identity and vault syncs in its own subfolder.
+    2. The owner authorizes another Google account on the root
        (`permissions.create`, writer role) in the Authorized accounts panel.
     3. A device invite names that authorized account and the folder target
        without embedding owner tokens.
     4. The joiner signs in with that account and its own OAuth token to reach
        the same encrypted replica.
 
-  - The folder's Drive permissions are the authorized-account list.
+  - The root's Drive permissions are the authorized-account list.
   - See [auth-providers.md](auth-providers.md#authorized-accounts).
   - Never use this provider-account flow as Sentinel membership or quorum.
 

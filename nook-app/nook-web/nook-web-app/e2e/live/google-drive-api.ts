@@ -223,7 +223,7 @@ export async function verifySharedVaultFolder(
       : {}
   return {
     id: id || folderId,
-    name: name || 'Nook shared vault',
+    name: name || 'Nook',
     canAddChildren: capabilities.canAddChildren === true,
   }
 }

@@ -10,11 +10,11 @@
     HardDrive,
     Cloud,
     Plus,
-    ChevronLeft,
     Trash2,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -197,18 +197,14 @@
       <div class="space-y-1">
         <!-- Back to the saved list. -->
         {#if syncProviders.length > 0}
-          <button
-            type="button"
-            class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            data-testid="cancel-add-provider-btn"
-            onclick={() =>
-              showSetup ? onCancelSetup() : onCancelAddProvider?.()}
-          >
-            <ChevronLeft class="size-3.5" />
-            {syncProviders.length > 0
-              ? vault.t(I18N_KEYS.OnboardingBackToSaved)
-              : vault.t(I18N_KEYS.CommonBack)}
-          </button>
+          <div class="mb-2">
+            <BackButton
+              label={vault.t(I18N_KEYS.OnboardingBackToSaved)}
+              testId="cancel-add-provider-btn"
+              onBack={() =>
+                showSetup ? onCancelSetup() : onCancelAddProvider?.()}
+            />
+          </div>
         {/if}
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
@@ -219,7 +215,9 @@
                   type: setupIs('github')
                     ? vault.t(I18N_KEYS.AuthStorageGithub)
                     : setupIs('oauth-file')
-                      ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                      ? oauthPreset === 'icloud'
+                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
+                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
                       : setupIs('local-folder')
                         ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                         : vault.t(I18N_KEYS.AuthStorageThisDevice),
@@ -262,8 +260,6 @@
         {#if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
-            bind:githubRepo
-            idPrefix="settings"
             preset={oauthPreset}
             {isVerifying}
             {isInitializing}

@@ -2,7 +2,7 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { Snippet } from 'svelte'
   import { Cloud, ExternalLink, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
+  import { Button, buttonVariants } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { DEFAULT_GITHUB_REPO } from '$lib/auth/providers'
   import { cn } from '$lib/utils'
@@ -35,10 +35,12 @@
   const githubPatUrl =
     'https://github.com/settings/tokens/new?scopes=repo&description=nook'
 
+  const githubTokenButtonVariant: Parameters<typeof buttonVariants>[0] = {
+    variant: 'default',
+    size: 'sm',
+  }
   const githubTokenButtonClass = cn(
-    'ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-    'bg-primary text-primary-foreground hover:bg-primary/90',
-    'h-9 rounded-md px-3',
+    buttonVariants(githubTokenButtonVariant),
     'w-full sm:w-auto',
   )
 
