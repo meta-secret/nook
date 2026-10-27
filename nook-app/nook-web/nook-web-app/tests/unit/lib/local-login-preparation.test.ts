@@ -12,7 +12,7 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { VaultLoginActions } from '$lib/vault/local-login'
-import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
+import { LocalLoginPreparationState } from '$lib/vault/state/local-login-preparation-state'
 import type { PasswordEntriesRefreshSnapshot } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 

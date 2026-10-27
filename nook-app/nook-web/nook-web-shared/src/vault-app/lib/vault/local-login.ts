@@ -32,9 +32,9 @@ import {
 } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
-  LocalLoginPreparationState,
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
+import { LocalLoginPreparationState } from "$lib/vault/state/local-login-preparation-state";
 import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 import { PaintOpportunity } from "$lib/runtime/paint-opportunity";

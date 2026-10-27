@@ -1,4 +1,4 @@
-import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
+import { LocalLoginPreparationState } from '$lib/vault/state/local-login-preparation-state'
 import { expect, test } from '../fixtures'
 import {
   addVaultPassword,

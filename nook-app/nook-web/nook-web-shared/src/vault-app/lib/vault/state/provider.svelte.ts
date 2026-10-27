@@ -22,6 +22,7 @@ import {
   VaultType,
   type VaultArchitecture,
 } from "$lib/vault/architecture-model";
+import { LocalLoginPreparationState } from "./local-login-preparation-state";
 export enum ActiveVaultKind {
   Closed = "closed",
   Open = "open",
@@ -46,12 +47,6 @@ export enum LoginSetupKind {
 export type LoginSetup =
   | { kind: LoginSetupKind.Inactive }
   | { kind: LoginSetupKind.Active; providerType: StorageProviderType };
-
-export enum LocalLoginPreparationState {
-  Idle = "idle",
-  Preparing = "preparing",
-  Ready = "ready",
-}
 
 export enum StagedRemoteStorageKind {
   Unavailable = "unavailable",

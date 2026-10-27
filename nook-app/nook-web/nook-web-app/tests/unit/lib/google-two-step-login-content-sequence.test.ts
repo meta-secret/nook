@@ -29,11 +29,11 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { AuthenticationWorkflowSnapshotMessage } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 import type { AuthenticationWorkflowRoutingResponse } from '../../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
-import {
-  WebsiteFocusedLoginRevealMessageType,
-  type WebsiteFocusedLoginRevealMessage,
-  type WebsiteFocusedLoginFillResponse,
+import type {
+  WebsiteFocusedLoginRevealMessage,
+  WebsiteFocusedLoginFillResponse,
 } from '../../../../nook-web-extension/src/lib/focused-login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from '../../../../nook-web-extension/src/lib/focused-login-reveal-message-type'
 import {
   GoogleLoginDocumentContinuation,
   GoogleLoginStartDisposition,

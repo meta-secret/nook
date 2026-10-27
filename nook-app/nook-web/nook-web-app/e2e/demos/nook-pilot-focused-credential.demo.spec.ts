@@ -5,7 +5,9 @@ import {
   loadPilotMessages,
 } from './pilot-demo-helpers'
 import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
-import { WebsiteFocusedLoginRevealMessageType } from '../../../nook-web-extension/src/lib/focused-login-fill-messages'
+// The message type comes from its own module: the fill-message module
+// starts the companion WASM on import, which Node cannot load.
+import { WebsiteFocusedLoginRevealMessageType } from '../../../nook-web-extension/src/lib/focused-login-reveal-message-type'
 import type { WebsiteFocusedLoginFillResponse } from '../../../nook-web-extension/src/lib/focused-login-fill-messages'
 import { AuthenticationWorkflowSnapshotMessageType } from '../../../nook-web-extension/src/lib/auth-workflow-messages'
 import { WebsiteLoginPickerOpenMessageType } from '../../../nook-web-extension/src/lib/login-picker-messages'

@@ -10,10 +10,8 @@ import { Effect, Schema, SchemaIssue } from 'effect'
 import { ExtensionSessionMessageType } from './extension-session-message-type'
 import type { NookFocusedLoginFillRequest } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { WebsiteLoginRevealMessage } from './login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from './focused-login-reveal-message-type'
 
-export enum WebsiteFocusedLoginRevealMessageType {
-  Reveal = 'nook:website-focused-login-fill',
-}
 export type WebsiteFocusedLoginFillResponse =
   { ok: true; value: string } | { ok: false; reason: string }
 

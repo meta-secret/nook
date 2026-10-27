@@ -102,7 +102,6 @@
   import {
     ActiveVaultKind,
     LocalFolderDraftKind,
-    LocalLoginPreparationState,
     LoginSetupKind,
     LoginVaultSelectionKind,
     OAuthFileDraftKind,
@@ -110,6 +109,7 @@
     RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
+  import { LocalLoginPreparationState } from '$lib/vault/state/local-login-preparation-state'
 
   let {
     vault,

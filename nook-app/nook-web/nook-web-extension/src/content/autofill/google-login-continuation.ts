@@ -22,10 +22,10 @@ import {
   type PasswordFormScopeQuery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
-  WebsiteFocusedLoginRevealMessageType,
   WebsiteFocusedLoginRevealMessage,
   type WebsiteFocusedLoginFillResponse,
 } from '../../lib/focused-login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from '../../lib/focused-login-reveal-message-type'
 import {
   authenticationRuntimeTransport,
   RuntimeMessageDeliveryKind,

@@ -1,9 +1,9 @@
 import { Effect } from 'effect'
 import {
   WebsiteFocusedLoginRevealMessage,
-  WebsiteFocusedLoginRevealMessageType,
   type WebsiteFocusedLoginFillResponse,
 } from '../../lib/focused-login-fill-messages'
+import { WebsiteFocusedLoginRevealMessageType } from '../../lib/focused-login-reveal-message-type'
 import type { FocusedWebsiteLoginFillOperation } from './focused-login-operations'
 import {
   RuntimeMessageResponseChannel,
