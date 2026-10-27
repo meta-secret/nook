@@ -113,17 +113,6 @@ tasks:
     cmds:
       - task: docker:ci:web:build
 
-  ci:pr:ui-demo:
-    desc: Build the PR Chromium image and record selected UI demo videos.
-    cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:pr:ui-demo:host }
-
-  _ci:pr:ui-demo:host:
-    cmds:
-      - task: docker:ci:web:e2e:build
-      - task: ui:demo:ci
-
   _ci:pr:host:
     cmds:
       - task: preflight
@@ -148,8 +137,6 @@ tasks:
       NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
       NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
       NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
-      UI_DEMO_OUTPUT_DIR: '{{.UI_DEMO_OUTPUT_DIR}}'
-      UI_DEMO_SPECS: '{{.UI_DEMO_SPECS}}'
       PREPARE_GROUP: '{{.PREPARE_GROUP}}'
       SETUP_TARGET: '{{.SETUP_TARGET}}'
       VITE_BASE: '{{.VITE_BASE}}'
@@ -305,17 +292,6 @@ tasks:
       - task: docker:ci:web:e2e:build
       - task: docker:e2e:run
         vars: { TASK: _extension:test:e2e }
-
-  ci:main:ui-demo:artifacts:
-    desc: Main headless UI demos from the split WASM artifact.
-    cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:ui-demo:artifacts:host }
-
-  _ci:main:ui-demo:artifacts:host:
-    cmds:
-      - task: docker:ci:web:e2e:build
-      - task: ui:demo:ci
 
   _ci:main:host:
     cmds:

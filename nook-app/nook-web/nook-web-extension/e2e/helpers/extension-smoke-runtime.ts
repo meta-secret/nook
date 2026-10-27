@@ -694,7 +694,7 @@ export async function launchExtensionContext(userDataDir: string) {
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
-    // Automated contexts, including recorded demos, remain headless.
+    // Automated contexts remain headless.
     headless: true,
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }

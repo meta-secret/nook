@@ -22,10 +22,6 @@ The projects are defined in
 - **`sync-live`**
   - Specs: `e2e/live/**/*.spec.ts`.
   - CI: Manual `e2e-pr.yml` runs.
-- **`ui-demo`**
-  - Specs: `e2e/demos/**/*.demo.spec.ts`.
-  - CI: Implemented but temporarily disabled in PR and Main workflows.
-  - Contract: UI-changing pull requests still require focused demo specs.
 
 The `test:e2e` script runs `stable` and then `unstable`.
 `test:e2e:local` runs `stable`.
@@ -36,14 +32,14 @@ The `test:e2e` script runs `stable` and then `unstable`.
 Apply the [CPU and E2E circuit breaker](../../../CIRCUIT-BREAKER.md#reducing-cpu-allocation-or-e2e-parallelism)
 to every browser entry point. Playwright worker counts use all available
 logical CPUs reported by Node's `availableParallelism()` in every environment.
-Demo, live-provider, debug and Windows runs follow the same capacity rule.
+Live-provider, debug and Windows runs follow the same capacity rule.
 
 Independent tests retain the full worker budget. A test that consumes state
 created by another may retain file ordering or a `describe.serial` group.
 Document the dependency beside those tests. A shared provider alone does not
 authorize globally capping the suite.
 
-- **Prohibited:** add `--workers=1` to a live-provider or demo command to hide a
+- **Prohibited:** add `--workers=1` to a live-provider command to hide a
   failure or avoid investigating shared state.
 - **Required:** keep native worker capacity. Isolate independent tests' state,
   or retain serial ordering only for a documented dependent test group.
@@ -75,7 +71,6 @@ It captures screenshots only on failure and retains traces on failure.
    - `unstable` selects both file and GitHub-stub provider jobs.
    - Their report labels are `unstable-file` and `unstable-github`.
    - The jobs share the producer's exact source SHA and immutable artifacts.
-   - Demonstration videos remain excluded from `all`.
    - Optional `E2E_SPEC` is passed as a positional Playwright filter.
 3. Record the actual terminal result with its source SHA and selected suite.
    - Source inspection or a Linux run does not establish native Windows success.

@@ -578,7 +578,6 @@ class ArcManifestContract {
       "bash .github/scripts/verify-wasm-gha-cache.sh",
       "web-e2e:",
       "extension-e2e:",
-      "ui-demos:",
       "deploy:",
       "Upload verified development deployment handoff",
       "main-web-deploy-${{ github.run_id }}",
@@ -589,7 +588,6 @@ class ArcManifestContract {
       "needs: [rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
       "task _ci:main:web:e2e-only",
       "task _extension:test:e2e",
-      "task _web:test:ui-demo",
     ]);
     if (admittedContract28.isErr()) return err(admittedContract28.error);
     const admittedContract29 = mainWorkflow.forbid(

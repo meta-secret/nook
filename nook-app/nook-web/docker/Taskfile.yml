@@ -131,35 +131,6 @@ tasks:
         {{.DOCKER_E2E_IMAGE}} \
         task {{.TASK}}
 
-  docker:ui-demo:run:
-    desc: Record Playwright demo videos into a host-mounted artifact directory.
-    internal: true
-    vars:
-      UI_DEMO_OUTPUT_DIR: '{{default (printf "%s/ui-demo-results" .REPO_ROOT) .UI_DEMO_OUTPUT_DIR}}'
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        out_dir="{{.UI_DEMO_OUTPUT_DIR}}";
-        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
-        test "$out_dir" != "/";
-        mkdir -p "$out_dir";
-        {{.DOCKER}} run --rm
-        --platform linux/amd64
-        {{.DOCKER_RUN_LIMITS}}
-        --ipc=host
-        -e CI=1
-        -e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-        -e NOOK_UI_DEMO_OUTPUT_DIR=/ui-demo-results
-        -e UI_DEMO_SPECS="{{.UI_DEMO_SPECS}}"
-        -v "$out_dir:/ui-demo-results"
-        -w /meta-secret/nook
-        {{.DOCKER_E2E_IMAGE}}
-        task _web:test:ui-demo;
-        find "$out_dir" -type f -name "*.webm" -print -quit | grep -q . || {
-          echo "task ui:demo: no Playwright video was produced" >&2;
-          exit 1;
-        }'
-
   docker:extract:dist:
     desc: Copy the landing, Simple Vault, and Sentinel Vault web artifacts to the host.
     cmds:

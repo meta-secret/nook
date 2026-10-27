@@ -72,7 +72,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Feature PRs with only policy paths require the authorized `ci:validate` or
   `ci:full-e2e` label mutation to select product validation; without one they
   run tooling verification, preflight, and Loom in the same job.
-- UI-demo execution remains disabled, with its focused-spec contract retained.
 - Pages preview uses the final job's composite action; coverage remains inside
   the Docker/BuildKit solve.
 - An immutable `browser.tar` artifact carries production output to browser jobs
@@ -99,15 +98,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Checks and builds the isolated research package.
 - Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
 - Records the deployment and comments the PR preview URL.
-
-**`linear-ui-demo.yml`**
-
-- Runs from the trusted default branch.
-- Uses an independent publisher group. Central CI owns close cancellation.
-- Keeps artifact publication disabled.
-- Keeps the retained publisher implementation available for later re-enable.
-- Completes or cancels matching Linear issues created before publication was
-  disabled.
 
 **`main.yml`**
 
@@ -138,8 +128,6 @@ and manual ecosystem execution in one Actions run named `CI`.
   image in separate pods. Each extension shard uses native available CPU capacity.
   For example, `E2E_SHARD=1/2 task _extension:test:e2e:shard` runs one half.
 - Each browser E2E solve is read-only.
-- Headless UI-demo execution and new artifact publication are temporarily
-  disabled.
 - Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` only after both browser e2e
   suites, native verification, ecosystem checks and cache gates succeed.
   Dispatching a feature branch exercises validation without development deployment.
@@ -333,7 +321,6 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - `NOOK_BROWSER_RUNS_ON` selects `nook-k0s-browser` for these trusted consumers.
 - PR full-browser and selected research jobs consume the producer's immutable `browser.tar`.
 - Main web and extension jobs consume their prepared image.
-- Main's disabled UI-demo job retains browser-only placement for later re-enable.
 - `e2e-pr.yml` consumes its prepared browser image.
 - Remote's explicit `ci-pr-e2e-suite` consumer uses the browser-only pool.
 - PR preparation, including focused auth and research source checks/build, stays build-capable.
@@ -439,7 +426,7 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
 - Product and requested research uploads run concurrently after validation.
   Both must succeed before publishing their outputs. GitHub comments and
   deployment records remain ordered after that upload join.
-- Scope detection and the UI demo contract run before either producer, without
+- Scope detection runs before either producer, without
   compiler or deployment credentials. Each producer initializes its own metadata
   and local-cache settings after BuildKit and Node setup.
 - Policy-only PRs retain verification and the final gate; artifact preparation
@@ -524,83 +511,6 @@ artifact when direct dependencies are outdated. Updates are handled manually.
 - The Nook server is stateless; vault data never lives on the server in e2e.
 
 Do **not** spin up multiple Nook servers for parallel e2e unless debugging port conflicts locally with `reuseExistingServer`.
-
-## PR UI demo videos
-
-UI demo rules:
-
-- PR and Main headless UI-demo execution is temporarily disabled.
-- New Actions and Linear demo artifacts are not published.
-- Demo implementations remain retained for later re-enable.
-- The UI-demo contract and focused demo-spec requirements remain active.
-- PR readiness observes the UI-demo result through the preview dependency.
-- It permits a disabled or non-required skip.
-- It rejects an enabled, required demo failure.
-- Browser E2E remains a separate validation authority.
-
-- UI-facing changes under web apps, shared vault UI, or extension browser
-  surfaces must add or update a focused
-  `nook-web-app/e2e/demos/*.demo.spec.ts`.
-- The PR contract rejects a UI change without a changed demo.
-- Only changed demo specs run.
-  - They use native available CPU capacity.
-  - PR CI avoids the cost of the full browser suite.
-
-**After integration, Prime runs the contract on the host before the first
-push** (and after any later UI edit) so Verify does not discover a missing demo:
-
-```bash
-git fetch origin main
-.github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
-```
-
-The feature PR required-check stage runs this contract. Local feature formatting stays
-bounded — see
-[pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
-
-When re-enabled, the `ui-demo` Playwright project runs Chromium headlessly at
-1280x720. It records WebM video. The pull-request demo job starts beside web
-verification.
-
-- The demo job starts after the WASM handoff is ready.
-- Its browser-image solve is read-only.
-- After Playwright succeeds, a cache-only publisher exports the warm graph to
-  the isolated exact-head scope.
-- Demo-only waits may hold meaningful before and after states for review.
-  - Ordinary regression specs remain full-speed.
-- CI retains the Actions result for 90 days.
-- After successful recording, CI uploads the 10 largest WebMs to Linear's
-  private file storage.
-  - One deterministic `nook-ui` issue owns all recordings for a GitHub PR.
-  - One idempotent comment represents each head SHA.
-  - The PR comment links the Actions fallback and Linear archive.
-  - Merge completes the issue; close without merge cancels it.
-  - Linear publication is best-effort and cannot invalidate Playwright
-    assertions or block the product gate.
-
-- When re-enabled, Main runs the complete UI-demo project.
-  - It retains every WebM in the 90-day Actions artifact.
-  - It adds only the 10 largest recordings to the associated Linear issue.
-  - It leaves the issue in Done.
-
-- Active Linear close cleanup requires the repository Actions secret
-  `LINEAR_API_KEY`.
-- The retained publisher requires the same secret when re-enabled.
-- The unmerged `pull_request` workflow never receives that secret.
-- It never loads secret-consuming code from the PR checkout.
-- Never put the secret in workflow YAML, logs, comments, artifacts, or agent
-  statistics.
-
-The local Linear MCP OAuth connection is useful for interactive issue
-management. It is separate from this unattended CI credential. Use
-`task ui:demo` from the repository root or `cargo ui-demo` from `nook-app/` to
-reproduce a recording locally.
-
-Playwright DOM/state assertions decide pass or failure. Humans and multimodal AI
-agents may review the video as supporting evidence, but visual AI review is
-advisory: timing, animation, font rendering, and compression can make frame-only
-judgments flaky. A future AI reviewer should consume the video plus assertion
-results and traces, and must not receive real vault secrets.
 
 The Playwright project catalog and command grouping live in
 [Browser Validation](browser-validation.md).

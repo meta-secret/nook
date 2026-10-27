@@ -1,8 +1,7 @@
 /**
- * Regenerates the checked-in QR module grids that test pages render, so ZXing
- * decodes genuine QR codes instead of a page-provided marker:
- * - tests/fixtures/otpauth-qr-modules.ts for the 2FA dialog demo;
- * - the extension mock-auth authenticator setup dialog's grid.
+ * Regenerates the checked-in QR module grid that the extension mock-auth
+ * authenticator setup dialog renders, so ZXing decodes a genuine QR code
+ * instead of a page-provided marker.
  *
  * Run from nook-web-app: `bun scripts/generate-otpauth-qr-fixture.ts`.
  */
@@ -10,10 +9,6 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { format, resolveConfig } from 'prettier'
 import { prepareZXingModule, writeBarcode } from 'zxing-wasm/writer'
-
-/** A demo-only authenticator; the secret is the RFC 4648 "Hello!\xDE\xAD\xBE\xEF" sample. */
-const OTPAUTH_QR_TEXT =
-  'otpauth://totp/Demo%20Service:demo.user%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Demo%20Service&algorithm=SHA1&digits=6&period=30'
 
 /** The mock-auth enrollment account (accounts.ts), same payload as public/totp-enroll-qr.png. */
 const MOCK_AUTH_ENROLL_QR_TEXT =
@@ -42,10 +37,6 @@ function moduleGlyph(module: number): string {
 }
 
 const files: readonly QrFixtureFile[] = [
-  {
-    output: join(import.meta.dir, '../tests/fixtures/otpauth-qr-modules.ts'),
-    fixtures: [{ name: 'OTPAUTH_QR', text: OTPAUTH_QR_TEXT }],
-  },
   {
     output: join(
       import.meta.dir,

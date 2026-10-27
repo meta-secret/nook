@@ -169,12 +169,8 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '13ea52eb03efd9af5133fc810aeb67a85176d1dd30bb7f884a159d05be3280f1',
   ],
   [
-    '.github/workflows/lib/linear-ui-demo.cjs',
-    'a52477a1e74c01cebd9d4f9c8de03790e1426cd15e2ddffcd34a85e5e2052fa4',
-  ],
-  [
     'agentic-ai/loom/src/lib/run.ts',
-    '8bee6ac341fecf756a0323ecaa509bf82617cc9b4a51f9999ec3a5709a4c25f3',
+    'a123af64b13c0bec15b825562891c888dc3bc1aa56b398c3b4d274c48aa83924',
   ],
   [
     'agentic-ai/loom/src/commands/pr-authored-budget.ts',

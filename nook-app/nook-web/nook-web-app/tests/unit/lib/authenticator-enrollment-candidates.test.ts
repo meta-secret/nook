@@ -18,10 +18,12 @@ import {
   type AuthenticatorEnrollmentCandidatesMessage,
 } from '../../../../nook-web-extension/src/offscreen/authenticator-enrollment-candidates'
 import { SessionOperationFailureKind } from '../../../../nook-web-extension/src/lib/session-operation-queue'
-import { OTPAUTH_QR_TEXT } from '../../fixtures/otpauth-qr-modules'
 
 const PAGE_ORIGIN = 'https://www.demo.example.test'
 const SETUP_KEY = 'JBSW Y3DP EHPK 3PXP'
+/** An authenticator setup QR payload for that key. */
+const OTPAUTH_QR_TEXT =
+  'otpauth://totp/Demo%20Service:demo.user%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Demo%20Service&algorithm=SHA1&digits=6&period=30'
 /** A QR payload that is not an authenticator setup; Rust must drop it. */
 const NON_OTPAUTH_QR_TEXT = 'https://example.test/download-the-app'
 /** A transported picture; the stubbed reader stands in for ZXing's decode. */

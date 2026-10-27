@@ -849,8 +849,7 @@ void test("sealed browser jobs use browser capacity while arbitrary remote tasks
   const mixedRoute = "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}";
   for (const { path, start, end } of [
     { path: ".github/workflows/main.yml", start: "\n  web-e2e:\n", end: "\n  extension-e2e:\n" },
-    { path: ".github/workflows/main.yml", start: "\n  extension-e2e:\n", end: "\n  ui-demos:\n" },
-    { path: ".github/workflows/main.yml", start: "\n  ui-demos:\n", end: "\n  deploy:\n" },
+    { path: ".github/workflows/main.yml", start: "\n  extension-e2e:\n", end: "\n  deploy:\n" },
     { path: ".github/workflows/remote.yml", start: "\n  ci-pr-e2e-suite:\n", end: "\n  ci-pr-e2e:\n" },
   ]) {
     const workflow = fs.readFileSync(path, "utf8");

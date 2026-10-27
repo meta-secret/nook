@@ -6,6 +6,5 @@ target
 **/dist
 **/test-results
 **/playwright-report
-**/ui-demo-results
 **/coverage
 .DS_Store

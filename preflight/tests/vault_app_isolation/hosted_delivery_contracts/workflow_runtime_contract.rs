@@ -75,7 +75,7 @@ impl WorkflowRuntimeContract<'_> {
                 && main
                     .matches("runs-on: ${{ vars.NOOK_BROWSER_RUNS_ON || 'nook-k0s-browser' }}")
                     .count()
-                    >= 3
+                    == 2 // Web and extension e2e.
                 && main.contains("name: Portable WASM cache publication proof")
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
@@ -88,7 +88,7 @@ impl WorkflowRuntimeContract<'_> {
             ),
             (
                 "  extension-e2e:\n",
-                "\n  ui-demos:\n",
+                "\n  deploy:\n",
                 "task _extension:test:e2e",
             ),
         ] {

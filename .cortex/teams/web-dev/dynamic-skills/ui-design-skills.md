@@ -45,9 +45,9 @@ parity. Do not hide inline English in fallbacks, conditionals, or ARIA attribute
 
 ### Evidence
 
-Supply changed-state, light/dark, and phone/desktop evidence through the existing
-hosted UI demo and browser gates. Inspect attached logs when a browser gate fails.
-Formatting, UI demos, and Cortex audits follow Nook's authorized execution stage.
+Supply changed-state, light/dark, and phone/desktop evidence through the hosted
+browser gates and screenshots. Inspect attached logs when a browser gate fails.
+Formatting and Cortex audits follow Nook's authorized execution stage.
 
 **Prohibited:** claim a changed unlock flow is verified from source inspection.
 

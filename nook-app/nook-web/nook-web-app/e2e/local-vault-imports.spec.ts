@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
@@ -22,6 +23,37 @@ declare global {
     __nookClipboardRead: () => Promise<string>
     __nookClipboardWrite: (value: string) => Promise<void>
   }
+}
+
+type StoredSearchRow = { key: string; value: string }
+
+/** Every search-catalog row the browser holds in IndexedDB. */
+function storedSearchRows(page: Page): Promise<StoredSearchRow[]> {
+  return page.evaluate(
+    () =>
+      new Promise<StoredSearchRow[]>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const cursor = request.result
+            .transaction('vault', 'readonly')
+            .objectStore('vault')
+            .openCursor()
+          const rows: StoredSearchRow[] = []
+          cursor.onerror = () => reject(cursor.error)
+          cursor.onsuccess = () => {
+            const current = cursor.result
+            if (!current) return resolve(rows)
+            if (
+              typeof current.key === 'string' &&
+              current.key.startsWith('secret_search')
+            )
+              rows.push({ key: current.key, value: String(current.value) })
+            current.continue()
+          }
+        }
+      }),
+  )
 }
 
 test.describe('local vault', () => {
@@ -838,6 +870,16 @@ test.describe('local vault', () => {
       .filter({ hasText: 'demand-user-54' })
     await expect(row).toBeVisible()
     await expect.poll(decryptLogCount).toBe(beforeNavigation)
+
+    // The search catalog that answered that query is stored only as
+    // AGE-armored buckets; no username reaches IndexedDB in plaintext.
+    const searchRows = await storedSearchRows(page)
+    expect(searchRows.length).toBeGreaterThan(0)
+    for (const { key, value } of searchRows) {
+      expect(key).toMatch(/^secret_search_v2:/)
+      expect(value).toContain('-----BEGIN AGE ENCRYPTED FILE-----')
+      expect(value).not.toContain('demand-user-54')
+    }
 
     await row.getByTestId('secret-row-toggle').click()
     await expect(row.getByTestId('revealed-secret')).toContainText('••••')
