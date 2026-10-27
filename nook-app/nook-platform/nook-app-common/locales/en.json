@@ -1640,7 +1640,7 @@
     "loading": "Looking for vaults in your Nook folder…",
     "root_absent": "Connect & sync creates a folder named “Nook” in your Google Drive. Each vault syncs in its own subfolder inside it.",
     "root_empty": "Your “Nook” folder holds no vaults yet. Connect & sync adds this identity’s vaults to it.",
-    "connect_explainer": "Connect & sync saves this Google account as a sync provider and syncs this identity’s vaults into the Nook folder, each in its own subfolder. The vaults listed below stay as they are unless you choose an action for one.",
+    "connect_explainer": "Connect & sync saves this Google account as a sync provider and syncs this identity’s vaults into the Nook folder, each in its own subfolder. The vaults listed above stay as they are unless you choose an action for one.",
     "access_syncs": "Syncs with this identity",
     "access_other_identity": "In identity {identity} on this browser",
     "access_granted": "Access granted to this device",

@@ -14,6 +14,7 @@ import {
   storedOAuthCredential,
   type OAuthFileConfig,
 } from '$lib/auth/providers'
+import { buttonVariants } from '$lib/components/ui/button/button-variants'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
 import {
   ProviderVaultAccessActions,
@@ -136,7 +137,17 @@ describe('Google Drive provider setup', () => {
     expect(view.getAllByTestId('provider-vault-request-access')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
     expect(view.queryAllByTestId('provider-vault-use-instead')).toHaveLength(0)
-    expect(view.getByTestId('connect-provider-btn')).toBeTruthy()
+    // Connect & sync is the step's one primary action; a row's never competes.
+    const secondary: Parameters<typeof buttonVariants>[0] = {
+      variant: 'outline',
+      size: 'sm',
+    }
+    expect(view.getByTestId('provider-vault-request-access').className).toBe(
+      buttonVariants(secondary),
+    )
+    expect(view.getByTestId('connect-provider-btn').className).not.toContain(
+      'border-input',
+    )
   })
 
   test('imports another vault through the existing import flow', async () => {

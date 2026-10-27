@@ -314,7 +314,8 @@ Around the list:
 - **Connect & sync:** stays below the list and says what it does: it saves
   the provider and syncs this identity's vaults into the Nook folder, each in
   its own subfolder. The listed vaults stay as they are unless the user
-  chooses an action.
+  chooses an action. It is the step's only primary button; every vault row's
+  actions are secondary, so a row never competes with it.
 - **Recovery picker:** a provider with several vaults shows the same access
   for every transport and offers recovery only for a vault this device can
   open.
