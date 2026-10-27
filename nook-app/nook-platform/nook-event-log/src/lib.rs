@@ -25,6 +25,7 @@
 mod builder;
 mod canonical;
 mod epoch;
+mod epoch_vault_name;
 mod errors;
 mod event;
 mod event_bytes;
@@ -42,6 +43,7 @@ pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
     ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
+pub use epoch_vault_name::EpochVaultName;
 pub use errors::{EventError, EventResult};
 pub use event::{
     EncryptedSecretPayload, EpochCheckpointRequirement, EpochMetadataState, EpochPasswordState,

@@ -281,9 +281,13 @@ pub enum VaultOperation {
         // The custom serializer likewise preserves the legacy omitted/explicit-array distinction.
         #[tsify(type = "PasswordUnlockEntry[]", optional)]
         password_entries: EpochPasswordState,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[tsify(optional)]
-        vault_name: Option<OpaqueCiphertext>,
+        #[serde(
+            default,
+            skip_serializing_if = "crate::EpochVaultName::is_unnamed",
+            serialize_with = "crate::EpochVaultName::serialize_epoch_vault_name"
+        )]
+        #[tsify(type = "string", optional)]
+        vault_name: crate::EpochVaultName,
     },
 }
 
@@ -671,7 +675,7 @@ mod tests {
             value: StoredRecordPayload::from_trusted("malformed".to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {
-            vault_name: None,
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![malformed_share]),
@@ -686,7 +690,7 @@ mod tests {
         let signing_key = test_signing_key();
         let mut body = empty_genesis_event(&signing_key)?.body;
         body.operations.push(VaultOperation::EpochCheckpoint {
-            vault_name: None,
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::LegacyRetain,
@@ -757,7 +761,7 @@ mod tests {
         );
 
         body.operations = vec![VaultOperation::EpochCheckpoint {
-            vault_name: None,
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

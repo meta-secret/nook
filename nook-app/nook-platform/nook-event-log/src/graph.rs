@@ -887,7 +887,7 @@ mod tests {
             vec![genesis_id.clone()],
             genesis_id,
             VaultOperation::EpochCheckpoint {
-                vault_name: None,
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),

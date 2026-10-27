@@ -239,7 +239,7 @@ mod tests {
                     created_at: IsoTimestamp::parse("2026-08-15T00:01:31Z")?,
                     key_epoch: trigger_id,
                     operations: vec![VaultOperation::EpochCheckpoint {
-                        vault_name: None,
+                        vault_name: crate::EpochVaultName::Unnamed,
                         secrets: Vec::new(),
                         members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted(
                             "0".repeat(64),
@@ -356,7 +356,7 @@ mod tests {
                     created_at: IsoTimestamp::parse("2026-08-15T00:01:01Z")?,
                     key_epoch: trigger_id,
                     operations: vec![VaultOperation::EpochCheckpoint {
-                        vault_name: None,
+                        vault_name: crate::EpochVaultName::Unnamed,
                         secrets: Vec::new(),
                         members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted(
                             "0".repeat(64),
@@ -734,7 +734,7 @@ mod tests {
         assert_eq!(meta.enrolled_devices.len(), 1);
 
         let operation = VaultOperation::EpochCheckpoint {
-            vault_name: None,
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
@@ -764,7 +764,7 @@ mod tests {
             value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {
-            vault_name: None,
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![invalid]),

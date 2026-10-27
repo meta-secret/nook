@@ -31,7 +31,7 @@ struct PreparedEpochRotation {
     secrets: Vec<nook_core::EncryptedSecretPayload>,
     members_checkpoint_hash: nook_auth2::Sha256Hex,
     rotated_meta_records: Vec<nook_core::StoredSecretRecord>,
-    vault_name: Option<nook_core::OpaqueCiphertext>,
+    vault_name: nook_core::EpochVaultName,
 }
 
 struct PersistedSecurityEpochRecoveryPlan {
@@ -613,7 +613,7 @@ mod tests {
         let epoch = IdentityVaultEventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let other = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let mut prepared = PreparedEpochRotation {
-            vault_name: None,
+            vault_name: nook_core::EpochVaultName::Unnamed,
             previous_key_epoch: epoch.clone(),
             previous_checkpoint: epoch,
             new_keys: nook_core::VaultKeys::generate()?,

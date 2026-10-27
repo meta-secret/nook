@@ -44,8 +44,8 @@ impl VaultProjection {
                 // The checkpoint carries the name under the new key; a name
                 // under the retired key could not be read after the rotation.
                 self.vault_name = match vault_name {
-                    Some(name) => ProjectedVaultName::Named(name.clone()),
-                    None => ProjectedVaultName::Unnamed,
+                    crate::EpochVaultName::Named(name) => ProjectedVaultName::Named(name.clone()),
+                    crate::EpochVaultName::Unnamed => ProjectedVaultName::Unnamed,
                 };
                 for secret in secrets {
                     self.insert_secret(event_id, secret, ProjectedSecretOrigin::Created);
@@ -407,7 +407,7 @@ mod tests {
         projection.apply_operation(
             &EventId::projection_fixture()?,
             &VaultOperation::EpochCheckpoint {
-                vault_name: None,
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
@@ -439,7 +439,7 @@ mod tests {
         projection.apply_operation(
             &event,
             &VaultOperation::EpochCheckpoint {
-                vault_name: None,
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: vec![replacement.clone()],
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
@@ -472,7 +472,7 @@ mod tests {
         projection.apply_operation(
             &EventId::projection_fixture()?,
             &VaultOperation::EpochCheckpoint {
-                vault_name: None,
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: vec![replacement.clone()],
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
@@ -522,7 +522,9 @@ mod tests {
 
         projection.apply_operation(
             &event,
-            &checkpoint(Some(name("cipher-family-next-epoch"))),
+            &checkpoint(crate::EpochVaultName::Named(name(
+                "cipher-family-next-epoch",
+            ))),
             &mut replacements,
         );
         assert_eq!(
@@ -531,7 +533,11 @@ mod tests {
         );
 
         // A name under the retired key is unreadable in the new epoch.
-        projection.apply_operation(&event, &checkpoint(None), &mut replacements);
+        projection.apply_operation(
+            &event,
+            &checkpoint(crate::EpochVaultName::Unnamed),
+            &mut replacements,
+        );
         assert_eq!(projection.vault_name, ProjectedVaultName::Unnamed);
         Ok(())
     }

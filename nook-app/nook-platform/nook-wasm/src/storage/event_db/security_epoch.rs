@@ -530,7 +530,7 @@ mod browser {
                     created_at,
                     key_epoch: trigger.event.id()?,
                     operations: vec![VaultOperation::EpochCheckpoint {
-                        vault_name: None,
+                        vault_name: nook_core::EpochVaultName::Unnamed,
                         secrets: Vec::new(),
                         members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                         rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

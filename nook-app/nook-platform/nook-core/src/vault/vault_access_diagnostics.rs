@@ -180,7 +180,7 @@ impl EncryptedOperationDiagnostic<'_> {
                         EpochPasswordState::LegacyRetain => 0,
                         EpochPasswordState::Replace(entries) => entries.len(),
                     }
-                    + usize::from(vault_name.is_some())
+                    + usize::from(matches!(vault_name, crate::EpochVaultName::Named(_)))
             }
             VaultOperation::SecretCreated { .. }
             | VaultOperation::SecretReplaced { .. }

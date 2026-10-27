@@ -97,17 +97,17 @@ impl<'a> VaultNameEpochReencryption<'a> {
         }
     }
 
-    pub fn reencrypt(self) -> VaultEpochResult<Option<OpaqueCiphertext>> {
+    pub fn reencrypt(self) -> VaultEpochResult<crate::EpochVaultName> {
         let crate::ProjectedVaultName::Named(name) = self.name else {
-            return Ok(None);
+            return Ok(crate::EpochVaultName::Unnamed);
         };
         let armored = AgeArmoredCiphertext::from_trusted_armored(name.as_str().to_owned());
         let mut plaintext = VaultCrypto::new(self.old_secrets_key)?.decrypt_value(&armored)?;
         let ciphertext = VaultCrypto::new(self.new_secrets_key)?.encrypt_value(&plaintext)?;
         plaintext.zeroize_plaintext();
-        Ok(Some(OpaqueCiphertext::from_trusted(
-            ciphertext.as_str().to_owned(),
-        )))
+        Ok(crate::EpochVaultName::Named(
+            OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
+        ))
     }
 }
 
@@ -306,7 +306,7 @@ mod tests {
                 .as_str()
                 .to_owned(),
         ));
-        let Some(carried) =
+        let crate::EpochVaultName::Named(carried) =
             VaultNameEpochReencryption::new(&named, &old_key, &new_key).reencrypt()?
         else {
             anyhow::bail!("a named vault must carry its name into the new epoch");
@@ -323,7 +323,7 @@ mod tests {
         let unnamed = crate::ProjectedVaultName::Unnamed;
         assert_eq!(
             VaultNameEpochReencryption::new(&unnamed, &old_key, &new_key).reencrypt()?,
-            None
+            crate::EpochVaultName::Unnamed
         );
         Ok(())
     }
@@ -455,7 +455,7 @@ mod tests {
         let requested_at = IsoTimestamp::parse("2026-06-28T00:02:00Z")?;
         VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
             operation: &VaultOperation::EpochCheckpoint {
-                vault_name: None,
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
