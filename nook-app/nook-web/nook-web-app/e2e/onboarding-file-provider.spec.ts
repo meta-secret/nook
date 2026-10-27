@@ -293,7 +293,7 @@ test.describe('Google Drive authorized accounts', () => {
       await stranger.goto('/app/')
       await clearBrowserVault(stranger)
       await stranger.goto('about:blank')
-      await stranger.goto(localizeAppLinkForE2e(stranger, enrollmentLink))
+      await stranger.goto(localizeAppLinkForE2e(owner, enrollmentLink))
       await expect(stranger.getByTestId('join-this-device')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
