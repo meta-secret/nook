@@ -6,6 +6,7 @@ use std::{fmt, str};
 use crate::canonical::{Ed25519Signature, EventId};
 use crate::signing::SigningIdentity;
 use crate::{CanonicalEventBodyBytes, EventError, EventResult, EventStorageBytes};
+use crate::{EpochMetadataState, EpochPasswordState};
 use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
@@ -14,7 +15,7 @@ use nook_auth2::{
     SecretId, SecretType, SentinelParticipantCount, SentinelShareIndex, SentinelThreshold,
     Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
 };
-use serde::{Deserialize, Serialize, ser::Error as _};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 use serde_json::json;
@@ -99,82 +100,6 @@ pub struct SentinelShareIssuedPayload {
     pub required_participants: SentinelParticipantCount,
     pub share_index: SentinelShareIndex,
     pub ciphertext: AgeArmoredCiphertext,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(from = "Vec<PasswordUnlockEntry>")]
-pub enum EpochPasswordState {
-    #[default]
-    LegacyRetain,
-    Replace(Vec<PasswordUnlockEntry>),
-}
-
-/// Checkpoint metadata replacement. Omitted legacy fields retain the previous
-/// metadata, while an explicit empty array clears every metadata record.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(from = "Vec<StoredSecretRecord>")]
-pub enum EpochMetadataState {
-    #[default]
-    LegacyRetain,
-    Replace(Vec<StoredSecretRecord>),
-}
-
-impl EpochMetadataState {
-    fn is_legacy_retain(&self) -> bool {
-        matches!(self, Self::LegacyRetain)
-    }
-}
-
-impl From<Vec<StoredSecretRecord>> for EpochMetadataState {
-    fn from(values: Vec<StoredSecretRecord>) -> Self {
-        Self::Replace(values)
-    }
-}
-
-impl EpochMetadataState {
-    fn serialize_epoch_metadata_state<S>(
-        state: &EpochMetadataState,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match state {
-            EpochMetadataState::Replace(records) => records.serialize(serializer),
-            EpochMetadataState::LegacyRetain => Err(S::Error::custom(
-                "legacy checkpoint metadata state must be omitted",
-            )),
-        }
-    }
-}
-
-impl EpochPasswordState {
-    fn is_legacy_retain(&self) -> bool {
-        matches!(self, Self::LegacyRetain)
-    }
-}
-
-impl From<Vec<PasswordUnlockEntry>> for EpochPasswordState {
-    fn from(values: Vec<PasswordUnlockEntry>) -> Self {
-        Self::Replace(values)
-    }
-}
-
-impl EpochPasswordState {
-    fn serialize_epoch_password_state<S>(
-        state: &EpochPasswordState,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match state {
-            EpochPasswordState::Replace(entries) => entries.serialize(serializer),
-            EpochPasswordState::LegacyRetain => Err(S::Error::custom(
-                "legacy checkpoint password state must be omitted",
-            )),
-        }
-    }
 }
 
 /// Atomic domain operations recorded in the immutable event log.
