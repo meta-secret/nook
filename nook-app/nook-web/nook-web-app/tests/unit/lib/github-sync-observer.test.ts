@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
-  GITHUB_EVENT_LOG_PATH,
+  GITHUB_PROVIDER_ROOT,
   GITHUB_VAULT_PATH,
 } from '../../../e2e/github-api'
 import {
@@ -11,7 +11,11 @@ import {
 } from '../../../e2e/helpers'
 
 const eventDigest = 'A'.repeat(43)
-const eventPath = `${GITHUB_EVENT_LOG_PATH}/${eventDigest}.yaml`
+const identityDir = `${GITHUB_PROVIDER_ROOT}/idn_observeride`
+const vaultDir = `${identityDir}/store_observervau`
+const eventsDir = `${vaultDir}/events`
+const eventPath = `${eventsDir}/${eventDigest}.yaml`
+const contents = 'https://api.github.com/repos/owner/observer-test/contents'
 const eventYaml = `created_at: 2026-09-12T00:00:00Z
 operations:
   - type: secret-created
@@ -39,14 +43,26 @@ describe('waitForVaultYaml GitHub observer', () => {
       if (url === 'https://api.github.com/user') {
         return response({ login: 'owner' })
       }
-      if (
-        url ===
-        `https://api.github.com/repos/owner/observer-test/contents/${GITHUB_EVENT_LOG_PATH}`
-      ) {
-        return response([
-          { name: `${eventDigest}.yaml`, path: eventPath, type: 'file' },
-        ])
-      }
+      // The repository files each vault under the identity that wrote it.
+      const listings = new Map<string, unknown[]>([
+        [
+          `${contents}/${GITHUB_PROVIDER_ROOT}`,
+          [{ name: 'idn_observeride', path: identityDir, type: 'dir' }],
+        ],
+        [
+          `${contents}/${identityDir}`,
+          [
+            { name: 'log', path: `${identityDir}/log`, type: 'dir' },
+            { name: 'store_observervau', path: vaultDir, type: 'dir' },
+          ],
+        ],
+        [
+          `${contents}/${eventsDir}`,
+          [{ name: `${eventDigest}.yaml`, path: eventPath, type: 'file' }],
+        ],
+      ])
+      const listing = listings.get(url)
+      if (listing) return response(listing)
       if (
         url ===
         `https://api.github.com/repos/owner/observer-test/contents/${eventPath}`
@@ -65,9 +81,9 @@ describe('waitForVaultYaml GitHub observer', () => {
     )
 
     expect(snapshot.secretIds).toEqual(['observed-secret'])
-    expect(requests).toContain(
-      `https://api.github.com/repos/owner/observer-test/contents/${GITHUB_EVENT_LOG_PATH}`,
-    )
+    expect(requests).toContain(`${contents}/${eventsDir}`)
+    // An identity's control log is never read as vault events.
+    expect(requests).not.toContain(`${contents}/${identityDir}/log/events`)
     expect(requests).toContain(
       `https://api.github.com/repos/owner/observer-test/contents/${eventPath}`,
     )

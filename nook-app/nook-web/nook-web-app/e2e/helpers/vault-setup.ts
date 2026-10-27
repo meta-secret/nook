@@ -89,6 +89,9 @@ export async function skipFirstRunBackup(
 export async function expectFirstVaultOpen(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
   await skipFirstRunBackup(page, vaultPanel.or(openVaultRow(page)).first())
+  // The e2e idle lock is 2.5 s: under load it can lock the new vault before
+  // the identities page leads into it.
+  await disableVaultIdleLock(page)
   await openVaultPage(page)
 }
 
@@ -158,6 +161,9 @@ export async function createLocalVaultOnLogin(
   }
 
   await skipFirstRunBackup(page, readySurface.or(openVaultRow(page)).first())
+  // The vault exists now: keep the 2.5 s e2e idle lock from locking it while
+  // the identities page leads into it.
+  await disableVaultIdleLock(page)
   // The first vault's setup ends on the identities; the vault opens there.
   if (readyTestId === 'vault-panel' || readyTestId === 'authenticated-shell')
     await openVaultPage(page)

@@ -99,10 +99,14 @@ impl NookVaultManager {
             )
             .into());
         }
-        Ok(LocalFolderHandles::current()
+        let folder = LocalFolderHandles::current()
             .open_folder(&handle_id)
-            .await?
-            .delete_namespace(&EventLogLocation::Vault(store_id))
-            .await?)
+            .await?;
+        let nook_core::VaultPlacement::Filed(placed) =
+            folder.placement(&EventLogLocation::Vault(store_id)).await?
+        else {
+            return Ok(false);
+        };
+        Ok(folder.delete_namespace(&placed).await?)
     }
 }

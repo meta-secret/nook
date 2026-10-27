@@ -156,8 +156,10 @@ export async function stubGithubVaultForLocalE2e(
   await stub.install(page, opts)
 }
 
-/** Identity control logs live outside the vault event roots. */
-const GITHUB_IDENTITY_LOG_PREFIX = 'nook-identity/'
+/** Every identity and vault lives under one root; an identity's control log
+ * sits in its folder's `log`, apart from its vaults. */
+const GITHUB_PROVIDER_ROOT_PREFIX = 'meta-secret-nook/'
+const GITHUB_IDENTITY_LOG_PATH = /^meta-secret-nook\/[^/]+\/log\//
 
 export enum ListGithubStubDirResultType {
   File = 'file',
@@ -224,10 +226,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
     revision += 1
     sha = `e2e-stub-sha-${revision}`
   }
-  /** Vault events at the legacy root or a vault namespace, never identity logs. */
+  /** Vault events in any identity's folder, never identity logs. */
   const vaultEventPaths = () =>
     [...eventFiles.keys()].filter(
-      (path) => !path.startsWith(GITHUB_IDENTITY_LOG_PREFIX),
+      (path) => !GITHUB_IDENTITY_LOG_PATH.test(path),
     )
 
   return {
@@ -329,17 +331,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               type: ListGithubStubDirResultType.File,
             })
           }
-          if (vaultEventPaths().length > 0) {
+          if (eventFiles.size > 0) {
             files.push({
-              name: 'nook-log',
-              path: 'nook-log',
-              type: ListGithubStubDirResultType.Dir,
-            })
-          }
-          if (eventFiles.size > vaultEventPaths().length) {
-            files.push({
-              name: 'nook-identity',
-              path: 'nook-identity',
+              name: 'meta-secret-nook',
+              path: 'meta-secret-nook',
               type: ListGithubStubDirResultType.Dir,
             })
           }
@@ -399,10 +394,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
-        if (
-          url.startsWith(`${contentsPrefix}nook-log/`) ||
-          url.startsWith(`${contentsPrefix}${GITHUB_IDENTITY_LOG_PREFIX}`)
-        ) {
+        if (url.startsWith(`${contentsPrefix}${GITHUB_PROVIDER_ROOT_PREFIX}`)) {
           if (failureScenario === GithubStubFailureScenario.EventLogForbidden) {
             failureResponses.push({
               method,

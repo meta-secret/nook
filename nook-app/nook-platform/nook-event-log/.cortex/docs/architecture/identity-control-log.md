@@ -172,19 +172,30 @@ the DEK can close with `vault-dek-granted`.
 
 ### Store the log once per provider mount
 
-Every remote mount stores the identity's log beside its vaults, each in its own
-namespace. Events are immutable and content-addressed, so replicas converge by
-set union.
+Every remote mount keeps one root, `meta-secret-nook`, with a folder per
+identity. An identity's folder holds its log in `log` and each vault it filed
+in a folder named by the store id. Events are immutable and content-addressed,
+so replicas converge by set union. `PlacedNamespace` owns the layout.
 
 - **Path-addressed providers (GitHub, local folder)**
-  - Identity log: `nook-identity/v1/{identity_id}/events/{digest}.yaml`.
-  - Vault: `nook-log/v1/vaults/{store_id}/events/{digest}.yaml`.
+  - Identity log: `meta-secret-nook/{identity_id}/log/events/{digest}.yaml`.
+  - Vault: `meta-secret-nook/{identity_id}/{store_id}/events/{digest}.yaml`.
 - **Google Drive**
-  - Each namespace is a child folder of the row's event parent, named by
-    `EventLogLocation::namespace_tag` (`nook-identity-{id}`, `nook-vault-{id}`).
+  - The same layout as nested folders: the root, an `{identity_id}` folder in
+    it, and `log` or `{store_id}` inside that.
 - **iCloud**
-  - Every record is a `NookLogEvent` whose queryable `location` field holds
-    the namespace tag, so one log can be listed and deleted on its own.
+  - `CloudKit` has no folders. Every record is a `NookLogEvent` whose queryable
+    `location` field holds `identity:{identity_id}` or
+    `vault:{store_id}:{identity_id}`, so one log can be listed and deleted on
+    its own, and a vault is found by its store id prefix.
+- **Filing a vault**
+  - A vault is filed once, under the identity that first writes it to the
+    provider, and stays in that folder. An identity that later shares the
+    vault reads and writes it there.
+  - Sync finds the vault's folder by store id (`VaultPlacement`). A vault the
+    provider does not hold yet is filed under the identity of this
+    installation's unlocked app key. A vault found in two identity folders
+    stops sync, because choosing one would fork its log.
 - **Browser**
   - `nook_db.events` holds `identity_event:{identity_id}:{event_id}` rows and
     an `identity_event_index:{identity_id}` index in one transaction.

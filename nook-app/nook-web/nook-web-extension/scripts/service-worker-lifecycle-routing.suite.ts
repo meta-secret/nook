@@ -467,7 +467,6 @@ describe('service worker routing', () => {
             eventLogRecords: [
               {
                 eventId: 'event-1',
-                path: 'events/1',
                 event: routedVaultEvent,
               },
             ],
@@ -558,7 +557,6 @@ describe('service worker routing', () => {
               eventLogRecords: [
                 {
                   eventId: 'event-1',
-                  path: 'events/1',
                   event: routedVaultEvent,
                 },
               ],
@@ -605,7 +603,6 @@ describe('service worker routing', () => {
               eventLogRecords: [
                 {
                   eventId: 'event-1',
-                  path: 'events/1',
                   event: routedVaultEvent,
                 },
               ],

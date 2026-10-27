@@ -6,7 +6,7 @@ export function eventLogRecords(
   records: LocalFolderRecord[],
 ): LocalFolderRecord[] {
   return records.filter((record) =>
-    /^nook-log\/v1\/vaults\/[^/]+\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
+    /^meta-secret-nook\/idn_[^/]+\/store_[^/]+\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
       record.path,
     ),
   )

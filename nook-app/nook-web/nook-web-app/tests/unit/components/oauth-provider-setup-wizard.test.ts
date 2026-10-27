@@ -48,6 +48,11 @@ function summary(
     storeId,
     shortId: storeId.slice('store_'.length, 'store_'.length + 8),
     name: { state: 'unknown' },
+    identity: {
+      identityId: 'idn_strangerabc',
+      shortId: 'stranger',
+      name: { state: 'unknown' },
+    },
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
     eventCount: 4,
@@ -109,6 +114,11 @@ describe('Google Drive provider setup', () => {
           {
             ...summary('store_ownvault001', { state: 'syncs' }, []),
             name: { state: 'named', name: 'Family' },
+            identity: {
+              identityId: 'idn_personalide',
+              shortId: 'personal',
+              name: { state: 'named', name: 'Personal' },
+            },
           },
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
@@ -128,6 +138,25 @@ describe('Google Drive provider setup', () => {
     expect(own?.textContent).toContain('Family')
     expect(own?.textContent).not.toContain('ownvault')
     expect(other?.textContent).toContain('othervau')
+    // Each row names the identity whose folder files the vault.
+    expect(
+      own?.querySelector('[data-testid="provider-vault-identity"]')
+        ?.textContent,
+    ).toBe(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsFiledUnder,
+        replacements: { identity: 'Personal' },
+      }),
+    )
+    expect(
+      other?.querySelector('[data-testid="provider-vault-identity"]')
+        ?.textContent,
+    ).toBe(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsFiledUnder,
+        replacements: { identity: 'stranger' },
+      }),
+    )
     expect(own?.textContent).toContain(
       vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
     )

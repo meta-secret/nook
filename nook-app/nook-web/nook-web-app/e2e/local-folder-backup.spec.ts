@@ -19,8 +19,12 @@ import {
   localFolderPickerInvocationCount,
   localFolderSnapshot,
   waitForLocalFolderEventRecords,
-  type LocalFolderRecord,
 } from './local-folder-mock'
+import {
+  backUpTwoVaultsToOneFolder,
+  connectLocalFolderProviderFromSettings,
+  filedVaults,
+} from './local-folder-vaults'
 
 async function installInterceptedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
@@ -40,20 +44,6 @@ async function installUnsupportedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
     Reflect.deleteProperty(window, 'showDirectoryPicker')
   })
-}
-
-async function connectLocalFolderProviderFromSettings(page: Page) {
-  await openStorageSettings(page)
-  await expandSettingsSection(page, 'storage')
-  await beginAddSyncProvider(page)
-  await page.getByTestId('provider-option-local-folder').click()
-  await expect(page.getByTestId('local-folder-setup')).toBeVisible()
-  await page.getByTestId('settings-choose-local-folder-btn').click()
-  await expect(page.getByTestId('settings-local-folder-selected')).toHaveText(
-    'Nook Backup',
-  )
-  await page.getByTestId('settings-connect-local-folder-btn').click()
-  await waitForVaultOperationsIdle(page)
 }
 
 async function prepareVaultForFolderSettings(
@@ -230,7 +220,7 @@ test.describe('local folder backup provider', () => {
           )
           return records.filter(
             (record) =>
-              /^nook-log\/v1\/vaults\/[^/]+\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
+              /^meta-secret-nook\/idn_[^/]+\/store_[^/]+\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
                 record.path,
               ) &&
               record.content.includes('schema_version:') &&
@@ -251,7 +241,10 @@ test.describe('local folder backup provider', () => {
     const { sharedFolder } = await backUpTwoVaultsToOneFolder(page)
 
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toHaveCount(0)
-    expect(vaultFolders(sharedFolder)).toHaveLength(2)
+    // Each browser filed its vault under the identity it created.
+    const vaults = filedVaults(sharedFolder)
+    expect(vaults).toHaveLength(2)
+    expect(new Set(vaults.map((vault) => vault.identityId)).size).toBe(2)
   })
 
   test('offers a vault choice when a folder holds several vaults', async ({
@@ -297,55 +290,3 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('secret-row')).toHaveCount(1)
   })
 })
-
-function vaultFolders(records: LocalFolderRecord[]): string[] {
-  const folders = new Set<string>()
-  for (const record of records) {
-    const match = /^nook-log\/v1\/vaults\/([^/]+)\/events\//.exec(record.path)
-    const [, storeId = ''] = match ? match : []
-    if (storeId) folders.add(storeId)
-  }
-  return [...folders]
-}
-
-/** Two vaults back up into the same folder; neither touches the other's events. */
-async function backUpTwoVaultsToOneFolder(
-  page: Page,
-): Promise<{ sharedFolder: LocalFolderRecord[]; latestStoreId: string }> {
-  await clearBrowserVault(page)
-  await page.reload()
-  await connectLocalVault(page)
-  await connectLocalFolderProviderFromSettings(page)
-  await openVaultPage(page)
-  await assertVaultReady(page)
-  await addSecret(
-    page,
-    uniqueSecretKey('folder-shared-first'),
-    'folder-shared-first-value',
-  )
-  const firstVault = await waitForLocalFolderEventRecords(page)
-
-  await clearBrowserVault(page)
-  await page.reload()
-  await connectLocalVault(page)
-  await connectLocalFolderProviderFromSettings(page)
-  await openVaultPage(page)
-  await assertVaultReady(page)
-  await addSecret(
-    page,
-    uniqueSecretKey('folder-shared-second'),
-    'folder-shared-second-value',
-  )
-  await expect
-    .poll(async () => vaultFolders(await localFolderSnapshot(page)).length, {
-      timeout: 30_000,
-    })
-    .toBe(2)
-  const sharedFolder = await localFolderSnapshot(page)
-  for (const record of firstVault) expect(sharedFolder).toContainEqual(record)
-  const [firstStoreId] = vaultFolders(firstVault)
-  const [latestStoreId = ''] = vaultFolders(sharedFolder).filter(
-    (storeId) => storeId !== firstStoreId,
-  )
-  return { sharedFolder, latestStoreId }
-}

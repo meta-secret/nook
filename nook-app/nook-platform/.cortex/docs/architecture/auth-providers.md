@@ -203,10 +203,11 @@ TypeScript owns browser integration:
 ### Google Drive Nook root
 
 Every Google Drive provider is shared. Each Google account holds one
-app-owned Nook root folder in My Drive, always named `Nook`
-(`NOOK_PROVIDER_ROOT_NAME` in `nook-core`). The identity log and every vault
-sync in their own namespace subfolder of that root, independently of vault
-replication or membership. Writes remain limited to app-created files below
+app-owned Nook root folder in My Drive, always named `meta-secret-nook`
+(`NOOK_PROVIDER_ROOT_NAME` in `nook-core`). Inside it, each identity has a
+folder holding its log in `log` and each vault it filed in a `{store_id}`
+subfolder, independently of vault replication or membership. See
+[the identity control log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount). Writes remain limited to app-created files below
 the root.
 
 - **Scopes:** Sign-in and silent refresh request only the non-sensitive
@@ -233,8 +234,8 @@ the root.
   Its connect reference is `shared:{folderId}`.
 - **Setup:** The wizard has no folder-name field. Setup step 2 connects the
   root with `connect_google_drive_vault_folder`. It looks up the account's
-  owned, untrashed My Drive root folders named `Nook`. With `drive.file`
-  alone, Drive reports only folders Nook created.
+  owned, untrashed My Drive root folders named `meta-secret-nook`. With
+  `drive.file` alone, Drive reports only folders Nook created.
   - No match creates the root. A new root is shared with no other account.
   - One match reuses that root. Sync keeps its encrypted events: event
     writes add content-addressed files only when absent, and the setup wizard
@@ -352,9 +353,9 @@ owner's private database or accepts an existing share.
 - **Credentials:** The target never contains the owner's CloudKit web-auth
   token. Each account signs into Apple and accepts the share with its own
   account before sync.
-- **Setup:** The wizard has no name field; the share is titled `Nook`, like
-  every account's root. Creating a share still adds a new custom zone on
-  each owner setup.
+- **Setup:** The wizard has no name field; the share is titled
+  `meta-secret-nook`, like every account's root. Creating a share still
+  adds a new custom zone on each owner setup.
 - **Not yet one root per account:** Finding an existing Nook zone needs a
   CloudKit zone and share lookup that cannot be verified without Apple
   sign-in, so it remains future work. The same per-namespace layout already

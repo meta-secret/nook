@@ -155,7 +155,7 @@ impl GitHubEventStore<'_> {
                 "GitHub tree listing was truncated; nothing was deleted.".to_owned(),
             ));
         }
-        let root = self.location.root();
+        let root = self.placed.root();
         let paths = Self::namespace_paths(&listing.tree, &root);
         if paths.is_empty() {
             return Ok(0);
@@ -274,15 +274,16 @@ mod tests {
 mod fetch_tests {
     use super::*;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use nook_core::{EventLogLocation, EventLogNamespaceKind, StoreId};
+    use nook_core::{EventLogNamespaceKind, IdentityId, PlacedNamespace, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const REPO: &str = "repos/owner/repo";
 
-    fn location() -> anyhow::Result<EventLogLocation> {
-        Ok(EventLogLocation::Vault(StoreId::parse(
-            "store_abcdefghijk",
-        )?))
+    fn location() -> anyhow::Result<PlacedNamespace> {
+        Ok(PlacedNamespace::vault(
+            IdentityId::parse("idn_abcdefghijk")?,
+            StoreId::parse("store_abcdefghijk")?,
+        ))
     }
 
     fn head_routes(tree: &str) -> Vec<FetchRoute> {
@@ -313,9 +314,10 @@ mod fetch_tests {
     async fn deleting_a_namespace_commits_its_removal_once() -> anyhow::Result<()> {
         let location = location()?;
         let tree = r#"{"truncated":false,"tree":[
-            {"path":"nook-log/v1/vaults/store_abcdefghijk/events/a.yaml","type":"blob"},
-            {"path":"nook-log/v1/vaults/store_abcdefghijk/events/b.yaml","type":"blob"},
-            {"path":"nook-log/v1/vaults/store_keep/events/c.yaml","type":"blob"}
+            {"path":"meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/a.yaml","type":"blob"},
+            {"path":"meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/b.yaml","type":"blob"},
+            {"path":"meta-secret-nook/idn_abcdefghijk/store_keepkeepkee/events/c.yaml","type":"blob"},
+            {"path":"meta-secret-nook/idn_abcdefghijk/log/events/d.yaml","type":"blob"}
         ]}"#;
         let mut routes = head_routes(tree);
         routes.extend([
@@ -331,7 +333,7 @@ mod fetch_tests {
         let deleted = GitHubEventStore {
             pat: " pat ",
             repo: "owner/repo",
-            location: &location,
+            placed: &location,
         }
         .delete_github_namespace()
         .await?;
@@ -355,7 +357,7 @@ mod fetch_tests {
         let store = GitHubEventStore {
             pat: "pat",
             repo: "owner/repo",
-            location: &location,
+            placed: &location,
         };
         let stub = FetchStub::install(head_routes(r#"{"truncated":false,"tree":[]}"#))?;
         assert_eq!(store.delete_github_namespace().await?, 0);
@@ -379,33 +381,45 @@ mod fetch_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn namespace_ids_come_from_the_default_branch_tree() -> anyhow::Result<()> {
+    async fn namespaces_come_from_the_default_branch_tree() -> anyhow::Result<()> {
         let stub = FetchStub::install(vec![
             FetchRoute::ok(
                 "GET",
                 "git/trees/main?recursive=1",
                 r#"{"truncated":false,"tree":[
-                    {"path":"nook-log/v1/vaults/store_b/events/x.yaml","type":"blob"},
-                    {"path":"nook-log/v1/vaults/store_a/events/y.yaml","type":"blob"},
-                    {"path":"nook-log/v1/vaults/store_a/events/z.yaml","type":"blob"},
-                    {"path":"nook-log/v1/vaults/store_a/events","type":"tree"}
+                    {"path":"meta-secret-nook/idn_bbbbbbbbbbb/store_bbbbbbbbbbb/events/x.yaml","type":"blob"},
+                    {"path":"meta-secret-nook/idn_aaaaaaaaaaa/store_aaaaaaaaaaa/events/y.yaml","type":"blob"},
+                    {"path":"meta-secret-nook/idn_aaaaaaaaaaa/store_aaaaaaaaaaa/events/z.yaml","type":"blob"},
+                    {"path":"meta-secret-nook/idn_aaaaaaaaaaa/store_aaaaaaaaaaa/events","type":"tree"}
                 ]}"#,
             ),
             FetchRoute::ok("GET", REPO, r#"{"default_branch":"main"}"#),
         ])?;
-        let ids = GitHubEventStore::list_github_namespace_ids(
+        let placed = GitHubEventStore::list_github_namespaces(
             "pat",
             "owner/repo",
             EventLogNamespaceKind::Vault,
         )
         .await?;
-        assert_eq!(ids, ["store_a", "store_b"]);
+        assert_eq!(
+            placed,
+            [
+                PlacedNamespace::vault(
+                    IdentityId::parse("idn_aaaaaaaaaaa")?,
+                    StoreId::parse("store_aaaaaaaaaaa")?
+                ),
+                PlacedNamespace::vault(
+                    IdentityId::parse("idn_bbbbbbbbbbb")?,
+                    StoreId::parse("store_bbbbbbbbbbb")?
+                ),
+            ]
+        );
         assert_eq!(stub.calls().len(), 2);
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", REPO, 404)])?;
         assert!(
-            GitHubEventStore::list_github_namespace_ids(
+            GitHubEventStore::list_github_namespaces(
                 "pat",
                 "owner/repo",
                 EventLogNamespaceKind::Identity,

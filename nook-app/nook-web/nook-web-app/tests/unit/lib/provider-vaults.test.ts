@@ -141,6 +141,11 @@ describe('recovery choice between several vaults', () => {
         storeId: CHOSEN,
         shortId: 'otherva',
         name: { state: 'unknown' },
+        identity: {
+          identityId: 'idn_strangerabc',
+          shortId: 'stranger',
+          name: { state: 'unknown' },
+        },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
         eventCount: 7,
@@ -158,8 +163,15 @@ describe('recovery choice between several vaults', () => {
       replacements: { count: '7' },
     }
     expect(row?.textContent).toContain(vault.t(eventsRequest))
-    // Unreported times are left out rather than guessed.
-    expect(view.getByTestId('provider-vault-meta').children).toHaveLength(1)
+    // Unreported times are left out rather than guessed: the line holds only
+    // the identity filing the vault and its event count.
+    expect(view.getByTestId('provider-vault-meta').children).toHaveLength(2)
+    expect(view.getByTestId('provider-vault-identity').textContent).toBe(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsFiledUnder,
+        replacements: { identity: 'stranger' },
+      }),
+    )
     await fireEvent.click(view.getByTestId('remote-vault-choice-item'))
     expect(onChoose).toHaveBeenCalledWith(CHOSEN)
   })
@@ -171,6 +183,11 @@ describe('recovery choice between several vaults', () => {
         storeId: CHOSEN,
         shortId: 'otherva',
         name: { state: 'unknown' },
+        identity: {
+          identityId: 'idn_strangerabc',
+          shortId: 'stranger',
+          name: { state: 'unknown' },
+        },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
         eventCount: 7,

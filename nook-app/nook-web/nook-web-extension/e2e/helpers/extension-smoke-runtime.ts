@@ -281,7 +281,6 @@ export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
 export const syntheticEventLogRecords: ExtensionEventLogRecord[] = [
   {
     eventId: 'event-e2e',
-    path: 'events/event-e2e.yaml',
     event: {
       schema_version: 2,
       store_id: 'store-e2e',

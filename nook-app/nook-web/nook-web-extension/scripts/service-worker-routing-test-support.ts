@@ -119,7 +119,6 @@ const externalPairingMessage = {
   eventLogRecords: [
     {
       eventId: 'event-1',
-      path: 'events/1',
       event: routedVaultEvent,
     },
   ],
@@ -316,7 +315,6 @@ async function routeDecodedLocalUpdate(
           eventLogRecords: [
             {
               eventId: 'event-1',
-              path: 'events/1',
               event: routedVaultEvent,
             },
           ],

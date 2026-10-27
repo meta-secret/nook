@@ -67,7 +67,6 @@ impl NookLocalFolderConfig {
 
 pub(crate) struct LocalFolderEventFile {
     pub event_id: String,
-    pub path: String,
     pub content: String,
 }
 
@@ -144,12 +143,12 @@ impl FolderObject<'_> {
 impl FolderObject<'_> {
     async fn event_directory(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
         lookup: ChildLookup,
     ) -> Result<FolderDirectory, NookError> {
         let root = self.object;
         let mut current = FolderDirectory::Opened(root.clone());
-        let path = location.root();
+        let path = placed.root();
         for part in path.split('/') {
             let FolderDirectory::Opened(parent) = current else {
                 return Ok(FolderDirectory::Unavailable);
@@ -338,11 +337,11 @@ impl LocalFolderEventName<'_> {
 impl OpenedLocalFolder {
     pub(crate) async fn read_events(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
     ) -> Result<Vec<LocalFolderEventFile>, NookError> {
         let root = &self.root;
         let FolderDirectory::Opened(dir) = FolderObject::new(root)
-            .event_directory(location, ChildLookup::Existing)
+            .event_directory(placed, ChildLookup::Existing)
             .await?
         else {
             return Ok(Vec::new());
@@ -355,7 +354,6 @@ impl OpenedLocalFolder {
             };
             records.push(LocalFolderEventFile {
                 event_id: event_id.as_str().to_owned(),
-                path: location.event_path(&event_id),
                 content: FolderObject::new(&file_handle).read_text().await?,
             });
         }
@@ -365,10 +363,10 @@ impl OpenedLocalFolder {
     /// How many event files one namespace holds, without reading them.
     pub(crate) async fn count_events(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
     ) -> Result<usize, NookError> {
         let FolderDirectory::Opened(dir) = FolderObject::new(&self.root)
-            .event_directory(location, ChildLookup::Existing)
+            .event_directory(placed, ChildLookup::Existing)
             .await?
         else {
             return Ok(0);
@@ -376,29 +374,63 @@ impl OpenedLocalFolder {
         Ok(FolderObject::new(&dir).event_entries().await?.len())
     }
 
-    /// Ids of every namespace of one kind written to this folder.
-    pub(crate) async fn list_namespace_ids(
+    /// Where this folder already holds one log: an identity log in its own
+    /// folder, a vault in the identity folder that files it.
+    pub(crate) async fn placement(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Result<nook_core::VaultPlacement, NookError> {
+        match location {
+            nook_core::EventLogLocation::Identity(identity) => {
+                Ok(nook_core::VaultPlacement::Filed(
+                    nook_core::PlacedNamespace::identity_log(identity.clone()),
+                ))
+            }
+            nook_core::EventLogLocation::Vault(store_id) => Ok(nook_core::VaultPlacement::of(
+                store_id,
+                self.list_namespaces(nook_core::EventLogNamespaceKind::Vault)
+                    .await?,
+            )?),
+        }
+    }
+
+    /// Every namespace of one kind written to this folder, each in the
+    /// identity folder that files it.
+    pub(crate) async fn list_namespaces(
         &self,
         kind: nook_core::EventLogNamespaceKind,
-    ) -> Result<Vec<String>, NookError> {
-        let mut current = FolderDirectory::Opened(self.root.clone());
-        for part in kind.parent_dir().split('/') {
-            let FolderDirectory::Opened(parent) = current else {
-                return Ok(Vec::new());
-            };
-            current = FolderObject::new(&parent)
-                .child_directory(ChildLookupRequest {
-                    name: part,
-                    lookup: ChildLookup::Existing,
-                })
-                .await?;
-        }
-        let FolderDirectory::Opened(parent) = current else {
+    ) -> Result<Vec<nook_core::PlacedNamespace>, NookError> {
+        let FolderDirectory::Opened(provider_root) = FolderObject::new(&self.root)
+            .child_directory(ChildLookupRequest {
+                name: nook_core::PROVIDER_ROOT_DIR,
+                lookup: ChildLookup::Existing,
+            })
+            .await?
+        else {
             return Ok(Vec::new());
         };
-        let mut ids = FolderObject::new(&parent).directory_names().await?;
-        ids.sort();
-        Ok(ids)
+        let mut placed = Vec::new();
+        for identity in FolderObject::new(&provider_root).directory_names().await? {
+            let FolderDirectory::Opened(identity_dir) = FolderObject::new(&provider_root)
+                .child_directory(ChildLookupRequest {
+                    name: &identity,
+                    lookup: ChildLookup::Existing,
+                })
+                .await?
+            else {
+                continue;
+            };
+            for folder in FolderObject::new(&identity_dir).directory_names().await? {
+                if let Some(namespace) =
+                    nook_core::PlacedNamespace::from_folders(&identity, &folder)
+                    && namespace.location().kind() == kind
+                {
+                    placed.push(namespace);
+                }
+            }
+        }
+        placed.sort();
+        Ok(placed)
     }
 
     /// Delete one namespace's directory with every event in it (a vault
@@ -406,9 +438,9 @@ impl OpenedLocalFolder {
     /// Nothing to do when it was never written here.
     pub(crate) async fn delete_namespace(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
     ) -> Result<bool, NookError> {
-        let root = location.root();
+        let root = placed.root();
         let parts = root.split('/').collect::<Vec<_>>();
         let [parents @ .., name, _events] = parts.as_slice() else {
             return Err(NookError::Database(format!(
@@ -637,8 +669,6 @@ mod tests {
             assert_eq!(records.len(), 2);
             assert_eq!(records[0].event_id, first.as_str());
             assert_eq!(records[1].event_id, second.as_str());
-            assert_eq!(records[0].path, fixture_location()?.event_path(&first));
-            assert_eq!(records[1].path, fixture_location()?.event_path(&second));
             assert!(records.iter().all(|record| record.content.is_empty()));
         }
         Ok(())

@@ -90,13 +90,13 @@ mod tests {
 
     #[test]
     fn every_account_uses_the_fixed_nook_root_name() {
-        assert_eq!(DriveVaultFolderLookup::root_name(), "Nook");
+        assert_eq!(DriveVaultFolderLookup::root_name(), "meta-secret-nook");
     }
 
     #[test]
     fn creates_the_root_only_when_none_exists() -> anyhow::Result<()> {
         assert_eq!(select(&[])?, DriveVaultFolderSelection::Create);
-        let mut file = folder("file-1", "Nook");
+        let mut file = folder("file-1", "meta-secret-nook");
         file.mime_type = "text/plain".to_owned();
         assert_eq!(
             select(&[file, folder("other", "nook-events")])?,
@@ -110,8 +110,8 @@ mod tests {
         assert_eq!(
             select(&[
                 folder("old-1", "nook-events"),
-                folder("old-2", "nook-events"),
-                folder("root", "Nook"),
+                folder("old-2", "Nook"),
+                folder("root", "meta-secret-nook"),
             ])?,
             DriveVaultFolderSelection::Existing(GoogleDriveFolderId::parse("root")?)
         );
@@ -121,7 +121,10 @@ mod tests {
     #[test]
     fn a_duplicated_root_fails_without_guessing() {
         assert_eq!(
-            select(&[folder("a", "Nook"), folder("b", "Nook")]),
+            select(&[
+                folder("a", "meta-secret-nook"),
+                folder("b", "meta-secret-nook")
+            ]),
             Err(ValidationError::GoogleDriveVaultFolderAmbiguous)
         );
     }
@@ -129,11 +132,11 @@ mod tests {
     #[test]
     fn an_existing_root_without_a_usable_id_is_rejected() {
         assert_eq!(
-            select(&[folder(" ", "Nook")]),
+            select(&[folder(" ", "meta-secret-nook")]),
             Err(ValidationError::SharedStorageTargetRequired)
         );
         assert_eq!(
-            select(&[folder("bad/id", "Nook")]),
+            select(&[folder("bad/id", "meta-secret-nook")]),
             Err(ValidationError::SharedStorageTargetInvalid)
         );
     }

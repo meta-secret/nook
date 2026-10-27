@@ -30,14 +30,16 @@ type NamespaceFolderResource = {
   parent: string
 }
 
-const NAMESPACE_FOLDER_PREFIX = 'nook-'
-const VAULT_NAMESPACE_FOLDER_PREFIX = 'nook-vault-'
-const IDENTITY_NAMESPACE_FOLDER_PREFIX = 'nook-identity-'
+/** Folders below a vault root: one per identity, holding its control log
+ * in `log` and each vault it filed in a folder named by the store id. */
+const VAULT_FOLDER_PREFIX = 'store_'
+const IDENTITY_LOG_FOLDER_NAME = 'log'
+const NAMESPACE_FOLDER_NAME = /^(idn_[A-Za-z0-9_-]+|store_[A-Za-z0-9_-]+|log)$/
 const NAMESPACE_LOOKUP_PATTERN =
   /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
-/** Listing every identity log or vault folder below one event parent. */
-const NAMESPACE_LISTING_PATTERN =
-  /^name contains '(nook-identity-|nook-vault-)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+/** Listing every child folder of one parent. */
+const NAMESPACE_CHILDREN_PATTERN =
+  /^mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
 const EVENT_PARENT_PATTERN = /'((?:[^'\\]|\\.)*)' in parents/
 const MULTIPART_PARENT_PATTERN = /"parents"\s*:\s*\[\s*"([^"]+)"/
 
@@ -105,9 +107,7 @@ export function createLocalE2eFileSyncVaultStub(
     return [
       eventsDir(),
       ...namespaceFolders
-        .filter((folder) =>
-          folder.name.startsWith(VAULT_NAMESPACE_FOLDER_PREFIX),
-        )
+        .filter((folder) => folder.name.startsWith(VAULT_FOLDER_PREFIX))
         .map((folder) => namespaceDir(folder.id)),
     ]
   }
@@ -209,19 +209,13 @@ export function createLocalE2eFileSyncVaultStub(
       [
         ...new Set(
           namespaceFolders
-            .filter((folder) =>
-              folder.name.startsWith(VAULT_NAMESPACE_FOLDER_PREFIX),
-            )
-            .map((folder) =>
-              folder.name.slice(VAULT_NAMESPACE_FOLDER_PREFIX.length),
-            ),
+            .filter((folder) => folder.name.startsWith(VAULT_FOLDER_PREFIX))
+            .map((folder) => folder.name),
         ),
       ].sort(),
     getIdentityEventFileCount: () =>
       namespaceFolders
-        .filter((folder) =>
-          folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX),
-        )
+        .filter((folder) => folder.name === IDENTITY_LOG_FOLDER_NAME)
         .flatMap((folder) => eventDigests(namespaceDir(folder.id))).length,
     /** Vault folders on the provider with the emails that can write to them. */
     getSharedFolders: () =>
@@ -348,21 +342,18 @@ export function createLocalE2eFileSyncVaultStub(
         ) {
           const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
           const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
-          const namespaceListing = query.match(NAMESPACE_LISTING_PATTERN)
-          if (namespaceLookup || namespaceListing) {
+          const namespaceChildren = query.match(NAMESPACE_CHILDREN_PATTERN)
+          if (namespaceLookup || namespaceChildren) {
             const [, rawName = '', rawParent = ''] = namespaceLookup
               ? namespaceLookup
-              : ['', '', ((v) => (v ? v : ''))(namespaceListing?.[2])]
-            const listedPrefix = ((v) => (v ? v : ''))(namespaceListing?.[1])
+              : ['', '', ((v) => (v ? v : ''))(namespaceChildren?.[1])]
             const name = unescapeDriveQueryValue(rawName)
             const parent = unescapeDriveQueryValue(rawParent)
             const files = namespaceFolders
               .filter(
                 (folder) =>
                   folder.parent === parent &&
-                  (namespaceLookup
-                    ? folder.name === name
-                    : folder.name.startsWith(listedPrefix)),
+                  (!namespaceLookup || folder.name === name),
               )
               .map(({ id, name: folderName, mimeType }) => ({
                 id,
@@ -431,7 +422,7 @@ export function createLocalE2eFileSyncVaultStub(
             : []
           if (
             metadata.mimeType === DRIVE_FOLDER_MIME_TYPE &&
-            folderName.startsWith(NAMESPACE_FOLDER_PREFIX) &&
+            NAMESPACE_FOLDER_NAME.test(folderName) &&
             folderParent.length > 0
           ) {
             const folder: NamespaceFolderResource = {

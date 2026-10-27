@@ -2249,6 +2249,7 @@ pub const PROVIDER_VAULTS_ACCESS_UNCHECKED: &str = "provider_vaults.access_unche
 pub const PROVIDER_VAULTS_CONNECT_EXPLAINER: &str = "provider_vaults.connect_explainer";
 pub const PROVIDER_VAULTS_CREATED: &str = "provider_vaults.created";
 pub const PROVIDER_VAULTS_EVENTS: &str = "provider_vaults.events";
+pub const PROVIDER_VAULTS_FILED_UNDER: &str = "provider_vaults.filed_under";
 pub const PROVIDER_VAULTS_HINT_BACKUP_PASSWORD: &str = "provider_vaults.hint_backup_password";
 pub const PROVIDER_VAULTS_HINT_GRANTED: &str = "provider_vaults.hint_granted";
 pub const PROVIDER_VAULTS_HINT_LOCKED: &str = "provider_vaults.hint_locked";

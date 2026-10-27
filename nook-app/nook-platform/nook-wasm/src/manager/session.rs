@@ -2,10 +2,10 @@ use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, EventGraph, EventLogLocation, ICloudSharedTarget, SentinelConfiguration,
-    SentinelGenesisPhase, SentinelPolicy, StorageMode, StoreId, StoredSecretRecord,
-    VaultArchitecture, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
-    VaultSessionProjection, VaultType, VaultUnlock, VaultUserRecordBatch,
+    DriveEventParent, EventGraph, ICloudSharedTarget, SentinelConfiguration, SentinelGenesisPhase,
+    SentinelPolicy, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
+    VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultSessionProjection, VaultType,
+    VaultUnlock, VaultUserRecordBatch,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -65,8 +65,13 @@ pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
     /// The vault to open when the prepared provider holds several.
     pub(in crate::manager) chosen_vault: ChosenProviderVault,
-    /// Resolved Drive child folders for namespaced event logs.
-    pub(in crate::manager) drive_namespaces: RefCell<BTreeMap<EventLogLocation, DriveEventParent>>,
+    /// Resolved Drive folders for placed event-log namespaces.
+    pub(in crate::manager) drive_namespaces:
+        RefCell<BTreeMap<nook_core::PlacedNamespace, DriveEventParent>>,
+    /// The identity folder each vault was found in or filed under at the
+    /// prepared provider.
+    pub(in crate::manager) vault_placements:
+        RefCell<BTreeMap<nook_core::StoreId, nook_core::PlacedNamespace>>,
     pub(in crate::manager) access_token: String,
     pub(in crate::manager) remote_ref: String,
     pub(in crate::manager) remote_path: String,
@@ -79,19 +84,36 @@ pub(in crate::manager) struct StorageSession {
 impl StorageSession {
     pub(in crate::manager) fn drive_namespace_parent(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
     ) -> Option<nook_core::DriveEventParent> {
-        self.drive_namespaces.borrow().get(location).cloned()
+        self.drive_namespaces.borrow().get(placed).cloned()
     }
 
     pub(in crate::manager) fn remember_drive_namespace(
         &self,
-        location: &nook_core::EventLogLocation,
+        placed: &nook_core::PlacedNamespace,
         parent: &nook_core::DriveEventParent,
     ) {
         self.drive_namespaces
             .borrow_mut()
-            .insert(location.clone(), parent.clone());
+            .insert(placed.clone(), parent.clone());
+    }
+
+    pub(in crate::manager) fn vault_placement(
+        &self,
+        store_id: &nook_core::StoreId,
+    ) -> Option<nook_core::PlacedNamespace> {
+        self.vault_placements.borrow().get(store_id).cloned()
+    }
+
+    pub(in crate::manager) fn remember_vault_placement(
+        &self,
+        store_id: &nook_core::StoreId,
+        placed: &nook_core::PlacedNamespace,
+    ) {
+        self.vault_placements
+            .borrow_mut()
+            .insert(store_id.clone(), placed.clone());
     }
 }
 
@@ -99,6 +121,7 @@ impl StorageSession {
     /// Forget folder lookups resolved for the previously prepared row.
     pub(in crate::manager) fn forget_namespaces(&mut self) {
         self.drive_namespaces.get_mut().clear();
+        self.vault_placements.get_mut().clear();
     }
 }
 
@@ -108,6 +131,7 @@ impl Default for StorageSession {
             mode: StorageMode::Local,
             chosen_vault: ChosenProviderVault::Unchosen,
             drive_namespaces: RefCell::default(),
+            vault_placements: RefCell::default(),
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),

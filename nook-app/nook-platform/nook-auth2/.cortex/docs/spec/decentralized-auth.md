@@ -12,8 +12,8 @@ app-key membership, a local identity keyring, and per-store DEKs as defined in
   encrypt member catalog entries.
 - **Device distribution:** Per-device X25519 identities distribute both keys
   through event-sourced auth metadata.
-- **Provider authority:** The immutable event log under `nook-log/v1/events/`
-  is the source of truth.
+- **Provider authority:** The immutable event log under
+  `meta-secret-nook/{identity_id}/{store_id}/events/` is the source of truth.
   - `nook-projection.yaml` is only the local projection and import format.
 
 **Related:** [Application architecture](../../../../../.cortex/docs/architecture/system.md) §2 (`nook-auth2` boundary), §4 (storage and cryptographic catalog), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).

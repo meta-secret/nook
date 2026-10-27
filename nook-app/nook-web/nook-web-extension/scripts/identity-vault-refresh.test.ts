@@ -45,7 +45,6 @@ const NOW = 1_792_100_000_000
 
 const record: ExtensionEventLogRecord = {
   eventId: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-  path: 'events/later.json',
   event: {
     schema_version: 2,
     store_id: 'store_lllllllllll',

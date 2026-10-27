@@ -3,7 +3,7 @@
 ## Overview
 
 - **Provider-sync status:** Superseded. Event-log vaults use immutable YAML
-  events under `nook-log/v1/events/`. See
+  events under `meta-secret-nook/{identity_id}/{store_id}/events/`. See
   [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md).
 - **Historical scope:** Retain the scalar `vault_version` model as context for
   local projection and migration behavior.

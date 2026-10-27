@@ -284,7 +284,7 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
   - **Correct action:** Nook says how this device can open it. A vault that opens merges into the open vault or imports as a separate one; an empty open vault may give way after confirmation; a vault nothing here opens can only be requested. See [auth-providers.md](auth-providers.md#what-the-provider-already-holds)
 
 A second vault of the identity writes beside the first in its own namespace
-(`nook-log/v1/vaults/{store_id}/`); Nook never merges unrelated vaults. See
+(`meta-secret-nook/{identity_id}/{store_id}/`); Nook never merges unrelated vaults. See
 [unified-vault.md](unified-vault.md).
 
 ---

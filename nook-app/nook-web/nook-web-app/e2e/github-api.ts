@@ -1,5 +1,6 @@
 const GITHUB_VAULT_PATH = 'nook-events'
-export const GITHUB_EVENT_LOG_PATH = 'nook-log/v1/events'
+/** The root every provider keeps its identities and vaults under. */
+export const GITHUB_PROVIDER_ROOT = 'meta-secret-nook'
 const GITHUB_EVENT_FILE_NAME = /^[A-Za-z0-9_-]{43}\.yaml$/i
 const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
@@ -139,23 +140,105 @@ export type GithubEventLogFetch =
       eventYamls: string[]
     }
 
-function eventLogPaths(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error('GitHub event-log response was not an array.')
-  }
+enum GithubDirectoryEntryType {
+  File = 'file',
+  Dir = 'dir',
+}
 
+type GithubDirectoryEntry = {
+  readonly name: string
+  readonly path: string
+  readonly type: string
+}
+
+enum GithubDirectoryListingKind {
+  Missing = 'missing',
+  Listed = 'listed',
+}
+
+type GithubDirectoryListing =
+  | { kind: GithubDirectoryListingKind.Missing }
+  | {
+      kind: GithubDirectoryListingKind.Listed
+      entries: GithubDirectoryEntry[]
+    }
+
+type GithubDirectoryRequest = {
+  readonly pat: string
+  readonly repo: string
+  readonly headers: RepoContext['headers']
+  readonly path: string
+}
+
+async function listGithubDirectory(
+  request: GithubDirectoryRequest,
+): Promise<GithubDirectoryListing> {
+  const { pat, repo, headers, path } = request
+  const url = `https://api.github.com/repos/${repo}/contents/${path}`
+  const res = await githubApiFetch(pat, url, { headers })
+  if (res.status === 404) {
+    return { kind: GithubDirectoryListingKind.Missing }
+  }
+  const value: unknown = await res.json()
+  if (!Array.isArray(value)) {
+    throw new Error(`GitHub directory ${path} was not an array.`)
+  }
+  const entries = value.map((item) => {
+    const entry = requireRecord(item, 'GitHub directory entry')
+    return {
+      name: readStringProperty(entry, 'name', 'GitHub directory entry'),
+      path: readStringProperty(entry, 'path', 'GitHub directory entry'),
+      type: readStringProperty(entry, 'type', 'GitHub directory entry'),
+    }
+  })
+  return { kind: GithubDirectoryListingKind.Listed, entries }
+}
+
+/** The event files of every vault in the repository: each identity's folder
+ * under the provider root holds its vaults' `<store id>/events` folders. */
+async function vaultEventPaths(
+  context: Omit<GithubDirectoryRequest, 'path'>,
+): Promise<string[]> {
+  const rootRequest: GithubDirectoryRequest = {
+    ...context,
+    path: GITHUB_PROVIDER_ROOT,
+  }
+  const root = await listGithubDirectory(rootRequest)
+  if (root.kind === GithubDirectoryListingKind.Missing) return []
   const paths: string[] = []
-  for (const item of value) {
-    const entry = requireRecord(item, 'GitHub event-log entry')
-    const name = readStringProperty(entry, 'name', 'GitHub event-log entry')
-    const path = readStringProperty(entry, 'path', 'GitHub event-log entry')
-    const type = readStringProperty(entry, 'type', 'GitHub event-log entry')
+  for (const identity of root.entries) {
     if (
-      type === 'file' &&
-      GITHUB_EVENT_FILE_NAME.test(name) &&
-      path === `${GITHUB_EVENT_LOG_PATH}/${name}`
-    ) {
-      paths.push(path)
+      identity.type !== GithubDirectoryEntryType.Dir ||
+      !identity.name.startsWith('idn_')
+    )
+      continue
+    const identityRequest: GithubDirectoryRequest = {
+      ...context,
+      path: identity.path,
+    }
+    const folders = await listGithubDirectory(identityRequest)
+    if (folders.kind === GithubDirectoryListingKind.Missing) continue
+    for (const vault of folders.entries) {
+      if (
+        vault.type !== GithubDirectoryEntryType.Dir ||
+        !vault.name.startsWith('store_')
+      )
+        continue
+      const eventsRequest: GithubDirectoryRequest = {
+        ...context,
+        path: `${vault.path}/events`,
+      }
+      const events = await listGithubDirectory(eventsRequest)
+      if (events.kind === GithubDirectoryListingKind.Missing) continue
+      paths.push(
+        ...events.entries
+          .filter(
+            (event) =>
+              event.type === GithubDirectoryEntryType.File &&
+              GITHUB_EVENT_FILE_NAME.test(event.name),
+          )
+          .map((event) => event.path),
+      )
     }
   }
   return paths.sort()
@@ -166,13 +249,8 @@ export async function fetchGithubEventLog(
   repoName: string,
 ): Promise<GithubEventLogFetch> {
   const { headers, repo } = await githubRepoContext(pat, repoName)
-  const directoryUrl = `https://api.github.com/repos/${repo}/contents/${GITHUB_EVENT_LOG_PATH}`
-  const directoryRes = await githubApiFetch(pat, directoryUrl, { headers })
-  if (directoryRes.status === 404) {
-    return { kind: GithubEventLogFetchKind.Missing }
-  }
-
-  const paths = eventLogPaths(await directoryRes.json())
+  const context: Omit<GithubDirectoryRequest, 'path'> = { pat, repo, headers }
+  const paths = await vaultEventPaths(context)
   const eventYamls: string[] = []
   for (const path of paths) {
     const fileUrl = `https://api.github.com/repos/${repo}/contents/${path}`

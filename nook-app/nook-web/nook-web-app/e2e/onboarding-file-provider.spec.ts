@@ -120,7 +120,7 @@ test.describe('file sync provider onboarding', () => {
     const [vaultFolder, ...otherFolders] = target.stub.getSharedFolders()
     if (!vaultFolder) throw new Error('the provider did not create a folder')
     expect(otherFolders).toHaveLength(0)
-    expect(vaultFolder.name).toBe('Nook')
+    expect(vaultFolder.name).toBe('meta-secret-nook')
     expect(vaultFolder.writers).toEqual([E2E_GOOGLE_ACCOUNT_EMAIL])
     await assertVaultReady(deviceA)
     await disableVaultIdleLock(deviceA)
@@ -215,7 +215,7 @@ test.describe('Google Drive authorized accounts', () => {
     await expect(owner.getByTestId('drive-file-input')).toHaveCount(0)
     await owner.getByTestId('google-sign-in-btn').click()
     await expect(owner.getByTestId('google-folder-on-connect')).toContainText(
-      'Nook',
+      'meta-secret-nook',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     const connectButton = owner.getByTestId('connect-provider-btn')
@@ -231,7 +231,7 @@ test.describe('Google Drive authorized accounts', () => {
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     const [sharedFolder] = driveStub.getSharedFolders()
     if (!sharedFolder) throw new Error('Drive stub did not create a folder')
-    expect(sharedFolder.name).toBe('Nook')
+    expect(sharedFolder.name).toBe('meta-secret-nook')
     // Creating the folder shares it with nobody.
     expect(sharedFolder.writers).toEqual([ownerEmail])
 

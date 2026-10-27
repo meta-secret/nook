@@ -3,7 +3,7 @@ import { parseJson, requireRecord } from './helpers/guards'
 
 export const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
-const DEFAULT_VAULT_FOLDER_NAME = 'Nook'
+const DEFAULT_VAULT_FOLDER_NAME = 'meta-secret-nook'
 const CORS_HEADERS = { 'access-control-allow-origin': '*' }
 
 export enum DriveFolderRole {

@@ -42,7 +42,7 @@ impl ParsedLogEvent {
     }
 }
 
-pub(super) struct CheckedEventWrite<'a> {
+pub(crate) struct CheckedEventWrite<'a> {
     event_id: &'a EventId,
     bytes: &'a [u8],
     location: &'a EventLogLocation,
@@ -51,15 +51,15 @@ pub(super) struct CheckedEventWrite<'a> {
 
 /// Named values required to check one content-addressed write.
 #[derive(Clone, Copy)]
-pub(super) struct CheckedEventWriteRequest<'a> {
-    pub(super) bytes: &'a [u8],
-    pub(super) event_id: &'a EventId,
-    pub(super) location: &'a EventLogLocation,
-    pub(super) provider: &'a str,
+pub(crate) struct CheckedEventWriteRequest<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) event_id: &'a EventId,
+    pub(crate) location: &'a EventLogLocation,
+    pub(crate) provider: &'a str,
 }
 
 impl<'a> CheckedEventWrite<'a> {
-    pub(super) fn parse(request: CheckedEventWriteRequest<'a>) -> Result<Self, NookError> {
+    pub(crate) fn parse(request: CheckedEventWriteRequest<'a>) -> Result<Self, NookError> {
         let CheckedEventWriteRequest {
             bytes,
             event_id,
@@ -230,9 +230,10 @@ pub(super) mod tests {
         let github = GitHubEventStore {
             pat: "",
             repo: "",
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
+            placed: &nook_core::PlacedNamespace::vault(
+                nook_core::IdentityId::parse("idn_abcdefghijk")?,
+                nook_core::StoreId::parse("store_abcdefghijk")?,
+            ),
         };
         let share =
             ICloudSharedTarget::new(ICloudShareRole::Owner, "zone", "owner", "root", "guid")?;
@@ -246,9 +247,10 @@ pub(super) mod tests {
         let cloud = ICloudEventStore {
             web_auth_token: "fixture-token",
             target: &share,
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
+            placed: &nook_core::PlacedNamespace::vault(
+                nook_core::IdentityId::parse("idn_abcdefghijk")?,
+                nook_core::StoreId::parse("store_abcdefghijk")?,
+            ),
         };
         for (result, prefix) in [
             (
@@ -284,9 +286,10 @@ pub(super) mod tests {
         let no_token = ICloudEventStore {
             web_auth_token: " ",
             target: &share,
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
+            placed: &nook_core::PlacedNamespace::vault(
+                nook_core::IdentityId::parse("idn_abcdefghijk")?,
+                nook_core::StoreId::parse("store_abcdefghijk")?,
+            ),
         };
         match no_token
             .put_icloud_event_if_absent(&event_id, &[0xff])

@@ -34,7 +34,6 @@ describe('extension pairing approved message', () => {
   const eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords'] = [
     {
       eventId: 'event-1',
-      path: 'events/event-1.yaml',
       event: {
         schema_version: 2,
         store_id: 'store_abcdefghijk',
@@ -414,7 +413,7 @@ describe('extension pairing approved message', () => {
   test.each([
     [false, RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage],
     [
-      [{ path: 'events/one', event: { schema_version: 3 } }],
+      [{ event: { schema_version: 3 } }],
       RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
@@ -422,11 +421,11 @@ describe('extension pairing approved message', () => {
       RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
-      [{ eventId: 'one', path: 'events/one', event: false }],
+      [{ eventId: 'one', event: false }],
       RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
-      [{ eventId: 'one', path: 'events/one', event: {} }],
+      [{ eventId: 'one', event: {} }],
       RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
   ] as const)(
