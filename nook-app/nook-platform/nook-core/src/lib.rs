@@ -54,9 +54,10 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, provider_vault_listing, sync_provider_credentials,
-    sync_provider_store, validation, vault_sync, vault_sync_conflict, vault_sync_session,
-    vault_sync_state, vault_sync_store,
+    authorized_accounts, drive_vault_folder, provider_vault_access, provider_vault_join,
+    provider_vault_listing, provider_vault_merge, sync_provider_credentials, sync_provider_store,
+    validation, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
+    vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -127,9 +128,9 @@ pub use enrollment::{
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
-    ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
-    SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
-    VaultRecoveryErrorKind, VaultResult, VaultSyncError,
+    ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, ProviderFailureCause,
+    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
+    VaultError, VaultFormatError, VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
@@ -308,17 +309,18 @@ pub use multi_device::{
 pub use nook_event_log::{
     AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
     Ed25519Signature, EncryptedSecretPayload, EpochCheckpoint, EpochMetadataState,
-    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EventCount, EventGraph,
-    EventGraphInsert, EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture,
-    EventId, EventInsertStatus, EventLookup, EventPendingReason, EventStorageBytes,
-    GenesisImportPayload, GenesisImportRequest, KeyEpoch, LocalEventAppend,
+    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EpochVaultName,
+    EventCount, EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection,
+    EventGraphVaultArchitecture, EventId, EventInsertStatus, EventLookup, EventPendingReason,
+    EventStorageBytes, GenesisImportPayload, GenesisImportRequest, KeyEpoch, LocalEventAppend,
     LocalEventAppendOutcome, LocalEventBytes, LocalEventStore, LocalEventStoreRejection,
     LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved,
     LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
-    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity, SecretFingerprint,
-    SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
-    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectedVaultName, ProjectionEpoch,
+    RemoteEventBatch, RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity,
+    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
+    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+    VaultProjection,
 };
 pub use nook_event_log::{
     EventLogLocation, EventLogNamespaceKind, IdentityApprovalRequest, IdentityControlInsertion,
@@ -351,12 +353,17 @@ pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
 };
+pub use provider_vault_access::{
+    BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultAction,
+    ProviderVaultEvents, ProviderVaultInspection, ProviderVaultKeyholding, ProviderVaultStanding,
+};
+pub use provider_vault_join::ProviderVaultAccessRequest;
 pub use provider_vault_listing::{
     EmptyVaultReplacement, IdentityAppCount, LocalVaultItemCount, LocalVaultOccupancy,
     NOOK_PROVIDER_ROOT_NAME, ProviderEventCount, ProviderInstant, ProviderVaultListing,
-    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultRelation,
-    ProviderVaultSummary, ProviderVaultTime,
+    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
 };
+pub use provider_vault_merge::{ProviderVaultGrantedOpening, ProviderVaultPasswordOpening};
 pub use secrets::SecretRecordFilter;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
@@ -435,7 +442,7 @@ pub use vault_connect::{
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     MembersCheckpointHash, SecretEpochReencryption, VaultKeyRotation, VaultMetaRecordRewrap,
-    VaultMetaRewrap,
+    VaultMetaRewrap, VaultNameEpochReencryption,
 };
 pub use vault_event_session::{
     EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,

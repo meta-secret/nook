@@ -172,6 +172,7 @@ impl EncryptedOperationDiagnostic<'_> {
             VaultOperation::EpochCheckpoint {
                 secrets,
                 password_entries,
+                vault_name,
                 ..
             } => {
                 secrets.len()
@@ -179,12 +180,14 @@ impl EncryptedOperationDiagnostic<'_> {
                         EpochPasswordState::LegacyRetain => 0,
                         EpochPasswordState::Replace(entries) => entries.len(),
                     }
+                    + usize::from(matches!(vault_name, crate::EpochVaultName::Named(_)))
             }
             VaultOperation::SecretCreated { .. }
             | VaultOperation::SecretReplaced { .. }
             | VaultOperation::PasswordAdded { .. }
             | VaultOperation::PasswordRotated { .. }
-            | VaultOperation::PasswordEnvelopeUpgraded { .. } => 1,
+            | VaultOperation::PasswordEnvelopeUpgraded { .. }
+            | VaultOperation::VaultNamed { .. } => 1,
             VaultOperation::JoinApproved { .. } => 2,
             VaultOperation::SentinelSharesIssued { shares } => shares.len(),
             VaultOperation::SecretDeleted { .. }

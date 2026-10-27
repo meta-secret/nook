@@ -75,6 +75,42 @@ impl<'a> SecretEpochReencryption<'a> {
     }
 }
 
+/// Re-encrypt the projected vault name under a new `secrets_key`, so the
+/// epoch checkpoint carries a name every member of the new epoch can read.
+pub struct VaultNameEpochReencryption<'a> {
+    name: &'a crate::ProjectedVaultName,
+    old_secrets_key: &'a SymmetricKey,
+    new_secrets_key: &'a SymmetricKey,
+}
+
+impl<'a> VaultNameEpochReencryption<'a> {
+    #[must_use]
+    pub fn new(
+        name: &'a crate::ProjectedVaultName,
+        old_secrets_key: &'a SymmetricKey,
+        new_secrets_key: &'a SymmetricKey,
+    ) -> Self {
+        Self {
+            name,
+            old_secrets_key,
+            new_secrets_key,
+        }
+    }
+
+    pub fn reencrypt(self) -> VaultEpochResult<crate::EpochVaultName> {
+        let crate::ProjectedVaultName::Named(name) = self.name else {
+            return Ok(crate::EpochVaultName::Unnamed);
+        };
+        let armored = AgeArmoredCiphertext::from_trusted_armored(name.as_str().to_owned());
+        let mut plaintext = VaultCrypto::new(self.old_secrets_key)?.decrypt_value(&armored)?;
+        let ciphertext = VaultCrypto::new(self.new_secrets_key)?.encrypt_value(&plaintext)?;
+        plaintext.zeroize_plaintext();
+        Ok(crate::EpochVaultName::Named(
+            OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
+        ))
+    }
+}
+
 /// Rotate vault keys and rebuild encrypted secret payloads for a new epoch.
 pub struct VaultKeyRotation<'a> {
     user_records: &'a [StoredSecretRecord],
@@ -257,6 +293,42 @@ mod tests {
     };
 
     #[test]
+    fn the_vault_name_moves_to_the_new_epoch_key() -> anyhow::Result<()> {
+        let old_key = SymmetricKey::parse(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )?;
+        let new_key = SymmetricKey::parse(
+            "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+        )?;
+        let named = crate::ProjectedVaultName::Named(OpaqueCiphertext::from_trusted(
+            VaultCrypto::new(&old_key)?
+                .encrypt_value("Family")?
+                .as_str()
+                .to_owned(),
+        ));
+        let crate::EpochVaultName::Named(carried) =
+            VaultNameEpochReencryption::new(&named, &old_key, &new_key).reencrypt()?
+        else {
+            anyhow::bail!("a named vault must carry its name into the new epoch");
+        };
+        let armored = AgeArmoredCiphertext::from_trusted_armored(carried.as_str().to_owned());
+        assert_eq!(
+            VaultCrypto::new(&new_key)?
+                .decrypt_value(&armored)?
+                .as_str(),
+            "Family"
+        );
+        assert!(VaultCrypto::new(&old_key)?.decrypt_value(&armored).is_err());
+
+        let unnamed = crate::ProjectedVaultName::Unnamed;
+        assert_eq!(
+            VaultNameEpochReencryption::new(&unnamed, &old_key, &new_key).reencrypt()?,
+            crate::EpochVaultName::Unnamed
+        );
+        Ok(())
+    }
+
+    #[test]
     fn reencrypt_produces_decryptable_new_epoch_secrets() -> anyhow::Result<()> {
         let old_key = SymmetricKey::parse(
             "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
@@ -383,6 +455,7 @@ mod tests {
         let requested_at = IsoTimestamp::parse("2026-06-28T00:02:00Z")?;
         VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
             operation: &VaultOperation::EpochCheckpoint {
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),

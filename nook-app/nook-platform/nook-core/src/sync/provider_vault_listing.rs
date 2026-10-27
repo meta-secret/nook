@@ -17,6 +17,9 @@ use std::cmp::Ordering;
 
 use crate::StoreId;
 use crate::errors::{ValidationError, ValidationResult};
+use crate::provider_vault_access::{
+    OpenVaultContents, ProviderVaultAccess, ProviderVaultAction, ProviderVaultKeyholding,
+};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use tsify::Tsify;
@@ -93,16 +96,6 @@ pub struct ProviderVaultObservation {
     pub events: Vec<ProviderVaultTime>,
 }
 
-/// How a listed vault relates to the identity on this device.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub enum ProviderVaultRelation {
-    /// The local identity holds this vault: it simply syncs.
-    ThisIdentity,
-    /// Another identity's vault: it can only be imported as a separate vault.
-    Other,
-}
-
 /// One vault a provider holds, as far as its listing tells without
 /// decryption.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -115,7 +108,10 @@ pub struct ProviderVaultSummary {
     pub last_activity: ProviderVaultTime,
     #[tsify(type = "number")]
     pub event_count: ProviderEventCount,
-    pub relation: ProviderVaultRelation,
+    /// How this device can open it.
+    pub access: ProviderVaultAccess,
+    /// What the user may do with it, the recommended action first.
+    pub actions: Vec<ProviderVaultAction>,
 }
 
 impl ProviderVaultSummary {
@@ -128,12 +124,18 @@ impl ProviderVaultSummary {
             .collect()
     }
 
-    fn summarize(observation: ProviderVaultObservation, relation: ProviderVaultRelation) -> Self {
+    fn summarize(
+        observation: ProviderVaultObservation,
+        keys: &ProviderVaultKeyholding<'_>,
+        contents: OpenVaultContents,
+    ) -> Self {
         let ProviderVaultObservation {
             store_id,
             namespace_created,
             events,
         } = observation;
+        let access = keys.access(&store_id);
+        let actions = contents.actions(&access);
         let event_times = events
             .iter()
             .filter_map(|time| time.instant())
@@ -154,18 +156,16 @@ impl ProviderVaultSummary {
             created: ProviderVaultTime::from_instant(created),
             last_activity: ProviderVaultTime::from_instant(last_activity),
             event_count: ProviderEventCount::of(events.len()),
-            relation,
+            access,
+            actions,
         }
     }
 
-    /// This identity's vaults first, then the most recently active.
+    /// The vaults that sync first, then by access, then the most recently active.
     fn listing_order(&self, other: &Self) -> Ordering {
-        let relation_rank = |relation: ProviderVaultRelation| match relation {
-            ProviderVaultRelation::ThisIdentity => 0,
-            ProviderVaultRelation::Other => 1,
-        };
-        relation_rank(self.relation)
-            .cmp(&relation_rank(other.relation))
+        self.access
+            .listing_rank()
+            .cmp(&other.access.listing_rank())
             .then_with(|| {
                 other
                     .last_activity
@@ -226,6 +226,14 @@ impl LocalVaultOccupancy {
             Self::Closed | Self::Open { .. } => None,
         }
     }
+
+    fn contents(&self) -> OpenVaultContents {
+        match (self, self.empty_store_id()) {
+            (Self::Closed, _) => OpenVaultContents::Closed,
+            (Self::Open { .. }, Some(_)) => OpenVaultContents::Empty,
+            (Self::Open { .. }, None) => OpenVaultContents::Occupied,
+        }
+    }
 }
 
 /// Whether this device may swap its empty vault for one the provider holds.
@@ -249,42 +257,37 @@ pub struct ProviderVaultListing {
     pub replacement: EmptyVaultReplacement,
 }
 
-/// The transport's observations and this device's identity and open vault.
+/// The transport's observations, the keys this device holds, and its open
+/// vault.
 pub struct ProviderVaultListingRequest<'a> {
     pub observations: Vec<ProviderVaultObservation>,
-    /// Vaults the local identity holds.
-    pub identity_vaults: &'a [StoreId],
+    pub keys: ProviderVaultKeyholding<'a>,
     pub local_vault: &'a LocalVaultOccupancy,
 }
 
 impl ProviderVaultListingRequest<'_> {
-    /// Summarize and classify every listed vault. A vault with records is
-    /// never merged into another: the provider's other vaults are offered
-    /// for import beside it, and only an empty open vault may be replaced.
+    /// Summarize every listed vault, decide how this device can open it, and
+    /// offer what the user may do: a vault this device can open replaces an
+    /// empty open vault, merges into one with records, or comes in beside
+    /// it; a vault nothing here opens can only be requested.
     #[must_use]
     pub fn listing(self) -> ProviderVaultListing {
         let Self {
             observations,
-            identity_vaults,
+            keys,
             local_vault,
         } = self;
+        let contents = local_vault.contents();
         let mut vaults = observations
             .into_iter()
-            .map(|observation| {
-                let relation = if identity_vaults.contains(&observation.store_id) {
-                    ProviderVaultRelation::ThisIdentity
-                } else {
-                    ProviderVaultRelation::Other
-                };
-                ProviderVaultSummary::summarize(observation, relation)
-            })
+            .map(|observation| ProviderVaultSummary::summarize(observation, &keys, contents))
             .collect::<Vec<_>>();
         vaults.sort_by(ProviderVaultSummary::listing_order);
-        let holds_other = vaults
+        let offers_replacement = vaults
             .iter()
-            .any(|vault| vault.relation == ProviderVaultRelation::Other);
+            .any(|vault| vault.actions.contains(&ProviderVaultAction::UseInstead));
         let replacement = match local_vault.empty_store_id() {
-            Some(empty_store_id) if holds_other => EmptyVaultReplacement::Offered {
+            Some(empty_store_id) if offers_replacement => EmptyVaultReplacement::Offered {
                 empty_store_id: empty_store_id.clone(),
             },
             Some(_) | None => EmptyVaultReplacement::Unavailable,
@@ -377,7 +380,7 @@ mod tests {
                     ProviderVaultTime::Unreported,
                 ],
             }],
-            identity_vaults: &[],
+            keys: ProviderVaultKeyholding::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -389,7 +392,8 @@ mod tests {
                 created: at("2024-01-01T00:00:00Z")?,
                 last_activity: at("2024-03-01T00:00:00Z")?,
                 event_count: ProviderEventCount(3),
-                relation: ProviderVaultRelation::Other,
+                access: ProviderVaultAccess::Unchecked,
+                actions: vec![ProviderVaultAction::ImportSeparately],
             }]
         );
         assert_eq!(listing.replacement, EmptyVaultReplacement::Unavailable);
@@ -404,7 +408,7 @@ mod tests {
                 namespace_created: ProviderVaultTime::Unreported,
                 events: vec![ProviderVaultTime::Unreported; 2],
             }],
-            identity_vaults: &[],
+            keys: ProviderVaultKeyholding::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -425,7 +429,7 @@ mod tests {
                 namespace_created: at("2024-01-02T00:00:00Z")?,
                 events: vec![],
             }],
-            identity_vaults: &[],
+            keys: ProviderVaultKeyholding::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -439,8 +443,10 @@ mod tests {
     }
 
     #[test]
-    fn this_identitys_vaults_come_first_then_the_most_recent() -> anyhow::Result<()> {
+    fn syncing_vaults_come_first_then_openable_then_locked_most_recent_first() -> anyhow::Result<()>
+    {
         let own = store("store_ownvault001")?;
+        let backed = store("store_backedvault")?;
         let older = store("store_oldvault001")?;
         let newer = store("store_newvault001")?;
         let observation = |store_id: &StoreId, time: &str| -> anyhow::Result<_> {
@@ -454,30 +460,39 @@ mod tests {
             observations: vec![
                 observation(&older, "2023-01-01T00:00:00Z")?,
                 observation(&newer, "2025-01-01T00:00:00Z")?,
+                observation(&backed, "2019-01-01T00:00:00Z")?,
                 observation(&own, "2020-01-01T00:00:00Z")?,
             ],
-            identity_vaults: slice::from_ref(&own),
+            keys: ProviderVaultKeyholding {
+                identity_vaults: slice::from_ref(&own),
+                password_vaults: slice::from_ref(&backed),
+                identity_in_use: true,
+                ..ProviderVaultKeyholding::NONE
+            },
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
         let ranked = listing
             .vaults
             .iter()
-            .map(|vault| (vault.store_id.clone(), vault.relation))
+            .map(|vault| (vault.store_id.clone(), vault.access.clone()))
             .collect::<Vec<_>>();
         assert_eq!(
             ranked,
             [
-                (own, ProviderVaultRelation::ThisIdentity),
-                (newer, ProviderVaultRelation::Other),
-                (older, ProviderVaultRelation::Other),
+                (own, ProviderVaultAccess::Syncs),
+                (backed, ProviderVaultAccess::BackupPassword),
+                (newer, ProviderVaultAccess::Locked),
+                (older, ProviderVaultAccess::Locked),
             ]
         );
         Ok(())
     }
 
     #[test]
-    fn only_an_empty_unshared_open_vault_may_give_way() -> anyhow::Result<()> {
+    fn an_openable_vault_replaces_an_empty_vault_and_merges_into_a_full_one() -> anyhow::Result<()>
+    {
+        use ProviderVaultAction::{ImportSeparately, MergeIntoOpen, RequestAccess, UseInstead};
         let local = store("store_localvault1")?;
         let other = store("store_othervault1")?;
         let observations = || {
@@ -495,33 +510,55 @@ mod tests {
             ]
         };
         let identity_vaults = [local.clone()];
-        let replacement = |occupancy: LocalVaultOccupancy| {
-            ProviderVaultListingRequest {
+        let listed = |occupancy: LocalVaultOccupancy, password_vaults: &[StoreId]| {
+            let listing = ProviderVaultListingRequest {
                 observations: observations(),
-                identity_vaults: &identity_vaults,
+                keys: ProviderVaultKeyholding {
+                    identity_vaults: &identity_vaults,
+                    password_vaults,
+                    identity_in_use: true,
+                    ..ProviderVaultKeyholding::NONE
+                },
                 local_vault: &occupancy,
             }
-            .listing()
-            .replacement
+            .listing();
+            let actions = listing
+                .vaults
+                .iter()
+                .find(|vault| vault.store_id == other)
+                .map(|vault| vault.actions.clone())
+                .unwrap_or_default();
+            (listing.replacement, actions)
         };
+        let openable = [other.clone()];
         assert_eq!(
-            replacement(open(&local, 0, 1)),
-            EmptyVaultReplacement::Offered {
-                empty_store_id: local.clone()
-            }
+            listed(open(&local, 0, 1), &openable),
+            (
+                EmptyVaultReplacement::Offered {
+                    empty_store_id: local.clone()
+                },
+                vec![UseInstead, ImportSeparately]
+            )
         );
-        // Records are never merged away; another app shares the vault.
+        // An open vault with records or another app merges instead.
+        for occupancy in [open(&local, 3, 1), open(&local, 0, 2)] {
+            assert_eq!(
+                listed(occupancy, &openable),
+                (
+                    EmptyVaultReplacement::Unavailable,
+                    vec![MergeIntoOpen, ImportSeparately]
+                )
+            );
+        }
         assert_eq!(
-            replacement(open(&local, 3, 1)),
-            EmptyVaultReplacement::Unavailable
+            listed(LocalVaultOccupancy::Closed, &openable),
+            (EmptyVaultReplacement::Unavailable, vec![ImportSeparately])
         );
+        // A vault nothing here opens can only be requested, so it never
+        // replaces the empty vault.
         assert_eq!(
-            replacement(open(&local, 0, 2)),
-            EmptyVaultReplacement::Unavailable
-        );
-        assert_eq!(
-            replacement(LocalVaultOccupancy::Closed),
-            EmptyVaultReplacement::Unavailable
+            listed(open(&local, 0, 1), &[]),
+            (EmptyVaultReplacement::Unavailable, vec![RequestAccess])
         );
         Ok(())
     }
@@ -536,7 +573,10 @@ mod tests {
                 namespace_created: ProviderVaultTime::Unreported,
                 events: vec![],
             }],
-            identity_vaults: &identity_vaults,
+            keys: ProviderVaultKeyholding {
+                identity_vaults: &identity_vaults,
+                ..ProviderVaultKeyholding::NONE
+            },
             local_vault: &open(&local, 0, 1),
         }
         .listing();
@@ -555,7 +595,8 @@ mod tests {
                     at: ProviderInstant(5),
                 },
                 event_count: ProviderEventCount(1),
-                relation: ProviderVaultRelation::ThisIdentity,
+                access: ProviderVaultAccess::Syncs,
+                actions: Vec::new(),
             }],
             replacement: EmptyVaultReplacement::Unavailable,
         })?;
@@ -568,7 +609,8 @@ mod tests {
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "reported", "at": 5 },
                     "eventCount": 1,
-                    "relation": "thisIdentity",
+                    "access": { "state": "syncs" },
+                    "actions": [],
                 }],
                 "replacement": { "state": "unavailable" },
             })

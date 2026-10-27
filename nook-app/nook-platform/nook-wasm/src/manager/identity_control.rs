@@ -715,4 +715,49 @@ mod browser_tests {
         Founder::js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_device_that_only_has_the_event_log_learns_the_vault_name() -> anyhow::Result<()> {
+        let mut founder = Founder::new("vault name pin").await?;
+        let store_id = founder.store_id();
+        assert!(founder.manager.set_vault_name(" ").await.is_err());
+        Founder::js(founder.manager.set_vault_name("  Family  ").await)?;
+
+        // A device that joined the identity holds the vault keys and events
+        // but no name of its own, and lists the vault under its id.
+        founder.manager.vault.vault_name = super::super::VaultNameState::Unnamed;
+        founder.manager.vault.projected_name = nook_core::ProjectedVaultName::Unnamed;
+        NookDatabase::set_local_vault_label(
+            crate::storage::indexed_db::SetLocalVaultLabelRequest {
+                store_id: &store_id,
+                label: "Vault placeholder",
+            },
+        )
+        .await?;
+
+        founder.manager.adopt_vault_name_from_events().await?;
+        founder
+            .manager
+            .label_local_vault_with_projected_name()
+            .await?;
+        assert!(matches!(
+            &founder.manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Family"
+        ));
+        let listed = NookDatabase::list_vault_registry_entries()
+            .await?
+            .into_iter()
+            .find(|entry| entry.store_id == store_id)
+            .ok_or_else(|| anyhow::anyhow!("the vault stays registered"))?;
+        assert_eq!(listed.label, "Family");
+        Founder::js(founder.manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
 }

@@ -109,4 +109,24 @@ test('Manage → Vaults lists only the vaults the identity in use owns', async (
   await expect(page.getByTestId('vault-admin-entry')).toHaveCount(1)
   await snapshot(page, '3-travel-vaults')
   await demoBeat(page)
+
+  // The open vault renames from its row; the name is recorded in the vault's
+  // event log, so every device of the identity shows it.
+  const tripRename = page.locator(
+    `[data-testid="vault-admin-rename-btn"][data-store-id="${tripStoreId}"]`,
+  )
+  await tripRename.click()
+  await page
+    .locator(
+      `[data-testid="vault-admin-name-input"][data-store-id="${tripStoreId}"]`,
+    )
+    .fill('Trip 2026')
+  await tripRename.click()
+  await expect(
+    page.locator(
+      `[data-testid="vault-admin-name"][data-store-id="${tripStoreId}"]`,
+    ),
+  ).toContainText('Trip 2026', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await snapshot(page, '4-renamed-open-vault')
+  await demoBeat(page)
 })

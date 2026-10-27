@@ -6,6 +6,7 @@ use std::{fmt, str};
 use crate::canonical::{Ed25519Signature, EventId};
 use crate::signing::SigningIdentity;
 use crate::{CanonicalEventBodyBytes, EventError, EventResult, EventStorageBytes};
+use crate::{EpochMetadataState, EpochPasswordState};
 use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
@@ -14,7 +15,7 @@ use nook_auth2::{
     SecretId, SecretType, SentinelParticipantCount, SentinelShareIndex, SentinelThreshold,
     Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
 };
-use serde::{Deserialize, Serialize, ser::Error as _};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 use serde_json::json;
@@ -101,82 +102,6 @@ pub struct SentinelShareIssuedPayload {
     pub ciphertext: AgeArmoredCiphertext,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(from = "Vec<PasswordUnlockEntry>")]
-pub enum EpochPasswordState {
-    #[default]
-    LegacyRetain,
-    Replace(Vec<PasswordUnlockEntry>),
-}
-
-/// Checkpoint metadata replacement. Omitted legacy fields retain the previous
-/// metadata, while an explicit empty array clears every metadata record.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(from = "Vec<StoredSecretRecord>")]
-pub enum EpochMetadataState {
-    #[default]
-    LegacyRetain,
-    Replace(Vec<StoredSecretRecord>),
-}
-
-impl EpochMetadataState {
-    fn is_legacy_retain(&self) -> bool {
-        matches!(self, Self::LegacyRetain)
-    }
-}
-
-impl From<Vec<StoredSecretRecord>> for EpochMetadataState {
-    fn from(values: Vec<StoredSecretRecord>) -> Self {
-        Self::Replace(values)
-    }
-}
-
-impl EpochMetadataState {
-    fn serialize_epoch_metadata_state<S>(
-        state: &EpochMetadataState,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match state {
-            EpochMetadataState::Replace(records) => records.serialize(serializer),
-            EpochMetadataState::LegacyRetain => Err(S::Error::custom(
-                "legacy checkpoint metadata state must be omitted",
-            )),
-        }
-    }
-}
-
-impl EpochPasswordState {
-    fn is_legacy_retain(&self) -> bool {
-        matches!(self, Self::LegacyRetain)
-    }
-}
-
-impl From<Vec<PasswordUnlockEntry>> for EpochPasswordState {
-    fn from(values: Vec<PasswordUnlockEntry>) -> Self {
-        Self::Replace(values)
-    }
-}
-
-impl EpochPasswordState {
-    fn serialize_epoch_password_state<S>(
-        state: &EpochPasswordState,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match state {
-            EpochPasswordState::Replace(entries) => entries.serialize(serializer),
-            EpochPasswordState::LegacyRetain => Err(S::Error::custom(
-                "legacy checkpoint password state must be omitted",
-            )),
-        }
-    }
-}
-
 /// Atomic domain operations recorded in the immutable event log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -258,6 +183,10 @@ pub enum VaultOperation {
         entry_id: PasswordEntryId,
     },
     VaultCleared,
+    /// The vault's display name under `secrets_key`; the last in topological order wins.
+    VaultNamed {
+        name: OpaqueCiphertext,
+    },
     EpochCheckpoint {
         secrets: Vec<EncryptedSecretPayload>,
         members_checkpoint_hash: Sha256Hex,
@@ -277,6 +206,13 @@ pub enum VaultOperation {
         // The custom serializer likewise preserves the legacy omitted/explicit-array distinction.
         #[tsify(type = "PasswordUnlockEntry[]", optional)]
         password_entries: EpochPasswordState,
+        #[serde(
+            default,
+            skip_serializing_if = "crate::EpochVaultName::is_unnamed",
+            serialize_with = "crate::EpochVaultName::serialize_epoch_vault_name"
+        )]
+        #[tsify(type = "string", optional)]
+        vault_name: crate::EpochVaultName,
     },
 }
 
@@ -664,6 +600,7 @@ mod tests {
             value: StoredRecordPayload::from_trusted("malformed".to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![malformed_share]),
@@ -678,6 +615,7 @@ mod tests {
         let signing_key = test_signing_key();
         let mut body = empty_genesis_event(&signing_key)?.body;
         body.operations.push(VaultOperation::EpochCheckpoint {
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::LegacyRetain,
@@ -748,6 +686,7 @@ mod tests {
         );
 
         body.operations = vec![VaultOperation::EpochCheckpoint {
+            vault_name: crate::EpochVaultName::Unnamed,
             secrets: Vec::new(),
             members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

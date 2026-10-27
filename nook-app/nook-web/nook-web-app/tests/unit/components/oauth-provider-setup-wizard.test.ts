@@ -16,8 +16,11 @@ import {
 } from '$lib/auth/providers'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
 import {
+  ProviderVaultAccessActions,
+  ProviderVaultAccessRequest,
   ProviderVaultActions,
   ProviderVaultImportStart,
+  ProviderVaultOpeningKind,
 } from '$lib/vault/provider-vaults'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
@@ -37,7 +40,8 @@ function signedInDriveWithFolder(folderId: string): OAuthFileConfig {
 
 function summary(
   storeId: string,
-  relation: ProviderVaultSummary['relation'],
+  access: ProviderVaultSummary['access'],
+  actions: ProviderVaultSummary['actions'],
 ): ProviderVaultSummary {
   return {
     storeId,
@@ -45,7 +49,8 @@ function summary(
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
     eventCount: 4,
-    relation,
+    access,
+    actions,
   }
 }
 
@@ -94,13 +99,13 @@ describe('Google Drive provider setup', () => {
     expect(vault.successMsg).toBe('')
   })
 
-  test('lists what the Nook root holds without decrypting it', async () => {
+  test('lists each vault with how this device can open it', async () => {
     const list = listVaults({
       root: 'found',
       listing: {
         vaults: [
-          summary('store_ownvault001', 'thisIdentity'),
-          summary('store_othervault1', 'other'),
+          summary('store_ownvault001', { state: 'syncs' }, []),
+          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
         ],
         replacement: { state: 'unavailable' },
       },
@@ -112,20 +117,24 @@ describe('Google Drive provider setup', () => {
     )
     expect(list).toHaveBeenCalledWith({ state: 'closed' })
     const [own, other] = view.getAllByTestId('provider-vault-row')
-    expect(own?.dataset.relation).toBe('thisIdentity')
+    expect(own?.dataset.access).toBe('syncs')
     expect(own?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsThisIdentity),
+      vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
     )
     const eventsRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderVaultsEvents,
       replacements: { count: '4' },
     }
     expect(own?.textContent).toContain(vault.t(eventsRequest))
+    // A vault nothing here opens says so and can only be requested.
     expect(other?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsOtherIdentity),
+      vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
     )
-    // This identity's vault simply syncs; only the other one imports.
-    expect(view.getAllByTestId('provider-vault-import')).toHaveLength(1)
+    expect(other?.textContent).toContain(
+      vault.t(I18N_KEYS.ProviderVaultsHintLocked),
+    )
+    expect(view.getAllByTestId('provider-vault-request-access')).toHaveLength(1)
+    expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
     expect(view.queryAllByTestId('provider-vault-use-instead')).toHaveLength(0)
     expect(view.getByTestId('connect-provider-btn')).toBeTruthy()
   })
@@ -134,7 +143,11 @@ describe('Google Drive provider setup', () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [summary('store_othervault1', 'other')],
+        vaults: [
+          summary('store_othervault1', { state: 'backupPassword' }, [
+            'importSeparately',
+          ]),
+        ],
         replacement: { state: 'unavailable' },
       },
     })
@@ -159,7 +172,12 @@ describe('Google Drive provider setup', () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [summary('store_othervault1', 'other')],
+        vaults: [
+          summary('store_othervault1', { state: 'backupPassword' }, [
+            'useInstead',
+            'importSeparately',
+          ]),
+        ],
         replacement: { state: 'offered', emptyStoreId: 'store_localvault1' },
       },
     })
@@ -188,6 +206,79 @@ describe('Google Drive provider setup', () => {
     )
     // The import continues after the identity locks, not here.
     expect(onConnect).not.toHaveBeenCalled()
+  })
+
+  test('merges a vault into the open one with its backup password', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          summary('store_othervault1', { state: 'backupPassword' }, [
+            'mergeIntoOpen',
+            'importSeparately',
+          ]),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const merge = vi
+      .spyOn(ProviderVaultAccessActions.prototype, 'mergeIntoOpen')
+      .mockResolvedValue(ok(3))
+    const { view, onConnect } = renderWizard(signedInDrive())
+
+    await fireEvent.click(await view.findByTestId('provider-vault-merge'))
+    const confirm = view.getByTestId('provider-vault-merge-confirm-btn')
+    // Nothing opens the vault until its backup password is typed.
+    expect(confirm.hasAttribute('disabled')).toBe(true)
+    await fireEvent.input(view.getByTestId('provider-vault-merge-password'), {
+      target: { value: 'correct horse battery staple' },
+    })
+    await fireEvent.click(confirm)
+
+    await vi.waitFor(() =>
+      expect(merge).toHaveBeenCalledWith({
+        accessToken: 'drive-token',
+        storeId: 'store_othervault1',
+        opening: {
+          kind: ProviderVaultOpeningKind.BackupPassword,
+          password: 'correct horse battery staple',
+        },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(
+        view.queryAllByTestId('provider-vault-merge-confirm'),
+      ).toHaveLength(0),
+    )
+    expect(onConnect).not.toHaveBeenCalled()
+  })
+
+  test('requests access to a vault it cannot open and lists it again', async () => {
+    const list = listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const request = vi
+      .spyOn(ProviderVaultAccessActions.prototype, 'requestAccess')
+      .mockResolvedValue(ok(ProviderVaultAccessRequest.Saved))
+    const { view } = renderWizard(signedInDrive())
+
+    await fireEvent.click(
+      await view.findByTestId('provider-vault-request-access'),
+    )
+
+    await vi.waitFor(() =>
+      expect(request).toHaveBeenCalledWith({
+        accessToken: 'drive-token',
+        storeId: 'store_othervault1',
+      }),
+    )
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
   })
 
   test('says it found the existing Nook root and syncs beside its vaults', async () => {

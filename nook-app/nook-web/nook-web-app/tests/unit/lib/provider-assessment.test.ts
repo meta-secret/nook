@@ -68,6 +68,8 @@ describe('GitHub provider assessment failure', () => {
     expect(JSON.parse(logContext.serializedContext)).toEqual({
       provider_type: GITHUB_PROVIDER_TYPE,
       failure_kind: VaultStorageFailureKind.GitHubTokenRejected,
+      // The message names no status Rust can read; the typed code supplies 401.
+      cause: 'other',
       http_status: 401,
     })
     expect(JSON.stringify(logContext)).not.toContain(sentinel)

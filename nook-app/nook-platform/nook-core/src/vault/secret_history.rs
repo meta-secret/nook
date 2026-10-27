@@ -251,6 +251,7 @@ impl SecretHistoryRequest<'_> {
                 | VaultOperation::SecretReplaced { .. }
                 | VaultOperation::SecretConflictResolved { .. }
                 | VaultOperation::VaultCleared
+                | VaultOperation::VaultNamed { .. }
                 | VaultOperation::PasswordAdded { .. }
                 | VaultOperation::PasswordRotated { .. }
                 | VaultOperation::PasswordEnvelopeUpgraded { .. }
@@ -534,6 +535,7 @@ mod tests {
             &rotator,
             "2026-05-05T00:00:00Z",
             VaultOperation::EpochCheckpoint {
+                vault_name: crate::EpochVaultName::Unnamed,
                 secrets: vec![HistoryFixture::payload("secret_carried1")],
                 members_checkpoint_hash: Sha256Hex::from_trusted("ab".repeat(32)),
                 rotated_meta_records: crate::EpochMetadataState::LegacyRetain,

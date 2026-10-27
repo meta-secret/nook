@@ -488,7 +488,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub(super) async fn read_external_local_folder_records(
+    pub(in crate::manager) async fn read_external_local_folder_records(
         handle_id: &str,
         location: &nook_core::EventLogLocation,
     ) -> Result<Vec<ExternalEventLogRecord>, NookError> {

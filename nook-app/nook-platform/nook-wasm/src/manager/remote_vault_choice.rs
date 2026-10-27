@@ -12,8 +12,8 @@
 )]
 
 use nook_core::{
-    EventLogLocation, LocalVaultOccupancy, ProviderVaultObservation, ProviderVaultSummary,
-    StorageMode, StoreId,
+    EventLogLocation, LocalEventWrite, LocalVaultOccupancy, ProviderVaultObservation,
+    ProviderVaultSummary, StorageMode, StoreId, VaultEvent,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -24,8 +24,10 @@ use super::{ChosenProviderVault, NookVaultManager};
 use crate::NookError;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::{
-    CountedVaultNamespace, DriveVaultListing, LocalVaultClassification,
+    BrowserHeldVaults, CountedVaultNamespace, DriveVaultListing, InspectedVaults,
+    LocalVaultClassification,
 };
+use crate::storage::remote_event::RemoteEventRead;
 
 /// The vaults a staged sync provider holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -94,6 +96,56 @@ impl NookVaultManager {
         Ok(observations)
     }
 
+    /// What the discovered vaults' events tell without their keys.
+    async fn inspect_discovered_vaults(
+        &self,
+        source: &DiscoveredVaultSource<'_>,
+        store_ids: &[StoreId],
+        app_id: Option<&nook_core::AppId>,
+    ) -> Result<InspectedVaults, NookError> {
+        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
+            (source, self.storage.mode)
+        {
+            return DriveVaultListing {
+                token: &self.storage.access_token,
+                root: self.storage.drive_event_parent.parent()?,
+            }
+            .inspect_vaults(store_ids, app_id)
+            .await;
+        }
+        let mut inspected = InspectedVaults::default();
+        for store_id in store_ids {
+            let location = EventLogLocation::Vault(store_id.clone());
+            let events = match source {
+                DiscoveredVaultSource::CurrentProvider => {
+                    let mut events = Vec::new();
+                    for event_id in self.list_provider_event_ids_at(&location).await? {
+                        if let RemoteEventRead::Retrieved(bytes) =
+                            self.read_provider_event_at(&location, &event_id).await?
+                        {
+                            events.push(LocalEventWrite { event_id, bytes });
+                        }
+                    }
+                    events
+                }
+                DiscoveredVaultSource::BackupFolder(handle_id) => {
+                    NookVaultManager::read_external_local_folder_records(handle_id, &location)
+                        .await?
+                        .into_iter()
+                        .map(|record| {
+                            Ok(LocalEventWrite {
+                                event_id: record.event.id()?,
+                                bytes: VaultEvent::serialize_event_storage_yaml(&record.event)?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, NookError>>()?
+                }
+            };
+            inspected.record(store_id.clone(), events, app_id)?;
+        }
+        Ok(inspected)
+    }
+
     /// The several vaults a discovery found, summarized and related to the
     /// local identity. Discovery runs with no vault open.
     async fn several_discovered_vaults(
@@ -104,11 +156,14 @@ impl NookVaultManager {
         let observations = self
             .discovered_vault_observations(&source, store_ids)
             .await?;
+        let held = BrowserHeldVaults::load().await?;
+        let inspected = self
+            .inspect_discovered_vaults(&source, &held.unheld(&observations), held.app_id.as_ref())
+            .await?;
         let listing = LocalVaultClassification {
             local_vault: &LocalVaultOccupancy::Closed,
         }
-        .listing(observations)
-        .await?;
+        .listing(observations, &held, &inspected);
         Ok(NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
         })
@@ -268,7 +323,7 @@ mod tests {
                 }
                 .observation(),
             ],
-            identity_vaults: &[],
+            keys: nook_core::ProviderVaultKeyholding::NONE,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -285,7 +340,8 @@ mod tests {
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "unreported" },
                     "eventCount": 2,
-                    "relation": "other",
+                    "access": { "state": "unchecked" },
+                    "actions": ["importSeparately"],
                 }],
             })
         );

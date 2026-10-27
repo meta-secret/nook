@@ -1,5 +1,6 @@
 import {
   classify_vault_recovery_error,
+  provider_failure_cause,
   VaultRecoveryErrorKind,
 } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
@@ -45,23 +46,31 @@ export enum NativeProviderFailureCode {
 export type VaultStorageFailureRequest = {
   readonly kind: VaultStorageFailureKind;
   readonly recoveryKind: VaultRecoveryErrorKind;
+  /** Rust's loggable category of the native failure, never its message. */
+  readonly cause: string;
 };
 
 type VaultStorageFailureInput =
   VaultStorageFailureKind | VaultStorageFailureRequest;
 
+/** The cause logged for a failure the app raised itself: its kind says it all. */
+const NON_NATIVE_FAILURE_CAUSE = "app";
+
 export class VaultStorageFailure {
   readonly kind: VaultStorageFailureKind;
   readonly recoveryKind: VaultRecoveryErrorKind;
+  readonly cause: string;
 
   constructor(input: VaultStorageFailureInput) {
     if (typeof input === "string") {
       this.kind = input;
       this.recoveryKind = VaultRecoveryErrorKind.Other;
+      this.cause = NON_NATIVE_FAILURE_CAUSE;
       return;
     }
     this.kind = input.kind;
     this.recoveryKind = input.recoveryKind;
+    this.cause = input.cause;
   }
   get translationKey() {
     switch (this.kind) {
@@ -140,6 +149,7 @@ export class NativeVaultStorageFailure<
         ? VaultStorageFailureKind.GitHubTokenRejected
         : VaultStorageFailureKind.OperationFailed,
       recoveryKind: classify_vault_recovery_error(causeMessage),
+      cause: provider_failure_cause(causeMessage),
     };
     super(request);
   }

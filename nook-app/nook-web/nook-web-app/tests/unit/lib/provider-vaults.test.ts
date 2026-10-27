@@ -143,7 +143,8 @@ describe('recovery choice between several vaults', () => {
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
         eventCount: 7,
-        relation: 'other',
+        access: { state: 'backupPassword' },
+        actions: ['importSeparately'],
       },
     ]
     vault.remoteVaultChoices = vaults
@@ -160,5 +161,30 @@ describe('recovery choice between several vaults', () => {
     expect(view.getByTestId('provider-vault-meta').children).toHaveLength(1)
     await fireEvent.click(view.getByTestId('remote-vault-choice-item'))
     expect(onChoose).toHaveBeenCalledWith(CHOSEN)
+  })
+
+  test('offers no recovery for a vault nothing on this device opens', () => {
+    const vault = VaultStateTestFixture.create()
+    vault.remoteVaultChoices = [
+      {
+        storeId: CHOSEN,
+        shortId: 'otherva',
+        created: { state: 'unreported' },
+        lastActivity: { state: 'unreported' },
+        eventCount: 7,
+        access: { state: 'locked' },
+        actions: ['requestAccess'],
+      },
+    ]
+    const view = render(RemoteVaultChoice, {
+      vault,
+      busy: false,
+      onChoose: vi.fn(),
+    })
+
+    expect(view.getByTestId('provider-vault-access').textContent).toContain(
+      vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
+    )
+    expect(view.queryAllByTestId('remote-vault-choice-item')).toHaveLength(0)
   })
 })

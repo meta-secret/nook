@@ -383,6 +383,7 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.vault.projection = VaultSessionProjection::Unhydrated;
         let projection = VaultProjection::from_graph(graph, &self.vault.store_id)?;
+        self.adopt_projected_vault_name(projection.vault_name.clone())?;
         let live = projection.live_secrets(graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
@@ -393,6 +394,56 @@ impl NookVaultManager {
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             drop(self.maybe_sync_self_into_roster(&identity));
+        }
+        Ok(())
+    }
+
+    /// Take the name the event log carries. A vault no event named keeps
+    /// the name it already has; a locked session keeps only the ciphertext.
+    fn adopt_projected_vault_name(
+        &mut self,
+        name: nook_core::ProjectedVaultName,
+    ) -> Result<(), NookError> {
+        if let (
+            nook_core::ProjectedVaultName::Named(ciphertext),
+            VaultCryptoState::Unlocked(crypto),
+        ) = (&name, &self.vault.crypto)
+        {
+            let armored = nook_core::AgeArmoredCiphertext::from_trusted_armored(
+                ciphertext.as_str().to_owned(),
+            );
+            let plaintext = crypto.decrypt_value(&armored)?;
+            self.assign_vault_name(plaintext.as_str());
+        }
+        self.vault.projected_name = name;
+        Ok(())
+    }
+
+    /// Name the open vault from its event log before the first unlock that
+    /// projects it, as a device that joined the identity does.
+    pub(in crate::manager) async fn adopt_vault_name_from_events(
+        &mut self,
+    ) -> Result<(), NookError> {
+        let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
+        self.adopt_projected_vault_name(projection.vault_name)
+    }
+
+    /// The browser's vault list shows the name the event log carries.
+    pub(in crate::manager) async fn label_local_vault_with_projected_name(
+        &self,
+    ) -> Result<(), NookError> {
+        if let (nook_core::ProjectedVaultName::Named(_), VaultNameState::Named(name)) =
+            (&self.vault.projected_name, &self.vault.vault_name)
+        {
+            NookDatabase::set_local_vault_label(
+                crate::storage::indexed_db::SetLocalVaultLabelRequest {
+                    store_id: &self.vault.store_id,
+                    label: name,
+                },
+            )
+            .await?;
         }
         Ok(())
     }
@@ -448,6 +499,7 @@ impl NookVaultManager {
         )?;
         NookDatabase::save_to_indexed_db(yaml.as_str()).await?;
         self.vault.last_synced_content = yaml.into_inner();
+        self.label_local_vault_with_projected_name().await?;
         Ok(())
     }
 

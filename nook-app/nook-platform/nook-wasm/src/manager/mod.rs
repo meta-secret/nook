@@ -34,7 +34,7 @@ use nook_core::{
     VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
     i18n_keys,
 };
-use nook_core::{EnsureSelfInRosterRequest, VaultMetaState};
+use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;
@@ -197,35 +197,20 @@ impl NookVaultManager {
         }
     }
 
+    /// Name the open vault for every member: the name is recorded in the
+    /// vault event log, encrypted under the vault key, and projected back.
     #[wasm_bindgen]
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
-        let previous_name = self.vault.vault_name.clone();
-        let previous_projection = if self.vault.last_synced_content.trim().is_empty() {
-            match NookDatabase::load_from_indexed_db()
-                .await
-                .map_err(|error| JsError::new(&error.to_string()))?
-            {
-                VaultSnapshotLookup::Stored(content) => content,
-                VaultSnapshotLookup::NotStored => {
-                    return Err(JsError::new("Vault projection is not initialized."));
-                }
-            }
-        } else {
-            self.vault.last_synced_content.clone()
-        };
-        self.assign_vault_name(name);
-        if let Err(error) = self.persist_vault_change(Vec::new()).await {
-            self.vault.vault_name = previous_name;
-            self.vault.last_synced_content = previous_projection.clone();
-            if let Err(rollback_error) =
-                NookDatabase::save_to_indexed_db(&previous_projection).await
-            {
-                return Err(JsError::new(&format!(
-                    "{error}; vault-name rollback failed: {rollback_error}"
-                )));
-            }
-            return Err(JsError::new(&error.to_string()));
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(JsError::new("Vault name cannot be empty."));
         }
+        self.ensure_vault_crypto_from_cache().await?;
+        let ciphertext = self.vault.crypto.get()?.encrypt_value(trimmed)?;
+        self.persist_vault_change(vec![VaultOperation::VaultNamed {
+            name: nook_core::OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
+        }])
+        .await?;
         Ok(())
     }
 

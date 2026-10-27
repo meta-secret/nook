@@ -31,6 +31,7 @@ vi.mock('$app-wasm', async (importOriginal) => ({
   NookVaultSwitchState: { Switch: 'Switch' },
   VaultRecoveryErrorKind: { Other: 'Other' },
   classify_vault_recovery_error: () => 'Other',
+  provider_failure_cause: () => 'other',
 }))
 
 vi.mock('$lib/runtime/log', () => ({

@@ -1,6 +1,7 @@
 //! Typed errors for the vault stack.
 
 mod database;
+mod provider_failure;
 mod session;
 mod vault_epoch;
 mod vault_format;
@@ -13,6 +14,7 @@ pub use nook_auth2::{
     ValidationResult, VaultCryptoError,
 };
 pub use nook_event_log::{EventError, EventResult};
+pub use provider_failure::ProviderFailureCause;
 pub use session::{SessionError, SessionResult};
 pub use vault_epoch::{VaultEpochError, VaultEpochResult};
 pub use vault_format::{VaultFormatError, VaultFormatResult};

@@ -25,6 +25,8 @@
 mod builder;
 mod canonical;
 mod epoch;
+mod epoch_checkpoint_state;
+mod epoch_vault_name;
 mod errors;
 mod event;
 mod event_bytes;
@@ -42,10 +44,12 @@ pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
     ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
+pub use epoch_checkpoint_state::{EpochMetadataState, EpochPasswordState};
+pub use epoch_vault_name::EpochVaultName;
 pub use errors::{EventError, EventResult};
 pub use event::{
-    EncryptedSecretPayload, EpochCheckpointRequirement, EpochMetadataState, EpochPasswordState,
-    GenesisImportContents, GenesisImportPayload, GenesisImportRequest, SecurityRotationTrigger,
+    EncryptedSecretPayload, EpochCheckpointRequirement, GenesisImportContents,
+    GenesisImportPayload, GenesisImportRequest, SecurityRotationTrigger,
     SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
     VaultOperation,
 };
@@ -70,8 +74,8 @@ pub use location::{EventLogLocation, EventLogNamespaceKind};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
-    ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict, SecurityConflict,
-    VaultProjection,
+    ProjectedVaultName, ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict,
+    SecurityConflict, VaultProjection,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;

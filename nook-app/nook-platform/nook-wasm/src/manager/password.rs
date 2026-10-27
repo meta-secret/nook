@@ -454,6 +454,59 @@ mod metadata_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn a_key_rotation_carries_the_vault_name_into_the_new_epoch() -> anyhow::Result<()> {
+        let keys = nook_core::VaultKeys::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.bootstrap_event_log_genesis().await?;
+        manager
+            .set_vault_name("Family")
+            .await
+            .map_err(|error| anyhow::anyhow!("rename failed: {error:?}"))?;
+        manager
+            .add_vault_password_for_e2e("Recovery".to_owned(), "password".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("password add failed: {error:?}"))?;
+        let entry = manager
+            .vault
+            .password_entries
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("password entry was not added"))?;
+
+        // Removing a password rotates the vault keys.
+        manager
+            .remove_vault_password_entry(entry.id)
+            .await
+            .map_err(|error| anyhow::anyhow!("password entry removal failed: {error:?}"))?;
+
+        let nook_core::ProjectedVaultName::Named(name) = &manager.vault.projected_name else {
+            anyhow::bail!("the rotated epoch must still carry the vault name");
+        };
+        let armored =
+            nook_core::AgeArmoredCiphertext::from_trusted_armored(name.as_str().to_owned());
+        assert_eq!(
+            manager
+                .vault
+                .crypto
+                .get()?
+                .decrypt_value(&armored)?
+                .as_str(),
+            "Family"
+        );
+        assert!(
+            nook_core::VaultCrypto::new(&keys.secrets_key)?
+                .decrypt_value(&armored)
+                .is_err(),
+            "the retired key must not read the new epoch's name"
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
@@ -657,24 +710,13 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn failed_sync_flush_restores_local_projection_and_storage() -> anyhow::Result<()> {
+    async fn a_rename_is_an_encrypted_local_event_while_the_provider_is_unreachable()
+    -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
         manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
-        manager.vault.last_synced_content =
-            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-                &manager.vault.meta.to_stored_records(),
-                &manager.vault.unlock,
-                &manager.vault.password_entries,
-                VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
-                VaultNameRef::Named("Personal"),
-                VaultVersionWrite::Initial,
-                &manager.vault.architecture,
-            )?
-            .into_inner();
-        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
-        manager.vault.members_key = keys.members_key.as_str().to_owned();
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
@@ -683,30 +725,51 @@ mod wasm_tests {
         manager.sync_outbox.access_token = "invalid-token".to_owned();
         manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
 
-        assert!(manager.set_vault_name("Rejected rename").await.is_err());
-        assert!(
-            manager.event_log_has_events().await?,
-            "the browser-backed local write must succeed before the remote flush fails"
-        );
+        assert!(manager.set_vault_name("   ").await.is_err());
+        manager
+            .set_vault_name("  Family  ")
+            .await
+            .map_err(|error| anyhow::anyhow!("rename failed: {error:?}"))?;
+
         assert!(matches!(
             &manager.vault.vault_name,
-            VaultNameState::Named(name) if name == "Personal"
+            VaultNameState::Named(name) if name == "Family"
         ));
         assert_eq!(
             nook_core::VaultFormatDocument::new(&manager.vault.last_synced_content).name()?,
-            VaultName::Named("Personal".to_owned())
+            VaultName::Named("Family".to_owned())
         );
         let persisted_projection = match NookDatabase::load_from_indexed_db().await? {
             VaultSnapshotLookup::Stored(content) => content,
             VaultSnapshotLookup::NotStored => {
-                return Err(anyhow::anyhow!("persisted rolled-back projection is missing").into());
+                return Err(anyhow::anyhow!("the renamed projection is not persisted"));
             }
         };
         assert_eq!(
             nook_core::VaultFormatDocument::new(&persisted_projection).name()?,
-            VaultName::Named("Personal".to_owned())
+            VaultName::Named("Family".to_owned())
         );
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+
+        // The provider only ever sees the name encrypted under the vault key.
+        let graph = NookDatabase::load_local_event_store(&manager.vault.store_id)
+            .await?
+            .load_graph(&manager.vault.store_id)?;
+        let names = graph
+            .events()
+            .flat_map(|(_, event)| event.body.operations.iter())
+            .filter_map(|operation| match operation {
+                VaultOperation::VaultNamed { name } => Some(name.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let [name] = names.as_slice() else {
+            anyhow::bail!("one rename records one name event");
+        };
+        assert!(!name.as_str().contains("Family"));
+        let plaintext = VaultCrypto::new(&keys.secrets_key)?.decrypt_value(
+            &nook_core::AgeArmoredCiphertext::from_trusted_armored(name.as_str().to_owned()),
+        )?;
+        assert_eq!(plaintext.as_str(), "Family");
         Ok(())
     }
 

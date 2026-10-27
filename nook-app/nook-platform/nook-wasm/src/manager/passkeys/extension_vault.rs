@@ -347,6 +347,7 @@ mod tests {
                 parents: vec![trigger_id.clone()],
                 key_epoch: trigger_id,
                 operations: vec![VaultOperation::EpochCheckpoint {
+                    vault_name: nook_core::EpochVaultName::Unnamed,
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_bytes(b"empty roster"),
                     rotated_meta_records: EpochMetadataState::Replace(Vec::new()),

@@ -16,7 +16,7 @@ use crate::graph::EventGraph;
 use crate::{ConcurrentEpochRotations, VaultOperation};
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
-use nook_auth2::StoredSecretRecord;
+use nook_auth2::{OpaqueCiphertext, StoredSecretRecord};
 use nook_auth2::{SecretId, StoreId};
 use std::collections::BTreeMap;
 
@@ -68,6 +68,16 @@ pub struct SecurityConflict {
     pub reasons: Vec<EpochRotationReason>,
 }
 
+/// The vault's display name as the event log last set it, still encrypted
+/// under the epoch's `secrets_key`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ProjectedVaultName {
+    /// No event named the vault.
+    #[default]
+    Unnamed,
+    Named(OpaqueCiphertext),
+}
+
 /// Materialized encrypted vault state derived from events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultProjection {
@@ -76,6 +86,7 @@ pub struct VaultProjection {
     pub epoch_history: Vec<EpochRecord>,
     pub secrets: BTreeMap<SecretId, ProjectedSecret>,
     pub password_entries: Vec<PasswordUnlockEntry>,
+    pub vault_name: ProjectedVaultName,
     pub replacement_conflicts: BTreeMap<SecretId, SecretReplacementConflict>,
     pub security_conflicts: Vec<SecurityConflict>,
     pub unresolved_schema: bool,
@@ -96,6 +107,7 @@ impl Default for VaultProjection {
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),
             password_entries: Vec::new(),
+            vault_name: ProjectedVaultName::Unnamed,
             replacement_conflicts: BTreeMap::new(),
             security_conflicts: Vec::new(),
             unresolved_schema: false,
@@ -588,6 +600,37 @@ mod tests {
             VaultProjection::from_graph(&prepared.graph, "store_otherid0001"),
             Err(EventError::ProjectionStoreMismatch)
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_renames_settle_on_one_name_in_any_insert_order() -> anyhow::Result<()> {
+        let signing_key = key();
+        let genesis = ProjectionFixtures::genesis(EventGraph::new(), &signing_key)?;
+        let rename = |ciphertext: &str| {
+            ProjectionFixtures::signed_operation(
+                &signing_key,
+                vec![genesis.event_id.clone()],
+                VaultOperation::VaultNamed {
+                    name: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
+                },
+            )
+        };
+        let work = rename("cipher-work")?;
+        let home = rename("cipher-home")?;
+        let mut names = Vec::new();
+        for events in [[work.clone(), home.clone()], [home, work]] {
+            let mut graph = genesis.graph.clone();
+            for event in events {
+                graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event })?;
+            }
+            names.push(VaultProjection::from_graph(&graph, STORE)?.vault_name);
+        }
+        let [first, second] = names.as_slice() else {
+            anyhow::bail!("both insert orders must project");
+        };
+        assert!(matches!(first, ProjectedVaultName::Named(_)));
+        assert_eq!(first, second);
         Ok(())
     }
 
