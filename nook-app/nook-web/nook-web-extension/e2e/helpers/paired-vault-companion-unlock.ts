@@ -368,7 +368,9 @@ export async function expectVaultOpened(
 async function describeVaultPage(page: Page): Promise<string> {
   const state = await page.evaluate(() => {
     const attributes = (element: Element, names: readonly string[]) =>
-      Object.fromEntries(names.map((name) => [name, element.getAttribute(name)]))
+      Object.fromEntries(
+        names.map((name) => [name, element.getAttribute(name)]),
+      )
     const byTestId = (testId: string) =>
       Array.from(document.querySelectorAll(`[data-testid="${testId}"]`))
     return {
@@ -378,11 +380,11 @@ async function describeVaultPage(page: Page): Promise<string> {
       ),
       rows: byTestId('identity-vault-row').map((row) => ({
         ...attributes(row, ['data-state', 'aria-expanded']),
-        disabled: (row as HTMLButtonElement).disabled,
+        disabled: row.hasAttribute('disabled'),
       })),
       panel: byTestId('identity-card-vault').length > 0,
       open: byTestId('vault-panel-open').map((button) => ({
-        disabled: (button as HTMLButtonElement).disabled,
+        disabled: button.hasAttribute('disabled'),
       })),
       alerts: Array.from(document.querySelectorAll('[role="alert"]')).map(
         (alert) => (alert.textContent || '').trim().slice(0, 200),
