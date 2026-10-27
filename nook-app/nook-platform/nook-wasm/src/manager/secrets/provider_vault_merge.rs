@@ -16,7 +16,7 @@ use zeroize::Zeroizing;
 
 use super::NookVaultManager;
 use super::secret_import::SecretImportSource;
-use crate::storage::provider_vault_listing::{DriveVaultListing, existing_drive_nook_root};
+use crate::storage::provider_vault_listing::DriveVaultListing;
 use crate::{NookError, NookImportResult};
 
 impl NookVaultManager {
@@ -25,7 +25,9 @@ impl NookVaultManager {
         access_token: &str,
         store_id: &StoreId,
     ) -> Result<Vec<LocalEventWrite>, NookError> {
-        let root = existing_drive_nook_root(access_token).await?;
+        let root = crate::DriveStorageClient::new(access_token)
+            .existing_nook_root()
+            .await?;
         DriveVaultListing {
             token: access_token,
             root: &root,
@@ -105,7 +107,9 @@ impl NookVaultManager {
         store_id: String,
     ) -> Result<(), JsError> {
         let store_id = StoreId::parse(&store_id)?;
-        let root = existing_drive_nook_root(&access_token).await?;
+        let root = crate::DriveStorageClient::new(&access_token)
+            .existing_nook_root()
+            .await?;
         let listing = DriveVaultListing {
             token: &access_token,
             root: &root,

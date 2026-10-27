@@ -85,18 +85,17 @@ impl CountedVaultNamespace {
     }
 }
 
-/// The signed-in account's Nook root; an account without one holds no vault.
-pub(crate) async fn existing_drive_nook_root(token: &str) -> Result<DriveEventParent, NookError> {
-    match crate::DriveStorageClient::new(token)
-        .find_vault_folder()
-        .await?
-    {
-        nook_core::DriveVaultFolderSelection::Existing(folder_id) => {
-            Ok(DriveEventParent::shared_folder_id(folder_id.as_str()))
+impl crate::DriveStorageClient<'_> {
+    /// The signed-in account's Nook root; an account without one holds no vault.
+    pub(crate) async fn existing_nook_root(&self) -> Result<DriveEventParent, NookError> {
+        match self.find_vault_folder().await? {
+            nook_core::DriveVaultFolderSelection::Existing(folder_id) => {
+                Ok(DriveEventParent::shared_folder_id(folder_id.as_str()))
+            }
+            nook_core::DriveVaultFolderSelection::Create => Err(NookError::Drive(
+                "The account has no Nook folder.".to_owned(),
+            )),
         }
-        nook_core::DriveVaultFolderSelection::Create => Err(NookError::Drive(
-            "The account has no Nook folder.".to_owned(),
-        )),
     }
 }
 
