@@ -207,7 +207,7 @@ app-owned Nook root folder in My Drive, always named `meta-secret-nook`
 (`NOOK_PROVIDER_ROOT_NAME` in `nook-core`). Inside it, each identity has a
 folder holding its log in `log` and each vault it filed in a `{store_id}`
 subfolder, independently of vault replication or membership. See
-[the identity control log](../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount). Writes remain limited to app-created files below
+[the identity control log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount). Writes remain limited to app-created files below
 the root.
 
 - **Scopes:** Sign-in and silent refresh request only the non-sensitive
