@@ -145,7 +145,7 @@ test('a locked vault asks its locked paired extension one discovery at a time wh
     const recorded = await page
       .locator('html')
       .getAttribute('data-demo-discoveries')
-    const [total = 0, peak = 0] = (recorded ?? '0/0').split('/').map(Number)
+    const [total = 0, peak = 0] = (recorded || '0/0').split('/').map(Number)
     return { inFlight: 0, peak, total }
   }
   await expect

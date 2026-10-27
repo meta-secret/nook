@@ -55,8 +55,8 @@ export class PairedExtensionResumeQueue {
     // The next resume waits for this one to end, however it ends; its
     // caller still receives the outcome.
     this.tail = turn.then(
-      () => undefined,
-      () => undefined,
+      () => {},
+      () => {},
     );
     return turn;
   }

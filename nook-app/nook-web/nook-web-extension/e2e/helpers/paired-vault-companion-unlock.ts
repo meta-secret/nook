@@ -385,10 +385,10 @@ async function describeVaultPage(page: Page): Promise<string> {
         disabled: (button as HTMLButtonElement).disabled,
       })),
       alerts: Array.from(document.querySelectorAll('[role="alert"]')).map(
-        (alert) => alert.textContent?.trim().slice(0, 200) ?? '',
+        (alert) => (alert.textContent || '').trim().slice(0, 200),
       ),
       testIds: Array.from(document.querySelectorAll('[data-testid]'))
-        .map((element) => element.getAttribute('data-testid') ?? '')
+        .map((element) => element.getAttribute('data-testid') || '')
         .filter(Boolean)
         .slice(0, 60),
     }
