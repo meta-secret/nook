@@ -14,7 +14,6 @@ import {
   storedOAuthCredential,
   type OAuthFileConfig,
 } from '$lib/auth/providers'
-import { buttonVariants } from '$lib/components/ui/button/button-variants'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
 import {
   ProviderVaultAccessActions,
@@ -175,17 +174,24 @@ describe('Google Drive provider setup', () => {
     expect(view.getAllByTestId('provider-vault-request-access')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
     expect(view.queryAllByTestId('provider-vault-use-instead')).toHaveLength(0)
-    // Connect & sync is the step's one primary action; a row's never competes.
-    const secondary: Parameters<typeof buttonVariants>[0] = {
-      variant: 'outline',
-      size: 'sm',
-    }
-    expect(view.getByTestId('provider-vault-request-access').className).toBe(
-      buttonVariants(secondary),
+    // A row's actions are choices; the step has one action button, and it
+    // runs whichever choice is picked.
+    const choice = view.getByTestId('provider-vault-request-access')
+    expect(choice.getAttribute('type')).toBe('radio')
+    const connectChoice = view.getByTestId('provider-vault-choice-connect')
+    expect(connectChoice).toHaveProperty('checked', true)
+    expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
+    expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
+
+    await fireEvent.click(choice)
+    expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
+    expect(view.getByTestId('provider-vault-action-btn').textContent).toContain(
+      vault.t(I18N_KEYS.ProviderVaultsRequestAccess),
     )
-    expect(view.getByTestId('connect-provider-btn').className).not.toContain(
-      'border-input',
-    )
+
+    await fireEvent.click(connectChoice)
+    expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
+    expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
   })
 
   test('imports another vault through the existing import flow', async () => {
@@ -211,6 +217,8 @@ describe('Google Drive provider setup', () => {
     const { view, onConnect } = renderWizard(signedInDrive())
 
     await fireEvent.click(await view.findByTestId('provider-vault-import'))
+    expect(onConnect).not.toHaveBeenCalled()
+    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
     expect(start).toHaveBeenCalledWith('store_othervault1')
@@ -236,13 +244,18 @@ describe('Google Drive provider setup', () => {
     const { view, onConnect } = renderWizard(signedInDrive())
 
     await fireEvent.click(await view.findByTestId('provider-vault-use-instead'))
+    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
     expect(replace).not.toHaveBeenCalled()
+    // The confirmation's own button is the only live action meanwhile.
+    expect(
+      view.getByTestId('provider-vault-action-btn').hasAttribute('disabled'),
+    ).toBe(true)
     await fireEvent.click(view.getByTestId('provider-vault-replace-cancel'))
     expect(
       view.queryAllByTestId('provider-vault-replace-confirm'),
     ).toHaveLength(0)
 
-    await fireEvent.click(view.getByTestId('provider-vault-use-instead'))
+    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
     await fireEvent.click(
       view.getByTestId('provider-vault-replace-confirm-btn'),
     )
@@ -276,6 +289,7 @@ describe('Google Drive provider setup', () => {
     const { view, onConnect } = renderWizard(signedInDrive())
 
     await fireEvent.click(await view.findByTestId('provider-vault-merge'))
+    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
     const confirm = view.getByTestId('provider-vault-merge-confirm-btn')
     // Nothing opens the vault until its backup password is typed.
     expect(confirm.hasAttribute('disabled')).toBe(true)
@@ -320,6 +334,7 @@ describe('Google Drive provider setup', () => {
     await fireEvent.click(
       await view.findByTestId('provider-vault-request-access'),
     )
+    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
 
     await vi.waitFor(() =>
       expect(request).toHaveBeenCalledWith({

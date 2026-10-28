@@ -1,4 +1,8 @@
-import type { NookGoogleDriveVaultListing } from "$app-wasm";
+import type {
+  NookGoogleDriveVaultListing,
+  ProviderVaultAction,
+  ProviderVaultSummary,
+} from "$app-wasm";
 import type { EmptyVaultSwap } from "$lib/vault/provider-vaults";
 
 export enum DriveVaultInventoryKind {
@@ -53,3 +57,18 @@ export type MergeConfirmation =
   | ({
       readonly kind: MergeConfirmationKind.Confirming;
     } & MergeConfirmationRequest);
+
+export enum DriveVaultChoiceKind {
+  Connect = "connect",
+  VaultAction = "vaultAction",
+}
+
+/** The one thing the step's single action button does: Connect & sync, or
+ * the action picked on one listed vault. */
+export type DriveVaultChoice =
+  | { readonly kind: DriveVaultChoiceKind.Connect }
+  | {
+      readonly kind: DriveVaultChoiceKind.VaultAction;
+      readonly action: ProviderVaultAction;
+      readonly summary: ProviderVaultSummary;
+    };

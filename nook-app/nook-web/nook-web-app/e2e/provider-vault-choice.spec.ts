@@ -115,6 +115,9 @@ test.describe('vaults another identity keeps in the Nook folder', () => {
     await expect(row.getByTestId('provider-vault-import')).toBeVisible()
 
     await row.getByTestId('provider-vault-merge').click()
+    // Choosing an action swaps Connect & sync for that action's button.
+    await expect(deviceB.getByTestId('connect-provider-btn')).toHaveCount(0)
+    await deviceB.getByTestId('provider-vault-action-btn').click()
     const password = deviceB.getByTestId('provider-vault-merge-password')
     const merge = deviceB.getByTestId('provider-vault-merge-confirm-btn')
     await expect(merge).toBeDisabled()
@@ -220,6 +223,7 @@ test.describe('a vault nothing on this device opens', () => {
     await expect(row.getByTestId('provider-vault-merge')).toHaveCount(0)
     await expect(row.getByTestId('provider-vault-import')).toHaveCount(0)
     await row.getByTestId('provider-vault-request-access').click()
+    await deviceB.getByTestId('provider-vault-action-btn').click()
     await expect(row).toHaveAttribute('data-access', 'requested', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -245,6 +249,7 @@ test.describe('a vault nothing on this device opens', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await row.getByTestId('provider-vault-merge').click()
+    await deviceB.getByTestId('provider-vault-action-btn').click()
     await expect(
       deviceB.getByTestId('provider-vault-merge-password'),
     ).toHaveCount(0)

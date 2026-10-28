@@ -1670,6 +1670,7 @@
     "last_activity": "Last activity {date}",
     "events": "Events: {count}",
     "import_separately": "Import as a separate vault",
+    "choice_connect": "Leave these vaults as they are and only connect & sync",
     "recover": "Recover this vault",
     "use_instead": "Use this vault instead",
     "replace_confirm_title": "Replace your empty vault?",

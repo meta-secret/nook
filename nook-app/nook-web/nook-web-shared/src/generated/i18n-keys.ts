@@ -1865,6 +1865,7 @@ export const I18N_KEYS = {
   ProviderVaultsAccessRequestedToast: 'provider_vaults.access_requested_toast',
   ProviderVaultsAccessSyncs: 'provider_vaults.access_syncs',
   ProviderVaultsAccessUnchecked: 'provider_vaults.access_unchecked',
+  ProviderVaultsChoiceConnect: 'provider_vaults.choice_connect',
   ProviderVaultsConnectExplainer: 'provider_vaults.connect_explainer',
   ProviderVaultsCreated: 'provider_vaults.created',
   ProviderVaultsEvents: 'provider_vaults.events',
