@@ -161,9 +161,9 @@ type CurrentProviderCheck = {
   readonly run: (manager: NookVaultManager) => Promise<CredentialCheckReport>;
 };
 
-/** Where a recovery's vault list came from: the folder the user picked, or
- * the provider staged for the recovery. */
-export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
+/** The provider a recovery reads: the folder the user picked, or the
+ * provider staged for the recovery. */
+export function recoveryProviderSource(vault: VaultState): NookProviderSource {
   if (
     vault.loginSetup.kind === LoginSetupKind.Active &&
     vault.loginSetup.providerType === LOCAL_FOLDER_PROVIDER_TYPE &&
@@ -173,12 +173,28 @@ export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
       vault.localFolderDraft.config,
     ).localFolderHandle();
     if (handle.kind === LocalFolderHandleKind.Selected)
+      return { kind: "localFolder", handleId: handle.handleId };
+  }
+  return CURRENT_PROVIDER;
+}
+
+/** Where a recovery's checks read from: the same provider as its plan. */
+export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
+  const source = recoveryProviderSource(vault);
+  switch (source.kind) {
+    case "currentProvider":
+      return { kind: AccessCheckTargetKind.CurrentProvider };
+    case "localFolder":
       return {
         kind: AccessCheckTargetKind.Source,
-        source: { kind: "localFolder", handleId: handle.handleId },
+        source: { kind: "localFolder", handleId: source.handleId },
+      };
+    case "googleDrive":
+      return {
+        kind: AccessCheckTargetKind.Source,
+        source: { kind: "googleDrive", accessToken: source.accessToken },
       };
   }
-  return { kind: AccessCheckTargetKind.CurrentProvider };
 }
 
 /** The short form of a passkey fingerprint people can compare by eye. */

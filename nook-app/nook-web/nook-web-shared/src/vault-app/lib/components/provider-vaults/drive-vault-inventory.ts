@@ -1,9 +1,4 @@
-import type {
-  NookGoogleDriveVaultListing,
-  ProviderVaultAction,
-  ProviderVaultSummary,
-} from "$app-wasm";
-import type { EmptyVaultSwap } from "$lib/vault/provider-vaults";
+import type { NookGoogleDriveVaultListing } from "$app-wasm";
 
 export enum DriveVaultInventoryKind {
   Loading = "loading",
@@ -20,55 +15,10 @@ export type DriveVaultInventory =
     }
   | { readonly kind: DriveVaultInventoryKind.Failed };
 
-export enum EmptyVaultConfirmationKind {
-  Closed = "closed",
-  Confirming = "confirming",
-}
-
-/** The swap being confirmed and the short id of the vault taking over. */
-export interface EmptyVaultConfirmationRequest {
-  readonly swap: EmptyVaultSwap;
-  readonly shortId: string;
-}
-
-/** The explicit confirmation before an empty vault gives way. */
-export type EmptyVaultConfirmation =
-  | { readonly kind: EmptyVaultConfirmationKind.Closed }
-  | ({
-      readonly kind: EmptyVaultConfirmationKind.Confirming;
-    } & EmptyVaultConfirmationRequest);
-
-export enum MergeConfirmationKind {
-  Closed = "closed",
-  Confirming = "confirming",
-}
-
-/** The provider vault being merged into the open vault, and whether the
- * user must type its backup password to open it. */
-export interface MergeConfirmationRequest {
-  readonly storeId: string;
-  readonly shortId: string;
-  readonly needsPassword: boolean;
-}
-
-/** The explicit confirmation before a provider vault's records come in. */
-export type MergeConfirmation =
-  | { readonly kind: MergeConfirmationKind.Closed }
-  | ({
-      readonly kind: MergeConfirmationKind.Confirming;
-    } & MergeConfirmationRequest);
-
-export enum DriveVaultChoiceKind {
-  Connect = "connect",
-  VaultAction = "vaultAction",
-}
-
-/** The one thing the step's single action button does: Connect & sync, or
- * the action picked on one listed vault. */
-export type DriveVaultChoice =
-  | { readonly kind: DriveVaultChoiceKind.Connect }
-  | {
-      readonly kind: DriveVaultChoiceKind.VaultAction;
-      readonly action: ProviderVaultAction;
-      readonly summary: ProviderVaultSummary;
-    };
+/** The step's one action button: Connect & sync, or the identity plan
+ * followed by it. An empty label keeps the button's own words. */
+export type ConnectPlanButton = {
+  readonly busy: boolean;
+  readonly label: string;
+  readonly run: () => Promise<void>;
+};

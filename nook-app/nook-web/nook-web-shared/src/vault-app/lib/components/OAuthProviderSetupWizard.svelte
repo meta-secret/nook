@@ -16,11 +16,7 @@
   import type { VaultState } from "$lib/vault.svelte";
   import * as oauthActions from "$lib/vault/oauth";
   import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
-  import {
-    ProviderVaultActions,
-    ProviderVaultImportStart,
-    type EmptyVaultSwap,
-  } from "$lib/vault/provider-vaults";
+  import type { ConnectPlanButton } from "$lib/components/provider-vaults/drive-vault-inventory";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
@@ -161,19 +157,12 @@
       vault.showSuccess(existingFolderNotice);
   }
 
-  /** Import another identity's vault from the listing as a separate vault. */
-  async function importProviderVault(storeId: string) {
-    const start = new ProviderVaultActions(vault).importSeparately(storeId);
-    if (start === ProviderVaultImportStart.ConnectNow)
-      await connectWithVaultTarget();
-  }
-
-  /** Swap the empty open vault for a listed one, once confirmed. */
-  async function replaceEmptyVault(swap: EmptyVaultSwap) {
-    const start = new ProviderVaultActions(vault).replaceEmptyVault(swap);
-    if (start === ProviderVaultImportStart.ConnectNow)
-      await connectWithVaultTarget();
-  }
+  /** The step's button when no listing owns it: Connect & sync alone. */
+  const directConnect: ConnectPlanButton = {
+    busy: false,
+    label: "",
+    run: connectWithVaultTarget,
+  };
 
   function watchICloudSignInIntent(node: HTMLElement) {
     let deferredSignInPending = false;
@@ -454,13 +443,12 @@
       {:else if driveAccessToken}
         <!-- What the account's Nook folder already holds, before Connect &
              sync. It owns the step's one action button: Connect & sync, or the
-             action chosen on one of its vaults. -->
+             identity plan followed by it. -->
         <GoogleDriveVaultInventory
           {vault}
           accessToken={driveAccessToken}
           busy={isVerifying || isInitializing || preparingTarget}
-          onImport={importProviderVault}
-          onReplace={replaceEmptyVault}
+          onConnect={connectWithVaultTarget}
           {connectButton}
         />
       {/if}
@@ -482,26 +470,26 @@
         </p>
       {/if}
       {#if isICloud && !sharedTargetReady}
-        {@render connectButton(false)}
+        {@render connectButton(directConnect)}
       {:else if !driveAccessToken}
-        {@render connectButton(false)}
+        {@render connectButton(directConnect)}
       {/if}
     </SetupWizardStep>
   </div>
 </div>
 
-{#snippet connectButton(inventoryBusy: boolean)}
+{#snippet connectButton(button: ConnectPlanButton)}
   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
     <Button
       type="button"
       class="sm:min-w-[180px]"
       data-testid="connect-provider-btn"
       disabled={!canConnect ||
-        inventoryBusy ||
+        button.busy ||
         isVerifying ||
         isInitializing ||
         preparingTarget}
-      onclick={() => void connectWithVaultTarget()}
+      onclick={() => void button.run()}
     >
       {#if isInitializing}
         <RefreshCw class="size-4 animate-spin" />
@@ -511,7 +499,7 @@
         {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
       {:else}
         <ShieldCheck class="size-4" />
-        {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+        {button.label || vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
       {/if}
     </Button>
   </div>
