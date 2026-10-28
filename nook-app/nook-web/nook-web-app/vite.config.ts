@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vitest/config'
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { loadEnv, type PreviewServer, type ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
@@ -20,6 +21,9 @@ import {
   type ShellAliasWrite,
 } from '../nook-web-shared/vite-config.ts'
 
+/** Entry pages and env files resolve from this config's directory, so the dev
+ * server finds them whichever directory Vite starts in. */
+const appRoot = dirname(fileURLToPath(import.meta.url))
 const runsOnBun = 'Bun' in globalThis
 const viteBase = runsOnBun ? Bun.env.VITE_BASE : process.env.VITE_BASE
 /** Vite serves HTTPS over HTTP/2, whose Bun server never emits the WebSocket
@@ -233,7 +237,7 @@ function seoStaticFiles(outputDirectory: string): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const env = loadEnv(mode, appRoot, '')
   const localHttps = env.NOOK_LOCAL_HTTPS === '1'
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
@@ -241,11 +245,11 @@ export default defineConfig(({ mode }) => {
   const input: Record<string, string> =
     appKind === 'site'
       ? {
-          landing: join(process.cwd(), 'index.html'),
+          landing: join(appRoot, 'index.html'),
         }
       : {
-          landing: join(process.cwd(), 'index.html'),
-          app: join(process.cwd(), 'app/index.html'),
+          landing: join(appRoot, 'index.html'),
+          app: join(appRoot, 'app/index.html'),
         }
 
   return {

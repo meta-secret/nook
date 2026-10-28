@@ -2246,6 +2246,7 @@ pub const PROVIDER_VAULTS_ACCESS_REQUESTED: &str = "provider_vaults.access_reque
 pub const PROVIDER_VAULTS_ACCESS_REQUESTED_TOAST: &str = "provider_vaults.access_requested_toast";
 pub const PROVIDER_VAULTS_ACCESS_SYNCS: &str = "provider_vaults.access_syncs";
 pub const PROVIDER_VAULTS_ACCESS_UNCHECKED: &str = "provider_vaults.access_unchecked";
+pub const PROVIDER_VAULTS_CHOICE_CONNECT: &str = "provider_vaults.choice_connect";
 pub const PROVIDER_VAULTS_CONNECT_EXPLAINER: &str = "provider_vaults.connect_explainer";
 pub const PROVIDER_VAULTS_CREATED: &str = "provider_vaults.created";
 pub const PROVIDER_VAULTS_EVENTS: &str = "provider_vaults.events";

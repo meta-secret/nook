@@ -452,13 +452,16 @@
           {vault.t(I18N_KEYS.ProviderSetupIcloudSharedCreateDesc)}
         </p>
       {:else if driveAccessToken}
-        <!-- What the account's Nook folder already holds, before Connect & sync. -->
+        <!-- What the account's Nook folder already holds, before Connect &
+             sync. It owns the step's one action button: Connect & sync, or the
+             action chosen on one of its vaults. -->
         <GoogleDriveVaultInventory
           {vault}
           accessToken={driveAccessToken}
           busy={isVerifying || isInitializing || preparingTarget}
           onImport={importProviderVault}
           onReplace={replaceEmptyVault}
+          {connectButton}
         />
       {/if}
       {#if existingFolderNotice}
@@ -478,32 +481,37 @@
           {vault.errorMsg}
         </p>
       {/if}
-      <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button
-          type="button"
-          class="sm:min-w-[180px]"
-          data-testid="connect-provider-btn"
-          disabled={!canConnect ||
-            isVerifying ||
-            isInitializing ||
-            preparingTarget}
-          onclick={() => void connectWithVaultTarget()}
-        >
-          {#if isInitializing}
-            <RefreshCw class="size-4 animate-spin" />
-            {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-          {:else if isVerifying || preparingTarget}
-            <RefreshCw class="size-4 animate-spin" />
-            {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
-          {:else}
-            <ShieldCheck class="size-4" />
-            {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
-          {/if}
-        </Button>
-      </div>
+      {#if isICloud && !sharedTargetReady}
+        {@render connectButton()}
+      {:else if !driveAccessToken}
+        {@render connectButton()}
+      {/if}
     </SetupWizardStep>
   </div>
 </div>
+
+{#snippet connectButton()}
+  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+    <Button
+      type="button"
+      class="sm:min-w-[180px]"
+      data-testid="connect-provider-btn"
+      disabled={!canConnect || isVerifying || isInitializing || preparingTarget}
+      onclick={() => void connectWithVaultTarget()}
+    >
+      {#if isInitializing}
+        <RefreshCw class="size-4 animate-spin" />
+        {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+      {:else if isVerifying || preparingTarget}
+        <RefreshCw class="size-4 animate-spin" />
+        {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
+      {:else}
+        <ShieldCheck class="size-4" />
+        {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+      {/if}
+    </Button>
+  </div>
+{/snippet}
 
 <style>
   .apple-cloudkit-control :global(button),

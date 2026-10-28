@@ -5,10 +5,12 @@ how this device can open it and which actions it allows, recommended action
 first: a vault this device can open replaces an empty open vault, merges
 into one with records, or comes in beside it; a vault nothing here opens
 can only be requested from a device that can. Connect & sync itself only
-adds this identity's vaults beside these.
+adds this identity's vaults beside these. Each row offers its actions as
+choices beside Connect & sync, and the step has one action button that runs
+the chosen one, so two actions are never live at once.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
   import { RefreshCw } from '@lucide/svelte'
   import type {
     EmptyVaultReplacement,
@@ -30,9 +32,11 @@ adds this identity's vaults beside these.
     type ProviderVaultOpening,
   } from '$lib/vault/provider-vaults'
   import {
+    DriveVaultChoiceKind,
     DriveVaultInventoryKind,
     EmptyVaultConfirmationKind,
     MergeConfirmationKind,
+    type DriveVaultChoice,
     type DriveVaultInventory,
     type EmptyVaultConfirmation,
     type EmptyVaultConfirmationRequest,
@@ -45,6 +49,7 @@ adds this identity's vaults beside these.
     busy,
     onImport,
     onReplace,
+    connectButton,
   }: {
     vault: VaultState
     /** The signed-in account's token; a new sign-in lists again. */
@@ -52,7 +57,11 @@ adds this identity's vaults beside these.
     busy: boolean
     onImport: (storeId: string) => void | Promise<void>
     onReplace: (swap: EmptyVaultSwap) => void | Promise<void>
+    /** The step's Connect & sync button, shown while that is the choice. */
+    connectButton: Snippet
   } = $props()
+
+  let choice = $state<DriveVaultChoice>({ kind: DriveVaultChoiceKind.Connect })
 
   let inventory = $state<DriveVaultInventory>({
     kind: DriveVaultInventoryKind.Loading,
@@ -64,9 +73,22 @@ adds this identity's vaults beside these.
   let mergePassword = $state('')
   let working = $state(false)
   const disabled = $derived(busy || working)
+  /** A replace or merge confirmation carries its own confirm button. */
+  const confirming = $derived(
+    replacement.kind === EmptyVaultConfirmationKind.Confirming ||
+      merge.kind === MergeConfirmationKind.Confirming,
+  )
+
+  /** The chosen row action as `<store id>/<action>`; empty for Connect & sync. */
+  const chosenOption = $derived(
+    choice.kind === DriveVaultChoiceKind.VaultAction
+      ? `${choice.summary.storeId}/${choice.action}`
+      : '',
+  )
 
   async function load(token: string): Promise<void> {
     inventory = { kind: DriveVaultInventoryKind.Loading }
+    choice = { kind: DriveVaultChoiceKind.Connect }
     replacement = { kind: EmptyVaultConfirmationKind.Closed }
     merge = { kind: MergeConfirmationKind.Closed }
     const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
@@ -249,28 +271,46 @@ adds this identity's vaults beside these.
       </p>
       <ProviderVaultList {vault} vaults={listing.vaults}>
         {#snippet action(summary: ProviderVaultSummary)}
-          {#each summary.actions as action (action)}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid={actionTestId(action)}
-              data-store-id={summary.storeId}
-              {disabled}
-              onclick={() => {
-                const press: VaultActionPress = {
-                  action,
-                  summary,
-                  offer: listing.replacement,
-                }
-                runAction(press)
-              }}
-            >
-              {actionLabel(action)}
-            </Button>
-          {/each}
+          <div class="grid gap-1.5" role="radiogroup">
+            {#each summary.actions as action (action)}
+              <label
+                class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
+              >
+                <input
+                  class="size-4"
+                  type="radio"
+                  name="provider-vault-choice"
+                  data-testid={actionTestId(action)}
+                  data-store-id={summary.storeId}
+                  {disabled}
+                  checked={chosenOption === `${summary.storeId}/${action}`}
+                  onchange={() =>
+                    (choice = {
+                      kind: DriveVaultChoiceKind.VaultAction,
+                      action,
+                      summary,
+                    })}
+                />
+                {actionLabel(action)}
+              </label>
+            {/each}
+          </div>
         {/snippet}
       </ProviderVaultList>
+      <label
+        class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
+      >
+        <input
+          class="size-4"
+          type="radio"
+          name="provider-vault-choice"
+          data-testid="provider-vault-choice-connect"
+          {disabled}
+          checked={choice.kind === DriveVaultChoiceKind.Connect}
+          onchange={() => (choice = { kind: DriveVaultChoiceKind.Connect })}
+        />
+        {vault.t(I18N_KEYS.ProviderVaultsChoiceConnect)}
+      </label>
       {#if replacement.kind === EmptyVaultConfirmationKind.Confirming}
         {@const swap = replacement.swap}
         <div
@@ -381,4 +421,30 @@ adds this identity's vaults beside these.
       </p>
     </div>
   {/if}
+{/if}
+{#if choice.kind === DriveVaultChoiceKind.VaultAction}
+  {@const chosen = choice}
+  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+    <Button
+      type="button"
+      class="sm:min-w-[180px]"
+      data-testid="provider-vault-action-btn"
+      data-store-id={chosen.summary.storeId}
+      disabled={disabled || confirming}
+      onclick={() => {
+        if (inventory.kind !== DriveVaultInventoryKind.Loaded) return
+        if (inventory.listing.root !== 'found') return
+        const press: VaultActionPress = {
+          action: chosen.action,
+          summary: chosen.summary,
+          offer: inventory.listing.listing.replacement,
+        }
+        runAction(press)
+      }}
+    >
+      {actionLabel(chosen.action)}
+    </Button>
+  </div>
+{:else}
+  {@render connectButton()}
 {/if}
