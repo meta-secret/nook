@@ -135,7 +135,32 @@ impl NookDatabase {
         let store = transaction
             .store(STORE_EVENTS)
             .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
-        let mut index = Self::read_identity_index(&store, identity_id)
+        Self::put_identity_events(
+            &store,
+            IdentityLogWrite {
+                identity_id,
+                events,
+            },
+        )
+        .await?;
+        transaction
+            .done()
+            .await
+            .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
+        Ok(())
+    }
+
+    /// Write identity events and extend the identity index inside the
+    /// caller's transaction on the events store.
+    pub(crate) async fn put_identity_events(
+        store: &rexie::Store,
+        request: IdentityLogWrite<'_>,
+    ) -> Result<(), NookError> {
+        let IdentityLogWrite {
+            identity_id,
+            events,
+        } = request;
+        let mut index = Self::read_identity_index(store, identity_id)
             .await?
             .into_iter()
             .collect::<BTreeSet<_>>();
@@ -181,10 +206,6 @@ impl NookDatabase {
             .map_err(|error| {
                 NookError::IndexedDb(format!("Identity index write error: {error:?}"))
             })?;
-        transaction
-            .done()
-            .await
-            .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
         Ok(())
     }
 }

@@ -10,6 +10,7 @@ mod connection;
 mod invite;
 mod log_creation;
 mod membership;
+mod passkey_addition;
 mod vault_access;
 mod vault_removal;
 

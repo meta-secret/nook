@@ -59,27 +59,35 @@ Rust decides each identity's standing and the decisions it allows.
 
 - Preconditions:
   - A passkey re-derived an app key listed as a member of the identity's log.
+  - The same passkey re-derived the event signer the log lists for that
+    member.
 - Effect:
   - The directory gains the identity under its **original** id, adopted from
     the provider's identity log.
-  - The app key is stored under that identity, protected by the same passkey.
+  - The app key is stored under that identity, protected by the same passkey,
+    with the passkey's derived signer.
   - The identity in use stays selected; the user switches in Identities.
     When no identity is in use, the added one is.
 - In place today:
+  - `add_identity_with_passkey` takes the source, the identity id, and the
+    relying party, and asks for one passkey.
   - `PasskeyIdentityAddition` in `nook-core` decides the addition from the
     source's identity log, without passkey recovery.
-  - An active member key adds the identity under its original id, with the
-    members the log lists and the key's grant for each vault at its current
-    key epoch.
+  - An active member whose listed signer the passkey derives adds the
+    identity under its original id, with the members the log lists and the
+    key's grant for each vault at its current key epoch.
+  - An identity without a sealed name is named by its identity words.
+  - The identity log, the directory entry, and the keyring entry are written
+    in one transaction.
   - A key that is not a member, was revoked, or already belongs to an
-    identity here adds nothing.
+    identity here adds nothing. So does a member whose listed signer the
+    passkey does not derive.
+  - Its vaults open through the identity's mounts, as for any member.
 - Gaps today:
-  - No WASM operation stores the addition yet.
-  - A passkey re-derives the member's app key, not the event signer the log
-    lists for that member. The signer's seed never leaves its installation.
-  - A keyring entry for a member with an established signer but no seed fails
-    closed, so the identity cannot be stored here until a passkey can
-    re-establish its member's signer.
+  - A member whose signer was minted before passkey-derived signers existed
+    cannot be added this way.
+  - A member protected by a passkey-wrapped random app key cannot be added
+    this way; its app key and signer stay with its installation.
 
 ### Merge into the current identity
 

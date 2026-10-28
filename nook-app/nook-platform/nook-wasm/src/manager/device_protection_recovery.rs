@@ -7,6 +7,7 @@ use crate::manager::device_protection::ExtensionIdentityPublication;
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
 use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare};
+use crate::storage::identity_record::MemberSigner;
 #[cfg(test)]
 use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::identity_record::{
@@ -14,7 +15,7 @@ use crate::storage::identity_record::{
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
 use crate::{NookDatabase, NookError};
-use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, StorageMode};
+use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, PasskeyMemberSigner, StorageMode};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -123,7 +124,11 @@ impl NookVaultManager {
         material: &nook_core::PasskeyDeviceIdentityMaterial,
     ) -> Result<String, NookError> {
         let identity = DeviceIdentity::from_secret_str(material.identity_secret())?;
-        self.persist_and_adopt_local_identity(identity, material.record())
+        let signer = match material.signer() {
+            PasskeyMemberSigner::Derived(seed) => MemberSigner::Passkey(seed),
+            PasskeyMemberSigner::Installation => MemberSigner::Installation,
+        };
+        self.persist_and_adopt_local_identity(identity, material.record(), signer)
             .await
     }
 }

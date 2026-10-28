@@ -333,12 +333,13 @@ pub(crate) use storage::event_db::{
     EventDbRemoveOutboxEntry, EventDbSaveEventBytes, EventDbSaveHeads, EventDbSaveKeyEpoch,
 };
 
+#[cfg(test)]
+pub(crate) use storage::identity_record::IdentityDbSaveNewProtectedLocalIdentity;
 pub(crate) use storage::identity_record::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbEnsureLocalIdentityInDirectory,
     IdentityDbGenerateVaultDekForIdentity, IdentityDbLocalKeyringEntryForAppIdFromStore,
-    IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
-    IdentityDbSetIdentityMemberSigningPublicKey, IdentityDbValidateVaultIdentityEnrollment,
-    IdentityDbWriteIdentityDirectory,
+    IdentityDbSaveProtectedLocalIdentity, IdentityDbSetIdentityMemberSigningPublicKey,
+    IdentityDbValidateVaultIdentityEnrollment, IdentityDbWriteIdentityDirectory,
 };
 
 pub(crate) use storage::identity_record::{

@@ -26,7 +26,7 @@ use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
-    DeviceIdentitySecret,
+    DeviceIdentitySecret, SigningSeedHex,
     auth::multi_device::DeviceIdentity,
     errors::{DeviceKeyProtectionError, DeviceKeyProtectionResult},
 };
@@ -110,6 +110,8 @@ const PIN_KDF_NAME: &str = "pbkdf2-sha256";
 const CIPHER_NAME: &str = "aes-256-gcm";
 const DETERMINISTIC_PRF_INPUT_CONTEXT: &[u8] = b"nook/passkey-device-prf-input/v1";
 const DETERMINISTIC_IDENTITY_HKDF_INFO: &[u8] = b"nook/passkey-derived-age-x25519/v1";
+/// The member's event signer, from the same PRF output as the app key.
+const DETERMINISTIC_SIGNER_HKDF_INFO: &[u8] = b"nook/passkey-derived-ed25519-signer/v1";
 const PASSKEY_WRAPPING_HKDF_INFO: &[u8] = b"nook/passkey-wrapped-local-age-x25519/v1";
 const PASSKEY_WRAPPED_AAD_CONTEXT: &[u8] = b"nook/device-identity-passkey-wrapped-local/v1";
 const PIN_AAD_CONTEXT: &[u8] = b"nook/device-identity-pin-record/v2";
@@ -194,11 +196,25 @@ impl PasskeyRecoveryRequest {
     }
 }
 
+/// The event signer a passkey-protected member signs with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PasskeyMemberSigner {
+    /// Derived from the passkey's PRF output beside the app key, under its
+    /// own label, so the passkey re-derives the signer wherever it
+    /// re-derives the app key.
+    Derived(SigningSeedHex),
+    /// The passkey wraps a random app key, so the signer stays this
+    /// installation's own: one signer per app key keeps a revoked
+    /// installation's signatures revoked.
+    Installation,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct PasskeyDeviceIdentityMaterial {
     device_id: String,
     identity_secret: DeviceIdentitySecret,
     record: WrappedDeviceIdentity,
+    signer: PasskeyMemberSigner,
 }
 
 impl fmt::Debug for PasskeyDeviceIdentityMaterial {
@@ -207,6 +223,7 @@ impl fmt::Debug for PasskeyDeviceIdentityMaterial {
             .field("device_id", &self.device_id)
             .field("identity_secret", &"<redacted>")
             .field("record", &self.record)
+            .field("signer", &self.signer)
             .finish()
     }
 }
@@ -225,6 +242,11 @@ impl PasskeyDeviceIdentityMaterial {
     #[must_use]
     pub fn record(&self) -> &WrappedDeviceIdentity {
         &self.record
+    }
+
+    #[must_use]
+    pub fn signer(&self) -> &PasskeyMemberSigner {
+        &self.signer
     }
 
     #[must_use]

@@ -52,6 +52,9 @@ pub enum MultiDeviceError {
     #[error("This app key is not a member of identity {identity_id}.")]
     AppKeyNotIdentityMember { identity_id: String },
 
+    #[error("Identity {identity_id} lists a signer for this key that its passkey does not derive.")]
+    PasskeySignerNotListed { identity_id: String },
+
     #[error("Identity {identity_id} already exists on this installation.")]
     ReplicatedIdentityAlreadyLocal { identity_id: String },
 

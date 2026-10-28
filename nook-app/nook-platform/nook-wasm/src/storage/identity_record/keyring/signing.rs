@@ -13,14 +13,26 @@ use crate::{NookDatabase, NookError};
 use nook_core::LocalIdentityProtection;
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, SigningIdentity,
+    SigningSeedHex,
 };
 use rexie::{Store, TransactionMode};
 
+/// Where a newly protected member's event signer comes from.
+#[derive(Clone, Copy)]
+pub(crate) enum MemberSigner<'a> {
+    /// The installation's own: the session's signer, or a newly minted one.
+    Installation,
+    /// Derived from the protecting passkey beside its app key, so the
+    /// passkey re-derives it wherever it re-derives the app key.
+    Passkey(&'a SigningSeedHex),
+}
 /// Where an unprotected identity's signing seed comes from.
-pub(super) enum SigningSeedOrigin {
+pub(super) enum SigningSeedOrigin<'a> {
     /// Adopt the signer this session already signs with.
     AdoptSessionSigner,
     NewIdentity,
+    /// The protecting passkey's derived signer.
+    Passkey(&'a SigningSeedHex),
 }
 pub(super) enum IdentityVaultEvidence {
     Empty,
@@ -35,7 +47,7 @@ pub(super) struct IdentitySigningSource<'a> {
     pub(super) store: &'a Store,
     pub(super) existing: LocalIdentityProtection<'a>,
     pub(super) app_key: &'a AppKey,
-    pub(super) origin: SigningSeedOrigin,
+    pub(super) origin: SigningSeedOrigin<'a>,
     pub(super) established: &'a DeviceSigningPublicKey,
     pub(super) vaults: IdentityVaultEvidence,
 }
@@ -84,6 +96,13 @@ impl IdentitySigningSource<'_> {
                 .open_signing_seed(app_key)
                 .map_err(|error| NookError::Database(error.to_string()))?
                 .into_inner(),
+            // A passkey member signs with the signer its passkey derives; an
+            // established signer that differs fails the check below.
+            LocalIdentityProtection::Unprotected
+                if let SigningSeedOrigin::Passkey(seed) = self.origin =>
+            {
+                seed.as_str().to_owned()
+            }
             LocalIdentityProtection::Unprotected
                 if matches!(self.origin, SigningSeedOrigin::AdoptSessionSigner) =>
             {

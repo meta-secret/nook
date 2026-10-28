@@ -52,8 +52,8 @@ mod wire;
 pub use auth::device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyIdentityUnlock, PasskeyProtectionInput, PasskeyRecordMetadata, PasskeyRecoveryInput,
-    PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
+    PasskeyIdentityUnlock, PasskeyMemberSigner, PasskeyProtectionInput, PasskeyRecordMetadata,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
     PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
     WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
     WrappedDeviceIdentity,

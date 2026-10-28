@@ -110,11 +110,11 @@ pub use database::{Database, SecretRemoval};
 pub use device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyDeviceProtectionMode, PasskeyIdentityUnlock, PasskeyProtectionInput,
-    PasskeyRecordMetadata, PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration,
-    PasskeyRegistrationInput, PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput,
-    PasskeyRegistrationResolution, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
-    WebAuthnUserHandle, WrappedDeviceIdentity,
+    PasskeyDeviceProtectionMode, PasskeyIdentityUnlock, PasskeyMemberSigner,
+    PasskeyProtectionInput, PasskeyRecordMetadata, PasskeyRecoveryInput, PasskeyRecoveryRequest,
+    PasskeyRegistration, PasskeyRegistrationInput, PasskeyRegistrationOutcome,
+    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WebAuthnCredentialId,
+    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
 };
 pub use enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,

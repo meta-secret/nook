@@ -12,8 +12,9 @@ use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use nook_core::{
     BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
     EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, PasskeyAccessCheck,
-    PasskeyAccessProfile, PasskeyRecoveryInput, PasskeyRecoveryRequest, ProviderIdentityLogEvents,
-    StoreId, WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
+    PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput, PasskeyRecoveryRequest,
+    ProviderIdentityLogEvents, SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput,
+    WebAuthnUserHandle, WrappedDeviceIdentity,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -176,15 +177,18 @@ pub(crate) struct CheckedPasskey<'a> {
     pub(crate) rp_id: &'a str,
 }
 
-/// A passkey's re-derived app key and the fingerprint that names it.
+/// A passkey's re-derived app key and member signer, the record that
+/// protects the app key with that passkey, and the fingerprint that names it.
 pub(crate) struct DerivedPasskey {
     pub(crate) fingerprint: String,
     pub(crate) app_key: DeviceIdentity,
+    pub(crate) signer: SigningSeedHex,
+    pub(crate) record: WrappedDeviceIdentity,
 }
 
 impl CheckedPasskey<'_> {
-    /// Ask for one passkey and re-derive this device's app key from its PRF
-    /// output, in memory only.
+    /// Ask for one passkey and re-derive this device's app key and its
+    /// member signer from its PRF output, in memory only.
     pub(crate) async fn derive(&self) -> Result<DerivedPasskey, JsError> {
         let request_options = BrowserPasskeyClient::recovery_options(self.rp_id)?;
         let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
@@ -202,9 +206,16 @@ impl CheckedPasskey<'_> {
             user_handle: &user_handle,
             prf_output: &typed_prf_output?,
         })?;
+        let PasskeyMemberSigner::Derived(signer) = material.signer() else {
+            return Err(JsError::new(
+                "A passkey-derived app key must derive its member signer.",
+            ));
+        };
         Ok(DerivedPasskey {
             fingerprint,
             app_key: DeviceIdentity::from_secret_str(material.identity_secret())?,
+            signer: signer.clone(),
+            record: material.record().clone(),
         })
     }
 }

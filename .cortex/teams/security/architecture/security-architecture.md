@@ -145,6 +145,8 @@ for the full ownership model.
   - Uses age X25519 recipient envelopes.
 - **Local app-key protection**
   - Passkey-derived mode uses WebAuthn PRF output and HKDF-SHA256.
+  - The same PRF output derives the member's Ed25519 event signer under its
+    own HKDF label.
   - Passkey-wrapped and PIN fallback records use AES-256-GCM with bound
     metadata as additional authenticated data.
   - PIN fallback derives its wrapping key with PBKDF2-SHA256 and the persisted
