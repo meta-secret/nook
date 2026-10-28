@@ -423,6 +423,11 @@ mod tests {
                         "identityId": "idn_abcdefghijk",
                         "shortId": "abcdefgh",
                         "name": { "state": "unknown" },
+                        "words": nook_core::IdentityWords::of(
+                            &nook_core::IdentityId::parse("idn_abcdefghijk")?
+                        )
+                        .words(),
+                        "log": { "state": "absent" },
                     },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "unreported" },
