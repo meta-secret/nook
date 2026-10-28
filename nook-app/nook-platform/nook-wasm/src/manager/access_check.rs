@@ -104,7 +104,11 @@ impl NookVaultManager {
 mod browser_tests {
     use super::*;
     use crate::public_api::{NookAccessCheckSource, check_backup_password_access};
-    use nook_core::{CheckedCredential, IdentityCheckOutcome, VaultCheckOutcome};
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use nook_core::{
+        CheckedCredential, DriveVaultFolderLookup, IdentityCheckOutcome, StorageMode,
+        VaultCheckOutcome,
+    };
     use tsify::Tsify;
     use wasm_bindgen_test::*;
 
@@ -178,6 +182,56 @@ mod browser_tests {
             .delete_local_browser_data()
             .await
             .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn a_drive_root_without_identities_opens_nothing_and_writes_nothing() -> anyhow::Result<()>
+    {
+        const LIST: &str = "drive/v3/files?";
+        let root = format!(
+            r#"{{"files":[{{"id":"nook-root","name":"{}","mimeType":"application/vnd.google-apps.folder"}}]}}"#,
+            DriveVaultFolderLookup::root_name()
+        );
+        let empty = r#"{"files":[]}"#;
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("GET", LIST, &root),
+            FetchRoute::ok("GET", LIST, empty),
+            FetchRoute::ok("GET", LIST, empty),
+            FetchRoute::ok("GET", LIST, empty),
+        ])?;
+        let source = Tsify::into_ts(&NookAccessCheckSource::GoogleDrive {
+            access_token: "drive-access-token".to_owned(),
+        })
+        .map_err(|_| anyhow::anyhow!("encode the check source"))?;
+
+        let report: CredentialCheckReport = check_backup_password_access(&source, "any".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
+            .to_rust()
+            .map_err(|_| anyhow::anyhow!("decode the check report"))?;
+
+        assert_eq!(report.credential, CheckedCredential::BackupPassword);
+        assert!(report.identities.is_empty());
+        let calls = stub.calls();
+        assert!(!calls.is_empty());
+        assert!(calls.iter().all(|call| call.starts_with("GET ")));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn a_session_without_a_sync_provider_has_nothing_to_check() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Local;
+
+        let report: CredentialCheckReport = manager
+            .check_backup_password_access_at_current_provider("any".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
+            .to_rust()
+            .map_err(|_| anyhow::anyhow!("decode the check report"))?;
+
+        assert!(report.identities.is_empty());
         Ok(())
     }
 }
