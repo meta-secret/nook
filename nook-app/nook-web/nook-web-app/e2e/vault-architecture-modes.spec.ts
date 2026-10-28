@@ -766,8 +766,16 @@ test.describe('vault architecture modes', () => {
     await expect(joinerPick).toHaveAttribute('aria-checked', 'true')
     await page.getByTestId('onboard-device-submit').click()
 
+    // Issuing seals the invite under the passphrase and publishes the identity
+    // log to every mount: enrollment work, waited on as every other invite
+    // issue is (submitOnboardEnrollmentCode), and failing on its error.
     const linkInput = page.getByTestId('onboarding-link-url')
-    await expect(linkInput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const onboardError = page.getByTestId('onboard-error')
+    await expect(linkInput.or(onboardError)).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(onboardError).toHaveCount(0)
+    await expect(linkInput).toBeVisible()
     // Issuing the invite grants nothing on Drive.
     expect(driveStub.getSharedFolders()).toEqual([sharedFolder])
     await expect

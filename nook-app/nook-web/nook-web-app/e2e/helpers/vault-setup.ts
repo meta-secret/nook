@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import { unlockVaultOnLogin } from './settings-auth'
 import { disableVaultIdleLock, waitForStorageChainIdle } from './vault-runtime'
@@ -120,6 +121,10 @@ export async function createLocalVaultOnLogin(
   await expect(createButton).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  // Creating the vault starts the 2.5 s e2e idle lock while the first-run
+  // steps are still on screen; hold it off from the moment it starts, so the
+  // identities page never leads into a vault that locked behind it.
+  await keepVaultIdleLockDisabled(page)
   await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
   // Deferred passkey: the first-run protect step (or, elsewhere, the
@@ -161,9 +166,6 @@ export async function createLocalVaultOnLogin(
   }
 
   await skipFirstRunBackup(page, readySurface.or(openVaultRow(page)).first())
-  // The vault exists now: keep the 2.5 s e2e idle lock from locking it while
-  // the identities page leads into it.
-  await disableVaultIdleLock(page)
   // The first vault's setup ends on the identities; the vault opens there.
   if (readyTestId === 'vault-panel' || readyTestId === 'authenticated-shell')
     await openVaultPage(page)

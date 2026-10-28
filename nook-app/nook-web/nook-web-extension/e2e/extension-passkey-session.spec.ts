@@ -566,6 +566,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         await expect(picker.getByText('Nook extension e2e')).toBeVisible({
           timeout: 20_000,
         })
+        // The panel lists the request before this page has registered it; a
+        // choice made before then is refused.
+        await expect(
+          otpWidget.getByText(
+            'Choose a 2FA item in the Nook side panel. You can search all 2FA items in your vault.',
+          ),
+        ).toBeVisible()
         await picker.getByRole('button', { name: /Nook extension e2e/ }).click()
         await expect(
           otpPage.locator('[autocomplete="one-time-code"]'),

@@ -450,6 +450,17 @@ jobs:
           VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
           VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
 
+      - name: Preserve existing web failure context
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-web-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /meta-secret/nook/nook-app/nook-web/nook-web-app/test-results/**/error-context.md
+            /meta-secret/nook/nook-app/nook-web/nook-web-app/test-results/**/test-failed-*.png
+          retention-days: 1
+          if-no-files-found: ignore
+
   extension-e2e:
     name: Extension e2e (${{ matrix.shard }}/2)
     strategy:
