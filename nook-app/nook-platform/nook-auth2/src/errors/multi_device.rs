@@ -49,6 +49,9 @@ pub enum MultiDeviceError {
     #[error("This app key was revoked from identity {identity_id}.")]
     AppKeyRevokedFromIdentity { identity_id: String },
 
+    #[error("This app key is not a member of identity {identity_id}.")]
+    AppKeyNotIdentityMember { identity_id: String },
+
     #[error("Identity {identity_id} already exists on this installation.")]
     ReplicatedIdentityAlreadyLocal { identity_id: String },
 
