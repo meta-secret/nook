@@ -7,40 +7,40 @@ vault opens only when Rust decrypted its key, so its name shows once any
 check opened it.
 -->
 <script lang="ts">
-  import { FolderKey, UserRound } from "@lucide/svelte";
+  import { FolderKey, UserRound } from '@lucide/svelte'
   import type {
     CheckedCredential,
     CredentialCheckReport,
     IdentityCheck,
     IdentityCheckOutcome,
     VaultCheck,
-  } from "$app-wasm";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { CheckReports, shortPasskeyId } from "$lib/vault/access-check";
+  } from '$app-wasm'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { CheckReports, shortPasskeyId } from '$lib/vault/access-check'
 
   let {
     vault,
     reports,
   }: {
-    vault: VaultState;
-    reports: readonly CredentialCheckReport[];
-  } = $props();
+    vault: VaultState
+    reports: readonly CredentialCheckReport[]
+  } = $props()
 
-  const checked = $derived(new CheckReports(reports));
-  const identities = $derived(checked.identities());
+  const checked = $derived(new CheckReports(reports))
+  const identities = $derived(checked.identities())
 
   function credentialLabel(credential: CheckedCredential): string {
     switch (credential.kind) {
-      case "passkey": {
+      case 'passkey': {
         const request: Parameters<typeof vault.t>[0] = {
           key: I18N_KEYS.AccessCheckCredentialPasskey,
           replacements: { id: shortPasskeyId(credential.fingerprint) },
-        };
-        return vault.t(request);
+        }
+        return vault.t(request)
       }
-      case "backupPassword":
-        return vault.t(I18N_KEYS.AccessCheckCredentialPassword);
+      case 'backupPassword':
+        return vault.t(I18N_KEYS.AccessCheckCredentialPassword)
     }
   }
 
@@ -48,49 +48,49 @@ check opened it.
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.AccessCheckCheckNumber,
       replacements: { n: String(index + 1) },
-    };
-    return vault.t(request);
+    }
+    return vault.t(request)
   }
 
   /** The identity's name once a passkey opened it, beside its words. */
   function identityLabel(identity: IdentityCheck): string {
-    const words = identity.words.join("-");
-    const name = checked.identityName(identity.identityId);
-    return name ? `${name} (${words})` : words;
+    const words = identity.words.join('-')
+    const name = checked.identityName(identity.identityId)
+    return name ? `${name} (${words})` : words
   }
 
   function vaultLabel({ storeId, shortId }: VaultCheck): string {
-    const name = checked.vaultName(storeId);
-    if (name) return name;
+    const name = checked.vaultName(storeId)
+    if (name) return name
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.FirstRunRestoreVaultItem,
       replacements: { id: shortId },
-    };
-    return vault.t(request);
+    }
+    return vault.t(request)
   }
 
   function outcomeLabel(outcome: IdentityCheckOutcome): string {
     switch (outcome) {
-      case "opens":
-        return vault.t(I18N_KEYS.AccessCheckOpens);
-      case "vaultsOnly":
-        return vault.t(I18N_KEYS.AccessCheckOpensVaultsOnly);
-      case "doesNotOpen":
-        return vault.t(I18N_KEYS.AccessCheckDoesNotOpen);
+      case 'opens':
+        return vault.t(I18N_KEYS.AccessCheckOpens)
+      case 'vaultsOnly':
+        return vault.t(I18N_KEYS.AccessCheckOpensVaultsOnly)
+      case 'doesNotOpen':
+        return vault.t(I18N_KEYS.AccessCheckDoesNotOpen)
     }
   }
 
   /** One report's outcome for one identity. */
   type CellRequest = {
-    report: CredentialCheckReport;
-    identityId: string;
-  };
+    report: CredentialCheckReport
+    identityId: string
+  }
 
   function cell({ report, identityId }: CellRequest): IdentityCheckOutcome {
     const found = report.identities.find(
       (identity) => identity.identityId === identityId,
-    );
-    return found ? found.outcome : "doesNotOpen";
+    )
+    return found ? found.outcome : 'doesNotOpen'
   }
 </script>
 
@@ -175,11 +175,11 @@ check opened it.
                   data-outcome={outcome}
                 >
                   <span
-                    class={outcome === "opens"
-                      ? "nk-tag nk-tag-success"
-                      : outcome === "vaultsOnly"
-                        ? "nk-tag nk-tag-warning"
-                        : "nk-tag"}>{outcomeLabel(outcome)}</span
+                    class={outcome === 'opens'
+                      ? 'nk-tag nk-tag-success'
+                      : outcome === 'vaultsOnly'
+                        ? 'nk-tag nk-tag-warning'
+                        : 'nk-tag'}>{outcomeLabel(outcome)}</span
                   >
                 </td>
               {/each}

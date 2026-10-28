@@ -7,14 +7,14 @@ Opened from the extension, the connect route shows this same screen: the
 person creates or joins here, never in the extension.
 -->
 <script lang="ts">
-  import { VaultWorkspaceActions } from "$lib/vault/ui";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { ArrowRight, MonitorSmartphone, RefreshCw } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
-  import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { FirstRunStage } from "$lib/vault/state/ui.svelte";
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { ArrowRight, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
+  import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
@@ -25,40 +25,40 @@ person creates or joins here, never in the extension.
     onConnectStorage,
     onUseEnrollmentCode,
   }: {
-    vault: VaultState;
-    isBusy: boolean;
-    isVerifying: boolean;
+    vault: VaultState
+    isBusy: boolean
+    isVerifying: boolean
     /** The paired extension supplies the device key; no passkey is asked. */
-    usesExtensionDeviceIdentity?: boolean;
-    onCreate: (label: string) => void | Promise<void>;
-    onConnectStorage: () => void;
+    usesExtensionDeviceIdentity?: boolean
+    onCreate: (label: string) => void | Promise<void>
+    onConnectStorage: () => void
     /** Present when this app can join an identity with an enrollment code. */
-    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
-  } = $props();
+    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>
+  } = $props()
 
-  let name = $state("");
+  let name = $state('')
   /** Joining an identity this person already has replaces the screen. */
-  let joining = $state(false);
+  let joining = $state(false)
   // An empty field takes the suggested name, so one click is enough.
   const vaultName = $derived(
     name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
-  );
+  )
 
   const extensionHint = $derived.by(() => {
     const hintRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.LoginLandingCreateSimpleWithExtension,
       replacements: { name: vaultName },
-    };
-    return vault.t(hintRequest);
-  });
+    }
+    return vault.t(hintRequest)
+  })
 
   async function create(): Promise<void> {
-    if (isBusy) return;
-    vault.firstRunVaultName = vaultName;
+    if (isBusy) return
+    vault.firstRunVaultName = vaultName
     vault.firstRun = vault.deviceProtectionReady
       ? FirstRunStage.Backup
-      : FirstRunStage.Protect;
-    await onCreate(vaultName);
+      : FirstRunStage.Protect
+    await onCreate(vaultName)
   }
 </script>
 
@@ -88,8 +88,8 @@ person creates or joins here, never in the extension.
     <form
       class="flex flex-col gap-2 sm:flex-row"
       onsubmit={(event) => {
-        event.preventDefault();
-        void create();
+        event.preventDefault()
+        void create()
       }}
     >
       <label class="sr-only" for="first-vault-name">

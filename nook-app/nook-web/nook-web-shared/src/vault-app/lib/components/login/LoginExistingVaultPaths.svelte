@@ -4,12 +4,12 @@ app is the usual path for a second device; restoring from a sync provider is
 the recovery path when no other app is at hand.
 -->
 <script lang="ts">
-  import { VaultWorkspaceActions } from "$lib/vault/ui";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { ArrowRight, Cloud, QrCode } from "@lucide/svelte";
-  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
-  import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { ArrowRight, Cloud, QrCode } from '@lucide/svelte'
+  import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
+  import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
@@ -19,18 +19,18 @@ the recovery path when no other app is at hand.
     onConnectStorage,
     onUseEnrollmentCode,
   }: {
-    vault: VaultState;
-    isBusy: boolean;
-    isVerifying: boolean;
-    restoreDescription: string;
-    onConnectStorage: () => void;
+    vault: VaultState
+    isBusy: boolean
+    isVerifying: boolean
+    restoreDescription: string
+    onConnectStorage: () => void
     /** Present when this app can join an identity with an enrollment code. */
-    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
-  } = $props();
+    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>
+  } = $props()
 
   // The code panel replaces the join button; collapsing it brings the
   // button back.
-  let joinOpen = $state(false);
+  let joinOpen = $state(false)
 </script>
 
 <div class="pt-5 pl-11" data-testid="login-path-cloud">

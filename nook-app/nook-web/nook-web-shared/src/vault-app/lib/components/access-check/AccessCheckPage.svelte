@@ -8,86 +8,86 @@ decrypts in memory only and nothing is saved, imported, or written. The page
 keeps one live action button: preparing a source comes first, then Check.
 -->
 <script lang="ts">
-  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import {
     choose_local_folder_backup_directory,
     type CredentialCheckReport,
     type NookAccessCheckSource,
-  } from "$app-wasm";
-  import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
-  import BackButton from "$lib/components/workspace/BackButton.svelte";
-  import AccessCheckResults from "$lib/components/access-check/AccessCheckResults.svelte";
-  import { Button } from "$lib/components/ui/button";
+  } from '$app-wasm'
+  import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
+  import BackButton from '$lib/components/workspace/BackButton.svelte'
+  import AccessCheckResults from '$lib/components/access-check/AccessCheckResults.svelte'
+  import { Button } from '$lib/components/ui/button'
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from "$lib/components/ui/card";
+  } from '$lib/components/ui/card'
   import {
     GoogleDriveOAuthScope,
     GoogleOAuthPrompt,
     googleOAuthSession,
     type GoogleAccessTokenRequest,
-  } from "$lib/auth/google/oauth";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/auth/google/oauth'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
     type BackupPasswordCheckRequest,
-  } from "$lib/vault/access-check";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  } from '$lib/vault/access-check'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ACCESS_CHECK_SOURCES,
     AccessCheckMethod,
     AccessCheckSourceKind,
     PreparedSourceKind,
     type PreparedSource,
-  } from "$lib/components/access-check/access-check-page";
+  } from '$lib/components/access-check/access-check-page'
 
-  let { vault, onClose }: { vault: VaultState; onClose: () => void } = $props();
+  let { vault, onClose }: { vault: VaultState; onClose: () => void } = $props()
 
   let sourceKind = $state<AccessCheckSourceKind>(
     AccessCheckSourceKind.ThisBrowser,
-  );
-  let driveToken = $state("");
-  let folderName = $state("");
-  let folderHandle = $state("");
-  let method = $state<AccessCheckMethod>(AccessCheckMethod.Passkey);
-  let password = $state("");
-  let busy = $state(false);
-  let reports = $state<CredentialCheckReport[]>([]);
+  )
+  let driveToken = $state('')
+  let folderName = $state('')
+  let folderHandle = $state('')
+  let method = $state<AccessCheckMethod>(AccessCheckMethod.Passkey)
+  let password = $state('')
+  let busy = $state(false)
+  let reports = $state<CredentialCheckReport[]>([])
 
   const prepared = $derived.by((): PreparedSource => {
     switch (sourceKind) {
       case AccessCheckSourceKind.ThisBrowser: {
-        const browser: NookAccessCheckSource = { kind: "thisBrowser" };
-        return ready(browser);
+        const browser: NookAccessCheckSource = { kind: 'thisBrowser' }
+        return ready(browser)
       }
       case AccessCheckSourceKind.GoogleDrive: {
-        if (!driveToken) return { kind: PreparedSourceKind.Pending };
+        if (!driveToken) return { kind: PreparedSourceKind.Pending }
         const drive: NookAccessCheckSource = {
-          kind: "googleDrive",
+          kind: 'googleDrive',
           accessToken: driveToken,
-        };
-        return ready(drive);
+        }
+        return ready(drive)
       }
       case AccessCheckSourceKind.LocalFolder: {
-        if (!folderHandle) return { kind: PreparedSourceKind.Pending };
+        if (!folderHandle) return { kind: PreparedSourceKind.Pending }
         const folder: NookAccessCheckSource = {
-          kind: "localFolder",
+          kind: 'localFolder',
           handleId: folderHandle,
-        };
-        return ready(folder);
+        }
+        return ready(folder)
       }
       case AccessCheckSourceKind.CurrentProvider:
         return {
           kind: PreparedSourceKind.Ready,
           target: { kind: AccessCheckTargetKind.CurrentProvider },
-        };
+        }
     }
-  });
+  })
 
   // The connected provider is a source once a session holds its credentials.
   const sources = $derived(
@@ -96,95 +96,95 @@ keeps one live action button: preparing a source comes first, then Check.
         kind !== AccessCheckSourceKind.CurrentProvider ||
         (vault.isAuthenticated && vault.storageMode !== LOCAL_PROVIDER_TYPE),
     ),
-  );
+  )
 
   function ready(source: NookAccessCheckSource): PreparedSource {
     return {
       kind: PreparedSourceKind.Ready,
       target: { kind: AccessCheckTargetKind.Source, source },
-    };
+    }
   }
   const canCheck = $derived(
     prepared.kind === PreparedSourceKind.Ready &&
       !busy &&
       (method === AccessCheckMethod.Passkey || password.length > 0),
-  );
+  )
 
   function chooseSource(kind: AccessCheckSourceKind): void {
-    sourceKind = kind;
-    reports = [];
+    sourceKind = kind
+    reports = []
   }
 
   async function signInToDrive(): Promise<void> {
-    busy = true;
+    busy = true
     try {
       const request: GoogleAccessTokenRequest = {
         prompt: GoogleOAuthPrompt.Default,
         scope: GoogleDriveOAuthScope.VaultFolder,
-        accountHint: "",
+        accountHint: '',
         includeGrantedScopes: true,
-      };
-      const tokens = await googleOAuthSession.requestGoogleAccessToken(request);
-      if (tokens.isErr()) {
-        vault.errorMsg = vault.t(tokens.error.translationKey);
-        return;
       }
-      driveToken = tokens.value.accessToken;
+      const tokens = await googleOAuthSession.requestGoogleAccessToken(request)
+      if (tokens.isErr()) {
+        vault.errorMsg = vault.t(tokens.error.translationKey)
+        return
+      }
+      driveToken = tokens.value.accessToken
     } finally {
-      busy = false;
+      busy = false
     }
   }
 
   async function chooseFolder(): Promise<void> {
-    busy = true;
+    busy = true
     try {
-      const folder = await choose_local_folder_backup_directory();
-      folderName = folder.directoryName;
-      folderHandle = folder.handleId;
+      const folder = await choose_local_folder_backup_directory()
+      folderName = folder.directoryName
+      folderHandle = folder.handleId
     } catch {
-      vault.errorMsg = vault.t(I18N_KEYS.AccessCheckFailed);
+      vault.errorMsg = vault.t(I18N_KEYS.AccessCheckFailed)
     } finally {
-      busy = false;
+      busy = false
     }
   }
 
   async function check(): Promise<void> {
-    if (prepared.kind !== PreparedSourceKind.Ready) return;
-    busy = true;
-    vault.errorMsg = "";
+    if (prepared.kind !== PreparedSourceKind.Ready) return
+    busy = true
+    vault.errorMsg = ''
     try {
-      const actions = new AccessCheckActions(vault);
-      let checked: Awaited<ReturnType<AccessCheckActions["checkPasskey"]>>;
+      const actions = new AccessCheckActions(vault)
+      let checked: Awaited<ReturnType<AccessCheckActions['checkPasskey']>>
       if (method === AccessCheckMethod.Passkey) {
-        checked = await actions.checkPasskey(prepared.target);
+        checked = await actions.checkPasskey(prepared.target)
       } else {
         const request: BackupPasswordCheckRequest = {
           target: prepared.target,
           password,
-        };
-        checked = await actions.checkBackupPassword(request);
-        password = "";
+        }
+        checked = await actions.checkBackupPassword(request)
+        password = ''
       }
       if (checked.isErr()) {
-        vault.errorMsg = vault.t(checked.error.translationKey);
-        return;
+        vault.errorMsg = vault.t(checked.error.translationKey)
+        return
       }
-      reports = [...reports, checked.value];
+      reports = [...reports, checked.value]
     } finally {
-      busy = false;
+      busy = false
     }
   }
 
   function sourceLabel(kind: AccessCheckSourceKind): string {
     switch (kind) {
       case AccessCheckSourceKind.ThisBrowser:
-        return vault.t(I18N_KEYS.AccessCheckSourceBrowser);
+        return vault.t(I18N_KEYS.AccessCheckSourceBrowser)
       case AccessCheckSourceKind.GoogleDrive:
-        return vault.t(I18N_KEYS.AccessCheckSourceDrive);
+        return vault.t(I18N_KEYS.AccessCheckSourceDrive)
       case AccessCheckSourceKind.LocalFolder:
-        return vault.t(I18N_KEYS.AccessCheckSourceFolder);
+        return vault.t(I18N_KEYS.AccessCheckSourceFolder)
       case AccessCheckSourceKind.CurrentProvider:
-        return vault.t(I18N_KEYS.AccessCheckSourceCurrentProvider);
+        return vault.t(I18N_KEYS.AccessCheckSourceCurrentProvider)
     }
   }
 </script>

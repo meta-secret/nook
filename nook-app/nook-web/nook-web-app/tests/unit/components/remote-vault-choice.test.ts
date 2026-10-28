@@ -119,13 +119,11 @@ describe('Recovery vault choice', () => {
         .getAllByTestId('provider-identity')
         .map((card) => card.dataset.standing),
     ).toEqual(['unchecked', 'unchecked'])
-    // Each identity that does not open yet offers to find its passkey.
-    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
-      2,
-    )
-    const [findPasskey] = view.getAllByTestId('provider-identity-find-passkey')
-    if (!findPasskey) return
-    await fireEvent.click(findPasskey)
+    // Each identity is recovered once, whatever number of vaults it files.
+    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(2)
+    const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
+    if (!whichPasskey) throw new Error('no passkey check offered')
+    await fireEvent.click(whichPasskey)
 
     await vi.waitFor(() =>
       expect(
@@ -141,26 +139,24 @@ describe('Recovery vault choice', () => {
     const [familyCard] = view.getAllByTestId('provider-identity')
     expect(familyCard?.textContent).toContain('Family')
     expect(familyCard?.textContent).toContain('Groceries')
-    // Only the identity no passkey opened still offers its actions.
-    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
-      1,
-    )
-    const [recoverFamily, recoverOther] = view.getAllByTestId(
-      'remote-vault-choice-item',
-    )
-    expect(recoverFamily?.textContent).toContain(
+    // The identity no passkey opened offers its hunt and a join instead.
+    expect(view.getAllByTestId('provider-identity-ask-to-join')).toHaveLength(1)
+    const [recover] = view.getAllByTestId('remote-vault-choice-item')
+    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(1)
+    expect(recover?.textContent).toContain(
       vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey),
     )
-    expect(recoverOther?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsRecover),
-    )
-    if (!recoverFamily) return
-    await fireEvent.click(recoverFamily)
+    if (!recover) throw new Error('no recovery offered')
+    await fireEvent.click(recover)
     expect(onChoose).toHaveBeenCalledWith('store_familyvault')
   })
 
   test('asking to join an identity this browser has no key for explains the join code', async () => {
-    const { view } = renderChoice([choice(strangerVault)])
+    const locked: ProviderVaultSummary = {
+      ...choice(strangerVault),
+      actions: [],
+    }
+    const { view } = renderChoice([locked])
 
     await fireEvent.click(view.getByTestId('provider-identity-ask-to-join'))
 

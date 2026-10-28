@@ -1,58 +1,68 @@
 <!--
-A recovery provider that holds several vaults: the user picks the one to
-recover here from what the provider tells about each, grouped by the identity
-that files them. Passkeys belong to identities, so "Find the passkey that
-opens it" proves, by decrypting in memory, which identity a passkey opens;
-its vaults then recover with that passkey. An identity no passkey opens can
-only be joined with a code from one of its devices.
+A recovery provider that holds several vaults, grouped by the identity that
+files them. Passkeys belong to identities, so the identity is what the user
+recovers: recovering one of its vaults with its passkey opens the identity,
+and its other vaults then sync through it. "Which passkey opens it?" proves,
+by decrypting in memory, which identity a passkey opens. An identity this
+browser cannot recover can only be joined with a code from one of its
+devices. A vault a backup password opens is recovered on its own.
 -->
 <script lang="ts">
-  import { ArrowRight, KeyRound, RefreshCw, UserPlus } from "@lucide/svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import type { CredentialCheckReport, ProviderVaultSummary } from "$app-wasm";
-  import { Button } from "$lib/components/ui/button";
-  import ProviderVaultList from "$lib/components/provider-vaults/ProviderVaultList.svelte";
+  import { ArrowRight, KeyRound, RefreshCw, UserPlus } from '@lucide/svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import type { CredentialCheckReport, ProviderVaultSummary } from '$app-wasm'
+  import { Button } from '$lib/components/ui/button'
+  import ProviderVaultList from '$lib/components/provider-vaults/ProviderVaultList.svelte'
   import {
+    identityLocked,
     IdentityStandingKind,
     IdentityStandings,
+    type IdentityStanding,
     type ProviderIdentityGroup,
-  } from "$lib/components/provider-vaults/provider-identity-groups";
-  import type { VaultState } from "$lib/vault.svelte";
+  } from '$lib/components/provider-vaults/provider-identity-groups'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     AccessCheckActions,
     recoveryCheckTarget,
-  } from "$lib/vault/access-check";
+  } from '$lib/vault/access-check'
 
   let {
     vault,
     busy,
     onChoose,
   }: {
-    vault: VaultState;
-    busy: boolean;
-    onChoose: (storeId: string) => void | Promise<void>;
-  } = $props();
+    vault: VaultState
+    busy: boolean
+    onChoose: (storeId: string) => void | Promise<void>
+  } = $props()
 
-  let checks = $state<CredentialCheckReport[]>([]);
-  let checking = $state(false);
-  let joinHelp = $state<string[]>([]);
-  const standings = $derived(new IdentityStandings(checks));
+  let checks = $state<CredentialCheckReport[]>([])
+  let checking = $state(false)
+  let joinHelp = $state<string[]>([])
+  const standings = $derived(new IdentityStandings(checks))
+  const disabled = $derived(busy || checking)
 
   /** One passkey tap: which listed identity it opens. */
   async function checkPasskey(): Promise<void> {
-    checking = true;
+    checking = true
     try {
       const result = await new AccessCheckActions(vault).checkPasskey(
         recoveryCheckTarget(vault),
-      );
+      )
       if (result.isErr()) {
-        vault.errorMsg = vault.t(result.error.translationKey);
-        return;
+        vault.errorMsg = vault.t(result.error.translationKey)
+        return
       }
-      checks = [...checks, result.value];
+      checks = [...checks, result.value]
     } finally {
-      checking = false;
+      checking = false
     }
+  }
+
+  function recoverLabel(standing: IdentityStanding): string {
+    return standing.kind === IdentityStandingKind.OpenedByPasskey
+      ? vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey)
+      : vault.t(I18N_KEYS.ProviderVaultsRecoverIdentity)
   }
 </script>
 
@@ -66,36 +76,71 @@ only be joined with a code from one of its devices.
     </p>
   </div>
   <ProviderVaultList {vault} vaults={vault.remoteVaultChoices} {checks}>
-    {#snippet identityActions(group: ProviderIdentityGroup)}
-      <div class="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="provider-identity-find-passkey"
-          disabled={busy || checking}
-          onclick={() => void checkPasskey()}
-        >
-          {#if checking}
-            <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
-            {vault.t(I18N_KEYS.AccessCheckChecking)}
-          {:else}
-            <KeyRound class="size-4" aria-hidden="true" />
-            {vault.t(I18N_KEYS.AccessCheckFindPasskey)}
+    {#snippet identityActions(
+      group: ProviderIdentityGroup,
+      standing: IdentityStanding,
+    )}
+      {#each standings.openingVaults(group) as opening (opening.storeId)}
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button
+            type="button"
+            size="sm"
+            data-testid="remote-vault-choice-item"
+            data-store-id={opening.storeId}
+            {disabled}
+            onclick={() => void onChoose(opening.storeId)}
+          >
+            {recoverLabel(standing)}
+            <ArrowRight class="size-4" aria-hidden="true" />
+          </Button>
+          {#if standing.kind === IdentityStandingKind.Unchecked}
+            <button
+              type="button"
+              class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+              data-testid="provider-identity-find-passkey"
+              {disabled}
+              onclick={() => void checkPasskey()}
+            >
+              {checking
+                ? vault.t(I18N_KEYS.AccessCheckChecking)
+                : vault.t(I18N_KEYS.AccessCheckWhichPasskey)}
+            </button>
           {/if}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="provider-identity-ask-to-join"
-          disabled={busy || checking}
-          onclick={() => (joinHelp = [...joinHelp, group.identity.identityId])}
-        >
-          <UserPlus class="size-4" aria-hidden="true" />
-          {vault.t(I18N_KEYS.AccessCheckAskToJoin)}
-        </Button>
-      </div>
+        </div>
+      {:else}
+        {#if identityLocked(standing)}
+          <div class="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="provider-identity-find-passkey"
+              {disabled}
+              onclick={() => void checkPasskey()}
+            >
+              {#if checking}
+                <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+                {vault.t(I18N_KEYS.AccessCheckChecking)}
+              {:else}
+                <KeyRound class="size-4" aria-hidden="true" />
+                {vault.t(I18N_KEYS.AccessCheckFindPasskey)}
+              {/if}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="provider-identity-ask-to-join"
+              {disabled}
+              onclick={() =>
+                (joinHelp = [...joinHelp, group.identity.identityId])}
+            >
+              <UserPlus class="size-4" aria-hidden="true" />
+              {vault.t(I18N_KEYS.AccessCheckAskToJoin)}
+            </Button>
+          </div>
+        {/if}
+      {/each}
       {#if joinHelp.includes(group.identity.identityId)}
         <p
           class="text-xs text-pretty text-muted-foreground"
@@ -107,22 +152,18 @@ only be joined with a code from one of its devices.
       {/if}
     {/snippet}
     {#snippet action(summary: ProviderVaultSummary)}
-      <!-- Only a vault this device may open can be recovered here. -->
-      {#if summary.actions.includes("importSeparately")}
-        <Button
+      <!-- A backup password opens one vault on its own. -->
+      {#if standings.vaultActions(summary).includes('importSeparately')}
+        <button
           type="button"
-          size="sm"
-          variant="outline"
-          data-testid="remote-vault-choice-item"
-          disabled={busy || checking}
+          class="text-xs text-foreground underline underline-offset-4 disabled:opacity-60"
+          data-testid="remote-vault-choice-password"
+          data-store-id={summary.storeId}
+          {disabled}
           onclick={() => void onChoose(summary.storeId)}
         >
-          {standings.of(summary.identity).kind ===
-          IdentityStandingKind.OpenedByPasskey
-            ? vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey)
-            : vault.t(I18N_KEYS.ProviderVaultsRecover)}
-          <ArrowRight class="size-4" aria-hidden="true" />
-        </Button>
+          {vault.t(I18N_KEYS.AccessCheckRecoverWithPassword)}
+        </button>
       {/if}
     {/snippet}
   </ProviderVaultList>

@@ -281,9 +281,13 @@ without any key:
 
 The standing needs no tap when this browser is already one of the
 identity's devices: `ProviderIdentityLog` reports `thisBrowser` when the
-app key held here is a member of the log. An identity that does not open yet
-offers two actions:
+app key held here is a member of the log. The card carries the identity's
+actions; its vaults are quiet one-line rows (name or short id, events, last
+activity).
 
+- **Recover this identity:** one choice per identity, whatever number of
+  vaults it files. Recovering one of its vaults with its passkey opens the
+  identity, and its other vaults then sync through it.
 - **Find the passkey that opens it:** runs `check_passkey_access`. One
   passkey assertion re-derives an app key in memory. The identity opens only
   when its log lists that key and its key envelope decrypts; then every vault
@@ -293,8 +297,9 @@ offers two actions:
   access request to the identity's devices. A browser with no identity is
   told to add itself with a join code from one of those devices.
 
-A backup password opens one vault, never an identity. "Check a backup
-password" opens a small form that tries the password on every listed vault;
+Only what opens a single vault is a choice on its row: a backup password,
+a granted key, merging into or replacing the open vault. A backup password
+opens one vault, never an identity. "Check a backup password" opens a small form that tries the password on every listed vault;
 while it is open, its Check is the only live action. The recovery list for a
 local folder, iCloud, or GitHub offers the same identity actions, read
 through the provider staged for the recovery. Results live on the page only;
@@ -322,8 +327,9 @@ unlock screen link to it, and so does Manage → Sync providers.
 
 Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
 device can open it (`ProviderVaultAccess`) and what the user may do
-(`ProviderVaultAction`, recommended action first). The row shows the access
-and one line that says what it means.
+(`ProviderVaultAction`, recommended action first). The web folds the
+accesses into the identity's standing and moves recovering and requesting
+access onto the identity; the row keeps only the single-vault actions.
 
 - **Syncs:** the identity in use holds the vault. It syncs through the
   identity mount; the row offers no action.

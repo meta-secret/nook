@@ -1,39 +1,42 @@
 <!--
 What the signed-in Google account's Nook folder already holds, shown in
-Connect & sync before anything is written. Rust lists every vault, decides
-how this device can open it and which actions it allows, recommended action
-first: a vault this device can open replaces an empty open vault, merges
-into one with records, or comes in beside it; a vault nothing here opens
-can only be requested from a device that can. Connect & sync itself only
-adds this identity's vaults beside these. Each row offers its actions as
-choices beside Connect & sync, and the step has one action button that runs
-the chosen one, so two actions are never live at once.
+Connect & sync before anything is written, grouped by identity. Passkeys
+belong to identities, so recovering and joining are choices on the identity:
+recovering one of its vaults with its passkey opens the identity and its
+other vaults sync through it; an identity nothing here opens offers to find
+its passkey or to ask to join. Only what opens a single vault (a backup
+password, a granted key, merging into or replacing the open vault) is a
+choice on that vault. Connect & sync itself only adds this identity's vaults
+beside these. The step has one action button that runs the chosen choice,
+so two actions are never live at once.
 -->
 <script lang="ts">
-  import { untrack, type Snippet } from "svelte";
-  import { KeyRound, RefreshCw, UserPlus } from "@lucide/svelte";
+  import { untrack, type Snippet } from 'svelte'
+  import { KeyRound, RefreshCw, UserPlus } from '@lucide/svelte'
   import type {
     CredentialCheckReport,
     EmptyVaultReplacement,
     ProviderVaultAction,
     ProviderVaultSummary,
-  } from "$app-wasm";
-  import { I18N_KEYS, type I18nKey } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
-  import ProviderVaultList from "$lib/components/provider-vaults/ProviderVaultList.svelte";
+  } from '$app-wasm'
+  import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
+  import { Button } from '$lib/components/ui/button'
+  import ProviderVaultList from '$lib/components/provider-vaults/ProviderVaultList.svelte'
   import {
+    identityLocked,
     IdentityStandingKind,
     IdentityStandings,
+    type IdentityStanding,
     type ProviderIdentityGroup,
-  } from "$lib/components/provider-vaults/provider-identity-groups";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { VaultOAuthActions } from "$lib/vault/oauth";
+  } from '$lib/components/provider-vaults/provider-identity-groups'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { VaultOAuthActions } from '$lib/vault/oauth'
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
     type AccessCheckTarget,
     type BackupPasswordCheckRequest,
-  } from "$lib/vault/access-check";
+  } from '$lib/vault/access-check'
   import {
     ProviderVaultAccessActions,
     ProviderVaultActions,
@@ -42,7 +45,7 @@ the chosen one, so two actions are never live at once.
     type GoogleDriveVaultTarget,
     type ProviderVaultMerge,
     type ProviderVaultOpening,
-  } from "$lib/vault/provider-vaults";
+  } from '$lib/vault/provider-vaults'
   import {
     DriveVaultChoiceKind,
     DriveVaultInventoryKind,
@@ -53,7 +56,7 @@ the chosen one, so two actions are never live at once.
     type EmptyVaultConfirmation,
     type EmptyVaultConfirmationRequest,
     type MergeConfirmation,
-  } from "$lib/components/provider-vaults/drive-vault-inventory";
+  } from '$lib/components/provider-vaults/drive-vault-inventory'
 
   let {
     vault,
@@ -63,121 +66,123 @@ the chosen one, so two actions are never live at once.
     onReplace,
     connectButton,
   }: {
-    vault: VaultState;
+    vault: VaultState
     /** The signed-in account's token; a new sign-in lists again. */
-    accessToken: string;
-    busy: boolean;
-    onImport: (storeId: string) => void | Promise<void>;
-    onReplace: (swap: EmptyVaultSwap) => void | Promise<void>;
+    accessToken: string
+    busy: boolean
+    onImport: (storeId: string) => void | Promise<void>
+    onReplace: (swap: EmptyVaultSwap) => void | Promise<void>
     /** The step's Connect & sync button, shown while that is the choice;
      * true holds it disabled while the listing loads or an action runs. */
-    connectButton: Snippet<[boolean]>;
-  } = $props();
+    connectButton: Snippet<[boolean]>
+  } = $props()
 
-  let choice = $state<DriveVaultChoice>({ kind: DriveVaultChoiceKind.Connect });
+  let choice = $state<DriveVaultChoice>({ kind: DriveVaultChoiceKind.Connect })
 
   let inventory = $state<DriveVaultInventory>({
     kind: DriveVaultInventoryKind.Loading,
-  });
+  })
   let replacement = $state<EmptyVaultConfirmation>({
     kind: EmptyVaultConfirmationKind.Closed,
-  });
-  let merge = $state<MergeConfirmation>({ kind: MergeConfirmationKind.Closed });
-  let mergePassword = $state("");
+  })
+  let merge = $state<MergeConfirmation>({ kind: MergeConfirmationKind.Closed })
+  let mergePassword = $state('')
   // Passkey checks of this listing, newest last; they live with the page.
-  let checks = $state<CredentialCheckReport[]>([]);
-  let checking = $state(false);
+  let checks = $state<CredentialCheckReport[]>([])
+  let checking = $state(false)
   // The backup password form is open; it holds the step's other buttons.
-  let passwordCheckOpen = $state(false);
-  let checkedPassword = $state("");
+  let passwordCheckOpen = $state(false)
+  let checkedPassword = $state('')
   // Identities whose join needs a code from one of their devices.
-  let joinHelp = $state<string[]>([]);
-  let working = $state(false);
-  const disabled = $derived(busy || working);
+  let joinHelp = $state<string[]>([])
+  let working = $state(false)
+  const disabled = $derived(busy || working)
   /** A replace or merge confirmation, or the backup password form, carries
    * its own confirm button. */
   const confirming = $derived(
     replacement.kind === EmptyVaultConfirmationKind.Confirming ||
       merge.kind === MergeConfirmationKind.Confirming ||
       passwordCheckOpen,
-  );
+  )
+
+  const standings = $derived(new IdentityStandings(checks))
 
   /** The chosen row action as `<store id>/<action>`; empty for Connect & sync. */
   const chosenOption = $derived(
     choice.kind === DriveVaultChoiceKind.VaultAction
       ? `${choice.summary.storeId}/${choice.action}`
-      : "",
-  );
+      : '',
+  )
 
   async function load(token: string): Promise<void> {
-    inventory = { kind: DriveVaultInventoryKind.Loading };
-    choice = { kind: DriveVaultChoiceKind.Connect };
-    replacement = { kind: EmptyVaultConfirmationKind.Closed };
-    merge = { kind: MergeConfirmationKind.Closed };
-    checks = [];
+    inventory = { kind: DriveVaultInventoryKind.Loading }
+    choice = { kind: DriveVaultChoiceKind.Connect }
+    replacement = { kind: EmptyVaultConfirmationKind.Closed }
+    merge = { kind: MergeConfirmationKind.Closed }
+    checks = []
     const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
       new ProviderVaultActions(vault).localVaultOccupancy(),
-    );
-    if (token !== accessToken) return;
+    )
+    if (token !== accessToken) return
     if (listed.isErr()) {
-      inventory = { kind: DriveVaultInventoryKind.Failed };
-      vault.errorMsg = vault.t(listed.error.translationKey);
-      return;
+      inventory = { kind: DriveVaultInventoryKind.Failed }
+      vault.errorMsg = vault.t(listed.error.translationKey)
+      return
     }
-    inventory = { kind: DriveVaultInventoryKind.Loaded, listing: listed.value };
+    inventory = { kind: DriveVaultInventoryKind.Loaded, listing: listed.value }
   }
 
   $effect(() => {
-    const token = accessToken;
+    const token = accessToken
     // Only a new sign-in lists again, not the state the listing reads.
-    untrack(() => void load(token));
-  });
+    untrack(() => void load(token))
+  })
 
   /** One passkey tap checks which listed vaults it opens, by decrypting
    * them; the names it opens show for this page only. */
   async function checkPasskey(): Promise<void> {
-    checking = true;
+    checking = true
     try {
       const checked = await new AccessCheckActions(vault).checkPasskey(
         driveTarget(),
-      );
+      )
       if (checked.isErr()) {
-        vault.errorMsg = vault.t(checked.error.translationKey);
-        return;
+        vault.errorMsg = vault.t(checked.error.translationKey)
+        return
       }
-      checks = [...checks, checked.value];
+      checks = [...checks, checked.value]
     } finally {
-      checking = false;
+      checking = false
     }
   }
 
   function driveTarget(): AccessCheckTarget {
     return {
       kind: AccessCheckTargetKind.Source,
-      source: { kind: "googleDrive", accessToken },
-    };
+      source: { kind: 'googleDrive', accessToken },
+    }
   }
 
   /** Check which listed vaults a typed backup password opens. */
   async function checkBackupPassword(): Promise<void> {
-    checking = true;
+    checking = true
     try {
       const request: BackupPasswordCheckRequest = {
         target: driveTarget(),
         password: checkedPassword,
-      };
+      }
       const checked = await new AccessCheckActions(vault).checkBackupPassword(
         request,
-      );
-      checkedPassword = "";
+      )
+      checkedPassword = ''
       if (checked.isErr()) {
-        vault.errorMsg = vault.t(checked.error.translationKey);
-        return;
+        vault.errorMsg = vault.t(checked.error.translationKey)
+        return
       }
-      checks = [...checks, checked.value];
-      passwordCheckOpen = false;
+      checks = [...checks, checked.value]
+      passwordCheckOpen = false
     } finally {
-      checking = false;
+      checking = false
     }
   }
 
@@ -186,56 +191,84 @@ the chosen one, so two actions are never live at once.
    * devices; a browser with no identity needs a join code from one of them. */
   async function askToJoin(group: ProviderIdentityGroup): Promise<void> {
     const requestable = group.vaults.filter((summary) =>
-      summary.actions.includes("requestAccess"),
-    );
+      summary.actions.includes('requestAccess'),
+    )
     if (requestable.length === 0) {
-      joinHelp = [...joinHelp, group.identity.identityId];
-      return;
+      joinHelp = [...joinHelp, group.identity.identityId]
+      return
     }
-    for (const summary of requestable) await requestAccess(summary.storeId);
-    vault.successMsg = vault.t(I18N_KEYS.AccessCheckJoinRequested);
+    for (const summary of requestable) await requestAccess(summary.storeId)
+    vault.successMsg = vault.t(I18N_KEYS.AccessCheckJoinRequested)
   }
 
   /** One action offered on one vault's row. */
   type RowAction = {
-    action: ProviderVaultAction;
-    summary: ProviderVaultSummary;
-  };
+    action: ProviderVaultAction
+    summary: ProviderVaultSummary
+  }
 
   /** A row's action label; importing a vault a checked passkey or backup
    * password opens is recovering it with that check. */
   function rowActionLabel({ action, summary }: RowAction): string {
     switch (action) {
-      case "importSeparately": {
-        const standings = new IdentityStandings(checks);
-        const standing = standings.of(summary.identity);
-        if (standing.kind === IdentityStandingKind.OpenedByPasskey)
-          return vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey);
+      case 'importSeparately': {
         if (standings.opensWithBackupPassword(summary.storeId))
-          return vault.t(I18N_KEYS.AccessCheckRecoverWithPassword);
-        return actionLabel(action);
+          return vault.t(I18N_KEYS.AccessCheckRecoverWithPassword)
+        if (standings.vaultActions(summary).includes(action))
+          return actionLabel(action)
+        const group: ProviderIdentityGroup = {
+          identity: summary.identity,
+          vaults: [summary],
+        }
+        return identityOpenLabel(standings.of(group))
       }
-      case "useInstead":
-      case "mergeIntoOpen":
-      case "requestAccess":
-        return actionLabel(action);
+      case 'useInstead':
+      case 'mergeIntoOpen':
+      case 'requestAccess':
+        return actionLabel(action)
     }
   }
 
+  /** Choose recovering the identity through one of its vaults. */
+  function chooseOpening(opening: ProviderVaultSummary): void {
+    for (const action of opening.actions)
+      switch (action) {
+        case 'importSeparately':
+          choice = {
+            kind: DriveVaultChoiceKind.VaultAction,
+            action,
+            summary: opening,
+          }
+          return
+        case 'useInstead':
+        case 'mergeIntoOpen':
+        case 'requestAccess':
+          continue
+      }
+  }
+
+  /** Opening an identity: with the passkey a check found, or by trying
+   * the user's passkey when the recovery runs. */
+  function identityOpenLabel(standing: IdentityStanding): string {
+    return standing.kind === IdentityStandingKind.OpenedByPasskey
+      ? vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey)
+      : vault.t(I18N_KEYS.ProviderVaultsRecoverIdentity)
+  }
+
   function confirmReplacement(request: EmptyVaultConfirmationRequest): void {
-    merge = { kind: MergeConfirmationKind.Closed };
-    replacement = { kind: EmptyVaultConfirmationKind.Confirming, ...request };
+    merge = { kind: MergeConfirmationKind.Closed }
+    replacement = { kind: EmptyVaultConfirmationKind.Confirming, ...request }
   }
 
   function confirmMerge(summary: ProviderVaultSummary): void {
-    replacement = { kind: EmptyVaultConfirmationKind.Closed };
-    mergePassword = "";
+    replacement = { kind: EmptyVaultConfirmationKind.Closed }
+    mergePassword = ''
     merge = {
       kind: MergeConfirmationKind.Confirming,
       storeId: summary.storeId,
       shortId: summary.shortId,
-      needsPassword: summary.access.state === "backupPassword",
-    };
+      needsPassword: summary.access.state === 'backupPassword',
+    }
   }
 
   /** Translate the lines that name one vault by its short id. */
@@ -244,110 +277,110 @@ the chosen one, so two actions are never live at once.
       const request: Parameters<typeof vault.t>[0] = {
         key,
         replacements: { id: shortId },
-      };
-      return vault.t(request);
-    };
+      }
+      return vault.t(request)
+    }
   }
 
   async function runMerge(): Promise<void> {
-    if (merge.kind !== MergeConfirmationKind.Confirming) return;
-    const { storeId, shortId, needsPassword } = merge;
+    if (merge.kind !== MergeConfirmationKind.Confirming) return
+    const { storeId, shortId, needsPassword } = merge
     const opening: ProviderVaultOpening = needsPassword
       ? {
           kind: ProviderVaultOpeningKind.BackupPassword,
           password: mergePassword,
         }
-      : { kind: ProviderVaultOpeningKind.GrantedKey };
-    working = true;
+      : { kind: ProviderVaultOpeningKind.GrantedKey }
+    working = true
     try {
-      const request: ProviderVaultMerge = { accessToken, storeId, opening };
+      const request: ProviderVaultMerge = { accessToken, storeId, opening }
       const merged = await new ProviderVaultAccessActions(vault).mergeIntoOpen(
         request,
-      );
+      )
       if (merged.isErr()) {
-        vault.errorMsg = idText(shortId)(I18N_KEYS.ProviderVaultsMergeFailed);
-        return;
+        vault.errorMsg = idText(shortId)(I18N_KEYS.ProviderVaultsMergeFailed)
+        return
       }
-      merge = { kind: MergeConfirmationKind.Closed };
-      mergePassword = "";
+      merge = { kind: MergeConfirmationKind.Closed }
+      mergePassword = ''
     } finally {
-      working = false;
+      working = false
     }
   }
 
   async function requestAccess(storeId: string): Promise<void> {
-    working = true;
+    working = true
     try {
-      const target: GoogleDriveVaultTarget = { accessToken, storeId };
+      const target: GoogleDriveVaultTarget = { accessToken, storeId }
       const requested = await new ProviderVaultAccessActions(
         vault,
-      ).requestAccess(target);
+      ).requestAccess(target)
       if (requested.isErr()) {
-        vault.errorMsg = vault.t(I18N_KEYS.ProviderVaultsRequestFailed);
-        return;
+        vault.errorMsg = vault.t(I18N_KEYS.ProviderVaultsRequestFailed)
+        return
       }
-      await load(accessToken);
+      await load(accessToken)
     } finally {
-      working = false;
+      working = false
     }
   }
 
   /** One action button pressed on one vault's row. */
   type VaultActionPress = {
-    action: ProviderVaultAction;
-    summary: ProviderVaultSummary;
-    offer: EmptyVaultReplacement;
-  };
+    action: ProviderVaultAction
+    summary: ProviderVaultSummary
+    offer: EmptyVaultReplacement
+  }
 
   function runAction({ action, summary, offer }: VaultActionPress): void {
     switch (action) {
-      case "useInstead": {
-        if (offer.state !== "offered") return;
+      case 'useInstead': {
+        if (offer.state !== 'offered') return
         const request: EmptyVaultConfirmationRequest = {
           swap: {
             emptyStoreId: offer.emptyStoreId,
             replacementStoreId: summary.storeId,
           },
           shortId: summary.shortId,
-        };
-        confirmReplacement(request);
-        return;
+        }
+        confirmReplacement(request)
+        return
       }
-      case "mergeIntoOpen":
-        confirmMerge(summary);
-        return;
-      case "importSeparately":
-        void onImport(summary.storeId);
-        return;
-      case "requestAccess":
-        void requestAccess(summary.storeId);
-        return;
+      case 'mergeIntoOpen':
+        confirmMerge(summary)
+        return
+      case 'importSeparately':
+        void onImport(summary.storeId)
+        return
+      case 'requestAccess':
+        void requestAccess(summary.storeId)
+        return
     }
   }
 
   function actionTestId(action: ProviderVaultAction): string {
     switch (action) {
-      case "useInstead":
-        return "provider-vault-use-instead";
-      case "mergeIntoOpen":
-        return "provider-vault-merge";
-      case "importSeparately":
-        return "provider-vault-import";
-      case "requestAccess":
-        return "provider-vault-request-access";
+      case 'useInstead':
+        return 'provider-vault-use-instead'
+      case 'mergeIntoOpen':
+        return 'provider-vault-merge'
+      case 'importSeparately':
+        return 'provider-vault-import'
+      case 'requestAccess':
+        return 'provider-vault-request-access'
     }
   }
 
   function actionLabel(action: ProviderVaultAction): string {
     switch (action) {
-      case "useInstead":
-        return vault.t(I18N_KEYS.ProviderVaultsUseInstead);
-      case "mergeIntoOpen":
-        return vault.t(I18N_KEYS.ProviderVaultsMergeIntoOpen);
-      case "importSeparately":
-        return vault.t(I18N_KEYS.ProviderVaultsImportSeparately);
-      case "requestAccess":
-        return vault.t(I18N_KEYS.ProviderVaultsRequestAccess);
+      case 'useInstead':
+        return vault.t(I18N_KEYS.ProviderVaultsUseInstead)
+      case 'mergeIntoOpen':
+        return vault.t(I18N_KEYS.ProviderVaultsMergeIntoOpen)
+      case 'importSeparately':
+        return vault.t(I18N_KEYS.ProviderVaultsImportSeparately)
+      case 'requestAccess':
+        return vault.t(I18N_KEYS.ProviderVaultsRequestAccess)
     }
   }
 </script>
@@ -361,14 +394,14 @@ the chosen one, so two actions are never live at once.
     <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
     {vault.t(I18N_KEYS.ProviderVaultsLoading)}
   </p>
-{:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === "absent"}
+{:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === 'absent'}
   <p
     class="text-[11px] text-pretty text-muted-foreground"
     data-testid="google-folder-on-connect"
   >
     {vault.t(I18N_KEYS.ProviderVaultsRootAbsent)}
   </p>
-{:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === "found"}
+{:else if inventory.kind === DriveVaultInventoryKind.Loaded && inventory.listing.root === 'found'}
   {@const listing = inventory.listing.listing}
   {#if listing.vaults.length === 0}
     <p
@@ -400,8 +433,8 @@ the chosen one, so two actions are never live at once.
           class="nk-banner space-y-2 px-4 py-3"
           data-testid="provider-vault-password-check"
           onsubmit={(event) => {
-            event.preventDefault();
-            void checkBackupPassword();
+            event.preventDefault()
+            void checkBackupPassword()
           }}
         >
           <label class="grid gap-1 text-xs text-muted-foreground">
@@ -423,8 +456,8 @@ the chosen one, so two actions are never live at once.
               data-testid="provider-vault-password-check-cancel"
               disabled={checking}
               onclick={() => {
-                passwordCheckOpen = false;
-                checkedPassword = "";
+                passwordCheckOpen = false
+                checkedPassword = ''
               }}
             >
               {vault.t(I18N_KEYS.CommonCancel)}
@@ -452,36 +485,76 @@ the chosen one, so two actions are never live at once.
         </p>
       {/if}
       <ProviderVaultList {vault} vaults={listing.vaults} {checks}>
-        {#snippet identityActions(group: ProviderIdentityGroup)}
-          <div class="flex flex-wrap gap-2">
-            <Button
+        {#snippet identityActions(
+          group: ProviderIdentityGroup,
+          standing: IdentityStanding,
+        )}
+          {#each standings.openingVaults(group) as opening (opening.storeId)}
+            <!-- Recovering one vault with the identity's passkey opens the
+                 identity; its other vaults then sync through it. -->
+            <label
+              class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
+            >
+              <input
+                class="size-4"
+                type="radio"
+                name="provider-vault-choice"
+                data-testid="provider-identity-open"
+                data-store-id={opening.storeId}
+                {disabled}
+                checked={chosenOption === `${opening.storeId}/importSeparately`}
+                onchange={() => chooseOpening(opening)}
+              />
+              {identityOpenLabel(standing)}
+            </label>
+          {:else}
+            {#if identityLocked(standing)}
+              <div class="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="provider-identity-find-passkey"
+                  disabled={disabled || checking || passwordCheckOpen}
+                  onclick={() => void checkPasskey()}
+                >
+                  {#if checking}
+                    <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
+                    {vault.t(I18N_KEYS.AccessCheckChecking)}
+                  {:else}
+                    <KeyRound class="size-4" aria-hidden="true" />
+                    {vault.t(I18N_KEYS.AccessCheckFindPasskey)}
+                  {/if}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="provider-identity-ask-to-join"
+                  disabled={disabled || checking || passwordCheckOpen}
+                  onclick={() => void askToJoin(group)}
+                >
+                  <UserPlus class="size-4" aria-hidden="true" />
+                  {vault.t(I18N_KEYS.AccessCheckAskToJoin)}
+                </Button>
+              </div>
+            {/if}
+          {/each}
+          {#if standing.kind === IdentityStandingKind.Unchecked && standings.openingVaults(group).length > 0}
+            <!-- Recovering tries the passkey; checking first tells which
+                 passkey opens the identity, without changing anything. -->
+            <button
               type="button"
-              size="sm"
-              variant="outline"
+              class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
               data-testid="provider-identity-find-passkey"
               disabled={disabled || checking || passwordCheckOpen}
               onclick={() => void checkPasskey()}
             >
-              {#if checking}
-                <RefreshCw class="size-4 animate-spin" aria-hidden="true" />
-                {vault.t(I18N_KEYS.AccessCheckChecking)}
-              {:else}
-                <KeyRound class="size-4" aria-hidden="true" />
-                {vault.t(I18N_KEYS.AccessCheckFindPasskey)}
-              {/if}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="provider-identity-ask-to-join"
-              disabled={disabled || checking || passwordCheckOpen}
-              onclick={() => void askToJoin(group)}
-            >
-              <UserPlus class="size-4" aria-hidden="true" />
-              {vault.t(I18N_KEYS.AccessCheckAskToJoin)}
-            </Button>
-          </div>
+              {checking
+                ? vault.t(I18N_KEYS.AccessCheckChecking)
+                : vault.t(I18N_KEYS.AccessCheckWhichPasskey)}
+            </button>
+          {/if}
           {#if joinHelp.includes(group.identity.identityId)}
             <p
               class="text-xs text-pretty text-muted-foreground"
@@ -493,31 +566,29 @@ the chosen one, so two actions are never live at once.
           {/if}
         {/snippet}
         {#snippet action(summary: ProviderVaultSummary)}
-          <div class="grid gap-1.5" role="radiogroup">
-            {#each summary.actions as action (action)}
-              {@const rowAction: RowAction = { action, summary }}
-              <label
-                class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
-              >
-                <input
-                  class="size-4"
-                  type="radio"
-                  name="provider-vault-choice"
-                  data-testid={actionTestId(action)}
-                  data-store-id={summary.storeId}
-                  {disabled}
-                  checked={chosenOption === `${summary.storeId}/${action}`}
-                  onchange={() =>
-                    (choice = {
-                      kind: DriveVaultChoiceKind.VaultAction,
-                      action,
-                      summary,
-                    })}
-                />
-                {rowActionLabel(rowAction)}
-              </label>
-            {/each}
-          </div>
+          {#each standings.vaultActions(summary) as action (action)}
+            {@const rowAction: RowAction = { action, summary }}
+            <label
+              class="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-foreground"
+            >
+              <input
+                class="size-3.5"
+                type="radio"
+                name="provider-vault-choice"
+                data-testid={actionTestId(action)}
+                data-store-id={summary.storeId}
+                {disabled}
+                checked={chosenOption === `${summary.storeId}/${action}`}
+                onchange={() =>
+                  (choice = {
+                    kind: DriveVaultChoiceKind.VaultAction,
+                    action,
+                    summary,
+                  })}
+              />
+              {rowActionLabel(rowAction)}
+            </label>
+          {/each}
         {/snippet}
       </ProviderVaultList>
       <label
@@ -583,8 +654,8 @@ the chosen one, so two actions are never live at once.
           aria-labelledby="provider-vault-merge-title"
           data-testid="provider-vault-merge-confirm"
           onsubmit={(event) => {
-            event.preventDefault();
-            void runMerge();
+            event.preventDefault()
+            void runMerge()
           }}
         >
           <p
@@ -655,14 +726,14 @@ the chosen one, so two actions are never live at once.
       data-store-id={chosen.summary.storeId}
       disabled={disabled || confirming}
       onclick={() => {
-        if (inventory.kind !== DriveVaultInventoryKind.Loaded) return;
-        if (inventory.listing.root !== "found") return;
+        if (inventory.kind !== DriveVaultInventoryKind.Loaded) return
+        if (inventory.listing.root !== 'found') return
         const press: VaultActionPress = {
           action: chosen.action,
           summary: chosen.summary,
           offer: inventory.listing.listing.replacement,
-        };
-        runAction(press);
+        }
+        runAction(press)
       }}
     >
       {rowActionLabel(chosen)}

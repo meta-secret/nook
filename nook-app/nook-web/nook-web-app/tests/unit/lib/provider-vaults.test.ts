@@ -174,7 +174,9 @@ describe('recovery choice between several vaults', () => {
         replacements: { identity: 'ripple-canvas-orbit' },
       }),
     )
-    await fireEvent.click(view.getByTestId('remote-vault-choice-item'))
+    // A backup password opens this one vault, not its identity.
+    expect(view.queryAllByTestId('remote-vault-choice-item')).toHaveLength(0)
+    await fireEvent.click(view.getByTestId('remote-vault-choice-password'))
     expect(onChoose).toHaveBeenCalledWith(CHOSEN)
   })
 
@@ -205,9 +207,12 @@ describe('recovery choice between several vaults', () => {
       onChoose: vi.fn(),
     })
 
-    expect(view.getByTestId('provider-vault-access').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
-    )
+    // The identity cannot be recovered here; it offers its passkey hunt
+    // and a join instead.
     expect(view.queryAllByTestId('remote-vault-choice-item')).toHaveLength(0)
+    expect(
+      view.getByTestId('provider-identity-standing').textContent,
+    ).toContain(vault.t(I18N_KEYS.AccessCheckIdentityUnchecked))
+    expect(view.getAllByTestId('provider-identity-ask-to-join')).toHaveLength(1)
   })
 })

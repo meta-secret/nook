@@ -108,20 +108,22 @@ test.describe('vaults another identity keeps in the Nook folder', () => {
     // B's keys cannot open A's vault, but its backup password can; with
     // records of its own, B is offered a merge first.
     await expect(row).toHaveAttribute('data-access', 'backupPassword')
-    await expect(row.getByTestId('provider-vault-access')).toHaveText(
-      enLocale.provider_vaults.access_backup_password,
-    )
     await expect(row.getByTestId('provider-vault-use-instead')).toHaveCount(0)
     await expect(row.getByTestId('provider-vault-import')).toBeVisible()
     // A's identity is named by three words, and its public control log on
     // Drive says how many devices and vaults it has; nothing is decrypted.
-    await expect(row.getByTestId('provider-vault-identity')).toHaveText(
+    const identity = deviceB
+      .getByTestId('provider-identity')
+      .filter({ has: row })
+    await expect(identity.getByTestId('provider-vault-identity')).toHaveText(
       /^Identity [a-z]+-[a-z]+-[a-z]+$/,
     )
-    await expect(row.getByTestId('provider-vault-identity-log')).toContainText([
+    await expect(
+      identity.getByTestId('provider-vault-identity-log'),
+    ).toContainText([
       enLocale.provider_vaults.devices.replace('{count}', '1'),
-      /^Newest device added /,
       enLocale.provider_vaults.identity_vaults.replace('{count}', '1'),
+      /^Newest device added /,
     ])
 
     await row.getByTestId('provider-vault-merge').click()
@@ -225,15 +227,16 @@ test.describe('a vault nothing on this device opens', () => {
     const row = deviceB.locator(
       `[data-testid="provider-vault-row"][data-store-id="${vaultA.store_id}"]`,
     )
-    // Nothing here opens it: the row says so and only offers a request.
+    // Nothing here opens it: its identity offers only a passkey hunt and
+    // a join, which requests access to each of its vaults.
     await expect(row).toHaveAttribute('data-access', 'locked')
-    await expect(row.getByTestId('provider-vault-access-hint')).toHaveText(
-      enLocale.provider_vaults.hint_locked,
-    )
     await expect(row.getByTestId('provider-vault-merge')).toHaveCount(0)
     await expect(row.getByTestId('provider-vault-import')).toHaveCount(0)
-    await row.getByTestId('provider-vault-request-access').click()
-    await deviceB.getByTestId('provider-vault-action-btn').click()
+    await deviceB
+      .getByTestId('provider-identity')
+      .filter({ has: row })
+      .getByTestId('provider-identity-ask-to-join')
+      .click()
     await expect(row).toHaveAttribute('data-access', 'requested', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

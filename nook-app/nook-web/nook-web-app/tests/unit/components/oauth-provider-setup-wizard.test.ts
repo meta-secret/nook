@@ -155,7 +155,9 @@ describe('Google Drive provider setup', () => {
     // Vaults are grouped under the identity whose folder files them.
     const [ownIdentity, otherIdentity] =
       view.getAllByTestId('provider-identity')
-    expect(ownIdentity?.dataset.standing).toBe('unchecked')
+    // The identity this browser syncs opens here; the stranger does not.
+    expect(ownIdentity?.dataset.standing).toBe('thisBrowser')
+    expect(otherIdentity?.dataset.standing).toBe('unchecked')
     expect(
       ownIdentity?.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
@@ -198,37 +200,62 @@ describe('Google Drive provider setup', () => {
         '[data-testid="provider-vault-identity-log"]',
       ),
     ).toHaveLength(0)
-    expect(own?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
-    )
     const eventsRequest: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderVaultsEvents,
       replacements: { count: '4' },
     }
     expect(own?.textContent).toContain(vault.t(eventsRequest))
-    // A vault nothing here opens says so and can only be requested.
-    expect(other?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
+    // The identity that opens here needs nothing; the one nothing here
+    // opens offers its passkey hunt and a join, once, on the identity.
+    expect(
+      ownIdentity?.querySelectorAll(
+        '[data-testid="provider-identity-ask-to-join"]',
+      ),
+    ).toHaveLength(0)
+    expect(view.getAllByTestId('provider-identity-ask-to-join')).toHaveLength(1)
+    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
+      1,
     )
-    expect(other?.textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsHintLocked),
+    // Joining is the identity's; no vault row offers a request of its own.
+    expect(view.queryAllByTestId('provider-vault-request-access')).toHaveLength(
+      0,
     )
-    expect(view.getAllByTestId('provider-vault-request-access')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
-    expect(view.queryAllByTestId('provider-vault-use-instead')).toHaveLength(0)
-    // A row's actions are choices; the step has one action button, and it
-    // runs whichever choice is picked.
-    const choice = view.getByTestId('provider-vault-request-access')
-    expect(choice.getAttribute('type')).toBe('radio')
-    const connectChoice = view.getByTestId('provider-vault-choice-connect')
-    expect(connectChoice).toHaveProperty('checked', true)
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
+  })
 
-    await fireEvent.click(choice)
+  test('recovering is a choice on the identity, run by the one action button', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          summary('store_othervault1', { state: 'unchecked' }, [
+            'importSeparately',
+          ]),
+          summary('store_othervault2', { state: 'unchecked' }, [
+            'importSeparately',
+          ]),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const { view, vault } = renderWizard(signedInDrive())
+
+    // Two vaults, one identity: one choice recovers the identity.
+    const open = await view.findByTestId('provider-identity-open')
+    expect(open.getAttribute('type')).toBe('radio')
+    expect(open.closest('label')?.textContent).toContain(
+      vault.t(I18N_KEYS.ProviderVaultsRecoverIdentity),
+    )
+    expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
+    const connectChoice = view.getByTestId('provider-vault-choice-connect')
+    expect(connectChoice).toHaveProperty('checked', true)
+
+    await fireEvent.click(open)
     expect(view.queryAllByTestId('connect-provider-btn')).toHaveLength(0)
     expect(view.getByTestId('provider-vault-action-btn').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsRequestAccess),
+      vault.t(I18N_KEYS.ProviderVaultsRecoverIdentity),
     )
 
     await fireEvent.click(connectChoice)
@@ -390,11 +417,11 @@ describe('Google Drive provider setup', () => {
     expect(
       view.queryAllByTestId('provider-identity-find-passkey'),
     ).toHaveLength(0)
-    // Importing a vault of an opened identity is recovering it with the passkey.
-    const [first] = view.getAllByTestId('provider-vault-import')
-    expect(first?.closest('label')?.textContent).toContain(
-      vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey),
-    )
+    // The opened identity is recovered with the passkey, as one choice.
+    expect(view.queryAllByTestId('provider-vault-import')).toHaveLength(0)
+    expect(
+      view.getByTestId('provider-identity-open').closest('label')?.textContent,
+    ).toContain(vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey))
   })
 
   test('an identity no passkey opens offers the checker again and a join request', async () => {
@@ -647,7 +674,7 @@ describe('Google Drive provider setup', () => {
     expect(onConnect).not.toHaveBeenCalled()
   })
 
-  test('requests access to a vault it cannot open and lists it again', async () => {
+  test('asking to join requests access to each of its vaults and lists again', async () => {
     const list = listVaults({
       root: 'found',
       listing: {
@@ -663,9 +690,8 @@ describe('Google Drive provider setup', () => {
     const { view } = renderWizard(signedInDrive())
 
     await fireEvent.click(
-      await view.findByTestId('provider-vault-request-access'),
+      await view.findByTestId('provider-identity-ask-to-join'),
     )
-    await fireEvent.click(view.getByTestId('provider-vault-action-btn'))
 
     await vi.waitFor(() =>
       expect(request).toHaveBeenCalledWith({

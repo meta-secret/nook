@@ -272,11 +272,15 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('remote-vault-choice-item')).toHaveCount(2)
     expect(await localFolderSnapshot(page)).toEqual(sharedFolder)
 
-    // This browser's passkey belongs to the identity that wrote last.
+    // This browser's passkey belongs to the identity that wrote last;
+    // recovering is a choice on that identity.
     await page
-      .locator(
-        `[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`,
-      )
+      .getByTestId('provider-identity')
+      .filter({
+        has: page.locator(
+          `[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`,
+        ),
+      })
       .getByTestId('remote-vault-choice-item')
       .click()
     await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0)
