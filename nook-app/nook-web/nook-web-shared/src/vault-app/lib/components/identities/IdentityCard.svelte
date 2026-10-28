@@ -455,14 +455,8 @@ panel sits inside the card, which then spans the full row.
             <span
               class="nk-fingerprint"
               title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
+              data-testid="identity-card-words">{card.fingerprint.join('-')}</span
             >
-              {card.fingerprint.slice(0, 2).join(' ')}<span
-                class="hidden sm:inline"
-                >{card.fingerprint.length > 2 ? ' ' : ''}{card.fingerprint
-                  .slice(2)
-                  .join(' ')}</span
-              >
-            </span>
           {/if}
         </div>
       </div>

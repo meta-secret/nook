@@ -268,6 +268,20 @@ describes. No vault is downloaded or decrypted. A vault this browser
 registered is named from its vault registry; every other vault's name is
 encrypted under its own key, so its row shows the short id instead.
 
+Each row names its filing identity by three BIP39 words derived from the
+identity id (`IdentityWords`), the same words the identity card shows. Rust
+also reads that identity's signed, unencrypted control log and shows what it
+already exposes: device count, when the newest device joined, and how many
+vaults the identity keeps (`ProviderIdentityLog`).
+
+A "Show names" text link runs `reveal_google_drive_names`. One passkey
+assertion re-derives this device's app key in memory. If that key is a member
+of a listed identity, its envelopes in the identity log open the identity's
+sealed name and its vaults' keys, and each vault's own log yields its
+encrypted name. The names are shown for this page only; nothing is stored,
+imported, or written. The link commits nothing, so the step keeps one action
+button.
+
 Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
 device can open it (`ProviderVaultAccess`) and what the user may do
 (`ProviderVaultAction`, recommended action first). The row shows the access

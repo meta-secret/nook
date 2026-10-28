@@ -51,6 +51,13 @@ function summary(
       identityId: 'idn_strangerabc',
       shortId: 'stranger',
       name: { state: 'unknown' },
+      words: ['ripple', 'canvas', 'orbit'],
+      log: {
+        state: 'read',
+        devices: 2,
+        newestDevice: { state: 'reported', at: Date.UTC(2026, 9, 27) },
+        vaults: 3,
+      },
     },
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
     lastActivity: { state: 'reported', at: Date.UTC(2024, 2, 1) },
@@ -117,6 +124,8 @@ describe('Google Drive provider setup', () => {
               identityId: 'idn_personalide',
               shortId: 'personal',
               name: { state: 'named', name: 'Personal' },
+              words: ['amber', 'falcon', 'tide'],
+              log: { state: 'absent' },
             },
           },
           summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
@@ -147,15 +156,38 @@ describe('Google Drive provider setup', () => {
         replacements: { identity: 'Personal' },
       }),
     )
+    // An identity this browser does not hold is named by its three words,
+    // and its public control log says how many devices and vaults it has.
     expect(
       other?.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toBe(
       vault.t({
         key: I18N_KEYS.ProviderVaultsFiledUnder,
-        replacements: { identity: 'stranger' },
+        replacements: { identity: 'ripple-canvas-orbit' },
       }),
     )
+    const facts = [
+      ...(other?.querySelectorAll(
+        '[data-testid="provider-vault-identity-log"]',
+      ) ?? []),
+    ].map((line) => line.textContent)
+    expect(facts).toContain(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsDevices,
+        replacements: { count: '2' },
+      }),
+    )
+    expect(facts).toContain(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsIdentityVaults,
+        replacements: { count: '3' },
+      }),
+    )
+    expect(facts).toHaveLength(3)
+    expect(
+      own?.querySelectorAll('[data-testid="provider-vault-identity-log"]'),
+    ).toHaveLength(0)
     expect(own?.textContent).toContain(
       vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
     )
@@ -192,6 +224,79 @@ describe('Google Drive provider setup', () => {
     await fireEvent.click(connectChoice)
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
+  })
+
+  test('a passkey shows the sealed names for this page only', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [summary('store_othervault1', { state: 'unchecked' }, [])],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const reveal = vi
+      .spyOn(VaultOAuthActions.prototype, 'revealGoogleDriveNames')
+      .mockResolvedValue(
+        ok({
+          state: 'revealed',
+          identityId: 'idn_strangerabc',
+          identityName: { state: 'named', name: 'Personal' },
+          vaults: [
+            {
+              storeId: 'store_othervault1',
+              name: { state: 'named', name: 'Family' },
+            },
+          ],
+        }),
+      )
+    const { view, vault } = renderWizard(signedInDrive())
+
+    const row = await view.findByTestId('provider-vault-row')
+    expect(row.textContent).not.toContain('Family')
+    // Showing names is a text link; the step keeps one action button.
+    expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
+    expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
+    expect(view.getByTestId('provider-vault-show-names').className).toContain(
+      'underline',
+    )
+    await fireEvent.click(view.getByTestId('provider-vault-show-names'))
+
+    await vi.waitFor(() => expect(row.textContent).toContain('Family'))
+    expect(reveal).toHaveBeenCalledOnce()
+    expect(
+      row.querySelector('[data-testid="provider-vault-identity"]')?.textContent,
+    ).toBe(
+      vault.t({
+        key: I18N_KEYS.ProviderVaultsFiledUnder,
+        replacements: { identity: 'Personal' },
+      }),
+    )
+    expect(view.getByTestId('provider-vault-names-shown').textContent).toBe(
+      vault.t(I18N_KEYS.ProviderVaultsNamesShown),
+    )
+    expect(view.queryAllByTestId('provider-vault-show-names')).toHaveLength(0)
+  })
+
+  test('a passkey of another identity says so and shows nothing', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [summary('store_othervault1', { state: 'unchecked' }, [])],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'revealGoogleDriveNames',
+    ).mockResolvedValue(ok({ state: 'notAMember' }))
+    const { view } = renderWizard(signedInDrive())
+
+    await fireEvent.click(await view.findByTestId('provider-vault-show-names'))
+
+    await view.findByTestId('provider-vault-names-not-a-member')
+    expect(view.getByTestId('provider-vault-row').textContent).toContain(
+      'othervau',
+    )
   })
 
   test('imports another vault through the existing import flow', async () => {

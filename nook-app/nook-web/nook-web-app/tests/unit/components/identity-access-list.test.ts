@@ -149,6 +149,7 @@ describe('identity key inventory', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
+      words: [],
       label: 'Personal',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [
@@ -210,6 +211,7 @@ describe('identity key inventory', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
+      words: [],
       label: 'Personal',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [
@@ -275,6 +277,7 @@ describe('identity key inventory', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_work',
+      words: [],
       label: 'Work',
       localAccess: NookIdentityLocalAccessKind.OtherInstallation,
       members: [
@@ -312,6 +315,7 @@ describe('identity key inventory', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_work',
+      words: [],
       label: 'Work',
       localAccess: NookIdentityLocalAccessKind.OtherInstallation,
       members: [
@@ -357,6 +361,7 @@ describe('identity key inventory', () => {
     view.protection = DeviceAccessProtectionKind.CompanionSession
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_work',
+      words: [],
       label: 'Work',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [
@@ -393,6 +398,7 @@ describe('identity key inventory', () => {
     view.protection = DeviceAccessProtectionKind.Missing
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
+      words: [],
       label: 'Personal',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [

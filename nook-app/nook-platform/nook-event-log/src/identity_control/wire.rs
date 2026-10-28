@@ -133,6 +133,15 @@ pub struct MemberVaultDek {
     pub members_key_ciphertext: AgeArmoredCiphertext,
 }
 
+/// The identity's name sealed to one member's encryption public key, so a
+/// member's device can show it while the provider sees only ciphertext.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct MemberSealedName {
+    pub app_id: AppId,
+    pub name_ciphertext: AgeArmoredCiphertext,
+}
+
 /// A vault DEK pair at one vault key epoch, wrapped to the member being approved.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -280,6 +289,11 @@ pub enum IdentityControlOperation {
     },
     ProviderUnmounted {
         mount_id: ProviderMountId,
+    },
+    /// The identity's name, sealed to every member. The latest naming
+    /// replaces any earlier one.
+    IdentityNamed {
+        recipients: Vec<MemberSealedName>,
     },
 }
 
@@ -460,6 +474,19 @@ impl IdentityEvent {
                     if apps.len() != recipients.len() || recipients.is_empty() {
                         return Err(EventError::IdentityControlInvalid(
                             "vault DEK recipients must be non-empty and unique".to_owned(),
+                        ));
+                    }
+                }
+                IdentityControlOperation::IdentityNamed { recipients } => {
+                    let mut apps = recipients
+                        .iter()
+                        .map(|recipient| &recipient.app_id)
+                        .collect::<Vec<_>>();
+                    apps.sort();
+                    apps.dedup();
+                    if apps.len() != recipients.len() || recipients.is_empty() {
+                        return Err(EventError::IdentityControlInvalid(
+                            "identity name recipients must be non-empty and unique".to_owned(),
                         ));
                     }
                 }

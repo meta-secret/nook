@@ -87,6 +87,10 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     registration.
 - **`provider-mounted`** and **`provider-unmounted`**
   - Add or remove one credential-free mount record.
+- **`identity-named`**
+  - Holds the identity's name sealed to each active member's X25519
+    encryption key, one recipient per member.
+  - The latest naming replaces any earlier one.
 
 A member tuple carries `app_id`, the X25519 encryption public key, the Ed25519
 signing public key, and a label. Validation derives `app_id` from the
@@ -100,22 +104,30 @@ local folder name. Each installation supplies and seals its own credential
 locally, as [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md)
 requires.
 
-### Keep names out of the signed log
+### Keep names sealed in the signed log
 
 The identity log is signed, not encrypted. Every mount's operator can read it.
 
 - It carries public keys, device labels, wrapped DEKs, vault `store_id`s, and
   credential-free mount targets.
 - Device labels follow the vault log's `join-approved` precedent.
-- Identity names stay in the local directory and in the encrypted enrollment
-  code.
+- The identity name appears only inside `identity-named`, sealed to each
+  active member's encryption key. The local directory and the encrypted
+  enrollment code also carry it.
 - Vault names stay in the local vault registry and encrypted vault metadata.
+- A provider listing may show what the log already exposes: device count,
+  when the newest device joined, and how many vaults the identity keeps.
 
-**Prohibited:** add an `identity-renamed` operation so a rename on one
-installation appears on the others.
+The name in the log wins. A device seals its local name only into a log no
+member has named. Otherwise it re-seals the log's own name for members that
+cannot read it, so devices never overwrite each other's name.
 
-**Required:** keep the identity name local. A provider operator must not learn
-that the identity is called "Work" or that a vault is called "Taxes".
+**Prohibited:** write the identity name, or a vault name, into the log in
+plaintext, or seal it to anything other than member encryption keys.
+
+**Required:** seal the name to every active member. A provider operator must
+not learn that the identity is called "Work" or that a vault is called
+"Taxes".
 
 ### Authorize actors from causal history
 
@@ -264,3 +276,12 @@ Behavior-focused Rust tests cover the log in
 - **Remote namespaces**
   - `vault_and_identity_namespaces_never_overlap`
   - `namespace_ids_are_read_back_from_paths_and_tags`
+- **Sealed identity name: every member reads it, strangers cannot rename it,
+  the log's name wins**
+  - `the_identity_name_is_sealed_to_every_member_including_one_joining`
+  - `the_log_name_wins_and_reaches_every_member` (nook-core)
+- **Provider listing facts and the passkey name reveal** (nook-core)
+  - `a_signed_log_tells_its_devices_their_newest_join_and_its_vaults`
+  - `a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails`
+  - `the_member_passkey_opens_the_identity_and_vault_names_in_memory`
+  - `another_passkey_opens_nothing`

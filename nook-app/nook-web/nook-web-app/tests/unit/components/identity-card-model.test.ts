@@ -48,6 +48,7 @@ function vaultAccess(storeId: string, label: string) {
 
 const personal: IdentityDirectoryEntry = {
   identityId: 'id_3f2a9c0b71de4e58aa10',
+  words: ['amber', 'falcon', 'tide'],
   label: 'Personal',
   localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
   members: [
@@ -62,6 +63,7 @@ const personal: IdentityDirectoryEntry = {
 
 const work: IdentityDirectoryEntry = {
   identityId: 'id_work',
+  words: [],
   label: 'Work',
   localAccess: NookIdentityLocalAccessKind.ThisBrowser,
   members: [member('laptop', DeviceAccessProtectionKind.PinOrPassphrase)],
@@ -70,6 +72,7 @@ const work: IdentityDirectoryEntry = {
 
 const elsewhere: IdentityDirectoryEntry = {
   identityId: 'id_far',
+  words: [],
   label: 'Family',
   localAccess: NookIdentityLocalAccessKind.OtherInstallation,
   members: [],
@@ -174,11 +177,11 @@ describe('identity card projection', () => {
     ])
   })
 
-  test('derives a stable monogram, hue, and grouped fingerprint', () => {
+  test('derives a stable monogram and hue, and shows the identity words', () => {
     const first = new IdentityCardProjection(source(false)).cards[0]
     const again = new IdentityCardProjection(source(true)).cards[0]
     expect(first?.monogram).toBe('P')
-    expect(first?.fingerprint).toEqual(['3F2A', '9C0B', '71DE', '4E58'])
+    expect(first?.fingerprint).toEqual(['amber', 'falcon', 'tide'])
     expect(first?.hue).toBe(again?.hue)
     expect(first?.hue).toBeGreaterThanOrEqual(0)
     expect(first?.hue).toBeLessThan(360)
@@ -345,6 +348,7 @@ describe('IdentityCardProjection current identity vaults', () => {
     // "Personal vault", which belongs to the "Personal" identity.
     const travel: IdentityDirectoryEntry = {
       identityId: 'id_travel',
+      words: [],
       label: 'Travel test',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [member('browser', DeviceAccessProtectionKind.PinOrPassphrase)],

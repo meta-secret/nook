@@ -106,9 +106,6 @@ type IdentityVaultRowsRequest = {
   readonly current: boolean;
 };
 
-const FINGERPRINT_GROUPS = 4;
-const FINGERPRINT_GROUP_SIZE = 4;
-
 /** Stable, decorative hue so each identity keeps its monogram colour. */
 function identityHue(identityId: string): number {
   let hash = 0;
@@ -116,25 +113,6 @@ function identityHue(identityId: string): number {
     hash = (hash * 31 + character.charCodeAt(0)) % 360;
   }
   return hash;
-}
-
-/** Short, grouped identity fingerprint for recognition, not verification. */
-function identityFingerprint(identityId: string): string[] {
-  // Identity ids carry a short type prefix ("id_…"); the fingerprint is the
-  // random part after it.
-  const random = identityId.replace(/^[a-z]+_/, "");
-  const hex = random.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
-  const source =
-    hex.length >= FINGERPRINT_GROUPS * FINGERPRINT_GROUP_SIZE
-      ? hex
-      : random.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
-  const groups: string[] = [];
-  for (let group = 0; group < FINGERPRINT_GROUPS; group += 1) {
-    const start = group * FINGERPRINT_GROUP_SIZE;
-    const chunk = source.slice(start, start + FINGERPRINT_GROUP_SIZE);
-    if (chunk.length > 0) groups.push(chunk);
-  }
-  return groups;
 }
 
 function keyKind(entry: IdentityDirectoryEntry): IdentityKeyKind {
@@ -396,7 +374,7 @@ export class IdentityCardProjection {
       label,
       monogram: (label.length > 0 ? label.charAt(0) : "?").toUpperCase(),
       hue: identityHue(entry.identityId),
-      fingerprint: identityFingerprint(entry.identityId),
+      fingerprint: entry.words,
       keyCount: entry.members.length,
       keyKind: keyKind(entry),
       status: this.status(entry),

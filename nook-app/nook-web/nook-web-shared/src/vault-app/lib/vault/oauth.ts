@@ -37,6 +37,8 @@ import {
   connect_google_drive_vault_folder,
   list_google_drive_vaults,
   nook_provider_root_name,
+  reveal_google_drive_names,
+  type ProviderNameRevealOutcome,
   type LocalVaultOccupancy,
   type NookGoogleDriveVaultListing,
 } from "$app-wasm";
@@ -365,6 +367,32 @@ export class VaultOAuthActions {
         kind: OAuthFailureKind.GoogleVaultListing,
       };
       return err(this.driveRootFailure(report));
+    }
+  }
+
+  /**
+   * Show the listed vaults' names with one passkey tap. Rust re-derives this
+   * device's app key from the passkey and decrypts the names in memory for
+   * this page; nothing is stored or imported.
+   */
+  async revealGoogleDriveNames(): Promise<
+    Result<ProviderNameRevealOutcome, OAuthFailure>
+  > {
+    const state = this.state;
+    if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured)
+      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
+    const accessCredential = oauth_access_token(state.oauthFileDraft.config);
+    if (accessCredential.kind === "missing")
+      return err(new OAuthFailure(OAuthFailureKind.GoogleSharedSignInRequired));
+    try {
+      return ok(
+        await reveal_google_drive_names(
+          accessCredential.token,
+          location.hostname,
+        ),
+      );
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.GoogleNameReveal));
     }
   }
 

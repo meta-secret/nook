@@ -12,7 +12,8 @@
 )]
 
 use nook_core::{
-    EventLogLocation, LocalEventWrite, LocalVaultOccupancy, ProviderVaultObservation,
+    EventLogLocation, EventStorageBytes, IdentityId, ListedIdentityLog, LocalEventWrite,
+    LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents, ProviderVaultObservation,
     ProviderVaultSummary, StorageMode, StoreId, VaultEvent,
 };
 use serde::{Deserialize, Serialize};
@@ -159,6 +160,67 @@ impl NookVaultManager {
         Ok(inspected)
     }
 
+    /// The public control logs of the identities that file the discovered
+    /// vaults, read and verified; nothing in them is encrypted.
+    async fn discovered_identity_logs(
+        &self,
+        source: &DiscoveredVaultSource<'_>,
+        observations: &[ProviderVaultObservation],
+    ) -> Result<Vec<ListedIdentityLog>, NookError> {
+        let mut identities: Vec<IdentityId> = Vec::new();
+        for observation in observations {
+            if !identities.contains(&observation.identity) {
+                identities.push(observation.identity.clone());
+            }
+        }
+        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
+            (source, self.storage.mode)
+        {
+            return Ok(DriveVaultListing {
+                token: &self.storage.access_token,
+                root: self.storage.drive_event_parent.parent()?,
+            }
+            .identity_logs()
+            .await?
+            .into_iter()
+            .filter(|listed| identities.contains(&listed.identity_id))
+            .collect());
+        }
+        let mut logs = Vec::new();
+        for identity_id in identities {
+            let location = EventLogLocation::Identity(identity_id.clone());
+            let events = match source {
+                DiscoveredVaultSource::CurrentProvider => {
+                    let mut events = Vec::new();
+                    for event_id in self.list_provider_event_ids_at(&location).await? {
+                        if let RemoteEventRead::Retrieved(bytes) =
+                            self.read_provider_event_at(&location, &event_id).await?
+                        {
+                            events.push(bytes);
+                        }
+                    }
+                    events
+                }
+                DiscoveredVaultSource::BackupFolder(handle_id) => LocalFolderHandles::current()
+                    .open_folder(handle_id)
+                    .await?
+                    .read_events(&PlacedNamespace::identity_log(identity_id.clone()))
+                    .await?
+                    .into_iter()
+                    .map(|file| EventStorageBytes::from(file.content.into_bytes()))
+                    .collect(),
+            };
+            logs.push(
+                ProviderIdentityLogEvents {
+                    identity_id,
+                    events,
+                }
+                .read()?,
+            );
+        }
+        Ok(logs)
+    }
+
     /// The several vaults a discovery found, summarized and related to the
     /// local identity. Discovery runs with no vault open.
     async fn several_discovered_vaults(
@@ -173,10 +235,13 @@ impl NookVaultManager {
         let inspected = self
             .inspect_discovered_vaults(&source, &held.unheld(&observations), held.app_id.as_ref())
             .await?;
+        let identity_logs = self
+            .discovered_identity_logs(&source, &observations)
+            .await?;
         let listing = LocalVaultClassification {
             local_vault: &LocalVaultOccupancy::Closed,
         }
-        .listing(observations, &held, &inspected);
+        .listing(observations, &held, &inspected, &identity_logs);
         Ok(NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
         })
@@ -339,6 +404,7 @@ mod tests {
             ],
             keys: nook_core::ProviderVaultKeyholding::NONE,
             names: nook_core::BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
