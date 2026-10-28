@@ -20,7 +20,11 @@ import {
   type ShellAliasWrite,
 } from '../nook-web-shared/vite-config.ts'
 
-const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
+const runsOnBun = 'Bun' in globalThis
+const viteBase = runsOnBun ? Bun.env.VITE_BASE : process.env.VITE_BASE
+/** Vite serves HTTPS over HTTP/2, whose Bun server never emits the WebSocket
+ * upgrade, so on Bun HMR gets its own HTTP/1.1 TLS port. */
+const BUN_HTTPS_HMR_PORT = 24678
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
 const sentinelAppUrl =
@@ -291,6 +295,7 @@ export default defineConfig(({ mode }) => {
                 requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
               ),
             },
+            ...(runsOnBun ? { ws: { port: BUN_HTTPS_HMR_PORT } } : {}),
           }
         : {}),
       fs: {

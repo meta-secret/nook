@@ -11,6 +11,7 @@ import type { Subprocess } from 'bun'
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
 const sharedSourceRoot = join(webGroupRoot, 'nook-web-shared', 'src')
+const webAppRoot = join(webGroupRoot, 'nook-web-app')
 const platformRoot = resolve(webGroupRoot, '..', 'nook-platform')
 const repoRoot = resolve(platformRoot, '..', '..')
 const distDir = join(extensionRoot, 'dist')
@@ -91,12 +92,13 @@ const buildExtension = (): Promise<boolean> =>
     }),
   )
 
+// vite.config.ts resolves its entry pages and env files from the working
+// directory, so Vite runs from the web app itself.
 const startVite = (): Subprocess =>
   Bun.spawn(
     [
       'bun',
-      '../nook-web-app/node_modules/.bin/vite',
-      '../nook-web-app',
+      'node_modules/.bin/vite',
       '--host',
       'localhost',
       '--port',
@@ -104,6 +106,7 @@ const startVite = (): Subprocess =>
       '--strictPort',
     ],
     {
+      cwd: webAppRoot,
       stdout: 'inherit',
       stderr: 'inherit',
     },
