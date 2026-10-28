@@ -6,12 +6,12 @@
 //! Deterministic derivation and stored-identity checks, without browser authorization claims.
 use super::protected_identity::DeviceIdentitySecretEncoding;
 use super::{
-    DETERMINISTIC_IDENTITY_HKDF_INFO, DETERMINISTIC_PRF_INPUT_CONTEXT, DeviceIdentity,
-    DeviceIdentitySecret, DeviceKeyProtectionError, DeviceKeyProtectionResult,
-    PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION, PRF_INPUT_LEN, PasskeyAssertionRequest,
-    PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRecoveryRequest,
-    WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
-    WrappedDeviceIdentity,
+    DETERMINISTIC_IDENTITY_HKDF_INFO, DETERMINISTIC_PRF_INPUT_CONTEXT,
+    DETERMINISTIC_SIGNER_HKDF_INFO, DeviceIdentity, DeviceIdentitySecret, DeviceKeyProtectionError,
+    DeviceKeyProtectionResult, PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION, PRF_INPUT_LEN,
+    PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode,
+    PasskeyRecoveryRequest, SigningSeedHex, WebAuthnCredentialId, WebAuthnPrfInput,
+    WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
 };
 use super::{PasskeyRegistration, PasskeyRegistrationInput};
 use hkdf::Hkdf;
@@ -55,6 +55,20 @@ impl WebAuthnUserHandle {
             .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity);
         encoded.zeroize();
         secret
+    }
+
+    /// The member's Ed25519 event-signing seed, from the same PRF output as
+    /// the app key under its own label, so the two keys never coincide.
+    pub fn derive_signing_seed(
+        &self,
+        prf_output: &WebAuthnPrfOutput,
+    ) -> DeviceKeyProtectionResult<SigningSeedHex> {
+        let hkdf = Hkdf::<Sha256>::new(Some(self.as_ref()), prf_output.as_ref());
+        let mut seed_bytes = Zeroizing::new([0u8; 32]);
+        hkdf.expand(DETERMINISTIC_SIGNER_HKDF_INFO, seed_bytes.as_mut())
+            .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
+        let encoded = Zeroizing::new(hex::encode(seed_bytes.as_slice()));
+        SigningSeedHex::parse(&encoded).map_err(|_| DeviceKeyProtectionError::KeyDerivation)
     }
 }
 impl WrappedDeviceIdentity {
@@ -119,7 +133,7 @@ impl PasskeyRecoveryRequest {
 }
 #[cfg(test)]
 mod tests {
-    use super::super::DeviceKeyProtectionVersion;
+    use super::super::{DeviceKeyProtectionVersion, PasskeyMemberSigner};
     use super::*;
 
     #[test]
@@ -187,6 +201,71 @@ mod tests {
         assert_ne!(identity, different_user);
         assert_ne!(identity, different_prf);
         assert!(identity.as_str().starts_with("AGE-SECRET-KEY-"));
+        Ok(())
+    }
+
+    /// One passkey's registration material, created with a fixed PRF output.
+    fn registered(
+        mode: PasskeyDeviceProtectionMode,
+        prf_output: &WebAuthnPrfOutput,
+    ) -> anyhow::Result<PasskeyDeviceIdentityMaterial> {
+        Ok(PasskeyRegistration::new(PasskeyRegistrationInput {
+            credential_id: &WebAuthnCredentialId::try_from(vec![7; 48])?,
+            user_handle: &WebAuthnUserHandle::try_from(vec![8; 32])?,
+            prf_input: &WebAuthnPrfInput::deterministic(),
+            mode,
+        })
+        .complete(prf_output)?)
+    }
+
+    #[test]
+    fn a_passkey_re_derives_the_same_signer_it_created() -> anyhow::Result<()> {
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10; 32])?;
+        let created = registered(PasskeyDeviceProtectionMode::Standard, &prf_output)?;
+
+        let recovered = PasskeyRecoveryRequest::deterministic().recover(&PasskeyRecoveryInput {
+            credential_id: &WebAuthnCredentialId::try_from(vec![7; 48])?,
+            user_handle: &WebAuthnUserHandle::try_from(vec![8; 32])?,
+            prf_output: &prf_output,
+        })?;
+        let other = registered(
+            PasskeyDeviceProtectionMode::Standard,
+            &WebAuthnPrfOutput::try_from(vec![11; 32])?,
+        )?;
+
+        assert!(matches!(created.signer(), PasskeyMemberSigner::Derived(_)));
+        assert_eq!(recovered.signer(), created.signer());
+        assert_eq!(recovered.identity_secret(), created.identity_secret());
+        assert_ne!(other.signer(), created.signer());
+        Ok(())
+    }
+
+    #[test]
+    fn the_signer_label_differs_from_the_app_key_label() -> anyhow::Result<()> {
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10; 32])?;
+        let created = registered(PasskeyDeviceProtectionMode::Standard, &prf_output)?;
+        let PasskeyMemberSigner::Derived(seed) = created.signer() else {
+            anyhow::bail!("a passkey-derived app key has a derived signer");
+        };
+        let (_, app_key_bytes) =
+            bech32::decode(&created.identity_secret().as_str().to_lowercase())?;
+
+        assert_ne!(
+            DETERMINISTIC_SIGNER_HKDF_INFO,
+            DETERMINISTIC_IDENTITY_HKDF_INFO
+        );
+        assert_ne!(hex::decode(seed.as_str())?, app_key_bytes);
+        Ok(())
+    }
+
+    #[test]
+    fn a_passkey_that_wraps_a_random_app_key_leaves_the_signer_to_the_installation()
+    -> anyhow::Result<()> {
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10; 32])?;
+
+        let wrapped = registered(PasskeyDeviceProtectionMode::AntiHacker, &prf_output)?;
+
+        assert_eq!(wrapped.signer(), &PasskeyMemberSigner::Installation);
         Ok(())
     }
 

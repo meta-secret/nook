@@ -9,8 +9,9 @@ use super::protected_identity::{
 };
 use super::{
     DeviceIdentity, DeviceKeyProtectionError, DeviceKeyProtectionResult, PasskeyAssertionRequest,
-    PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRegistrationPrfOutput,
-    WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
+    PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyMemberSigner,
+    PasskeyRegistrationPrfOutput, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
+    WebAuthnUserHandle,
 };
 
 /// Borrowed setup supplied by the existing browser or direct completion boundary.
@@ -143,6 +144,7 @@ impl<'a> PasskeyRegistration<'a> {
         } = self.input;
 
         let identity_secret = user_handle.derive_identity(prf_output)?;
+        let signer = PasskeyMemberSigner::Derived(user_handle.derive_signing_seed(prf_output)?);
         let identity = DeviceIdentity::from_secret_str(&identity_secret)
             .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
         let record = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
@@ -154,6 +156,7 @@ impl<'a> PasskeyRegistration<'a> {
             device_id: identity.device_id().to_string(),
             identity_secret,
             record,
+            signer,
         })
     }
     fn wrap(
@@ -182,6 +185,7 @@ impl<'a> PasskeyRegistration<'a> {
             device_id: identity.device_id().to_string(),
             identity_secret,
             record,
+            signer: PasskeyMemberSigner::Installation,
         })
     }
 }

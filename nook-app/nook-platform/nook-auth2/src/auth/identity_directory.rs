@@ -10,7 +10,8 @@ pub use invitation::{
 };
 pub use recovery::RecoveryRetirement;
 pub use replication::{
-    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
+    ReplicatedIdentityAddition, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedVaultGrant,
 };
 
 /// Membership of an admitted app key in the local identity directory.

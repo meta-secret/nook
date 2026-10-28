@@ -1,6 +1,7 @@
 //! Versioned persistence for independently protected local identity keys.
 
 use crate::IdentityDbWriteIdentityDirectory;
+use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::PreviousLocalSelection;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::StoredStringRecord;
@@ -17,7 +18,7 @@ mod signing;
 use protection::IdentityTransitionAdmission;
 pub(crate) use protection::ProtectedIdentityPublication;
 
-pub(crate) use signing::LocalIdentitySigner;
+pub(crate) use signing::{LocalIdentitySigner, MemberSigner};
 
 pub(crate) const LOCAL_IDENTITY_KEYRING_KEY: &str = "local_identity_keyring_v1";
 
@@ -483,5 +484,81 @@ impl NookDatabase {
             NookError::IndexedDb(format!("Identity rebind completion error: {error:?}"))
         })?;
         Ok(())
+    }
+}
+
+/// Named values required by `NookDatabase::save_added_passkey_identity`.
+pub(crate) struct KeyringDbSaveAddedPasskeyIdentity<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
+    /// The member's signer, derived from the same passkey as the app key.
+    pub(crate) signer: &'a nook_core::SigningSeedHex,
+    pub(crate) identity_id: &'a nook_core::IdentityId,
+    /// The source's identity logs.
+    pub(crate) identity_logs: &'a [nook_core::ProviderIdentityLogEvents],
+}
+
+impl NookDatabase {
+    /// Add an identity a provider holds under its original id: the addition
+    /// is decided against the directory this transaction reads, then the
+    /// identity log, the directory, and the passkey-protected keyring entry
+    /// are written together. A refusal writes nothing.
+    pub(crate) async fn save_added_passkey_identity(
+        request: KeyringDbSaveAddedPasskeyIdentity<'_>,
+    ) -> Result<nook_core::AddedIdentitySelection, NookError> {
+        let KeyringDbSaveAddedPasskeyIdentity {
+            app_key,
+            record,
+            signer,
+            identity_id,
+            identity_logs,
+        } = request;
+        let rexie = NookDatabase::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault", "events"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity add error: {error:?}")))?;
+        let store = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity add store error: {error:?}"))
+        })?;
+        let events_store = transaction.store("events").map_err(|error| {
+            NookError::IndexedDb(format!("Identity add events store error: {error:?}"))
+        })?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let added = nook_core::PasskeyIdentityAddition {
+            app_key,
+            signer,
+            identity_id,
+            identity_logs,
+            directory: &directory,
+        }
+        .add()?;
+        let label = added
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| &identity.identity_id == identity_id)
+            .map(|identity| identity.label.clone())
+            .ok_or_else(|| NookError::Database("Added identity disappeared".to_owned()))?;
+        NookDatabase::put_identity_events(
+            &events_store,
+            IdentityLogWrite {
+                identity_id,
+                events: &added.log.storage_bytes()?,
+            },
+        )
+        .await?;
+        ProtectedIdentityPublication {
+            store: &store,
+            directory: added.directory,
+            app_key,
+            wrapped_app_key: record,
+            label: &label,
+        }
+        .save_added(identity_id.clone(), signer)
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity add completion error: {error:?}"))
+        })?;
+        Ok(added.selection)
     }
 }

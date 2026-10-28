@@ -42,7 +42,8 @@ pub(crate) use handoff::{
     IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
 };
 pub(crate) use keyring::{
-    KeyringDbRebindLocalIdentity, LocalIdentitySigner, ProtectedLocalIdentitySave,
+    KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, LocalIdentitySigner,
+    MemberSigner, ProtectedLocalIdentitySave,
 };
 
 /// Named values required by `NookDatabase::local_keyring_entry_for_app_id_from_store`.
@@ -65,10 +66,29 @@ pub(crate) struct IdentityDbSaveProtectedLocalIdentity<'a> {
 }
 
 /// Named values required by `NookDatabase::save_new_protected_local_identity`.
+#[cfg(test)]
 pub(crate) struct IdentityDbSaveNewProtectedLocalIdentity<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
     pub(crate) label: &'a str,
+}
+
+/// Which local identity a protected app key is saved under.
+#[derive(Clone, Copy)]
+pub(crate) enum ProtectedIdentityTarget {
+    /// The identity the app key already belongs to, or the first one here.
+    Existing,
+    /// A new identity created for it.
+    New,
+}
+
+/// Named values required by `NookDatabase::save_protected_member`.
+pub(crate) struct IdentityDbSaveProtectedMember<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
+    pub(crate) label: &'a str,
+    pub(crate) signer: MemberSigner<'a>,
+    pub(crate) target: ProtectedIdentityTarget,
 }
 
 /// Named values required by `NookDatabase::set_identity_member_signing_public_key`.
@@ -260,31 +280,19 @@ impl NookDatabase {
             record,
             label,
         } = request;
-        let rexie = NookDatabase::open_nook_database().await?;
-        let transaction = rexie
-            .transaction(&["vault"], TransactionMode::ReadWrite)
-            .map_err(|error| NookError::IndexedDb(format!("Identity setup error: {error:?}")))?;
-        let store = transaction.store("vault").map_err(|error| {
-            NookError::IndexedDb(format!("Identity setup store error: {error:?}"))
-        })?;
-        let directory = NookDatabase::load_directory_for_write(&store).await?;
-        let identity = keyring::ProtectedIdentityPublication {
-            store: &store,
-            directory,
+        NookDatabase::save_protected_member(IdentityDbSaveProtectedMember {
             app_key,
-            wrapped_app_key: record,
+            record,
             label,
-        }
-        .save_existing()
-        .await?;
-        transaction.done().await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity setup completion error: {error:?}"))
-        })?;
-        Ok(identity)
+            signer: MemberSigner::Installation,
+            target: ProtectedIdentityTarget::Existing,
+        })
+        .await
     }
-}
 
-impl NookDatabase {
+    /// Test fixture: protect an app key as a new local identity with an
+    /// installation signer.
+    #[cfg(test)]
     pub(crate) async fn save_new_protected_local_identity(
         request: IdentityDbSaveNewProtectedLocalIdentity<'_>,
     ) -> Result<ProtectedLocalIdentitySave, NookError> {
@@ -293,25 +301,53 @@ impl NookDatabase {
             record,
             label,
         } = request;
+        NookDatabase::save_protected_member(IdentityDbSaveProtectedMember {
+            app_key,
+            record,
+            label,
+            signer: MemberSigner::Installation,
+            target: ProtectedIdentityTarget::New,
+        })
+        .await
+    }
+
+    /// Protect an app key under a local identity with the member signer the
+    /// request names, in one transaction.
+    pub(crate) async fn save_protected_member(
+        request: IdentityDbSaveProtectedMember<'_>,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
+        let IdentityDbSaveProtectedMember {
+            app_key,
+            record,
+            label,
+            signer,
+            target,
+        } = request;
+        let context = match target {
+            ProtectedIdentityTarget::Existing => "Identity setup",
+            ProtectedIdentityTarget::New => "Identity creation",
+        };
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
-            .map_err(|error| NookError::IndexedDb(format!("Identity creation error: {error:?}")))?;
-        let store = transaction.store("vault").map_err(|error| {
-            NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
-        })?;
+            .map_err(|error| NookError::IndexedDb(format!("{context} error: {error:?}")))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|error| NookError::IndexedDb(format!("{context} store error: {error:?}")))?;
         let directory = NookDatabase::load_directory_for_write(&store).await?;
-        let identity = keyring::ProtectedIdentityPublication {
+        let publication = keyring::ProtectedIdentityPublication {
             store: &store,
             directory,
             app_key,
             wrapped_app_key: record,
             label,
-        }
-        .save_new()
-        .await?;
+        };
+        let identity = match target {
+            ProtectedIdentityTarget::Existing => publication.save_existing(signer).await?,
+            ProtectedIdentityTarget::New => publication.save_new(signer).await?,
+        };
         transaction.done().await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
+            NookError::IndexedDb(format!("{context} completion error: {error:?}"))
         })?;
         Ok(identity)
     }

@@ -3,6 +3,7 @@
 pub(crate) mod authorized_accounts;
 pub(crate) mod drive_vault_folder;
 pub(crate) mod identity_merge;
+pub(crate) mod passkey_identity_addition;
 pub(crate) mod provider_identity_choice;
 pub(crate) mod provider_identity_join;
 pub(crate) mod provider_identity_log;

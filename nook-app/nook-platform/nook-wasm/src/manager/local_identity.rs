@@ -24,9 +24,11 @@ const DEFAULT_IDENTITY_LABEL: &str = "Personal";
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::IdbPutStringRequest;
-use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::{
+    IdentityDbSaveProtectedMember, MemberSigner, ProtectedIdentityTarget,
+};
 impl NookVaultManager {
     fn finish_local_identity_activation(&mut self, app_id: &nook_core::AppId) {
         self.reset_local_identity_session();
@@ -56,28 +58,25 @@ impl NookVaultManager {
         &mut self,
         app_key: nook_core::AppKey,
         record: &nook_core::WrappedDeviceIdentity,
+        signer: MemberSigner<'_>,
     ) -> Result<String, NookError> {
         let pending_label = self.device.pending_local_identity_label.clone();
-        let saved = match &pending_label {
+        let (label, target) = match &pending_label {
             LocalIdentityCreation::Creating(label) => {
-                NookDatabase::save_new_protected_local_identity(
-                    IdentityDbSaveNewProtectedLocalIdentity {
-                        app_key: &app_key,
-                        record,
-                        label,
-                    },
-                )
-                .await?
+                (label.as_str(), ProtectedIdentityTarget::New)
             }
             LocalIdentityCreation::ExistingIdentity => {
-                NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
-                    app_key: &app_key,
-                    record,
-                    label: DEFAULT_IDENTITY_LABEL,
-                })
-                .await?
+                (DEFAULT_IDENTITY_LABEL, ProtectedIdentityTarget::Existing)
             }
         };
+        let saved = NookDatabase::save_protected_member(IdentityDbSaveProtectedMember {
+            app_key: &app_key,
+            record,
+            label,
+            signer,
+            target,
+        })
+        .await?;
         if !saved.identity.has_app_id(app_key.app_id()) {
             return Err(NookError::Database(
                 "Persisted local identity does not own its app key".to_owned(),

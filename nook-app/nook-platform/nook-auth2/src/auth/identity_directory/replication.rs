@@ -5,11 +5,14 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::{IdentityDirectory, IdentityDirectoryRejection, IdentitySelection};
+use super::{
+    AppKeyIdentityMembership, IdentityDirectory, IdentityDirectoryRejection, IdentitySelection,
+};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, IdentityId, IdentityMember, IdentityMemberKeyBinding,
-    IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope, StoreId,
+    IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope, MemberLabelState,
+    StoreId,
 };
 
 /// This installation's envelopes for one vault at the vault's current epoch.
@@ -35,6 +38,14 @@ pub struct ReplicatedIdentityMembership<'a> {
 pub struct ReplicatedIdentityAdoption<'a> {
     pub local_identity_id: &'a IdentityId,
     pub replicated_identity_id: &'a IdentityId,
+}
+
+/// A replicated identity whose log lists this installation's app key, added
+/// under the identity's own id.
+pub struct ReplicatedIdentityAddition<'a> {
+    /// The identity's name on this installation.
+    pub label: &'a str,
+    pub membership: ReplicatedIdentityMembership<'a>,
 }
 
 impl IdentityRecord {
@@ -239,6 +250,62 @@ impl IdentityDirectory {
             }),
         }
     }
+
+    /// Add a replicated identity beside the identities already here, under
+    /// its own id, with its members and this installation's DEK grants. The
+    /// identity in use stays selected; when none is, the added one is. An
+    /// identity already here, or an app key another local identity holds,
+    /// adds nothing.
+    pub fn add_replicated_identity(
+        self,
+        request: &ReplicatedIdentityAddition<'_>,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        let mut candidate = self.clone();
+        let added: MultiDeviceResult<()> = (|| {
+            let membership = &request.membership;
+            if candidate
+                .identities
+                .iter()
+                .any(|record| &record.identity_id == membership.identity_id)
+            {
+                return Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal {
+                    identity_id: membership.identity_id.to_string(),
+                });
+            }
+            if let AppKeyIdentityMembership::Enrolled(identity_id) =
+                candidate.identity_for_app_key(membership.app_key)?
+            {
+                return Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity {
+                    identity_id: identity_id.to_string(),
+                });
+            }
+            let label = request.label.trim();
+            if label.is_empty() {
+                return Err(MultiDeviceError::IdentityLabelEmpty);
+            }
+            // The record starts as this app key's own and takes the
+            // replicated identity's id, as adoption renames one.
+            let mut record = IdentityRecord::create_with_app_key(
+                label,
+                membership.app_key,
+                MemberLabelState::Unnamed,
+            )?;
+            record.identity_id = membership.identity_id.clone();
+            record.apply_replicated_membership(membership)?;
+            candidate.identities.push(record);
+            if candidate.selection == IdentitySelection::Empty {
+                candidate.selection = IdentitySelection::Selected(membership.identity_id.clone());
+            }
+            candidate.validate()
+        })();
+        match added {
+            Ok(()) => Ok(candidate),
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -429,6 +496,134 @@ mod tests {
         assert!(matches!(
             duplicate.map_err(IdentityDirectoryRejection::into_cause),
             Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal { .. })
+        ));
+        Ok(())
+    }
+
+    /// A replicated identity listing `app` beside a phone, with one vault.
+    fn addition<'a>(
+        identity_id: &'a IdentityId,
+        app: &'a AppKey,
+        phone: &AppKey,
+        vault: (&StoreId, &VaultKeys),
+    ) -> anyhow::Result<ReplicatedIdentityAddition<'a>> {
+        let (store_id, keys) = vault;
+        Ok(ReplicatedIdentityAddition {
+            label: "Family",
+            membership: ReplicatedIdentityMembership {
+                identity_id,
+                app_key: app,
+                members: vec![member(app, "Laptop"), member(phone, "Phone")],
+                revoked: Vec::new(),
+                own_grants: vec![grant(app, store_id, keys)?],
+                removed_vaults: Vec::new(),
+            },
+        })
+    }
+
+    #[test]
+    fn a_replicated_identity_is_added_beside_the_one_in_use_under_its_own_id() -> anyhow::Result<()>
+    {
+        let personal_key = AppKey::generate()?;
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &personal_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let personal = created.identity_id;
+        let family = IdentityId::generate()?;
+        let laptop = AppKey::generate()?;
+        let phone = AppKey::generate()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+
+        let directory = created.directory.add_replicated_identity(&addition(
+            &family,
+            &laptop,
+            &phone,
+            (&store_id, &keys),
+        )?)?;
+
+        assert_eq!(directory.selected()?.identity_id, personal);
+        let added = directory
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == family)
+            .ok_or_else(|| anyhow::anyhow!("the identity is added under its own id"))?;
+        assert_eq!(added.label, "Family");
+        assert!(added.has_app_id(laptop.app_id()) && added.has_app_id(phone.app_id()));
+        assert_eq!(
+            directory.open_vault_dek(IdentityVaultKeyOpening {
+                app_key: &laptop,
+                store_id,
+            })?,
+            keys
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_identity_added_to_an_empty_directory_is_the_one_in_use() -> anyhow::Result<()> {
+        let family = IdentityId::generate()?;
+        let laptop = AppKey::generate()?;
+        let keys = VaultKeys::generate()?;
+
+        let directory = IdentityDirectory::empty().add_replicated_identity(&addition(
+            &family,
+            &laptop,
+            &AppKey::generate()?,
+            (&StoreId::generate()?, &keys),
+        )?)?;
+
+        assert_eq!(directory.selected()?.identity_id, family);
+        Ok(())
+    }
+
+    #[test]
+    fn an_identity_already_here_or_a_key_another_identity_holds_adds_nothing() -> anyhow::Result<()>
+    {
+        let personal_key = AppKey::generate()?;
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &personal_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let family = IdentityId::generate()?;
+        let laptop = AppKey::generate()?;
+        let phone = AppKey::generate()?;
+        let keys = VaultKeys::generate()?;
+        let directory = created.directory.add_replicated_identity(&addition(
+            &family,
+            &laptop,
+            &phone,
+            (&StoreId::generate()?, &keys),
+        )?)?;
+
+        let again = directory.clone().add_replicated_identity(&addition(
+            &family,
+            &laptop,
+            &phone,
+            (&StoreId::generate()?, &keys),
+        )?);
+        let Err(again) = again else {
+            anyhow::bail!("the same identity was added twice");
+        };
+        assert_eq!(again.directory, directory);
+        assert!(matches!(
+            again.cause,
+            MultiDeviceError::ReplicatedIdentityAlreadyLocal { .. }
+        ));
+
+        let other = IdentityId::generate()?;
+        let held = directory.clone().add_replicated_identity(&addition(
+            &other,
+            &personal_key,
+            &phone,
+            (&StoreId::generate()?, &keys),
+        )?);
+        assert!(matches!(
+            held.map_err(IdentityDirectoryRejection::into_cause),
+            Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. })
         ));
         Ok(())
     }

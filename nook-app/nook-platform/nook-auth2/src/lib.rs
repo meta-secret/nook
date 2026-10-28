@@ -52,8 +52,8 @@ mod wire;
 pub use auth::device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyIdentityUnlock, PasskeyProtectionInput, PasskeyRecordMetadata, PasskeyRecoveryInput,
-    PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
+    PasskeyIdentityUnlock, PasskeyMemberSigner, PasskeyProtectionInput, PasskeyRecordMetadata,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
     PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
     WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
     WrappedDeviceIdentity,
@@ -81,8 +81,9 @@ pub use auth::identity_directory::{
     IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
     IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
     IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentitySelection,
-    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant, StagedIdentityRebase,
+    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition,
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
+    StagedIdentityRebase,
 };
 
 pub use auth::local_identity_keyring::{

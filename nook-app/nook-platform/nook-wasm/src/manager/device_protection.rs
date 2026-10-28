@@ -18,6 +18,7 @@ use crate::NookDatabase;
 use crate::manager::session::ExtensionHandoffState;
 use crate::passkey_browser::PasskeyPrfEvaluation;
 use crate::storage::identity_record::HandoffAuthorization;
+use crate::storage::identity_record::MemberSigner;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
 use crate::storage::identity_record::{
@@ -804,7 +805,7 @@ impl NookVaultManager {
                 self.device_identity()?
             };
             let record = DeviceIdentityProtection::new(&identity.secret_string()).with_pin(&pin)?;
-            self.persist_and_adopt_local_identity(identity, &record)
+            self.persist_and_adopt_local_identity(identity, &record, MemberSigner::Installation)
                 .await?;
             Ok(())
         }

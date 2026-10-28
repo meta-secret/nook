@@ -308,6 +308,29 @@ A synced passkey has provider availability, not one asserted laptop location.
 A synced passkey may unlock an installation's wrapped app key.
 It does not copy the app private key between installations.
 
+A passkey-derived member derives its event signer from the passkey too.
+
+- **Derivation**
+  - The PRF output yields the app key and the Ed25519 signing seed through
+    HKDF-SHA256, each under its own label.
+  - Both stay in memory; the keyring stores the signing seed sealed to the
+    app key, as for any member.
+- **Creation**
+  - Every passkey-derived member signs with its derived signer, so the
+    identity log lists a signer the passkey can re-derive.
+  - A PIN member, or a passkey-wrapped random app key, keeps its own
+    installation signer. One signer per app key keeps a revoked
+    installation's signatures revoked.
+- **Restoration**
+  - The passkey restores its member on another browser: app key and signer.
+  - A member whose listed signer the passkey does not derive is not restored.
+
+**Prohibited:** mint a random signer for a passkey-derived member, or reuse
+the app-key HKDF label for its signer.
+
+**Required:** derive the signer from the same PRF output under its own label,
+and refuse a restoration whose listed signer differs.
+
 Target shape: fresh random locally wrapped app key per installation.
 Deterministic passkey-derived app keys remain a compatibility boundary and
 must not define the target model.
