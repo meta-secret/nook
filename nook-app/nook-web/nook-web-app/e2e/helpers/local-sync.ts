@@ -15,11 +15,7 @@ import {
   type E2eOauthSyncProvider,
 } from './auth-providers'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
-import {
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  UI_TIMEOUT_MS,
-  sleep,
-} from './environment'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, sleep } from './environment'
 import {
   flushRemoteEventsToSyncProviders,
   type GithubE2eTarget,
@@ -28,6 +24,7 @@ import {
   assertVaultReady,
   dismissSyncConflictIfVisible,
   ensureLoginLocalUnlockReady,
+  expectLoginGateAfterLoad,
   invokeInitializedVaultProviderReload,
   unlockVaultOnLogin,
   waitForStableLocalVaultState,
@@ -516,9 +513,7 @@ export async function reloadUnlockLocalVaultWithSync(
 
   await keepVaultIdleLockDisabled(page)
   try {
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await expect(
       page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
@@ -650,9 +645,7 @@ export async function reloadUnlockWithSyncProvider(
   // A one-shot stop can therefore run too early and let the 2.5s e2e timeout
   // lock the vault while provider loading is still in progress.
   await keepVaultIdleLockDisabled(page)
-  await expect(page.getByTestId('login-gate')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await expectLoginGateAfterLoad(page)
   await ensureLoginLocalUnlockReady(page)
   if (opts?.password) {
     const unlockRequest: { password: string; entryLabel?: string } = {

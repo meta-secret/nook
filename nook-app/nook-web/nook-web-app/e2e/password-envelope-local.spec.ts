@@ -36,6 +36,7 @@ import {
   wipeDeviceIdentity,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openVaultPage,
+  expectLoginGateAfterLoad,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -114,9 +115,7 @@ test.describe('vault password envelope (local)', () => {
     // Simulate lost device keys: wipe identity from nook_db but keep providers.
     await wipeDeviceIdentity(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await expect(
       page
         .getByTestId('identity-vault-row')

@@ -13,6 +13,7 @@ import {
   unlockWithCardPassword,
   waitForPersistedAppLog,
   wipeDeviceIdentity,
+  expectLoginGateAfterLoad,
 } from './helpers'
 
 test.describe('login unlock flow (local-first)', () => {
@@ -32,9 +33,7 @@ test.describe('login unlock flow (local-first)', () => {
 
     await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     const card = page.getByTestId('identity-card').first()
     await expect(card.getByTestId('identity-vault-row')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -156,9 +155,7 @@ test.describe('login unlock flow (local-first)', () => {
 
     await wipeDeviceIdentity(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await expect
       .poll(() =>
         page.evaluate(() =>

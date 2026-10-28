@@ -11,11 +11,11 @@ import {
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   storePlaintextGithubPat,
-  UI_TIMEOUT_MS,
   unselectedAuthProviderSeedScope,
   waitForAuthProvidersE2eHook,
   waitForStorageChainIdle,
   waitForVaultSyncIdle,
+  expectLoginGateAfterLoad,
 } from './helpers'
 import { AUTH_PROVIDER_HOOK_READ_FAILED } from './helpers/auth-providers'
 
@@ -24,9 +24,7 @@ test.describe('sync provider credential encryption', () => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
   })
 
   test('saveAuthProviders seals credentials in IndexedDB and load decrypts them', async ({

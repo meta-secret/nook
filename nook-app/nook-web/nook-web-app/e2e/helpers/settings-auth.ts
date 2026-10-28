@@ -473,6 +473,15 @@ export async function waitForVaultInitialized(page: Page) {
     .toBe(true)
 }
 
+/** After a page load the engine starts before any screen; the login gate is
+ * then a UI step, bounded like one. */
+export async function expectLoginGateAfterLoad(page: Page) {
+  await waitForVaultInitialized(page)
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /**
  * Authorize the wrapped device identity after an explicit or idle lock.
  * A locked hub unlocks from a vault row: the identity's passkey, then the
