@@ -21,8 +21,11 @@ export class KeyFlow {
   provider = $state('Google Drive')
   /** The remote identity the user is acting on. */
   chosen = $state<IdentityFixture>(work)
-  /** Remote identities joined and kept separate. */
-  separate = $state<readonly IdentityFixture[]>([])
+  /** Remote identities of yours merged into the one on this browser; you
+   * never switch to another identity, yours only gains their keys. */
+  merged = $state<readonly IdentityFixture[]>([])
+  /** Remote identities whose join request a device approved. */
+  approved = $state<readonly string[]>([])
   providerHolds = $state<ProviderHolds>(ProviderHolds.Identities)
   passkeyFit = $state<PasskeyFit>(PasskeyFit.Opens)
   synced = $state(false)
@@ -87,14 +90,16 @@ export class KeyFlow {
     this.visited = [KeyState.Empty]
     this.hasLocal = false
     this.chosen = work
-    this.separate = []
+    this.merged = []
+    this.approved = []
     this.synced = false
     this.remoteChecked = false
   }
 
-  /** A freshly created identity has one key: this browser's passkey. */
+  /** A freshly created identity has one key, this browser's passkey; each
+   * merge adds the merged identity's keys. */
   localKeys(): readonly KeyFixture[] {
-    return [thisBrowserPasskey]
+    return [thisBrowserPasskey, ...this.merged.flatMap((identity) => identity.keys)]
   }
 
   local(): IdentityFixture {
@@ -104,10 +109,5 @@ export class KeyFlow {
       words: 'spoon-river-calm',
       keys: this.localKeys(),
     }
-  }
-
-  /** The chosen remote identity with this browser's key added, once joined. */
-  joined(): IdentityFixture {
-    return { ...this.chosen, keys: [...this.chosen.keys, thisBrowserPasskey] }
   }
 }

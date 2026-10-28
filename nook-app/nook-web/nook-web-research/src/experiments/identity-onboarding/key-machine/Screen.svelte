@@ -1,7 +1,8 @@
 <!-- The screen for the machine's current state: a scene of where the
 identities are, a headline of a few words, and the state's transitions as
 cards. Identities on a provider show by their three words until a passkey or
-a join opens them. -->
+a join opens them. The identity on this browser never changes: one of yours
+found on the provider merges into it, and it only gains keys. -->
 <script lang="ts">
   import ActionCard from './ActionCard.svelte'
   import Scene from './Scene.svelte'
@@ -30,12 +31,22 @@ a join opens them. -->
     return flow.passkeyFit === PasskeyFit.Opens && identity.id === first?.id
   }
 
+  /** Your passkey opened it, or a device approved your join request. */
   function revealed(identity: IdentityFixture): boolean {
-    return flow.remoteChecked && opensFor(identity)
+    return (flow.remoteChecked && opensFor(identity)) || flow.approved.includes(identity.id)
+  }
+
+  function nameOf(identity: IdentityFixture): string {
+    return identity.name || identity.words
+  }
+
+  function keyCount(): string {
+    const count = flow.localKeys().length
+    return count === 1 ? '1 key' : `${count} keys`
   }
 
   function local(status: TokenStatus): Token {
-    return { id: 'local', label: flow.local().name, keys: 1, status }
+    return { id: 'local', label: flow.local().name, keys: flow.localKeys().length, status }
   }
 
   function remote(identity: IdentityFixture, status: TokenStatus): Token {
@@ -53,13 +64,12 @@ a join opens them. -->
   }
 
   const undecided = $derived(
-    remoteIdentities.filter((identity) => !flow.separate.some((kept) => kept.id === identity.id)),
+    remoteIdentities.filter((identity) => !flow.merged.some((done) => done.id === identity.id)),
   )
 
   /** The provider's identities as the remote step draws them. */
   const found = $derived<readonly Token[]>([
     local(TokenStatus.Synced),
-    ...flow.separate.map((identity) => remote(identity, TokenStatus.Synced)),
     ...undecided.map((identity) =>
       remote(identity, revealed(identity) ? TokenStatus.Opened : TokenStatus.Sealed),
     ),
@@ -68,10 +78,6 @@ a join opens them. -->
   const sealedAll = $derived<readonly Token[]>(
     remoteIdentities.map((identity) => remote(identity, TokenStatus.Sealed)),
   )
-
-  function chosenName(): string {
-    return flow.chosen.name || flow.chosen.words
-  }
 
   function connect(provider: string): void {
     flow.provider = provider
@@ -82,15 +88,19 @@ a join opens them. -->
     )
   }
 
-  function useInstead(): void {
-    flow.hasLocal = false
-    flow.separate = []
-    flow.go(KeyState.UsingRemote)
+  /** Fold one of your identities into the one on this browser, in place:
+   * its token leaves the provider and yours gains its keys. */
+  function merge(identity: IdentityFixture): void {
+    flow.merged = [...flow.merged, identity]
   }
 
-  function keepBoth(): void {
-    flow.separate = [...flow.separate, flow.chosen]
-    flow.go(KeyState.Synced)
+  function approve(): void {
+    if (!flow.hasLocal) {
+      flow.go(KeyState.UsingRemote)
+      return
+    }
+    flow.approved = [...flow.approved, flow.chosen.id]
+    flow.go(KeyState.RemoteIdentities)
   }
 </script>
 
@@ -115,11 +125,16 @@ a join opens them. -->
     />
   {:else if flow.current === KeyState.LocalIdentity}
     <Scene browser={[local(TokenStatus.Here)]} />
-    <h1 class={ui.title}>{flow.local().name} · 1 key</h1>
-    <ActionCard title="Add sync" onPick={() => flow.go(KeyState.ConnectProvider)} />
+    <h1 class={ui.title}>{flow.local().name} · {keyCount()}</h1>
+    <ActionCard
+      title="Back up"
+      tag="Only here"
+      tagTone="warn"
+      onPick={() => flow.go(KeyState.ConnectProvider)}
+    />
   {:else if flow.current === KeyState.ConnectProvider}
     <Scene browser={[local(TokenStatus.Here)]} />
-    <h1 class={ui.title}>Sync with</h1>
+    <h1 class={ui.title}>Back up to</h1>
     <div class={grid}>
       {#each providerNames as name (name)}
         <ActionCard title={name} onPick={() => connect(name)} />
@@ -127,13 +142,13 @@ a join opens them. -->
     </div>
   {:else if flow.current === KeyState.Synced}
     <Scene
-      browser={[local(TokenStatus.Here), ...flow.separate.map((identity) => remote(identity, TokenStatus.Here))]}
+      browser={[local(TokenStatus.Here)]}
       provider={flow.provider}
-      remote={[local(TokenStatus.Synced), ...flow.separate.map((identity) => remote(identity, TokenStatus.Synced))]}
+      remote={[local(TokenStatus.Synced)]}
       link={SceneLink.Sync}
     />
-    <h1 class={ui.title}>Synced</h1>
-    {#if undecided.length > 0}
+    <h1 class={ui.title}>Backed up</h1>
+    {#if flow.providerHolds === ProviderHolds.Identities && undecided.length > 0}
       <ActionCard
         title="{undecided.length} more in {flow.provider}"
         tag="Sealed"
@@ -147,7 +162,9 @@ a join opens them. -->
       remote={found}
       link={flow.remoteChecked ? SceneLink.Passkey : SceneLink.Sync}
     />
-    <h1 class={ui.title}>{undecided.length} more found</h1>
+    <h1 class={ui.title}>
+      {undecided.length > 0 ? `${undecided.length} more found` : `${flow.local().name} · ${keyCount()}`}
+    </h1>
     <div class={grid}>
       {#if !flow.remoteChecked}
         <ActionCard
@@ -161,13 +178,10 @@ a join opens them. -->
       {#each undecided as identity (identity.id)}
         {#if revealed(identity)}
           <ActionCard
-            title="Use {identity.name}"
-            tag="Yours"
+            title="Merge into {flow.local().name}"
+            tag={nameOf(identity)}
             tagTone="ok"
-            onPick={() => {
-              flow.chosen = identity
-              flow.go(KeyState.UseInstead)
-            }}
+            onPick={() => merge(identity)}
           />
         {:else if flow.remoteChecked}
           <ActionCard
@@ -179,19 +193,10 @@ a join opens them. -->
           />
         {/if}
       {/each}
-      <ActionCard title="Skip" onPick={() => flow.go(KeyState.Synced)} />
-    </div>
-  {:else if flow.current === KeyState.UseInstead}
-    <Scene
-      browser={[local(TokenStatus.Removed), remote(flow.chosen, TokenStatus.Here)]}
-      provider={flow.provider}
-      remote={[remote(flow.chosen, TokenStatus.Opened)]}
-      link={SceneLink.Passkey}
-    />
-    <h1 class={ui.title}>Use {flow.chosen.name}?</h1>
-    <div class={grid}>
-      <ActionCard title="Use {flow.chosen.name}" tag="Yours" tagTone="ok" passkey onPick={useInstead} />
-      <ActionCard title="Keep {flow.local().name}" onPick={() => flow.go(KeyState.Synced)} />
+      <ActionCard
+        title={undecided.length > 0 ? 'Skip' : 'Done'}
+        onPick={() => flow.go(KeyState.Synced)}
+      />
     </div>
   {:else if flow.current === KeyState.JoinPending}
     <Scene
@@ -201,23 +206,7 @@ a join opens them. -->
       link={SceneLink.Request}
     />
     <h1 class={ui.title}>Waiting for approval</h1>
-    <ActionCard title="Simulate: approve on the other device" onPick={() => flow.go(KeyState.Joined)} />
-  {:else if flow.current === KeyState.Joined}
-    <Scene
-      browser={[...(flow.hasLocal ? [local(TokenStatus.Here)] : []), remote(flow.chosen, TokenStatus.Here)]}
-      provider={flow.provider}
-      remote={[remote(flow.chosen, TokenStatus.Synced)]}
-      link={SceneLink.Sync}
-    />
-    <h1 class={ui.title}>Joined {chosenName()}</h1>
-    <div class={grid}>
-      {#if flow.hasLocal}
-        <ActionCard title="Use {chosenName()} instead" tag="Yours" tagTone="ok" onPick={useInstead} />
-        <ActionCard title="Keep both" onPick={keepBoth} />
-      {:else}
-        <ActionCard title="Use {chosenName()}" tag="Yours" tagTone="ok" onPick={() => flow.go(KeyState.UsingRemote)} />
-      {/if}
-    </div>
+    <ActionCard title="Simulate: approve on the other device" onPick={approve} />
   {:else if flow.current === KeyState.ImportProvider}
     <h1 class={ui.title}>Import from</h1>
     <div class={grid}>
@@ -261,6 +250,6 @@ a join opens them. -->
       remote={[remote(flow.chosen, TokenStatus.Synced)]}
       link={SceneLink.Sync}
     />
-    <h1 class={ui.title}>{chosenName()} is here</h1>
+    <h1 class={ui.title}>{nameOf(flow.chosen)} is here</h1>
   {/if}
 </div>

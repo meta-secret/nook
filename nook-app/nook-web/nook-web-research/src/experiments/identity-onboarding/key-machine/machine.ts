@@ -1,7 +1,9 @@
 /**
  * Key management as a state machine. There are no vaults here: an identity
  * is the set of keys that open it (passkeys, devices), and everything the
- * user does is about which keys open which identity.
+ * user does is about which keys open which identity. The browser keeps one
+ * identity and never switches: an identity of yours found elsewhere merges
+ * into it and only adds keys.
  */
 export enum KeyState {
   Empty = 'empty',
@@ -10,9 +12,7 @@ export enum KeyState {
   ConnectProvider = 'connect-provider',
   Synced = 'synced',
   RemoteIdentities = 'remote-identities',
-  UseInstead = 'use-instead',
   JoinPending = 'join-pending',
-  Joined = 'joined',
   ImportProvider = 'import-provider',
   ImportPasskey = 'import-passkey',
   ImportChoose = 'import-choose',
@@ -67,11 +67,11 @@ export const machine: readonly StateNode[] = [
     state: KeyState.LocalIdentity,
     title: 'Local identity',
     group: StateGroup.Local,
-    next: [{ to: KeyState.ConnectProvider, label: 'add sync provider' }],
+    next: [{ to: KeyState.ConnectProvider, label: 'back up' }],
   },
   {
     state: KeyState.ConnectProvider,
-    title: 'Connect sync provider',
+    title: 'Pick sync provider',
     group: StateGroup.Local,
     next: [
       { to: KeyState.Synced, label: 'provider empty' },
@@ -80,40 +80,26 @@ export const machine: readonly StateNode[] = [
   },
   {
     state: KeyState.Synced,
-    title: 'Synced',
+    title: 'Backed up',
     group: StateGroup.Local,
-    next: [],
+    next: [{ to: KeyState.RemoteIdentities, label: 'more on provider' }],
   },
   {
     state: KeyState.RemoteIdentities,
     title: 'Remote identities found',
     group: StateGroup.Remote,
     next: [
-      { to: KeyState.UseInstead, label: 'check with passkey → yours → use it instead' },
       { to: KeyState.JoinPending, label: 'sealed to you → join request' },
-      { to: KeyState.Synced, label: 'skip for now' },
+      { to: KeyState.Synced, label: 'yours merged, rest skipped' },
     ],
-  },
-  {
-    state: KeyState.UseInstead,
-    title: 'Use it instead',
-    group: StateGroup.Remote,
-    next: [{ to: KeyState.UsingRemote, label: 'empty local identity removed' }],
   },
   {
     state: KeyState.JoinPending,
     title: 'Join request sent',
     group: StateGroup.Remote,
-    next: [{ to: KeyState.Joined, label: 'a device approves' }],
-  },
-  {
-    state: KeyState.Joined,
-    title: 'Joined',
-    group: StateGroup.Remote,
     next: [
-      { to: KeyState.UseInstead, label: 'use it instead' },
-      { to: KeyState.Synced, label: 'keep both' },
-      { to: KeyState.UsingRemote, label: 'onboarding: use it' },
+      { to: KeyState.RemoteIdentities, label: 'approved → merge it' },
+      { to: KeyState.UsingRemote, label: 'approved (onboarding)' },
     ],
   },
   {
@@ -203,8 +189,6 @@ export enum TokenStatus {
   Opened = 'opened',
   /** A join request waits on its devices. */
   Pending = 'pending',
-  /** Goes away. */
-  Removed = 'removed',
 }
 
 /** One identity drawn in a scene. */

@@ -15,13 +15,14 @@ key marks, and its state shown by shape and icon rather than text. -->
       [TokenStatus.Sealed]: 'border-[#2c3035] text-[#6f747b]',
       [TokenStatus.Opened]: 'border-[#9cc3a4] text-[#e9e8e4] bg-[#141a16]',
       [TokenStatus.Pending]: 'border-dashed border-[#d2b07a] text-[#d6d5d1]',
-      [TokenStatus.Removed]: 'border-[#2c3035] text-[#5d6268] line-through opacity-50',
     }[token.status],
   )
   const marks = $derived(Array.from({ length: Math.min(token.keys, 4) }, (_, index) => index))
 </script>
 
-{#key token.status}
+<!-- A new state or a new key count replays the scale-in, so a merge shows
+on the token that gained keys. -->
+{#key `${token.status}:${token.keys}`}
 <div class="flex min-w-0 items-center gap-2.5 border px-3 py-2 transition {frame}" title={token.label} in:scale={{ start: 0.94, duration: 240 }}>
   {#if token.status === TokenStatus.Sealed}
     <Lock class="size-3.5 shrink-0" aria-hidden="true" />
