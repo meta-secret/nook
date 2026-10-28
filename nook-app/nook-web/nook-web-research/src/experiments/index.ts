@@ -17,6 +17,7 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
+import IdentityFirst from './identity-management/identity-first/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -167,6 +168,13 @@ const identityManagementV2: ExperimentSubcategory = {
   description:
     'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
 }
+const identityManagementV3: ExperimentSubcategory = {
+  categorySlug: 'identity-management',
+  slug: ExperimentVersion.V3,
+  title: 'V3 · Identity first',
+  description:
+    'Who you are is settled before vaults and sync providers: first run, connecting a provider, and the Identities hub.',
+}
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
   slug: ExperimentVersion.V1,
@@ -186,6 +194,7 @@ export const subcategories: ExperimentSubcategory[] = [
   keysV3,
   identityManagementV1,
   identityManagementV2,
+  identityManagementV3,
   inspirationV1,
 ]
 
@@ -333,6 +342,15 @@ export const experiments: Experiment[] = [
     description:
       'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
     component: AccessTerminal,
+  },
+  {
+    slug: 'identity-first',
+    category: identityManagement,
+    subcategory: identityManagementV3,
+    title: 'Identity first',
+    description:
+      'New identity, existing identity by one passkey tap, or join; a provider only mounts the identity in use; the hub uses or merges other identities.',
+    component: IdentityFirst,
   },
   {
     slug: 'identity-keys',
