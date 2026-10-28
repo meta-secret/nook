@@ -167,6 +167,17 @@ person creates or joins here, never in the extension.
     </button>
   </div>
 
+  <div class="flex justify-center text-sm">
+    <button
+      type="button"
+      class="text-balance text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground hover:decoration-foreground"
+      data-testid="login-access-check-link"
+      onclick={() => vault.openAccessCheck()}
+    >
+      {vault.t(I18N_KEYS.AccessCheckEntryLink)}
+    </button>
+  </div>
+
   <!-- What Nook is, in one line; the details live in Help. -->
   <p
     class="flex flex-col items-center gap-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-2"

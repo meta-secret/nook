@@ -86,6 +86,7 @@ export class VaultWorkspaceActions {
   private applySection(section: WorkspaceSection): void {
     const state = this.state;
     state.helpOpen = false;
+    state.accessCheckOpen = false;
     state.workspaceSection = section;
     switch (section) {
       case WorkspaceSection.Keys:
@@ -130,7 +131,13 @@ export class VaultWorkspaceActions {
     switch (route) {
       case WorkspaceRoute.Help:
         state.workspaceSection = WorkspaceSection.Vault;
+        state.accessCheckOpen = false;
         state.helpOpen = true;
+        return;
+      case WorkspaceRoute.AccessCheck:
+        state.workspaceSection = WorkspaceSection.Vault;
+        state.helpOpen = false;
+        state.accessCheckOpen = true;
         return;
       case WorkspaceRoute.Vault:
         this.applySection(WorkspaceSection.Vault);
@@ -270,6 +277,7 @@ export class VaultWorkspaceActions {
       return;
     }
     state.workspaceSection = WorkspaceSection.Vault;
+    state.accessCheckOpen = false;
     state.helpOpen = true;
   }
 
@@ -281,5 +289,31 @@ export class VaultWorkspaceActions {
       return;
     }
     state.helpOpen = false;
+  }
+
+  /** Open the access check page; it works whether or not an identity is
+   * unlocked. */
+  openAccessCheck(): void {
+    const state = this.state;
+    const navigation = new WorkspaceLocation(
+      WorkspaceRoute.AccessCheck,
+    ).navigate();
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey);
+      return;
+    }
+    state.workspaceSection = WorkspaceSection.Vault;
+    state.helpOpen = false;
+    state.accessCheckOpen = true;
+  }
+
+  closeAccessCheck(): void {
+    const state = this.state;
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Vault).navigate();
+    if (navigation.isErr()) {
+      state.errorMsg = state.t(navigation.error.translationKey);
+      return;
+    }
+    state.accessCheckOpen = false;
   }
 }

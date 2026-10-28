@@ -242,7 +242,7 @@ pub struct ProviderVaultSummary {
 }
 
 impl ProviderVaultSummary {
-    fn short_id(store_id: &StoreId) -> String {
+    pub(crate) fn short_id(store_id: &StoreId) -> String {
         let raw = store_id.as_str();
         raw.strip_prefix("store_")
             .unwrap_or(raw)

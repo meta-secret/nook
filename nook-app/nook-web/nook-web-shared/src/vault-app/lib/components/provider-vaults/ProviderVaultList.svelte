@@ -13,6 +13,7 @@ not report are left out.
   import type { Snippet } from 'svelte'
   import { FolderKey } from '@lucide/svelte'
   import type {
+    CredentialCheckReport,
     ProviderIdentityLog,
     ProviderVaultAccess,
     ProviderVaultSummary,
@@ -20,24 +21,23 @@ not report are left out.
   } from '$app-wasm'
   import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    NameRevealKind,
-    type NameReveal,
-  } from '$lib/components/provider-vaults/drive-vault-inventory'
+  import { CheckReports } from '$lib/vault/access-check'
 
   let {
     vault,
     vaults,
     action,
-    reveal = { kind: NameRevealKind.Sealed },
+    checks = [],
   }: {
     vault: VaultState
     vaults: readonly ProviderVaultSummary[]
-    /** Whether a passkey opened the listed names for this page. */
-    reveal?: NameReveal
+    /** Passkey checks run on this page; a vault one opened shows its name. */
+    checks?: readonly CredentialCheckReport[]
     /** What the user can do with one listed vault. */
     action?: Snippet<[ProviderVaultSummary]>
   } = $props()
+
+  const checked = $derived(new CheckReports(checks))
 
   /** One reported time and the line that names it. */
   interface TimeLineRequest {
@@ -69,12 +69,8 @@ not report are left out.
       case 'unknown':
         break
     }
-    if (reveal.kind === NameRevealKind.Revealed) {
-      const opened = reveal.names.vaults.find(
-        (name) => name.storeId === summary.storeId,
-      )
-      if (opened && opened.name.state === 'named') return opened.name.name
-    }
+    const opened = checked.vaultName(summary.storeId)
+    if (opened) return opened
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.FirstRunRestoreVaultItem,
       replacements: { id: summary.shortId },
@@ -86,12 +82,13 @@ not report are left out.
    * holds it or a passkey opened it, else its three words. */
   function identityLine(summary: ProviderVaultSummary): string {
     let identity = summary.identity.words.join('-')
-    if (
-      reveal.kind === NameRevealKind.Revealed &&
-      reveal.names.identityId === summary.identity.identityId &&
-      reveal.names.identityName.state === 'named'
-    )
-      identity = reveal.names.identityName.name
+    for (const check of checks)
+      if (
+        check.identity.state === 'member' &&
+        check.identity.identityId === summary.identity.identityId &&
+        check.identity.name.state === 'named'
+      )
+        identity = check.identity.name.name
     switch (summary.identity.name.state) {
       case 'named':
         identity = summary.identity.name.name
@@ -178,6 +175,21 @@ not report are left out.
     }
   }
 
+  /** What the passkey checks on this page say about one vault, if any ran. */
+  function verificationLine(summary: ProviderVaultSummary): string {
+    const passkey = checked.openingPasskey(summary.storeId)
+    if (passkey) {
+      const request: Parameters<typeof vault.t>[0] = {
+        key: I18N_KEYS.AccessCheckVaultVerified,
+        replacements: { id: passkey },
+      }
+      return vault.t(request)
+    }
+    return checks.some((check) => check.credential.kind === 'passkey')
+      ? vault.t(I18N_KEYS.AccessCheckVaultNotVerified)
+      : ''
+  }
+
   function eventLine(summary: ProviderVaultSummary): string {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderVaultsEvents,
@@ -232,6 +244,17 @@ not report are left out.
         >
           {access[1]}
         </p>
+        {#if verificationLine(summary)}
+          <p
+            class={checked.openingPasskey(summary.storeId)
+              ? 'nk-tag nk-tag-success mt-1'
+              : 'nk-tag mt-1'}
+            data-testid="provider-vault-verification"
+            data-verified={checked.openingPasskey(summary.storeId) !== ''}
+          >
+            {verificationLine(summary)}
+          </p>
+        {/if}
         <p class="nk-spec mt-1" data-testid="provider-vault-meta">
           <span
             data-testid="provider-vault-identity"

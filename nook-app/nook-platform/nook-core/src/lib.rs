@@ -54,9 +54,9 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, provider_identity_log, provider_name_reveal,
-    provider_vault_access, provider_vault_join, provider_vault_listing, provider_vault_merge,
-    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
+    authorized_accounts, drive_vault_folder, provider_identity_log, provider_vault_access,
+    provider_vault_join, provider_vault_listing, provider_vault_merge, sync_provider_credentials,
+    sync_provider_store, validation, vault_access_check, vault_sync, vault_sync_conflict,
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
@@ -357,10 +357,6 @@ pub use drive_vault_folder::{
 pub use provider_identity_log::{
     ListedIdentityLog, ProviderIdentityLog, ProviderIdentityLogEvents, ProviderLogCount,
 };
-pub use provider_name_reveal::{
-    ProviderNameReveal, ProviderNameRevealOutcome, RevealMembership, RevealableVault,
-    RevealedVaultName,
-};
 pub use provider_vault_access::{
     BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultAction,
     ProviderVaultEvents, ProviderVaultInspection, ProviderVaultKeyholding, ProviderVaultStanding,
@@ -419,6 +415,10 @@ pub use validation::{
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
     VaultRecoveryProjectionRequest, VaultRecoverySummary,
+};
+pub use vault_access_check::{
+    BackupPasswordAccessCheck, CheckedCredential, CheckedIdentity, CheckedVaultEvents,
+    CredentialCheckReport, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,

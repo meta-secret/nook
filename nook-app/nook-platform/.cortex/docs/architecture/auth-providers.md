@@ -276,15 +276,30 @@ Each row also tells, without any key:
   its device count, when the newest device joined, and how many vaults it
   keeps (`ProviderIdentityLog`).
 
-A "Show names" text link runs `reveal_google_drive_names`:
+A "Check a passkey" text link runs `check_passkey_access` on the account:
 
 - One passkey assertion re-derives this device's app key in memory.
-- When that key is a member of a listed identity, its identity-log envelopes
-  open the identity's sealed name and its vaults' keys, and each vault's own
-  log yields its encrypted name.
-- The names are shown for this page only; nothing is stored, imported, or
-  written.
-- The link commits nothing, so the step keeps one action button.
+- A vault counts as opened only when its key envelope and its name decrypt:
+  through the identity log the key is a member of, or the vault log that
+  enrolled it.
+- Each row then says which checked passkey opens it, shows its real name, and
+  offers "Recover with the checked passkey" in place of a blind import.
+- Results live on the page only; nothing is stored, imported, or written. The
+  link commits nothing, so the step keeps one action button.
+
+### Check access
+
+The Check access page answers the same question outside any setup flow, and
+before an identity is unlocked: the header, the first-run screen, and the
+unlock screen link to it.
+
+- **Sources:** this browser's identities and vaults, a Google Drive account
+  (signed in for this page only), or a local folder.
+- **Checks:** one passkey or one backup password at a time
+  (`check_passkey_access`, `check_backup_password_access`); each adds a
+  numbered column, and every vault says whether that check opened it.
+- **One live action:** a source that still needs a sign-in or a folder keeps
+  Check disabled until it is ready.
 
 Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
 device can open it (`ProviderVaultAccess`) and what the user may do

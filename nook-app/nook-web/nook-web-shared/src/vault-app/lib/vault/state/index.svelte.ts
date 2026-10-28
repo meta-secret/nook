@@ -42,6 +42,7 @@ const uiKeys = [
   "workspaceSection",
   "identityTransitionPending",
   "helpOpen",
+  "accessCheckOpen",
   "firstRun",
   "firstRunVaultName",
   "newIdentity",
@@ -214,6 +215,7 @@ class VaultStateSlicesImplementation {
   declare workspaceSection: VaultUiState["workspaceSection"];
   declare identityTransitionPending: VaultUiState["identityTransitionPending"];
   declare helpOpen: VaultUiState["helpOpen"];
+  declare accessCheckOpen: VaultUiState["accessCheckOpen"];
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
   declare newIdentity: VaultUiState["newIdentity"];

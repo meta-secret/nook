@@ -95,4 +95,14 @@ the recovery path when no other app is at hand.
       />
     </button>
   </div>
+  <div class="mt-3 flex justify-center text-sm">
+    <button
+      type="button"
+      class="text-balance text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground hover:decoration-foreground"
+      data-testid="login-access-check-link"
+      onclick={() => vault.openAccessCheck()}
+    >
+      {vault.t(I18N_KEYS.AccessCheckEntryLink)}
+    </button>
+  </div>
 </div>

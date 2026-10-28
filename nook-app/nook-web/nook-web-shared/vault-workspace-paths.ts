@@ -1,5 +1,6 @@
 /** Workspace pages the app shell is served at, so a reload stays in the app. */
 export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
+  "access-check",
   "admin",
   "devices-access",
   "help",

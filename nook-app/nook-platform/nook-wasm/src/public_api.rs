@@ -24,6 +24,8 @@ mod localization;
 pub use localization::*;
 mod enrollment_entry;
 pub use enrollment_entry::*;
+mod access_check;
+pub use access_check::*;
 mod mnemonic;
 pub use mnemonic::*;
 mod provider_labels;

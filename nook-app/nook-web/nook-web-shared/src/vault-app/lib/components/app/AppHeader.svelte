@@ -2,6 +2,7 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     BookOpen,
+    ShieldCheck,
     EllipsisVertical,
     Lock,
     Moon,
@@ -48,7 +49,10 @@
   } = $props()
 
   const authenticatedSessionControlsVisible = $derived(
-    vault.isAuthenticated && !vault.helpOpen && !legalPageOpen,
+    vault.isAuthenticated &&
+      !vault.helpOpen &&
+      !vault.accessCheckOpen &&
+      !legalPageOpen,
   )
   const identitiesLinkVisible = $derived(
     authenticatedSessionControlsVisible &&
@@ -208,6 +212,18 @@
               <button
                 type="button"
                 class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                data-testid="header-mobile-access-check-btn"
+                onclick={() => {
+                  closeMobileTools()
+                  vault.openAccessCheck()
+                }}
+              >
+                <ShieldCheck class="size-4 shrink-0" />
+                <span>{vault.t(I18N_KEYS.AccessCheckOpen)}</span>
+              </button>
+              <button
+                type="button"
+                class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 data-testid="header-mobile-help-open-btn"
                 onclick={() => {
                   closeMobileTools()
@@ -313,7 +329,27 @@
           testId="help-header-close"
           onBack={() => vault.closeHelp()}
         />
+      {:else if vault.accessCheckOpen}
+        <BackButton
+          label={vault.t(I18N_KEYS.AppBack)}
+          testId="access-check-header-close"
+          onBack={() => vault.closeAccessCheck()}
+        />
       {:else}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4 {vault.isAuthenticated
+            ? 'hidden sm:inline-flex'
+            : ''}"
+          aria-label={vault.t(I18N_KEYS.AccessCheckOpen)}
+          data-testid="access-check-open-btn"
+          onclick={() => vault.openAccessCheck()}
+        >
+          <ShieldCheck class="size-4" />
+          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AccessCheckOpen)}</span>
+        </Button>
         <Button
           type="button"
           variant="outline"

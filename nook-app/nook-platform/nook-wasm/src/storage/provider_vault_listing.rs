@@ -12,11 +12,11 @@
 )]
 
 use nook_core::{
-    AppId, BrowserIdentityVault, BrowserVaultKeys, DriveEventParent, EventId, EventLogLocation,
-    EventLogNamespaceKind, KnownIdentityName, KnownVaultName, ListedIdentityLog, LocalEventWrite,
-    LocalVaultOccupancy, ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding,
-    ProviderVaultListing, ProviderVaultListingRequest, ProviderVaultObservation,
-    ProviderVaultStanding, ProviderVaultTime, StoreId,
+    AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent, EventId,
+    EventLogLocation, EventLogNamespaceKind, KnownIdentityName, KnownVaultName, ListedIdentityLog,
+    LocalEventWrite, LocalVaultOccupancy, ProviderIdentityLogEvents, ProviderVaultEvents,
+    ProviderVaultKeyholding, ProviderVaultListing, ProviderVaultListingRequest,
+    ProviderVaultObservation, ProviderVaultStanding, ProviderVaultTime, StoreId,
 };
 
 use super::drive_events::DriveEventStore;
@@ -215,6 +215,28 @@ impl DriveVaultListing<'_> {
             }
         }
         Ok(events)
+    }
+}
+
+impl DriveVaultListing<'_> {
+    /// Every vault namespace under the root with the identity filing it and
+    /// its events, read without its keys.
+    pub(crate) async fn all_vault_events(&self) -> Result<Vec<CheckedVaultEvents>, NookError> {
+        let folders =
+            DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
+                .await?;
+        let mut vaults = Vec::new();
+        for folder in folders {
+            let Some(store_id) = folder.store_id().cloned() else {
+                continue;
+            };
+            vaults.push(CheckedVaultEvents {
+                events: self.namespace_events(&store_id, &folder.folder).await?,
+                filed_under: folder.placed.identity().clone(),
+                store_id,
+            });
+        }
+        Ok(vaults)
     }
 }
 

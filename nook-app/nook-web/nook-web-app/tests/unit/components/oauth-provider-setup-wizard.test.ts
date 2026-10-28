@@ -2,6 +2,7 @@ import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { err, ok } from 'neverthrow'
 import type {
+  CredentialCheckReport,
   NookGoogleDriveVaultListing,
   ProviderVaultSummary,
 } from '$app-wasm'
@@ -15,6 +16,7 @@ import {
   type OAuthFileConfig,
 } from '$lib/auth/providers'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+import { AccessCheckActions } from '$lib/vault/access-check'
 import {
   ProviderVaultAccessActions,
   ProviderVaultAccessRequest,
@@ -248,43 +250,52 @@ describe('Google Drive provider setup', () => {
     ).toBe(false)
   })
 
-  test('a passkey shows the sealed names for this page only', async () => {
+  test('a checked passkey verifies the vaults it opens and shows their names', async () => {
     listVaults({
       root: 'found',
       listing: {
-        vaults: [summary('store_othervault1', { state: 'unchecked' }, [])],
+        vaults: [
+          summary('store_othervault1', { state: 'unchecked' }, [
+            'importSeparately',
+          ]),
+        ],
         replacement: { state: 'unavailable' },
       },
     })
-    const reveal = vi
-      .spyOn(VaultOAuthActions.prototype, 'revealGoogleDriveNames')
-      .mockResolvedValue(
-        ok({
-          state: 'revealed',
-          identityId: 'idn_strangerabc',
-          identityName: { state: 'named', name: 'Personal' },
-          vaults: [
-            {
-              storeId: 'store_othervault1',
-              name: { state: 'named', name: 'Family' },
-            },
-          ],
-        }),
-      )
+    const opens: CredentialCheckReport = {
+      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      identity: {
+        state: 'member',
+        identityId: 'idn_strangerabc',
+        words: ['ripple', 'canvas', 'orbit'],
+        name: { state: 'named', name: 'Personal' },
+      },
+      vaults: [
+        {
+          storeId: 'store_othervault1',
+          shortId: 'othervau',
+          filedUnder: ['ripple', 'canvas', 'orbit'],
+          outcome: { state: 'opens', name: { state: 'named', name: 'Family' } },
+        },
+      ],
+    }
+    const check = vi
+      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .mockResolvedValue(ok(opens))
     const { view, vault } = renderWizard(signedInDrive())
 
     const row = await view.findByTestId('provider-vault-row')
     expect(row.textContent).not.toContain('Family')
-    // Showing names is a text link; the step keeps one action button.
+    // Checking is a text link; the step keeps one action button.
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
-    expect(view.getByTestId('provider-vault-show-names').className).toContain(
-      'underline',
-    )
-    await fireEvent.click(view.getByTestId('provider-vault-show-names'))
+    await fireEvent.click(view.getByTestId('provider-vault-check-passkey'))
 
     await vi.waitFor(() => expect(row.textContent).toContain('Family'))
-    expect(reveal).toHaveBeenCalledOnce()
+    expect(check).toHaveBeenCalledWith({
+      kind: 'googleDrive',
+      accessToken: 'drive-token',
+    })
     expect(
       row.querySelector('[data-testid="provider-vault-identity"]')?.textContent,
     ).toBe(
@@ -293,13 +304,24 @@ describe('Google Drive provider setup', () => {
         replacements: { identity: 'Personal' },
       }),
     )
-    expect(view.getByTestId('provider-vault-names-shown').textContent).toBe(
-      vault.t(I18N_KEYS.ProviderVaultsNamesShown),
+    const verification = view.getByTestId('provider-vault-verification')
+    expect(verification.dataset.verified).toBe('true')
+    expect(verification.textContent?.trim()).toBe(
+      vault.t({
+        key: I18N_KEYS.AccessCheckVaultVerified,
+        replacements: { id: 'a1b2c3d4' },
+      }),
     )
-    expect(view.queryAllByTestId('provider-vault-show-names')).toHaveLength(0)
+    // Importing a vault the checked passkey opens is recovering it with it.
+    expect(
+      view.getByTestId('provider-vault-import').closest('label')?.textContent,
+    ).toContain(vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey))
+    expect(
+      view.getByTestId('provider-vault-check-passkey').textContent,
+    ).toContain(vault.t(I18N_KEYS.AccessCheckCheckAnotherPasskey))
   })
 
-  test('a passkey of another identity says so and shows nothing', async () => {
+  test('a passkey that opens nothing marks the vault unverified', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -307,15 +329,32 @@ describe('Google Drive provider setup', () => {
         replacement: { state: 'unavailable' },
       },
     })
-    vi.spyOn(
-      VaultOAuthActions.prototype,
-      'revealGoogleDriveNames',
-    ).mockResolvedValue(ok({ state: 'notAMember' }))
-    const { view } = renderWizard(signedInDrive())
+    const none: CredentialCheckReport = {
+      credential: { kind: 'passkey', fingerprint: 'passkey_ffffffffffffffff' },
+      identity: { state: 'notAMember' },
+      vaults: [
+        {
+          storeId: 'store_othervault1',
+          shortId: 'othervau',
+          filedUnder: ['ripple', 'canvas', 'orbit'],
+          outcome: { state: 'doesNotOpen' },
+        },
+      ],
+    }
+    vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
+      ok(none),
+    )
+    const { view, vault } = renderWizard(signedInDrive())
 
-    await fireEvent.click(await view.findByTestId('provider-vault-show-names'))
+    await fireEvent.click(
+      await view.findByTestId('provider-vault-check-passkey'),
+    )
 
-    await view.findByTestId('provider-vault-names-not-a-member')
+    const verification = await view.findByTestId('provider-vault-verification')
+    expect(verification.dataset.verified).toBe('false')
+    expect(verification.textContent?.trim()).toBe(
+      vault.t(I18N_KEYS.AccessCheckVaultNotVerified),
+    )
     expect(view.getByTestId('provider-vault-row').textContent).toContain(
       'othervau',
     )

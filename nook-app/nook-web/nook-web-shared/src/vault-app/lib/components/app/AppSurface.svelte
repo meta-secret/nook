@@ -13,6 +13,7 @@
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import AppHelpWorkspace from '$lib/components/app/AppHelpWorkspace.svelte'
+  import AccessCheckPage from '$lib/components/access-check/AccessCheckPage.svelte'
   import AppPersistentChrome from '$lib/components/app/AppPersistentChrome.svelte'
   import ExtensionConnectConsentWorkspace from '$lib/components/app/ExtensionConnectConsentWorkspace.svelte'
   import InvalidExtensionConnectWorkspace from '$lib/components/app/InvalidExtensionConnectWorkspace.svelte'
@@ -156,6 +157,8 @@
         />
       {:else if vault.helpOpen}
         <AppHelpWorkspace {vault} {colorMode} {appVersion} />
+      {:else if vault.accessCheckOpen}
+        <AccessCheckPage {vault} onClose={() => vault.closeAccessCheck()} />
       {:else if extensionConnectRoute && extensionConnectRequestState.kind === ExtensionConnectIntentKind.Absent}
         <InvalidExtensionConnectWorkspace {vault} onClose={onNavigateHome} />
       {:else if vault.newIdentity !== NewIdentityStage.Off}

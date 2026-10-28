@@ -280,8 +280,9 @@ Behavior-focused Rust tests cover the log in
   the log's name wins**
   - `the_identity_name_is_sealed_to_every_member_including_one_joining`
   - `the_log_name_wins_and_reaches_every_member` (nook-core)
-- **Provider listing facts and the passkey name reveal** (nook-core)
+- **Provider listing facts and access checks** (nook-core)
   - `a_signed_log_tells_its_devices_their_newest_join_and_its_vaults`
   - `a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails`
-  - `the_member_passkey_opens_the_identity_and_vault_names_in_memory`
-  - `another_passkey_opens_nothing`
+  - `the_member_passkey_opens_its_identity_and_vault_by_decrypting_them`
+  - `another_passkey_belongs_to_no_identity_and_opens_no_vault`
+  - `a_backup_password_opens_its_vault_and_a_wrong_one_does_not`

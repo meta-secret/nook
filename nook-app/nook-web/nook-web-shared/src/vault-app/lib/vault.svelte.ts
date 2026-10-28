@@ -782,6 +782,14 @@ export class VaultState extends VaultRuntimeState {
     return this.uiActions.closeHelp();
   }
 
+  openAccessCheck() {
+    return this.uiActions.openAccessCheck();
+  }
+
+  closeAccessCheck() {
+    return this.uiActions.closeAccessCheck();
+  }
+
   async refreshSecretsFromSession() {
     return this.secretsActions.refreshSecretsFromSession();
   }

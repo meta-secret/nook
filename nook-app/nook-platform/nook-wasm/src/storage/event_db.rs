@@ -381,7 +381,17 @@ impl NookDatabase {
     pub(crate) async fn load_local_event_store(
         store_id: &str,
     ) -> Result<LocalEventStore, NookError> {
-        let mut local = LocalEventStore::new();
+        Ok(NookDatabase::load_local_event_writes(store_id)
+            .await?
+            .into_iter()
+            .fold(LocalEventStore::new(), LocalEventStore::put_event))
+    }
+
+    /// Every event this browser stores for one vault, as written.
+    pub(crate) async fn load_local_event_writes(
+        store_id: &str,
+    ) -> Result<Vec<nook_core::LocalEventWrite>, NookError> {
+        let mut local = Vec::new();
         let index_key = format!("event_index:{store_id}");
         if let StoredStringRecord::Stored(list_json) = NookDatabase::store_get(EventDbStoreGet {
             store_name: STORE_EVENTS,
@@ -404,7 +414,7 @@ impl NookDatabase {
                     .await?
                     && let Ok(event_id) = EventId::parse(&raw_id)
                 {
-                    local = local.put_event(nook_core::LocalEventWrite {
+                    local.push(nook_core::LocalEventWrite {
                         event_id,
                         bytes: bytes.into_bytes().into(),
                     });

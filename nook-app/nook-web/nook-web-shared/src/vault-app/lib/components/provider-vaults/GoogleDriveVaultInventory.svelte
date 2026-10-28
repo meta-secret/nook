@@ -13,7 +13,9 @@ the chosen one, so two actions are never live at once.
   import { untrack, type Snippet } from 'svelte'
   import { RefreshCw } from '@lucide/svelte'
   import type {
+    CredentialCheckReport,
     EmptyVaultReplacement,
+    NookAccessCheckSource,
     ProviderVaultAction,
     ProviderVaultSummary,
   } from '$app-wasm'
@@ -22,6 +24,7 @@ the chosen one, so two actions are never live at once.
   import ProviderVaultList from '$lib/components/provider-vaults/ProviderVaultList.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultOAuthActions } from '$lib/vault/oauth'
+  import { AccessCheckActions, CheckReports } from '$lib/vault/access-check'
   import {
     ProviderVaultAccessActions,
     ProviderVaultActions,
@@ -36,13 +39,11 @@ the chosen one, so two actions are never live at once.
     DriveVaultInventoryKind,
     EmptyVaultConfirmationKind,
     MergeConfirmationKind,
-    NameRevealKind,
     type DriveVaultChoice,
     type DriveVaultInventory,
     type EmptyVaultConfirmation,
     type EmptyVaultConfirmationRequest,
     type MergeConfirmation,
-    type NameReveal,
   } from '$lib/components/provider-vaults/drive-vault-inventory'
 
   let {
@@ -74,7 +75,9 @@ the chosen one, so two actions are never live at once.
   })
   let merge = $state<MergeConfirmation>({ kind: MergeConfirmationKind.Closed })
   let mergePassword = $state('')
-  let reveal = $state<NameReveal>({ kind: NameRevealKind.Sealed })
+  // Passkey checks of this listing, newest last; they live with the page.
+  let checks = $state<CredentialCheckReport[]>([])
+  let checking = $state(false)
   let working = $state(false)
   const disabled = $derived(busy || working)
   /** A replace or merge confirmation carries its own confirm button. */
@@ -95,7 +98,7 @@ the chosen one, so two actions are never live at once.
     choice = { kind: DriveVaultChoiceKind.Connect }
     replacement = { kind: EmptyVaultConfirmationKind.Closed }
     merge = { kind: MergeConfirmationKind.Closed }
-    reveal = { kind: NameRevealKind.Sealed }
+    checks = []
     const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
       new ProviderVaultActions(vault).localVaultOccupancy(),
     )
@@ -114,23 +117,38 @@ the chosen one, so two actions are never live at once.
     untrack(() => void load(token))
   })
 
-  /** One passkey tap opens the listed names for this page only. */
-  async function revealNames(): Promise<void> {
-    reveal = { kind: NameRevealKind.Asking }
-    const revealed = await new VaultOAuthActions(vault).revealGoogleDriveNames()
-    if (revealed.isErr()) {
-      reveal = { kind: NameRevealKind.Sealed }
-      vault.errorMsg = vault.t(revealed.error.translationKey)
-      return
-    }
-    switch (revealed.value.state) {
-      case 'revealed':
-        reveal = { kind: NameRevealKind.Revealed, names: revealed.value }
+  /** One passkey tap checks which listed vaults it opens, by decrypting
+   * them; the names it opens show for this page only. */
+  async function checkPasskey(): Promise<void> {
+    checking = true
+    try {
+      const source: NookAccessCheckSource = { kind: 'googleDrive', accessToken }
+      const checked = await new AccessCheckActions().checkPasskey(source)
+      if (checked.isErr()) {
+        vault.errorMsg = vault.t(checked.error.translationKey)
         return
-      case 'notAMember':
-        reveal = { kind: NameRevealKind.NotAMember }
-        return
+      }
+      checks = [...checks, checked.value]
+    } finally {
+      checking = false
     }
+  }
+
+  /** One action offered on one vault's row. */
+  type RowAction = {
+    action: ProviderVaultAction
+    summary: ProviderVaultSummary
+  }
+
+  /** A row's action label; importing a vault a checked passkey opens is
+   * recovering it with that passkey. */
+  function rowActionLabel({ action, summary }: RowAction): string {
+    if (
+      action === 'importSeparately' &&
+      new CheckReports(checks).openingPasskey(summary.storeId) !== ''
+    )
+      return vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey)
+    return actionLabel(action)
   }
 
   function confirmReplacement(request: EmptyVaultConfirmationRequest): void {
@@ -293,41 +311,35 @@ the chosen one, so two actions are never live at once.
       <p class="nk-subpanel-head">
         {vault.t(I18N_KEYS.ProviderVaultsListTitle)}
       </p>
-      {#if reveal.kind === NameRevealKind.Revealed}
+      <!-- A text link, not a button: a check commits nothing, so the step
+           keeps one action button. -->
+      <button
+        type="button"
+        class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+        data-testid="provider-vault-check-passkey"
+        disabled={disabled || checking}
+        onclick={() => void checkPasskey()}
+      >
+        {checking
+          ? vault.t(I18N_KEYS.AccessCheckChecking)
+          : checks.length === 0
+            ? vault.t(I18N_KEYS.AccessCheckCheckPasskey)
+            : vault.t(I18N_KEYS.AccessCheckCheckAnotherPasskey)}
+      </button>
+      {#if checks.length > 0}
         <p
           class="text-[11px] text-pretty text-muted-foreground"
           role="status"
-          data-testid="provider-vault-names-shown"
+          data-testid="provider-vault-checks-note"
         >
-          {vault.t(I18N_KEYS.ProviderVaultsNamesShown)}
+          {vault.t(I18N_KEYS.AccessCheckResultsNote)}
         </p>
-      {:else if reveal.kind === NameRevealKind.NotAMember}
-        <p
-          class="text-[11px] text-pretty text-muted-foreground"
-          role="status"
-          data-testid="provider-vault-names-not-a-member"
-        >
-          {vault.t(I18N_KEYS.ProviderVaultsNamesNotAMember)}
-        </p>
-      {:else if listing.vaults.some((summary) => summary.name.state === 'unknown')}
-        <!-- A text link, not a button: it reveals names and commits nothing,
-             so the step keeps one action button. -->
-        <button
-          type="button"
-          class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
-          data-testid="provider-vault-show-names"
-          disabled={disabled || reveal.kind === NameRevealKind.Asking}
-          onclick={() => void revealNames()}
-        >
-          {reveal.kind === NameRevealKind.Asking
-            ? vault.t(I18N_KEYS.ProviderVaultsShowingNames)
-            : vault.t(I18N_KEYS.ProviderVaultsShowNames)}
-        </button>
       {/if}
-      <ProviderVaultList {vault} vaults={listing.vaults} {reveal}>
+      <ProviderVaultList {vault} vaults={listing.vaults} {checks}>
         {#snippet action(summary: ProviderVaultSummary)}
           <div class="grid gap-1.5" role="radiogroup">
             {#each summary.actions as action (action)}
+              {@const rowAction: RowAction = { action, summary }}
               <label
                 class="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
               >
@@ -346,7 +358,7 @@ the chosen one, so two actions are never live at once.
                       summary,
                     })}
                 />
-                {actionLabel(action)}
+                {rowActionLabel(rowAction)}
               </label>
             {/each}
           </div>
@@ -497,13 +509,13 @@ the chosen one, so two actions are never live at once.
         runAction(press)
       }}
     >
-      {actionLabel(chosen.action)}
+      {rowActionLabel(chosen)}
     </Button>
   </div>
 {:else}
   {@render connectButton(
     inventory.kind === DriveVaultInventoryKind.Loading ||
       working ||
-      reveal.kind === NameRevealKind.Asking,
+      checking,
   )}
 {/if}

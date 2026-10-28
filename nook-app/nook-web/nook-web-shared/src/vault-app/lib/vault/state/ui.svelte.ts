@@ -90,6 +90,8 @@ export class VaultUiState {
   /** Survives panel cancellation and navigation until the identity authenticates. */
   identityTransitionPending = $state(false);
   helpOpen = $state(false);
+  /** The access check page is open, unlocked or not. */
+  accessCheckOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
   /** The name given on the first-vault screen, shown by the later steps. */
   firstRunVaultName = $state("");
