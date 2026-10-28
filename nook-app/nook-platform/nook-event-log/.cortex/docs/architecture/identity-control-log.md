@@ -301,3 +301,8 @@ Behavior-focused Rust tests cover the log in
   - `the_member_passkey_opens_its_identity_and_every_vault_it_keeps`
   - `another_passkey_opens_no_identity_and_no_vault`
   - `a_backup_password_opens_its_vault_but_never_the_identity`
+- **Merging another identity's vaults with its passkey** (nook-core)
+  - `merging_registers_every_vault_of_the_other_identity_in_the_current_log`
+  - `a_passkey_that_is_not_a_member_merges_nothing`
+  - `merging_never_writes_the_other_identity_s_log`
+  - `a_vault_that_cannot_be_proven_fails_the_whole_merge`

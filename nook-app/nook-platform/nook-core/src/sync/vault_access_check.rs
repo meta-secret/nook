@@ -302,13 +302,13 @@ impl IdentityCheck {
 }
 
 /// One vault's causal graph and projection, built in memory.
-struct CheckedVaultSource {
+pub(crate) struct CheckedVaultSource {
     graph: EventGraph,
     projection: VaultProjection,
 }
 
 impl CheckedVaultSource {
-    fn load(store_id: &StoreId, events: Vec<LocalEventWrite>) -> VaultResult<Self> {
+    pub(crate) fn load(store_id: &StoreId, events: Vec<LocalEventWrite>) -> VaultResult<Self> {
         let graph = events
             .into_iter()
             .fold(LocalEventStore::new(), LocalEventStore::put_event)
@@ -347,8 +347,13 @@ impl CheckedVaultSource {
         Ok(VaultCheckOutcome::DoesNotOpen)
     }
 
+    /// The vault's projection of its own log.
+    pub(crate) fn projection(&self) -> &VaultProjection {
+        &self.projection
+    }
+
     /// The vault's name, decrypted with its secrets key.
-    fn name(&self, secrets_key: &SymmetricKey) -> VaultResult<ProviderVaultName> {
+    pub(crate) fn name(&self, secrets_key: &SymmetricKey) -> VaultResult<ProviderVaultName> {
         let crypto = VaultCrypto::new(secrets_key)?;
         Ok(match &self.projection.vault_name {
             ProjectedVaultName::Unnamed => ProviderVaultName::Unknown,
