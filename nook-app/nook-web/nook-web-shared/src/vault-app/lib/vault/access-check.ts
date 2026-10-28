@@ -99,11 +99,18 @@ export class CheckReports {
    * empty when none did. */
   openingPasskey(storeId: string): string {
     for (const report of this.reports) {
-      if (report.credential.kind !== "passkey") continue;
-      const opened = report.vaults.some(
-        (vault) => vault.storeId === storeId && vault.outcome.state === "opens",
-      );
-      if (opened) return shortPasskeyId(report.credential.fingerprint);
+      switch (report.credential.kind) {
+        case "backupPassword":
+          continue;
+        case "passkey":
+          if (
+            report.vaults.some(
+              (vault) =>
+                vault.storeId === storeId && vault.outcome.state === "opens",
+            )
+          )
+            return shortPasskeyId(report.credential.fingerprint);
+      }
     }
     return "";
   }
