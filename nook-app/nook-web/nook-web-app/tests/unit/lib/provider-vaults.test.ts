@@ -166,8 +166,8 @@ describe('recovery choice between several vaults', () => {
     }
     expect(row?.textContent).toContain(vault.t(eventsRequest))
     // Unreported times are left out rather than guessed: the line holds only
-    // the identity filing the vault and its event count.
-    expect(view.getByTestId('provider-vault-meta').children).toHaveLength(2)
+    // the event count; the identity filing the vault heads its group.
+    expect(view.getByTestId('provider-vault-meta').children).toHaveLength(1)
     expect(view.getByTestId('provider-vault-identity').textContent).toBe(
       vault.t({
         key: I18N_KEYS.ProviderVaultsFiledUnder,
