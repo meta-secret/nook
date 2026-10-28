@@ -7,7 +7,8 @@ import {
   type PasswordFormObservation,
 } from '../../nook-web-shared/src/extension/password-forms'
 
-type SiteMutationGlobalName =
+type SiteMutationBrowserGlobals = Pick<
+  Window,
   | 'document'
   | 'Element'
   | 'Node'
@@ -18,13 +19,13 @@ type SiteMutationGlobalName =
   | 'HTMLButtonElement'
   | 'HTMLInputElement'
   | 'HTMLLabelElement'
-type SiteMutationGlobals = Pick<typeof globalThis, SiteMutationGlobalName>
+>
 
 await companionWasmReady
 
 /** Renders an owned sign-in form and records the page's next mutations. */
 class SiteMutationFixture {
-  private readonly previous: SiteMutationGlobals = {
+  private readonly previous = {
     document: globalThis.document,
     Element: globalThis.Element,
     Node: globalThis.Node,
@@ -40,7 +41,7 @@ class SiteMutationFixture {
 
   install(): this {
     const browser = this.browser
-    const installed: Pick<Window, SiteMutationGlobalName> = {
+    const installed: SiteMutationBrowserGlobals = {
       document: browser.document,
       Element: browser.Element,
       Node: browser.Node,
