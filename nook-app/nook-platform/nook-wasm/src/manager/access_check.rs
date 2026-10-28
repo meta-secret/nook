@@ -1,7 +1,8 @@
-//! Access checks against the sync provider this manager is connected to or
-//! has staged for a recovery: iCloud, GitHub, Google Drive, or a local
-//! folder. The provider's identity logs and vault logs are read with the
-//! credentials already in the session; nothing is written.
+//! Where the manager reads a provider's identities and vaults from, and the
+//! access checks against them. The current provider (iCloud, GitHub, Google
+//! Drive, or a local folder this session is connected to or has staged for a
+//! recovery) is read with the session's credentials; a Drive account or a
+//! folder can also be read on its own. Checks write nothing.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -15,12 +16,54 @@ use nook_core::{
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+
 use super::NookVaultManager;
 use crate::NookError;
-use crate::public_api::SourceContents;
+use crate::public_api::{NookAccessCheckSource, SourceContents};
 use crate::storage::remote_event::RemoteEventRead;
 
+/// Where an identity operation or a check reads identities and vaults from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum NookProviderSource {
+    /// The provider this session is connected to or has staged for a
+    /// recovery, read with the credentials the session already holds.
+    CurrentProvider,
+    /// A signed-in Google account's Nook root.
+    #[serde(rename_all = "camelCase")]
+    GoogleDrive { access_token: String },
+    /// A local folder the user picked, by its stored handle.
+    #[serde(rename_all = "camelCase")]
+    LocalFolder { handle_id: String },
+}
+
 impl NookVaultManager {
+    /// A source's identity logs and vaults, read without any key.
+    pub(crate) async fn provider_source_contents(
+        &self,
+        source: &NookProviderSource,
+    ) -> Result<SourceContents, NookError> {
+        match source {
+            NookProviderSource::CurrentProvider => self.current_provider_contents().await,
+            NookProviderSource::GoogleDrive { access_token } => {
+                NookAccessCheckSource::GoogleDrive {
+                    access_token: access_token.clone(),
+                }
+                .contents()
+                .await
+            }
+            NookProviderSource::LocalFolder { handle_id } => {
+                NookAccessCheckSource::LocalFolder {
+                    handle_id: handle_id.clone(),
+                }
+                .contents()
+                .await
+            }
+        }
+    }
+
     /// Every vault the current provider files, with the identity filing it,
     /// and those identities' control logs.
     async fn current_provider_contents(&self) -> Result<SourceContents, NookError> {
@@ -76,25 +119,33 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Ask for one passkey and report which of the current provider's vaults
-    /// it opens, each proven by decrypting its key and name.
-    pub async fn check_passkey_access_at_current_provider(
+    /// Ask for one passkey and report which of the source's identities and
+    /// vaults it opens, each proven by decrypting its key and name.
+    pub async fn check_passkey_access_from(
         &self,
+        source: &tsify::Ts<NookProviderSource>,
         rp_id: &str,
     ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
-        self.current_provider_contents()
+        let source = source
+            .to_rust()
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+        self.provider_source_contents(&source)
             .await?
             .check_passkey(rp_id)
             .await
     }
 
-    /// Report which of the current provider's vaults a backup password opens.
-    pub async fn check_backup_password_access_at_current_provider(
+    /// Report which of the source's vaults a backup password opens.
+    pub async fn check_backup_password_access_from(
         &self,
+        source: &tsify::Ts<NookProviderSource>,
         password: String,
     ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
+        let source = source
+            .to_rust()
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
         let password = Zeroizing::new(password);
-        self.current_provider_contents()
+        self.provider_source_contents(&source)
             .await?
             .check_backup_password(&password)
     }
@@ -224,8 +275,10 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Local;
 
+        let source = Tsify::into_ts(&NookProviderSource::CurrentProvider)
+            .map_err(|_| anyhow::anyhow!("encode the check source"))?;
         let report: CredentialCheckReport = manager
-            .check_backup_password_access_at_current_provider("any".to_owned())
+            .check_backup_password_access_from(&source, "any".to_owned())
             .await
             .map_err(|error| anyhow::anyhow!("check backup password: {error:?}"))?
             .to_rust()

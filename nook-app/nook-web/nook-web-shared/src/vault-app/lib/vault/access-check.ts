@@ -5,6 +5,7 @@ import {
   type CredentialCheckReport,
   type IdentityCheck,
   type NookAccessCheckSource,
+  type NookProviderSource,
   type NookVaultManager,
   type VaultCheck,
 } from "$app-wasm";
@@ -63,6 +64,9 @@ export type BackupPasswordCheckRequest = {
 
 type CheckResult = Result<CredentialCheckReport, AccessCheckFailure>;
 
+/** The provider this session is connected to or has staged for a recovery. */
+const CURRENT_PROVIDER: NookProviderSource = { kind: "currentProvider" };
+
 /**
  * Read-only checks of which vaults a passkey or backup password opens. Rust
  * decrypts in memory and reports each vault by name; nothing is stored,
@@ -86,7 +90,10 @@ export class AccessCheckActions {
         const check: CurrentProviderCheck = {
           failure,
           run: (manager) =>
-            manager.check_passkey_access_at_current_provider(location.hostname),
+            manager.check_passkey_access_from(
+              CURRENT_PROVIDER,
+              location.hostname,
+            ),
         };
         return this.atCurrentProvider(check);
       }
@@ -113,7 +120,10 @@ export class AccessCheckActions {
         const check: CurrentProviderCheck = {
           failure,
           run: (manager) =>
-            manager.check_backup_password_access_at_current_provider(password),
+            manager.check_backup_password_access_from(
+              CURRENT_PROVIDER,
+              password,
+            ),
         };
         return this.atCurrentProvider(check);
       }

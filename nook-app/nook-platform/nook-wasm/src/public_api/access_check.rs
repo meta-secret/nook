@@ -72,7 +72,7 @@ impl SourceContents {
 }
 
 impl NookAccessCheckSource {
-    async fn contents(&self) -> Result<SourceContents, NookError> {
+    pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
         match self {
             Self::ThisBrowser => Self::browser_contents().await,
             Self::GoogleDrive { access_token } => {
@@ -172,20 +172,20 @@ impl NookAccessCheckSource {
 }
 
 /// One passkey the browser lets the user pick, on this relying party.
-struct CheckedPasskey<'a> {
-    rp_id: &'a str,
+pub(crate) struct CheckedPasskey<'a> {
+    pub(crate) rp_id: &'a str,
 }
 
 /// A passkey's re-derived app key and the fingerprint that names it.
-struct DerivedPasskey {
-    fingerprint: String,
-    app_key: DeviceIdentity,
+pub(crate) struct DerivedPasskey {
+    pub(crate) fingerprint: String,
+    pub(crate) app_key: DeviceIdentity,
 }
 
 impl CheckedPasskey<'_> {
     /// Ask for one passkey and re-derive this device's app key from its PRF
     /// output, in memory only.
-    async fn derive(&self) -> Result<DerivedPasskey, JsError> {
+    pub(crate) async fn derive(&self) -> Result<DerivedPasskey, JsError> {
         let request_options = BrowserPasskeyClient::recovery_options(self.rp_id)?;
         let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
         let raw_credential_id = BrowserPasskeyClient::credential_id(&credential)?;
