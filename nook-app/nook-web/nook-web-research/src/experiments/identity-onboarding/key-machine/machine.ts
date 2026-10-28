@@ -92,7 +92,7 @@ export const machine: readonly StateNode[] = [
     next: [
       { to: KeyState.MergeConfirm, label: 'passkey opens it → merge' },
       { to: KeyState.JoinPending, label: 'sealed → join request' },
-      { to: KeyState.Synced, label: 'leave them' },
+      { to: KeyState.Synced, label: 'skip for now' },
     ],
   },
   {

@@ -161,9 +161,15 @@ state's transitions; nothing here is about vaults. -->
     <p class={ui.label}>{flow.provider}</p>
     <h1 class={ui.title}>Other identities are kept here</h1>
     <p class={ui.body}>
-      An identity your passkey opens can be merged into {flow.local().name}.
-      One sealed to you can't: its devices have to let you in first.
+      {flow.local().name} now syncs to {flow.provider}. The same folder keeps
+      {undecided.length} other {undecided.length === 1 ? 'identity' : 'identities'}.
+      Pick one to act on:
     </p>
+    <ul class="{ui.quiet} list-disc space-y-1 pl-5">
+      <li><span class="text-[#d6d5d1]">Merge into {flow.local().name}</span> — only if your passkey is one of its keys. Then every key of either opens {flow.local().name}.</li>
+      <li><span class="text-[#d6d5d1]">Send join request</span> — if it's sealed to you. Its devices approve; then you merge it or keep it separate.</li>
+      <li><span class="text-[#d6d5d1]">Skip for now</span> — nothing changes for them; only {flow.local().name} syncs. Come back from Identities anytime.</li>
+    </ul>
   </header>
   <div class="mt-6 space-y-px" role="radiogroup" aria-label="Remote identity">
     {#each undecided as identity (identity.id)}
@@ -197,7 +203,7 @@ state's transitions; nothing here is about vaults. -->
         <Send class="size-4" aria-hidden="true" /> Send join request
       </button>
     {/if}
-    <button type="button" class={ui.link} onclick={() => flow.go(KeyState.Synced)}>Leave them</button>
+    <button type="button" class={ui.link} onclick={() => flow.go(KeyState.Synced)}>Skip for now</button>
   </div>
 {:else if flow.current === KeyState.MergeConfirm}
   <header class="space-y-2">
