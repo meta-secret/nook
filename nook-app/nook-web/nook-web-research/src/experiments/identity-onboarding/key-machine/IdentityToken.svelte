@@ -2,6 +2,7 @@
 key marks, and its state shown by shape and icon rather than text. -->
 <script lang="ts">
   import { KeyRound, Lock, LockOpen, Send, UserRound } from '@lucide/svelte'
+  import { scale } from 'svelte/transition'
   import { TokenStatus, type Token } from './machine'
 
   let { token }: { token: Token } = $props()
@@ -20,7 +21,8 @@ key marks, and its state shown by shape and icon rather than text. -->
   const marks = $derived(Array.from({ length: Math.min(token.keys, 4) }, (_, index) => index))
 </script>
 
-<div class="flex min-w-0 items-center gap-2.5 border px-3 py-2 transition {frame}" title={token.label}>
+{#key token.status}
+<div class="flex min-w-0 items-center gap-2.5 border px-3 py-2 transition {frame}" title={token.label} in:scale={{ start: 0.94, duration: 240 }}>
   {#if token.status === TokenStatus.Sealed}
     <Lock class="size-3.5 shrink-0" aria-hidden="true" />
   {:else if token.status === TokenStatus.Opened}
@@ -39,3 +41,4 @@ key marks, and its state shown by shape and icon rather than text. -->
     {/each}
   </span>
 </div>
+{/key}
