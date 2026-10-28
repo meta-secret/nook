@@ -26,6 +26,9 @@ const workflow = z
         if: z.string(),
         steps: z.array(z.record(z.string(), z.unknown())),
       }),
+      "web-e2e": z.object({
+        steps: z.array(z.record(z.string(), z.unknown())),
+      }),
     }),
   })
   .parse(
