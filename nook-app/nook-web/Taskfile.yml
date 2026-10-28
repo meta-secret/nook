@@ -431,8 +431,8 @@ tasks:
         fi
         cd "{{.WEB_ROOT}}"
         failed=0
-        bun x playwright test --project=stable "$@" || failed=1
-        bun x playwright test --project=unstable "$@" || failed=1
+        bun x playwright test --project=stable --output=test-results/stable "$@" || failed=1
+        bun x playwright test --project=unstable --output=test-results/unstable "$@" || failed=1
         exit "$failed"
 
   _web:e2e:build-if-needed:
