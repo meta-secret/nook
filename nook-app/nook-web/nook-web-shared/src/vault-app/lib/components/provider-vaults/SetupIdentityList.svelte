@@ -12,6 +12,7 @@ own button saves it there. Picking runs at once: there is no plan to apply.
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
   import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
+  import { SetupIdentityOffer } from '$lib/components/provider-vaults/setup-identity-offer'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -36,11 +37,28 @@ own button saves it there. Picking runs at once: there is no plan to apply.
   } = $props()
 
   const busy = $derived(disabled || working !== '' || vault.isVerifying)
+
+  /** The one button Rust's setup action gives a card. */
+  function offer(choice: ProviderIdentityChoice): SetupIdentityOffer {
+    switch (choice.setup.kind) {
+      case 'continue':
+        return choice.setup.decision === 'leave'
+          ? SetupIdentityOffer.NoAction
+          : SetupIdentityOffer.Continue
+      case 'requestToJoin':
+        return SetupIdentityOffer.Join
+      case 'waiting':
+        return SetupIdentityOffer.Check
+      case 'unavailable':
+        return SetupIdentityOffer.NoAction
+    }
+  }
 </script>
 
 <div class="space-y-3" data-testid="setup-identity-list">
   {#each choices as choice (choice.identity.identityId)}
     {@const running = working === choice.identity.identityId}
+    {@const offered = offer(choice)}
     <section
       class="nk-frame space-y-3 px-4 py-3"
       data-testid="setup-identity"
@@ -48,7 +66,7 @@ own button saves it there. Picking runs at once: there is no plan to apply.
       data-setup={choice.setup.kind}
     >
       <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
-      {#if choice.setup.kind === 'continue' && choice.setup.decision !== 'leave'}
+      {#if offered === SetupIdentityOffer.Continue}
         <Button
           type="button"
           size="sm"
@@ -63,7 +81,7 @@ own button saves it there. Picking runs at once: there is no plan to apply.
           {/if}
           {vault.t(I18N_KEYS.FirstRunIdentityContinue)}
         </Button>
-      {:else if choice.setup.kind === 'requestToJoin'}
+      {:else if offered === SetupIdentityOffer.Join}
         <Button
           type="button"
           size="sm"
@@ -79,7 +97,7 @@ own button saves it there. Picking runs at once: there is no plan to apply.
           {/if}
           {vault.t(I18N_KEYS.FirstRunIdentityJoin)}
         </Button>
-      {:else if choice.setup.kind === 'waiting'}
+      {:else if offered === SetupIdentityOffer.Check}
         <Button
           type="button"
           size="sm"

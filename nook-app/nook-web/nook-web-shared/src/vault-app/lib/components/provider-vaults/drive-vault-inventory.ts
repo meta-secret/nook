@@ -23,9 +23,21 @@ export type DriveVaultInventory =
 
 /** The step's one action button: Connect & sync, or the identity plan
  * followed by it. An empty label keeps the button's own words. */
+/** How the step shows its one action. */
+export enum ConnectButtonLook {
+  /** The step's primary button. */
+  Primary = "primary",
+  /** "Create a new identity" under the listed identities: the identity in
+   * use is saved on the provider as a new one. */
+  NewIdentity = "new-identity",
+}
+
 export type ConnectPlanButton = {
   readonly busy: boolean;
   readonly label: string;
+  /** The new-identity option's second line; the primary button has none. */
+  readonly detail: string;
+  readonly look: ConnectButtonLook;
   readonly run: () => Promise<void>;
 };
 

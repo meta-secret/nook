@@ -15,6 +15,7 @@ use nook_core::{
     GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
 };
 use nook_core::{SymmetricKey, VaultMetaState, VaultType, VaultUnlock};
+use std::mem;
 use wasm_bindgen::JsError;
 
 impl NookVaultManager {
@@ -28,7 +29,7 @@ impl NookVaultManager {
     ) -> Result<identity_record::PendingSimpleGenesis, NookError> {
         // A name setup gave the identity before it existed wins; the vault's
         // own name is set only after it connects.
-        let label = match std::mem::take(&mut self.device.first_vault_identity_name) {
+        let label = match mem::take(&mut self.device.first_vault_identity_name) {
             FirstVaultIdentityName::Named(name) => name,
             FirstVaultIdentityName::Unnamed => match &self.vault.vault_name {
                 VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),

@@ -105,9 +105,14 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
       0,
     )
 
-    // The step's one button saves the identity in use there.
-    await expect(deviceB.getByTestId('connect-provider-btn')).toHaveText(
-      enLocale.provider_identities.save_here.replace('{identity}', 'Mine'),
+    // Or the identity in use is saved there as a new identity.
+    const create = deviceB.getByTestId('connect-provider-btn')
+    await expect(create).toContainText(enLocale.first_run.sync_create_title)
+    await expect(create).toContainText(
+      enLocale.provider_identities.new_identity_detail.replace(
+        '{identity}',
+        'Mine',
+      ),
     )
   })
 })

@@ -7,7 +7,7 @@ identity can be created there instead, or kept on this browser only.
 <script lang="ts">
   import { untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { Plus, RefreshCw } from '@lucide/svelte'
+  import { RefreshCw } from '@lucide/svelte'
   import type { NookProviderSource, ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -17,6 +17,8 @@ identity can be created there instead, or kept on this browser only.
     resolveCurrentOAuthOriginSupport,
   } from '$lib/auth/oauth-origin'
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
+  import NewIdentityOption from '$lib/components/provider-vaults/NewIdentityOption.svelte'
+  import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
   import {
     identityChoices,
     type IdentityChoicesFailure,
@@ -195,30 +197,19 @@ identity can be created there instead, or kept on this browser only.
           onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
           onCheck={act(FirstRunIdentityAction.CheckJoin)}
         />
+        <OptionDivider {vault} />
       {:else}
         <p class="text-sm text-muted-foreground" data-testid="first-run-identities-empty">
           {vault.t(I18N_KEYS.FirstRunSyncEmpty)}
         </p>
       {/if}
-      <button
-        type="button"
-        class="group flex w-full items-center gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 disabled:opacity-60"
-        data-testid="first-run-create-new-identity"
+      <NewIdentityOption
+        title={vault.t(I18N_KEYS.FirstRunSyncCreateTitle)}
+        detail={vault.t(I18N_KEYS.FirstRunSyncCreateBody)}
+        testId="first-run-create-new-identity"
         disabled={working !== '' || vault.isVerifying}
-        onclick={() => actions.nameNew(FirstRunPlace.SyncProvider)}
-      >
-        <span class="nk-tile shrink-0" aria-hidden="true">
-          <Plus class="size-4" />
-        </span>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground">
-            {vault.t(I18N_KEYS.FirstRunSyncCreateTitle)}
-          </span>
-          <span class="block text-xs text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.FirstRunSyncCreateBody)}
-          </span>
-        </span>
-      </button>
+        onCreate={() => actions.nameNew(FirstRunPlace.SyncProvider)}
+      />
     {/if}
   {/if}
 

@@ -16,7 +16,11 @@
   import type { VaultState } from "$lib/vault.svelte";
   import * as oauthActions from "$lib/vault/oauth";
   import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
-  import type { ConnectPlanButton } from "$lib/components/provider-vaults/drive-vault-inventory";
+  import {
+    ConnectButtonLook,
+    type ConnectPlanButton,
+  } from "$lib/components/provider-vaults/drive-vault-inventory";
+  import NewIdentityOption from "$lib/components/provider-vaults/NewIdentityOption.svelte";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
@@ -161,6 +165,8 @@
   const directConnect: ConnectPlanButton = {
     busy: false,
     label: "",
+    detail: "",
+    look: ConnectButtonLook.Primary,
     run: connectWithVaultTarget,
   };
 
@@ -479,30 +485,45 @@
 </div>
 
 {#snippet connectButton(button: ConnectPlanButton)}
-  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-    <Button
-      type="button"
-      class="sm:min-w-[180px]"
-      data-testid="connect-provider-btn"
+  {#if button.look === ConnectButtonLook.NewIdentity}
+    <NewIdentityOption
+      title={button.label}
+      detail={button.detail}
+      testId="connect-provider-btn"
       disabled={!canConnect ||
         button.busy ||
         isVerifying ||
         isInitializing ||
         preparingTarget}
-      onclick={() => void button.run()}
-    >
-      {#if isInitializing}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-      {:else if isVerifying || preparingTarget}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
-      {:else}
-        <ShieldCheck class="size-4" />
-        {button.label || vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
-      {/if}
-    </Button>
-  </div>
+      busy={isVerifying || preparingTarget}
+      onCreate={() => void button.run()}
+    />
+  {:else}
+    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        class="sm:min-w-[180px]"
+        data-testid="connect-provider-btn"
+        disabled={!canConnect ||
+          button.busy ||
+          isVerifying ||
+          isInitializing ||
+          preparingTarget}
+        onclick={() => void button.run()}
+      >
+        {#if isInitializing}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+        {:else if isVerifying || preparingTarget}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
+        {:else}
+          <ShieldCheck class="size-4" />
+          {button.label || vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+        {/if}
+      </Button>
+    </div>
+  {/if}
 {/snippet}
 
 <style>

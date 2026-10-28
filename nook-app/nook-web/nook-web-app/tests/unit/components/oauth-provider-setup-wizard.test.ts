@@ -281,10 +281,13 @@ describe('Google Drive provider setup', () => {
       other.querySelectorAll('[data-testid="setup-identity-join"]'),
     ).toHaveLength(1)
     expect(view.queryAllByTestId('provider-identity-decision')).toHaveLength(0)
+    // Or the identity in use is saved there as a new identity.
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
-    expect(view.getByTestId('connect-provider-btn').textContent).toContain(
+    const create = view.getByTestId('connect-provider-btn').textContent
+    expect(create).toContain(vault.t(I18N_KEYS.FirstRunSyncCreateTitle))
+    expect(create).toContain(
       vault.t({
-        key: I18N_KEYS.ProviderIdentitiesSaveHere,
+        key: I18N_KEYS.ProviderIdentitiesNewIdentityDetail,
         replacements: { identity: 'Personal' },
       }),
     )

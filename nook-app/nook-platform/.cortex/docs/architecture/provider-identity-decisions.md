@@ -98,9 +98,11 @@ offers adding by another passkey.
 | Unchecked, not opened, join denied | **Request to join** |
 | Other identity here | none |
 
+- Below the list, after an "or", **Create a new identity** is always
+  offered. First run names a fresh identity there. With an identity in use,
+  it saves that identity on the provider as a new one and connects.
 - With an identity in use, **This browser** is that identity: its card has
-  no action, and the step's button reads **Save _identity_ here** and
-  connects. Another action re-reads the folder when it finishes.
+  no action. Another action re-reads the folder when it finishes.
 - The card's tag says what this browser's passkey is to the identity:
   **In use here**, **Member**, **Not a member**, **Join requested**, or
   **Join request denied**.

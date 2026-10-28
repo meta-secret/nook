@@ -294,7 +294,8 @@ With an identity in use, as when the Sync page adds Google Drive, each card
 carries its one [setup action](provider-identity-decisions.md#setup-action),
 which runs at once: **Continue** for a member, **Request to join** for
 anyone else, **Check again** for a join already asked. The identity in use
-has none; the step's button reads **Save _identity_ here** and connects.
+has none. Below the list, after an "or", **Create a new identity** saves the
+identity in use on the provider as a new one and connects.
 Identities are never merged: a passkey that opens one completes it here.
 
 With no identity in use, the decision is one segmented control, **Leave as

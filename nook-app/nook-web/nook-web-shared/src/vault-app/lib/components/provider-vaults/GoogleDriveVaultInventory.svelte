@@ -5,7 +5,8 @@ Connect & sync before anything is written, one card per identity.
 With an identity in use (adding a sync provider to it), each card carries
 the one action Rust decided from this browser's key, and it runs at once: a
 member continues, anyone else asks to join, a join asked before is checked
-again. The step's button saves the identity in use there.
+again. Or "Create a new identity" saves the identity in use there as a new
+one, and connects.
 
 On the recovery screen, with no identity yet, each identity offers the
 decisions Rust allows; picking one runs nothing, and the step's button runs
@@ -25,6 +26,7 @@ decrypts in memory and changes nothing.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
   import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
+  import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
   import { FirstRunIdentityAction } from '$lib/vault/first-run'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
@@ -47,6 +49,7 @@ decrypts in memory and changes nothing.
     type AccessCheckTarget,
   } from '$lib/vault/access-check'
   import {
+    ConnectButtonLook,
     DriveVaultInventoryKind,
     DriveVaultInventoryReader,
     listedVaults,
@@ -217,7 +220,7 @@ decrypts in memory and changes nothing.
     }
   }
 
-  /** The name of the identity in use, which the step's button saves. */
+  /** The name of the identity in use, which the new-identity option saves. */
   const identityInUse = $derived(
     vault.identityControl.view.kind === IdentityControlViewKind.Ready
       ? vault.identityControl.view.snapshot.identityLabel
@@ -225,19 +228,34 @@ decrypts in memory and changes nothing.
   )
 
   const button = $derived.by((): ConnectPlanButton => {
-    const ready = inventory.kind !== DriveVaultInventoryKind.Loading
-    const saveHere: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.ProviderIdentitiesSaveHere,
-      replacements: { identity: identityInUse },
+    const busy =
+      inventory.kind === DriveVaultInventoryKind.Loading ||
+      working ||
+      checking ||
+      workingOn !== ''
+    if (setupMode) {
+      const detail: Parameters<typeof vault.t>[0] = {
+        key: I18N_KEYS.ProviderIdentitiesNewIdentityDetail,
+        replacements: { identity: identityInUse },
+      }
+      return {
+        busy,
+        label: vault.t(I18N_KEYS.FirstRunSyncCreateTitle),
+        detail: identityInUse
+          ? vault.t(detail)
+          : vault.t(I18N_KEYS.FirstRunSyncCreateBody),
+        look: ConnectButtonLook.NewIdentity,
+        run: runPlan,
+      }
     }
     return {
-      busy: !ready || working || checking || workingOn !== '',
+      busy,
       label:
         planned.length > 0
           ? vault.t(I18N_KEYS.ProviderIdentitiesConnectApply)
-          : setupMode && identityInUse
-            ? vault.t(saveHere)
-            : '',
+          : '',
+      detail: '',
+      look: ConnectButtonLook.Primary,
       run: runPlan,
     }
   })
@@ -300,4 +318,7 @@ decrypts in memory and changes nothing.
   {/if}
 {/if}
 <IdentityJoinKeyGate {vault} onRequested={() => load(accessToken)} />
+{#if setupMode && listedIdentities > 0}
+  <OptionDivider {vault} />
+{/if}
 {@render connectButton(button)}
