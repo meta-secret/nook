@@ -10,8 +10,7 @@ export enum KeyState {
   ConnectProvider = 'connect-provider',
   Synced = 'synced',
   RemoteIdentities = 'remote-identities',
-  MergeConfirm = 'merge-confirm',
-  Merged = 'merged',
+  UseInstead = 'use-instead',
   JoinPending = 'join-pending',
   Joined = 'joined',
   ImportProvider = 'import-provider',
@@ -90,22 +89,16 @@ export const machine: readonly StateNode[] = [
     title: 'Remote identities found',
     group: StateGroup.Remote,
     next: [
-      { to: KeyState.MergeConfirm, label: 'passkey opens it → merge' },
+      { to: KeyState.UseInstead, label: 'passkey opens it → use it instead' },
       { to: KeyState.JoinPending, label: 'sealed → join request' },
       { to: KeyState.Synced, label: 'skip for now' },
     ],
   },
   {
-    state: KeyState.MergeConfirm,
-    title: 'Merge identities',
+    state: KeyState.UseInstead,
+    title: 'Use it instead',
     group: StateGroup.Remote,
-    next: [{ to: KeyState.Merged, label: 'confirmed with passkey' }],
-  },
-  {
-    state: KeyState.Merged,
-    title: 'One identity',
-    group: StateGroup.Remote,
-    next: [],
+    next: [{ to: KeyState.UsingRemote, label: 'empty local identity removed' }],
   },
   {
     state: KeyState.JoinPending,
@@ -118,8 +111,9 @@ export const machine: readonly StateNode[] = [
     title: 'Joined',
     group: StateGroup.Remote,
     next: [
-      { to: KeyState.MergeConfirm, label: 'merge into yours' },
-      { to: KeyState.Synced, label: 'keep separate' },
+      { to: KeyState.UseInstead, label: 'use it instead' },
+      { to: KeyState.Synced, label: 'keep both' },
+      { to: KeyState.UsingRemote, label: 'onboarding: use it' },
     ],
   },
   {

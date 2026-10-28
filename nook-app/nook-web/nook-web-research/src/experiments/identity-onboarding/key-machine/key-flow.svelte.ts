@@ -19,8 +19,6 @@ export class KeyFlow {
   provider = $state('Google Drive')
   /** The remote identity the user is acting on. */
   chosen = $state<IdentityFixture>(work)
-  /** Remote identities merged into the local one. */
-  merged = $state<readonly IdentityFixture[]>([])
   /** Remote identities joined and kept separate. */
   separate = $state<readonly IdentityFixture[]>([])
   providerHolds = $state<ProviderHolds>(ProviderHolds.Identities)
@@ -37,15 +35,13 @@ export class KeyFlow {
     this.visited = [KeyState.Empty]
     this.hasLocal = false
     this.chosen = work
-    this.merged = []
     this.separate = []
     this.synced = false
   }
 
-  /** Every key that opens the local identity: its own passkey, plus the keys
-   * of every identity merged into it. */
+  /** A freshly created identity has one key: this browser's passkey. */
   localKeys(): readonly KeyFixture[] {
-    return [thisBrowserPasskey, ...this.merged.flatMap((identity) => identity.keys)]
+    return [thisBrowserPasskey]
   }
 
   local(): IdentityFixture {

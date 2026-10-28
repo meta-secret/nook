@@ -52,11 +52,13 @@ state's transitions; nothing here is about vaults. -->
     )
   }
 
-  async function merge(): Promise<void> {
+  /** The local identity holds nothing but this browser's key, so using the
+   * remote one instead removes it and loses nothing. */
+  async function useInstead(): Promise<void> {
     await pause()
-    flow.merged = [...flow.merged, flow.chosen]
-    flow.separate = flow.separate.filter((identity) => identity.id !== flow.chosen.id)
-    flow.go(KeyState.Merged)
+    flow.hasLocal = false
+    flow.separate = []
+    flow.go(KeyState.UsingRemote)
   }
 
   async function approve(): Promise<void> {
@@ -67,9 +69,7 @@ state's transitions; nothing here is about vaults. -->
   /** The remote identities still to decide about. */
   const undecided = $derived(
     remoteIdentities.filter(
-      (identity) =>
-        !flow.merged.some((merged) => merged.id === identity.id) &&
-        !flow.separate.some((kept) => kept.id === identity.id),
+      (identity) => !flow.separate.some((kept) => kept.id === identity.id),
     ),
   )
 
@@ -166,8 +166,8 @@ state's transitions; nothing here is about vaults. -->
       Pick one to act on:
     </p>
     <ul class="{ui.quiet} list-disc space-y-1 pl-5">
-      <li><span class="text-[#d6d5d1]">Merge into {flow.local().name}</span> — only if your passkey is one of its keys. Then every key of either opens {flow.local().name}.</li>
-      <li><span class="text-[#d6d5d1]">Send join request</span> — if it's sealed to you. Its devices approve; then you merge it or keep it separate.</li>
+      <li><span class="text-[#d6d5d1]">Use it instead</span> — if your passkey is one of its keys, it is already yours. {flow.local().name} holds nothing but this browser's key, so it is removed and nothing is lost.</li>
+      <li><span class="text-[#d6d5d1]">Send join request</span> — if it's sealed to you. Once a device approves, use it instead of {flow.local().name} or keep both on this browser.</li>
       <li><span class="text-[#d6d5d1]">Skip for now</span> — nothing changes for them; only {flow.local().name} syncs. Come back from Identities anytime.</li>
     </ul>
   </header>
@@ -195,8 +195,8 @@ state's transitions; nothing here is about vaults. -->
   </div>
   <div class="mt-6 flex flex-wrap items-center gap-3">
     {#if opensFor(flow.chosen)}
-      <button type="button" class={ui.primary} onclick={() => flow.go(KeyState.MergeConfirm)}>
-        Merge into {flow.local().name}
+      <button type="button" class={ui.primary} onclick={() => flow.go(KeyState.UseInstead)}>
+        Use {flow.chosen.name || flow.chosen.words} instead
       </button>
     {:else}
       <button type="button" class={ui.primary} onclick={() => flow.go(KeyState.JoinPending)}>
@@ -205,33 +205,24 @@ state's transitions; nothing here is about vaults. -->
     {/if}
     <button type="button" class={ui.link} onclick={() => flow.go(KeyState.Synced)}>Skip for now</button>
   </div>
-{:else if flow.current === KeyState.MergeConfirm}
+{:else if flow.current === KeyState.UseInstead}
   <header class="space-y-2">
-    <p class={ui.label}>Merge</p>
-    <h1 class={ui.title}>Make {flow.chosen.name || flow.chosen.words} part of {flow.local().name}?</h1>
+    <p class={ui.label}>Use it instead</p>
+    <h1 class={ui.title}>Use {flow.chosen.name || flow.chosen.words} instead of {flow.local().name}?</h1>
     <p class={ui.body}>
-      The two become one identity: every key of either opens it. Its devices
-      keep working; they now open {flow.local().name}.
+      {flow.local().name} holds nothing but this browser's key, so it is
+      removed and nothing is lost. This browser opens
+      {flow.chosen.name || flow.chosen.words} with the same passkey.
     </p>
   </header>
   <div class="mt-6 grid gap-px sm:grid-cols-2">
-    <KeyIdentity identity={flow.local()} tag="Yours" />
-    <KeyIdentity identity={flow.chosen} tag="Merging" />
+    <KeyIdentity identity={flow.local()} tag="Removed" opens={false} />
+    <KeyIdentity identity={flow.joined()} tag="Yours" />
   </div>
-  <button type="button" class="{ui.primary} mt-6" disabled={waiting} onclick={merge}>
+  <button type="button" class="{ui.primary} mt-6" disabled={waiting} onclick={useInstead}>
     <KeyRound class="size-4" aria-hidden="true" />
-    {waiting ? 'Waiting for your passkey…' : 'Merge with my passkey'}
+    {waiting ? 'Waiting for your passkey…' : `Use ${flow.chosen.name || flow.chosen.words}`}
   </button>
-{:else if flow.current === KeyState.Merged}
-  <header class="space-y-2">
-    <p class={ui.label}>Merged</p>
-    <h1 class={ui.title}>{flow.local().name} is one identity</h1>
-    <p class={ui.body}>All of these keys open it.</p>
-  </header>
-  <div class="mt-6 space-y-4">
-    <KeyIdentity identity={flow.local()} tag="In use" />
-    <button type="button" class={ui.secondary} onclick={() => flow.go(KeyState.Synced)}>Done</button>
-  </div>
 {:else if flow.current === KeyState.JoinPending}
   <header class="space-y-2">
     <p class={ui.label}>Join request</p>
@@ -253,8 +244,8 @@ state's transitions; nothing here is about vaults. -->
     <h1 class={ui.title}>This browser is a key of {flow.chosen.name || flow.chosen.words}</h1>
     {#if flow.hasLocal}
       <p class={ui.body}>
-        Now you can open it. Merge it into {flow.local().name}, or keep the two
-        apart.
+        It opens on this browser now. Use it instead of {flow.local().name},
+        which holds only this browser's key, or keep both here.
       </p>
     {/if}
   </header>
@@ -262,8 +253,8 @@ state's transitions; nothing here is about vaults. -->
     <KeyIdentity identity={flow.joined()} tag="This browser" />
     {#if flow.hasLocal}
       <div class="flex flex-wrap items-center gap-3">
-        <button type="button" class={ui.primary} onclick={() => flow.go(KeyState.MergeConfirm)}>
-          Merge into {flow.local().name}
+        <button type="button" class={ui.primary} onclick={() => flow.go(KeyState.UseInstead)}>
+          Use {flow.chosen.name || flow.chosen.words} instead
         </button>
         <button
           type="button"
@@ -273,7 +264,7 @@ state's transitions; nothing here is about vaults. -->
             flow.go(KeyState.Synced)
           }}
         >
-          Keep separate
+          Keep both on this browser
         </button>
       </div>
     {:else}
