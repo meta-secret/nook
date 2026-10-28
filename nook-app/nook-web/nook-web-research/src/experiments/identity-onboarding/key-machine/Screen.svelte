@@ -96,7 +96,6 @@ a join opens them. -->
 
 <div class="space-y-6">
   {#if flow.current === KeyState.Empty}
-    <Scene browser={[]} />
     <h1 class={ui.title}>Start</h1>
     <div class={grid}>
       <ActionCard title="Create identity" onPick={() => flow.go(KeyState.CreateIdentity)} />
@@ -220,7 +219,6 @@ a join opens them. -->
       {/if}
     </div>
   {:else if flow.current === KeyState.ImportProvider}
-    <Scene browser={[]} />
     <h1 class={ui.title}>Import from</h1>
     <div class={grid}>
       {#each providerNames as name (name)}

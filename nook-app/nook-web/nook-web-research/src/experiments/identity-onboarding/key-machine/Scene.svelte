@@ -1,7 +1,8 @@
-<!-- Where identities are, drawn: this browser on the left, the sync
-provider's folder on the right, and what links them. -->
+<!-- Where identities are, drawn: this browser, and once one is connected,
+the sync provider's folder beside it with what links them. Nothing is drawn
+before there is something to show. -->
 <script lang="ts">
-  import { ArrowLeftRight, Cloud, KeyRound, Monitor, Plus, Send } from '@lucide/svelte'
+  import { ArrowLeftRight, Cloud, KeyRound, Monitor, Send } from '@lucide/svelte'
   import IdentityToken from './IdentityToken.svelte'
   import { SceneLink, type Token } from './machine'
 
@@ -22,6 +23,7 @@ provider's folder on the right, and what links them. -->
   const head = 'mb-1 flex items-center gap-2 font-mono text-[11px] tracking-[0.14em] text-[#80858c] uppercase'
 </script>
 
+{#if provider}
 <div class="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-stretch" aria-label="Where your identities are">
   <div class={zone}>
     <p class={head}><Monitor class="size-3.5" aria-hidden="true" /> This browser</p>
@@ -44,19 +46,20 @@ provider's folder on the right, and what links them. -->
     {/if}
   </div>
 
-  {#if provider}
-    <div class={zone}>
-      <p class={head}><Cloud class="size-3.5" aria-hidden="true" /> {provider}</p>
-      {#each remote as token (token.id)}
-        <IdentityToken {token} />
-      {:else}
-        <span class="m-auto font-mono text-[12px] text-[#4a5058]">empty</span>
-      {/each}
-    </div>
-  {:else}
-    <div class="{zone} items-center justify-center border-dashed text-[#4a5058]">
-      <Plus class="size-5" aria-hidden="true" />
-      <span class="font-mono text-[11px] tracking-[0.14em] uppercase">sync</span>
-    </div>
-  {/if}
+  <div class={zone}>
+    <p class={head}><Cloud class="size-3.5" aria-hidden="true" /> {provider}</p>
+    {#each remote as token (token.id)}
+      <IdentityToken {token} />
+    {:else}
+      <span class="m-auto font-mono text-[12px] text-[#4a5058]">empty</span>
+    {/each}
+  </div>
 </div>
+{:else if browser.length > 0}
+  <div class="max-w-[320px] {zone} min-h-0" aria-label="Where your identities are">
+    <p class={head}><Monitor class="size-3.5" aria-hidden="true" /> This browser</p>
+    {#each browser as token (token.id)}
+      <IdentityToken {token} />
+    {/each}
+  </div>
+{/if}

@@ -57,6 +57,7 @@ the sync provider holds and whether your passkey opens its identities. -->
       <StateMap {flow} />
     </aside>
     <section class="max-w-[560px]">
+      {#if flow.history.length > 1}
       <nav class="mb-8 flex items-center gap-4" aria-label="History">
         <button type="button" class="{ui.link} inline-flex items-center gap-1.5 disabled:opacity-30" disabled={!flow.canBack()} onclick={() => flow.back()}>
           <ArrowLeft class="size-3.5" aria-hidden="true" /> Back
@@ -66,6 +67,7 @@ the sync provider holds and whether your passkey opens its identities. -->
         </button>
         <span class="ml-auto font-mono text-[11px] text-[#5d6268]">step {flow.cursor + 1} of {flow.history.length}</span>
       </nav>
+      {/if}
       <Screen {flow} />
     </section>
   </div>
