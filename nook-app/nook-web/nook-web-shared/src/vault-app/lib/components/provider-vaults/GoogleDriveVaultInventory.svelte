@@ -25,11 +25,14 @@ passkey opens an identity decrypts in memory and changes nothing.
     type IdentityChoicesFailure,
     type IdentityChoicesRequest,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
   import {
     IdentityPlanActions,
+    IdentityPlanOutcomeKind,
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
+  import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
   import { VaultOAuthActions } from '$lib/vault/oauth'
   import {
     AccessCheckActions,
@@ -68,7 +71,11 @@ passkey opens an identity decrypts in memory and changes nothing.
   let checking = $state(false)
   let working = $state(false)
   const plan = new IdentityPlan()
-  const disabled = $derived(busy || working)
+  // A join waiting for its key keeps the step still: one action at a time.
+  const joinIdle = $derived(
+    vault.identityJoin.kind === IdentityJoinWaitKind.Idle,
+  )
+  const disabled = $derived(busy || working || !joinIdle)
 
   /** The vaults a found Nook root holds; none before it is listed. */
   function listedVaults(
@@ -95,6 +102,7 @@ passkey opens an identity decrypts in memory and changes nothing.
   )
 
   const planned = $derived(choices.isOk() ? plan.planned(choices.value) : [])
+  const listedIdentities = $derived(choices.isOk() ? choices.value.length : 0)
 
   async function load(token: string): Promise<void> {
     inventory = { kind: DriveVaultInventoryKind.Loading }
@@ -157,6 +165,14 @@ passkey opens an identity decrypts in memory and changes nothing.
           return
         }
         plan.clear()
+        switch (ran.value.kind) {
+          case IdentityPlanOutcomeKind.Applied:
+            break
+          // A join waits for a new key of its own; its ceremony asks, and
+          // Connect & sync waits for the identity that ceremony adopts.
+          case IdentityPlanOutcomeKind.WaitsForKey:
+            return
+        }
       } finally {
         working = false
       }
@@ -198,7 +214,7 @@ passkey opens an identity decrypts in memory and changes nothing.
     <p class="text-xs text-destructive" role="alert">
       {vault.t(choices.error.translationKey)}
     </p>
-  {:else if choices.value.length === 0}
+  {:else if listedIdentities === 0}
     <p
       class="text-[11px] text-pretty text-muted-foreground"
       data-testid="google-drive-vaults-empty"
@@ -221,4 +237,5 @@ passkey opens an identity decrypts in memory and changes nothing.
     </div>
   {/if}
 {/if}
+<IdentityJoinKeyGate {vault} onRequested={() => load(accessToken)} />
 {@render connectButton(button)}

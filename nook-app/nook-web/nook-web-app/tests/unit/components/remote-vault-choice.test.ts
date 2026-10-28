@@ -1,19 +1,24 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { ok } from 'neverthrow'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import type {
-  CredentialCheckReport,
-  FilingIdentity,
-  ProviderVaultSummary,
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
+import initNookWasm, {
+  type CredentialCheckReport,
+  type FilingIdentity,
+  type ProviderIdentityJoin,
+  type ProviderVaultSummary,
 } from '$app-wasm'
 import {
   AccessCheckActions,
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
+import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
-import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import RemoteVaultChoice from '../../../../nook-web-shared/src/vault-app/lib/components/login/RemoteVaultChoice.svelte'
+
+beforeAll(async () => {
+  await initNookWasm()
+})
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -31,6 +36,21 @@ const stranger: FilingIdentity = {
   name: { state: 'unknown' },
   words: ['amber', 'falcon', 'tide'],
   log: { state: 'absent' },
+}
+
+/** The stranger, with its log telling where this browser's join stands. */
+function strangerWhoseJoinIs(join: ProviderIdentityJoin): FilingIdentity {
+  return {
+    ...stranger,
+    log: {
+      state: 'read',
+      devices: 2,
+      newestDevice: { state: 'unreported' },
+      vaults: 1,
+      thisBrowser: false,
+      join,
+    },
+  }
 }
 
 /** One recoverable vault filed under one identity. */
@@ -53,11 +73,20 @@ function choice({ storeId, identity }: ChoiceRequest): ProviderVaultSummary {
 function renderChoice(vaults: ProviderVaultSummary[]) {
   const vault = VaultStateTestFixture.create()
   vault.remoteVaultChoices = vaults
-  const onChoose = vi.fn()
-  const props = { vault, busy: false, onChoose } satisfies ComponentProps<
+  const onApplied = vi.fn()
+  const props = { vault, busy: false, onApplied } satisfies ComponentProps<
     typeof RemoteVaultChoice
   >
-  return { view: render(RemoteVaultChoice, props), vault, onChoose }
+  return { view: render(RemoteVaultChoice, props), vault, onApplied }
+}
+
+function decisionsOf(card: HTMLElement | undefined): (string | undefined)[] {
+  return [
+    ...(card?.querySelectorAll('[data-testid="provider-identity-decision"]') ??
+      []),
+  ]
+    .filter((button) => button instanceof HTMLElement)
+    .map((button) => button.dataset.decision)
 }
 
 const familyVault: ChoiceRequest = {
@@ -108,19 +137,13 @@ describe('Recovery vault choice', () => {
     const check = vi
       .spyOn(AccessCheckActions.prototype, 'checkPasskey')
       .mockResolvedValue(ok(report))
-    const { view, vault, onChoose } = renderChoice([
-      choice(familyVault),
-      choice(strangerVault),
-    ])
+    const { view } = renderChoice([choice(familyVault), choice(strangerVault)])
 
-    expect(view.getAllByTestId('provider-identity')).toHaveLength(2)
     expect(
       view
         .getAllByTestId('provider-identity')
         .map((card) => card.dataset.standing),
     ).toEqual(['unchecked', 'unchecked'])
-    // Each identity is recovered once, whatever number of vaults it files.
-    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(2)
     const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
     if (!whichPasskey) throw new Error('no passkey check offered')
     await fireEvent.click(whichPasskey)
@@ -136,30 +159,62 @@ describe('Recovery vault choice', () => {
     expect(check).toHaveBeenCalledWith({
       kind: AccessCheckTargetKind.CurrentProvider,
     })
-    const [familyCard] = view.getAllByTestId('provider-identity')
+    const [familyCard, strangerCard] = view.getAllByTestId('provider-identity')
     expect(familyCard?.textContent).toContain('Family')
     expect(familyCard?.textContent).toContain('Groceries')
-    // The identity no passkey opened offers its hunt and a join instead.
-    expect(view.getAllByTestId('provider-identity-ask-to-join')).toHaveLength(1)
-    const [recover] = view.getAllByTestId('remote-vault-choice-item')
-    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(1)
-    expect(recover?.textContent).toContain(
-      vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey),
-    )
-    if (!recover) throw new Error('no recovery offered')
-    await fireEvent.click(recover)
-    expect(onChoose).toHaveBeenCalledWith('store_familyvault')
+    expect(decisionsOf(familyCard)).toEqual(['leave', 'addToBrowser'])
+    // The identity no passkey opened can only be asked to let this browser in.
+    expect(decisionsOf(strangerCard)).toEqual(['leave', 'askToJoin'])
   })
 
-  test('asking to join an identity this browser has no key for explains the join code', async () => {
-    const locked: ProviderVaultSummary = {
-      ...choice(strangerVault),
-      actions: [],
-    }
-    const { view } = renderChoice([locked])
+  test('asking to join with no protected key queues the join for the device protection gate', async () => {
+    const { view, vault, onApplied } = renderChoice([choice(strangerVault)])
+    const ask = view
+      .getAllByTestId('provider-identity-decision')
+      .find((button) => button.dataset.decision === 'askToJoin')
+    if (!ask) throw new Error('no join offered')
+    await fireEvent.click(ask)
+    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
-    await fireEvent.click(view.getByTestId('provider-identity-ask-to-join'))
+    await vi.waitFor(() =>
+      expect(vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Device),
+    )
+    expect(view.getByTestId('passkey-auth-overlay')).toBeTruthy()
+    // Nothing is recovered yet: the join asks once a key exists.
+    expect(onApplied).not.toHaveBeenCalled()
+  })
 
-    expect(view.getByTestId('provider-identity-join-help')).toBeTruthy()
+  test('the log tells a requested, denied, or approved join apart', () => {
+    const { view } = renderChoice([
+      choice({
+        storeId: 'store_othervault1',
+        identity: strangerWhoseJoinIs('requested'),
+      }),
+    ])
+    const [requested] = view.getAllByTestId('provider-identity')
+    expect(requested?.dataset.standing).toBe('joinRequested')
+    expect(decisionsOf(requested)).toEqual([])
+
+    const denied = renderChoice([
+      choice({
+        storeId: 'store_othervault1',
+        identity: strangerWhoseJoinIs('denied'),
+      }),
+    ])
+    const deniedCard = denied.view.getAllByTestId('provider-identity').at(-1)
+    expect(deniedCard?.dataset.standing).toBe('joinDenied')
+    expect(decisionsOf(deniedCard)).toEqual(['leave', 'askToJoin'])
+
+    const approved = renderChoice([
+      choice({
+        storeId: 'store_othervault1',
+        identity: strangerWhoseJoinIs('approved'),
+      }),
+    ])
+    const approvedCard = approved.view
+      .getAllByTestId('provider-identity')
+      .at(-1)
+    expect(approvedCard?.dataset.standing).toBe('joinApproved')
+    expect(decisionsOf(approvedCard)).toEqual(['leave', 'finishJoining'])
   })
 })

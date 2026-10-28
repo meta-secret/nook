@@ -1715,6 +1715,8 @@
     "opens_vaults_only": "Opens its vaults only",
     "identity_other_here": "Opens from {identity} on this browser",
     "identity_requested": "Join requested",
+    "identity_join_denied": "Join request denied",
+    "identity_join_approved": "Join approved",
     "which_passkey": "Which passkey opens it?"
   },
   "devices_card": {
@@ -2603,6 +2605,10 @@
     "choices_failed": "This folder could not be read. Sign in again and retry.",
     "add_failed": "The identity could not be added. Check that the passkey you picked opens it.",
     "merge_failed": "The identities could not be merged. Check that the passkey you picked opens the one being merged.",
-    "join_failed": "The join request could not be sent."
+    "join_failed": "The join request could not be sent.",
+    "finish_joining": "Finish joining",
+    "join_pending": "No device of this identity has approved the request yet. List again after one does.",
+    "join_denied": "A device of this identity denied the request. You can ask again.",
+    "finish_join_failed": "The identity could not be added to this browser."
   }
 }

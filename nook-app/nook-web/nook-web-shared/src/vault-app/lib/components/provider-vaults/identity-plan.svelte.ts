@@ -82,6 +82,7 @@ export class IdentityPlan {
       case "addToBrowser":
       case "mergeIntoCurrent":
       case "askToJoin":
+      case "finishJoining":
         this.picks = [...others, pick];
     }
   }
@@ -104,6 +105,7 @@ export class IdentityPlan {
         case "addToBrowser":
         case "mergeIntoCurrent":
         case "askToJoin":
+        case "finishJoining":
           if (choice.decisions.includes(decision)) {
             const entry: PlannedDecision = { choice, decision };
             planned.push(entry);
@@ -140,7 +142,8 @@ export class IdentityDecisionText {
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
       case "mergeIntoCurrent": {
         const current = this.inUse(planned.choices);
-        if (!current) return vault.t(I18N_KEYS.ProviderIdentitiesMergeIntoYours);
+        if (!current)
+          return vault.t(I18N_KEYS.ProviderIdentitiesMergeIntoYours);
         const request: Parameters<typeof vault.t>[0] = {
           key: I18N_KEYS.ProviderIdentitiesMerge,
           replacements: { identity: current },
@@ -149,6 +152,8 @@ export class IdentityDecisionText {
       }
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin);
+      case "finishJoining":
+        return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
     }
   }
 
@@ -161,6 +166,8 @@ export class IdentityDecisionText {
         case "otherIdentityHere":
         case "openedByPasskey":
         case "joinRequested":
+        case "joinDenied":
+        case "joinApproved":
         case "notOpened":
         case "unchecked":
           continue;
