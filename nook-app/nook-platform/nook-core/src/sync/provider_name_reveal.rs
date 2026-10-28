@@ -252,10 +252,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(unowned_function, reason = "framework boundary: test function")
-    )]
     fn the_member_passkey_opens_the_identity_and_vault_names_in_memory() -> anyhow::Result<()> {
         let named = NamedIdentity::new()?;
         let RevealMembership::Member {
@@ -287,10 +283,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(unowned_function, reason = "framework boundary: test function")
-    )]
     fn another_passkey_opens_nothing() -> anyhow::Result<()> {
         let named = NamedIdentity::new()?;
         let stranger = AppKey::generate()?;

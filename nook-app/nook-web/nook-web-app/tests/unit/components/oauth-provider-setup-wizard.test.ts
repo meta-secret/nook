@@ -167,11 +167,10 @@ describe('Google Drive provider setup', () => {
         replacements: { identity: 'ripple-canvas-orbit' },
       }),
     )
-    const facts = [
-      ...(other?.querySelectorAll(
-        '[data-testid="provider-vault-identity-log"]',
-      ) ?? []),
-    ].map((line) => line.textContent)
+    // Only the stranger's row has log facts; its own vault's identity has none.
+    const facts = view
+      .getAllByTestId('provider-vault-identity-log')
+      .map((line) => line.textContent)
     expect(facts).toContain(
       vault.t({
         key: I18N_KEYS.ProviderVaultsDevices,
@@ -224,6 +223,29 @@ describe('Google Drive provider setup', () => {
     await fireEvent.click(connectChoice)
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
+  })
+
+  test('keeps Connect & sync disabled until the Nook folder is listed', async () => {
+    let finishListing: (listing: NookGoogleDriveVaultListing) => void = () => {}
+    const listed = new Promise<NookGoogleDriveVaultListing>((resolve) => {
+      finishListing = resolve
+    })
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'listGoogleDriveVaults',
+    ).mockReturnValue(listed.then((listing) => ok(listing)))
+    const { view } = renderWizard(signedInDrive())
+
+    await view.findByTestId('google-drive-vaults-loading')
+    expect(
+      view.getByTestId('connect-provider-btn').hasAttribute('disabled'),
+    ).toBe(true)
+
+    finishListing({ root: 'absent' })
+    await view.findByTestId('google-folder-on-connect')
+    expect(
+      view.getByTestId('connect-provider-btn').hasAttribute('disabled'),
+    ).toBe(false)
   })
 
   test('a passkey shows the sealed names for this page only', async () => {
@@ -491,6 +513,7 @@ describe('Google Drive provider setup', () => {
     )
     const { view, onConnect, vault } = renderWizard(signedInDrive())
 
+    await view.findByTestId('google-folder-on-connect')
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     const ambiguous = vault.t(
@@ -532,6 +555,7 @@ describe('Google Drive provider setup', () => {
       signedInDriveWithFolder('vault-folder'),
     )
 
+    await view.findByTestId('google-folder-on-connect')
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())

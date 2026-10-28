@@ -230,10 +230,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(unowned_function, reason = "framework boundary: test function")
-    )]
     fn a_signed_log_tells_its_devices_their_newest_join_and_its_vaults() -> anyhow::Result<()> {
         let log = two_device_log()?;
         let listed = provider_events(&log)?.read()?;
@@ -253,10 +249,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(unowned_function, reason = "framework boundary: test function")
-    )]
     fn a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails() -> anyhow::Result<()> {
         let identity_id = IdentityId::generate()?;
         let empty = ProviderIdentityLogEvents {

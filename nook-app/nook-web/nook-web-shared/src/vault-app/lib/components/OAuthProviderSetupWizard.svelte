@@ -482,21 +482,25 @@
         </p>
       {/if}
       {#if isICloud && !sharedTargetReady}
-        {@render connectButton()}
+        {@render connectButton(false)}
       {:else if !driveAccessToken}
-        {@render connectButton()}
+        {@render connectButton(false)}
       {/if}
     </SetupWizardStep>
   </div>
 </div>
 
-{#snippet connectButton()}
+{#snippet connectButton(inventoryBusy: boolean)}
   <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
     <Button
       type="button"
       class="sm:min-w-[180px]"
       data-testid="connect-provider-btn"
-      disabled={!canConnect || isVerifying || isInitializing || preparingTarget}
+      disabled={!canConnect ||
+        inventoryBusy ||
+        isVerifying ||
+        isInitializing ||
+        preparingTarget}
       onclick={() => void connectWithVaultTarget()}
     >
       {#if isInitializing}

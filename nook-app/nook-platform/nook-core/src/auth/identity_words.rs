@@ -66,10 +66,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(unowned_function, reason = "framework boundary: test function")
-    )]
     fn every_identity_gets_three_stable_words_of_its_own() -> anyhow::Result<()> {
         let personal = IdentityId::generate()?;
         let work = IdentityId::generate()?;

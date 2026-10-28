@@ -59,8 +59,9 @@ the chosen one, so two actions are never live at once.
     busy: boolean
     onImport: (storeId: string) => void | Promise<void>
     onReplace: (swap: EmptyVaultSwap) => void | Promise<void>
-    /** The step's Connect & sync button, shown while that is the choice. */
-    connectButton: Snippet
+    /** The step's Connect & sync button, shown while that is the choice;
+     * true holds it disabled while the listing loads or an action runs. */
+    connectButton: Snippet<[boolean]>
   } = $props()
 
   let choice = $state<DriveVaultChoice>({ kind: DriveVaultChoiceKind.Connect })
@@ -500,5 +501,9 @@ the chosen one, so two actions are never live at once.
     </Button>
   </div>
 {:else}
-  {@render connectButton()}
+  {@render connectButton(
+    inventory.kind === DriveVaultInventoryKind.Loading ||
+      working ||
+      reveal.kind === NameRevealKind.Asking,
+  )}
 {/if}
