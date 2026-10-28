@@ -199,8 +199,8 @@ identity may enroll.
   - Use a distinct pending handoff state.
   - Start from the provider listing in
     [auth-providers.md](auth-providers.md#what-the-provider-already-holds):
-    another identity's vault is merged into the open vault, imported as a
-    separate vault, or requested, by how this device can open it.
+    another identity's vault is imported as a separate vault or requested,
+    by how this device can open it.
   - During verified connect, synthesize the vault owner from active signed
     envelopes and verify the extension signing key against the active event
     roster.
@@ -476,7 +476,7 @@ already one local identity's storage.
     identity owns.
   - Keep every vault in its own namespace, so vaults of other identities in
     the same target coexist; another vault's events are never unioned into
-    one, though its decrypted records may be merged through import.
+    one.
   - Use the namespaced paths in
     [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount).
 - **Browser rows**

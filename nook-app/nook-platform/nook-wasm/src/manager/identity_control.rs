@@ -11,7 +11,6 @@ mod invite;
 mod join_request;
 mod log_creation;
 mod membership;
-mod merge;
 mod passkey_addition;
 mod vault_access;
 mod vault_removal;

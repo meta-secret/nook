@@ -347,11 +347,6 @@ impl CheckedVaultSource {
         Ok(VaultCheckOutcome::DoesNotOpen)
     }
 
-    /// The vault's projection of its own log.
-    pub(crate) fn projection(&self) -> &VaultProjection {
-        &self.projection
-    }
-
     /// The vault's name, decrypted with its secrets key.
     pub(crate) fn name(&self, secrets_key: &SymmetricKey) -> VaultResult<ProviderVaultName> {
         let crypto = VaultCrypto::new(secrets_key)?;

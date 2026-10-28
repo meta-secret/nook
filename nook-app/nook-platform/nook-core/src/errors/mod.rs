@@ -1,7 +1,6 @@
 //! Typed errors for the vault stack.
 
 mod database;
-mod identity_merge;
 mod provider_failure;
 mod session;
 mod vault_epoch;
@@ -9,7 +8,6 @@ mod vault_format;
 mod vault_sync;
 
 pub use database::{DatabaseError, DatabaseResult};
-pub use identity_merge::IdentityMergeError;
 pub use nook_auth2::{
     AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
     PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
@@ -114,9 +112,6 @@ pub enum VaultError {
 
     #[error(transparent)]
     Age(#[from] AgeCryptoError),
-
-    #[error(transparent)]
-    IdentityMerge(#[from] IdentityMergeError),
 }
 
 #[cfg(test)]

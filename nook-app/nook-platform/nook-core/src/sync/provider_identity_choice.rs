@@ -89,8 +89,6 @@ pub enum IdentityDecision {
     Leave,
     /// Add it to this browser as its own identity, proven by its passkey.
     AddToBrowser,
-    /// Make its vaults vaults of the identity in use, proven by its passkey.
-    MergeIntoCurrent,
     /// Ask one of its devices to let this browser join it.
     AskToJoin,
     /// Add the identity a device approved this browser's request for.
@@ -219,12 +217,9 @@ impl ProviderIdentityChoices<'_> {
             (IdentityStanding::JoinApproved, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
             }
-            (IdentityStanding::OpenedByPasskey { .. }, IdentitySession::IdentityInUse) => vec![
-                IdentityDecision::Leave,
-                IdentityDecision::AddToBrowser,
-                IdentityDecision::MergeIntoCurrent,
-            ],
-            (IdentityStanding::OpenedByPasskey { .. }, IdentitySession::NoIdentity) => {
+            // A passkey that opens the identity completes it here: there
+            // is nothing to merge.
+            (IdentityStanding::OpenedByPasskey { .. }, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::AddToBrowser]
             }
             (IdentityStanding::Unchecked, IdentitySession::NoIdentity) => vec![
@@ -483,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn a_checked_passkey_offers_adding_or_merging_and_names_the_identity() -> anyhow::Result<()> {
+    fn a_checked_passkey_offers_adding_and_names_the_identity() -> anyhow::Result<()> {
         let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
         let vaults = [Fixture::vault(
             OTHER_VAULT,
@@ -507,39 +502,12 @@ mod tests {
         );
         assert_eq!(
             choice.decisions,
-            vec![
-                IdentityDecision::Leave,
-                IdentityDecision::AddToBrowser,
-                IdentityDecision::MergeIntoCurrent,
-            ]
+            vec![IdentityDecision::Leave, IdentityDecision::AddToBrowser]
         );
         assert_eq!(choice.identity.name, ProviderVaultName::named("Personal"));
         assert_eq!(
             Fixture::first_vault_name(choice),
             Some(&ProviderVaultName::named("Family"))
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn merging_needs_an_identity_in_use() -> anyhow::Result<()> {
-        let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
-        let vaults = [Fixture::vault(
-            OTHER_VAULT,
-            &other,
-            ProviderVaultAccess::Unchecked,
-        )?];
-        let checks = [Fixture::passkey_opening(&other, OTHER_VAULT)?];
-        let choices = ProviderIdentityChoices {
-            vaults: &vaults,
-            checks: &checks,
-            session: IdentitySession::NoIdentity,
-        }
-        .choices();
-
-        assert_eq!(
-            Fixture::at(&choices, 0)?.decisions,
-            vec![IdentityDecision::Leave, IdentityDecision::AddToBrowser]
         );
         Ok(())
     }

@@ -80,7 +80,6 @@ export class IdentityPlan {
         this.picks = others;
         return;
       case "addToBrowser":
-      case "mergeIntoCurrent":
       case "askToJoin":
       case "finishJoining":
         this.picks = [...others, pick];
@@ -103,7 +102,6 @@ export class IdentityPlan {
         case "leave":
           continue;
         case "addToBrowser":
-        case "mergeIntoCurrent":
         case "askToJoin":
         case "finishJoining":
           if (choice.decisions.includes(decision)) {
@@ -131,53 +129,19 @@ export class IdentityDecisionText {
   }
 
   /** What one decision does, said for the screen it is on. */
-  decision(planned: PlannedDecisionText): string {
+  decision(decision: IdentityDecision): string {
     const vault = this.vault;
-    switch (planned.decision) {
+    switch (decision) {
       case "leave":
         return vault.t(I18N_KEYS.ProviderIdentitiesLeave);
       case "addToBrowser":
         return vault.isAuthenticated
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
-      case "mergeIntoCurrent": {
-        const current = this.inUse(planned.choices);
-        if (!current)
-          return vault.t(I18N_KEYS.ProviderIdentitiesMergeIntoYours);
-        const request: Parameters<typeof vault.t>[0] = {
-          key: I18N_KEYS.ProviderIdentitiesMerge,
-          replacements: { identity: current },
-        };
-        return vault.t(request);
-      }
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin);
       case "finishJoining":
         return vault.t(I18N_KEYS.ProviderIdentitiesFinishJoining);
     }
   }
-
-  /** The name of the listed identity this browser holds, or empty. */
-  private inUse(choices: readonly ProviderIdentityChoice[]): string {
-    for (const choice of choices)
-      switch (choice.standing.kind) {
-        case "thisBrowser":
-          return this.name(choice);
-        case "otherIdentityHere":
-        case "openedByPasskey":
-        case "joinRequested":
-        case "joinDenied":
-        case "joinApproved":
-        case "notOpened":
-        case "unchecked":
-          continue;
-      }
-    return "";
-  }
 }
-
-/** One decision to put in words, with the listing it belongs to. */
-export type PlannedDecisionText = {
-  readonly decision: IdentityDecision;
-  readonly choices: readonly ProviderIdentityChoice[];
-};

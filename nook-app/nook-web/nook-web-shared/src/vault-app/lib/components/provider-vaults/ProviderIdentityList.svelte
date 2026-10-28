@@ -15,7 +15,6 @@ Picking a decision runs nothing; the page's one button applies the plan.
     IdentityDecisionText,
     type IdentityPick,
     type IdentityPlan,
-    type PlannedDecisionText,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
 
   let {
@@ -89,7 +88,6 @@ Picking a decision runs nothing; the page's one button applies the plan.
               identityId: choice.identity.identityId,
               decision,
             }}
-            {@const words: PlannedDecisionText = { decision, choices }}
             {@const picked = plan.decisionOf(choice) === decision}
             <button
               type="button"
@@ -103,7 +101,7 @@ Picking a decision runs nothing; the page's one button applies the plan.
               {disabled}
               onclick={() => plan.decide(pick)}
             >
-              {text.decision(words)}
+              {text.decision(decision)}
             </button>
           {/each}
         </div>
@@ -130,15 +128,11 @@ Picking a decision runs nothing; the page's one button applies the plan.
       </p>
       <ul class="space-y-0.5 text-xs text-foreground">
         {#each planned as entry (entry.choice.identity.identityId)}
-          {@const words: PlannedDecisionText = {
-            decision: entry.decision,
-            choices,
-          }}
           {@const row: Parameters<typeof vault.t>[0] = {
             key: I18N_KEYS.ProviderIdentitiesPlanRow,
             replacements: {
               identity: text.name(entry.choice),
-              decision: text.decision(words),
+              decision: text.decision(entry.decision),
             },
           }}
           <li data-testid="provider-identity-plan-row">{vault.t(row)}</li>

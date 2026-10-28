@@ -54,11 +54,11 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, identity_merge, passkey_identity_addition,
-    provider_identity_choice, provider_identity_join, provider_identity_log, provider_vault_access,
-    provider_vault_join, provider_vault_listing, provider_vault_merge, sync_provider_credentials,
-    sync_provider_store, validation, vault_access_check, vault_sync, vault_sync_conflict,
-    vault_sync_session, vault_sync_state, vault_sync_store,
+    authorized_accounts, drive_vault_folder, passkey_identity_addition, provider_identity_choice,
+    provider_identity_join, provider_identity_log, provider_vault_access, provider_vault_join,
+    provider_vault_listing, sync_provider_credentials, sync_provider_store, validation,
+    vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
+    vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -129,10 +129,9 @@ pub use enrollment::{
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
-    ExtensionIdentityHandoffError, IdentityMergeError, MultiDeviceError, PasswordError,
-    ProviderFailureCause, SecretPayloadError, SessionError, ValidationError, VaultCryptoError,
-    VaultEpochError, VaultError, VaultFormatError, VaultRecoveryErrorKind, VaultResult,
-    VaultSyncError,
+    ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, ProviderFailureCause,
+    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
+    VaultError, VaultFormatError, VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
@@ -362,9 +361,6 @@ pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
 };
-pub use identity_merge::{
-    IdentityMerge, IdentityMergeDestination, IdentityMergePlan, IdentityMergeProof, MergedVault,
-};
 pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,
 };
@@ -390,7 +386,6 @@ pub use provider_vault_listing::{
     ProviderEventCount, ProviderInstant, ProviderVaultListing, ProviderVaultListingRequest,
     ProviderVaultName, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
 };
-pub use provider_vault_merge::{ProviderVaultGrantedOpening, ProviderVaultPasswordOpening};
 pub use secrets::SecretRecordFilter;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,

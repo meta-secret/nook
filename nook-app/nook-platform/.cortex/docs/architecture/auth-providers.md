@@ -279,36 +279,44 @@ Each identity card shows, without any key:
 
 - **Name:** its name when this browser holds it or a passkey opened it,
   else three BIP39 words derived from its id (`IdentityWords`).
-- **Standing tag:** opens here, opens from another identity here, opens
-  with a checked passkey, join requested, join denied, join approved, not
-  opened by the checked passkeys, or not opened here yet.
+- **Tag:** with no identity in use, its standing: opens here, opens from
+  another identity here, opens with a checked passkey, join requested, join
+  denied, join approved, not opened by the checked passkeys, or not on this
+  browser. With an identity in use, what this browser's passkey is to it:
+  in use here, member, not a member, join requested, or join request denied.
 - **Public log facts:** from its signed, unencrypted control log, its device
   and vault counts (`ProviderIdentityLog`). The log also tells whether this
   browser's key is a member and where its join request stands.
 - **No vault rows:** vaults are neither listed nor acted on; the step's
   heading, loading and empty copy all speak of identities.
 
-The decision is one segmented control, **Leave as is** first:
+With an identity in use, as when the Sync page adds Google Drive, each card
+carries its one [setup action](provider-identity-decisions.md#setup-action),
+which runs at once: **Continue** for a member, **Request to join** for
+anyone else, **Check again** for a join already asked. The identity in use
+has none; the step's button reads **Save _identity_ here** and connects.
+Identities are never merged: a passkey that opens one completes it here.
+
+With no identity in use, the decision is one segmented control, **Leave as
+is** first:
 
 - **Add to this browser** (**Recover it** on a browser with no identity):
   one passkey tap re-derives the member's app key and signer.
-- **Merge into _current identity_:** its vaults become vaults of the
-  identity in use; its own log is never written.
 - **Ask to join** and **Finish joining:** a membership request from a fresh
   protected key, and its completion once a device approves.
 
 The step keeps one action button:
 
-- **Drive setup:** **Connect and sync**, or **Connect and apply** once a
-  decision is picked. It runs the plan, one identity at a time, then
-  connects; a failing decision stops the plan before connecting.
+- **Drive wizard with no identity in use:** **Connect and sync**, or
+  **Connect and apply** once a decision is picked. It runs the plan, one
+  identity at a time, then connects; a failing decision stops the plan
+  before connecting.
 - **Recovery screen:** **Apply** runs the plan, then unlocks what it
   recovered. The list reads the provider staged for the recovery.
 - **Plan summary:** "What will happen" lists every picked decision; picking
   runs nothing.
 - **Passkey check:** "Which passkey opens it?" runs `check_passkey_access`
-  in memory and changes nothing; an identity it opens offers adding or
-  merging.
+  in memory and changes nothing; an identity it opens offers adding it.
 
 Backup passwords open single vaults, never identities, so this step has no
 backup-password form; Check access tries one.

@@ -35,6 +35,9 @@ owns what is read from the provider without a key.
 - **Checks are not decisions.**
   - "Which passkey opens it?" decrypts in memory and changes nothing.
   - It sits beside the decision as a quiet link.
+- **Identities are never merged.**
+  - A passkey that opens a listed identity completes it here: the identity
+    is added to this browser as its own, and nothing else is decided.
 - **Backup passwords stay out of this step.**
   - A backup password opens one vault, never an identity.
   - Recovering a vault with one belongs to Check access.
@@ -59,16 +62,11 @@ Rust decides each identity's standing and the decisions it allows.
   - **Leave as is**
   - **Add to this browser:** the identity joins this browser's directory as
     its own identity, beside the one in use.
-  - **Merge into _current identity_:** its vaults become vaults of the
-    identity in use. The other identity is unchanged for its own devices.
-    Rust offers it only while an identity is in use; that screen now shows
-    setup actions, so no screen offers merging at present.
 - **Not on this browser** (nothing was checked)
   - With no identity in use, as on the recovery screen: **Leave as is**,
     **Recover it** (adding it; the passkey is tapped when the plan runs), or
     **Ask to join**.
-  - With an identity in use: **Leave as is** or **Ask to join**. Finding its
-    passkey offers adding and merging.
+  - With an identity in use: **Leave as is** or **Ask to join**.
 - **Not opened by the checked passkeys**
   - **Leave as is**
   - **Ask to join:** a join request to the identity's devices.
@@ -155,28 +153,6 @@ offers adding by another passkey.
   - A member protected by a passkey-wrapped random app key cannot be added
     this way; its app key and signer stay with its installation.
 
-### Merge into the current identity
-
-- Preconditions:
-  - A passkey re-derived a member app key of the other identity.
-  - The identity in use is unlocked, has a control log, and is not the other
-    identity.
-- Effect:
-  - Each vault's DEK is read from the other identity's log with that key.
-  - Each vault's events are stored here and listed in the vault registry.
-  - The current identity's log records `VaultRegistered` for each vault, wrapped
-    to its own members and signed by the current app key.
-  - The vault namespaces sync through the current identity's mounts.
-  - The other identity's log is not written; its devices keep their access.
-- Gaps today:
-  - `merge_identity_with_passkey` runs the merge; no Svelte flow calls it yet.
-  - It plans every vault before writing: one vault without a current key,
-    events, or a matching key epoch fails the whole merge.
-  - A vault the current identity already registers is reported, not
-    registered again. A vault another identity on this browser keeps fails.
-  - The identity sync pushes the new log events; nothing pushes a merged
-    vault's events to a mount until that vault is opened and synced.
-
 ### Ask to join
 
 - Preconditions:
@@ -249,7 +225,7 @@ accent, no pills.
 - No provider credential grants identity membership or vault decryption.
 - Membership is proven by a member app key, re-derived from a passkey or
   approved by a member.
-- Merging never rewrites the other identity's log or revokes its devices.
+- No operation rewrites another identity's log or revokes its devices.
 - Decision rules and standings are computed in Rust; Svelte renders them.
 
 ## Related records

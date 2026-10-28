@@ -36,7 +36,6 @@ export type IdentityPlanOutcome =
 
 export enum IdentityPlanFailureKind {
   Add = "add",
-  Merge = "merge",
   Join = "join",
   /** No device of the identity approved the request yet. */
   JoinPending = "join-pending",
@@ -53,8 +52,6 @@ export class IdentityPlanFailure {
     switch (this.kind) {
       case IdentityPlanFailureKind.Add:
         return I18N_KEYS.ProviderIdentitiesAddFailed;
-      case IdentityPlanFailureKind.Merge:
-        return I18N_KEYS.ProviderIdentitiesMergeFailed;
       case IdentityPlanFailureKind.Join:
         return I18N_KEYS.ProviderIdentitiesJoinFailed;
       case IdentityPlanFailureKind.JoinPending:
@@ -302,20 +299,6 @@ export class IdentityPlanActions {
           },
         };
         return calls.run(add);
-      }
-      case "mergeIntoCurrent": {
-        const merge: ManagerCall<IdentityPlanOutcome> = {
-          failure: new IdentityPlanFailure(IdentityPlanFailureKind.Merge),
-          run: async (manager) => {
-            await manager.merge_identity_with_passkey(
-              join.source,
-              join.identityId,
-              location.hostname,
-            );
-            return applied;
-          },
-        };
-        return calls.run(merge);
       }
       case "askToJoin": {
         const asked = await joins.ask(join);
