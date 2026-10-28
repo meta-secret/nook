@@ -160,7 +160,7 @@ describe('Google Drive provider setup', () => {
     ).toBe(false)
   })
 
-  test('lists each identity once, with its standing and its vaults by name', async () => {
+  test('lists each identity once, with its standing and no vault actions', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -194,7 +194,8 @@ describe('Google Drive provider setup', () => {
     // The identity this browser syncs needs nothing decided.
     expect(own?.dataset.standing).toBe('thisBrowser')
     expect(own?.textContent).toContain('Personal')
-    expect(own?.textContent).toContain('Family')
+    // Cards are about identities: no vault is listed or acted on.
+    expect(own?.textContent).not.toContain('Family')
     expect(
       own?.querySelectorAll('[data-testid="provider-identity-decision"]'),
     ).toHaveLength(0)
@@ -205,9 +206,7 @@ describe('Google Drive provider setup', () => {
       other.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toContain('ripple-canvas-orbit')
-    expect(
-      other.querySelectorAll('[data-testid="provider-vault-row"]'),
-    ).toHaveLength(2)
+    expect(String(other.dataset.storeIds).split(' ')).toHaveLength(2)
     expect(
       Array.from(
         other.querySelectorAll('[data-testid="provider-vault-identity-log"]'),
@@ -387,8 +386,6 @@ describe('Google Drive provider setup', () => {
       kind: AccessCheckTargetKind.Source,
       source: { kind: 'googleDrive', accessToken: 'drive-token' },
     })
-    expect(identity.textContent).toContain('Family')
-    expect(identity.textContent).toContain('Work')
     expect(
       identity
         .querySelector('[data-testid="provider-vault-identity"]')

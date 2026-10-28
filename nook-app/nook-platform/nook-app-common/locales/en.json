@@ -1636,10 +1636,10 @@
     "google_vaults_list_failed": "Could not read the vaults in your Google Drive “meta-secret-nook” folder."
   },
   "provider_vaults": {
-    "list_title": "Vaults in your Nook folder",
-    "loading": "Looking for vaults in your Nook folder…",
-    "root_absent": "Connect & sync creates a folder named “meta-secret-nook” in your Google Drive, with a folder for each identity and a subfolder for each of its vaults.",
-    "root_empty": "Your “meta-secret-nook” folder holds no vaults yet. Connect & sync adds this identity’s vaults to it.",
+    "list_title": "Identities in your Nook folder",
+    "loading": "Looking for identities in your Nook folder…",
+    "root_absent": "Connect & sync creates a folder named “meta-secret-nook” in your Google Drive, with a folder for each identity.",
+    "root_empty": "Your “meta-secret-nook” folder holds no identities yet. Connect & sync adds yours to it.",
     "connect_explainer": "Connect & sync saves this Google account as a sync provider and syncs this identity’s vaults into its folder in the Nook folder, each vault in its own subfolder. The vaults listed above stay as they are unless you choose an action for one.",
     "filed_under": "Identity {identity}",
     "merge_into_open": "Merge into my vault",
@@ -2449,8 +2449,8 @@
     "how_it_works": "How Nook works",
     "restore_title": "Recover your vault",
     "restore_pick": "Pick the sync provider that holds it",
-    "restore_choose_vault": "This provider holds several vaults",
-    "restore_choose_vault_body": "Choose the vault to recover on this device.",
+    "restore_choose_vault": "Identities on this provider",
+    "restore_choose_vault_body": "Recover yours with its passkey, or ask one of its devices to let this browser join.",
     "restore_vault_item": "Vault {id}",
     "restore_body": "For when no device with your identity is left. You need your passkey synced to this device (iCloud Keychain or Google Password Manager) or the vault’s passphrase. If another device still has your identity, add this device from there instead."
   },

@@ -285,8 +285,8 @@ Each identity card shows, without any key:
 - **Public log facts:** from its signed, unencrypted control log, its device
   and vault counts (`ProviderIdentityLog`). The log also tells whether this
   browser's key is a member and where its join request stands.
-- **Vaults:** a quiet list of names or short ids. Vault rows carry no
-  actions.
+- **No vault rows:** vaults are neither listed nor acted on; the step's
+  heading, loading and empty copy all speak of identities.
 
 The decision is one segmented control, **Leave as is** first:
 
@@ -313,11 +313,9 @@ The step keeps one action button:
 Backup passwords open single vaults, never identities, so this step has no
 backup-password form; Check access tries one.
 
-**Prohibited:** offer an action on one vault row while its identity offers
-its own decision.
+**Prohibited:** list a provider's vaults or offer an action on one vault.
 
-**Required:** the identity card offers one decision; its vaults list names
-only.
+**Required:** list identities, each with one decision.
 
 ### Check access
 

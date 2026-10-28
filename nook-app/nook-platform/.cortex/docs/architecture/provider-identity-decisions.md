@@ -15,8 +15,9 @@ owns what is read from the provider without a key.
 ## Rules
 
 - **The identity is the unit.**
-  - Each listed identity gets one decision; its vaults are a read-only list.
-  - A vault's real name shows once its identity is opened.
+  - Each listed identity gets one decision.
+  - Vaults are never listed or acted on in this step; the card shows only
+    the identity's vault count from its log.
 - **One decision per identity, mutually exclusive.**
   - The decision defaults to **Leave as is** and can always return to it.
   - Nothing runs when a decision is picked.
@@ -36,8 +37,8 @@ owns what is read from the provider without a key.
 **Prohibited:** offer "Import as a separate vault" on one vault row while the
 same identity offers "Ask to join".
 
-**Required:** the identity offers one segmented decision. Its vaults list their
-names and nothing else.
+**Required:** the identity offers one segmented decision. The step's copy
+speaks of identities, never of vaults.
 
 ## Decisions by standing
 
@@ -191,9 +192,8 @@ accent, no pills.
 - **Card:** one `nk-frame` per identity. A tile shows a person when the
   identity opens here and a lock when it does not.
 - **Header:** the identity's name or words, and one standing tag, success
-  toned when it opens. Below it, one spec line of public log facts.
-- **Vaults:** names or short ids in quiet monospace, with no row chrome and
-  no actions.
+  toned when it opens. Below it, one spec line of public log facts: its
+  device and vault counts.
 - **Decision:** a square, hairline-framed segmented control, one segment per
   allowed decision. The picked segment is inverted (foreground fill); the
   others are muted text.

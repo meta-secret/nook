@@ -90,11 +90,9 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await openDriveVaultList(deviceB, target)
 
     // A's vault is listed under A's identity, which nothing on B opens.
-    const identityA = deviceB.getByTestId('provider-identity').filter({
-      has: deviceB.locator(
-        `[data-testid="provider-vault-row"][data-store-id="${vaultA.store_id}"]`,
-      ),
-    })
+    const identityA = deviceB.locator(
+      `[data-testid="provider-identity"][data-store-ids~="${vaultA.store_id}"]`,
+    )
     await expect(identityA).toHaveCount(1)
     await expect(identityA).toHaveAttribute('data-standing', 'unchecked')
     await expect(identityA.getByTestId('provider-vault-identity')).toHaveText(

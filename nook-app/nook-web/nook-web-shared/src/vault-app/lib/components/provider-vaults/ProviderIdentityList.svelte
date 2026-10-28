@@ -2,9 +2,9 @@
 The identities a provider holds, one card each. Passkeys and devices belong
 to identities, so the identity is the only thing the user decides about:
 its card says whether it opens here and offers the decisions Rust allows as
-one segmented choice, Leave as is first. Its vaults are a quiet list of
-names. Picking a decision runs nothing; the page's one button applies the
-plan.
+one segmented choice, Leave as is first. Vaults are never acted on here:
+the card names the identity and what its public log tells, nothing more.
+Picking a decision runs nothing; the page's one button applies the plan.
 -->
 <script lang="ts">
   import { Lock, UserRound } from '@lucide/svelte'
@@ -12,7 +12,6 @@ plan.
     IdentityStanding,
     ProviderIdentityChoice,
     ProviderIdentityLog,
-    ProviderVaultSummary,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -127,20 +126,6 @@ plan.
     }
   }
 
-  function vaultName(summary: ProviderVaultSummary): string {
-    switch (summary.name.state) {
-      case 'named':
-        return summary.name.name
-      case 'unknown': {
-        const request: Parameters<typeof vault.t>[0] = {
-          key: I18N_KEYS.FirstRunRestoreVaultItem,
-          replacements: { id: summary.shortId },
-        }
-        return vault.t(request)
-      }
-    }
-  }
-
   function decisionsLabel(choice: ProviderIdentityChoice): string {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderIdentitiesDecisionsLabel,
@@ -157,6 +142,7 @@ plan.
       class="nk-frame space-y-3 px-4 py-3"
       data-testid="provider-identity"
       data-identity-id={choice.identity.identityId}
+      data-store-ids={choice.vaults.map((summary) => summary.storeId).join(' ')}
       data-standing={standing.kind}
     >
       <header class="flex items-start gap-3">
@@ -188,19 +174,6 @@ plan.
           <p class="nk-spec" data-testid="provider-identity-facts">
             {#each facts(choice.identity.log) as line (line)}
               <span data-testid="provider-vault-identity-log">{line}</span>
-            {/each}
-          </p>
-          <p
-            class="flex flex-wrap gap-x-3 font-mono text-xs text-muted-foreground"
-            data-testid="provider-identity-vaults"
-          >
-            {#each choice.vaults as summary (summary.storeId)}
-              <span
-                data-testid="provider-vault-row"
-                data-store-id={summary.storeId}
-                data-access={summary.access.state}
-                title={summary.storeId}>{vaultName(summary)}</span
-              >
             {/each}
           </p>
         </div>

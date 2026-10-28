@@ -165,7 +165,6 @@ describe('Recovery vault choice', () => {
     })
     const [familyCard, strangerCard] = view.getAllByTestId('provider-identity')
     expect(familyCard?.textContent).toContain('Family')
-    expect(familyCard?.textContent).toContain('Groceries')
     expect(decisionsOf(familyCard)).toEqual(['leave', 'addToBrowser'])
     // The identity no passkey opened can only be asked to let this browser in.
     expect(decisionsOf(strangerCard)).toEqual(['leave', 'askToJoin'])

@@ -276,12 +276,9 @@ test.describe('local folder backup provider', () => {
     // This browser's passkey belongs to the identity that wrote last;
     // recovering it is that identity's decision, run by Apply.
     await page
-      .getByTestId('provider-identity')
-      .filter({
-        has: page.locator(
-          `[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`,
-        ),
-      })
+      .locator(
+        `[data-testid="provider-identity"][data-store-ids~="${latestStoreId}"]`,
+      )
       .locator(
         '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
       )
