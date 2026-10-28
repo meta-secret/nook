@@ -127,14 +127,14 @@ found on the provider merges into it, and it only gains keys. -->
     <Scene browser={[local(TokenStatus.Here)]} />
     <h1 class={ui.title}>{flow.local().name} · {keyCount()}</h1>
     <ActionCard
-      title="Back up"
+      title="Add sync provider"
       tag="Only here"
       tagTone="warn"
       onPick={() => flow.go(KeyState.ConnectProvider)}
     />
   {:else if flow.current === KeyState.ConnectProvider}
     <Scene browser={[local(TokenStatus.Here)]} />
-    <h1 class={ui.title}>Back up to</h1>
+    <h1 class={ui.title}>Sync provider</h1>
     <div class={grid}>
       {#each providerNames as name (name)}
         <ActionCard title={name} onPick={() => connect(name)} />
@@ -147,7 +147,7 @@ found on the provider merges into it, and it only gains keys. -->
       remote={[local(TokenStatus.Synced)]}
       link={SceneLink.Sync}
     />
-    <h1 class={ui.title}>Backed up</h1>
+    <h1 class={ui.title}>Synced</h1>
     {#if flow.providerHolds === ProviderHolds.Identities && undecided.length > 0}
       <ActionCard
         title="{undecided.length} more in {flow.provider}"

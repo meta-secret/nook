@@ -67,11 +67,11 @@ export const machine: readonly StateNode[] = [
     state: KeyState.LocalIdentity,
     title: 'Local identity',
     group: StateGroup.Local,
-    next: [{ to: KeyState.ConnectProvider, label: 'back up' }],
+    next: [{ to: KeyState.ConnectProvider, label: 'add sync provider' }],
   },
   {
     state: KeyState.ConnectProvider,
-    title: 'Pick sync provider',
+    title: 'Connect sync provider',
     group: StateGroup.Local,
     next: [
       { to: KeyState.Synced, label: 'provider empty' },
@@ -80,7 +80,7 @@ export const machine: readonly StateNode[] = [
   },
   {
     state: KeyState.Synced,
-    title: 'Backed up',
+    title: 'Synced',
     group: StateGroup.Local,
     next: [{ to: KeyState.RemoteIdentities, label: 'more on provider' }],
   },
