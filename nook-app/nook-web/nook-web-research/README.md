@@ -48,11 +48,11 @@ different layout or visual direction.
   evidence interactions, but they do not define the virtual-identity model.
 - **`identity-management`** — the current research direction: virtual
   identities keep installation keys and receive independent vault grants.
-- **`identity-onboarding`** — key management before vaults. A browser holds
-  one identity: created locally or imported from a sync provider. Each
-  identity shows as a sigil drawn from its three words; home lists the
-  devices that open it and where it is synced. Identities found on a provider
-  are unlocked and merged, or asked to join. Passkeys and providers are simulated.
+- **`identity-onboarding`** — identity setup before vaults: create or use a
+  passkey, connect Google Drive, and Nook reads its folder. A passkey that is
+  a member continues and syncs events; otherwise it sends a join request, or
+  a new named identity is created there. Passkeys and Drive are
+  simulated.
 - **`inspiration`** — sketches frozen for an interaction or visual idea rather
   than as candidates. Borrow from them; do not iterate on them. They may read
   older fixtures, kept beside them.

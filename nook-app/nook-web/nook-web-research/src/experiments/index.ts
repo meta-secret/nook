@@ -17,7 +17,7 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
-import OneIdentity from './identity-onboarding/one-identity/Experiment.svelte'
+import IdentitySetup from './identity-onboarding/setup/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -178,9 +178,9 @@ const identityManagementV2: ExperimentSubcategory = {
 const identityOnboardingV1: ExperimentSubcategory = {
   categorySlug: 'identity-onboarding',
   slug: ExperimentVersion.V1,
-  title: 'V1 · One identity',
+  title: 'V1 · Setup',
   description:
-    'No vaults, only keys: one identity per browser, its sigil, the devices that open it, and where it is synced.',
+    'Create an identity: passkey, Google Drive, then the identities Nook finds there — continue as a member, ask to join, or create one.',
 }
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
@@ -351,13 +351,13 @@ export const experiments: Experiment[] = [
     component: AccessTerminal,
   },
   {
-    slug: 'one-identity',
+    slug: 'identity-setup',
     category: identityOnboarding,
     subcategory: identityOnboardingV1,
-    title: 'One identity',
+    title: 'Identity setup',
     description:
-      'A popup-sized app: create with a passkey or import from a sync provider, then home with devices, sync, join requests, and identities to merge or join.',
-    component: OneIdentity,
+      'Create or use a passkey, connect Google Drive, read its Nook folder, and finish as a member, by a join request, or with a new named identity.',
+    component: IdentitySetup,
   },
   {
     slug: 'identity-keys',
