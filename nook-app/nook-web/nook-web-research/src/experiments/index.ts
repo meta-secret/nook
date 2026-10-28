@@ -19,6 +19,7 @@ import IdentityBridge from './identity-management/identity-bridge/Experiment.sve
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
 import IdentityFirst from './identity-onboarding/identity-first/Experiment.svelte'
 import KeyMachine from './identity-onboarding/key-machine/Experiment.svelte'
+import KeyRing from './identity-onboarding/key-ring/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -190,6 +191,13 @@ const identityOnboardingV2: ExperimentSubcategory = {
   description:
     'No vaults: an identity is the keys that open it. Create locally or import; merge what your passkey opens, join what is sealed to you.',
 }
+const identityOnboardingV3: ExperimentSubcategory = {
+  categorySlug: 'identity-onboarding',
+  slug: ExperimentVersion.V3,
+  title: 'V3 · Key ring',
+  description:
+    'One screen after onboarding: your identity in the middle, its keys on one side, where it is synced on the other; every action is a slot or a panel there.',
+}
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
   slug: ExperimentVersion.V1,
@@ -211,6 +219,7 @@ export const subcategories: ExperimentSubcategory[] = [
   identityManagementV2,
   identityOnboardingV1,
   identityOnboardingV2,
+  identityOnboardingV3,
   inspirationV1,
 ]
 
@@ -376,6 +385,15 @@ export const experiments: Experiment[] = [
     description:
       'A state machine beside each screen: empty, create or import, sync, merge identities your passkey opens, join requests for sealed ones.',
     component: KeyMachine,
+  },
+  {
+    slug: 'key-ring',
+    category: identityOnboarding,
+    subcategory: identityOnboardingV3,
+    title: 'Key ring',
+    description:
+      'Create on this browser or import from a sync provider, then one ring: keys that open you, places you are synced to, join requests and merges shown on it.',
+    component: KeyRing,
   },
   {
     slug: 'identity-keys',
