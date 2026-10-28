@@ -188,3 +188,37 @@ export const stranger: IdentityFixture = {
 export const remoteIdentities: readonly IdentityFixture[] = [work, stranger]
 
 export const providerNames = ['Google Drive', 'iCloud', 'GitHub', 'A folder'] as const
+
+/** How an identity token looks in a scene. */
+export enum TokenStatus {
+  /** On this browser, in use. */
+  Here = 'here',
+  /** Being created. */
+  Ghost = 'ghost',
+  /** Kept by the provider and open to you. */
+  Synced = 'synced',
+  /** Kept by the provider; none of your keys opens it. */
+  Sealed = 'sealed',
+  /** Your passkey just opened it; its name shows. */
+  Opened = 'opened',
+  /** A join request waits on its devices. */
+  Pending = 'pending',
+  /** Goes away. */
+  Removed = 'removed',
+}
+
+/** One identity drawn in a scene. */
+export type Token = {
+  readonly id: string
+  readonly label: string
+  readonly keys: number
+  readonly status: TokenStatus
+}
+
+/** What links this browser and the provider in a scene. */
+export enum SceneLink {
+  None = 'none',
+  Sync = 'sync',
+  Request = 'request',
+  Passkey = 'passkey',
+}
