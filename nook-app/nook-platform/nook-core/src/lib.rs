@@ -293,9 +293,9 @@ pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
     AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment,
     DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
-    DirectoryVaultEnrollment, IdentityConnectionKey, IdentityConnectionKeyRequest,
-    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
-    IdentityDirectoryVaultKeys, IdentityId, IdentityInvitationBinding,
+    DirectoryVaultEnrollment, FreshIdentityNaming, IdentityConnectionKey,
+    IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityInvitationBinding,
     IdentityInvitationBindingRequest, IdentityInviteId, IdentityLegacyVaultImport,
     IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
     IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
@@ -369,7 +369,7 @@ pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,
 };
 pub use provider_identity_choice::{
-    IdentityDecision, IdentitySession, IdentityStanding, ProviderIdentityChoice,
+    IdentityDecision, IdentitySession, IdentitySetup, IdentityStanding, ProviderIdentityChoice,
     ProviderIdentityChoices,
 };
 pub use provider_identity_join::{

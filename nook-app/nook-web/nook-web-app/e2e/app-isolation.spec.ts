@@ -52,7 +52,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
     )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await expect(
+      page.getByTestId('first-run-create-identity-btn'),
+    ).toBeVisible()
   } else {
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)

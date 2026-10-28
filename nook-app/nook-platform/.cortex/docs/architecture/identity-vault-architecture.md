@@ -343,17 +343,26 @@ mounts therefore act on the identity, never on one vault.
 
 ### Create the first vault
 
-1. Create the identity.
-2. Enroll a passkey or PIN and the local app key.
-3. Generate the vault DEK and wrap it to the identity's current app keys.
-4. Create the vault bound to that identity.
-5. Register the vault in the identity control log with `vault-registered`.
+1. Create the identity: enroll a passkey or PIN and the local app key. The
+   local identity stays fresh: no log, no vault, one member.
+2. Settle the identity on the sync provider, when one is signed in to:
+   - the app key is a member of a listed identity: finish joining it, as for
+     an approved join request; it brings its own vaults.
+   - it is not: ask to join one, or keep the fresh identity as a new one.
+3. Name a new identity while it is fresh (`name_fresh_identity`); its log
+   seals that name.
+4. Generate the vault DEK and wrap it to the identity's current app keys.
+5. Create the vault bound to that identity.
+6. Register the vault in the identity control log with `vault-registered`.
 
 **Prohibited:** create a vault from the hub before any identity exists, then
-attach an identity later.
+attach an identity later; or create a first vault before the identity is
+settled, which makes its key unable to finish joining an identity it is
+already a member of.
 
-**Required:** create the identity and its key with the first vault. The vault
-is registered in that identity's log from its genesis.
+**Required:** create the identity and its key before the first vault, and
+settle it first. The vault is registered in that identity's log from its
+genesis.
 
 ### Join an installation to an identity
 

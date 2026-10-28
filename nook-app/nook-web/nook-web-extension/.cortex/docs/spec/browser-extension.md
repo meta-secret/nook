@@ -135,8 +135,11 @@ administer vault items.
    panel opens that route directly, never the authentication tab.
    - The route carries no start choice. The page owns create, join, and the
      identity choice.
-   - A browser with no vault shows its first-vault screen. There the person
-     creates the first vault or joins with Add this device.
+   - A browser with no vault shows its first-run screen. There the person
+     creates the identity or joins with Add this device. Creating it runs
+     the page's identity setup after the approval: the sync provider's
+     identities, or a new identity named here, whose first vault the
+     extension then selects.
    - A browser that already holds a vault shows its usual unlock. There the
      person chooses the identity to connect.
    - The page reports its [connect steps](#connect-steps) to the side panel.

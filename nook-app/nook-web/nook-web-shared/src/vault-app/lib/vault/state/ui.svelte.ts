@@ -15,7 +15,9 @@ import {
   type IdentityDirectoryLoadState,
 } from "$lib/components/devices-access/identity-directory-view";
 import {
+  FirstRunJoinKind,
   IdentityJoinWaitKind,
+  type FirstRunJoin,
   type IdentityJoinWait,
 } from "$lib/vault/identity-join-wait";
 
@@ -67,14 +69,30 @@ export class WorkspaceSectionScope {
   }
 }
 
-/** Where a first-vault setup stands after its name was given. */
+/** Where first-run setup stands. The identity is settled before any vault:
+ * the passkey makes this browser's key, the sync provider shows the
+ * identities that key belongs to or may join, and only a new identity gets
+ * a first vault. */
 export enum FirstRunStage {
-  /** No first-vault setup in progress. */
+  /** No first-run setup in progress. */
   Off = "off",
-  /** The vault waits for this browser's passkey or PIN. */
+  /** The identity waits for this browser's passkey or PIN. */
   Protect = "protect",
-  /** The vault exists; offer to back up its identity. */
-  Backup = "backup",
+  /** The key exists: sign in to a sync provider and pick an identity on it. */
+  Sync = "sync",
+  /** A new identity is being named, on the sync provider or this browser. */
+  Name = "name",
+  /** This browser asked to join an identity; one of its devices answers. */
+  Joining = "joining",
+  /** The new identity's first vault exists; it connects the sync provider
+   * signed in to during setup. */
+  Connect = "connect",
+}
+
+/** Where a new identity created during setup is kept. */
+export enum FirstRunPlace {
+  ThisBrowser = "this-browser",
+  SyncProvider = "sync-provider",
 }
 
 /** Where creating another identity stands. */
@@ -97,8 +115,13 @@ export class VaultUiState {
   /** The access check page is open, unlocked or not. */
   accessCheckOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
-  /** The name given on the first-vault screen, shown by the later steps. */
+  /** The name given to a new identity during setup; its first vault takes
+   * it too. */
   firstRunVaultName = $state("");
+  /** Where a new identity created during setup is kept. */
+  firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
+  /** The identity this browser asked to join during setup. */
+  firstRunJoin = $state.raw<FirstRunJoin>({ kind: FirstRunJoinKind.None });
   newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
   /** The name given to the identity being created. */
   newIdentityName = $state("");

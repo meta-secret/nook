@@ -12,10 +12,8 @@ passkey opens an identity decrypts in memory and changes nothing.
   import { RefreshCw } from '@lucide/svelte'
   import type {
     CredentialCheckReport,
-    NookGoogleDriveVaultListing,
     NookProviderSource,
     ProviderIdentityChoice,
-    ProviderVaultSummary,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
@@ -33,15 +31,15 @@ passkey opens an identity decrypts in memory and changes nothing.
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
   import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
-  import { VaultOAuthActions } from '$lib/vault/oauth'
   import {
     AccessCheckActions,
     AccessCheckTargetKind,
     type AccessCheckTarget,
   } from '$lib/vault/access-check'
-  import { ProviderVaultActions } from '$lib/vault/provider-vaults'
   import {
     DriveVaultInventoryKind,
+    DriveVaultInventoryReader,
+    listedVaults,
     type ConnectPlanButton,
     type DriveVaultInventory,
   } from '$lib/components/provider-vaults/drive-vault-inventory'
@@ -77,18 +75,6 @@ passkey opens an identity decrypts in memory and changes nothing.
   )
   const disabled = $derived(busy || working || !joinIdle)
 
-  /** The vaults a found Nook root holds; none before it is listed. */
-  function listedVaults(
-    listing: NookGoogleDriveVaultListing,
-  ): readonly ProviderVaultSummary[] {
-    switch (listing.root) {
-      case 'found':
-        return listing.listing.vaults
-      case 'absent':
-        return []
-    }
-  }
-
   const choices = $derived.by(
     (): Result<readonly ProviderIdentityChoice[], IdentityChoicesFailure> => {
       if (inventory.kind !== DriveVaultInventoryKind.Loaded) return ok([])
@@ -108,16 +94,9 @@ passkey opens an identity decrypts in memory and changes nothing.
     inventory = { kind: DriveVaultInventoryKind.Loading }
     checks = []
     plan.clear()
-    const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
-      new ProviderVaultActions(vault).localVaultOccupancy(),
-    )
+    const read = await new DriveVaultInventoryReader(vault).read()
     if (token !== accessToken) return
-    if (listed.isErr()) {
-      inventory = { kind: DriveVaultInventoryKind.Failed }
-      vault.errorMsg = vault.t(listed.error.translationKey)
-      return
-    }
-    inventory = { kind: DriveVaultInventoryKind.Loaded, listing: listed.value }
+    inventory = read
   }
 
   $effect(() => {

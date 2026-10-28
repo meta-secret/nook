@@ -5,8 +5,8 @@ mod recovery;
 mod replication;
 pub use crate::MemberLabelState;
 pub use invitation::{
-    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, LocalIdentityLog,
+    FreshIdentityNaming, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 pub use recovery::RecoveryRetirement;
 pub use replication::{

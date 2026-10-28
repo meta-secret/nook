@@ -1,8 +1,8 @@
 <!--
-Second step of the first-vault setup. This is where the identity is
-introduced: the passkey made here protects the identity, and the identity
-opens the vault named on the first screen. The card below is a preview of the
-identity card the hub will show once setup finishes.
+First step of setup, where the identity is introduced: a new passkey, or one
+made for Nook before, makes this browser's key. No vault exists yet; the
+sync provider comes next and shows the identities that key belongs to. The
+card below is a preview of the identity card the hub will show.
 -->
 <script lang="ts">
   import { KeyRound } from "@lucide/svelte";
@@ -13,7 +13,6 @@ identity card the hub will show once setup finishes.
   import {
     IdentityCardStatus,
     IdentityKeyKind,
-    IdentityVaultRowState,
     type IdentityCardView,
   } from "$lib/components/identities/identity-card-model";
   import FirstRunBackLink from "./FirstRunBackLink.svelte";
@@ -26,7 +25,7 @@ identity card the hub will show once setup finishes.
     onBack,
   }: {
     vault: VaultState;
-    /** Return to the naming screen; the pending vault is dropped. */
+    /** Return to the first screen; nothing was made yet. */
     onBack: () => void;
   } = $props();
 
@@ -51,23 +50,11 @@ identity card the hub will show once setup finishes.
       keyKind: IdentityKeyKind.Passkey,
       status: IdentityCardStatus.Locked,
       current: true,
-      vaults: [
-        {
-          storeId: "first-run-preview",
-          label: vault.firstRunVaultName,
-          state: IdentityVaultRowState.Available,
-        },
-      ],
+      vaults: [],
     };
     return view;
   });
-  const body = $derived.by(() => {
-    const bodyRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.FirstRunProtectBody,
-      replacements: { vault: vault.firstRunVaultName },
-    };
-    return vault.t(bodyRequest);
-  });
+  const body = $derived(vault.t(I18N_KEYS.FirstRunProtectBody));
 </script>
 
 <section

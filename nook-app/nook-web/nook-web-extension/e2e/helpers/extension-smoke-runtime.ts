@@ -257,14 +257,11 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-  // The Simple app starts with one name field; nothing to choose.
-  const nameInput = page.getByTestId('login-vault-name-input')
-  await expect(nameInput).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Test vault', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-  }
+  // First run starts by creating the identity; its name is asked once setup
+  // keeps it on this browser.
+  await expect(page.getByTestId('first-run-create-identity-btn')).toBeEnabled({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 const rootDir = path.resolve(

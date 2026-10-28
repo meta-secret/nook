@@ -23,6 +23,9 @@
   } from '$lib/app/route-state'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
+  import FirstRunSyncStep from '$lib/components/login/FirstRunSyncStep.svelte'
+  import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
+  import FirstRunJoinStep from '$lib/components/login/FirstRunJoinStep.svelte'
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
@@ -121,6 +124,15 @@
     onDismissPasskey()
   }
 
+  /** Setup past the passkey and before its identity is settled: no vault is
+   * open, so its steps show here. */
+  const firstRunSetup = $derived(
+    !vault.isAuthenticated &&
+      (vault.firstRun === FirstRunStage.Sync ||
+        vault.firstRun === FirstRunStage.Name ||
+        vault.firstRun === FirstRunStage.Joining),
+  )
+
   function identityTransitionPending(): boolean {
     return vault.identityTransitionPending
   }
@@ -136,6 +148,14 @@
   {#if showAccessGate || vault.errorMsg || sentinelInvitationOpen() || identityTransitionPending()}
     {#if firstRunProtect}
       <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
+    {:else if firstRunSetup}
+      {#if vault.firstRun === FirstRunStage.Sync}
+        <FirstRunSyncStep {vault} />
+      {:else if vault.firstRun === FirstRunStage.Name}
+        <FirstRunNameStep {vault} />
+      {:else}
+        <FirstRunJoinStep {vault} />
+      {/if}
     {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending() || (vault.hasManager && !vault.isInitializing)}
       <LoginGate
         {vault}

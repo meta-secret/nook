@@ -10,6 +10,7 @@ import {
   expectFirstVaultOpen,
   expectVaultPasswordStatus,
   openStorageSettings,
+  startFirstRun,
   UI_TIMEOUT_MS,
 } from './helpers'
 
@@ -33,14 +34,13 @@ test.describe('check access', () => {
     await expect(page.getByTestId('first-vault-start')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('login-vault-name-input').fill('Passkey vault')
-    await page.getByTestId('login-create-device-vault-btn').click()
+    await startFirstRun(page)
     const createChoice = page.getByTestId('device-protection-create-new-choice')
     if (await createChoice.isVisible()) await createChoice.click()
     const setup = page.getByTestId('device-protection-setup-btn')
     await expect(setup).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await setup.click()
-    await expectFirstVaultOpen(page)
+    await expectFirstVaultOpen(page, 'Passkey vault')
     await disableVaultIdleLock(page)
 
     await page.getByTestId('access-check-open-btn').click()

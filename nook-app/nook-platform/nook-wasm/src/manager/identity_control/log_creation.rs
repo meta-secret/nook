@@ -2,8 +2,8 @@
 //! the identity an enrollment code invites it into.
 
 use nook_core::{
-    IdentityControlLog, IdentityControlState, IdentityEvent, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
+    FreshIdentityNaming, IdentityControlLog, IdentityControlState, IdentityEvent,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
     IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
-use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
+use crate::storage::identity_record::{IdentityDirectoryWrite, KeyringDbRebindLocalIdentity};
 use crate::{NookDatabase, NookError};
 
 /// Result of making sure the current identity has a control log.
@@ -114,6 +114,28 @@ impl NookVaultManager {
         NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
             local_identity_id: &local_identity_id,
             replicated_identity_id: &invited,
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Name this browser's identity while it is still fresh. Setup asks for
+    /// the name only when it creates a new identity, after the passkey made
+    /// its key; the control log, created later, seals that name.
+    #[wasm_bindgen]
+    pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
+        let label = Self::local_identity_label(&label).map_err(JsError::new)?;
+        let app_key = self.unlocked_app_key()?;
+        let local_log = Self::local_identity_log(&app_key).await?;
+        NookDatabase::update_identity_directory(move |directory| {
+            let directory = directory
+                .name_fresh_identity(&FreshIdentityNaming {
+                    app_key: &app_key,
+                    label: &label,
+                    local_log,
+                })
+                .map_err(NookDatabase::map_domain_error)?;
+            Ok(IdentityDirectoryWrite::from(directory))
         })
         .await?;
         Ok(())

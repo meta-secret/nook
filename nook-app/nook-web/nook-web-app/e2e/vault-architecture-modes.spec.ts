@@ -469,7 +469,7 @@ test.describe('vault architecture modes', () => {
     await continueToPathChooser(page)
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
-    await expect(start).toContainText('Name your first vault')
+    await expect(start).toContainText('Create your identity')
     await expect(page.getByTestId('login-join-identity-btn')).toContainText(
       'Already use Nook on another device?',
     )
@@ -480,10 +480,10 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(start).toContainText('Назовите первый сейф')
+    await expect(start).toContainText('Создайте свою идентичность')
     await expect(
-      page.getByTestId('login-create-device-vault-btn'),
-    ).toContainText('Создать сейф')
+      page.getByTestId('first-run-create-identity-btn'),
+    ).toContainText('Создать идентичность')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -543,27 +543,35 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
   })
 
-  test('creates the first vault from one name and offers a backup next', async ({
+  test('creates the identity first and offers its sync provider next', async ({
     page,
   }) => {
     await continueToPathChooser(page)
-    // Joining is its own screen; Back returns to naming the first vault.
+    // Joining is its own screen; Back returns to creating the identity.
     await page.getByTestId('login-join-identity-btn').click()
     await expect(page.getByTestId('join-this-device')).toBeVisible()
     await expect(page.getByTestId('enrollment-code-input')).toBeVisible()
     await page.getByTestId('join-back').click()
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
-    // An empty name takes the suggested one, so one click creates the vault.
+    // The passkey makes the key; no vault exists until the identity is settled.
+    await page.getByTestId('first-run-create-identity-btn').click()
+    const sync = page.getByTestId('first-run-sync-step')
+    await expect(sync).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+
+    // Kept on this browser, the identity is named; an empty name takes the
+    // suggested one, and its first vault takes the same name.
+    await page.getByTestId('first-run-sync-skip').click()
+    await expect(page.getByTestId('first-run-name-step')).toBeVisible()
     await page.getByTestId('login-create-device-vault-btn').click()
-    const backup = page.getByTestId('first-run-backup-step')
-    await expect(backup).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(backup).toContainText('Personal')
     await expect(
-      page.getByTestId('first-run-progress').locator('[aria-current="step"]'),
-    ).toHaveCount(0)
-    await page.getByTestId('first-run-backup-btn').click()
-    await expect(page.getByTestId('first-run-provider-picker')).toBeVisible()
+      page
+        .getByTestId('identity-vault-row')
+        .or(page.getByTestId('vault-panel'))
+        .first(),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   })
 
   test('opens participant response only from an owner invitation URL', async ({

@@ -15,6 +15,7 @@ import {
   openVaultPage,
   openKeysPage,
   openVaultPanelAndUnlock,
+  startFirstRun,
   unlockVaultOnLogin,
 } from './helpers'
 
@@ -114,8 +115,7 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('first-vault-start')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
-  await page.getByTestId('login-create-device-vault-btn').click()
+  await startFirstRun(page)
   await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -123,7 +123,7 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    fn local_identity_label(label: &str) -> Result<String, &'static str> {
+    pub(in crate::manager) fn local_identity_label(label: &str) -> Result<String, &'static str> {
         let label = label.trim();
         if label.is_empty() {
             return Err("Identity label cannot be empty.");

@@ -45,6 +45,8 @@ const uiKeys = [
   "accessCheckOpen",
   "firstRun",
   "firstRunVaultName",
+  "firstRunPlace",
+  "firstRunJoin",
   "newIdentity",
   "newIdentityName",
   "vaultPanelStoreId",
@@ -219,6 +221,8 @@ class VaultStateSlicesImplementation {
   declare accessCheckOpen: VaultUiState["accessCheckOpen"];
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
+  declare firstRunPlace: VaultUiState["firstRunPlace"];
+  declare firstRunJoin: VaultUiState["firstRunJoin"];
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];

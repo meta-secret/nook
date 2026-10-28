@@ -63,24 +63,37 @@ Vault/Admin/Onboard/Settings bottom navigation.
 A browser without an identity shows one flow in place of the hub, in the
 Simple and unified apps. Sentinel is never offered.
 
-- **Name**: "Name your first vault", one field (empty takes the suggested
-  name) and Create vault. Below it, a distinct card, **Already use Nook on
-  another device? Add this device**, opens the join screen. A quiet link,
-  **Lost access to your devices? Recover from a sync provider**, opens
-  recovery.
+The identity is settled before any vault exists. The step bar counts
+Passkey, Sync provider, and Identity.
+
+- **Start**: "Create your identity" and one Create identity button. Below
+  it, a distinct card, **Already use Nook on another device? Add this
+  device**, opens the join screen. A quiet link, **Lost access to your
+  devices? Recover from a sync provider**, opens recovery.
 - **Recovery**: the provider's identities are listed as identity cards,
   each with one decision (recover it with its passkey, or ask to join) and
   one Apply button, as the
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
   record describes. A link below checks which passkey or backup password
   opens what, before anything is recovered.
-- **Key** ("This is you"): the identity is introduced where its passkey is
-  made; a preview of its card lists the named vault, with passkey or PIN
-  setup beside it. Back returns to the name.
-- **Ready**: "*vault* is ready". Setup counts only Name and Key, both done
-  here; keeping a copy is offered, not required. Add a sync provider opens
-  the picker inside this screen (Back returns to the offer); Not now opens
-  the vault. A provider that connects finishes setup.
+- **Passkey** ("This is you"): a new passkey, or one made for Nook before,
+  makes this browser's key. A preview of the identity's card shows no vault
+  yet. Back returns to Start.
+- **Sync provider**: Google Drive signs in, and Nook lists the identities in
+  its Nook folder. Each card has the one action Rust decides from this
+  browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
+  - **Continue** when the key is a member: the identity is added here and
+    its provider connects and syncs; setup ends on its vault.
+  - **Request to join** when it is not: the Join step follows.
+  - **Check again** for a request asked earlier.
+  - **Create a new identity** in that Drive, or **Keep it on this browser
+    only**, leads to Name.
+- **Name**: "Name your identity", one field (empty takes the suggested
+  name). Only members see the name; the first vault takes it too. On the
+  Drive path, the signed-in Drive connects next without another sign-in.
+- **Join**: "Request sent" with this browser's device id, the value the
+  approving device shows. Check again reads the answer; there is no polling.
+  Back returns to the identities.
 
 ### Join (add this device)
 

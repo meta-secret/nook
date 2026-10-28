@@ -122,6 +122,11 @@ async function advanceCreateVaultWizardToFinalStep(page) {
 
   await chooser.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
 
+  // First run creates the identity before any vault; it is named after the
+  // extension approval, once setup keeps it on this browser.
+  if (await page.getByTestId('first-run-create-identity-btn').isVisible())
+    return
+
   const finalStep = page.getByTestId('create-vault-wizard-create')
   if (await finalStep.isVisible()) return
 
@@ -199,8 +204,18 @@ async function createAndApproveVault(context, popupPage) {
     return simplePage
   }
 
+  const createIdentity = simplePage.getByTestId('first-run-create-identity-btn')
   if (!(await consent.isVisible().catch(() => false))) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
+  }
+  if (
+    !(await consent.isVisible().catch(() => false)) &&
+    (await createIdentity.isVisible().catch(() => false))
+  ) {
+    await createIdentity.click()
+    await consent.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  }
+  if (!(await consent.isVisible().catch(() => false))) {
     await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
     const initialVaultCreate = simplePage.getByTestId(
       'login-create-device-vault-btn',
@@ -231,9 +246,9 @@ async function createAndApproveVault(context, popupPage) {
 
   await simplePage.getByTestId('approve-extension-device-btn').click()
   // A delivered approval closes the consent; an undelivered one keeps it
-  // open with its approved notice and Done action. The first vault then
-  // shows its ready step, which a person declining the sync offer skips.
-  const firstRunReady = simplePage.getByTestId('first-run-backup-step')
+  // open with its approved notice and Done action. A first run then offers
+  // a sync provider: declining it keeps the identity here and names it.
+  const firstRunSync = simplePage.getByTestId('first-run-sync-step')
   await consent
     .locator(':scope:not(:has([data-testid="extension-connect-approved"]))')
     .waitFor({ state: 'hidden', timeout: TIMEOUT_MS })
@@ -241,12 +256,14 @@ async function createAndApproveVault(context, popupPage) {
     await simplePage.getByRole('button', { name: 'Done' }).click()
   }
   await authenticated
-    .or(firstRunReady)
+    .or(firstRunSync)
     .or(simplePage.getByTestId('identities-hub'))
     .first()
     .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
-  if (await firstRunReady.isVisible().catch(() => false)) {
-    await simplePage.getByTestId('first-run-backup-skip').click()
+  if (await firstRunSync.isVisible().catch(() => false)) {
+    await simplePage.getByTestId('first-run-sync-skip').click()
+    await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
+    await simplePage.getByTestId('login-create-device-vault-btn').click()
   }
   // The first run ends on the identities hub, which has no vault shell.
   await authenticated

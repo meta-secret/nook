@@ -69,6 +69,7 @@
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
   import { ProviderVaultActions } from '$lib/vault/provider-vaults'
+  import { FirstRunActions } from '$lib/vault/first-run'
   import {
     THEME_STORAGE_KEY,
     vaultBrowserLifecycle,
@@ -697,7 +698,7 @@
       return
     }
     pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    await vault.createLocalVaultWithDeviceKeys(label)
+    await new FirstRunActions(vault).createWithDeviceKeys(label)
   }
 
   async function handleStartSentinelGenesis(
@@ -822,7 +823,7 @@
       return
     pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     if (pending.kind === PendingVaultCreationKind.Simple) {
-      void vault.createLocalVaultWithDeviceKeys(pending.label)
+      void new FirstRunActions(vault).createWithDeviceKeys(pending.label)
       return
     }
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {

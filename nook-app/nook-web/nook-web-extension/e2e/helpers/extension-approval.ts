@@ -42,6 +42,7 @@ export async function waitForExtensionPairingReady(
     )
     .toBe('approved')
 
+  await nameFirstIdentityHere(vaultPage, vaultName)
   await expect.poll(readSetupState).toMatchObject({
     status: 'ready',
     selectedVaultName: vaultName,
@@ -50,24 +51,36 @@ export async function waitForExtensionPairingReady(
 }
 
 /**
- * A vault created while pairing is the browser's first vault, so its
- * first-run "ready" screen (with the sync offer) follows the approval.
- * Leave it the way a person declining the offer would; the page then lands
- * on the identities hub, which renders no authenticated vault shell. The
- * first-run steps render inside the hub, so the open vault's row on its card
- * shows that setup has finished.
+ * Pairing while the browser has no identity runs first-run setup: once the
+ * consent closes, setup offers a sync provider. Keep the identity on this
+ * browser the way a person declining a provider would, and name it; its
+ * first vault takes the name the extension then selects. A browser that
+ * already had an identity goes straight on.
+ */
+async function nameFirstIdentityHere(
+  vaultPage: Page,
+  vaultName: string,
+): Promise<void> {
+  const syncStep = vaultPage.getByTestId('first-run-sync-step')
+  const settled = syncStep
+    .or(vaultPage.getByTestId('authenticated-shell'))
+    .or(vaultPage.getByTestId('identities-workspace'))
+  await expect(settled.first()).toBeVisible({ timeout: 30_000 })
+  if (!(await syncStep.isVisible())) return
+  await vaultPage.getByTestId('first-run-sync-skip').click()
+  await vaultPage.getByTestId('login-vault-name-input').fill(vaultName)
+  await vaultPage.getByTestId('login-create-device-vault-btn').click()
+}
+
+/**
+ * A vault created while pairing is the browser's first vault; setup ends on
+ * the identities hub, which renders no authenticated vault shell. The open
+ * vault's row on its card shows that setup has finished.
  */
 export async function leaveFirstRunReady(vaultPage: Page): Promise<void> {
   const shell = vaultPage.getByTestId('authenticated-shell')
   const openRow = vaultPage.locator(
     '[data-testid="identity-vault-row"][data-state="open"]',
   )
-  const ready = vaultPage.getByTestId('first-run-backup-step')
-  await expect(shell.or(openRow).or(ready).first()).toBeVisible({
-    timeout: 30_000,
-  })
-  if (await ready.isVisible()) {
-    await vaultPage.getByTestId('first-run-backup-skip').click()
-  }
   await expect(shell.or(openRow).first()).toBeVisible({ timeout: 30_000 })
 }

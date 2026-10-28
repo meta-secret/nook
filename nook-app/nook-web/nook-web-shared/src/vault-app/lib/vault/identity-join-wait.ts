@@ -30,3 +30,18 @@ export type WaitingIdentityJoin =
 
 export type IdentityJoinWait =
   { readonly kind: IdentityJoinWaitKind.Idle } | WaitingIdentityJoin;
+
+export enum FirstRunJoinKind {
+  /** Setup has not asked to join an identity. */
+  None = "none",
+  /** Setup asked; a device of the identity answers. */
+  Asked = "asked",
+}
+
+/** The identity first-run setup asked to join, if any. */
+export type FirstRunJoin =
+  | { readonly kind: FirstRunJoinKind.None }
+  | {
+      readonly kind: FirstRunJoinKind.Asked;
+      readonly join: IdentityJoinIntent;
+    };

@@ -1,15 +1,16 @@
 <!--
-The first screen of a browser with no vault: one name, one button. The
-identity is created with the vault and introduced on the next step, where
-its passkey is made. Joining an identity from another device is the second
-path and stands apart; restoring from a sync provider is a quiet link.
-Opened from the extension, the connect route shows this same screen: the
-person creates or joins here, never in the extension.
+The first screen of a browser with no vault: one button that creates the
+identity. Setup then makes its passkey, signs in to a sync provider, and
+settles the identity there before any vault exists. Joining an identity with
+a code from another device is the second path and stands apart; restoring
+from a sync provider is a quiet link. Opened from the extension, the connect
+route shows this same screen: the person creates or joins here, never in
+the extension.
 -->
 <script lang="ts">
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { ArrowRight, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
+  import { ArrowRight, KeyRound, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
   import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
@@ -36,29 +37,15 @@ person creates or joins here, never in the extension.
     onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>
   } = $props()
 
-  let name = $state('')
   /** Joining an identity this person already has replaces the screen. */
   let joining = $state(false)
-  // An empty field takes the suggested name, so one click is enough.
-  const vaultName = $derived(
-    name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
-  )
 
-  const extensionHint = $derived.by(() => {
-    const hintRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.LoginLandingCreateSimpleWithExtension,
-      replacements: { name: vaultName },
-    }
-    return vault.t(hintRequest)
-  })
-
+  /** The passkey comes next; the identity's name is asked only when setup
+   * creates a new one. */
   async function create(): Promise<void> {
     if (isBusy) return
-    vault.firstRunVaultName = vaultName
-    vault.firstRun = vault.deviceProtectionReady
-      ? FirstRunStage.Backup
-      : FirstRunStage.Protect
-    await onCreate(vaultName)
+    vault.firstRun = FirstRunStage.Protect
+    await onCreate(vault.t(I18N_KEYS.FirstRunNamePlaceholder))
   }
 </script>
 
@@ -85,45 +72,26 @@ person creates or joins here, never in the extension.
       </p>
     </div>
 
-    <form
-      class="flex flex-col gap-2 sm:flex-row"
-      onsubmit={(event) => {
-        event.preventDefault()
-        void create()
-      }}
+    <Button
+      type="button"
+      class="h-11 sm:h-10"
+      disabled={isBusy}
+      data-testid="first-run-create-identity-btn"
+      onclick={() => void create()}
     >
-      <label class="sr-only" for="first-vault-name">
-        {vault.t(I18N_KEYS.FirstRunNameLabel)}
-      </label>
-      <input
-        id="first-vault-name"
-        type="text"
-        class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
-        maxlength="64"
-        autocomplete="off"
-        data-testid="login-vault-name-input"
-        bind:value={name}
-        disabled={isBusy}
-      />
-      <Button
-        type="submit"
-        class="h-11 shrink-0 sm:h-10"
-        disabled={isBusy}
-        data-testid="login-create-device-vault-btn"
-      >
-        {#if isBusy}
-          <RefreshCw class="size-4 animate-spin" />
-        {/if}
-        {vault.t(I18N_KEYS.FirstRunCreate)}
-      </Button>
-    </form>
+      {#if isBusy}
+        <RefreshCw class="size-4 animate-spin" />
+      {:else}
+        <KeyRound class="size-4" />
+      {/if}
+      {vault.t(I18N_KEYS.FirstRunCreate)}
+    </Button>
     {#if usesExtensionDeviceIdentity}
       <p
         class="-mt-4 text-xs text-pretty text-muted-foreground"
         data-testid="first-vault-extension-hint"
       >
-        {extensionHint}
+        {vault.t(I18N_KEYS.LoginLandingCreateSimpleWithExtension)}
       </p>
     {/if}
 

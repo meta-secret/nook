@@ -58,6 +58,29 @@ pub enum IdentityStanding {
     Unchecked,
 }
 
+impl IdentityStanding {
+    /// The one setup action this standing allows. A member continues; anyone
+    /// else asks to join, never adds by another passkey: setup already used
+    /// the passkey that made this browser's key.
+    #[must_use]
+    pub fn setup(&self) -> IdentitySetup {
+        match self {
+            Self::ThisBrowser => IdentitySetup::Continue {
+                decision: IdentityDecision::Leave,
+            },
+            Self::JoinApproved => IdentitySetup::Continue {
+                decision: IdentityDecision::FinishJoining,
+            },
+            Self::OpenedByPasskey { .. } => IdentitySetup::Continue {
+                decision: IdentityDecision::AddToBrowser,
+            },
+            Self::JoinRequested => IdentitySetup::Waiting,
+            Self::JoinDenied | Self::NotOpened | Self::Unchecked => IdentitySetup::RequestToJoin,
+            Self::OtherIdentityHere { .. } => IdentitySetup::Unavailable,
+        }
+    }
+}
+
 /// One thing the user may decide about an identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -74,8 +97,26 @@ pub enum IdentityDecision {
     FinishJoining,
 }
 
+/// What first-run setup does with an identity: one action, decided by the
+/// key this browser's passkey made. Its key is a member of the identity or it
+/// is not; nothing else is asked.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum IdentitySetup {
+    /// This browser's key is a member: setup finishes on the identity after
+    /// the decision that brings it here (**Leave** when it already is).
+    Continue { decision: IdentityDecision },
+    /// No key here is a member: ask one of its devices to let this browser in.
+    RequestToJoin,
+    /// This browser asked; a device of the identity answers.
+    Waiting,
+    /// Another identity on this browser holds its vaults; setup leaves it.
+    Unavailable,
+}
+
 /// One identity a provider holds: its standing, what the user may decide,
-/// and its vaults, named once a check decrypted them.
+/// the one action setup offers, and its vaults, named once a check
+/// decrypted them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderIdentityChoice {
@@ -83,6 +124,7 @@ pub struct ProviderIdentityChoice {
     pub standing: IdentityStanding,
     /// Empty when there is nothing to decide; otherwise **Leave** first.
     pub decisions: Vec<IdentityDecision>,
+    pub setup: IdentitySetup,
     pub vaults: Vec<ProviderVaultSummary>,
 }
 
@@ -111,6 +153,7 @@ impl ProviderIdentityChoices<'_> {
                     identity: self.named_identity(&summary.identity),
                     standing: IdentityStanding::Unchecked,
                     decisions: Vec::new(),
+                    setup: IdentitySetup::Unavailable,
                     vaults: vec![vault],
                 });
             }
@@ -118,6 +161,7 @@ impl ProviderIdentityChoices<'_> {
         for choice in &mut choices {
             choice.standing = self.standing(choice);
             choice.decisions = self.decisions(&choice.standing);
+            choice.setup = choice.standing.setup();
         }
         choices
     }
@@ -651,6 +695,96 @@ mod tests {
             Fixture::at(&choices, 0)?.identity.name,
             ProviderVaultName::Unknown
         );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_continues_on_an_identity_this_browsers_key_is_a_member_of() -> anyhow::Result<()> {
+        let approved =
+            Fixture::only_choice(ProviderIdentityJoin::Approved, IdentitySession::NoIdentity)?;
+        assert_eq!(
+            approved.setup,
+            IdentitySetup::Continue {
+                decision: IdentityDecision::FinishJoining
+            }
+        );
+
+        let mine = Fixture::identity(MINE, ProviderIdentityLog::Absent)?;
+        let vaults = [Fixture::vault(MY_VAULT, &mine, ProviderVaultAccess::Syncs)?];
+        let held = ProviderIdentityChoices {
+            vaults: &vaults,
+            checks: &[],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        assert_eq!(
+            Fixture::at(&held, 0)?.setup,
+            IdentitySetup::Continue {
+                decision: IdentityDecision::Leave
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_asks_to_join_an_identity_no_key_here_is_a_member_of() -> anyhow::Result<()> {
+        for join in [ProviderIdentityJoin::NotAsked, ProviderIdentityJoin::Denied] {
+            let choice = Fixture::only_choice(join, IdentitySession::NoIdentity)?;
+            // Recovering by another passkey is a decision elsewhere, never setup's.
+            assert_eq!(choice.setup, IdentitySetup::RequestToJoin);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn setup_waits_on_a_join_this_browser_asked_for() -> anyhow::Result<()> {
+        let choice =
+            Fixture::only_choice(ProviderIdentityJoin::Requested, IdentitySession::NoIdentity)?;
+        assert_eq!(choice.setup, IdentitySetup::Waiting);
+        Ok(())
+    }
+
+    #[test]
+    fn setup_adds_an_identity_a_checked_passkey_opens() -> anyhow::Result<()> {
+        let other = Fixture::identity(OTHER, Fixture::log_with(ProviderIdentityJoin::NotAsked))?;
+        let vaults = [Fixture::vault(
+            OTHER_VAULT,
+            &other,
+            ProviderVaultAccess::Locked,
+        )?];
+        let checks = [Fixture::passkey_opening(&other, OTHER_VAULT)?];
+        let choices = ProviderIdentityChoices {
+            vaults: &vaults,
+            checks: &checks,
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        assert_eq!(
+            Fixture::at(&choices, 0)?.setup,
+            IdentitySetup::Continue {
+                decision: IdentityDecision::AddToBrowser
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_leaves_an_identity_another_identity_here_holds() -> anyhow::Result<()> {
+        let other = Fixture::identity(OTHER, ProviderIdentityLog::Absent)?;
+        let vaults = [Fixture::vault(
+            OTHER_VAULT,
+            &other,
+            ProviderVaultAccess::OtherIdentityHere {
+                identity_label: "Work".to_owned(),
+            },
+        )?];
+        let choices = ProviderIdentityChoices {
+            vaults: &vaults,
+            checks: &[],
+            session: IdentitySession::NoIdentity,
+        }
+        .choices();
+        assert_eq!(Fixture::at(&choices, 0)?.setup, IdentitySetup::Unavailable);
         Ok(())
     }
 }

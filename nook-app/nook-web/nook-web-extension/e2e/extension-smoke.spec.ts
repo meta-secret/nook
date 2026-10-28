@@ -566,10 +566,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
-      .getByTestId('login-vault-name-input')
-      .fill('Unpair test vault')
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await simplePage.getByTestId('first-run-create-identity-btn').click()
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
@@ -705,10 +702,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       replacementPopupPage,
     )
     await advanceCreateVaultWizardToFinalStep(replacementPage)
-    await replacementPage
-      .getByTestId('login-vault-name-input')
-      .fill('Replacement vault')
-    await replacementPage.getByTestId('login-create-device-vault-btn').click()
+    await replacementPage.getByTestId('first-run-create-identity-btn').click()
     await expect(
       replacementPage.getByTestId('extension-connect-consent'),
     ).toBeVisible()

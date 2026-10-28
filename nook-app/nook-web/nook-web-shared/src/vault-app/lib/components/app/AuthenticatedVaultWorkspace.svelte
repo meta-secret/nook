@@ -35,7 +35,7 @@ band, the scrolling page and the status line.
   import BrowserSettingsPanel from '$lib/components/settings/BrowserSettingsPanel.svelte'
   import IdentityDevicesPanel from '$lib/components/identity-control/IdentityDevicesPanel.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import FirstRunBackupStep from '$lib/components/login/FirstRunBackupStep.svelte'
+  import FirstRunConnectStep from '$lib/components/login/FirstRunConnectStep.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import IdentitiesHub from '$lib/components/identities/IdentitiesHub.svelte'
   import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
@@ -548,10 +548,9 @@ band, the scrolling page and the status line.
   />
 {/snippet}
 
-{#if vault.firstRun !== FirstRunStage.Off}
-  <FirstRunBackupStep
+{#if vault.firstRun === FirstRunStage.Connect}
+  <FirstRunConnectStep
     {vault}
-    onReconnect={onSettingsReconnect}
     onDone={() => finishFirstRun(WorkspaceSection.Identities)}
   />
 {:else if section === WorkspaceSection.Identities || section === WorkspaceSection.Overview}

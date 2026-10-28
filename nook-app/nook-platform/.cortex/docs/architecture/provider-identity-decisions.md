@@ -77,6 +77,29 @@ Rust decides each identity's standing and the decisions it allows.
   - **Leave as is**
   - **Finish joining:** add the identity to this browser.
 
+## Setup action
+
+First-run setup offers no plan. Each listed identity gets one action that
+Rust decides from its standing (`IdentitySetup`), and picking it runs at
+once. Setup already used the passkey that made this browser's key, so it
+never offers adding by another passkey.
+
+| Standing | Setup action |
+|---|---|
+| This browser | **Continue** (Leave: connect and sync) |
+| Join approved | **Continue** (Finish joining) |
+| Opens with a checked passkey | **Continue** (Add to this browser) |
+| Join requested | **Waiting** (Check again) |
+| Unchecked, not opened, join denied | **Request to join** |
+| Other identity here | none |
+
+- A passkey made for Nook before re-derives the same app key, so an identity
+  it is a member of reads as **Join approved** with no extra tap.
+- A new passkey is a member of nothing: every identity asks to join.
+- Setup may instead create a new identity. It is still fresh, so
+  `name_fresh_identity` names it before its log exists; an identity with a
+  log, a vault, or another member keeps its name (`IdentityAlreadyInUse`).
+
 ## Operations
 
 ### Add to this browser

@@ -210,16 +210,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const initialHandoffNonce = connectionParameters.handoffNonce
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
-      .getByTestId('login-vault-name-input')
-      .fill(extensionApprovalVaultName)
     await expect(
       simplePage.getByText(
-        `Create “${extensionApprovalVaultName}” locally using the extension's protected device key.`,
+        "Create it locally using the extension's protected device key.",
       ),
     ).toBeVisible()
     await expect(simplePage.getByText(/passkey is required/i)).toHaveCount(0)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await simplePage.getByTestId('first-run-create-identity-btn').click()
     await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
@@ -760,10 +757,7 @@ test('accepts the pairing grant after the extension session was locked', async (
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
-      .getByTestId('login-vault-name-input')
-      .fill('Locked session handoff vault')
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await simplePage.getByTestId('first-run-create-identity-btn').click()
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
