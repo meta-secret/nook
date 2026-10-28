@@ -60,13 +60,23 @@ export class FirstRunActions {
   constructor(private readonly vault: VaultState) {}
 
   /** The device key is ready. During first run it only makes the identity's
-   * key, and setup moves on to the sync provider; elsewhere it creates the
-   * vault as before. */
+   * key, and setup moves on to the sync provider; outside setup it creates
+   * the vault as before. A key that becomes ready again while setup is past
+   * it (an extension's key arrives once its approval and its queued request
+   * both land) changes nothing: the vault waits for the identity. */
   async createWithDeviceKeys(label: string): Promise<void> {
     const vault = this.vault;
-    if (vault.firstRun !== FirstRunStage.Protect) {
-      await vault.createLocalVaultWithDeviceKeys(label);
-      return;
+    switch (vault.firstRun) {
+      case FirstRunStage.Off:
+      case FirstRunStage.Connect:
+        await vault.createLocalVaultWithDeviceKeys(label);
+        return;
+      case FirstRunStage.Sync:
+      case FirstRunStage.Name:
+      case FirstRunStage.Joining:
+        return;
+      case FirstRunStage.Protect:
+        break;
     }
     const initialized = await vault.initDeviceIdentity();
     if (initialized.isErr()) {

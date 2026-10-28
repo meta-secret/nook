@@ -117,6 +117,18 @@ describe('first-run setup settles the identity before any vault', () => {
     expect(setup.created).toEqual([])
   })
 
+  test('a key ready a second time while setup is past it creates no vault', async () => {
+    const setup = new Setup().at(FirstRunStage.Protect)
+    const actions = new FirstRunActions(setup.vault)
+
+    // An extension's key arrives through its approval and its queued request.
+    await actions.createWithDeviceKeys('Personal')
+    await actions.createWithDeviceKeys('Personal')
+
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
+    expect(setup.created).toEqual([])
+  })
+
   test('outside setup a ready key creates the vault as before', async () => {
     const setup = new Setup().at(FirstRunStage.Off)
 

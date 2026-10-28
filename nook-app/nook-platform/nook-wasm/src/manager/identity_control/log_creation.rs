@@ -12,6 +12,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
+use crate::manager::session::FirstVaultIdentityName;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::{IdentityDirectoryWrite, KeyringDbRebindLocalIdentity};
 use crate::{NookDatabase, NookError};
@@ -122,8 +123,8 @@ impl NookVaultManager {
     /// Name this browser's identity while it is still fresh. Setup asks for
     /// the name only when it creates a new identity, after the passkey made
     /// its key; the control log, created later, seals that name. A key the
-    /// browser extension lends has no local identity yet: its first vault's
-    /// genesis creates one under the vault's name, which is the same name.
+    /// browser extension lends has no local identity yet: the name waits on
+    /// this session for the first vault's genesis, which creates it.
     #[wasm_bindgen]
     pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
         let label = Self::local_identity_label(&label).map_err(JsError::new)?;
@@ -136,7 +137,8 @@ impl NookVaultManager {
             AppKeyIdentityMembership::Enrolled(_) => Self::local_identity_log(&app_key).await?,
             AppKeyIdentityMembership::Unenrolled => LocalIdentityLog::Empty,
         };
-        NookDatabase::update_identity_directory(move |directory| {
+        let name = label.clone();
+        let at_first_vault = NookDatabase::update_identity_directory(move |directory| {
             let named = directory
                 .name_fresh_identity(&FreshIdentityNaming {
                     app_key: &app_key,
@@ -144,11 +146,23 @@ impl NookVaultManager {
                     local_log,
                 })
                 .map_err(NookDatabase::map_domain_error)?;
-            let (FreshIdentityNamed::Renamed(directory)
-            | FreshIdentityNamed::AtFirstVault(directory)) = named;
-            Ok(IdentityDirectoryWrite::from(directory))
+            Ok(match named {
+                FreshIdentityNamed::Renamed(directory) => IdentityDirectoryWrite {
+                    directory,
+                    value: false,
+                },
+                FreshIdentityNamed::AtFirstVault(directory) => IdentityDirectoryWrite {
+                    directory,
+                    value: true,
+                },
+            })
         })
         .await?;
+        self.device.first_vault_identity_name = if at_first_vault {
+            FirstVaultIdentityName::Named(name)
+        } else {
+            FirstVaultIdentityName::Unnamed
+        };
         Ok(())
     }
 }

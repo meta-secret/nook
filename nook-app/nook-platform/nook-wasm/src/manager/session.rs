@@ -419,6 +419,15 @@ pub(in crate::manager) enum LocalIdentityCreation {
     Creating(String),
 }
 
+/// The name setup gave an identity the first vault's genesis has yet to
+/// create, as for a key the browser extension lends.
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub(in crate::manager) enum FirstVaultIdentityName {
+    #[default]
+    Unnamed,
+    Named(String),
+}
+
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) handoff_generation: Rc<()>,
@@ -427,6 +436,7 @@ pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,
     pub(in crate::manager) pending_extension_handoff: ExtensionIdentityPublication,
     pub(in crate::manager) pending_local_identity_label: LocalIdentityCreation,
+    pub(in crate::manager) first_vault_identity_name: FirstVaultIdentityName,
 }
 
 impl DeviceSessionState {

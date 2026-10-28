@@ -2,6 +2,7 @@
 
 use super::device_protection::{ExtensionIdentityPublication, PendingExtensionIdentityEnrollment};
 use super::identity_handoff::VaultCreationHandoff;
+use super::session::FirstVaultIdentityName;
 use super::{NookVaultManager, VaultNameState};
 use crate::IdentityDbGenerateVaultDekForIdentity;
 use crate::NookDatabase;
@@ -25,9 +26,14 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<identity_record::PendingSimpleGenesis, NookError> {
-        let label = match &self.vault.vault_name {
-            VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
-            _ => "Personal".to_owned(),
+        // A name setup gave the identity before it existed wins; the vault's
+        // own name is set only after it connects.
+        let label = match std::mem::take(&mut self.device.first_vault_identity_name) {
+            FirstVaultIdentityName::Named(name) => name,
+            FirstVaultIdentityName::Unnamed => match &self.vault.vault_name {
+                VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
+                _ => "Personal".to_owned(),
+            },
         };
         if let ExtensionIdentityPublication::Staged(pending) =
             &self.device.pending_extension_handoff
