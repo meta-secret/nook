@@ -365,11 +365,11 @@ Two cases sit outside these steps:
 - A vault registered after the invite went out reaches the joiner through
   `vault-dek-granted`, like any member that joined concurrently with a
   registration.
-- Logs from earlier builds may hold `member-join-requested`,
-  `member-approved`, and `member-join-denied`. They still project, so members
-  admitted by approval stay members. Nothing writes them now. A pending
-  request from an earlier build is not offered for approval; that
-  installation joins with a new invite.
+- A browser that finds the identity on a provider and cannot open it may
+  ask instead of using an invite. It writes `member-join-requested` for a
+  fresh app key; a member answers with `member-approved`, carrying every
+  vault's DEK, or `member-join-denied`. See
+  [Ask to join](provider-identity-decisions.md#ask-to-join).
 
 **Prohibited:** make the member who issued the invite approve the joiner as
 well. The passphrase-protected code already proves the joiner holds the

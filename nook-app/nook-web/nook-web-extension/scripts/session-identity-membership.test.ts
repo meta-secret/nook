@@ -74,6 +74,7 @@ class MembershipManager {
           identityLabel: 'Family',
           standing: this.standing,
           members: [],
+          joinRequests: [],
           vaults: [],
           mounts: [],
         }

@@ -13,10 +13,11 @@
 
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent, EventId,
-    EventLogLocation, EventLogNamespaceKind, KnownIdentityName, KnownVaultName, ListedIdentityLog,
-    LocalEventWrite, LocalVaultOccupancy, ProviderIdentityLogEvents, ProviderVaultEvents,
-    ProviderVaultKeyholding, ProviderVaultListing, ProviderVaultListingRequest,
-    ProviderVaultObservation, ProviderVaultStanding, ProviderVaultTime, StoreId,
+    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, KnownIdentityName,
+    KnownVaultName, ListedIdentityLog, LocalEventWrite, LocalVaultOccupancy,
+    ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
+    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
+    ProviderVaultTime, StoreId,
 };
 
 use super::drive_events::DriveEventStore;
@@ -114,6 +115,73 @@ impl DriveVaultListing<'_> {
             });
         }
         Ok(logs)
+    }
+}
+
+impl DriveVaultListing<'_> {
+    /// The folder that holds one identity's control log under the root.
+    async fn identity_log_folder(
+        &self,
+        identity_id: &IdentityId,
+    ) -> Result<DriveEventParent, NookError> {
+        let mut folders =
+            DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Identity)
+                .await?
+                .into_iter()
+                .filter(|folder| folder.placed.identity() == identity_id)
+                .map(|folder| folder.folder)
+                .collect::<Vec<_>>();
+        match (folders.pop(), folders.is_empty()) {
+            (Some(folder), true) => Ok(folder),
+            (Some(_), false) => Err(NookError::Drive(
+                "Google Drive contains ambiguous namespace folders; sync stopped before choosing one."
+                    .to_owned(),
+            )),
+            (None, _) => Err(NookError::Drive(
+                "The identity is not in this Nook folder.".to_owned(),
+            )),
+        }
+    }
+
+    /// One identity's control log events, read and not yet verified.
+    pub(crate) async fn identity_events(
+        &self,
+        identity_id: &IdentityId,
+    ) -> Result<Vec<EventStorageBytes>, NookError> {
+        let folder = self.identity_log_folder(identity_id).await?;
+        let location = EventLogLocation::Identity(identity_id.clone());
+        let store = DriveEventStore {
+            token: self.token,
+            parent: &folder,
+            location: &location,
+        };
+        let mut events = Vec::new();
+        for raw_id in store.list_drive_event_ids().await? {
+            let event_id = EventId::parse(&raw_id)?;
+            if let RemoteEventRead::Retrieved(bytes) = store.read_drive_event(&event_id).await? {
+                events.push(bytes);
+            }
+        }
+        Ok(events)
+    }
+
+    /// Write one event into an identity's log folder the root already holds.
+    pub(crate) async fn put_identity_event(
+        &self,
+        identity_id: &IdentityId,
+        event_id: &EventId,
+        bytes: &[u8],
+    ) -> Result<(), NookError> {
+        let folder = self.identity_log_folder(identity_id).await?;
+        let location = EventLogLocation::Identity(identity_id.clone());
+        DriveEventStore {
+            token: self.token,
+            parent: &folder,
+            location: &location,
+        }
+        .put_drive_event_if_absent(event_id, bytes)
+        .await?;
+        Ok(())
     }
 }
 

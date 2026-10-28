@@ -120,6 +120,7 @@ function joinFor(overrides: Partial<Scenario>) {
       label: '',
       isCurrentInstallation: appId === PAGE_APP,
     })),
+    joinRequests: [],
     vaults: [],
     mounts: [],
   }

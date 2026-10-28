@@ -8,6 +8,7 @@
 
 mod connection;
 mod invite;
+mod join_request;
 mod log_creation;
 mod membership;
 mod vault_access;

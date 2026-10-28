@@ -2376,7 +2376,11 @@
     "vault_open_through_identity": "Open through identity",
     "error_provider_not_mount": "Choose a provider that carries this identity.",
     "error_passphrase_short": "Use a passphrase of at least 8 characters.",
-    "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
+    "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync.",
+    "join_requests_title": "Devices asking to join",
+    "join_requests_body": "These devices asked to join this identity. Approve only devices you recognize: an approved device opens every vault of the identity.",
+    "join_request_approved": "The device joined this identity.",
+    "join_request_denied": "Request denied."
   },
   "identity_menu": {
     "actions": "Actions",

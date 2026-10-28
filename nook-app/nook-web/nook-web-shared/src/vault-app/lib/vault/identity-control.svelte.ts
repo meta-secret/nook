@@ -83,6 +83,17 @@ export type IdentityMemberRename = {
   readonly label: string;
 };
 
+export enum IdentityJoinDecision {
+  Approve = "approve",
+  Deny = "deny",
+}
+
+/** A member's answer to one device asking to join this identity. */
+export type IdentityJoinAnswer = {
+  readonly appId: string;
+  readonly decision: IdentityJoinDecision;
+};
+
 const PASSPHRASE_OPTIONS: PasswordGenerationOptions = {
   length: 20,
   lowercase: true,
@@ -334,6 +345,34 @@ export class IdentityControlModel {
 
   rename({ appId, label }: IdentityMemberRename) {
     return this.act((manager) => manager.rename_identity_member(appId, label));
+  }
+
+  /**
+   * Answer a device asking to join this identity. Rust approves it with
+   * every vault's DEK, or denies it; the answer then reaches every mount,
+   * where the asking device reads it.
+   */
+  async answerJoin({
+    appId,
+    decision,
+  }: IdentityJoinAnswer): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    const answered = await this.act((manager) => {
+      switch (decision) {
+        case IdentityJoinDecision.Approve:
+          return manager.approve_identity_join(appId);
+        case IdentityJoinDecision.Deny:
+          return manager.deny_identity_join(appId);
+      }
+    });
+    if (answered.isErr()) return answered;
+    const toast =
+      decision === IdentityJoinDecision.Approve
+        ? I18N_KEYS.IdentityControlJoinRequestApproved
+        : I18N_KEYS.IdentityControlJoinRequestDenied;
+    this.vault.showSuccess(this.vault.t(toast));
+    return answered;
   }
 
   /** Delete a vault from the identity on every device. The removal reaches

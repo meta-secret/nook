@@ -38,6 +38,15 @@ pub struct IdentityMemberView {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+pub struct IdentityJoinRequestView {
+    pub app_id: String,
+    pub label: String,
+    /// When the asking device wrote its request; audit time only.
+    pub requested_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
 pub struct IdentityVaultView {
     pub store_id: String,
     /// Whether this installation holds the vault's current DEK envelope.
@@ -76,6 +85,8 @@ pub struct IdentityControlSnapshot {
     pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
+    /// Devices asking to join, which this installation can answer as a member.
+    pub join_requests: Vec<IdentityJoinRequestView>,
     pub vaults: Vec<IdentityVaultView>,
     pub mounts: Vec<IdentityMountView>,
 }
@@ -126,6 +137,7 @@ impl IdentityControlSnapshot {
             identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
+            join_requests: Vec::new(),
             vaults: Vec::new(),
             mounts: Vec::new(),
         }
@@ -158,6 +170,22 @@ impl IdentityControlSnapshot {
                     is_current_installation: &member.keys.app_id == *current_app_id,
                 })
                 .collect(),
+            // Only a member answers join requests.
+            join_requests: match standing {
+                IdentityControlStanding::Member => state
+                    .pending_joins
+                    .iter()
+                    .map(|request| IdentityJoinRequestView {
+                        app_id: request.member.app_id.as_str().to_owned(),
+                        label: request.member.label.as_str().to_owned(),
+                        requested_at: request.requested_at.as_str().to_owned(),
+                    })
+                    .collect(),
+                IdentityControlStanding::NotReplicated
+                | IdentityControlStanding::PendingJoin
+                | IdentityControlStanding::Revoked
+                | IdentityControlStanding::NotListed => Vec::new(),
+            },
             vaults: state
                 .vaults
                 .iter()
