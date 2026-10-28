@@ -5,7 +5,7 @@ managed. -->
 <script lang="ts">
   import { ArrowLeft, Check, FolderClosed } from '@lucide/svelte'
   import IdentityCard from './IdentityCard.svelte'
-  import { ConnectStep, Provider, folderIdentities, personal, providerLabel, providers } from './flow'
+  import { ConnectStep, Provider, folderIdentities, personal, providerAccount, providerLabel, providers } from './flow'
   import { ui } from './ui'
 
   let step = $state<ConnectStep>(ConnectStep.Provider)
@@ -13,7 +13,7 @@ managed. -->
   let connecting = $state(false)
 
   const others = folderIdentities.length - 1
-  const account = $derived(providers.find((entry) => entry.id === provider)?.account ?? '')
+  const account = $derived(providerAccount(provider))
 
   async function connect(): Promise<void> {
     connecting = true

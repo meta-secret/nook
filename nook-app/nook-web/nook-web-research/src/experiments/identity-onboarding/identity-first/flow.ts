@@ -19,7 +19,7 @@ export enum Provider {
 }
 
 export const providers: readonly { id: Provider; label: string; account: string }[] = [
-  { id: Provider.GoogleDrive, label: 'Google Drive', account: 'bynull@meta-secret.org' },
+  { id: Provider.GoogleDrive, label: 'Google Drive', account: 'you@example.com' },
   { id: Provider.ICloud, label: 'iCloud', account: 'iCloud Drive' },
   { id: Provider.GitHub, label: 'GitHub', account: 'meta-secret/nook-backup' },
   { id: Provider.Folder, label: 'A folder', account: '~/Sync/meta-secret-nook' },
@@ -64,7 +64,8 @@ export const stranger: IdentityFixture = {
 export const folderIdentities: readonly IdentityFixture[] = [personal, work, stranger]
 
 export function providerLabel(id: Provider): string {
-  return providers.find((provider) => provider.id === id)?.label ?? id
+  for (const provider of providers) if (provider.id === id) return provider.label
+  return id
 }
 
 /** Where bringing an existing identity starts from. */
@@ -108,4 +109,9 @@ export enum HubStep {
   List = 'list',
   Bring = 'bring',
   ConfirmMerge = 'confirm-merge',
+}
+
+export function providerAccount(id: Provider): string {
+  for (const provider of providers) if (provider.id === id) return provider.account
+  return ''
 }

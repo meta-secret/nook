@@ -9,8 +9,10 @@ visited ones marked, and the current state's exits spelled out. -->
   let { flow }: { flow: KeyFlow } = $props()
 
   const groups = Object.values(StateGroup)
-  const titleOf = (state: string) =>
-    machine.find((node) => node.state === state)?.title ?? state
+  function titleOf(state: string): string {
+    for (const node of machine) if (node.state === state) return node.title
+    return state
+  }
 </script>
 
 <nav class="space-y-6" aria-label="State machine">
@@ -22,20 +24,31 @@ visited ones marked, and the current state's exits spelled out. -->
           {@const current = flow.current === node.state}
           {@const seen = flow.visited.includes(node.state)}
           <li>
-            <div class="flex items-center gap-2.5 text-[13px] {current ? 'text-[#e9e8e4]' : seen ? 'text-[#a4a8ae]' : 'text-[#5d6268]'}">
+            <button
+              type="button"
+              class="flex w-full items-center gap-2.5 py-0.5 text-left text-[13px] transition hover:text-[#e9e8e4] {current ? 'text-[#e9e8e4]' : seen ? 'text-[#a4a8ae]' : 'text-[#5d6268]'}"
+              aria-current={current ? 'step' : 'false'}
+              onclick={() => flow.jump(node.state)}
+            >
               <span
                 class="size-2 shrink-0 {current ? 'bg-[#8fa3c0]' : seen ? 'border border-[#8fa3c0]' : 'border border-[#3a3f45]'}"
                 aria-hidden="true"
               ></span>
               <span class={current ? 'font-medium' : ''}>{node.title}</span>
-            </div>
+            </button>
             {#if current && node.next.length > 0}
               <ul class="mt-1.5 mb-2 space-y-1 border-l border-[#2c3035] pl-4">
-                {#each node.next as edge (edge.to)}
-                  <li class="flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[#80858c]">
-                    <span>{edge.label}</span>
-                    <ArrowRight class="size-3" aria-hidden="true" />
-                    <span class="text-[#a4a8ae]">{titleOf(edge.to)}</span>
+                {#each node.next as edge (edge.label)}
+                  <li>
+                    <button
+                      type="button"
+                      class="flex flex-wrap items-center gap-1.5 text-left font-mono text-[11px] text-[#80858c] hover:text-[#e9e8e4]"
+                      onclick={() => flow.go(edge.to)}
+                    >
+                      <span>{edge.label}</span>
+                      <ArrowRight class="size-3" aria-hidden="true" />
+                      <span class="text-[#a4a8ae]">{titleOf(edge.to)}</span>
+                    </button>
                   </li>
                 {/each}
               </ul>

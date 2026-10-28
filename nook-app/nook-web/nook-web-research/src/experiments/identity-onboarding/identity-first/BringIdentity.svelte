@@ -20,6 +20,7 @@ try another passkey or ask their other device to let this browser in. -->
     Provider,
     folderIdentities,
     personal,
+    providerAccount,
     providerLabel,
     providers,
     work,
@@ -47,9 +48,7 @@ try another passkey or ask their other device to let this browser in. -->
   /** In the hub, the identity in use is already here; the passkey finds the
    * other one. */
   const found = $derived(context === BringContext.Hub ? work : personal)
-  const account = $derived(
-    providers.find((entry) => entry.id === provider)?.account ?? '',
-  )
+  const account = $derived(providerAccount(provider))
 
   function icon(id: Provider) {
     switch (id) {

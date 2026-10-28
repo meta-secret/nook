@@ -89,8 +89,8 @@ export const machine: readonly StateNode[] = [
     title: 'Remote identities found',
     group: StateGroup.Remote,
     next: [
-      { to: KeyState.UseInstead, label: 'passkey opens it → use it instead' },
-      { to: KeyState.JoinPending, label: 'sealed → join request' },
+      { to: KeyState.UseInstead, label: 'check with passkey → yours → use it instead' },
+      { to: KeyState.JoinPending, label: 'sealed to you → join request' },
       { to: KeyState.Synced, label: 'skip for now' },
     ],
   },
