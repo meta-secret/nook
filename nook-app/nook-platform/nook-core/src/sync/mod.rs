@@ -2,6 +2,7 @@
 
 pub(crate) mod authorized_accounts;
 pub(crate) mod drive_vault_folder;
+pub(crate) mod provider_identity_choice;
 pub(crate) mod provider_identity_log;
 pub(crate) mod provider_vault_access;
 pub(crate) mod provider_vault_join;

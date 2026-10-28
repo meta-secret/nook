@@ -26,6 +26,8 @@ mod enrollment_entry;
 pub use enrollment_entry::*;
 mod access_check;
 pub use access_check::*;
+mod provider_identity_choice;
+pub use provider_identity_choice::*;
 mod mnemonic;
 pub use mnemonic::*;
 mod provider_labels;
