@@ -865,13 +865,22 @@ export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
   const closedRow = row.and(page.locator(':not([aria-expanded="true"])'))
   // On the extension-connect route an opened vault goes straight to consent.
   const consent = page.getByTestId('extension-connect-consent')
+  // A PIN-protected browser asks for its PIN on the card instead; that prompt
+  // replaces the panel's unlock, so it is the unlock continuing too.
+  const cardPin = page.getByTestId('card-pin-input')
   // Automatic unlock may replace a disabled row or panel between observations.
   // Re-read the current state instead of waiting for a retired control.
   await expect
     .poll(
       async () => {
         switch (
-          await shell.or(open).or(overlay).or(consent).first().isVisible()
+          await shell
+            .or(open)
+            .or(overlay)
+            .or(consent)
+            .or(cardPin)
+            .first()
+            .isVisible()
         ) {
           case true:
             return VaultPanelUnlockProgress.Continued
