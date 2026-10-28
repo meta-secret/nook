@@ -17,7 +17,7 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
-import IdentityFirst from './identity-management/identity-first/Experiment.svelte'
+import IdentityFirst from './identity-onboarding/identity-first/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -85,6 +85,12 @@ const identityManagement: ExperimentCategory = {
   title: 'Identity Management',
   description: 'Small studies of identities and the public keys they keep.',
 }
+const identityOnboarding: ExperimentCategory = {
+  slug: 'identity-onboarding',
+  title: 'Identity Onboarding',
+  description:
+    'Who you are is settled before vaults and sync providers: first run, connecting a provider, and bringing or merging identities.',
+}
 const inspiration: ExperimentCategory = {
   slug: 'inspiration',
   title: 'Inspiration',
@@ -98,6 +104,7 @@ export const categories: ExperimentCategory[] = [
   vault,
   keys,
   identityManagement,
+  identityOnboarding,
   inspiration,
 ]
 
@@ -168,10 +175,10 @@ const identityManagementV2: ExperimentSubcategory = {
   description:
     'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
 }
-const identityManagementV3: ExperimentSubcategory = {
-  categorySlug: 'identity-management',
-  slug: ExperimentVersion.V3,
-  title: 'V3 · Identity first',
+const identityOnboardingV1: ExperimentSubcategory = {
+  categorySlug: 'identity-onboarding',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Identity first',
   description:
     'Who you are is settled before vaults and sync providers: first run, connecting a provider, and the Identities hub.',
 }
@@ -194,7 +201,7 @@ export const subcategories: ExperimentSubcategory[] = [
   keysV3,
   identityManagementV1,
   identityManagementV2,
-  identityManagementV3,
+  identityOnboardingV1,
   inspirationV1,
 ]
 
@@ -345,8 +352,8 @@ export const experiments: Experiment[] = [
   },
   {
     slug: 'identity-first',
-    category: identityManagement,
-    subcategory: identityManagementV3,
+    category: identityOnboarding,
+    subcategory: identityOnboardingV1,
     title: 'Identity first',
     description:
       'New identity, existing identity by one passkey tap, or join; a provider only mounts the identity in use; the hub uses or merges other identities.',

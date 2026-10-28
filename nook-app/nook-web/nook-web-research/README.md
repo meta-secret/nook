@@ -48,6 +48,10 @@ different layout or visual direction.
   evidence interactions, but they do not define the virtual-identity model.
 - **`identity-management`** — the current research direction: virtual
   identities keep installation keys and receive independent vault grants.
+- **`identity-onboarding`** — identity-first onboarding: first run settles
+  who you are (new identity, an existing one by one passkey tap, or join),
+  a sync provider only mounts the identity in use, and the Identities hub
+  brings or merges other identities. Passkeys are simulated.
 - **`inspiration`** — sketches frozen for an interaction or visual idea rather
   than as candidates. Borrow from them; do not iterate on them. They may read
   older fixtures, kept beside them.
