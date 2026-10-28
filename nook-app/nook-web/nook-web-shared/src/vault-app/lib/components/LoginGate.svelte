@@ -296,15 +296,6 @@
 
   /** Opening a locked vault's row selects that vault, which reads its
    * passphrases, without unlocking it. */
-  async function chooseRemoteVault(storeId: string): Promise<void> {
-    const chosen = vault.chooseRemoteVault(storeId)
-    if (chosen.isErr()) {
-      vault.errorMsg = vault.t(chosen.error.translationKey)
-      return
-    }
-    await onUnlock()
-  }
-
   async function selectVault(storeId: string): Promise<void> {
     if (selectedCardStoreId === storeId) return
     await openVaultFromCard(storeId)
@@ -790,7 +781,7 @@
           <RemoteVaultChoice
             {vault}
             busy={isVerifying}
-            onChoose={chooseRemoteVault}
+            onApplied={onUnlock}
           />
         {:else if setupIs('oauth-file')}
           <OAuthProviderSetupWizard

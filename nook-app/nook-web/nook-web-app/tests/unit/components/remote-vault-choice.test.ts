@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type {
   CredentialCheckReport,
@@ -11,11 +11,38 @@ import {
   AccessCheckActions,
   AccessCheckTargetKind,
 } from '$lib/vault/access-check'
+import {
+  IdentityPlanActions,
+  IdentityPlanFailure,
+  IdentityPlanFailureKind,
+  IdentityPlanOutcome,
+} from '$lib/vault/identity-plan-actions'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import RemoteVaultChoice from '../../../../nook-web-shared/src/vault-app/lib/components/login/RemoteVaultChoice.svelte'
 
 afterEach(() => vi.restoreAllMocks())
+
+/** What a rendered page offers to find its decision buttons. */
+type DecisionView = {
+  readonly getAllByTestId: (testId: string) => HTMLElement[]
+}
+
+/** The decision button of one kind, once the listing shows it. */
+class DecisionButtons {
+  static async of(
+    view: DecisionView,
+    decision: string,
+  ): Promise<HTMLElement> {
+    return vi.waitFor(() => {
+      const found = view
+        .getAllByTestId('provider-identity-decision')
+        .find((button) => button.dataset.decision === decision)
+      if (!found) throw new Error(`no ${decision} decision`)
+      return found
+    })
+  }
+}
 
 const family: FilingIdentity = {
   identityId: 'idn_familyident',
@@ -53,24 +80,32 @@ function choice({ storeId, identity }: ChoiceRequest): ProviderVaultSummary {
 function renderChoice(vaults: ProviderVaultSummary[]) {
   const vault = VaultStateTestFixture.create()
   vault.remoteVaultChoices = vaults
-  const onChoose = vi.fn()
-  const props = { vault, busy: false, onChoose } satisfies ComponentProps<
+  const onApplied = vi.fn()
+  const props = { vault, busy: false, onApplied } satisfies ComponentProps<
     typeof RemoteVaultChoice
   >
-  return { view: render(RemoteVaultChoice, props), vault, onChoose }
+  return { view: render(RemoteVaultChoice, props), vault, onApplied }
 }
 
 const familyVault: ChoiceRequest = {
-  storeId: 'store_familyvault',
+  storeId: 'store_familyvaulg',
   identity: family,
 }
 const strangerVault: ChoiceRequest = {
-  storeId: 'store_othervault1',
+  storeId: 'store_othervaultg',
   identity: stranger,
 }
 
-describe('Recovery vault choice', () => {
-  test('vaults are grouped by identity, and a found passkey opens its whole identity', async () => {
+function decisionsOf(card: HTMLElement | undefined): readonly string[] {
+  return Array.from(
+    card?.querySelectorAll<HTMLElement>(
+      '[data-testid="provider-identity-decision"]',
+    ) ?? [],
+  ).map((button) => button.dataset.decision ?? '')
+}
+
+describe('Recovery choice between identities', () => {
+  test('each identity is recovered or joined as a whole, and a found passkey narrows it', async () => {
     const report: CredentialCheckReport = {
       credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
       identities: [
@@ -81,7 +116,7 @@ describe('Recovery vault choice', () => {
           outcome: 'opens',
           vaults: [
             {
-              storeId: 'store_familyvault',
+              storeId: familyVault.storeId,
               shortId: 'familyva',
               outcome: {
                 state: 'opens',
@@ -97,8 +132,8 @@ describe('Recovery vault choice', () => {
           outcome: 'doesNotOpen',
           vaults: [
             {
-              storeId: 'store_othervault1',
-              shortId: 'othervau',
+              storeId: strangerVault.storeId,
+              shortId: 'otherva',
               outcome: { state: 'doesNotOpen' },
             },
           ],
@@ -108,19 +143,14 @@ describe('Recovery vault choice', () => {
     const check = vi
       .spyOn(AccessCheckActions.prototype, 'checkPasskey')
       .mockResolvedValue(ok(report))
-    const { view, vault, onChoose } = renderChoice([
-      choice(familyVault),
-      choice(strangerVault),
-    ])
+    const { view } = renderChoice([choice(familyVault), choice(strangerVault)])
 
-    expect(view.getAllByTestId('provider-identity')).toHaveLength(2)
-    expect(
-      view
-        .getAllByTestId('provider-identity')
-        .map((card) => card.dataset.standing),
-    ).toEqual(['unchecked', 'unchecked'])
-    // Each identity is recovered once, whatever number of vaults it files.
-    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(2)
+    const cards = view.getAllByTestId('provider-identity')
+    expect(cards.map((card) => card.dataset.standing)).toEqual([
+      'unchecked',
+      'unchecked',
+    ])
+    expect(decisionsOf(cards[0])).toEqual(['leave', 'addToBrowser', 'askToJoin'])
     const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
     if (!whichPasskey) throw new Error('no passkey check offered')
     await fireEvent.click(whichPasskey)
@@ -136,30 +166,51 @@ describe('Recovery vault choice', () => {
     expect(check).toHaveBeenCalledWith({
       kind: AccessCheckTargetKind.CurrentProvider,
     })
-    const [familyCard] = view.getAllByTestId('provider-identity')
+    const [familyCard, strangerCard] = view.getAllByTestId('provider-identity')
     expect(familyCard?.textContent).toContain('Family')
     expect(familyCard?.textContent).toContain('Groceries')
-    // The identity no passkey opened offers its hunt and a join instead.
-    expect(view.getAllByTestId('provider-identity-ask-to-join')).toHaveLength(1)
-    const [recover] = view.getAllByTestId('remote-vault-choice-item')
-    expect(view.getAllByTestId('remote-vault-choice-item')).toHaveLength(1)
-    expect(recover?.textContent).toContain(
-      vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey),
-    )
-    if (!recover) throw new Error('no recovery offered')
-    await fireEvent.click(recover)
-    expect(onChoose).toHaveBeenCalledWith('store_familyvault')
+    expect(decisionsOf(familyCard)).toEqual(['leave', 'addToBrowser'])
+    expect(decisionsOf(strangerCard)).toEqual(['leave', 'askToJoin'])
+    // Nothing is picked yet, so there is nothing to apply.
+    expect(view.queryAllByTestId('remote-vault-choice-apply')).toHaveLength(0)
   })
 
-  test('asking to join an identity this browser has no key for explains the join code', async () => {
-    const locked: ProviderVaultSummary = {
-      ...choice(strangerVault),
-      actions: [],
-    }
-    const { view } = renderChoice([locked])
+  test('Apply runs the plan against the recovery provider, then opens what it recovered', async () => {
+    const run = vi
+      .spyOn(IdentityPlanActions.prototype, 'run')
+      .mockResolvedValue(ok(IdentityPlanOutcome.Applied))
+    const { view, vault, onApplied } = renderChoice([choice(familyVault)])
 
-    await fireEvent.click(view.getByTestId('provider-identity-ask-to-join'))
+    await fireEvent.click(
+      await DecisionButtons.of(view, 'addToBrowser'),
+    )
+    expect(view.getByTestId('provider-identity-plan-row').textContent).toContain(
+      vault.t(I18N_KEYS.ProviderIdentitiesRecover),
+    )
+    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
-    expect(view.getByTestId('provider-identity-join-help')).toBeTruthy()
+    await vi.waitFor(() => expect(onApplied).toHaveBeenCalledOnce())
+    const [request] = run.mock.calls[0] ?? []
+    expect(request?.source).toEqual({ kind: 'currentProvider' })
+    expect(request?.planned.map((entry) => entry.decision)).toEqual([
+      'addToBrowser',
+    ])
+  })
+
+  test('a decision that fails says so and opens nothing', async () => {
+    vi.spyOn(IdentityPlanActions.prototype, 'run').mockResolvedValue(
+      err(new IdentityPlanFailure(IdentityPlanFailureKind.Add)),
+    )
+    const { view, vault, onApplied } = renderChoice([choice(familyVault)])
+
+    await fireEvent.click(
+      await DecisionButtons.of(view, 'addToBrowser'),
+    )
+    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
+
+    await vi.waitFor(() =>
+      expect(vault.errorMsg).toBe(vault.t(I18N_KEYS.ProviderIdentitiesAddFailed)),
+    )
+    expect(onApplied).not.toHaveBeenCalled()
   })
 })
