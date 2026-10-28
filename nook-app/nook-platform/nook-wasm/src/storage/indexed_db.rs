@@ -33,7 +33,6 @@ pub(crate) use atomic_string::{IndexedDbUpdate, StringUpdateGuard, StringUpdateR
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 pub(crate) use local_vault::ImportVaultLabel;
-#[cfg(test)]
 pub(crate) use local_vault::RegistryLabelUpdate;
 pub(crate) use local_vault::VaultSnapshotLookup;
 #[path = "sentinel_storage.rs"]
@@ -328,8 +327,8 @@ pub(crate) use local_vault::SaveVaultBlobRequest;
 #[cfg(test)]
 pub(crate) use local_vault::UpsertRegistryEntryRequest;
 pub(crate) use local_vault::{
-    ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
-    SetLocalVaultLabelRequest,
+    ImportVaultBlobRequest, RegisterLocalVaultRequest, SaveSecretSearchCatalogBucketsRequest,
+    SecretSearchBucketMutation, SetLocalVaultLabelRequest,
 };
 #[cfg(test)]
 pub(crate) use local_vault::{LocalVaultRemoval, RemoveRegistryEntryRequest};

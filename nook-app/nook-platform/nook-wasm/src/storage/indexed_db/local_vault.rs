@@ -56,6 +56,12 @@ pub(crate) struct SetLocalVaultLabelRequest<'a> {
     pub(crate) label: &'a str,
 }
 
+/// Named values required by `NookDatabase::register_local_vault`.
+pub(crate) struct RegisterLocalVaultRequest<'a> {
+    pub(crate) store_id: &'a str,
+    pub(crate) label: RegistryLabelUpdate<'a>,
+}
+
 /// Named values required by `NookDatabase::import_vault_blob`.
 pub(crate) struct ImportVaultBlobRequest<'a> {
     pub(crate) content: &'a str,
@@ -444,6 +450,24 @@ impl NookDatabase {
             .await?;
         }
         Ok(())
+    }
+}
+
+impl NookDatabase {
+    /// List a vault whose events this browser now stores. An existing entry
+    /// keeps its label unless a new one is set.
+    pub(crate) async fn register_local_vault(
+        request: RegisterLocalVaultRequest<'_>,
+    ) -> Result<(), NookError> {
+        let RegisterLocalVaultRequest { store_id, label } = request;
+        let mut registry = NookDatabase::load_vault_registry().await?;
+        NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
+            registry: &mut registry,
+            store_id,
+            label,
+            touch_unlock: false,
+        });
+        NookDatabase::save_vault_registry(&registry).await
     }
 }
 

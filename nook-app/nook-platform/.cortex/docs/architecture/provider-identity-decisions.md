@@ -73,16 +73,23 @@ Rust decides each identity's standing and the decisions it allows.
 
 - Preconditions:
   - A passkey re-derived a member app key of the other identity.
-  - The identity in use is unlocked.
+  - The identity in use is unlocked, has a control log, and is not the other
+    identity.
 - Effect:
   - Each vault's DEK is read from the other identity's log with that key.
+  - Each vault's events are stored here and listed in the vault registry.
   - The current identity's log records `VaultRegistered` for each vault, wrapped
     to its own members and signed by the current app key.
   - The vault namespaces sync through the current identity's mounts.
   - The other identity's log is not written; its devices keep their access.
 - Gaps today:
-  - No operation registers another identity's vault in the current log.
-    Only importing one vault through a granted key or backup password exists.
+  - `merge_identity_with_passkey` runs the merge; no Svelte flow calls it yet.
+  - It plans every vault before writing: one vault without a current key,
+    events, or a matching key epoch fails the whole merge.
+  - A vault the current identity already registers is reported, not
+    registered again. A vault another identity on this browser keeps fails.
+  - The identity sync pushes the new log events; nothing pushes a merged
+    vault's events to a mount until that vault is opened and synced.
 
 ### Ask to join
 
