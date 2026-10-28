@@ -18,6 +18,7 @@ import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
 import IdentityFirst from './identity-onboarding/identity-first/Experiment.svelte'
+import KeyMachine from './identity-onboarding/key-machine/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -182,6 +183,13 @@ const identityOnboardingV1: ExperimentSubcategory = {
   description:
     'Who you are is settled before vaults and sync providers: first run, connecting a provider, and the Identities hub.',
 }
+const identityOnboardingV2: ExperimentSubcategory = {
+  categorySlug: 'identity-onboarding',
+  slug: ExperimentVersion.V2,
+  title: 'V2 · Key management machine',
+  description:
+    'No vaults: an identity is the keys that open it. Create locally or import; merge what your passkey opens, join what is sealed to you.',
+}
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
   slug: ExperimentVersion.V1,
@@ -202,6 +210,7 @@ export const subcategories: ExperimentSubcategory[] = [
   identityManagementV1,
   identityManagementV2,
   identityOnboardingV1,
+  identityOnboardingV2,
   inspirationV1,
 ]
 
@@ -358,6 +367,15 @@ export const experiments: Experiment[] = [
     description:
       'New identity, existing identity by one passkey tap, or join; a provider only mounts the identity in use; the hub uses or merges other identities.',
     component: IdentityFirst,
+  },
+  {
+    slug: 'key-machine',
+    category: identityOnboarding,
+    subcategory: identityOnboardingV2,
+    title: 'Key management machine',
+    description:
+      'A state machine beside each screen: empty, create or import, sync, merge identities your passkey opens, join requests for sealed ones.',
+    component: KeyMachine,
   },
   {
     slug: 'identity-keys',
