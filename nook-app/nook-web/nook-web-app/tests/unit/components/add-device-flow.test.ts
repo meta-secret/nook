@@ -53,6 +53,7 @@ function snapshot(
     identityLabel: IDENTITY,
     standing,
     members: [],
+    joinRequests: [],
     vaults: [],
     mounts: [],
   }

@@ -88,14 +88,38 @@ Rust decides each identity's standing and the decisions it allows.
 
 - Preconditions:
   - The identity is locked here.
+  - The unlocked app key is fresh: its local identity has no log, no vaults,
+    and no other member, as an invite join requires. A browser whose key
+    already belongs to an identity first protects a new key, as Add identity
+    does.
 - Effect:
-  - A self-signed `MemberJoinRequested` from a new app key for that identity.
-  - A device of the identity approves it with `MemberApproved`, which carries
-    the vault DEKs; the identity then opens here.
+  - A self-signed `MemberJoinRequested` from that app key is written into the
+    identity's log at the provider. It carries public keys only.
+  - A device of the identity lists the request on its Devices page.
+    - **Approve** appends `MemberApproved` with every vault's current DEK
+      wrapped to the joiner, and re-seals the identity's name to it. A vault
+      the approver cannot open refuses the approval.
+    - **Deny** appends `MemberJoinDenied`.
+  - The asking browser completes when the user lists again; there is no
+    polling.
+    - Approved: its fresh local identity takes the identity's **original** id,
+      beside any other identity here. The log, membership, and DEKs are
+      stored locally.
+    - Pending or denied: nothing changes.
 - Gaps today:
-  - Requests are per vault (`JoinRequested` in each vault log) and grant one
-    vault's key, not membership.
-  - `MemberJoinRequested` approval has no product flow outside tests.
+  - Rust decides the request, the answer, and completion
+    (`ProviderIdentityJoinRequest`, `IdentityJoinAnswer`,
+    `IdentityJoinCompletion`).
+  - WASM exposes `request_identity_join`, `approve_identity_join`,
+    `deny_identity_join`, and `complete_identity_join`, reading the current
+    provider, a Drive account, or a local folder.
+  - The Devices page lists pending identity join requests with Approve and
+    Deny.
+  - The provider listing's **Ask to join** still sends per-vault
+    `JoinRequested` from the key in use. It does not yet protect a fresh key
+    and call `request_identity_join`.
+  - The asking browser keeps no list of its own requests. The page that
+    asked passes the source and identity to completion.
 
 ## Invariants
 

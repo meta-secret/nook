@@ -1506,6 +1506,10 @@ pub const IDENTITY_CONTROL_ERROR_PROVIDER_NOT_MOUNT: &str =
     "identity_control.error_provider_not_mount";
 pub const IDENTITY_CONTROL_JOIN_LOCAL_PROVIDER: &str = "identity_control.join_local_provider";
 pub const IDENTITY_CONTROL_JOIN_READY: &str = "identity_control.join_ready";
+pub const IDENTITY_CONTROL_JOIN_REQUEST_APPROVED: &str = "identity_control.join_request_approved";
+pub const IDENTITY_CONTROL_JOIN_REQUEST_DENIED: &str = "identity_control.join_request_denied";
+pub const IDENTITY_CONTROL_JOIN_REQUESTS_BODY: &str = "identity_control.join_requests_body";
+pub const IDENTITY_CONTROL_JOIN_REQUESTS_TITLE: &str = "identity_control.join_requests_title";
 pub const IDENTITY_CONTROL_MEMBERS_DESCRIPTION: &str = "identity_control.members_description";
 pub const IDENTITY_CONTROL_MOUNT_UNCONNECTED_DESCRIPTION: &str =
     "identity_control.mount_unconnected_description";
