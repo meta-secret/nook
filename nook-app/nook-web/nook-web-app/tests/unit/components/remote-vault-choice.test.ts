@@ -30,10 +30,7 @@ type DecisionView = {
 
 /** The decision button of one kind, once the listing shows it. */
 class DecisionButtons {
-  static async of(
-    view: DecisionView,
-    decision: string,
-  ): Promise<HTMLElement> {
+  static async of(view: DecisionView, decision: string): Promise<HTMLElement> {
     return vi.waitFor(() => {
       const found = view
         .getAllByTestId('provider-identity-decision')
@@ -150,7 +147,11 @@ describe('Recovery choice between identities', () => {
       'unchecked',
       'unchecked',
     ])
-    expect(decisionsOf(cards[0])).toEqual(['leave', 'addToBrowser', 'askToJoin'])
+    expect(decisionsOf(cards[0])).toEqual([
+      'leave',
+      'addToBrowser',
+      'askToJoin',
+    ])
     const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
     if (!whichPasskey) throw new Error('no passkey check offered')
     await fireEvent.click(whichPasskey)
@@ -181,12 +182,10 @@ describe('Recovery choice between identities', () => {
       .mockResolvedValue(ok(IdentityPlanOutcome.Applied))
     const { view, vault, onApplied } = renderChoice([choice(familyVault)])
 
-    await fireEvent.click(
-      await DecisionButtons.of(view, 'addToBrowser'),
-    )
-    expect(view.getByTestId('provider-identity-plan-row').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderIdentitiesRecover),
-    )
+    await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
+    expect(
+      view.getByTestId('provider-identity-plan-row').textContent,
+    ).toContain(vault.t(I18N_KEYS.ProviderIdentitiesRecover))
     await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
     await vi.waitFor(() => expect(onApplied).toHaveBeenCalledOnce())
@@ -203,13 +202,13 @@ describe('Recovery choice between identities', () => {
     )
     const { view, vault, onApplied } = renderChoice([choice(familyVault)])
 
-    await fireEvent.click(
-      await DecisionButtons.of(view, 'addToBrowser'),
-    )
+    await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
     await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
 
     await vi.waitFor(() =>
-      expect(vault.errorMsg).toBe(vault.t(I18N_KEYS.ProviderIdentitiesAddFailed)),
+      expect(vault.errorMsg).toBe(
+        vault.t(I18N_KEYS.ProviderIdentitiesAddFailed),
+      ),
     )
     expect(onApplied).not.toHaveBeenCalled()
   })

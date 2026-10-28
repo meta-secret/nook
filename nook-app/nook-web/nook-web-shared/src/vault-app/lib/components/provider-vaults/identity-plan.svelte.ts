@@ -140,7 +140,8 @@ export class IdentityDecisionText {
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
       case "mergeIntoCurrent": {
         const current = this.inUse(planned.choices);
-        if (!current) return vault.t(I18N_KEYS.ProviderIdentitiesMergeIntoYours);
+        if (!current)
+          return vault.t(I18N_KEYS.ProviderIdentitiesMergeIntoYours);
         const request: Parameters<typeof vault.t>[0] = {
           key: I18N_KEYS.ProviderIdentitiesMerge,
           replacements: { identity: current },

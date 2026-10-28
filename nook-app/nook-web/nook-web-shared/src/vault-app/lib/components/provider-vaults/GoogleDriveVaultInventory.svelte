@@ -94,7 +94,10 @@ passkey opens an identity decrypts in memory and changes nothing.
     },
   )
 
-  const planned = $derived(choices.isOk() ? plan.planned(choices.value) : [])
+  const listed = $derived<readonly ProviderIdentityChoice[]>(
+    choices.isOk() ? choices.value : [],
+  )
+  const planned = $derived(plan.planned(listed))
 
   async function load(token: string): Promise<void> {
     inventory = { kind: DriveVaultInventoryKind.Loading }
@@ -198,7 +201,7 @@ passkey opens an identity decrypts in memory and changes nothing.
     <p class="text-xs text-destructive" role="alert">
       {vault.t(choices.error.translationKey)}
     </p>
-  {:else if choices.value.length === 0}
+  {:else if listed.length === 0}
     <p
       class="text-[11px] text-pretty text-muted-foreground"
       data-testid="google-drive-vaults-empty"
@@ -212,7 +215,7 @@ passkey opens an identity decrypts in memory and changes nothing.
       </p>
       <ProviderIdentityList
         {vault}
-        choices={choices.value}
+        choices={listed}
         {plan}
         {disabled}
         {checking}

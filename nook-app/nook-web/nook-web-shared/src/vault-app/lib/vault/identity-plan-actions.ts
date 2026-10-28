@@ -1,5 +1,11 @@
 import { err, ok, type Result } from "neverthrow";
-import type { NookProviderSource, NookVaultManager } from "$app-wasm";
+import type {
+  NookIdentityAdded,
+  NookIdentityJoinRequested,
+  NookIdentityMerged,
+  NookProviderSource,
+  NookVaultManager,
+} from "$app-wasm";
 import type { PlannedDecision } from "$lib/components/provider-vaults/identity-plan.svelte";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
@@ -40,7 +46,11 @@ export type IdentityPlanRun = {
 /** One decision run through the session's manager. */
 type ManagerStep = {
   readonly failure: IdentityPlanFailure;
-  readonly run: (manager: NookVaultManager) => Promise<object>;
+  readonly run: (
+    manager: NookVaultManager,
+  ) => Promise<
+    NookIdentityAdded | NookIdentityMerged | NookIdentityJoinRequested
+  >;
 };
 
 /**
@@ -54,7 +64,9 @@ export class IdentityPlanActions {
   async run({
     source,
     planned,
-  }: IdentityPlanRun): Promise<Result<IdentityPlanOutcome, IdentityPlanFailure>> {
+  }: IdentityPlanRun): Promise<
+    Result<IdentityPlanOutcome, IdentityPlanFailure>
+  > {
     for (const { choice, decision } of planned) {
       const identityId = choice.identity.identityId;
       let step: ManagerStep;
@@ -102,18 +114,19 @@ export class IdentityPlanActions {
     step: ManagerStep,
   ): Promise<Result<IdentityPlanOutcome, IdentityPlanFailure>> {
     const vault = this.vault;
-    const ran = await vault.enqueueStorage<IdentityPlanOutcome, IdentityPlanFailure>(
-      async () => {
-        const admitted = vault.admitManager();
-        if (admitted.isErr()) return err(step.failure);
-        try {
-          await step.run(admitted.value);
-          return ok(IdentityPlanOutcome.Applied);
-        } catch {
-          return err(step.failure);
-        }
-      },
-    );
+    const ran = await vault.enqueueStorage<
+      IdentityPlanOutcome,
+      IdentityPlanFailure
+    >(async () => {
+      const admitted = vault.admitManager();
+      if (admitted.isErr()) return err(step.failure);
+      try {
+        await step.run(admitted.value);
+        return ok(IdentityPlanOutcome.Applied);
+      } catch {
+        return err(step.failure);
+      }
+    });
     return ran.mapErr(() => step.failure);
   }
 }

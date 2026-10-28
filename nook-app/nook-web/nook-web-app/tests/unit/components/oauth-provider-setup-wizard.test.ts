@@ -38,10 +38,7 @@ type DecisionView = {
 
 /** The decision button of one kind, once the listing shows it. */
 class DecisionButtons {
-  static async of(
-    view: DecisionView,
-    decision: string,
-  ): Promise<HTMLElement> {
+  static async of(view: DecisionView, decision: string): Promise<HTMLElement> {
     return vi.waitFor(() => {
       const found = view
         .getAllByTestId('provider-identity-decision')
@@ -210,8 +207,9 @@ describe('Google Drive provider setup', () => {
     ).toHaveLength(2)
     expect(
       Array.from(
-        other?.querySelectorAll('[data-testid="provider-vault-identity-log"]') ??
-          [],
+        other?.querySelectorAll(
+          '[data-testid="provider-vault-identity-log"]',
+        ) ?? [],
       ).map((line) => line.textContent),
     ).toContain(
       vault.t({
@@ -254,16 +252,14 @@ describe('Google Drive provider setup', () => {
     await fireEvent.click(join)
 
     expect(join.getAttribute('aria-checked')).toBe('true')
-    expect(view.getByTestId('provider-identity-plan-row').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin),
-    )
+    expect(
+      view.getByTestId('provider-identity-plan-row').textContent,
+    ).toContain(vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin))
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
       vault.t(I18N_KEYS.ProviderIdentitiesConnectApply),
     )
 
-    await fireEvent.click(
-      await DecisionButtons.of(view, 'leave'),
-    )
+    await fireEvent.click(await DecisionButtons.of(view, 'leave'))
     expect(view.queryAllByTestId('provider-identity-plan')).toHaveLength(0)
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
       vault.t(I18N_KEYS.AuthStorageConnectAndSync),
@@ -389,7 +385,8 @@ describe('Google Drive provider setup', () => {
     expect(identity.textContent).toContain('Family')
     expect(identity.textContent).toContain('Work')
     expect(
-      identity.querySelector('[data-testid="provider-vault-identity"]')
+      identity
+        .querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent?.trim(),
     ).toBe('Personal')
     expect(
@@ -411,9 +408,7 @@ describe('Google Drive provider setup', () => {
         .map((button) => button.dataset.decision),
     ).toEqual(['leave', 'addToBrowser', 'mergeIntoCurrent'])
 
-    await fireEvent.click(
-      await DecisionButtons.of(view, 'mergeIntoCurrent'),
-    )
+    await fireEvent.click(await DecisionButtons.of(view, 'mergeIntoCurrent'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
@@ -446,9 +441,7 @@ describe('Google Drive provider setup', () => {
     // Drive setup runs with an identity in use.
     vault.isAuthenticated = true
 
-    await fireEvent.click(
-      await DecisionButtons.of(view, 'askToJoin'),
-    )
+    await fireEvent.click(await DecisionButtons.of(view, 'askToJoin'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() =>
