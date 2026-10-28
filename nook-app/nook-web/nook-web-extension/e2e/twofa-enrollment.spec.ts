@@ -535,7 +535,18 @@ test.describe('Browser 2FA enrollment', () => {
       const sidePanel = await RealSidePanel.attach(paired.userDataDir)
       try {
         const picker = sidePanel.page.getByTestId('authenticator-picker')
+        // The worker stores the request, which the panel lists at once,
+        // before this page has registered it; a choice made before then is
+        // refused. The page shows this status once it has registered it.
+        await expect(
+          otpWidget.getByText(
+            'Choose a 2FA item in the Nook side panel. You can search all 2FA items in your vault.',
+          ),
+        ).toBeVisible()
         await picker.getByRole('button', { name: /Mock Auth/ }).click()
+        await expect(otpWidget.locator('.description')).toHaveText(
+          'The code is filled. Review the site and submit it manually.',
+        )
         await expect(
           otpPage.locator('[autocomplete="one-time-code"]'),
         ).toHaveValue(/^\d{6}$/)

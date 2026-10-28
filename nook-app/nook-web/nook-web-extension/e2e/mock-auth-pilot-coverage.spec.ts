@@ -809,6 +809,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         await picker
           .getByRole('button', { name: /Mock Auth Secondary/ })
           .click()
+        // The widget's last word says whether the code was filled or refused.
+        await expect(otpWidget.locator('.description')).toHaveText(
+          'The code is filled. Review the site and submit it manually.',
+        )
         await expect(
           otpPage.locator('[autocomplete="one-time-code"]'),
         ).toHaveValue(/^\d{6}$/)

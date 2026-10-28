@@ -345,7 +345,12 @@ class AuthenticationSurfaceObservation {
     if (this.mutationTouchesWorkflowLabelDependency(labelDependencyRequest)) {
       return true
     }
-    if (boundary instanceof HTMLFormElement) {
+    // An ancestor of the form contains every owned control, so a change to its
+    // children reaches the workflow only through the nodes compared below.
+    if (
+      boundary instanceof HTMLFormElement &&
+      !record.target.contains(boundary)
+    ) {
       const associationRequest: OwnedFormAssociationRequest = {
         node: record.target,
         boundary,
