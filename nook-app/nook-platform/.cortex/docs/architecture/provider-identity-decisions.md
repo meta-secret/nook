@@ -22,7 +22,9 @@ owns what is read from the provider without a key.
   - Nothing runs when a decision is picked.
 - **One action applies the plan.**
   - The step's single button runs every picked decision, in listing order.
-  - Its label names the plan, for example "Connect and add 1 identity".
+  - On Drive setup it reads **Connect and sync**, or **Connect and apply**
+    once a decision is picked; the recovery screen's reads **Apply**.
+  - A "What will happen" summary lists every picked decision.
   - While it runs, every other control is disabled.
 - **Checks are not decisions.**
   - "Which passkey opens it?" decrypts in memory and changes nothing.
@@ -43,13 +45,24 @@ Rust decides each identity's standing and the decisions it allows.
 
 - **This browser** (its app key is a member of the identity's log)
   - No decision: the identity syncs through its mount.
-- **Opens here** (a checked passkey re-derives a member app key)
+- **Other identity here** (another identity on this browser was granted its
+  vaults)
+  - No decision: its vaults open from that identity.
+- **Opens with a checked passkey** (a checked passkey re-derives a member
+  app key)
   - **Leave as is**
   - **Add to this browser:** the identity joins this browser's directory as
     its own identity, beside the one in use.
   - **Merge into _current identity_:** its vaults become vaults of the
     identity in use. The other identity is unchanged for its own devices.
-- **Locked here** (nothing on this browser opens it)
+    Offered only while an identity is in use.
+- **Not opened here yet** (nothing was checked)
+  - With no identity in use, as on the recovery screen: **Leave as is**,
+    **Recover it** (adding it; the passkey is tapped when the plan runs), or
+    **Ask to join**.
+  - With an identity in use: **Leave as is** or **Ask to join**. Finding its
+    passkey offers adding and merging.
+- **Not opened by the checked passkeys**
   - **Leave as is**
   - **Ask to join:** a join request to the identity's devices.
 - **Join requested** (the identity's log holds this browser's unanswered
@@ -169,6 +182,25 @@ Rust decides each identity's standing and the decisions it allows.
     from a new identity's key shows as asked only while that identity is in
     use, and finishes from there.
   - A waiting join lives with the page: a reload drops it before it asks.
+
+## Presentation
+
+The card follows Nook's matte-steel visual language: tone over borders, one
+accent, no pills.
+
+- **Card:** one `nk-frame` per identity. A tile shows a person when the
+  identity opens here and a lock when it does not.
+- **Header:** the identity's name or words, and one standing tag, success
+  toned when it opens. Below it, one spec line of public log facts.
+- **Vaults:** names or short ids in quiet monospace, with no row chrome and
+  no actions.
+- **Decision:** a square, hairline-framed segmented control, one segment per
+  allowed decision. The picked segment is inverted (foreground fill); the
+  others are muted text.
+- **Checks:** "Which passkey opens it?" is a quiet underlined link.
+- **Plan:** a subpanel head, "What will happen", over one line per picked
+  decision.
+- **Action:** the step's single primary button, with the steel finish.
 
 ## Invariants
 

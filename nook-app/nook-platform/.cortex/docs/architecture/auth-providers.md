@@ -268,43 +268,56 @@ describes. No vault is downloaded or decrypted. A vault this browser
 registered is named from its vault registry; every other vault's name is
 encrypted under its own key, so its row shows the short id instead.
 
-Rows are grouped by the identity that files them. Each identity card tells,
-without any key:
+Vaults are grouped by the identity that files them, and the identity is the
+only thing the user decides about. Rust `provider_identity_choices` turns
+the listing and the checks run on the page into one choice per identity
+(`ProviderIdentityChoice`): its standing, the decisions it allows, and its
+vaults. The [identity decisions](provider-identity-decisions.md) record owns
+the rules and the operations behind each decision.
 
-- **Identity words:** three BIP39 words derived from the identity id
-  (`IdentityWords`), the same words the identity card shows.
-- **Public log facts:** from the identity's signed, unencrypted control log,
-  its device count, when the newest device joined, and how many vaults it
-  keeps (`ProviderIdentityLog`).
-- **Standing:** whether the identity opens here. Passkeys are linked to
-  identities, not vaults, so access is decided once per identity.
+Each identity card shows, without any key:
 
-The standing needs no tap when this browser is already one of the
-identity's devices: `ProviderIdentityLog` reports `thisBrowser` when the
-app key held here is a member of the log. The card carries the identity's
-actions; its vaults are quiet one-line rows (name or short id, events, last
-activity).
+- **Name:** its name when this browser holds it or a passkey opened it,
+  else three BIP39 words derived from its id (`IdentityWords`).
+- **Standing tag:** opens here, opens from another identity here, opens
+  with a checked passkey, join requested, join denied, join approved, not
+  opened by the checked passkeys, or not opened here yet.
+- **Public log facts:** from its signed, unencrypted control log, its device
+  and vault counts (`ProviderIdentityLog`). The log also tells whether this
+  browser's key is a member and where its join request stands.
+- **Vaults:** a quiet list of names or short ids. Vault rows carry no
+  actions.
 
-- **Recover this identity:** one choice per identity, whatever number of
-  vaults it files. Recovering one of its vaults with its passkey opens the
-  identity, and its other vaults then sync through it.
-- **Find the passkey that opens it:** runs `check_passkey_access`. One
-  passkey assertion re-derives an app key in memory. The identity opens only
-  when its log lists that key and its key envelope decrypts; then every vault
-  it keeps opens with it, shows its real name, and offers "Recover with the
-  checked passkey" in place of a blind import.
-- **Ask to join:** a browser already in another identity sends each vault's
-  access request to the identity's devices. A browser with no identity is
-  told to add itself with a join code from one of those devices.
+The decision is one segmented control, **Leave as is** first:
 
-Only what opens a single vault is a choice on its row: a backup password,
-a granted key, merging into or replacing the open vault. A backup password
-opens one vault, never an identity. "Check a backup password" opens a small form that tries the password on every listed vault;
-while it is open, its Check is the only live action. The recovery list for a
-local folder, iCloud, or GitHub offers the same identity actions, read
-through the provider staged for the recovery. Results live on the page only;
-nothing is stored, imported, or written, and each check stays disabled while
-another action runs.
+- **Add to this browser** (**Recover it** on a browser with no identity):
+  one passkey tap re-derives the member's app key and signer.
+- **Merge into _current identity_:** its vaults become vaults of the
+  identity in use; its own log is never written.
+- **Ask to join** and **Finish joining:** a membership request from a fresh
+  protected key, and its completion once a device approves.
+
+The step keeps one action button:
+
+- **Drive setup:** **Connect and sync**, or **Connect and apply** once a
+  decision is picked. It runs the plan, one identity at a time, then
+  connects; a failing decision stops the plan before connecting.
+- **Recovery screen:** **Apply** runs the plan, then unlocks what it
+  recovered. The list reads the provider staged for the recovery.
+- **Plan summary:** "What will happen" lists every picked decision; picking
+  runs nothing.
+- **Passkey check:** "Which passkey opens it?" runs `check_passkey_access`
+  in memory and changes nothing; an identity it opens offers adding or
+  merging.
+
+Backup passwords open single vaults, never identities, so this step has no
+backup-password form; Check access tries one.
+
+**Prohibited:** offer an action on one vault row while its identity offers
+its own decision.
+
+**Required:** the identity card offers one decision; its vaults list names
+only.
 
 ### Check access
 
@@ -317,82 +330,19 @@ unlock screen link to it, and so does Manage → Sync providers.
   connected sync provider (iCloud, GitHub, Drive, or folder) with the
   session's own credentials.
 - **Checks:** one passkey or one backup password at a time
-  (`check_passkey_access`, `check_backup_password_access`, and their
-  `..._at_current_provider` manager forms); each adds a numbered column to a
-  grid whose rows are the identities, each listing the vaults it keeps. A
-  passkey cell says whether it opens the identity; a backup password cell
-  can only say it opens some of its vaults.
+  (`check_passkey_access`, `check_backup_password_access`, and the
+  manager's `check_passkey_access_from` and
+  `check_backup_password_access_from` for a `NookProviderSource`). Each
+  adds a numbered column to a grid whose rows are the identities, each
+  listing the vaults it keeps. A passkey cell says whether it opens the
+  identity; a backup password cell can only say it opens some of its vaults.
 - **One live action:** a source that still needs a sign-in or a folder keeps
   Check disabled until it is ready.
 
-Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
-device can open it (`ProviderVaultAccess`) and what the user may do
-(`ProviderVaultAction`, recommended action first). The web folds the
-accesses into the identity's standing and moves recovering and requesting
-access onto the identity; the row keeps only the single-vault actions.
-
-- **Syncs:** the identity in use holds the vault. It syncs through the
-  identity mount; the row offers no action.
-- **Other identity here:** another identity on this browser holds the vault
-  and its app key here was granted it. It opens from that identity; the row
-  offers no action.
-- **Granted:** a member approved this app's access request, so its key opens
-  the vault.
-- **Backup password:** the vault's event log keeps a password envelope, so its
-  backup password opens it.
-- **Requested:** this app asked for access; a member approves it when its
-  device syncs the vault. The row offers no action.
-- **Unchecked:** no identity is in use on this browser, as on the login
-  screen after browser data was cleared. Nothing was checked, and the user's
-  passkey or backup password may still open it, so recovery stays offered.
-- **Locked:** nothing on this device opens it. The row says so and offers
-  **Request access**.
-
-A vault that opens (granted or by backup password) offers actions by what the
-open vault holds:
-
-- **Empty open vault:** no items and no other app. **Use this vault instead**
-  comes first: after an explicit confirmation the chosen vault is imported as
-  a separate vault, and once it is open the empty vault is deleted from the
-  identity everywhere. **Import as a separate vault** is the alternative.
-- **Open vault with records:** **Merge into my vault** comes first. After an
-  explicit confirmation, and the backup password when that is how it opens,
-  Rust reads the vault's events, opens its keys, decrypts its live records,
-  and commits them through the open vault's import. Identical logins are
-  matched and different passwords stay separate items. The source vault stays
-  in the folder unchanged. **Import as a separate vault** is the alternative.
-- **No open vault (login screen):** only **Import as a separate vault**, the
-  recovery that tries the passkey or backup password.
-
-Around the list:
-
-- **Request access:** writes a self-signed `join-requested` event, carrying
-  this app's public keys only, into the vault's subfolder on top of its
-  current heads and key epoch. A member's Devices page lists the open vault's
-  requests with **Approve** and **Deny**. Approval wraps the vault keys to the
-  requesting app; that app then lists the vault as granted.
-- **Connect & sync:** stays below the list and says what it does: it saves
-  the provider and syncs this identity's vaults into the Nook folder, each in
-  its own subfolder. The listed vaults stay as they are unless the user
-  chooses an action. It is the step's only primary button; every vault row's
-  actions are secondary, so a row never competes with it.
-- **Recovery picker:** a provider with several vaults shows the same access
-  for every transport and offers recovery only for a vault this device can
-  open.
-
-**Prohibited:** union another vault's events into the open vault, or offer an
-action that needs keys this device does not hold.
-
-**Required:** merge decrypted records through the import pipeline, import a
-vault separately, or ask a member for access; only an empty vault may give
-way, after the user confirms.
-
-Future work, not implemented:
-
-- **Request access via join request:** a vault this device cannot open could
-  ask its owner for access instead of failing.
-- **Copy items into another vault:** a separate explicit action, never sync
-  behavior.
+Rust `ProviderVaultListingRequest` still decides, for each listed vault, how
+this device can open it (`ProviderVaultAccess`). The identity standing
+folds those accesses in: a vault that syncs makes its identity open here,
+and a vault another identity here holds makes it open from there.
 
 ### iCloud share target
 

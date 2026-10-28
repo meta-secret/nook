@@ -16,8 +16,8 @@
   - Description: Identity and vault ownership boundaries
   - Status: Implemented, including replicated identity control
 - **[provider-identity-decisions.md](provider-identity-decisions.md)**
-  - Description: Per-identity decisions on a sync provider: leave, add to this browser, merge, ask to join
-  - Status: Target; the identity operations are not implemented yet
+  - Description: Per-identity decisions on a sync provider: leave, add to this browser, merge, ask to join; card presentation
+  - Status: Implemented
 - **[vault-session-and-lock.md](vault-session-and-lock.md)**
   - Description: Lock session, vault vs sync providers, multi-vault model
   - Status: Active; compatibility storage examples are explicitly non-authoritative

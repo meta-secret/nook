@@ -68,6 +68,12 @@ Simple and unified apps. Sentinel is never offered.
   another device? Add this device**, opens the join screen. A quiet link,
   **Lost access to your devices? Recover from a sync provider**, opens
   recovery.
+- **Recovery**: the provider's identities are listed as identity cards,
+  each with one decision (recover it with its passkey, or ask to join) and
+  one Apply button, as the
+  [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
+  record describes. A link below checks which passkey or backup password
+  opens what, before anything is recovered.
 - **Key** ("This is you"): the identity is introduced where its passkey is
   made; a preview of its card lists the named vault, with passkey or PIN
   setup beside it. Back returns to the name.
