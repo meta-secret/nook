@@ -17,8 +17,6 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
-import IdentityFirst from './identity-onboarding/identity-first/Experiment.svelte'
-import KeyMachine from './identity-onboarding/key-machine/Experiment.svelte'
 import KeyRing from './identity-onboarding/key-ring/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
@@ -91,7 +89,7 @@ const identityOnboarding: ExperimentCategory = {
   slug: 'identity-onboarding',
   title: 'Identity Onboarding',
   description:
-    'Who you are is settled before vaults and sync providers: first run, connecting a provider, and bringing or merging identities.',
+    'Key management before vaults: create an identity on this browser or import one from a sync provider, then manage the keys that open it.',
 }
 const inspiration: ExperimentCategory = {
   slug: 'inspiration',
@@ -180,23 +178,9 @@ const identityManagementV2: ExperimentSubcategory = {
 const identityOnboardingV1: ExperimentSubcategory = {
   categorySlug: 'identity-onboarding',
   slug: ExperimentVersion.V1,
-  title: 'V1 · Identity first',
+  title: 'V1 · Key ring',
   description:
-    'Who you are is settled before vaults and sync providers: first run, connecting a provider, and the Identities hub.',
-}
-const identityOnboardingV2: ExperimentSubcategory = {
-  categorySlug: 'identity-onboarding',
-  slug: ExperimentVersion.V2,
-  title: 'V2 · Key management machine',
-  description:
-    'No vaults: an identity is the keys that open it. Create locally or import; merge what your passkey opens, join what is sealed to you.',
-}
-const identityOnboardingV3: ExperimentSubcategory = {
-  categorySlug: 'identity-onboarding',
-  slug: ExperimentVersion.V3,
-  title: 'V3 · Key ring',
-  description:
-    'One screen after onboarding: your identity in the middle, its keys on one side, where it is synced on the other; every action is a slot or a panel there.',
+    'No vaults, only keys: one identity per browser, drawn as a ring of the keys that open it and the sync providers that keep it.',
 }
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
@@ -218,8 +202,6 @@ export const subcategories: ExperimentSubcategory[] = [
   identityManagementV1,
   identityManagementV2,
   identityOnboardingV1,
-  identityOnboardingV2,
-  identityOnboardingV3,
   inspirationV1,
 ]
 
@@ -369,30 +351,12 @@ export const experiments: Experiment[] = [
     component: AccessTerminal,
   },
   {
-    slug: 'identity-first',
-    category: identityOnboarding,
-    subcategory: identityOnboardingV1,
-    title: 'Identity first',
-    description:
-      'New identity, existing identity by one passkey tap, or join; a provider only mounts the identity in use; the hub uses or merges other identities.',
-    component: IdentityFirst,
-  },
-  {
-    slug: 'key-machine',
-    category: identityOnboarding,
-    subcategory: identityOnboardingV2,
-    title: 'Key management machine',
-    description:
-      'A state machine beside each screen: empty, create or import, sync, merge identities your passkey opens, join requests for sealed ones.',
-    component: KeyMachine,
-  },
-  {
     slug: 'key-ring',
     category: identityOnboarding,
-    subcategory: identityOnboardingV3,
+    subcategory: identityOnboardingV1,
     title: 'Key ring',
     description:
-      'Create on this browser or import from a sync provider, then one ring: keys that open you, places you are synced to, join requests and merges shown on it.',
+      'Create on this browser or import from a sync provider; then one ring where keys join, sync providers are added, and identities found on them are unlocked, merged, or asked to join.',
     component: KeyRing,
   },
   {

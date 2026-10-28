@@ -1,216 +1,172 @@
-<!-- Onboarding is a few short screens that end on the key ring; after that
-the ring stays on screen and every action opens a panel beneath it. Each
-identity found on a provider is its own card with its token, so you always see
-which one you unlock, use, merge, or ask to join. -->
+<!-- What the current step asks for, under the ring. Start and picking a
+provider have nothing to draw yet; every other step shows the ring, and after
+onboarding each action opens a panel beneath it and closes back to it. Every
+identity found on a provider is its own card carrying its token. -->
 <script lang="ts">
-  import ActionCard from '../key-machine/ActionCard.svelte'
-  import IdentityToken from '../key-machine/IdentityToken.svelte'
-  import Scene from '../key-machine/Scene.svelte'
-  import {
-    SceneLink,
-    TokenStatus,
-    providerNames,
-    type IdentityFixture,
-    type Token,
-  } from '../key-machine/machine'
-  import KeyRing from './KeyRing.svelte'
-  import type { RingFlow } from './ring-flow.svelte'
-  import { RingState, Standing, linkCode } from './ring'
-  import { ui } from '../identity-first/ui'
+  import Card from './Card.svelte'
+  import Ring from './Ring.svelte'
+  import Token from './Token.svelte'
+  import type { KeyRingFlow } from './flow.svelte'
+  import { KeyKind, Standing, Step, linkCode, providers, type Identity } from './model'
+  import { Tone } from './tone'
+  import { ui } from './ui'
 
-  let { flow }: { flow: RingFlow } = $props()
+  let { flow }: { flow: KeyRingFlow } = $props()
 
-  const grid = 'grid gap-3 sm:grid-cols-2'
-  const panelTitle = 'text-[20px] leading-tight font-semibold tracking-tight'
-
-  /** The other device is being set up to ask; the panel shows its steps. */
+  /** Adding a device: the panel shows what to do on it. */
   let inviting = $state(false)
 
-  function tokenOf(identity: IdentityFixture): Token {
-    const standing = flow.standing(identity)
-    const status =
-      standing === Standing.Yours
-        ? TokenStatus.Opened
-        : standing === Standing.Asked
-          ? TokenStatus.Pending
-          : TokenStatus.Sealed
-    return {
-      id: identity.id,
-      label: status === TokenStatus.Opened && identity.name ? identity.name : identity.words,
-      keys: identity.keys.length,
-      status,
-    }
+  const panel = 'space-y-4 border-t border-[#24272b] pt-6'
+  const chip = 'border border-[#2c3035] px-2 py-1'
+
+  function signIn(provider: string): void {
+    flow.connect(provider)
+    flow.go(Step.Found)
   }
 
-  function ghost(): Token {
-    return { id: 'self', label: flow.name, keys: 1, status: TokenStatus.Ghost }
-  }
-
-  function pickProvider(name: string): void {
-    flow.connect(name)
-    flow.go(RingState.Found)
-  }
-
-  function adopt(identity: IdentityFixture): void {
+  function adopt(identity: Identity): void {
     flow.adopt(identity)
-    flow.go(RingState.Home)
+    flow.go(Step.Ring)
   }
 
-  function ask(identity: IdentityFixture, merging: boolean): void {
-    flow.askToJoin(identity)
-    if (!merging) flow.go(RingState.Linking)
-  }
-
-  function addProvider(name: string): void {
-    flow.connect(name)
-    flow.go(flow.onProvider.length > 0 ? RingState.Merge : RingState.Home)
+  function addProvider(provider: string): void {
+    flow.connect(provider)
+    flow.go(flow.onProvider.length > 0 ? Step.Provider : Step.Ring)
   }
 
   function addSecurityKey(): void {
-    flow.addKey({
-      id: `passkey_security_${flow.keys.length}`,
-      kind: 'passkey',
-      label: 'Security key · passkey',
-      here: false,
-    })
-    flow.go(RingState.Home)
+    flow.addKey({ id: `key_security_${flow.keys.length}`, kind: KeyKind.Passkey, device: 'Security key', here: false })
+    flow.go(Step.Ring)
   }
 
   function deviceAsks(): void {
     inviting = false
     flow.deviceAsks()
-    flow.go(RingState.Home)
+    flow.go(Step.Ring)
   }
 
   function save(): void {
     flow.saved = true
-    flow.go(RingState.Home)
+    flow.go(Step.Ring)
   }
 </script>
 
-{#snippet foundCard(identity: IdentityFixture, merging: boolean)}
+{#snippet found(identity: Identity, importing: boolean)}
   {@const standing = flow.standing(identity)}
   {#if standing === Standing.Yours}
-    <ActionCard
-      title={merging ? `Merge into ${flow.name}` : 'Use it'}
+    <Card
+      title={importing ? 'Use it' : `Merge into ${flow.name}`}
       tag="Yours"
-      tagTone="ok"
+      tone={Tone.Ok}
       onPick={() => {
-        if (merging) flow.merge(identity)
-        else adopt(identity)
+        if (importing) adopt(identity)
+        else flow.merge(identity)
       }}
     >
-      <IdentityToken token={tokenOf(identity)} />
-    </ActionCard>
+      <Token {identity} {standing} />
+    </Card>
   {:else if standing === Standing.Locked}
-    <ActionCard title="Ask to join" tag="Locked" onPick={() => ask(identity, merging)}>
-      <IdentityToken token={tokenOf(identity)} />
-    </ActionCard>
+    <Card
+      title="Ask to join"
+      tag="Locked"
+      onPick={() => {
+        flow.askToJoin(identity)
+        if (importing) flow.go(Step.Waiting)
+      }}
+    >
+      <Token {identity} {standing} />
+    </Card>
   {:else if standing === Standing.Asked}
-    <ActionCard title="Simulate: approved" tag="Asked" tagTone="warn" onPick={() => flow.approved()}>
-      <IdentityToken token={tokenOf(identity)} />
-    </ActionCard>
+    <Card title="Simulate: approved" tag="Asked" tone={Tone.Warn} onPick={() => flow.approved()}>
+      <Token {identity} {standing} />
+    </Card>
   {:else}
-    <ActionCard title="Unlock" passkey onPick={() => flow.unlock(identity)}>
-      <IdentityToken token={tokenOf(identity)} />
-    </ActionCard>
+    <Card title="Unlock" passkey onPick={() => flow.unlock(identity)}>
+      <Token {identity} {standing} />
+    </Card>
   {/if}
 {/snippet}
 
 {#snippet panelHead(title: string)}
   <div class="flex items-baseline justify-between gap-4">
-    <h2 class={panelTitle}>{title}</h2>
-    <button type="button" class={ui.link} onclick={() => flow.go(RingState.Home)}>Close</button>
+    <h2 class={ui.panelTitle}>{title}</h2>
+    <button type="button" class={ui.link} onclick={() => flow.go(Step.Ring)}>Close</button>
   </div>
 {/snippet}
 
 <div class="space-y-6">
-  {#if flow.current === RingState.Start}
+  {#if flow.step === Step.Start}
     <h1 class={ui.title}>Start</h1>
-    <div class={grid}>
-      <ActionCard
-        title="Create identity"
-        onPick={() => {
-          flow.provider = ''
-          flow.go(RingState.Create)
-        }}
-      />
-      <ActionCard title="Import from sync provider" onPick={() => flow.go(RingState.Import)} />
+    <div class={ui.grid}>
+      <Card title="Create identity" onPick={() => flow.go(Step.Create)} />
+      <Card title="Import from sync provider" onPick={() => flow.go(Step.Import)} />
     </div>
-  {:else if flow.current === RingState.Import}
+  {:else if flow.step === Step.Import}
     <h1 class={ui.title}>Import from</h1>
-    <div class={grid}>
-      {#each providerNames as name (name)}
-        <ActionCard title={name} onPick={() => pickProvider(name)} />
+    <div class={ui.grid}>
+      {#each providers as provider (provider)}
+        <Card title={provider} onPick={() => signIn(provider)} />
       {/each}
     </div>
-  {:else if flow.current === RingState.Create}
-    <Scene
-      browser={[ghost()]}
-      provider={flow.provider}
-      remote={flow.provider ? [ghost()] : []}
-      link={flow.provider ? SceneLink.Sync : SceneLink.None}
-    />
-    <h1 class={ui.title}>Name it</h1>
-    <input class={ui.input} bind:value={flow.name} aria-label="Identity name" />
-    <ActionCard
-      title="Create passkey"
-      passkey
-      onPick={() => {
-        flow.create()
-        flow.go(RingState.Home)
-      }}
-    />
-  {:else if flow.current === RingState.Found}
-    <Scene browser={[]} provider={flow.provider} remote={flow.onProvider.map(tokenOf)} />
-    {#if flow.onProvider.length > 0}
-      <h1 class={ui.title}>Which is yours?</h1>
-      <div class={grid}>
-        {#each flow.onProvider as identity (identity.id)}
-          {@render foundCard(identity, false)}
-        {/each}
-      </div>
-    {:else}
-      <h1 class={ui.title}>Nothing to import</h1>
-      <ActionCard title="Create identity" onPick={() => flow.go(RingState.Create)} />
-    {/if}
-  {:else if flow.current === RingState.Linking}
-    <Scene browser={[]} provider={flow.provider} remote={[tokenOf(flow.joining)]} link={SceneLink.Request} />
-    <h1 class={ui.title}>Approve on your other device</h1>
-    <div class="flex items-baseline gap-4">
-      <span class="font-mono text-[34px] tracking-[0.2em] text-[#e9e8e4]">{linkCode}</span>
-      <span class={ui.label}>same code there</span>
-    </div>
-    <ActionCard
-      title="Simulate: approved"
-      onPick={() => {
-        flow.approved()
-        adopt(flow.joining)
-      }}
-    />
   {:else}
-    <KeyRing {flow} />
+    <Ring {flow} />
 
-    {#if flow.current === RingState.AddKey}
-      <section class="space-y-4 border-t border-[#24272b] pt-6">
+    {#if flow.step === Step.Create}
+      <h1 class={ui.title}>Name it</h1>
+      <input class={ui.input} bind:value={flow.name} aria-label="Identity name" />
+      <Card
+        title="Create passkey"
+        passkey
+        onPick={() => {
+          flow.create()
+          flow.go(Step.Ring)
+        }}
+      />
+    {:else if flow.step === Step.Found}
+      {#if flow.onProvider.length > 0}
+        <h1 class={ui.title}>Which is yours?</h1>
+        <div class={ui.grid}>
+          {#each flow.onProvider as identity (identity.id)}
+            {@render found(identity, true)}
+          {/each}
+        </div>
+      {:else}
+        <h1 class={ui.title}>Nothing to import</h1>
+        <Card title="Create identity" onPick={() => flow.go(Step.Create)} />
+      {/if}
+    {:else if flow.step === Step.Waiting}
+      <h1 class={ui.title}>Approve on your other device</h1>
+      <div class="flex items-baseline gap-4">
+        <span class="font-mono text-[34px] tracking-[0.2em] text-[#e9e8e4]">{linkCode}</span>
+        <span class={ui.label}>same code there</span>
+      </div>
+      <Card
+        title="Simulate: approved"
+        onPick={() => {
+          flow.approved()
+          adopt(flow.joining)
+        }}
+      />
+    {:else if flow.step === Step.AddKey}
+      <section class={panel}>
         {#if inviting}
           {@render panelHead('On the other device')}
           <ol class="flex flex-wrap items-center gap-2 font-mono text-[12px] text-[#a4a8ae]">
-            <li class="border border-[#2c3035] px-2 py-1">Open Nook</li>
+            <li class={chip}>Open Nook</li>
             <li aria-hidden="true">→</li>
-            <li class="border border-[#2c3035] px-2 py-1">Sync with {flow.provider}</li>
+            <li class={chip}>Import from {flow.provider}</li>
             <li aria-hidden="true">→</li>
-            <li class="border border-[#2c3035] px-2 py-1">Ask to join {flow.words}</li>
+            <li class={chip}>Ask to join {flow.words}</li>
           </ol>
-          <ActionCard title="Simulate: the device asks" onPick={deviceAsks} />
+          <Card title="Simulate: the device asks" onPick={deviceAsks} />
         {:else}
           {@render panelHead('Add key')}
-          <div class={grid}>
-            <ActionCard title="Security key" passkey onPick={addSecurityKey} />
-            <ActionCard
+          <div class={ui.grid}>
+            <Card title="Security key" passkey onPick={addSecurityKey} />
+            <Card
               title="Another device"
               tag={flow.provider ? '' : 'Needs sync'}
-              tagTone="warn"
+              tone={Tone.Warn}
               disabled={!flow.provider}
               onPick={() => {
                 inviting = true
@@ -219,25 +175,28 @@ which one you unlock, use, merge, or ask to join. -->
           </div>
         {/if}
       </section>
-    {:else if flow.current === RingState.AddProvider}
-      <section class="space-y-4 border-t border-[#24272b] pt-6">
+    {:else if flow.step === Step.AddProvider}
+      <section class={panel}>
         {@render panelHead('Sync with')}
-        <div class={grid}>
-          {#each providerNames as name (name)}
-            <ActionCard title={name} onPick={() => addProvider(name)} />
+        <div class={ui.grid}>
+          {#each providers as provider (provider)}
+            <Card title={provider} onPick={() => addProvider(provider)} />
           {/each}
         </div>
       </section>
-    {:else if flow.current === RingState.Merge}
-      <section class="space-y-4 border-t border-[#24272b] pt-6">
-        {@render panelHead(
-          flow.others().length > 0 ? `${flow.others().length} more in ${flow.provider}` : 'All merged',
-        )}
-        <div class={grid}>
+    {:else if flow.step === Step.Provider}
+      <section class={panel}>
+        {@render panelHead(flow.provider)}
+        <div class={ui.grid}>
+          {#if !flow.saved}
+            <Card title="Save {flow.name}" onPick={save} />
+          {/if}
           {#each flow.others() as identity (identity.id)}
-            {@render foundCard(identity, true)}
+            {@render found(identity, false)}
           {/each}
-          <ActionCard title={flow.saved ? 'Done' : `Save ${flow.name}`} onPick={save} />
+          {#if flow.saved && flow.others().length === 0}
+            <Card title="Done" onPick={() => flow.go(Step.Ring)} />
+          {/if}
         </div>
       </section>
     {/if}

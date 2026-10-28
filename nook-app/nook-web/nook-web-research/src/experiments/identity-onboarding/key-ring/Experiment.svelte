@@ -1,21 +1,20 @@
-<!-- Key management as one key ring. Onboarding creates an identity on this
-browser or imports one from a sync provider; after that the ring is the app:
-keys that open your identity on one side, places it is synced to on the other,
-and every action a slot or a panel on that one screen. Simulator switches
-decide what the provider holds and send join requests from other devices. -->
+<!-- Key management before vaults, as one key ring. The step map on the left
+shows both onboarding branches and the ring; the screen on the right is the
+current step. Simulator switches decide what the sync provider holds and send
+join requests from other devices. -->
 <script lang="ts">
   import { ArrowLeft, ArrowRight, RotateCcw, Send } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import RingMap from './RingMap.svelte'
   import Screen from './Screen.svelte'
-  import { RingFlow } from './ring-flow.svelte'
-  import { ProviderHolds } from './ring'
-  import { ui } from '../identity-first/ui'
+  import StepMap from './StepMap.svelte'
+  import { KeyRingFlow } from './flow.svelte'
+  import { ProviderHolds } from './model'
+  import { ui } from './ui'
 
   let { navigate }: ExperimentProps = $props()
 
-  const flow = new RingFlow()
+  const flow = new KeyRingFlow()
 
   const holds: readonly { id: ProviderHolds; label: string }[] = [
     { id: ProviderHolds.Yours, label: 'Provider has yours' },
@@ -25,6 +24,7 @@ decide what the provider holds and send join requests from other devices. -->
   const segment = 'px-3 py-1.5 transition'
   const on = 'bg-[#e9e8e4] text-[#0b0c0d]'
   const off = 'text-[#8a8f96] hover:text-[#e9e8e4]'
+  const tool = `${segment} ${off} inline-flex items-center gap-1.5 border border-[#2c3035] bg-[#0b0c0d]/90`
 </script>
 
 <svelte:head>
@@ -34,7 +34,7 @@ decide what the provider holds and send join requests from other devices. -->
 <main class={ui.page}>
   <ExperimentBack {navigate} />
 
-  <div class="fixed top-5 right-5 z-50 flex flex-col items-end gap-2 font-mono text-[11px] tracking-wide">
+  <div class="fixed top-5 right-5 z-50 flex flex-col items-end gap-2 font-mono text-[11px] tracking-wide" aria-label="Simulator">
     <div class="flex border border-[#2c3035] bg-[#0b0c0d]/90" role="group" aria-label="Simulated provider">
       {#each holds as entry (entry.id)}
         <button type="button" class="{segment} {flow.holds === entry.id ? on : off}" onclick={() => (flow.holds = entry.id)}>{entry.label}</button>
@@ -42,11 +42,11 @@ decide what the provider holds and send join requests from other devices. -->
     </div>
     <div class="flex gap-2">
       {#if flow.ready}
-        <button type="button" class="{segment} inline-flex items-center gap-1.5 border border-[#2c3035] bg-[#0b0c0d]/90 {off}" onclick={() => flow.deviceAsks()}>
+        <button type="button" class={tool} onclick={() => flow.deviceAsks()}>
           <Send class="size-3" aria-hidden="true" /> Device asks to join
         </button>
       {/if}
-      <button type="button" class="{segment} inline-flex items-center gap-1.5 border border-[#2c3035] bg-[#0b0c0d]/90 {off}" onclick={() => flow.reset()}>
+      <button type="button" class={tool} onclick={() => flow.reset()}>
         <RotateCcw class="size-3" aria-hidden="true" /> Reset
       </button>
     </div>
@@ -54,9 +54,9 @@ decide what the provider holds and send join requests from other devices. -->
 
   <div class="mx-auto grid w-full max-w-[1120px] gap-12 px-5 pt-28 pb-16 lg:grid-cols-[240px_minmax(0,1fr)]">
     <aside class="lg:sticky lg:top-28 lg:self-start">
-      <RingMap {flow} />
+      <StepMap {flow} />
     </aside>
-    <section class="max-w-[680px]">
+    <section class="max-w-[700px]">
       {#if flow.history.length > 1}
         <nav class="mb-8 flex items-center gap-4" aria-label="History">
           <button type="button" class="{ui.link} inline-flex items-center gap-1.5 disabled:opacity-30" disabled={!flow.canBack()} onclick={() => flow.back()}>
