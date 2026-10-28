@@ -78,7 +78,7 @@ pub enum NookGoogleDriveVaultListing {
     access_token: &str,
     rp_id: &str,
 ) -> Result<tsify::Ts<ProviderNameRevealOutcome>, JsError> {
-    let app_key = passkey_app_key(rp_id).await?;
+    let app_key = RevealPasskey { rp_id }.app_key().await?;
     let root = DriveStorageClient::new(access_token).existing_nook_root().await?;
     let drive = DriveVaultListing {
         token: access_token,
@@ -119,24 +119,32 @@ pub enum NookGoogleDriveVaultListing {
     Tsify::into_ts(&outcome).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
-/// This device's app key, re-derived from a passkey's PRF output and kept
-/// only in memory.
-async fn passkey_app_key(rp_id: &str) -> Result<DeviceIdentity, JsError> {
-    let request_options = BrowserPasskeyClient::recovery_options(rp_id)?;
-    let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
-    let credential_id =
-        WebAuthnCredentialId::try_from(BrowserPasskeyClient::credential_id(&credential)?)?;
-    let user_handle =
-        WebAuthnUserHandle::try_from(BrowserPasskeyClient::assertion_user_handle(&credential)?)?;
-    let mut prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
-    let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone());
-    prf_output.zeroize();
-    let material = PasskeyRecoveryRequest::deterministic().recover(&PasskeyRecoveryInput {
-        credential_id: &credential_id,
-        user_handle: &user_handle,
-        prf_output: &typed_prf_output?,
-    })?;
-    Ok(DeviceIdentity::from_secret_str(material.identity_secret())?)
+/// The passkey a name reveal asks for, on this relying party.
+struct RevealPasskey<'a> {
+    rp_id: &'a str,
+}
+
+impl RevealPasskey<'_> {
+    /// This device's app key, re-derived from the passkey's PRF output and
+    /// kept only in memory.
+    async fn app_key(&self) -> Result<DeviceIdentity, JsError> {
+        let request_options = BrowserPasskeyClient::recovery_options(self.rp_id)?;
+        let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+        let credential_id =
+            WebAuthnCredentialId::try_from(BrowserPasskeyClient::credential_id(&credential)?)?;
+        let user_handle = WebAuthnUserHandle::try_from(
+            BrowserPasskeyClient::assertion_user_handle(&credential)?,
+        )?;
+        let mut prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
+        let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone());
+        prf_output.zeroize();
+        let material = PasskeyRecoveryRequest::deterministic().recover(&PasskeyRecoveryInput {
+            credential_id: &credential_id,
+            user_handle: &user_handle,
+            prf_output: &typed_prf_output?,
+        })?;
+        Ok(DeviceIdentity::from_secret_str(material.identity_secret())?)
+    }
 }
 
 /// The fixed name of every provider account's Nook root.
