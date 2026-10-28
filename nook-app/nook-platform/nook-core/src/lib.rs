@@ -278,7 +278,8 @@ pub use auth::identity_control_snapshot::{
     IdentityVaultView,
 };
 pub use auth::identity_join::{
-    IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinProgress,
+    IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
+    IdentityJoinProgress,
 };
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::identity_words::IdentityWords;
@@ -375,7 +376,8 @@ pub use provider_identity_join::{
     IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
 };
 pub use provider_identity_log::{
-    ListedIdentityLog, ProviderIdentityLog, ProviderIdentityLogEvents, ProviderLogCount,
+    ListedIdentityLog, ListingAppKey, ProviderIdentityJoin, ProviderIdentityLog,
+    ProviderIdentityLogEvents, ProviderLogCount,
 };
 pub use provider_vault_access::{
     BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultAction,

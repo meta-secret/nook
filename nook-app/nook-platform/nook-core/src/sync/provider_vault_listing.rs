@@ -448,7 +448,7 @@ impl ProviderVaultListingRequest<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ProviderLogCount;
+    use crate::{ProviderIdentityJoin, ProviderLogCount};
     use std::slice;
 
     fn at(raw: &str) -> anyhow::Result<ProviderVaultTime> {
@@ -830,6 +830,7 @@ mod tests {
             newest_device: at("2026-10-27T17:28:00Z")?,
             vaults: ProviderLogCount::from(1),
             this_browser: false,
+            join: ProviderIdentityJoin::NotAsked,
         };
         let theirs_log = [ListedIdentityLog {
             identity_id: theirs.clone(),
@@ -913,6 +914,7 @@ mod tests {
                         },
                         vaults: ProviderLogCount::from(3),
                         this_browser: false,
+                        join: ProviderIdentityJoin::NotAsked,
                     },
                 },
                 created: ProviderVaultTime::Unreported,
@@ -943,6 +945,7 @@ mod tests {
                             "newestDevice": { "state": "reported", "at": 7 },
                             "vaults": 3,
                             "thisBrowser": false,
+                            "join": "notAsked",
                         },
                     },
                     "created": { "state": "unreported" },

@@ -65,6 +65,10 @@ plan.
       }
       case 'joinRequested':
         return vault.t(I18N_KEYS.AccessCheckIdentityRequested)
+      case 'joinDenied':
+        return vault.t(I18N_KEYS.AccessCheckIdentityJoinDenied)
+      case 'joinApproved':
+        return vault.t(I18N_KEYS.AccessCheckIdentityJoinApproved)
       case 'notOpened':
         return vault.t(I18N_KEYS.AccessCheckIdentityNotOpened)
       case 'unchecked':
@@ -78,8 +82,10 @@ plan.
       case 'thisBrowser':
       case 'otherIdentityHere':
       case 'openedByPasskey':
+      case 'joinApproved':
         return true
       case 'joinRequested':
+      case 'joinDenied':
       case 'notOpened':
       case 'unchecked':
         return false
@@ -91,11 +97,13 @@ plan.
     switch (standing.kind) {
       case 'notOpened':
       case 'unchecked':
+      case 'joinDenied':
         return true
       case 'thisBrowser':
       case 'otherIdentityHere':
       case 'openedByPasskey':
       case 'joinRequested':
+      case 'joinApproved':
         return false
     }
   }

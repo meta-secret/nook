@@ -50,7 +50,7 @@ pub enum NookGoogleDriveVaultListing {
             };
             let observations = drive.observations().await?;
             let held = BrowserHeldVaults::load().await?;
-            let identity_logs = drive.identity_logs(held.app_id.as_ref()).await?;
+            let identity_logs = drive.identity_logs(held.listing_key.as_ref()).await?;
             let inspected = drive
                 .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
                 .await?;

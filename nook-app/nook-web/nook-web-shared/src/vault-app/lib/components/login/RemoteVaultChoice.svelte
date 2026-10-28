@@ -1,7 +1,9 @@
 <!--
 A recovery provider's identities, one card each, on a browser with no
 identity in use. Rust decides what each identity allows: recover it with
-its passkey, or ask one of its devices to let this browser join. Picking a
+its passkey, ask one of its devices to let this browser join, or finish a
+join a device approved. Asking needs this browser's own protected key, so
+the device protection gate runs first when there is none. Picking a
 decision runs nothing; Apply runs the plan. Checking which passkey opens an
 identity decrypts in memory and changes nothing.
 -->
@@ -16,11 +18,14 @@ identity decrypts in memory and changes nothing.
     identityChoices,
     type IdentityChoicesRequest,
   } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import IdentityJoinKeyGate from '$lib/components/provider-vaults/IdentityJoinKeyGate.svelte'
   import {
     IdentityPlanActions,
+    IdentityPlanOutcomeKind,
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
+  import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
     recoveryCheckTarget,
@@ -42,7 +47,11 @@ identity decrypts in memory and changes nothing.
   let checking = $state(false)
   let working = $state(false)
   const plan = new IdentityPlan()
-  const disabled = $derived(busy || checking || working)
+  // A join waiting for its key keeps the page still: one action at a time.
+  const joinIdle = $derived(
+    vault.identityJoin.kind === IdentityJoinWaitKind.Idle,
+  )
+  const disabled = $derived(busy || checking || working || !joinIdle)
 
   const choices = $derived.by(() => {
     const request: IdentityChoicesRequest = {
@@ -84,6 +93,13 @@ identity decrypts in memory and changes nothing.
         return
       }
       plan.clear()
+      switch (ran.value.kind) {
+        case IdentityPlanOutcomeKind.Applied:
+          break
+        // A join waits for a fresh key; its ceremony asks, then lists again.
+        case IdentityPlanOutcomeKind.WaitsForKey:
+          return
+      }
     } finally {
       working = false
     }
@@ -92,6 +108,7 @@ identity decrypts in memory and changes nothing.
 </script>
 
 <section class="grid gap-3" data-testid="remote-vault-choice">
+  <IdentityJoinKeyGate {vault} onRequested={onApplied} />
   <div class="space-y-1">
     <p class="text-sm font-medium text-foreground">
       {vault.t(I18N_KEYS.FirstRunRestoreChooseVault)}

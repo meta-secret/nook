@@ -8,16 +8,17 @@
 //! through the same adoption an invite join uses.
 
 use nook_core::{
-    AppId, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityControlLog,
-    IdentityControlState, IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest,
-    IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan,
-    IdentityJoinRequestPlan, IdentityJoinRequestWrite, PlacedNamespace,
-    ProviderIdentityJoinRequest, StorageMode,
+    AppId, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
+    IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
+    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityJoinRequestWrite,
+    PlacedNamespace, ProviderIdentityJoinRequest, StorageMode,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+use super::connection::NookIdentityConnectionStart;
 use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
@@ -170,6 +171,37 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Start asking to join an identity. A fresh unlocked key asks itself; a
+    /// key that already belongs to an identity stages a new local identity
+    /// named `label`, whose protection ceremony creates the key that asks.
+    /// A key already bound to the identity, or an identity another key here
+    /// holds, is refused.
+    #[wasm_bindgen]
+    pub async fn begin_identity_join(
+        &mut self,
+        identity_id: String,
+        label: &str,
+    ) -> Result<tsify::Ts<NookIdentityConnectionStart>, JsError> {
+        let invited = IdentityId::parse(&identity_id)?;
+        let app_key = self.unlocked_app_key()?;
+        let local_log = Self::local_identity_log(&app_key).await?;
+        let key = IdentityJoinKey {
+            directory: &NookDatabase::load_identity_directory().await?,
+            app_key: &app_key,
+            invited: &invited,
+            local_log,
+        }
+        .choose()?;
+        let start = match key {
+            IdentityConnectionKey::CurrentAppKey => NookIdentityConnectionStart::CurrentKey,
+            IdentityConnectionKey::NewAppKey => {
+                self.begin_local_identity_creation(label).await?;
+                NookIdentityConnectionStart::NewKeyStaged
+            }
+        };
+        Tsify::into_ts(&start).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+
     /// Ask an identity found at a source to let this browser in. The unlocked
     /// app key must be a fresh one, as an invite join needs: a browser whose
     /// key already belongs to an identity first protects a new key for this

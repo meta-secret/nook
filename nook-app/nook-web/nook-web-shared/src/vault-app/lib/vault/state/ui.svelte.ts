@@ -14,6 +14,10 @@ import {
   IdentityDirectoryLoadKind,
   type IdentityDirectoryLoadState,
 } from "$lib/components/devices-access/identity-directory-view";
+import {
+  IdentityJoinWaitKind,
+  type IdentityJoinWait,
+} from "$lib/vault/identity-join-wait";
 
 export enum WorkspaceSection {
   Vault = "vault",
@@ -122,4 +126,7 @@ export class VaultUiState {
   identityDirectory = $state<IdentityDirectoryLoadState>({
     kind: IdentityDirectoryLoadKind.Loading,
   });
+  /** A join to an identity that waits for the fresh key it asks with: the
+   * device protection gate, or a new local identity's key ceremony. */
+  identityJoin = $state<IdentityJoinWait>({ kind: IdentityJoinWaitKind.Idle });
 }

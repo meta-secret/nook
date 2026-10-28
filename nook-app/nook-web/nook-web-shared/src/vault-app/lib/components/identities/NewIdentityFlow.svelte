@@ -24,6 +24,9 @@ adopting the new identity ends the current identity's session midway.
   } from "./identity-card-model";
   import type { VaultState } from "$lib/vault.svelte";
   import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
+  import { untrack } from "svelte";
+  import { IdentityJoinWaitKind } from "$lib/vault/identity-join-wait";
+  import { IdentityJoinActions } from "$lib/vault/identity-plan-actions";
 
   let { vault }: { vault: VaultState } = $props();
 
@@ -32,8 +35,11 @@ adopting the new identity ends the current identity's session midway.
 
   let nameInput = $state("");
   let vaultInput = $state("");
-  /** Rust holds a prepared identity until its passkey commits it. */
-  let creationPending = false;
+  /** Rust holds a prepared identity until its passkey commits it. A join to
+   * another identity that waits for this identity's key arrives prepared:
+   * Rust staged it, and the key asks to join once it exists. */
+  const joinWait = untrack(() => vault.identityJoin);
+  let creationPending = joinWait.kind === IdentityJoinWaitKind.NewKey;
   let protectionInFlight = false;
   let cancelRequested = false;
 
@@ -136,6 +142,12 @@ adopting the new identity ends the current identity's session midway.
 
   async function backToName(): Promise<void> {
     await cancelPrepared();
+    // A join has no name to go back to: leaving its key leaves the join.
+    if (vault.identityJoin.kind === IdentityJoinWaitKind.NewKey) {
+      new IdentityJoinActions(vault).cancel();
+      close();
+      return;
+    }
     nameInput = vault.newIdentityName;
     vault.newIdentityName = "";
     vault.newIdentity = NewIdentityStage.Name;
@@ -157,14 +169,27 @@ adopting the new identity ends the current identity's session midway.
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
+    const wait = vault.identityJoin;
     const loaded = await vault.loadProviders(providerLoad);
     if (loaded.isErr()) {
+      vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return;
     }
     vault.applyActiveProviderCredentials();
     vault.identityTransitionPending = false;
-    vault.newIdentity = NewIdentityStage.Ready;
+    switch (wait.kind) {
+      case IdentityJoinWaitKind.Idle:
+      case IdentityJoinWaitKind.Device:
+        vault.newIdentity = NewIdentityStage.Ready;
+        return;
+      case IdentityJoinWaitKind.NewKey: {
+        // The new key exists: it asks to join, and the flow ends there.
+        const asked = await new IdentityJoinActions(vault).resume(wait);
+        close();
+        if (asked.isErr()) vault.errorMsg = vault.t(asked.error.translationKey);
+      }
+    }
   }
 
   async function createVault(event: SubmitEvent): Promise<void> {

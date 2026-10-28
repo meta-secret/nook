@@ -269,11 +269,12 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('remote-vault-choice')).toBeVisible({
       timeout: 30_000,
     })
-    await expect(page.getByTestId('remote-vault-choice-item')).toHaveCount(2)
+    // Two identities wrote here; each is recovered as a whole.
+    await expect(page.getByTestId('provider-identity')).toHaveCount(2)
     expect(await localFolderSnapshot(page)).toEqual(sharedFolder)
 
     // This browser's passkey belongs to the identity that wrote last;
-    // recovering is a choice on that identity.
+    // recovering it is that identity's decision, run by Apply.
     await page
       .getByTestId('provider-identity')
       .filter({
@@ -281,8 +282,11 @@ test.describe('local folder backup provider', () => {
           `[data-testid="provider-vault-row"][data-store-id="${latestStoreId}"]`,
         ),
       })
-      .getByTestId('remote-vault-choice-item')
+      .locator(
+        '[data-testid="provider-identity-decision"][data-decision="addToBrowser"]',
+      )
       .click()
+    await page.getByTestId('remote-vault-choice-apply').click()
     await expect(page.getByTestId('remote-vault-choice')).toHaveCount(0)
     await expect(page.getByTestId('device-protection-gate')).toBeVisible({
       timeout: 30_000,

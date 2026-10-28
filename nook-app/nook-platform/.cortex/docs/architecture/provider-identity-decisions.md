@@ -52,6 +52,16 @@ Rust decides each identity's standing and the decisions it allows.
 - **Locked here** (nothing on this browser opens it)
   - **Leave as is**
   - **Ask to join:** a join request to the identity's devices.
+- **Join requested** (the identity's log holds this browser's unanswered
+  request)
+  - No decision: a device of the identity answers it.
+- **Join denied** (a device denied this browser's request)
+  - **Leave as is**
+  - **Ask to join** again.
+- **Join approved** (this browser's key is a member; the identity is not
+  added here yet)
+  - **Leave as is**
+  - **Finish joining:** add the identity to this browser.
 
 ## Operations
 
@@ -114,11 +124,18 @@ Rust decides each identity's standing and the decisions it allows.
 ### Ask to join
 
 - Preconditions:
-  - The identity is locked here.
-  - The unlocked app key is fresh: its local identity has no log, no vaults,
-    and no other member, as an invite join requires. A browser whose key
-    already belongs to an identity first protects a new key, as Add identity
-    does.
+  - The identity is locked here, or a device denied an earlier request.
+  - The key that asks is fresh: its local identity has no log, no vaults,
+    and no other member, as an invite join requires.
+- The key, decided in Rust (`IdentityJoinKey`):
+  - **No key unlocked here** (recovery screen): the join waits while the
+    device protection gate protects this browser's first key, then asks.
+  - **A fresh key is unlocked:** it asks at once.
+  - **The key in use belongs to an identity** (Drive setup): Rust stages a
+    new local identity named after the one asked. Its key ceremony runs as
+    for Add identity, the new identity is adopted, and its key asks.
+  - One join waits at a time; the page's other actions stay disabled.
+    Leaving the gate or the ceremony leaves the join and asks nothing.
 - Effect:
   - A self-signed `MemberJoinRequested` from that app key is written into the
     identity's log at the provider. It carries public keys only.
@@ -127,26 +144,31 @@ Rust decides each identity's standing and the decisions it allows.
       wrapped to the joiner, and re-seals the identity's name to it. A vault
       the approver cannot open refuses the approval.
     - **Deny** appends `MemberJoinDenied`.
-  - The asking browser completes when the user lists again; there is no
+  - The listing reads each identity's log against the identity in use and
+    its key. The standing says whether the request is pending, denied, or
+    approved; a per-vault access request no longer counts.
+  - **Finish joining** completes when the user lists again; there is no
     polling.
     - Approved: its fresh local identity takes the identity's **original** id,
       beside any other identity here. The log, membership, and DEKs are
-      stored locally.
-    - Pending or denied: nothing changes.
+      stored locally, the identity directory is read again, and the page
+      follows the identity as after an invite join.
+    - Pending or denied: nothing changes, and the plan says why.
+- Implemented:
+  - Rust: `IdentityJoinKey`, `ProviderIdentityJoinRequest`,
+    `IdentityJoinAnswer`, `IdentityJoinCompletion`, and the log read's
+    `ProviderIdentityJoin`.
+  - WASM: `begin_identity_join`, `request_identity_join`,
+    `approve_identity_join`, `deny_identity_join`, and
+    `complete_identity_join`, against the current provider, a Drive account,
+    or a local folder.
+  - Web: the identity plan's **Ask to join** and **Finish joining**, on the
+    recovery screen and in Drive setup; the Devices page's Approve and Deny.
 - Gaps today:
-  - Rust decides the request, the answer, and completion
-    (`ProviderIdentityJoinRequest`, `IdentityJoinAnswer`,
-    `IdentityJoinCompletion`).
-  - WASM exposes `request_identity_join`, `approve_identity_join`,
-    `deny_identity_join`, and `complete_identity_join`, reading the current
-    provider, a Drive account, or a local folder.
-  - The Devices page lists pending identity join requests with Approve and
-    Deny.
-  - The provider listing's **Ask to join** still sends per-vault
-    `JoinRequested` from the key in use. It does not yet protect a fresh key
-    and call `request_identity_join`.
-  - The asking browser keeps no list of its own requests. The page that
-    asked passes the source and identity to completion.
+  - Join state is read for the key of the identity in use. A request made
+    from a new identity's key shows as asked only while that identity is in
+    use, and finishes from there.
+  - A waiting join lives with the page: a reload drops it before it asks.
 
 ## Invariants
 

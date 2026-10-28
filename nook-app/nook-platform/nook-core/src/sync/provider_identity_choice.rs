@@ -17,8 +17,8 @@ use tsify::Tsify;
 
 use crate::{
     CheckedCredential, CredentialCheckReport, FilingIdentity, IdentityCheck, IdentityCheckOutcome,
-    ProviderIdentityLog, ProviderVaultAccess, ProviderVaultName, ProviderVaultSummary,
-    VaultCheckOutcome,
+    ProviderIdentityJoin, ProviderIdentityLog, ProviderVaultAccess, ProviderVaultName,
+    ProviderVaultSummary, VaultCheckOutcome,
 };
 
 /// Whether an identity is in use on this browser, which merging needs.
@@ -47,6 +47,11 @@ pub enum IdentityStanding {
     },
     /// This browser asked to join; a device of the identity approves it.
     JoinRequested,
+    /// A device of the identity denied this browser's request.
+    JoinDenied,
+    /// A device approved this browser's request; finishing adds the
+    /// identity here.
+    JoinApproved,
     /// Passkeys were checked here, and none belongs to it.
     NotOpened,
     /// Nothing on this browser has opened it yet.
@@ -65,6 +70,8 @@ pub enum IdentityDecision {
     MergeIntoCurrent,
     /// Ask one of its devices to let this browser join it.
     AskToJoin,
+    /// Add the identity a device approved this browser's request for.
+    FinishJoining,
 }
 
 /// One identity a provider holds: its standing, what the user may decide,
@@ -116,9 +123,11 @@ impl ProviderIdentityChoices<'_> {
     }
 
     fn standing(&self, choice: &ProviderIdentityChoice) -> IdentityStanding {
-        let held_here = match choice.identity.log {
-            ProviderIdentityLog::Read { this_browser, .. } => this_browser,
-            ProviderIdentityLog::Absent => false,
+        let (held_here, join) = match choice.identity.log {
+            ProviderIdentityLog::Read {
+                this_browser, join, ..
+            } => (this_browser, join),
+            ProviderIdentityLog::Absent => (false, ProviderIdentityJoin::NotAsked),
         };
         if held_here
             || choice
@@ -135,15 +144,15 @@ impl ProviderIdentityChoices<'_> {
                 };
             }
         }
+        // The identity's own log says where this browser's request stands.
+        match join {
+            ProviderIdentityJoin::Approved => return IdentityStanding::JoinApproved,
+            ProviderIdentityJoin::Requested => return IdentityStanding::JoinRequested,
+            ProviderIdentityJoin::Denied => return IdentityStanding::JoinDenied,
+            ProviderIdentityJoin::NotAsked => {}
+        }
         if let Some(passkey) = self.opening_passkey(&choice.identity) {
             return IdentityStanding::OpenedByPasskey { passkey };
-        }
-        if choice
-            .vaults
-            .iter()
-            .all(|vault| vault.access == ProviderVaultAccess::Requested)
-        {
-            return IdentityStanding::JoinRequested;
         }
         if self.passkey_checked() {
             IdentityStanding::NotOpened
@@ -163,6 +172,9 @@ impl ProviderIdentityChoices<'_> {
                 | IdentityStanding::JoinRequested,
                 _,
             ) => Vec::new(),
+            (IdentityStanding::JoinApproved, _) => {
+                vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
+            }
             (IdentityStanding::OpenedByPasskey { .. }, IdentitySession::IdentityInUse) => vec![
                 IdentityDecision::Leave,
                 IdentityDecision::AddToBrowser,
@@ -180,7 +192,9 @@ impl ProviderIdentityChoices<'_> {
                 IdentityStanding::Unchecked | IdentityStanding::NotOpened,
                 IdentitySession::IdentityInUse,
             )
-            | (IdentityStanding::NotOpened, IdentitySession::NoIdentity) => {
+            | (IdentityStanding::NotOpened, IdentitySession::NoIdentity)
+            // A denied request may be asked again.
+            | (IdentityStanding::JoinDenied, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
             }
         }
@@ -314,6 +328,39 @@ mod tests {
                 access,
                 actions: Vec::new(),
             })
+        }
+
+        /// A log read for an identity, telling where this browser's join stands.
+        fn log_with(join: ProviderIdentityJoin) -> ProviderIdentityLog {
+            ProviderIdentityLog::Read {
+                devices: crate::ProviderLogCount::from(2),
+                newest_device: ProviderVaultTime::Unreported,
+                vaults: crate::ProviderLogCount::from(1),
+                this_browser: false,
+                join,
+            }
+        }
+
+        /// The one identity a listing of one locked vault holds.
+        fn only_choice(
+            join: ProviderIdentityJoin,
+            session: IdentitySession,
+        ) -> anyhow::Result<ProviderIdentityChoice> {
+            let other = Self::identity(OTHER, Self::log_with(join))?;
+            let vaults = [Self::vault(
+                OTHER_VAULT,
+                &other,
+                ProviderVaultAccess::Locked,
+            )?];
+            ProviderIdentityChoices {
+                vaults: &vaults,
+                checks: &[],
+                session,
+            }
+            .choices()
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("the listing holds one identity"))
         }
 
         fn passkey_opening(
@@ -506,6 +553,65 @@ mod tests {
         );
         assert_eq!(
             Fixture::at(&choices, 1)?.decisions,
+            vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_pending_join_request_waits_with_nothing_to_decide() -> anyhow::Result<()> {
+        for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
+            let choice = Fixture::only_choice(ProviderIdentityJoin::Requested, session)?;
+            assert_eq!(choice.standing, IdentityStanding::JoinRequested);
+            assert!(choice.decisions.is_empty());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_denied_join_request_can_be_asked_again() -> anyhow::Result<()> {
+        let choice =
+            Fixture::only_choice(ProviderIdentityJoin::Denied, IdentitySession::IdentityInUse)?;
+        assert_eq!(choice.standing, IdentityStanding::JoinDenied);
+        assert_eq!(
+            choice.decisions,
+            vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_approved_join_request_offers_finishing_the_join() -> anyhow::Result<()> {
+        for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
+            let choice = Fixture::only_choice(ProviderIdentityJoin::Approved, session)?;
+            assert_eq!(choice.standing, IdentityStanding::JoinApproved);
+            assert_eq!(
+                choice.decisions,
+                vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_vault_access_request_alone_does_not_mark_the_identity_requested() -> anyhow::Result<()> {
+        let other = Fixture::identity(OTHER, Fixture::log_with(ProviderIdentityJoin::NotAsked))?;
+        let vaults = [Fixture::vault(
+            OTHER_VAULT,
+            &other,
+            ProviderVaultAccess::Requested,
+        )?];
+        let choices = ProviderIdentityChoices {
+            vaults: &vaults,
+            checks: &[],
+            session: IdentitySession::IdentityInUse,
+        }
+        .choices();
+
+        let choice = Fixture::at(&choices, 0)?;
+        assert_eq!(choice.standing, IdentityStanding::Unchecked);
+        assert_eq!(
+            choice.decisions,
             vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
         );
         Ok(())
