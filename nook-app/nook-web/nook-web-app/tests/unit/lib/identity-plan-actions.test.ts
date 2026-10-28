@@ -4,6 +4,7 @@ import initNookWasm, {
   DeviceProtectionStatus,
   NookVaultManager,
   type IdentityDecision,
+  type NookIdentityConnectionStart,
   type NookIdentityJoinCompletion,
   type NookIdentityJoinRequested,
   type NookProviderSource,
@@ -73,7 +74,7 @@ class JoinSession {
   readonly requested: string[] = []
   readonly cancelled: string[] = []
 
-  constructor(start: 'current-key' | 'new-key-staged') {
+  constructor(start: NookIdentityConnectionStart) {
     vi.spyOn(this.vault, 'admitManager').mockReturnValue(ok(this.manager))
     VaultStateTestFixture.runStorageImmediately(this.vault)
     vi.spyOn(this.manager, 'begin_identity_join').mockResolvedValue(start)

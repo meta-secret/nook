@@ -45,7 +45,7 @@ export enum AccessCheckTargetKind {
   Source = "source",
   /** The sync provider this session is connected to or has staged for a
    * recovery, read with the credentials it already holds. */
-  CurrentProvider = "currentProvider",
+  CurrentProvider = "current-provider",
 }
 
 /** Where a check reads identity logs and vaults from. */
@@ -65,7 +65,9 @@ export type BackupPasswordCheckRequest = {
 type CheckResult = Result<CredentialCheckReport, AccessCheckFailure>;
 
 /** The provider this session is connected to or has staged for a recovery. */
-const CURRENT_PROVIDER: NookProviderSource = { kind: "currentProvider" };
+function currentProvider(): NookProviderSource {
+  return { kind: "currentProvider" };
+}
 
 /**
  * Read-only checks of which vaults a passkey or backup password opens. Rust
@@ -91,7 +93,7 @@ export class AccessCheckActions {
           failure,
           run: (manager) =>
             manager.check_passkey_access_from(
-              CURRENT_PROVIDER,
+              currentProvider(),
               location.hostname,
             ),
         };
@@ -121,7 +123,7 @@ export class AccessCheckActions {
           failure,
           run: (manager) =>
             manager.check_backup_password_access_from(
-              CURRENT_PROVIDER,
+              currentProvider(),
               password,
             ),
         };
@@ -175,7 +177,7 @@ export function recoveryProviderSource(vault: VaultState): NookProviderSource {
     if (handle.kind === LocalFolderHandleKind.Selected)
       return { kind: "localFolder", handleId: handle.handleId };
   }
-  return CURRENT_PROVIDER;
+  return currentProvider();
 }
 
 /** Where a recovery's checks read from: the same provider as its plan. */

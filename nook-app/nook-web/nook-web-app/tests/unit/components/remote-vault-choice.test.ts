@@ -80,13 +80,17 @@ function renderChoice(vaults: ProviderVaultSummary[]) {
   return { view: render(RemoteVaultChoice, props), vault, onApplied }
 }
 
-function decisionsOf(card: HTMLElement | undefined): (string | undefined)[] {
-  return [
-    ...(card?.querySelectorAll('[data-testid="provider-identity-decision"]') ??
-      []),
-  ]
-    .filter((button) => button instanceof HTMLElement)
-    .map((button) => button.dataset.decision)
+/** One card from a listing, which may be missing. */
+type ListedCard = ReturnType<HTMLElement[]['at']>
+
+/** The decisions an identity card offers, in order. */
+function decisionsOf(card: ListedCard): string[] {
+  if (!card) throw new Error('no identity card')
+  return Array.from(
+    card.querySelectorAll<HTMLElement>(
+      '[data-testid="provider-identity-decision"]',
+    ),
+  ).map((button) => String(button.dataset.decision))
 }
 
 const familyVault: ChoiceRequest = {

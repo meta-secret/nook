@@ -24,7 +24,8 @@ import {
   IdentityPlanActions,
   IdentityPlanFailure,
   IdentityPlanFailureKind,
-  IdentityPlanOutcome,
+  IdentityPlanOutcomeKind,
+  type IdentityPlanOutcome,
 } from '$lib/vault/identity-plan-actions'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
@@ -189,6 +190,7 @@ describe('Google Drive provider setup', () => {
       expect(view.getAllByTestId('provider-identity')).toHaveLength(2),
     )
     const [own, other] = view.getAllByTestId('provider-identity')
+    if (!other) throw new Error('the stranger is not listed')
     // The identity this browser syncs needs nothing decided.
     expect(own?.dataset.standing).toBe('thisBrowser')
     expect(own?.textContent).toContain('Personal')
@@ -198,19 +200,17 @@ describe('Google Drive provider setup', () => {
     ).toHaveLength(0)
     // The stranger is named by its three words; its log tells its facts;
     // its two vaults are listed once, under it.
-    expect(other?.dataset.standing).toBe('unchecked')
+    expect(other.dataset.standing).toBe('unchecked')
     expect(
-      other?.querySelector('[data-testid="provider-vault-identity"]')
+      other.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toContain('ripple-canvas-orbit')
     expect(
-      other?.querySelectorAll('[data-testid="provider-vault-row"]'),
+      other.querySelectorAll('[data-testid="provider-vault-row"]'),
     ).toHaveLength(2)
     expect(
       Array.from(
-        other?.querySelectorAll(
-          '[data-testid="provider-vault-identity-log"]',
-        ) ?? [],
+        other.querySelectorAll('[data-testid="provider-vault-identity-log"]'),
       ).map((line) => line.textContent),
     ).toContain(
       vault.t({
@@ -220,9 +220,9 @@ describe('Google Drive provider setup', () => {
     )
     // It is decided as a whole: leave it, or ask to join it.
     const decisions = Array.from(
-      other?.querySelectorAll<HTMLElement>(
+      other.querySelectorAll<HTMLElement>(
         '[data-testid="provider-identity-decision"]',
-      ) ?? [],
+      ),
     )
     expect(decisions.map((button) => button.dataset.decision)).toEqual([
       'leave',
@@ -356,9 +356,12 @@ describe('Google Drive provider setup', () => {
     const check = vi
       .spyOn(AccessCheckActions.prototype, 'checkPasskey')
       .mockResolvedValue(ok(opens))
+    const applied: IdentityPlanOutcome = {
+      kind: IdentityPlanOutcomeKind.Applied,
+    }
     const run = vi
       .spyOn(IdentityPlanActions.prototype, 'run')
-      .mockResolvedValue(ok(IdentityPlanOutcome.Applied))
+      .mockResolvedValue(ok(applied))
     const connect = vi
       .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
       .mockResolvedValue(
@@ -415,12 +418,14 @@ describe('Google Drive provider setup', () => {
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
     expect(run).toHaveBeenCalledOnce()
-    const [request] = run.mock.calls[0] ?? []
-    expect(request?.source).toEqual({
+    const call = run.mock.calls.at(0)
+    if (!call) throw new Error('the plan did not run')
+    const [request] = call
+    expect(request.source).toEqual({
       kind: 'googleDrive',
       accessToken: 'drive-token',
     })
-    expect(request?.planned.map((entry) => entry.decision)).toEqual([
+    expect(request.planned.map((entry) => entry.decision)).toEqual([
       'mergeIntoCurrent',
     ])
     expect(connect).toHaveBeenCalledOnce()
