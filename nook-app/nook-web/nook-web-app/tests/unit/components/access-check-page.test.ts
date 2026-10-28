@@ -4,7 +4,11 @@ import { ok } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { CredentialCheckReport } from '$app-wasm'
 import { googleOAuthSession } from '$lib/auth/google/oauth'
-import { AccessCheckActions } from '$lib/vault/access-check'
+import { OAUTH_FILE_PROVIDER_TYPE } from '$lib/auth/providers'
+import {
+  AccessCheckActions,
+  AccessCheckTargetKind,
+} from '$lib/vault/access-check'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import AccessCheckPage from '../../../../nook-web-shared/src/vault-app/lib/components/access-check/AccessCheckPage.svelte'
@@ -22,24 +26,32 @@ function renderPage() {
 
 const passkeyOpens: CredentialCheckReport = {
   credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
-  identity: {
-    state: 'member',
-    identityId: 'idn_personalide',
-    words: ['amber', 'falcon', 'tide'],
-    name: { state: 'named', name: 'Personal' },
-  },
-  vaults: [
+  identities: [
     {
-      storeId: 'store_familyvault',
-      shortId: 'familyva',
-      filedUnder: ['amber', 'falcon', 'tide'],
-      outcome: { state: 'opens', name: { state: 'named', name: 'Family' } },
+      identityId: 'idn_personalide',
+      words: ['amber', 'falcon', 'tide'],
+      name: { state: 'named', name: 'Personal' },
+      outcome: 'opens',
+      vaults: [
+        {
+          storeId: 'store_familyvault',
+          shortId: 'familyva',
+          outcome: { state: 'opens', name: { state: 'named', name: 'Family' } },
+        },
+      ],
     },
     {
-      storeId: 'store_othervault1',
-      shortId: 'othervau',
-      filedUnder: ['ripple', 'canvas', 'orbit'],
-      outcome: { state: 'doesNotOpen' },
+      identityId: 'idn_otheridenti',
+      words: ['ripple', 'canvas', 'orbit'],
+      name: { state: 'unknown' },
+      outcome: 'doesNotOpen',
+      vaults: [
+        {
+          storeId: 'store_othervault1',
+          shortId: 'othervau',
+          outcome: { state: 'doesNotOpen' },
+        },
+      ],
     },
   ],
 }
@@ -59,9 +71,16 @@ describe('Check access page', () => {
     await fireEvent.click(view.getByTestId('access-check-run'))
 
     await view.findByTestId('access-check-results')
-    expect(check).toHaveBeenCalledWith({ kind: 'thisBrowser' })
-    const [family, other] = view.getAllByTestId('access-check-vault')
-    expect(family?.textContent).toContain('Family')
+    expect(check).toHaveBeenCalledWith({
+      kind: AccessCheckTargetKind.Source,
+      source: { kind: 'thisBrowser' },
+    })
+    // One row per identity: a passkey opens an identity with every vault
+    // it keeps, so the vaults are listed under it.
+    const [personal, other] = view.getAllByTestId('access-check-identity')
+    expect(personal?.textContent).toContain('Personal (amber-falcon-tide)')
+    expect(personal?.textContent).toContain('Family')
+    expect(other?.textContent).toContain('ripple-canvas-orbit')
     expect(other?.textContent).toContain('othervau')
     const outcomes = view
       .getAllByTestId('access-check-cell')
@@ -69,8 +88,8 @@ describe('Check access page', () => {
     expect(outcomes).toEqual(['opens', 'doesNotOpen'])
     expect(view.getByTestId('access-check-credential').textContent).toContain(
       vault.t({
-        key: I18N_KEYS.AccessCheckPasskeyIdentity,
-        replacements: { identity: 'Personal (amber-falcon-tide)' },
+        key: I18N_KEYS.AccessCheckCredentialPasskey,
+        replacements: { id: 'a1b2c3d4' },
       }),
     )
   })
@@ -97,22 +116,31 @@ describe('Check access page', () => {
     await fireEvent.click(view.getByTestId('access-check-run'))
     await vi.waitFor(() =>
       expect(check).toHaveBeenCalledWith({
-        kind: 'googleDrive',
-        accessToken: 'drive-token',
+        kind: AccessCheckTargetKind.Source,
+        source: { kind: 'googleDrive', accessToken: 'drive-token' },
       }),
     )
   })
 
-  test('a backup password is checked against every vault and then cleared', async () => {
+  test('a backup password opens single vaults, never the identity, and is then cleared', async () => {
     const passwordReport: CredentialCheckReport = {
       credential: { kind: 'backupPassword' },
-      identity: { state: 'notAMember' },
-      vaults: [
+      identities: [
         {
-          storeId: 'store_familyvault',
-          shortId: 'familyva',
-          filedUnder: ['amber', 'falcon', 'tide'],
-          outcome: { state: 'noBackupPassword' },
+          identityId: 'idn_personalide',
+          words: ['amber', 'falcon', 'tide'],
+          name: { state: 'unknown' },
+          outcome: 'vaultsOnly',
+          vaults: [
+            {
+              storeId: 'store_familyvault',
+              shortId: 'familyva',
+              outcome: {
+                state: 'opens',
+                name: { state: 'named', name: 'Family' },
+              },
+            },
+          ],
         },
       ],
     }
@@ -130,7 +158,10 @@ describe('Check access page', () => {
 
     await view.findByTestId('access-check-results')
     expect(check).toHaveBeenCalledWith({
-      source: { kind: 'thisBrowser' },
+      target: {
+        kind: AccessCheckTargetKind.Source,
+        source: { kind: 'thisBrowser' },
+      },
       password: 'correct horse battery staple',
     })
     expect(view.getByTestId('access-check-password')).toHaveProperty(
@@ -138,10 +169,58 @@ describe('Check access page', () => {
       '',
     )
     expect(view.getByTestId('access-check-cell').dataset.outcome).toBe(
-      'noBackupPassword',
+      'vaultsOnly',
+    )
+    expect(view.getByTestId('access-check-vault').textContent).toContain(
+      'Family',
     )
 
     await fireEvent.click(view.getByTestId('access-check-clear'))
     expect(view.queryAllByTestId('access-check-results')).toHaveLength(0)
+  })
+})
+
+describe('Check access sources', () => {
+  test('the connected sync provider is a source only for an unlocked session', async () => {
+    const check = vi
+      .spyOn(AccessCheckActions.prototype, 'checkPasskey')
+      .mockResolvedValue(ok(passkeyOpens))
+    const { view, vault } = renderPage()
+    expect(
+      view.queryAllByTestId('access-check-source-currentProvider'),
+    ).toHaveLength(0)
+
+    vault.isAuthenticated = true
+    vault.storageMode = OAUTH_FILE_PROVIDER_TYPE
+    await fireEvent.click(
+      await view.findByTestId('access-check-source-currentProvider'),
+    )
+    await fireEvent.click(view.getByTestId('access-check-run'))
+
+    await vi.waitFor(() =>
+      expect(check).toHaveBeenCalledWith({
+        kind: AccessCheckTargetKind.CurrentProvider,
+      }),
+    )
+  })
+
+  test('results form a grid with one column per check', async () => {
+    vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
+      ok(passkeyOpens),
+    )
+    const { view } = renderPage()
+
+    await fireEvent.click(view.getByTestId('access-check-run'))
+    await view.findByTestId('access-check-grid')
+    await fireEvent.click(view.getByTestId('access-check-run'))
+
+    await vi.waitFor(() =>
+      expect(view.getAllByTestId('access-check-credential')).toHaveLength(2),
+    )
+    const [personal] = view.getAllByTestId('access-check-identity')
+    expect(
+      personal?.querySelectorAll('[data-testid="access-check-cell"]'),
+    ).toHaveLength(2)
+    expect(view.getAllByRole('columnheader')).toHaveLength(3)
   })
 })

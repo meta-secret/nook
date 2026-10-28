@@ -36,6 +36,7 @@ use nook_core::{
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
+mod access_check;
 mod authenticator_enrollment;
 mod authenticator_fill;
 mod companion_pairing;

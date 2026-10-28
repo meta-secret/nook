@@ -268,36 +268,55 @@ describes. No vault is downloaded or decrypted. A vault this browser
 registered is named from its vault registry; every other vault's name is
 encrypted under its own key, so its row shows the short id instead.
 
-Each row also tells, without any key:
+Rows are grouped by the identity that files them. Each identity card tells,
+without any key:
 
 - **Identity words:** three BIP39 words derived from the identity id
   (`IdentityWords`), the same words the identity card shows.
 - **Public log facts:** from the identity's signed, unencrypted control log,
   its device count, when the newest device joined, and how many vaults it
   keeps (`ProviderIdentityLog`).
+- **Standing:** whether the identity opens here. Passkeys are linked to
+  identities, not vaults, so access is decided once per identity.
 
-A "Check a passkey" text link runs `check_passkey_access` on the account:
+The standing needs no tap when this browser is already one of the
+identity's devices: `ProviderIdentityLog` reports `thisBrowser` when the
+app key held here is a member of the log. An identity that does not open yet
+offers two actions:
 
-- One passkey assertion re-derives this device's app key in memory.
-- A vault counts as opened only when its key envelope and its name decrypt:
-  through the identity log the key is a member of, or the vault log that
-  enrolled it.
-- Each row then says which checked passkey opens it, shows its real name, and
-  offers "Recover with the checked passkey" in place of a blind import.
-- Results live on the page only; nothing is stored, imported, or written. The
-  link commits nothing, so the step keeps one action button.
+- **Find the passkey that opens it:** runs `check_passkey_access`. One
+  passkey assertion re-derives an app key in memory. The identity opens only
+  when its log lists that key and its key envelope decrypts; then every vault
+  it keeps opens with it, shows its real name, and offers "Recover with the
+  checked passkey" in place of a blind import.
+- **Ask to join:** a browser already in another identity sends each vault's
+  access request to the identity's devices. A browser with no identity is
+  told to add itself with a join code from one of those devices.
+
+A backup password opens one vault, never an identity. "Check a backup
+password" opens a small form that tries the password on every listed vault;
+while it is open, its Check is the only live action. The recovery list for a
+local folder, iCloud, or GitHub offers the same identity actions, read
+through the provider staged for the recovery. Results live on the page only;
+nothing is stored, imported, or written, and each check stays disabled while
+another action runs.
 
 ### Check access
 
 The Check access page answers the same question outside any setup flow, and
 before an identity is unlocked: the header, the first-run screen, and the
-unlock screen link to it.
+unlock screen link to it, and so does Manage → Sync providers.
 
 - **Sources:** this browser's identities and vaults, a Google Drive account
-  (signed in for this page only), or a local folder.
+  (signed in for this page only), a local folder, or, once unlocked, the
+  connected sync provider (iCloud, GitHub, Drive, or folder) with the
+  session's own credentials.
 - **Checks:** one passkey or one backup password at a time
-  (`check_passkey_access`, `check_backup_password_access`); each adds a
-  numbered column, and every vault says whether that check opened it.
+  (`check_passkey_access`, `check_backup_password_access`, and their
+  `..._at_current_provider` manager forms); each adds a numbered column to a
+  grid whose rows are the identities, each listing the vaults it keeps. A
+  passkey cell says whether it opens the identity; a backup password cell
+  can only say it opens some of its vaults.
 - **One live action:** a source that still needs a sign-in or a folder keeps
   Check disabled until it is ready.
 

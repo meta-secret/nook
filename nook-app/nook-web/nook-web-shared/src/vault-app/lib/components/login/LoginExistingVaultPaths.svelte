@@ -4,6 +4,7 @@ app is the usual path for a second device; restoring from a sync provider is
 the recovery path when no other app is at hand.
 -->
 <script lang="ts">
+  import { VaultWorkspaceActions } from "$lib/vault/ui";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { ArrowRight, Cloud, QrCode } from "@lucide/svelte";
   import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
@@ -100,7 +101,7 @@ the recovery path when no other app is at hand.
       type="button"
       class="text-balance text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground hover:decoration-foreground"
       data-testid="login-access-check-link"
-      onclick={() => vault.openAccessCheck()}
+      onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
     >
       {vault.t(I18N_KEYS.AccessCheckEntryLink)}
     </button>

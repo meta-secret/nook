@@ -829,6 +829,7 @@ mod tests {
             devices: ProviderLogCount::from(2),
             newest_device: at("2026-10-27T17:28:00Z")?,
             vaults: ProviderLogCount::from(1),
+            this_browser: false,
         };
         let theirs_log = [ListedIdentityLog {
             identity_id: theirs.clone(),
@@ -911,6 +912,7 @@ mod tests {
                             at: ProviderInstant(7),
                         },
                         vaults: ProviderLogCount::from(3),
+                        this_browser: false,
                     },
                 },
                 created: ProviderVaultTime::Unreported,
@@ -940,6 +942,7 @@ mod tests {
                             "devices": 2,
                             "newestDevice": { "state": "reported", "at": 7 },
                             "vaults": 3,
+                            "thisBrowser": false,
                         },
                     },
                     "created": { "state": "unreported" },

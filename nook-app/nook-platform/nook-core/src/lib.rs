@@ -417,8 +417,8 @@ pub use vault::vault_recovery_options::{
     VaultRecoveryProjectionRequest, VaultRecoverySummary,
 };
 pub use vault_access_check::{
-    BackupPasswordAccessCheck, CheckedCredential, CheckedIdentity, CheckedVaultEvents,
-    CredentialCheckReport, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
+    BackupPasswordAccessCheck, CheckedCredential, CheckedVaultEvents, CredentialCheckReport,
+    IdentityCheck, IdentityCheckOutcome, PasskeyAccessCheck, VaultCheck, VaultCheckOutcome,
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,

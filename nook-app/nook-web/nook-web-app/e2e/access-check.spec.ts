@@ -47,14 +47,13 @@ test.describe('check access', () => {
     await expect(page.getByTestId('access-check-page')).toBeVisible()
     await runCheck(page, 1)
 
-    // The passkey belongs to this browser's identity and decrypts its vault.
-    await expect(page.getByTestId('access-check-credential')).toContainText(
-      'Belongs to identity',
+    // The passkey opens this browser's identity, and with it its vault.
+    const identity = page.getByTestId('access-check-identity')
+    await expect(identity).toHaveCount(1)
+    await expect(identity.getByTestId('access-check-vault')).toContainText(
+      'Passkey vault',
     )
-    const vault = page.getByTestId('access-check-vault')
-    await expect(vault).toHaveCount(1)
-    await expect(vault).toContainText('Passkey vault')
-    await expect(vault.getByTestId('access-check-cell')).toHaveAttribute(
+    await expect(identity.getByTestId('access-check-cell')).toHaveAttribute(
       'data-outcome',
       'opens',
     )
@@ -86,14 +85,15 @@ test.describe('check access', () => {
     await page.getByTestId('access-check-password').fill('correct-horse-1')
     await runCheck(page, 2)
 
-    // One column per check: the wrong password, then the right one.
+    // One column per check: the wrong password, then the right one, which
+    // opens the vault but never the identity itself.
     await expect(page.getByTestId('access-check-cell')).toHaveCount(2)
     const outcomes = await page
       .getByTestId('access-check-cell')
       .evaluateAll((cells) =>
         cells.map((cell) => cell.getAttribute('data-outcome')),
       )
-    expect(outcomes).toEqual(['doesNotOpen', 'opens'])
+    expect(outcomes).toEqual(['doesNotOpen', 'vaultsOnly'])
   })
 
   test('opens from the first-run screen before any identity exists', async ({

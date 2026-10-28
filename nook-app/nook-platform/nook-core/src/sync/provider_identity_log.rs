@@ -17,8 +17,8 @@ use tsify::Tsify;
 
 use crate::errors::VaultResult;
 use crate::{
-    EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId, ProviderInstant,
-    ProviderVaultTime,
+    AppId, EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId,
+    ProviderInstant, ProviderVaultTime,
 };
 
 /// How many devices or vaults a control log lists.
@@ -54,6 +54,9 @@ pub enum ProviderIdentityLog {
         /// Vaults the identity keeps; removed ones are not counted.
         #[tsify(type = "number")]
         vaults: ProviderLogCount,
+        /// This browser's own app key is one of its devices, so the
+        /// identity and every vault it keeps open here.
+        this_browser: bool,
     },
 }
 
@@ -74,7 +77,7 @@ pub struct ListedIdentityLog {
 impl ProviderIdentityLogEvents {
     /// Verify the log and read its facts. Every event must parse and carry a
     /// valid signature, as when the identity syncs its own log.
-    pub fn read(self) -> VaultResult<ListedIdentityLog> {
+    pub fn read(self, this_browser: Option<&AppId>) -> VaultResult<ListedIdentityLog> {
         let Self {
             identity_id,
             events,
@@ -108,6 +111,7 @@ impl ProviderIdentityLogEvents {
                         ProviderVaultTime::Reported { at }
                     }),
                 vaults: ProviderLogCount::of(state.vaults.len()),
+                this_browser: this_browser.is_some_and(|app_id| state.member(app_id).is_some()),
             },
         })
     }
@@ -159,7 +163,7 @@ mod tests {
     }
 
     /// A founder registers one vault on Oct 12; a second device joins on Oct 27.
-    fn two_device_log() -> anyhow::Result<IdentityControlLog> {
+    fn two_device_log() -> anyhow::Result<(IdentityControlLog, AppId)> {
         let founder = Device::new()?;
         let joiner = Device::new()?;
         let founding_time = IsoTimestamp::from_trusted("2026-10-12T00:00:00Z".to_owned());
@@ -212,10 +216,13 @@ mod tests {
             signing_key: founder.signer.signing_key(),
             created_at: &joining_time,
         };
-        Ok(log
-            .clone()
-            .insert(log.build_append(vec![approve], &at_joining)?)?
-            .log)
+        let founder_app = founder.app.app_id().clone();
+        Ok((
+            log.clone()
+                .insert(log.build_append(vec![approve], &at_joining)?)?
+                .log,
+            founder_app,
+        ))
     }
 
     fn provider_events(log: &IdentityControlLog) -> anyhow::Result<ProviderIdentityLogEvents> {
@@ -231,8 +238,8 @@ mod tests {
 
     #[test]
     fn a_signed_log_tells_its_devices_their_newest_join_and_its_vaults() -> anyhow::Result<()> {
-        let log = two_device_log()?;
-        let listed = provider_events(&log)?.read()?;
+        let (log, founder) = two_device_log()?;
+        let listed = provider_events(&log)?.read(None)?;
 
         assert_eq!(
             listed.log,
@@ -242,9 +249,19 @@ mod tests {
                     at: ProviderInstant::parse_rfc3339("2026-10-27T17:28:00Z")?,
                 },
                 vaults: ProviderLogCount::from(1),
+                this_browser: false,
             }
         );
         assert_eq!(&listed.identity_id, log.identity_id());
+        // A browser whose app key is one of the devices opens it.
+        let here = provider_events(&log)?.read(Some(&founder))?;
+        assert!(matches!(
+            here.log,
+            ProviderIdentityLog::Read {
+                this_browser: true,
+                ..
+            }
+        ));
         Ok(())
     }
 
@@ -255,7 +272,7 @@ mod tests {
             identity_id: identity_id.clone(),
             events: Vec::new(),
         }
-        .read()?;
+        .read(None)?;
         assert_eq!(empty.log, ProviderIdentityLog::Absent);
         assert_eq!(
             ListedIdentityLog::of(&identity_id, &[empty]),
@@ -263,11 +280,11 @@ mod tests {
         );
 
         // A log event that does not parse is reported, not skipped.
-        let mut damaged = provider_events(&two_device_log()?)?;
+        let mut damaged = provider_events(&two_device_log()?.0)?;
         damaged.events.push(EventStorageBytes::from(
             b"not: an identity event\n".to_vec(),
         ));
-        assert!(damaged.read().is_err());
+        assert!(damaged.read(None).is_err());
         Ok(())
     }
 }

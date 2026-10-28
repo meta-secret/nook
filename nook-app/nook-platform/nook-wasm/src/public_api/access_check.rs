@@ -35,9 +35,40 @@ pub enum NookAccessCheckSource {
 }
 
 /// A source's identity logs and vaults, read without any key.
-struct SourceContents {
-    identity_logs: Vec<ProviderIdentityLogEvents>,
-    vaults: Vec<CheckedVaultEvents>,
+pub(crate) struct SourceContents {
+    pub(crate) identity_logs: Vec<ProviderIdentityLogEvents>,
+    pub(crate) vaults: Vec<CheckedVaultEvents>,
+}
+
+impl SourceContents {
+    /// Ask for one passkey and check what it opens here.
+    pub(crate) async fn check_passkey(
+        self,
+        rp_id: &str,
+    ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
+        let passkey = CheckedPasskey { rp_id }.derive().await?;
+        let report = PasskeyAccessCheck {
+            app_key: &passkey.app_key,
+            fingerprint: passkey.fingerprint,
+            identity_logs: self.identity_logs,
+            vaults: self.vaults,
+        }
+        .report()?;
+        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    }
+
+    /// Check what a typed backup password opens here.
+    pub(crate) fn check_backup_password(
+        self,
+        password: &str,
+    ) -> Result<tsify::Ts<CredentialCheckReport>, JsError> {
+        let report = BackupPasswordAccessCheck {
+            password,
+            vaults: self.vaults,
+        }
+        .report()?;
+        Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    }
 }
 
 impl NookAccessCheckSource {
@@ -188,16 +219,7 @@ impl CheckedPasskey<'_> {
     let source = source
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let passkey = CheckedPasskey { rp_id }.derive().await?;
-    let contents = source.contents().await?;
-    let report = PasskeyAccessCheck {
-        app_key: &passkey.app_key,
-        fingerprint: passkey.fingerprint,
-        identity_logs: contents.identity_logs,
-        vaults: contents.vaults,
-    }
-    .report()?;
-    Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    source.contents().await?.check_passkey(rp_id).await
 }
 
 /// Report which of the source's vaults a typed backup password opens.
@@ -210,11 +232,5 @@ impl CheckedPasskey<'_> {
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let password = zeroize::Zeroizing::new(password);
-    let contents = source.contents().await?;
-    let report = BackupPasswordAccessCheck {
-        password: &password,
-        vaults: contents.vaults,
-    }
-    .report()?;
-    Tsify::into_ts(&report).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    source.contents().await?.check_backup_password(&password)
 }

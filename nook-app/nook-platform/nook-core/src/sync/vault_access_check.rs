@@ -53,26 +53,33 @@ pub struct VaultCheck {
     pub store_id: StoreId,
     /// The first characters of the store token, to tell vaults apart.
     pub short_id: String,
-    /// The words of the identity whose folder files it.
-    pub filed_under: IdentityWords,
     pub outcome: VaultCheckOutcome,
 }
 
-/// The identity a checked passkey belongs to among those the source holds.
+/// Whether a check opened an identity. A passkey belongs to an identity, so
+/// it opens every vault the identity keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum IdentityCheckOutcome {
+    /// The checked passkey's key is a member of the identity.
+    Opens,
+    /// The identity does not open, but some of its vaults do: a backup
+    /// password, or a vault that enrolled the key on its own.
+    VaultsOnly,
+    DoesNotOpen,
+}
+
+/// One identity of the source, its result, and its vaults.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum CheckedIdentity {
-    /// The passkey's key is a member of none of the source's identities, or
-    /// a backup password was checked.
-    NotAMember,
-    #[serde(rename_all = "camelCase")]
-    Member {
-        #[tsify(type = "string")]
-        identity_id: IdentityId,
-        words: IdentityWords,
-        /// The identity's name as sealed to the passkey's key.
-        name: ProviderVaultName,
-    },
+#[serde(rename_all = "camelCase")]
+pub struct IdentityCheck {
+    #[tsify(type = "string")]
+    pub identity_id: IdentityId,
+    pub words: IdentityWords,
+    /// The identity's name, once the checked passkey opened it.
+    pub name: ProviderVaultName,
+    pub outcome: IdentityCheckOutcome,
+    pub vaults: Vec<VaultCheck>,
 }
 
 /// What was checked.
@@ -86,13 +93,13 @@ pub enum CheckedCredential {
     BackupPassword,
 }
 
-/// What one passkey or backup password opens in one source.
+/// What one passkey or backup password opens in one source, identity by
+/// identity.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct CredentialCheckReport {
     pub credential: CheckedCredential,
-    pub identity: CheckedIdentity,
-    pub vaults: Vec<VaultCheck>,
+    pub identities: Vec<IdentityCheck>,
 }
 
 /// One passkey's re-derived app key against a source's identity logs and
@@ -105,24 +112,26 @@ pub struct PasskeyAccessCheck<'a> {
     pub vaults: Vec<CheckedVaultEvents>,
 }
 
-/// The vault keys an identity log wraps to the checked app key.
+/// The identity the checked app key is a member of, its sealed name, and
+/// the vault keys its log wraps to the app key.
 struct IdentityGrants {
-    identity: CheckedIdentity,
+    member: Option<(IdentityId, ProviderVaultName)>,
     keys: Vec<(StoreId, SymmetricKey)>,
 }
 
 impl PasskeyAccessCheck<'_> {
-    /// Check every vault of the source; a vault opens only when its key and
-    /// name actually decrypt.
+    /// Check every identity and vault of the source. An identity opens when
+    /// the key is its member; a vault opens only when its key and name
+    /// actually decrypt.
     pub fn report(self) -> VaultResult<CredentialCheckReport> {
         let grants = self.identity_grants()?;
-        let mut vaults = Vec::with_capacity(self.vaults.len());
-        for checked in self.vaults {
-            let source = CheckedVaultSource::load(&checked.store_id, checked.events)?;
+        let mut checked = Vec::with_capacity(self.vaults.len());
+        for vault in self.vaults {
+            let source = CheckedVaultSource::load(&vault.store_id, vault.events)?;
             let granted = grants
                 .keys
                 .iter()
-                .find(|(store_id, _)| store_id == &checked.store_id)
+                .find(|(store_id, _)| store_id == &vault.store_id)
                 .map(|(_, key)| key.clone());
             let secrets_key = match granted {
                 Some(key) => Some(key),
@@ -134,23 +143,25 @@ impl PasskeyAccessCheck<'_> {
                 },
                 None => VaultCheckOutcome::DoesNotOpen,
             };
-            vaults.push(VaultCheck::of(
-                &checked.store_id,
-                &checked.filed_under,
-                outcome,
-            ));
+            checked.push((vault.filed_under, VaultCheck::of(&vault.store_id, outcome)));
         }
+        let listed = self
+            .identity_logs
+            .iter()
+            .map(|log| log.identity_id.clone())
+            .collect::<Vec<_>>();
         Ok(CredentialCheckReport {
             credential: CheckedCredential::Passkey {
                 fingerprint: self.fingerprint,
             },
-            identity: grants.identity,
-            vaults,
+            identities: IdentityCheck::group(IdentityGrouping {
+                listed: &listed,
+                vaults: checked,
+                member: grants.member.as_ref(),
+            }),
         })
     }
 
-    /// The identity the app key is a member of, its sealed name, and the
-    /// current vault keys its log wraps to the app key.
     fn identity_grants(&self) -> VaultResult<IdentityGrants> {
         let app_id = self.app_key.app_id();
         for listed in &self.identity_logs {
@@ -178,16 +189,12 @@ impl PasskeyAccessCheck<'_> {
                 }
             }
             return Ok(IdentityGrants {
-                identity: CheckedIdentity::Member {
-                    identity_id: listed.identity_id.clone(),
-                    words: IdentityWords::of(&listed.identity_id),
-                    name,
-                },
+                member: Some((listed.identity_id.clone(), name)),
                 keys,
             });
         }
         Ok(IdentityGrants {
-            identity: CheckedIdentity::NotAMember,
+            member: None,
             keys: Vec::new(),
         })
     }
@@ -201,35 +208,96 @@ pub struct BackupPasswordAccessCheck<'a> {
 
 impl BackupPasswordAccessCheck<'_> {
     /// Try the password against each vault's password envelopes. A password
-    /// no envelope accepts does not open the vault; any other failure is
-    /// reported.
+    /// opens vaults, never an identity; any failure other than a wrong
+    /// password is reported.
     pub fn report(self) -> VaultResult<CredentialCheckReport> {
-        let mut vaults = Vec::with_capacity(self.vaults.len());
-        for checked in self.vaults {
-            let source = CheckedVaultSource::load(&checked.store_id, checked.events)?;
+        let mut checked = Vec::with_capacity(self.vaults.len());
+        for vault in self.vaults {
+            let source = CheckedVaultSource::load(&vault.store_id, vault.events)?;
             let outcome = source.password_outcome(self.password)?;
-            vaults.push(VaultCheck::of(
-                &checked.store_id,
-                &checked.filed_under,
-                outcome,
-            ));
+            checked.push((vault.filed_under, VaultCheck::of(&vault.store_id, outcome)));
         }
         Ok(CredentialCheckReport {
             credential: CheckedCredential::BackupPassword,
-            identity: CheckedIdentity::NotAMember,
-            vaults,
+            identities: IdentityCheck::group(IdentityGrouping {
+                listed: &[],
+                vaults: checked,
+                member: None,
+            }),
         })
     }
 }
 
 impl VaultCheck {
-    fn of(store_id: &StoreId, filed_under: &IdentityId, outcome: VaultCheckOutcome) -> Self {
+    fn of(store_id: &StoreId, outcome: VaultCheckOutcome) -> Self {
         Self {
             store_id: store_id.clone(),
             short_id: ProviderVaultSummary::short_id(store_id),
-            filed_under: IdentityWords::of(filed_under),
             outcome,
         }
+    }
+}
+
+/// The checked vaults with the identities filing them, and the identity the
+/// key is a member of.
+struct IdentityGrouping<'a> {
+    listed: &'a [IdentityId],
+    vaults: Vec<(IdentityId, VaultCheck)>,
+    member: Option<&'a (IdentityId, ProviderVaultName)>,
+}
+
+impl IdentityCheck {
+    /// One entry per identity, in the order the source lists them, each with
+    /// its own vaults.
+    fn group(grouping: IdentityGrouping<'_>) -> Vec<Self> {
+        let IdentityGrouping {
+            listed,
+            vaults,
+            member,
+        } = grouping;
+        let mut identities: Vec<Self> = Vec::new();
+        let order = listed
+            .iter()
+            .chain(vaults.iter().map(|(identity_id, _)| identity_id));
+        for identity_id in order {
+            if identities
+                .iter()
+                .any(|seen| &seen.identity_id == identity_id)
+            {
+                continue;
+            }
+            let own = vaults
+                .iter()
+                .filter(|(filed_under, _)| filed_under == identity_id)
+                .map(|(_, vault)| vault.clone())
+                .collect::<Vec<_>>();
+            let (outcome, name) = match member {
+                Some((member_id, name)) if member_id == identity_id => {
+                    (IdentityCheckOutcome::Opens, name.clone())
+                }
+                Some(_) | None => {
+                    let any_opens = own
+                        .iter()
+                        .any(|vault| matches!(vault.outcome, VaultCheckOutcome::Opens { .. }));
+                    (
+                        if any_opens {
+                            IdentityCheckOutcome::VaultsOnly
+                        } else {
+                            IdentityCheckOutcome::DoesNotOpen
+                        },
+                        ProviderVaultName::Unknown,
+                    )
+                }
+            };
+            identities.push(Self {
+                words: IdentityWords::of(identity_id),
+                identity_id: identity_id.clone(),
+                name,
+                outcome,
+                vaults: own,
+            });
+        }
+        identities
     }
 }
 
@@ -476,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn the_member_passkey_opens_its_identity_and_vault_by_decrypting_them() -> anyhow::Result<()> {
+    fn the_member_passkey_opens_its_identity_and_every_vault_it_keeps() -> anyhow::Result<()> {
         let named = NamedIdentity::new(false)?;
         let identity_id = named.identity_id();
         let report = named.check(&named.app_key)?;
@@ -488,35 +556,36 @@ mod tests {
             }
         );
         assert_eq!(
-            report.identity,
-            CheckedIdentity::Member {
+            report.identities,
+            [IdentityCheck {
                 words: IdentityWords::of(&identity_id),
                 identity_id: identity_id.clone(),
                 name: ProviderVaultName::named("Personal"),
-            }
-        );
-        assert_eq!(
-            report.vaults,
-            [VaultCheck {
-                short_id: ProviderVaultSummary::short_id(&named.store_id),
-                store_id: named.store_id.clone(),
-                filed_under: IdentityWords::of(&identity_id),
-                outcome: VaultCheckOutcome::Opens {
-                    name: ProviderVaultName::named("Family"),
-                },
+                outcome: IdentityCheckOutcome::Opens,
+                vaults: vec![VaultCheck {
+                    short_id: ProviderVaultSummary::short_id(&named.store_id),
+                    store_id: named.store_id.clone(),
+                    outcome: VaultCheckOutcome::Opens {
+                        name: ProviderVaultName::named("Family"),
+                    },
+                }],
             }]
         );
         Ok(())
     }
 
     #[test]
-    fn another_passkey_belongs_to_no_identity_and_opens_no_vault() -> anyhow::Result<()> {
+    fn another_passkey_opens_no_identity_and_no_vault() -> anyhow::Result<()> {
         let named = NamedIdentity::new(false)?;
         let report = named.check(&AppKey::generate()?)?;
 
-        assert_eq!(report.identity, CheckedIdentity::NotAMember);
+        let [identity] = report.identities.as_slice() else {
+            anyhow::bail!("the source lists one identity");
+        };
+        assert_eq!(identity.outcome, IdentityCheckOutcome::DoesNotOpen);
+        assert_eq!(identity.name, ProviderVaultName::Unknown);
         assert!(
-            report
+            identity
                 .vaults
                 .iter()
                 .all(|vault| vault.outcome == VaultCheckOutcome::DoesNotOpen)
@@ -525,30 +594,47 @@ mod tests {
     }
 
     #[test]
-    fn a_backup_password_opens_its_vault_and_a_wrong_one_does_not() -> anyhow::Result<()> {
+    fn a_backup_password_opens_its_vault_but_never_the_identity() -> anyhow::Result<()> {
         let with_password = NamedIdentity::new(true)?;
         let outcome = |report: CredentialCheckReport| {
             assert_eq!(report.credential, CheckedCredential::BackupPassword);
-            assert_eq!(report.identity, CheckedIdentity::NotAMember);
             report
-                .vaults
+                .identities
                 .into_iter()
-                .map(|vault| vault.outcome)
+                .map(|identity| {
+                    (
+                        identity.outcome,
+                        identity
+                            .vaults
+                            .into_iter()
+                            .map(|vault| vault.outcome)
+                            .collect::<Vec<_>>(),
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         assert_eq!(
             outcome(with_password.check_password(PASSWORD)?),
-            [VaultCheckOutcome::Opens {
-                name: ProviderVaultName::named("Family"),
-            }]
+            [(
+                IdentityCheckOutcome::VaultsOnly,
+                vec![VaultCheckOutcome::Opens {
+                    name: ProviderVaultName::named("Family"),
+                }]
+            )]
         );
         assert_eq!(
             outcome(with_password.check_password("not the backup password")?),
-            [VaultCheckOutcome::DoesNotOpen]
+            [(
+                IdentityCheckOutcome::DoesNotOpen,
+                vec![VaultCheckOutcome::DoesNotOpen]
+            )]
         );
         assert_eq!(
             outcome(NamedIdentity::new(false)?.check_password(PASSWORD)?),
-            [VaultCheckOutcome::NoBackupPassword]
+            [(
+                IdentityCheckOutcome::DoesNotOpen,
+                vec![VaultCheckOutcome::NoBackupPassword]
+            )]
         );
         Ok(())
     }

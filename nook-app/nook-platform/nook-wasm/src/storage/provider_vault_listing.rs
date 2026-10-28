@@ -73,11 +73,14 @@ impl DriveVaultListing<'_> {
 impl DriveVaultListing<'_> {
     /// The public control log of every identity folder under the root, read
     /// and verified; nothing in it is encrypted.
-    pub(crate) async fn identity_logs(&self) -> Result<Vec<ListedIdentityLog>, NookError> {
+    pub(crate) async fn identity_logs(
+        &self,
+        this_browser: Option<&AppId>,
+    ) -> Result<Vec<ListedIdentityLog>, NookError> {
         self.identity_log_events()
             .await?
             .into_iter()
-            .map(|events| Ok(events.read()?))
+            .map(|events| Ok(events.read(this_browser)?))
             .collect()
     }
 

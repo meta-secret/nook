@@ -16,7 +16,10 @@ import {
   type OAuthFileConfig,
 } from '$lib/auth/providers'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
-import { AccessCheckActions } from '$lib/vault/access-check'
+import {
+  AccessCheckActions,
+  AccessCheckTargetKind,
+} from '$lib/vault/access-check'
 import {
   ProviderVaultAccessActions,
   ProviderVaultAccessRequest,
@@ -59,6 +62,7 @@ function summary(
         devices: 2,
         newestDevice: { state: 'reported', at: Date.UTC(2026, 9, 27) },
         vaults: 3,
+        thisBrowser: false,
       },
     },
     created: { state: 'reported', at: Date.UTC(2024, 0, 2) },
@@ -148,9 +152,12 @@ describe('Google Drive provider setup', () => {
     expect(own?.textContent).toContain('Family')
     expect(own?.textContent).not.toContain('ownvault')
     expect(other?.textContent).toContain('othervau')
-    // Each row names the identity whose folder files the vault.
+    // Vaults are grouped under the identity whose folder files them.
+    const [ownIdentity, otherIdentity] =
+      view.getAllByTestId('provider-identity')
+    expect(ownIdentity?.dataset.standing).toBe('unchecked')
     expect(
-      own?.querySelector('[data-testid="provider-vault-identity"]')
+      ownIdentity?.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toBe(
       vault.t({
@@ -161,7 +168,7 @@ describe('Google Drive provider setup', () => {
     // An identity this browser does not hold is named by its three words,
     // and its public control log says how many devices and vaults it has.
     expect(
-      other?.querySelector('[data-testid="provider-vault-identity"]')
+      otherIdentity?.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toBe(
       vault.t({
@@ -187,7 +194,9 @@ describe('Google Drive provider setup', () => {
     )
     expect(facts).toHaveLength(3)
     expect(
-      own?.querySelectorAll('[data-testid="provider-vault-identity-log"]'),
+      ownIdentity?.querySelectorAll(
+        '[data-testid="provider-vault-identity-log"]',
+      ),
     ).toHaveLength(0)
     expect(own?.textContent).toContain(
       vault.t(I18N_KEYS.ProviderVaultsAccessSyncs),
@@ -250,12 +259,58 @@ describe('Google Drive provider setup', () => {
     ).toBe(false)
   })
 
-  test('a checked passkey verifies the vaults it opens and shows their names', async () => {
+  test('this browser opens an identity it is a device of without a check', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          {
+            ...summary('store_ownvault001', { state: 'syncs' }, []),
+            identity: {
+              identityId: 'idn_personalide',
+              shortId: 'personal',
+              name: { state: 'named', name: 'Personal' },
+              words: ['amber', 'falcon', 'tide'],
+              log: {
+                state: 'read',
+                devices: 1,
+                newestDevice: { state: 'unreported' },
+                vaults: 1,
+                thisBrowser: true,
+              },
+            },
+          },
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const check = vi.spyOn(AccessCheckActions.prototype, 'checkPasskey')
+    const { view, vault } = renderWizard(signedInDrive())
+
+    const identity = await view.findByTestId('provider-identity')
+    expect(identity.dataset.standing).toBe('thisBrowser')
+    expect(
+      view.getByTestId('provider-identity-standing').textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityThisBrowser))
+    // An identity that already opens needs no passkey hunt or join request.
+    expect(
+      view.queryAllByTestId('provider-identity-find-passkey'),
+    ).toHaveLength(0)
+    expect(view.queryAllByTestId('provider-identity-ask-to-join')).toHaveLength(
+      0,
+    )
+    expect(check).not.toHaveBeenCalled()
+  })
+
+  test('finding the passkey opens the whole identity and names its vaults', async () => {
     listVaults({
       root: 'found',
       listing: {
         vaults: [
           summary('store_othervault1', { state: 'unchecked' }, [
+            'importSeparately',
+          ]),
+          summary('store_othervault2', { state: 'unchecked' }, [
             'importSeparately',
           ]),
         ],
@@ -264,18 +319,30 @@ describe('Google Drive provider setup', () => {
     })
     const opens: CredentialCheckReport = {
       credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
-      identity: {
-        state: 'member',
-        identityId: 'idn_strangerabc',
-        words: ['ripple', 'canvas', 'orbit'],
-        name: { state: 'named', name: 'Personal' },
-      },
-      vaults: [
+      identities: [
         {
-          storeId: 'store_othervault1',
-          shortId: 'othervau',
-          filedUnder: ['ripple', 'canvas', 'orbit'],
-          outcome: { state: 'opens', name: { state: 'named', name: 'Family' } },
+          identityId: 'idn_strangerabc',
+          words: ['ripple', 'canvas', 'orbit'],
+          name: { state: 'named', name: 'Personal' },
+          outcome: 'opens',
+          vaults: [
+            {
+              storeId: 'store_othervault1',
+              shortId: 'othervau',
+              outcome: {
+                state: 'opens',
+                name: { state: 'named', name: 'Family' },
+              },
+            },
+            {
+              storeId: 'store_othervault2',
+              shortId: 'othervau',
+              outcome: {
+                state: 'opens',
+                name: { state: 'named', name: 'Work' },
+              },
+            },
+          ],
         },
       ],
     }
@@ -284,44 +351,53 @@ describe('Google Drive provider setup', () => {
       .mockResolvedValue(ok(opens))
     const { view, vault } = renderWizard(signedInDrive())
 
-    const row = await view.findByTestId('provider-vault-row')
-    expect(row.textContent).not.toContain('Family')
-    // Checking is a text link; the step keeps one action button.
+    const identity = await view.findByTestId('provider-identity')
+    expect(identity.dataset.standing).toBe('unchecked')
+    expect(identity.textContent).not.toContain('Family')
+    // The check sits on the identity, not on each vault.
+    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
+      1,
+    )
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
-    expect(view.queryAllByTestId('provider-vault-action-btn')).toHaveLength(0)
-    await fireEvent.click(view.getByTestId('provider-vault-check-passkey'))
+    await fireEvent.click(view.getByTestId('provider-identity-find-passkey'))
 
-    await vi.waitFor(() => expect(row.textContent).toContain('Family'))
+    await vi.waitFor(() =>
+      expect(identity.dataset.standing).toBe('openedByPasskey'),
+    )
     expect(check).toHaveBeenCalledWith({
-      kind: 'googleDrive',
-      accessToken: 'drive-token',
+      kind: AccessCheckTargetKind.Source,
+      source: { kind: 'googleDrive', accessToken: 'drive-token' },
     })
+    expect(identity.textContent).toContain('Family')
+    expect(identity.textContent).toContain('Work')
     expect(
-      row.querySelector('[data-testid="provider-vault-identity"]')?.textContent,
+      identity.querySelector('[data-testid="provider-vault-identity"]')
+        ?.textContent,
     ).toBe(
       vault.t({
         key: I18N_KEYS.ProviderVaultsFiledUnder,
         replacements: { identity: 'Personal' },
       }),
     )
-    const verification = view.getByTestId('provider-vault-verification')
-    expect(verification.dataset.verified).toBe('true')
-    expect(verification.textContent?.trim()).toBe(
+    expect(
+      view.getByTestId('provider-identity-standing').textContent?.trim(),
+    ).toBe(
       vault.t({
-        key: I18N_KEYS.AccessCheckVaultVerified,
+        key: I18N_KEYS.AccessCheckIdentityOpenedBy,
         replacements: { id: 'a1b2c3d4' },
       }),
     )
-    // Importing a vault the checked passkey opens is recovering it with it.
     expect(
-      view.getByTestId('provider-vault-import').closest('label')?.textContent,
-    ).toContain(vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey))
-    expect(
-      view.getByTestId('provider-vault-check-passkey').textContent,
-    ).toContain(vault.t(I18N_KEYS.AccessCheckCheckAnotherPasskey))
+      view.queryAllByTestId('provider-identity-find-passkey'),
+    ).toHaveLength(0)
+    // Importing a vault of an opened identity is recovering it with the passkey.
+    const [first] = view.getAllByTestId('provider-vault-import')
+    expect(first?.closest('label')?.textContent).toContain(
+      vault.t(I18N_KEYS.AccessCheckRecoverWithPasskey),
+    )
   })
 
-  test('a passkey that opens nothing marks the vault unverified', async () => {
+  test('an identity no passkey opens offers the checker again and a join request', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -331,13 +407,19 @@ describe('Google Drive provider setup', () => {
     })
     const none: CredentialCheckReport = {
       credential: { kind: 'passkey', fingerprint: 'passkey_ffffffffffffffff' },
-      identity: { state: 'notAMember' },
-      vaults: [
+      identities: [
         {
-          storeId: 'store_othervault1',
-          shortId: 'othervau',
-          filedUnder: ['ripple', 'canvas', 'orbit'],
-          outcome: { state: 'doesNotOpen' },
+          identityId: 'idn_strangerabc',
+          words: ['ripple', 'canvas', 'orbit'],
+          name: { state: 'unknown' },
+          outcome: 'doesNotOpen',
+          vaults: [
+            {
+              storeId: 'store_othervault1',
+              shortId: 'othervau',
+              outcome: { state: 'doesNotOpen' },
+            },
+          ],
         },
       ],
     }
@@ -347,17 +429,100 @@ describe('Google Drive provider setup', () => {
     const { view, vault } = renderWizard(signedInDrive())
 
     await fireEvent.click(
-      await view.findByTestId('provider-vault-check-passkey'),
+      await view.findByTestId('provider-identity-find-passkey'),
     )
 
-    const verification = await view.findByTestId('provider-vault-verification')
-    expect(verification.dataset.verified).toBe('false')
-    expect(verification.textContent?.trim()).toBe(
-      vault.t(I18N_KEYS.AccessCheckVaultNotVerified),
+    const identity = view.getByTestId('provider-identity')
+    await vi.waitFor(() => expect(identity.dataset.standing).toBe('notOpened'))
+    expect(
+      view.getByTestId('provider-identity-standing').textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityNotOpened))
+    expect(view.getAllByTestId('provider-identity-find-passkey')).toHaveLength(
+      1,
     )
-    expect(view.getByTestId('provider-vault-row').textContent).toContain(
-      'othervau',
+    // No vault here can be requested, so joining needs a code from a device.
+    await fireEvent.click(view.getByTestId('provider-identity-ask-to-join'))
+    expect(
+      view.getByTestId('provider-identity-join-help').textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.AccessCheckJoinWithCode))
+  })
+
+  test('a backup password check holds the step until it is checked or cancelled', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          summary('store_othervault1', { state: 'backupPassword' }, [
+            'importSeparately',
+          ]),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const passwordOpens: CredentialCheckReport = {
+      credential: { kind: 'backupPassword' },
+      identities: [
+        {
+          identityId: 'idn_strangerabc',
+          words: ['ripple', 'canvas', 'orbit'],
+          name: { state: 'unknown' },
+          outcome: 'vaultsOnly',
+          vaults: [
+            {
+              storeId: 'store_othervault1',
+              shortId: 'othervau',
+              outcome: {
+                state: 'opens',
+                name: { state: 'named', name: 'Family' },
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const check = vi
+      .spyOn(AccessCheckActions.prototype, 'checkBackupPassword')
+      .mockResolvedValue(ok(passwordOpens))
+    const { view, vault } = renderWizard(signedInDrive())
+
+    await fireEvent.click(
+      await view.findByTestId('provider-vault-check-password'),
     )
+    // While the form is open its Check is the only live action.
+    expect(
+      view.getByTestId('connect-provider-btn').hasAttribute('disabled'),
+    ).toBe(true)
+    const submit = view.getByTestId('provider-vault-password-check-btn')
+    expect(submit.hasAttribute('disabled')).toBe(true)
+    await fireEvent.input(
+      view.getByTestId('provider-vault-password-check-input'),
+      { target: { value: 'correct horse battery staple' } },
+    )
+    await fireEvent.click(submit)
+
+    await vi.waitFor(() =>
+      expect(
+        view.queryAllByTestId('provider-vault-password-check'),
+      ).toHaveLength(0),
+    )
+    expect(check).toHaveBeenCalledWith({
+      target: {
+        kind: AccessCheckTargetKind.Source,
+        source: { kind: 'googleDrive', accessToken: 'drive-token' },
+      },
+      password: 'correct horse battery staple',
+    })
+    const row = view.getByTestId('provider-vault-row')
+    expect(row.textContent).toContain('Family')
+    expect(
+      view.getByTestId('provider-vault-verification').textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.AccessCheckVaultVerifiedPassword))
+    expect(
+      view.getByTestId('provider-vault-import').closest('label')?.textContent,
+    ).toContain(vault.t(I18N_KEYS.AccessCheckRecoverWithPassword))
+    expect(
+      view.getByTestId('connect-provider-btn').hasAttribute('disabled'),
+    ).toBe(false)
   })
 
   test('imports another vault through the existing import flow', async () => {

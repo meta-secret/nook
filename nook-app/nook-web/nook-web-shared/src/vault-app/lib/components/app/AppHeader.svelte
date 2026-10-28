@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { VaultWorkspaceActions } from "$lib/vault/ui";
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     BookOpen,
     ShieldCheck,
@@ -7,24 +8,24 @@
     Lock,
     Moon,
     Sun,
-  } from '@lucide/svelte'
+  } from "@lucide/svelte";
   import {
     configured_vault_application_is_sentinel,
     simple_vault_app_url,
-  } from '$app-wasm'
-  import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
-  import NookLogo from '$lib/components/NookLogo.svelte'
-  import BackButton from '$lib/components/workspace/BackButton.svelte'
-  import { LogoSize } from '$lib/components/nook-logo-state'
-  import { Button } from '$lib/components/ui/button'
-  import { ColorMode } from '$lib/app/theme'
-  import type { VaultState } from '$lib/vault.svelte'
-  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
+  } from "$app-wasm";
+  import HeaderLanguageSelect from "$lib/components/HeaderLanguageSelect.svelte";
+  import NookLogo from "$lib/components/NookLogo.svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
+  import { LogoSize } from "$lib/components/nook-logo-state";
+  import { Button } from "$lib/components/ui/button";
+  import { ColorMode } from "$lib/app/theme";
+  import type { VaultState } from "$lib/vault.svelte";
+  import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 
-  const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
+  const IS_SENTINEL_APP = configured_vault_application_is_sentinel();
   const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
-    import.meta.env.VITE_SIMPLE_APP_URL || '',
-  )
+    import.meta.env.VITE_SIMPLE_APP_URL || "",
+  );
 
   let {
     vault,
@@ -37,66 +38,66 @@
     onNavigateHome,
     onToggleColorMode,
   }: {
-    vault: VaultState
-    colorMode: ColorMode
-    shellWidth: string
-    legalPageOpen: boolean
-    logsPage: boolean
-    extensionConnectRoute: boolean
-    workspaceAvailable: boolean
-    onNavigateHome: () => void
-    onToggleColorMode: () => void
-  } = $props()
+    vault: VaultState;
+    colorMode: ColorMode;
+    shellWidth: string;
+    legalPageOpen: boolean;
+    logsPage: boolean;
+    extensionConnectRoute: boolean;
+    workspaceAvailable: boolean;
+    onNavigateHome: () => void;
+    onToggleColorMode: () => void;
+  } = $props();
 
   const authenticatedSessionControlsVisible = $derived(
     vault.isAuthenticated &&
       !vault.helpOpen &&
       !vault.accessCheckOpen &&
       !legalPageOpen,
-  )
+  );
   const identitiesLinkVisible = $derived(
     authenticatedSessionControlsVisible &&
       workspaceAvailable &&
       !logsPage &&
       !extensionConnectRoute,
-  )
-  let mobileToolsOpen = $state(false)
-  let mobileToolsRoot = $state<HTMLDivElement>()
-  let mobileToolsTrigger = $state<HTMLButtonElement>()
+  );
+  let mobileToolsOpen = $state(false);
+  let mobileToolsRoot = $state<HTMLDivElement>();
+  let mobileToolsTrigger = $state<HTMLButtonElement>();
 
   function closeMobileTools(restoreFocus = false): void {
-    mobileToolsOpen = false
-    if (restoreFocus) mobileToolsTrigger?.focus()
+    mobileToolsOpen = false;
+    if (restoreFocus) mobileToolsTrigger?.focus();
   }
 
   function handleMobileToolsDocumentClick(event: MouseEvent): void {
-    const target = event.target
+    const target = event.target;
     if (
       !mobileToolsRoot ||
       !(target instanceof Node) ||
       !mobileToolsRoot.contains(target)
     )
-      closeMobileTools()
+      closeMobileTools();
   }
 
   function handleMobileToolsDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') closeMobileTools(true)
+    if (event.key === "Escape") closeMobileTools(true);
   }
 
   $effect(() => {
-    if (!mobileToolsOpen) return
-    document.addEventListener('click', handleMobileToolsDocumentClick)
-    document.addEventListener('keydown', handleMobileToolsDocumentKeydown)
+    if (!mobileToolsOpen) return;
+    document.addEventListener("click", handleMobileToolsDocumentClick);
+    document.addEventListener("keydown", handleMobileToolsDocumentKeydown);
     return () => {
-      document.removeEventListener('click', handleMobileToolsDocumentClick)
-      document.removeEventListener('keydown', handleMobileToolsDocumentKeydown)
-    }
-  })
+      document.removeEventListener("click", handleMobileToolsDocumentClick);
+      document.removeEventListener("keydown", handleMobileToolsDocumentKeydown);
+    };
+  });
 
   function navigateToSiblingApp(event: MouseEvent) {
-    event.preventDefault()
-    vault.lockVault()
-    window.location.assign(SIMPLE_VAULT_APP_URL)
+    event.preventDefault();
+    vault.lockVault();
+    window.location.assign(SIMPLE_VAULT_APP_URL);
   }
 </script>
 
@@ -172,7 +173,7 @@
             aria-expanded={mobileToolsOpen}
             aria-controls="header-mobile-tools"
             onclick={() => {
-              mobileToolsOpen = !mobileToolsOpen
+              mobileToolsOpen = !mobileToolsOpen;
             }}
           >
             <EllipsisVertical class="size-4" />
@@ -197,8 +198,8 @@
                 class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 data-testid="header-mobile-theme-toggle-btn"
                 onclick={() => {
-                  closeMobileTools()
-                  onToggleColorMode()
+                  closeMobileTools();
+                  onToggleColorMode();
                 }}
               >
                 {#if colorMode === ColorMode.Dark}
@@ -214,8 +215,8 @@
                 class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 data-testid="header-mobile-access-check-btn"
                 onclick={() => {
-                  closeMobileTools()
-                  vault.openAccessCheck()
+                  closeMobileTools();
+                  new VaultWorkspaceActions(vault).openAccessCheck();
                 }}
               >
                 <ShieldCheck class="size-4 shrink-0" />
@@ -226,8 +227,8 @@
                 class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 data-testid="header-mobile-help-open-btn"
                 onclick={() => {
-                  closeMobileTools()
-                  vault.openHelp()
+                  closeMobileTools();
+                  vault.openHelp();
                 }}
               >
                 <BookOpen class="size-4 shrink-0" />
@@ -239,8 +240,8 @@
                 data-testid="header-mobile-lock-vault-btn"
                 disabled={vault.isVerifying || vault.isInitializing}
                 onclick={() => {
-                  closeMobileTools()
-                  vault.lockIdentity()
+                  closeMobileTools();
+                  vault.lockIdentity();
                 }}
               >
                 <Lock class="size-4 shrink-0" />
@@ -253,8 +254,8 @@
 
       <div
         class={authenticatedSessionControlsVisible
-          ? 'hidden sm:block'
-          : 'block'}
+          ? "hidden sm:block"
+          : "block"}
       >
         <HeaderLanguageSelect {vault} />
       </div>
@@ -312,7 +313,7 @@
             d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.86 8.36 6.84 9.72.5.09.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.93.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.32 9.32 0 0 1 12 6.98c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.13 10.13 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
           />
         </svg>
-        <span class={vault.isAuthenticated ? 'sr-only' : 'hidden sm:inline'}
+        <span class={vault.isAuthenticated ? "sr-only" : "hidden sm:inline"}
           >GitHub</span
         >
       </a>
@@ -333,7 +334,7 @@
         <BackButton
           label={vault.t(I18N_KEYS.AppBack)}
           testId="access-check-header-close"
-          onBack={() => vault.closeAccessCheck()}
+          onBack={() => new VaultWorkspaceActions(vault).closeAccessCheck()}
         />
       {:else}
         <Button
@@ -345,10 +346,12 @@
             : ''}"
           aria-label={vault.t(I18N_KEYS.AccessCheckOpen)}
           data-testid="access-check-open-btn"
-          onclick={() => vault.openAccessCheck()}
+          onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
         >
           <ShieldCheck class="size-4" />
-          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AccessCheckOpen)}</span>
+          <span class="hidden sm:inline"
+            >{vault.t(I18N_KEYS.AccessCheckOpen)}</span
+          >
         </Button>
         <Button
           type="button"
