@@ -55,6 +55,8 @@ export type IdentityMemberView = {
 
 export type IdentityDirectoryEntry = {
   readonly identityId: string;
+  /** Three words derived from the identity id, for recognition. */
+  readonly words: readonly string[];
   readonly label: string;
   readonly localAccess: NookIdentityLocalAccessKind;
   readonly members: readonly IdentityMemberView[];
@@ -395,6 +397,7 @@ class NativeDirectoryIdentity {
       if (vaults.isErr()) return err(vaults.error);
       const view: IdentityDirectoryEntry = {
         identityId: identity.identityId,
+        words: identity.words(),
         label: identity.label,
         localAccess: identity.localAccess,
         members: members.value,

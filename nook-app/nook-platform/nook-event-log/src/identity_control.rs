@@ -13,7 +13,7 @@ mod wire;
 
 pub use builder::{
     IdentityApprovalRequest, IdentityEventSigning, IdentityGenesisRequest, IdentityInviteIssue,
-    IdentityInviteJoin, IdentityVaultRegistration, OpenedVaultDek,
+    IdentityInviteJoin, IdentityNaming, IdentityVaultRegistration, OpenedVaultDek,
 };
 pub use graph::{
     IdentityControlInsertion, IdentityControlLog, IdentityControlRejection,
@@ -26,7 +26,8 @@ pub use projection::{
 pub use wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
     IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekGrant, MemberVaultDek, ProviderMountId,
+    IdentityProviderMount, IdentityVaultDekGrant, MemberSealedName, MemberVaultDek,
+    ProviderMountId,
 };
 
 #[cfg(test)]

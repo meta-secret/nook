@@ -1,5 +1,6 @@
 import type {
   NookGoogleDriveVaultListing,
+  ProviderNameRevealOutcome,
   ProviderVaultAction,
   ProviderVaultSummary,
 } from "$app-wasm";
@@ -72,3 +73,20 @@ export type DriveVaultChoice =
       readonly action: ProviderVaultAction;
       readonly summary: ProviderVaultSummary;
     };
+
+export enum NameRevealKind {
+  Sealed = "sealed",
+  Asking = "asking",
+  Revealed = "revealed",
+  NotAMember = "notAMember",
+}
+
+/** Whether a passkey opened the listed names for this page. */
+export type NameReveal =
+  | { readonly kind: NameRevealKind.Sealed }
+  | { readonly kind: NameRevealKind.Asking }
+  | {
+      readonly kind: NameRevealKind.Revealed;
+      readonly names: Extract<ProviderNameRevealOutcome, { state: "revealed" }>;
+    }
+  | { readonly kind: NameRevealKind.NotAMember };

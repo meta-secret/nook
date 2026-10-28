@@ -2,28 +2,39 @@
 The vaults a provider already holds, as its listing tells without
 decryption: a short id, how this device can open the vault, when its files
 were created and last written, how many events it holds, and the identity
-whose folder files it. A vault this browser keeps a name for is listed by it;
-any other vault's name is sealed under its key, so it shows its short id.
-Times a transport does not report are left out.
+whose folder files it, named by three words derived from its id. What that
+identity's public control log tells (devices, when the newest joined, how many
+vaults it keeps) needs no key. A vault this browser keeps a name for is
+listed by it; any other vault's name is sealed under its key until a passkey
+opens it for this page, else it shows its short id. Times a transport does
+not report are left out.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import { FolderKey } from '@lucide/svelte'
   import type {
+    ProviderIdentityLog,
     ProviderVaultAccess,
     ProviderVaultSummary,
     ProviderVaultTime,
   } from '$app-wasm'
   import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    NameRevealKind,
+    type NameReveal,
+  } from '$lib/components/provider-vaults/drive-vault-inventory'
 
   let {
     vault,
     vaults,
     action,
+    reveal = { kind: NameRevealKind.Sealed },
   }: {
     vault: VaultState
     vaults: readonly ProviderVaultSummary[]
+    /** Whether a passkey opened the listed names for this page. */
+    reveal?: NameReveal
     /** What the user can do with one listed vault. */
     action?: Snippet<[ProviderVaultSummary]>
   } = $props()
@@ -58,6 +69,12 @@ Times a transport does not report are left out.
       case 'unknown':
         break
     }
+    if (reveal.kind === NameRevealKind.Revealed) {
+      const opened = reveal.names.vaults.find(
+        (name) => name.storeId === summary.storeId,
+      )
+      if (opened && opened.name.state === 'named') return opened.name.name
+    }
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.FirstRunRestoreVaultItem,
       replacements: { id: summary.shortId },
@@ -66,9 +83,15 @@ Times a transport does not report are left out.
   }
 
   /** The identity whose folder files the vault: its label when this browser
-   * holds it, else its short id. */
+   * holds it or a passkey opened it, else its three words. */
   function identityLine(summary: ProviderVaultSummary): string {
-    let identity = summary.identity.shortId
+    let identity = summary.identity.words.join('-')
+    if (
+      reveal.kind === NameRevealKind.Revealed &&
+      reveal.names.identityId === summary.identity.identityId &&
+      reveal.names.identityName.state === 'named'
+    )
+      identity = reveal.names.identityName.name
     switch (summary.identity.name.state) {
       case 'named':
         identity = summary.identity.name.name
@@ -127,6 +150,31 @@ Times a transport does not report are left out.
           vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
           vault.t(I18N_KEYS.ProviderVaultsHintLocked),
         ]
+    }
+  }
+
+  /** What the filing identity's public control log tells, where it was read. */
+  function identityLogLines(log: ProviderIdentityLog): readonly string[] {
+    switch (log.state) {
+      case 'absent':
+        return []
+      case 'read': {
+        const devices: Parameters<typeof vault.t>[0] = {
+          key: I18N_KEYS.ProviderVaultsDevices,
+          replacements: { count: String(log.devices) },
+        }
+        const newest: TimeLineRequest = {
+          key: I18N_KEYS.ProviderVaultsNewestDevice,
+          time: log.newestDevice,
+        }
+        const vaults: Parameters<typeof vault.t>[0] = {
+          key: I18N_KEYS.ProviderVaultsIdentityVaults,
+          replacements: { count: String(log.vaults) },
+        }
+        return [vault.t(devices), timeLine(newest), vault.t(vaults)].filter(
+          (line) => line.length > 0,
+        )
+      }
     }
   }
 
@@ -189,6 +237,9 @@ Times a transport does not report are left out.
             data-testid="provider-vault-identity"
             title={summary.identity.identityId}>{identityLine(summary)}</span
           >
+          {#each identityLogLines(summary.identity.log) as line (line)}
+            <span data-testid="provider-vault-identity-log">{line}</span>
+          {/each}
           {#if created}<span>{created}</span>{/if}
           {#if active}<span>{active}</span>{/if}
           <span>{eventLine(summary)}</span>

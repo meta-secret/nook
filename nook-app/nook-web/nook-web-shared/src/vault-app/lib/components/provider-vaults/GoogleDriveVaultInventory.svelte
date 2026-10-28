@@ -36,11 +36,13 @@ the chosen one, so two actions are never live at once.
     DriveVaultInventoryKind,
     EmptyVaultConfirmationKind,
     MergeConfirmationKind,
+    NameRevealKind,
     type DriveVaultChoice,
     type DriveVaultInventory,
     type EmptyVaultConfirmation,
     type EmptyVaultConfirmationRequest,
     type MergeConfirmation,
+    type NameReveal,
   } from '$lib/components/provider-vaults/drive-vault-inventory'
 
   let {
@@ -57,8 +59,9 @@ the chosen one, so two actions are never live at once.
     busy: boolean
     onImport: (storeId: string) => void | Promise<void>
     onReplace: (swap: EmptyVaultSwap) => void | Promise<void>
-    /** The step's Connect & sync button, shown while that is the choice. */
-    connectButton: Snippet
+    /** The step's Connect & sync button, shown while that is the choice;
+     * true holds it disabled while the listing loads or an action runs. */
+    connectButton: Snippet<[boolean]>
   } = $props()
 
   let choice = $state<DriveVaultChoice>({ kind: DriveVaultChoiceKind.Connect })
@@ -71,6 +74,7 @@ the chosen one, so two actions are never live at once.
   })
   let merge = $state<MergeConfirmation>({ kind: MergeConfirmationKind.Closed })
   let mergePassword = $state('')
+  let reveal = $state<NameReveal>({ kind: NameRevealKind.Sealed })
   let working = $state(false)
   const disabled = $derived(busy || working)
   /** A replace or merge confirmation carries its own confirm button. */
@@ -91,6 +95,7 @@ the chosen one, so two actions are never live at once.
     choice = { kind: DriveVaultChoiceKind.Connect }
     replacement = { kind: EmptyVaultConfirmationKind.Closed }
     merge = { kind: MergeConfirmationKind.Closed }
+    reveal = { kind: NameRevealKind.Sealed }
     const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
       new ProviderVaultActions(vault).localVaultOccupancy(),
     )
@@ -108,6 +113,25 @@ the chosen one, so two actions are never live at once.
     // Only a new sign-in lists again, not the state the listing reads.
     untrack(() => void load(token))
   })
+
+  /** One passkey tap opens the listed names for this page only. */
+  async function revealNames(): Promise<void> {
+    reveal = { kind: NameRevealKind.Asking }
+    const revealed = await new VaultOAuthActions(vault).revealGoogleDriveNames()
+    if (revealed.isErr()) {
+      reveal = { kind: NameRevealKind.Sealed }
+      vault.errorMsg = vault.t(revealed.error.translationKey)
+      return
+    }
+    switch (revealed.value.state) {
+      case 'revealed':
+        reveal = { kind: NameRevealKind.Revealed, names: revealed.value }
+        return
+      case 'notAMember':
+        reveal = { kind: NameRevealKind.NotAMember }
+        return
+    }
+  }
 
   function confirmReplacement(request: EmptyVaultConfirmationRequest): void {
     merge = { kind: MergeConfirmationKind.Closed }
@@ -269,7 +293,38 @@ the chosen one, so two actions are never live at once.
       <p class="nk-subpanel-head">
         {vault.t(I18N_KEYS.ProviderVaultsListTitle)}
       </p>
-      <ProviderVaultList {vault} vaults={listing.vaults}>
+      {#if reveal.kind === NameRevealKind.Revealed}
+        <p
+          class="text-[11px] text-pretty text-muted-foreground"
+          role="status"
+          data-testid="provider-vault-names-shown"
+        >
+          {vault.t(I18N_KEYS.ProviderVaultsNamesShown)}
+        </p>
+      {:else if reveal.kind === NameRevealKind.NotAMember}
+        <p
+          class="text-[11px] text-pretty text-muted-foreground"
+          role="status"
+          data-testid="provider-vault-names-not-a-member"
+        >
+          {vault.t(I18N_KEYS.ProviderVaultsNamesNotAMember)}
+        </p>
+      {:else if listing.vaults.some((summary) => summary.name.state === 'unknown')}
+        <!-- A text link, not a button: it reveals names and commits nothing,
+             so the step keeps one action button. -->
+        <button
+          type="button"
+          class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+          data-testid="provider-vault-show-names"
+          disabled={disabled || reveal.kind === NameRevealKind.Asking}
+          onclick={() => void revealNames()}
+        >
+          {reveal.kind === NameRevealKind.Asking
+            ? vault.t(I18N_KEYS.ProviderVaultsShowingNames)
+            : vault.t(I18N_KEYS.ProviderVaultsShowNames)}
+        </button>
+      {/if}
+      <ProviderVaultList {vault} vaults={listing.vaults} {reveal}>
         {#snippet action(summary: ProviderVaultSummary)}
           <div class="grid gap-1.5" role="radiogroup">
             {#each summary.actions as action (action)}
@@ -446,5 +501,9 @@ the chosen one, so two actions are never live at once.
     </Button>
   </div>
 {:else}
-  {@render connectButton()}
+  {@render connectButton(
+    inventory.kind === DriveVaultInventoryKind.Loading ||
+      working ||
+      reveal.kind === NameRevealKind.Asking,
+  )}
 {/if}

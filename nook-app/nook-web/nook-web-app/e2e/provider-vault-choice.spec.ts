@@ -113,6 +113,16 @@ test.describe('vaults another identity keeps in the Nook folder', () => {
     )
     await expect(row.getByTestId('provider-vault-use-instead')).toHaveCount(0)
     await expect(row.getByTestId('provider-vault-import')).toBeVisible()
+    // A's identity is named by three words, and its public control log on
+    // Drive says how many devices and vaults it has; nothing is decrypted.
+    await expect(row.getByTestId('provider-vault-identity')).toHaveText(
+      /^Identity [a-z]+-[a-z]+-[a-z]+$/,
+    )
+    await expect(row.getByTestId('provider-vault-identity-log')).toContainText([
+      enLocale.provider_vaults.devices.replace('{count}', '1'),
+      /^Newest device added /,
+      enLocale.provider_vaults.identity_vaults.replace('{count}', '1'),
+    ])
 
     await row.getByTestId('provider-vault-merge').click()
     // Choosing an action swaps Connect & sync for that action's button.

@@ -7,12 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nook_auth2::{AppId, IdentityId, IsoTimestamp, StoreId};
+use nook_auth2::{AgeArmoredCiphertext, AppId, IdentityId, IsoTimestamp, StoreId};
 
 use super::graph::IdentityControlLog;
 use super::wire::{
-    IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, MemberVaultDek,
-    ProviderMountId,
+    IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, MemberSealedName,
+    MemberVaultDek, ProviderMountId,
 };
 use crate::{EventError, EventId, EventResult};
 
@@ -84,6 +84,9 @@ pub struct IdentityControlState {
     /// Vaults deleted from the identity. Each device drops its local copy.
     pub removed_vaults: Vec<StoreId>,
     pub mounts: Vec<IdentityProviderMount>,
+    /// The identity's latest name, sealed to each member that still holds
+    /// keys; empty when no member named it.
+    pub sealed_name: Vec<MemberSealedName>,
     pub heads: Vec<EventId>,
 }
 
@@ -105,6 +108,7 @@ struct ProjectionAccumulator {
     /// apply the same events.
     removed_vaults: BTreeSet<StoreId>,
     mounts: BTreeMap<ProviderMountId, IdentityProviderMount>,
+    sealed_name: Vec<MemberSealedName>,
 }
 
 #[derive(Clone, Copy)]
@@ -209,6 +213,9 @@ impl ProjectionAccumulator {
             IdentityControlOperation::ProviderUnmounted { mount_id } => {
                 self.mounts.remove(mount_id);
             }
+            IdentityControlOperation::IdentityNamed { recipients } => {
+                self.sealed_name.clone_from(recipients);
+            }
         }
     }
 }
@@ -296,8 +303,22 @@ impl IdentityControlState {
             vaults,
             removed_vaults: removed_vaults.into_iter().collect(),
             mounts: accumulator.mounts.into_values().collect(),
+            sealed_name: accumulator
+                .sealed_name
+                .into_iter()
+                .filter(|sealed| active.contains_key(&sealed.app_id))
+                .collect(),
             heads: log.applicable_heads(),
         })
+    }
+
+    /// The identity's name as sealed to one member, where a member named it.
+    #[must_use]
+    pub fn sealed_name_for(&self, app_id: &AppId) -> Option<&AgeArmoredCiphertext> {
+        self.sealed_name
+            .iter()
+            .find(|sealed| &sealed.app_id == app_id)
+            .map(|sealed| &sealed.name_ciphertext)
     }
 
     #[must_use]

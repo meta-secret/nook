@@ -14,7 +14,8 @@ use super::graph::IdentityControlLog;
 use super::projection::IdentityControlState;
 use super::wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
-    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant, MemberVaultDek,
+    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant,
+    MemberSealedName, MemberVaultDek,
 };
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventId, EventResult};
@@ -45,6 +46,13 @@ pub struct IdentityApprovalRequest<'a> {
     pub app_id: &'a AppId,
     /// Every vault the identity owns, opened by the approver at its current epoch.
     pub vaults: &'a [OpenedVaultDek<'a>],
+}
+
+/// Named values required to name an identity.
+pub struct IdentityNaming<'a> {
+    pub name: &'a str,
+    /// A member joining in the same event, who must be able to read it too.
+    pub joining: Option<&'a IdentityMemberKeys>,
 }
 
 /// Named values required to register a vault with its owning identity.
@@ -246,6 +254,42 @@ impl IdentityControlState {
         })
     }
 
+    /// Name the identity: seal the name to every active member, and to a
+    /// member joining in the same event. A blank name is refused.
+    pub fn naming_operation(
+        &self,
+        naming: &IdentityNaming<'_>,
+    ) -> EventResult<IdentityControlOperation> {
+        let name = naming.name.trim();
+        if name.is_empty() {
+            return Err(EventError::IdentityControlInvalid(
+                "an identity name must not be blank".to_owned(),
+            ));
+        }
+        let mut recipients = Vec::with_capacity(self.members.len() + 1);
+        for keys in self
+            .members
+            .iter()
+            .map(|member| &member.keys)
+            .chain(naming.joining)
+        {
+            if recipients
+                .iter()
+                .any(|sealed: &MemberSealedName| sealed.app_id == keys.app_id)
+            {
+                continue;
+            }
+            recipients.push(MemberSealedName {
+                app_id: keys.app_id.clone(),
+                name_ciphertext: keys
+                    .encryption_public_key
+                    .seal_bytes(name.as_bytes())
+                    .map_err(|error| EventError::IdentityControlInvalid(error.to_string()))?,
+            });
+        }
+        Ok(IdentityControlOperation::IdentityNamed { recipients })
+    }
+
     fn recipients(&self, keys: &VaultKeys) -> EventResult<Vec<MemberVaultDek>> {
         self.members
             .iter()
@@ -296,6 +340,73 @@ mod tests {
     #![allow(clippy::too_many_lines)]
 
     use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn the_identity_name_is_sealed_to_every_member_including_one_joining() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let founder = fixture.founder();
+        assert!(fixture.state()?.sealed_name.is_empty());
+        let blank = IdentityNaming {
+            name: "  ",
+            joining: None,
+        };
+        assert!(fixture.state()?.naming_operation(&blank).is_err());
+
+        let naming = fixture.state()?.naming_operation(&IdentityNaming {
+            name: " Personal ",
+            joining: None,
+        })?;
+        fixture.append(&founder, vec![naming])?;
+        let state = fixture.state()?;
+        let sealed = state
+            .sealed_name_for(founder.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the founder must hold the name"))?;
+        assert_eq!(founder.app.open_utf8(sealed)?, "Personal");
+        assert!(!sealed.as_str().contains("Personal"));
+
+        // Approval re-seals the name so the joining member can read it too.
+        let joiner = Installation::new()?;
+        fixture.request_join(&joiner)?;
+        let state = fixture.state()?;
+        let joining = state
+            .pending_join(joiner.app.app_id())
+            .map(|request| request.member.clone())
+            .ok_or_else(|| anyhow::anyhow!("the join must be pending"))?;
+        let approval = state.approval_operation(&IdentityApprovalRequest {
+            app_id: joiner.app.app_id(),
+            vaults: &[],
+        })?;
+        let renaming = state.naming_operation(&IdentityNaming {
+            name: "Family",
+            joining: Some(&joining),
+        })?;
+        fixture.append(&founder, vec![approval, renaming])?;
+        let state = fixture.state()?;
+        for member in [&founder, &joiner] {
+            let sealed = state
+                .sealed_name_for(member.app.app_id())
+                .ok_or_else(|| anyhow::anyhow!("every member must hold the name"))?;
+            assert_eq!(member.app.open_utf8(sealed)?, "Family");
+        }
+
+        // A stranger cannot rename the identity.
+        let stranger = Installation::new()?;
+        let forged = state.naming_operation(&IdentityNaming {
+            name: "Stolen",
+            joining: Some(&stranger.keys("")),
+        })?;
+        let (_, status) = fixture.append(&stranger, vec![forged])?;
+        assert!(matches!(
+            status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        let state = fixture.state()?;
+        let sealed = state
+            .sealed_name_for(founder.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the founder must still hold the name"))?;
+        assert_eq!(founder.app.open_utf8(sealed)?, "Family");
+        Ok(())
+    }
 
     #[test]
     fn approval_wraps_every_owned_vault_dek_to_the_joiner() -> anyhow::Result<()> {

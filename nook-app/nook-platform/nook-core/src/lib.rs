@@ -54,10 +54,10 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, provider_vault_access, provider_vault_join,
-    provider_vault_listing, provider_vault_merge, sync_provider_credentials, sync_provider_store,
-    validation, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
-    vault_sync_store,
+    authorized_accounts, drive_vault_folder, provider_identity_log, provider_name_reveal,
+    provider_vault_access, provider_vault_join, provider_vault_listing, provider_vault_merge,
+    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
+    vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -266,15 +266,16 @@ pub use nook_auth2::{
 };
 
 pub use auth::identity_control::{
-    IdentityVaultEpochAction, IdentityVaultEpochStatus, ReplicatedIdentityStanding,
-    ReplicatedMembershipProjection, ReplicatedMembershipRequest, VaultDeletionPlan,
-    VaultDeletionRequest, VaultRevocationDue,
+    IdentityNameStatus, IdentityVaultEpochAction, IdentityVaultEpochStatus,
+    ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
+    VaultDeletionPlan, VaultDeletionRequest, VaultRevocationDue,
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
     IdentityMemberView, IdentityMountProvider, IdentityMountView, IdentityVaultView,
 };
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
+pub use auth::identity_words::IdentityWords;
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
@@ -328,10 +329,10 @@ pub use nook_event_log::{
     IdentityControlRejection, IdentityControlState, IdentityControlVault, IdentityEvent,
     IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
-    IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget, IdentityProviderMount,
-    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace,
-    ProviderMountId, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
+    IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget, IdentityNaming,
+    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, MemberSealedName, MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR,
+    PlacedNamespace, ProviderMountId, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
@@ -352,6 +353,13 @@ pub use authorized_accounts::{
 pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
+};
+pub use provider_identity_log::{
+    ListedIdentityLog, ProviderIdentityLog, ProviderIdentityLogEvents, ProviderLogCount,
+};
+pub use provider_name_reveal::{
+    ProviderNameReveal, ProviderNameRevealOutcome, RevealMembership, RevealableVault,
+    RevealedVaultName,
 };
 pub use provider_vault_access::{
     BrowserIdentityVault, BrowserVaultKeys, ProviderVaultAccess, ProviderVaultAction,

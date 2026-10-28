@@ -145,6 +145,8 @@ describe('recovery choice between several vaults', () => {
           identityId: 'idn_strangerabc',
           shortId: 'stranger',
           name: { state: 'unknown' },
+          words: ['ripple', 'canvas', 'orbit'],
+          log: { state: 'absent' },
         },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },
@@ -169,7 +171,7 @@ describe('recovery choice between several vaults', () => {
     expect(view.getByTestId('provider-vault-identity').textContent).toBe(
       vault.t({
         key: I18N_KEYS.ProviderVaultsFiledUnder,
-        replacements: { identity: 'stranger' },
+        replacements: { identity: 'ripple-canvas-orbit' },
       }),
     )
     await fireEvent.click(view.getByTestId('remote-vault-choice-item'))
@@ -187,6 +189,8 @@ describe('recovery choice between several vaults', () => {
           identityId: 'idn_strangerabc',
           shortId: 'stranger',
           name: { state: 'unknown' },
+          words: ['ripple', 'canvas', 'orbit'],
+          log: { state: 'absent' },
         },
         created: { state: 'unreported' },
         lastActivity: { state: 'unreported' },

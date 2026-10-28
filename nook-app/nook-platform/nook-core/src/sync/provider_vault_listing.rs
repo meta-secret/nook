@@ -20,7 +20,7 @@ use crate::errors::{ValidationError, ValidationResult};
 use crate::provider_vault_access::{
     OpenVaultContents, ProviderVaultAccess, ProviderVaultAction, ProviderVaultKeyholding,
 };
-use crate::{IdentityId, StoreId};
+use crate::{IdentityId, IdentityWords, ListedIdentityLog, ProviderIdentityLog, StoreId};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use tsify::Tsify;
@@ -119,6 +119,18 @@ pub enum ProviderVaultName {
 }
 
 impl ProviderVaultName {
+    /// A decrypted or kept name; a blank one is none.
+    pub(crate) fn named(name: &str) -> Self {
+        let name = name.trim();
+        if name.is_empty() {
+            Self::Unknown
+        } else {
+            Self::Named {
+                name: name.to_owned(),
+            }
+        }
+    }
+
     fn of(store_id: &StoreId, names: &[KnownVaultName]) -> Self {
         names
             .iter()
@@ -153,6 +165,13 @@ impl BrowserNames<'_> {
     };
 }
 
+/// What a listing knows about the identities that file its vaults.
+#[derive(Clone, Copy, Debug)]
+struct KnownIdentity<'a> {
+    names: &'a [KnownIdentityName],
+    logs: &'a [ListedIdentityLog],
+}
+
 /// The identity whose folder files a listed vault: the vault came from it,
 /// whichever identities share the vault since.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -164,10 +183,14 @@ pub struct FilingIdentity {
     pub short_id: String,
     /// Its label when an identity on this browser is that identity.
     pub name: ProviderVaultName,
+    /// Three words derived from its id, the same ones its identity card shows.
+    pub words: IdentityWords,
+    /// What its public control log on the provider tells.
+    pub log: ProviderIdentityLog,
 }
 
 impl FilingIdentity {
-    fn of(identity_id: IdentityId, names: &[KnownIdentityName]) -> Self {
+    fn of(identity_id: IdentityId, known: KnownIdentity<'_>) -> Self {
         let raw = identity_id.as_str();
         let short_id = raw
             .strip_prefix("idn_")
@@ -175,7 +198,8 @@ impl FilingIdentity {
             .chars()
             .take(SHORT_ID_LENGTH)
             .collect();
-        let name = names
+        let name = known
+            .names
             .iter()
             .find(|known| known.identity_id == identity_id)
             .map(|known| known.name.trim())
@@ -186,6 +210,8 @@ impl FilingIdentity {
                 }
             });
         Self {
+            words: IdentityWords::of(&identity_id),
+            log: ListedIdentityLog::of(&identity_id, known.logs),
             identity_id,
             short_id,
             name,
@@ -229,6 +255,7 @@ impl ProviderVaultSummary {
         observation: ProviderVaultObservation,
         keys: &ProviderVaultKeyholding<'_>,
         names: BrowserNames<'_>,
+        identity_logs: &[ListedIdentityLog],
         contents: OpenVaultContents,
     ) -> Self {
         let ProviderVaultObservation {
@@ -256,7 +283,13 @@ impl ProviderVaultSummary {
         Self {
             short_id: Self::short_id(&store_id),
             name: ProviderVaultName::of(&store_id, names.vaults),
-            identity: FilingIdentity::of(identity, names.identities),
+            identity: FilingIdentity::of(
+                identity,
+                KnownIdentity {
+                    names: names.identities,
+                    logs: identity_logs,
+                },
+            ),
             store_id,
             created: ProviderVaultTime::from_instant(created),
             last_activity: ProviderVaultTime::from_instant(last_activity),
@@ -369,6 +402,8 @@ pub struct ProviderVaultListingRequest<'a> {
     pub keys: ProviderVaultKeyholding<'a>,
     /// The names this browser keeps for the vaults and identities it holds.
     pub names: BrowserNames<'a>,
+    /// The public control logs of the listed identities, where read.
+    pub identity_logs: &'a [ListedIdentityLog],
     pub local_vault: &'a LocalVaultOccupancy,
 }
 
@@ -383,12 +418,15 @@ impl ProviderVaultListingRequest<'_> {
             observations,
             keys,
             names,
+            identity_logs,
             local_vault,
         } = self;
         let contents = local_vault.contents();
         let mut vaults = observations
             .into_iter()
-            .map(|observation| ProviderVaultSummary::summarize(observation, &keys, names, contents))
+            .map(|observation| {
+                ProviderVaultSummary::summarize(observation, &keys, names, identity_logs, contents)
+            })
             .collect::<Vec<_>>();
         vaults.sort_by(ProviderVaultSummary::listing_order);
         let offers_replacement = vaults
@@ -410,6 +448,7 @@ impl ProviderVaultListingRequest<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ProviderLogCount;
     use std::slice;
 
     fn at(raw: &str) -> anyhow::Result<ProviderVaultTime> {
@@ -496,6 +535,7 @@ mod tests {
             }],
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -509,6 +549,8 @@ mod tests {
                     identity_id: filer()?,
                     short_id: "filerfil".to_owned(),
                     name: ProviderVaultName::Unknown,
+                    words: IdentityWords::of(&filer()?),
+                    log: ProviderIdentityLog::Absent,
                 },
                 created: at("2024-01-01T00:00:00Z")?,
                 last_activity: at("2024-03-01T00:00:00Z")?,
@@ -532,6 +574,7 @@ mod tests {
             }],
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -555,6 +598,7 @@ mod tests {
             }],
             keys: ProviderVaultKeyholding::NONE,
             names: BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -596,6 +640,7 @@ mod tests {
                 ..ProviderVaultKeyholding::NONE
             },
             names: BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -650,6 +695,7 @@ mod tests {
                     ..ProviderVaultKeyholding::NONE
                 },
                 names: BrowserNames::NONE,
+                identity_logs: &[],
                 local_vault: &occupancy,
             }
             .listing();
@@ -710,6 +756,7 @@ mod tests {
                 ..ProviderVaultKeyholding::NONE
             },
             names: BrowserNames::NONE,
+            identity_logs: &[],
             local_vault: &open(&local, 0, 1),
         }
         .listing();
@@ -746,6 +793,7 @@ mod tests {
                 vaults: &names,
                 identities: &[],
             },
+            identity_logs: &[],
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -776,6 +824,16 @@ mod tests {
             identity_id: mine.clone(),
             name: " Personal ".to_owned(),
         }];
+        // Only the stranger's control log was read from the provider.
+        let theirs_facts = ProviderIdentityLog::Read {
+            devices: ProviderLogCount::from(2),
+            newest_device: at("2026-10-27T17:28:00Z")?,
+            vaults: ProviderLogCount::from(1),
+        };
+        let theirs_log = [ListedIdentityLog {
+            identity_id: theirs.clone(),
+            log: theirs_facts,
+        }];
         let observation = |identity: &IdentityId, token: &str| -> anyhow::Result<_> {
             Ok(ProviderVaultObservation {
                 store_id: store(token)?,
@@ -794,6 +852,7 @@ mod tests {
                 vaults: &[],
                 identities: &identities,
             },
+            identity_logs: &theirs_log,
             local_vault: &LocalVaultOccupancy::Closed,
         }
         .listing();
@@ -807,6 +866,8 @@ mod tests {
         assert_eq!(
             identity_of("store_ownvault001"),
             Some(FilingIdentity {
+                words: IdentityWords::of(&mine),
+                log: ProviderIdentityLog::Absent,
                 identity_id: mine,
                 short_id: "personal".to_owned(),
                 name: ProviderVaultName::Named {
@@ -818,6 +879,8 @@ mod tests {
         assert_eq!(
             identity_of("store_othervault1"),
             Some(FilingIdentity {
+                words: IdentityWords::of(&theirs),
+                log: theirs_facts,
                 identity_id: theirs,
                 short_id: "stranger".to_owned(),
                 name: ProviderVaultName::Unknown,
@@ -841,6 +904,14 @@ mod tests {
                     name: ProviderVaultName::Named {
                         name: "Personal".to_owned(),
                     },
+                    words: IdentityWords::of(&filer()?),
+                    log: ProviderIdentityLog::Read {
+                        devices: ProviderLogCount::from(2),
+                        newest_device: ProviderVaultTime::Reported {
+                            at: ProviderInstant(7),
+                        },
+                        vaults: ProviderLogCount::from(3),
+                    },
                 },
                 created: ProviderVaultTime::Unreported,
                 last_activity: ProviderVaultTime::Reported {
@@ -863,6 +934,13 @@ mod tests {
                         "identityId": "idn_filerfilerf",
                         "shortId": "filerfil",
                         "name": { "state": "named", "name": "Personal" },
+                        "words": IdentityWords::of(&filer()?).words(),
+                        "log": {
+                            "state": "read",
+                            "devices": 2,
+                            "newestDevice": { "state": "reported", "at": 7 },
+                            "vaults": 3,
+                        },
                     },
                     "created": { "state": "unreported" },
                     "lastActivity": { "state": "reported", "at": 5 },

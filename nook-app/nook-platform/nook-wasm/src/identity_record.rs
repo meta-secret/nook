@@ -250,6 +250,13 @@ impl NookIdentitySnapshot {
         self.identity_id.clone()
     }
 
+    /// Three words derived from the identity id, the same ones a provider
+    /// listing shows for it.
+    pub fn words(&self) -> Result<Vec<String>, wasm_bindgen::JsError> {
+        let identity_id = nook_core::IdentityId::parse(&self.identity_id)?;
+        Ok(nook_core::IdentityWords::of(&identity_id).words().to_vec())
+    }
+
     #[wasm_bindgen(getter)]
     pub fn label(&self) -> String {
         self.label.clone()

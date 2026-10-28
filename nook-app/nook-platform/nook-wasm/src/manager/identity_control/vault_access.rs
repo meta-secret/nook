@@ -7,10 +7,11 @@
 //! current key epoch for every active member.
 
 use nook_core::{
-    AuthProvidersSnapshotData, EventId, IdentityControlState, IdentityVaultEpochAction,
-    IdentityVaultEpochStatus, IdentityVaultKeyOpening, IdentityVaultRegistration, MultiDeviceError,
-    OpenedVaultDek, ProviderRows, SecretTypeFilter, StorageProviderData, StoreId, SymmetricKey,
-    VaultKeys, VaultMetaState, VaultRevocationDue, VaultType, VaultUnlock,
+    AuthProvidersSnapshotData, EventId, IdentityControlState, IdentityNameStatus,
+    IdentityVaultEpochAction, IdentityVaultEpochStatus, IdentityVaultKeyOpening,
+    IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek, ProviderRows, SecretTypeFilter,
+    StorageProviderData, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
+    VaultType, VaultUnlock,
 };
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -177,20 +178,39 @@ impl NookVaultManager {
             key_epoch: &key_epoch,
             keys: &keys,
         };
-        let operation = match (IdentityVaultEpochStatus {
+        let mut operations = match (IdentityVaultEpochStatus {
             state: &state,
             store_id: &store_id,
             key_epoch: &key_epoch,
         })
         .action()
         {
-            IdentityVaultEpochAction::Current => return Ok(false),
+            IdentityVaultEpochAction::Current => Vec::new(),
             IdentityVaultEpochAction::Register => {
-                state.vault_registration_operation(IdentityVaultRegistration { dek })?
+                vec![state.vault_registration_operation(IdentityVaultRegistration { dek })?]
             }
-            IdentityVaultEpochAction::Rewrap => state.vault_rewrap_operation(&dek)?,
+            IdentityVaultEpochAction::Rewrap => vec![state.vault_rewrap_operation(&dek)?],
         };
-        self.append_identity_operations(vec![operation]).await?;
+        // Every member keeps the identity's name sealed to its own key.
+        let directory = NookDatabase::load_identity_directory().await?;
+        let name = directory
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == identity_id)
+            .map_or("", |record| record.label.as_str());
+        if let Some(naming) = (IdentityNameStatus {
+            state: &state,
+            app_key: &app_key,
+            name,
+        })
+        .naming()?
+        {
+            operations.push(naming);
+        }
+        if operations.is_empty() {
+            return Ok(false);
+        }
+        self.append_identity_operations(operations).await?;
         Ok(true)
     }
 }

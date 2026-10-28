@@ -5,16 +5,20 @@
 //! decrypted: a vault is named only from this browser's own vault registry,
 //! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;
-use crate::DriveStorageClient;
 use crate::storage::provider_vault_listing::{
     BrowserHeldVaults, DriveVaultListing, LocalVaultClassification,
 };
+use crate::{BrowserPasskeyClient, DriveStorageClient};
 use nook_core::{
-    DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
+    DeviceIdentity, DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, ProviderNameReveal, ProviderNameRevealOutcome,
+    ProviderVaultListing, RevealMembership, WebAuthnCredentialId, WebAuthnPrfOutput,
+    WebAuthnUserHandle,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::JsError;
+use zeroize::Zeroize;
 
 /// What the signed-in Google account's Nook root holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -49,6 +53,7 @@ pub enum NookGoogleDriveVaultListing {
                 root: &root,
             };
             let observations = drive.observations().await?;
+            let identity_logs = drive.identity_logs().await?;
             let held = BrowserHeldVaults::load().await?;
             let inspected = drive
                 .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
@@ -57,11 +62,89 @@ pub enum NookGoogleDriveVaultListing {
                 listing: LocalVaultClassification {
                     local_vault: &local_vault,
                 }
-                .listing(observations, &held, &inspected),
+                .listing(observations, &held, &inspected, &identity_logs),
             }
         }
     };
     Tsify::into_ts(&listing).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+}
+
+/// Show the names of the listed vaults with one passkey tap. The passkey
+/// re-derives this device's app key; when that key is a member of a listed
+/// identity, the identity's name and its vaults' names are decrypted in memory
+/// and returned. Nothing is stored, imported, or written to the provider.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn reveal_google_drive_names(
+    access_token: &str,
+    rp_id: &str,
+) -> Result<tsify::Ts<ProviderNameRevealOutcome>, JsError> {
+    let app_key = RevealPasskey { rp_id }.app_key().await?;
+    let root = DriveStorageClient::new(access_token).existing_nook_root().await?;
+    let drive = DriveVaultListing {
+        token: access_token,
+        root: &root,
+    };
+    let membership = ProviderNameReveal {
+        app_key: &app_key,
+        identity_logs: drive.identity_log_events().await?,
+    }
+    .membership()?;
+    let outcome = match membership {
+        RevealMembership::NotAMember => ProviderNameRevealOutcome::NotAMember,
+        RevealMembership::Member {
+            identity_id,
+            identity_name,
+            vaults,
+        } => {
+            let listed = drive
+                .observations()
+                .await?
+                .into_iter()
+                .map(|observation| observation.store_id)
+                .collect::<Vec<_>>();
+            let mut names = Vec::new();
+            for vault in vaults {
+                // A vault the identity keeps elsewhere is not in this listing.
+                if listed.contains(&vault.store_id) {
+                    names.push(vault.name(drive.vault_events(&vault.store_id).await?)?);
+                }
+            }
+            ProviderNameRevealOutcome::Revealed {
+                identity_id,
+                identity_name,
+                vaults: names,
+            }
+        }
+    };
+    Tsify::into_ts(&outcome).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+}
+
+/// The passkey a name reveal asks for, on this relying party.
+struct RevealPasskey<'a> {
+    rp_id: &'a str,
+}
+
+impl RevealPasskey<'_> {
+    /// This device's app key, re-derived from the passkey's PRF output and
+    /// kept only in memory.
+    async fn app_key(&self) -> Result<DeviceIdentity, JsError> {
+        let request_options = BrowserPasskeyClient::recovery_options(self.rp_id)?;
+        let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+        let credential_id =
+            WebAuthnCredentialId::try_from(BrowserPasskeyClient::credential_id(&credential)?)?;
+        let user_handle = WebAuthnUserHandle::try_from(
+            BrowserPasskeyClient::assertion_user_handle(&credential)?,
+        )?;
+        let mut prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
+        let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone());
+        prf_output.zeroize();
+        let material = PasskeyRecoveryRequest::deterministic().recover(&PasskeyRecoveryInput {
+            credential_id: &credential_id,
+            user_handle: &user_handle,
+            prf_output: &typed_prf_output?,
+        })?;
+        Ok(DeviceIdentity::from_secret_str(material.identity_secret())?)
+    }
 }
 
 /// The fixed name of every provider account's Nook root.

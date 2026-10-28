@@ -13,10 +13,10 @@
 
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, DriveEventParent, EventId, EventLogLocation,
-    EventLogNamespaceKind, KnownIdentityName, KnownVaultName, LocalEventWrite, LocalVaultOccupancy,
-    ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
-    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
-    ProviderVaultTime, StoreId,
+    EventLogNamespaceKind, KnownIdentityName, KnownVaultName, ListedIdentityLog, LocalEventWrite,
+    LocalVaultOccupancy, ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding,
+    ProviderVaultListing, ProviderVaultListingRequest, ProviderVaultObservation,
+    ProviderVaultStanding, ProviderVaultTime, StoreId,
 };
 
 use super::drive_events::DriveEventStore;
@@ -67,6 +67,50 @@ impl DriveVaultListing<'_> {
             });
         }
         Ok(observations)
+    }
+}
+
+impl DriveVaultListing<'_> {
+    /// The public control log of every identity folder under the root, read
+    /// and verified; nothing in it is encrypted.
+    pub(crate) async fn identity_logs(&self) -> Result<Vec<ListedIdentityLog>, NookError> {
+        self.identity_log_events()
+            .await?
+            .into_iter()
+            .map(|events| Ok(events.read()?))
+            .collect()
+    }
+
+    /// The raw control log events of every identity folder under the root.
+    pub(crate) async fn identity_log_events(
+        &self,
+    ) -> Result<Vec<ProviderIdentityLogEvents>, NookError> {
+        let folders =
+            DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Identity)
+                .await?;
+        let mut logs = Vec::new();
+        for folder in folders {
+            let identity_id = folder.placed.identity().clone();
+            let location = EventLogLocation::Identity(identity_id.clone());
+            let store = DriveEventStore {
+                token: self.token,
+                parent: &folder.folder,
+                location: &location,
+            };
+            let mut events = Vec::new();
+            for raw_id in store.list_drive_event_ids().await? {
+                let event_id = EventId::parse(&raw_id)?;
+                if let RemoteEventRead::Retrieved(bytes) = store.read_drive_event(&event_id).await?
+                {
+                    events.push(bytes);
+                }
+            }
+            logs.push(ProviderIdentityLogEvents {
+                identity_id,
+                events,
+            });
+        }
+        Ok(logs)
     }
 }
 
@@ -309,6 +353,7 @@ impl LocalVaultClassification<'_> {
         observations: Vec<ProviderVaultObservation>,
         held: &BrowserHeldVaults,
         inspected: &InspectedVaults,
+        identity_logs: &[ListedIdentityLog],
     ) -> ProviderVaultListing {
         ProviderVaultListingRequest {
             observations,
@@ -324,6 +369,7 @@ impl LocalVaultClassification<'_> {
                 vaults: &held.names,
                 identities: &held.identity_names,
             },
+            identity_logs,
             local_vault: self.local_vault,
         }
         .listing()

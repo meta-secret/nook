@@ -6,12 +6,14 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::errors::VaultResult;
 use nook_auth2::{
     AppId, AppKey, AuthKeyId, IdentityMember, MemberLabelState, MultiDeviceResult,
     ReplicatedVaultGrant, StoreId,
 };
 use nook_event_log::{
-    IdentityControlState, IdentityMemberKeys, IdentityVaultDekLookup, VaultAuthorizedRoster,
+    IdentityControlOperation, IdentityControlState, IdentityMemberKeys, IdentityNaming,
+    IdentityVaultDekLookup, VaultAuthorizedRoster,
 };
 
 /// Replicated membership expressed in local directory terms.
@@ -154,6 +156,45 @@ impl IdentityVaultEpochStatus<'_> {
         } else {
             IdentityVaultEpochAction::Current
         }
+    }
+}
+
+/// Whether every member can read the identity's name in its control log.
+pub struct IdentityNameStatus<'a> {
+    pub state: &'a IdentityControlState,
+    pub app_key: &'a AppKey,
+    /// The identity's name on this device, used only while the log has none.
+    pub name: &'a str,
+}
+
+impl IdentityNameStatus<'_> {
+    /// The naming to append, if any. The name already in the log wins: this
+    /// device only re-seals it for members that cannot read it. A log no
+    /// member has named takes this device's name. A device that cannot read
+    /// the log's name leaves it to a member that can, so devices never
+    /// overwrite each other's name.
+    pub fn naming(&self) -> VaultResult<Option<IdentityControlOperation>> {
+        if self.state.member(self.app_key.app_id()).is_none() {
+            return Ok(None);
+        }
+        let everyone_holds_it = self
+            .state
+            .members
+            .iter()
+            .all(|member| self.state.sealed_name_for(&member.keys.app_id).is_some());
+        let name = match self.state.sealed_name_for(self.app_key.app_id()) {
+            Some(_) if everyone_holds_it => return Ok(None),
+            Some(sealed) => self.app_key.open_utf8(sealed)?,
+            None if self.state.sealed_name.is_empty() => self.name.trim().to_owned(),
+            None => return Ok(None),
+        };
+        if name.trim().is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(self.state.naming_operation(&IdentityNaming {
+            name: &name,
+            joining: None,
+        })?))
     }
 }
 
@@ -355,6 +396,80 @@ mod tests {
             }
             .action(),
             IdentityVaultEpochAction::Register
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_log_name_wins_and_reaches_every_member() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let at = IsoTimestamp::from_trusted("2026-10-14T00:00:00Z".to_owned());
+        let status = |log: &IdentityControlLog, member: &Member, name: &str| {
+            IdentityNameStatus {
+                state: &IdentityControlState::project(log)?,
+                app_key: &member.app,
+                name,
+            }
+            .naming()
+        };
+
+        // An unnamed log takes the founder's name, sealed to both members.
+        let Some(naming) = status(&scenario.log, &scenario.founder, "Personal")? else {
+            anyhow::bail!("an unnamed log must take this device's name");
+        };
+        let named = scenario
+            .log
+            .clone()
+            .insert(scenario.log.build_append(
+                vec![naming],
+                &IdentityEventSigning {
+                    signing_key: scenario.founder.signer.signing_key(),
+                    created_at: &at,
+                },
+            )?)?
+            .log;
+        let state = IdentityControlState::project(&named)?;
+        for member in [&scenario.founder, &scenario.joiner] {
+            let sealed = state
+                .sealed_name_for(member.app.app_id())
+                .ok_or_else(|| anyhow::anyhow!("every member must hold the name"))?;
+            assert_eq!(member.app.open_utf8(sealed)?, "Personal");
+        }
+        assert!(status(&named, &scenario.founder, "Personal")?.is_none());
+        // Another device's own name never overwrites the log's.
+        assert!(status(&named, &scenario.joiner, "Phone name")?.is_none());
+
+        // A member that cannot read the name gets the log's name re-sealed,
+        // not the local one of the device that re-seals it.
+        let founder_only = IdentityControlOperation::IdentityNamed {
+            recipients: vec![nook_event_log::MemberSealedName {
+                app_id: scenario.founder.app.app_id().clone(),
+                name_ciphertext: scenario.founder.app.public_key().seal_bytes(b"Personal")?,
+            }],
+        };
+        let partial = named
+            .clone()
+            .insert(named.build_append(
+                vec![founder_only],
+                &IdentityEventSigning {
+                    signing_key: scenario.founder.signer.signing_key(),
+                    created_at: &at,
+                },
+            )?)?
+            .log;
+        assert!(status(&partial, &scenario.joiner, "Phone name")?.is_none());
+        let Some(IdentityControlOperation::IdentityNamed { recipients }) =
+            status(&partial, &scenario.founder, "Work")?
+        else {
+            anyhow::bail!("the founder must re-seal the name for the joiner");
+        };
+        let resealed = recipients
+            .iter()
+            .find(|sealed| &sealed.app_id == scenario.joiner.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the joiner must be a recipient"))?;
+        assert_eq!(
+            scenario.joiner.app.open_utf8(&resealed.name_ciphertext)?,
+            "Personal"
         );
         Ok(())
     }
