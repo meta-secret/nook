@@ -49,10 +49,10 @@ different layout or visual direction.
 - **`identity-management`** — the current research direction: virtual
   identities keep installation keys and receive independent vault grants.
 - **`identity-onboarding`** — key management before vaults. A browser holds
-  one identity: created locally or imported from a sync provider. After that
-  one key ring shows the keys that open it and the sync providers that keep
-  it; identities found on a provider are unlocked and merged, or asked to
-  join. Passkeys and providers are simulated.
+  one identity: created locally or imported from a sync provider. Each
+  identity shows as a sigil drawn from its three words; home lists the
+  devices that open it and where it is synced. Identities found on a provider
+  are unlocked and merged, or asked to join. Passkeys and providers are simulated.
 - **`inspiration`** — sketches frozen for an interaction or visual idea rather
   than as candidates. Borrow from them; do not iterate on them. They may read
   older fixtures, kept beside them.

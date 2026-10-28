@@ -2,24 +2,27 @@ import {
   Branch,
   KeyKind,
   ProviderHolds,
+  ProviderKind,
   Standing,
   Step,
   askingDevices,
   browserKey,
+  googleDrive,
   laptop,
   providerIdentities,
-  providers,
   steps,
   type Identity,
   type Key,
+  type Provider,
 } from './model'
 
 /** The prototype's state: the step and the path to it, your identity and
- * its keys, the sync provider and what it holds, and the simulator. */
-export class KeyRingFlow {
-  step = $state<Step>(Step.Start)
-  visited = $state<readonly Step[]>([Step.Start])
-  history = $state<readonly Step[]>([Step.Start])
+ * the devices that open it, the sync provider and what it holds, and the
+ * simulator's answers. */
+export class IdentityFlow {
+  step = $state<Step>(Step.Welcome)
+  visited = $state<readonly Step[]>([Step.Welcome])
+  history = $state<readonly Step[]>([Step.Welcome])
   cursor = $state(0)
 
   holds = $state<ProviderHolds>(ProviderHolds.Yours)
@@ -37,8 +40,9 @@ export class KeyRingFlow {
   requests = $state<readonly Key[]>([])
   private asked = 0
 
-  /** The sync provider; empty while there is none. */
+  /** The sync provider's name; empty while there is none. */
   provider = $state('')
+  providerKind = $state<ProviderKind>(ProviderKind.Drive)
   /** Your identity is saved to the provider. */
   saved = $state(false)
   /** What the provider held when it was connected. */
@@ -73,25 +77,24 @@ export class KeyRingFlow {
     this.showAtCursor()
   }
 
-  /** Jump from the map with the context the step needs: onboarding starts
-   * with nothing, the ring has an identity, and provider steps a provider. */
+  /** Jump from the rail with the context the step needs: onboarding starts
+   * with nothing, home has an identity, provider steps have a provider. */
   jump(to: Step): void {
-    const ring = steps.some((node) => node.step === to && node.branch === Branch.Ring)
-    if (!ring) this.forget()
+    const home = steps.some((node) => node.step === to && node.branch === Branch.Home)
+    if (!home) this.forget()
     else if (!this.ready) this.create()
-    if ((to === Step.Found || to === Step.Waiting || to === Step.Provider) && !this.provider) {
-      this.connect(providers[0])
-    }
+    const needsProvider = to === Step.Found || to === Step.Waiting || to === Step.More
+    if (needsProvider && !this.provider) this.connect(googleDrive)
     if (to === Step.Waiting) this.askToJoin(laptop)
     this.go(to)
   }
 
   reset(): void {
     this.forget()
-    this.step = Step.Start
-    this.history = [Step.Start]
+    this.step = Step.Welcome
+    this.history = [Step.Welcome]
     this.cursor = 0
-    this.visited = [Step.Start]
+    this.visited = [Step.Welcome]
   }
 
   private showAtCursor(): void {
@@ -119,8 +122,9 @@ export class KeyRingFlow {
 
   /** Sign in to a provider and read what it holds. With nothing else on it,
    * an existing identity is saved there at once. */
-  connect(provider: string): void {
-    this.provider = provider
+  connect(provider: Provider): void {
+    this.provider = provider.name
+    this.providerKind = provider.kind
     this.standings = []
     this.onProvider = this.holds === ProviderHolds.Nothing ? [] : providerIdentities
     this.saved = this.ready && this.onProvider.length === 0
@@ -153,8 +157,8 @@ export class KeyRingFlow {
   }
 
   /** A device of the identity this browser asked to join approves it. */
-  approved(): void {
-    this.stand(this.joining, Standing.Yours)
+  approved(identity: Identity): void {
+    this.stand(identity, Standing.Yours)
   }
 
   /** A new identity whose one key is this browser's passkey. */
@@ -166,8 +170,8 @@ export class KeyRingFlow {
     this.saved = this.provider !== ''
   }
 
-  /** Import: the provider identity is yours, and this browser's passkey
-   * joins its keys. */
+  /** Import: the provider identity is yours, and this browser's key joins
+   * its devices. */
   adopt(identity: Identity): void {
     this.ready = true
     this.selfId = identity.id
@@ -177,8 +181,8 @@ export class KeyRingFlow {
     this.saved = true
   }
 
-  /** Another identity of yours folds into this one: the name stays, its keys
-   * join the ring, and yours is saved to the provider. */
+  /** Another identity of yours folds into this one: the name stays, its
+   * devices join yours, and yours is saved to the provider. */
   merge(identity: Identity): void {
     this.keys = [...this.keys, ...identity.keys]
     this.merged = [...this.merged, identity.id]
@@ -198,10 +202,10 @@ export class KeyRingFlow {
 
   /** The simulator: another device asks to join your identity. */
   deviceAsks(): void {
-    const device = askingDevices[this.asked % askingDevices.length]
+    const device = String(askingDevices[this.asked % askingDevices.length])
     this.requests = [
       ...this.requests,
-      { id: `key_asking_${this.asked}`, kind: KeyKind.Device, device: device || 'Device', here: false },
+      { id: `key_asking_${this.asked}`, kind: KeyKind.Phone, device, here: false },
     ]
     this.asked += 1
   }

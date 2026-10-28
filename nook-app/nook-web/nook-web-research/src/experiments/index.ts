@@ -17,7 +17,7 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
-import KeyRing from './identity-onboarding/key-ring/Experiment.svelte'
+import OneIdentity from './identity-onboarding/one-identity/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -178,9 +178,9 @@ const identityManagementV2: ExperimentSubcategory = {
 const identityOnboardingV1: ExperimentSubcategory = {
   categorySlug: 'identity-onboarding',
   slug: ExperimentVersion.V1,
-  title: 'V1 · Key ring',
+  title: 'V1 · One identity',
   description:
-    'No vaults, only keys: one identity per browser, drawn as a ring of the keys that open it and the sync providers that keep it.',
+    'No vaults, only keys: one identity per browser, its sigil, the devices that open it, and where it is synced.',
 }
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
@@ -351,13 +351,13 @@ export const experiments: Experiment[] = [
     component: AccessTerminal,
   },
   {
-    slug: 'key-ring',
+    slug: 'one-identity',
     category: identityOnboarding,
     subcategory: identityOnboardingV1,
-    title: 'Key ring',
+    title: 'One identity',
     description:
-      'Create on this browser or import from a sync provider; then one ring where keys join, sync providers are added, and identities found on them are unlocked, merged, or asked to join.',
-    component: KeyRing,
+      'A popup-sized app: create with a passkey or import from a sync provider, then home with devices, sync, join requests, and identities to merge or join.',
+    component: OneIdentity,
   },
   {
     slug: 'identity-keys',
