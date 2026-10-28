@@ -2,9 +2,9 @@
 //! the identity an enrollment code invites it into.
 
 use nook_core::{
-    FreshIdentityNaming, IdentityControlLog, IdentityControlState, IdentityEvent,
-    IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, LocalIdentityLog,
+    AppKeyIdentityMembership, FreshIdentityNamed, FreshIdentityNaming, IdentityControlLog,
+    IdentityControlState, IdentityEvent, IdentityEventSigning, IdentityGenesisRequest, IdentityId,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -121,20 +121,31 @@ impl NookVaultManager {
 
     /// Name this browser's identity while it is still fresh. Setup asks for
     /// the name only when it creates a new identity, after the passkey made
-    /// its key; the control log, created later, seals that name.
+    /// its key; the control log, created later, seals that name. A key the
+    /// browser extension lends has no local identity yet: its first vault's
+    /// genesis creates one under the vault's name, which is the same name.
     #[wasm_bindgen]
     pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
         let label = Self::local_identity_label(&label).map_err(JsError::new)?;
         let app_key = self.unlocked_app_key()?;
-        let local_log = Self::local_identity_log(&app_key).await?;
+        let membership = NookDatabase::load_identity_directory()
+            .await?
+            .identity_for_app_key(&app_key)
+            .map_err(NookDatabase::map_domain_error)?;
+        let local_log = match membership {
+            AppKeyIdentityMembership::Enrolled(_) => Self::local_identity_log(&app_key).await?,
+            AppKeyIdentityMembership::Unenrolled => LocalIdentityLog::Empty,
+        };
         NookDatabase::update_identity_directory(move |directory| {
-            let directory = directory
+            let named = directory
                 .name_fresh_identity(&FreshIdentityNaming {
                     app_key: &app_key,
                     label: &label,
                     local_log,
                 })
                 .map_err(NookDatabase::map_domain_error)?;
+            let (FreshIdentityNamed::Renamed(directory)
+            | FreshIdentityNamed::AtFirstVault(directory)) = named;
             Ok(IdentityDirectoryWrite::from(directory))
         })
         .await?;

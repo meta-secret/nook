@@ -78,8 +78,8 @@ pub use auth::identity::{
 pub use auth::identity_directory::{
     AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyVaultImport,
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
-    FreshIdentityNaming, IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation,
-    IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
+    FreshIdentityNamed, FreshIdentityNaming, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
     IdentityDirectoryVaultKeys, IdentityInvitationBinding, IdentityInvitationBindingRequest,
     IdentitySelection, LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement,
     ReplicatedIdentityAddition, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,

@@ -66,6 +66,17 @@ pub struct FreshIdentityNaming<'a> {
     pub local_log: LocalIdentityLog,
 }
 
+/// How a name given during setup reaches the identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FreshIdentityNamed {
+    /// The app key's local identity took the name now.
+    Renamed(IdentityDirectory),
+    /// The app key has no local identity yet, as a key the browser extension
+    /// lends: the first vault's genesis creates it under the vault's name,
+    /// which setup gives the same name. The directory is unchanged.
+    AtFirstVault(IdentityDirectory),
+}
+
 impl IdentityRecord {
     /// Nothing ties this local identity to an identity yet.
     fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
@@ -122,10 +133,17 @@ impl IdentityDirectory {
 
     /// Name the app key's local identity while nothing ties it to an identity
     /// yet, so its log seals that name when it is created. An identity with a
-    /// log, a vault, or another member keeps the name it has.
-    pub fn name_fresh_identity(self, request: &FreshIdentityNaming<'_>) -> MultiDeviceResult<Self> {
+    /// log, a vault, or another member keeps the name it has. A key with no
+    /// local identity yet is named by its first vault.
+    pub fn name_fresh_identity(
+        self,
+        request: &FreshIdentityNaming<'_>,
+    ) -> MultiDeviceResult<FreshIdentityNamed> {
         if request.label.trim().is_empty() {
             return Err(MultiDeviceError::IdentityLabelEmpty);
+        }
+        if self.identity_for_app_key(request.app_key)? == AppKeyIdentityMembership::Unenrolled {
+            return Ok(FreshIdentityNamed::AtFirstVault(self));
         }
         let local = self.local_identity_for_app_key(request.app_key)?;
         if !local.is_fresh_local_identity(request.local_log) {
@@ -140,7 +158,7 @@ impl IdentityDirectory {
                 request.label.clone_into(&mut record.label);
             }
         }
-        Ok(named)
+        Ok(FreshIdentityNamed::Renamed(named))
     }
 
     /// Choose the app key that connects this installation to one more
@@ -440,7 +458,7 @@ mod tests {
         app_key: &AppKey,
         label: &str,
         local_log: LocalIdentityLog,
-    ) -> MultiDeviceResult<IdentityDirectory> {
+    ) -> MultiDeviceResult<FreshIdentityNamed> {
         directory.name_fresh_identity(&FreshIdentityNaming {
             app_key,
             label,
@@ -462,14 +480,29 @@ mod tests {
         let key = AppKey::generate()?;
         let (installation, local) = Installation::new().protect(&key)?;
 
-        let directory = named(
+        let FreshIdentityNamed::Renamed(directory) = named(
             installation.directory,
             &key,
             "Family",
             LocalIdentityLog::Empty,
-        )?;
+        )?
+        else {
+            anyhow::bail!("a fresh local identity is renamed at once");
+        };
 
         assert_eq!(label_of(&directory, &local)?, "Family");
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_with_no_local_identity_yet_is_named_by_its_first_vault() -> anyhow::Result<()> {
+        let lent = AppKey::generate()?;
+        let directory = IdentityDirectory::empty();
+
+        assert_eq!(
+            named(directory.clone(), &lent, "Family", LocalIdentityLog::Empty)?,
+            FreshIdentityNamed::AtFirstVault(directory)
+        );
         Ok(())
     }
 
