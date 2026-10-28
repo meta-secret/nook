@@ -207,7 +207,7 @@ tasks:
         vars:
           TASK: _web:e2e:build-dist
           VITE_VAULT_SYNC_INTERVAL_MS: "500"
-          VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+          VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
           VITE_VAULT_IDLE_WARNING_MS: "0"
 
   web:e2e:restore-prod-dist:
@@ -337,7 +337,7 @@ tasks:
       VITE_BASE: "{{.VITE_BASE}}"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run build
@@ -372,7 +372,7 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
@@ -385,7 +385,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright e2e groups (workers=all available logical CPUs, shard=${NOOK_E2E_SHARD:-all}, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
@@ -398,7 +398,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
@@ -410,7 +410,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
@@ -442,7 +442,7 @@ tasks:
       VITE_BASE: "{{.VITE_BASE}}"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/e2e-build-if-needed.sh"
@@ -453,7 +453,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - test -n "${E2E_SPEC:-}" || (echo "E2E_SPEC is required (e.g. e2e/connect.spec.ts)" >&2; exit 1)
@@ -468,7 +468,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - test "${NOOK_REMOTE_E2E_DEBUG:-}" = "1" || (echo "_web:test:e2e:debug is hosted-only; set NOOK_REMOTE_E2E_DEBUG=1 in the remote job" >&2; exit 1)
@@ -482,7 +482,7 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright stable group (available CPUs, CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
@@ -494,7 +494,7 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run build
@@ -517,7 +517,7 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
@@ -546,7 +546,7 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run build
@@ -557,7 +557,7 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "1000"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run build

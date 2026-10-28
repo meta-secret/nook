@@ -8,6 +8,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  disableLoginAutoUnlock,
   expandSecretRow,
   fillSeedPhraseGrid,
   flushNookLogPersistQueue,
@@ -22,6 +23,7 @@ import {
   ManagePage,
   openVaultSection,
   VaultSection,
+  expectLoginGateAfterLoad,
 } from './helpers'
 
 /** How far another tab has dropped its copy after this tab deleted it. */
@@ -120,11 +122,11 @@ test.describe('local vault', () => {
     await revealSecretInRow(updatedRow)
     await expect(updatedRow.getByText(updatedValue)).toBeVisible()
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -543,7 +545,10 @@ test.describe('local vault', () => {
     await revealSecretInRow(row)
     await expect(row.getByRole('heading', { name: 'Recovery' })).toBeVisible()
     await expect(row.getByText('backup')).toBeVisible()
-    await expect(row.getByText('1234')).toBeVisible()
+    // The note's code, not digits that the timestamped title may contain.
+    await expect(
+      row.getByTestId('revealed-secret').getByText('1234', { exact: true }),
+    ).toBeVisible()
 
     await row.getByTestId('edit-secret-btn').click()
     const editForm = page.getByTestId('edit-secret-form')
@@ -557,11 +562,11 @@ test.describe('local vault', () => {
       page.getByRole('heading', { name: title, exact: true }),
     ).toHaveCount(0)
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -578,7 +583,11 @@ test.describe('local vault', () => {
       updatedRow.getByRole('heading', { name: 'Updated recovery' }),
     ).toBeVisible()
     await expect(updatedRow.getByText('replacement')).toBeVisible()
-    await expect(updatedRow.getByText('5678')).toBeVisible()
+    await expect(
+      updatedRow
+        .getByTestId('revealed-secret')
+        .getByText('5678', { exact: true }),
+    ).toBeVisible()
 
     await deleteSecret(page, updatedTitle)
   })
@@ -677,11 +686,11 @@ test.describe('local vault', () => {
     expect(serializedReplacementLogPayloads).not.toContain('9876')
     expect(serializedReplacementLogPayloads).not.toContain(notes)
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -851,11 +860,11 @@ test.describe('local vault', () => {
     const value = 'persist-me'
 
     await addSecret(page, key, value)
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
