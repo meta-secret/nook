@@ -63,7 +63,7 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await contextB?.close()
   })
 
-  test('is decided as a whole, and a decision changes the one button', async () => {
+  test('offers one action for it, and the step saves the identity in use', async () => {
     // Browser A keeps a vault in the Nook folder.
     await connectGoogleDriveGenesisDevice(
       deviceA,
@@ -89,32 +89,25 @@ test.describe('an identity another browser keeps in the Nook folder', () => {
     await disableVaultIdleLock(deviceB)
     await openDriveVaultList(deviceB, target)
 
-    // A's vault is listed under A's identity, which nothing on B opens.
-    const identityA = deviceB.locator(
-      `[data-testid="provider-identity"][data-store-ids~="${vaultA.store_id}"]`,
-    )
+    // A's identity is listed once; B's passkey is not a member of it, so
+    // its one action asks to join. Nothing is planned or decided.
+    const identityA = deviceB.getByTestId('setup-identity')
     await expect(identityA).toHaveCount(1)
-    await expect(identityA).toHaveAttribute('data-standing', 'unchecked')
+    await expect(identityA).toHaveAttribute('data-setup', 'requestToJoin')
     await expect(identityA.getByTestId('provider-vault-identity')).toHaveText(
       /^[a-z]+-[a-z]+-[a-z]+$/,
     )
-    const decisions = identityA.getByTestId('provider-identity-decision')
-    await expect(decisions).toHaveCount(2)
-    await expect(decisions.nth(0)).toHaveAttribute('data-decision', 'leave')
-    await expect(decisions.nth(0)).toHaveAttribute('aria-checked', 'true')
-    await expect(decisions.nth(1)).toHaveAttribute('data-decision', 'askToJoin')
-
-    // Picking a decision plans it and renames the step's one button; Leave
-    // as is takes it back out. Nothing runs until the button is pressed.
-    const connect = deviceB.getByTestId('connect-provider-btn')
-    await expect(connect).toHaveText(enLocale.auth_storage.connect_and_sync)
-    await decisions.nth(1).click()
-    await expect(deviceB.getByTestId('provider-identity-plan-row')).toHaveCount(
-      1,
+    await expect(
+      identityA.getByTestId('provider-identity-standing'),
+    ).toHaveText(enLocale.first_run.identity_not_member)
+    await expect(identityA.getByTestId('setup-identity-join')).toHaveCount(1)
+    await expect(deviceB.getByTestId('provider-identity-decision')).toHaveCount(
+      0,
     )
-    await expect(connect).toHaveText(enLocale.provider_identities.connect_apply)
-    await decisions.nth(0).click()
-    await expect(deviceB.getByTestId('provider-identity-plan')).toHaveCount(0)
-    await expect(connect).toHaveText(enLocale.auth_storage.connect_and_sync)
+
+    // The step's one button saves the identity in use there.
+    await expect(deviceB.getByTestId('connect-provider-btn')).toHaveText(
+      enLocale.provider_identities.save_here.replace('{identity}', 'Mine'),
+    )
   })
 })

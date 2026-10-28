@@ -7,6 +7,11 @@ Passkeys and devices belong to identities, not vaults, so everything the user
 decides about what a provider holds is decided per identity. Vaults are listed
 under their identity and are never acted on one by one in this step.
 
+Two screens read the folder. Setup (first run, and adding a sync provider to
+the identity in use) gives each identity one [setup action](#setup-action)
+that runs at once. The recovery screen, with no identity in use, plans
+decisions and applies them together.
+
 This record owns the rules and the identity operations behind them. The
 [identity architecture](identity-vault-architecture.md) owns identity, app key,
 and DEK ownership. The [provider listing](auth-providers.md#what-the-provider-already-holds)
@@ -21,10 +26,10 @@ owns what is read from the provider without a key.
 - **One decision per identity, mutually exclusive.**
   - The decision defaults to **Leave as is** and can always return to it.
   - Nothing runs when a decision is picked.
-- **One action applies the plan.**
+- **One action applies the plan** (with no identity in use).
   - The step's single button runs every picked decision, in listing order.
-  - On Drive setup it reads **Connect and sync**, or **Connect and apply**
-    once a decision is picked; the recovery screen's reads **Apply**.
+  - In the Drive wizard it reads **Connect and sync**, or **Connect and
+    apply** once a decision is picked; the recovery screen's reads **Apply**.
   - A "What will happen" summary lists every picked decision.
   - While it runs, every other control is disabled.
 - **Checks are not decisions.**
@@ -56,8 +61,9 @@ Rust decides each identity's standing and the decisions it allows.
     its own identity, beside the one in use.
   - **Merge into _current identity_:** its vaults become vaults of the
     identity in use. The other identity is unchanged for its own devices.
-    Offered only while an identity is in use.
-- **Not opened here yet** (nothing was checked)
+    Rust offers it only while an identity is in use; that screen now shows
+    setup actions, so no screen offers merging at present.
+- **Not on this browser** (nothing was checked)
   - With no identity in use, as on the recovery screen: **Leave as is**,
     **Recover it** (adding it; the passkey is tapped when the plan runs), or
     **Ask to join**.
@@ -79,10 +85,11 @@ Rust decides each identity's standing and the decisions it allows.
 
 ## Setup action
 
-First-run setup offers no plan. Each listed identity gets one action that
-Rust decides from its standing (`IdentitySetup`), and picking it runs at
-once. Setup already used the passkey that made this browser's key, so it
-never offers adding by another passkey.
+Setup offers no plan, on first run and when the Sync page adds Google Drive
+to the identity in use. Each listed identity gets one action that Rust
+decides from its standing (`IdentitySetup`), and picking it runs at once.
+Setup already used the passkey that made this browser's key, so it never
+offers adding by another passkey.
 
 | Standing | Setup action |
 |---|---|
@@ -93,6 +100,12 @@ never offers adding by another passkey.
 | Unchecked, not opened, join denied | **Request to join** |
 | Other identity here | none |
 
+- With an identity in use, **This browser** is that identity: its card has
+  no action, and the step's button reads **Save _identity_ here** and
+  connects. Another action re-reads the folder when it finishes.
+- The card's tag says what this browser's passkey is to the identity:
+  **In use here**, **Member**, **Not a member**, **Join requested**, or
+  **Join request denied**.
 - A passkey made for Nook before re-derives the same app key, so an identity
   it is a member of reads as **Join approved** with no extra tap.
 - A new passkey is a member of nothing: every identity asks to join.
@@ -100,9 +113,9 @@ never offers adding by another passkey.
   `name_fresh_identity` names it before its log exists; an identity with a
   log, a vault, or another member keeps its name (`IdentityAlreadyInUse`).
 - A key the browser extension lends has no local identity on the page until
-  its first vault's genesis creates one under the vault's name. Naming then
-  changes nothing (`FreshIdentityNamed::AtFirstVault`): setup gives the vault
-  the same name.
+  its first vault's genesis creates one. Naming then stages the name on the
+  session (`FreshIdentityNamed::AtFirstVault`), and that genesis creates the
+  identity under it.
 - Gap: a lent key cannot yet be recognised as a member of a listed identity,
   nor finish a join, because both need its local identity before any vault.
 
@@ -220,8 +233,8 @@ accent, no pills.
 
 - **Card:** one `nk-frame` per identity. A tile shows a person when the
   identity opens here and a lock when it does not.
-- **Header:** the identity's name or words, and one standing tag, success
-  toned when it opens. Below it, one spec line of public log facts: its
+- **Header:** the identity's name or words, and one tag, success toned when
+  it opens: its standing on the recovery screen, its setup tag in setup. Below it, one spec line of public log facts: its
   device and vault counts.
 - **Decision:** a square, hairline-framed segmented control, one segment per
   allowed decision. The picked segment is inverted (foreground fill); the

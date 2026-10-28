@@ -1,11 +1,13 @@
 <!--
 The head of one identity a provider holds: a tile that shows whether it opens
 here, its name or three words, one standing tag, and what its public log
-tells. The plan list and setup's list both open their cards with it.
+tells. The plan list and setup's list both open their cards with it; setup's
+tag says what this browser's passkey is to the identity instead.
 -->
 <script lang="ts">
   import { Lock, UserRound } from '@lucide/svelte'
   import type {
+    IdentitySetup,
     IdentityStanding,
     ProviderIdentityChoice,
     ProviderIdentityLog,
@@ -13,13 +15,16 @@ tells. The plan list and setup's list both open their cards with it.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { IdentityDecisionText } from '$lib/components/provider-vaults/identity-plan.svelte'
+  import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
 
   let {
     vault,
     choice,
+    tag = IdentityCardTag.Standing,
   }: {
     vault: VaultState
     choice: ProviderIdentityChoice
+    tag?: IdentityCardTag
   } = $props()
 
   const text = $derived(new IdentityDecisionText(vault))
@@ -53,6 +58,33 @@ tells. The plan list and setup's list both open their cards with it.
         return vault.t(I18N_KEYS.AccessCheckIdentityNotOpened)
       case 'unchecked':
         return vault.t(I18N_KEYS.AccessCheckIdentityUnchecked)
+    }
+  }
+
+  /** What this browser's passkey is to the identity, as setup says it. A
+   * setup with no words of its own keeps the standing line. */
+  function setupLine(setup: IdentitySetup): string {
+    switch (setup.kind) {
+      case 'continue':
+        return setup.decision === 'leave'
+          ? vault.t(I18N_KEYS.FirstRunIdentityInUse)
+          : vault.t(I18N_KEYS.FirstRunIdentityMember)
+      case 'requestToJoin':
+        return standing.kind === 'joinDenied'
+          ? standingLine(standing)
+          : vault.t(I18N_KEYS.FirstRunIdentityNotMember)
+      case 'waiting':
+      case 'unavailable':
+        return standingLine(standing)
+    }
+  }
+
+  function tagLine(): string {
+    switch (tag) {
+      case IdentityCardTag.Standing:
+        return standingLine(standing)
+      case IdentityCardTag.Setup:
+        return setupLine(choice.setup)
     }
   }
 
@@ -113,7 +145,7 @@ tells. The plan list and setup's list both open their cards with it.
         class={opens(standing) ? 'nk-tag nk-tag-success' : 'nk-tag'}
         data-testid="provider-identity-standing"
       >
-        {standingLine(standing)}
+        {tagLine()}
       </span>
     </div>
     <p class="nk-spec" data-testid="provider-identity-facts">

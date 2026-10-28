@@ -1,10 +1,16 @@
 <!--
 What the signed-in Google account's Nook folder already holds, shown in
-Connect & sync before anything is written, one card per identity. Rust
-decides each identity's standing and the decisions it allows; picking one
-runs nothing. The step keeps one action button: Connect & sync, or, once a
-decision is picked, the plan followed by Connect & sync. Checking which
-passkey opens an identity decrypts in memory and changes nothing.
+Connect & sync before anything is written, one card per identity.
+
+With an identity in use (adding a sync provider to it), each card carries
+the one action Rust decided from this browser's key, and it runs at once: a
+member continues, anyone else asks to join, a join asked before is checked
+again. The step's button saves the identity in use there.
+
+On the recovery screen, with no identity yet, each identity offers the
+decisions Rust allows; picking one runs nothing, and the step's button runs
+the plan, then Connect & sync. Checking which passkey opens an identity
+decrypts in memory and changes nothing.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
@@ -12,11 +18,15 @@ passkey opens an identity decrypts in memory and changes nothing.
   import { RefreshCw } from '@lucide/svelte'
   import type {
     CredentialCheckReport,
+    IdentityDecision,
     NookProviderSource,
     ProviderIdentityChoice,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import ProviderIdentityList from '$lib/components/provider-vaults/ProviderIdentityList.svelte'
+  import SetupIdentityList from '$lib/components/provider-vaults/SetupIdentityList.svelte'
+  import { FirstRunIdentityAction } from '$lib/vault/first-run'
+  import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
     IdentityPlan,
     identityChoices,
@@ -159,14 +169,75 @@ passkey opens an identity decrypts in memory and changes nothing.
     await onConnect()
   }
 
+  /** Adding a sync provider to the identity in use: each identity runs its
+   * one setup action at once, and nothing is planned. */
+  const setupMode = $derived(vault.isAuthenticated)
+  /** The identity a setup action runs for; empty while none runs. */
+  let workingOn = $state('')
+
+  /** The decision a picked setup action runs for one identity. */
+  function decisionFor(
+    action: FirstRunIdentityAction,
+  ): (choice: ProviderIdentityChoice) => IdentityDecision {
+    return (choice) => {
+      switch (action) {
+        case FirstRunIdentityAction.Continue:
+          return choice.setup.kind === 'continue'
+            ? choice.setup.decision
+            : 'leave'
+        case FirstRunIdentityAction.AskToJoin:
+          return 'askToJoin'
+        case FirstRunIdentityAction.CheckJoin:
+          return 'finishJoining'
+      }
+    }
+  }
+
+  /** The handler of one setup action: it runs for the identity picked, and
+   * the folder is read again unless a join waits for its own key. */
+  function act(
+    action: FirstRunIdentityAction,
+  ): (choice: ProviderIdentityChoice) => Promise<void> {
+    const decide = decisionFor(action)
+    return async (choice) => {
+      workingOn = choice.identity.identityId
+      try {
+        const source: NookProviderSource = { kind: 'googleDrive', accessToken }
+        const run: IdentityPlanRun = {
+          source,
+          planned: [{ choice, decision: decide(choice) }],
+        }
+        const ran = await new IdentityPlanActions(vault).run(run)
+        if (ran.isErr()) vault.errorMsg = vault.t(ran.error.translationKey)
+        else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
+        await load(accessToken)
+      } finally {
+        workingOn = ''
+      }
+    }
+  }
+
+  /** The name of the identity in use, which the step's button saves. */
+  const identityInUse = $derived(
+    vault.identityControl.view.kind === IdentityControlViewKind.Ready
+      ? vault.identityControl.view.snapshot.identityLabel
+      : '',
+  )
+
   const button = $derived.by((): ConnectPlanButton => {
     const ready = inventory.kind !== DriveVaultInventoryKind.Loading
+    const saveHere: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesSaveHere,
+      replacements: { identity: identityInUse },
+    }
     return {
-      busy: !ready || working || checking,
+      busy: !ready || working || checking || workingOn !== '',
       label:
         planned.length > 0
           ? vault.t(I18N_KEYS.ProviderIdentitiesConnectApply)
-          : '',
+          : setupMode && identityInUse
+            ? vault.t(saveHere)
+            : '',
       run: runPlan,
     }
   })
@@ -205,14 +276,26 @@ passkey opens an identity decrypts in memory and changes nothing.
       <p class="nk-subpanel-head">
         {vault.t(I18N_KEYS.ProviderVaultsListTitle)}
       </p>
-      <ProviderIdentityList
-        {vault}
-        choices={choices.value}
-        {plan}
-        {disabled}
-        {checking}
-        onFindPasskey={checkPasskey}
-      />
+      {#if setupMode}
+        <SetupIdentityList
+          {vault}
+          choices={choices.value}
+          working={workingOn}
+          disabled={busy || !joinIdle}
+          onContinue={act(FirstRunIdentityAction.Continue)}
+          onAskToJoin={act(FirstRunIdentityAction.AskToJoin)}
+          onCheck={act(FirstRunIdentityAction.CheckJoin)}
+        />
+      {:else}
+        <ProviderIdentityList
+          {vault}
+          choices={choices.value}
+          {plan}
+          {disabled}
+          {checking}
+          onFindPasskey={checkPasskey}
+        />
+      {/if}
     </div>
   {/if}
 {/if}

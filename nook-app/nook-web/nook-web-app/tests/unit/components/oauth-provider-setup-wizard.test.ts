@@ -3,7 +3,9 @@ import type { ComponentProps } from 'svelte'
 import { err, ok } from 'neverthrow'
 import type {
   CredentialCheckReport,
+  IdentityControlSnapshot,
   NookGoogleDriveVaultListing,
+  ProviderIdentityJoin,
   ProviderVaultSummary,
 } from '$app-wasm'
 import { OAuthFailure, OAuthFailureKind } from '$lib/auth/oauth-failure'
@@ -27,6 +29,11 @@ import {
   IdentityPlanOutcomeKind,
   type IdentityPlanOutcome,
 } from '$lib/vault/identity-plan-actions'
+import {
+  IdentityControlViewKind,
+  type IdentityControlView,
+} from '$lib/vault/identity-control.svelte'
+import type { VaultState } from '$lib/vault.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
 
@@ -90,6 +97,52 @@ function summary(
     access,
     actions,
   }
+}
+
+/** One vault of an identity of its own, whose log tells a join's answer. */
+function joinedSummary(
+  identityId: string,
+  join: ProviderIdentityJoin,
+): ProviderVaultSummary {
+  const base = summary(
+    `store_${identityId.slice('idn_'.length)}`,
+    { state: 'locked' },
+    ['requestAccess'],
+  )
+  return {
+    ...base,
+    identity: {
+      ...base.identity,
+      identityId,
+      log: {
+        state: 'read',
+        devices: 1,
+        newestDevice: { state: 'unreported' },
+        vaults: 1,
+        thisBrowser: false,
+        join,
+      },
+    },
+  }
+}
+
+/** Adding a sync provider runs with an identity in use. */
+function useIdentity(vault: VaultState): void {
+  const snapshot: IdentityControlSnapshot = {
+    identityId: 'idn_personalide',
+    identityLabel: 'Personal',
+    standing: 'member',
+    members: [{ appId: 'app_here', label: '', isCurrentInstallation: true }],
+    joinRequests: [],
+    vaults: [],
+    mounts: [],
+  }
+  const ready: IdentityControlView = {
+    kind: IdentityControlViewKind.Ready,
+    snapshot,
+  }
+  vault.identityControl.view = ready
+  vault.isAuthenticated = true
 }
 
 function listVaults(listing: NookGoogleDriveVaultListing) {
@@ -160,7 +213,7 @@ describe('Google Drive provider setup', () => {
     ).toBe(false)
   })
 
-  test('lists each identity once, with its standing and no vault actions', async () => {
+  test('with an identity in use, lists each identity once with its one action', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -183,30 +236,36 @@ describe('Google Drive provider setup', () => {
       },
     })
     const { view, vault } = renderWizard(signedInDrive())
-    // Drive setup runs with an identity in use.
-    vault.isAuthenticated = true
+    useIdentity(vault)
 
     await vi.waitFor(() =>
-      expect(view.getAllByTestId('provider-identity')).toHaveLength(2),
+      expect(view.getAllByTestId('setup-identity')).toHaveLength(2),
     )
-    const [own, other] = view.getAllByTestId('provider-identity')
+    const [own, other] = view.getAllByTestId('setup-identity')
     if (!other) throw new Error('the stranger is not listed')
-    // The identity this browser syncs needs nothing decided.
-    expect(own?.dataset.standing).toBe('thisBrowser')
+    // The identity in use has no action of its own: the step's button
+    // saves it here.
+    expect(own?.dataset.setup).toBe('continue')
     expect(own?.textContent).toContain('Personal')
+    expect(
+      own
+        ?.querySelector('[data-testid="provider-identity-standing"]')
+        ?.textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.FirstRunIdentityInUse))
     // Cards are about identities: no vault is listed or acted on.
     expect(own?.textContent).not.toContain('Family')
-    expect(
-      own?.querySelectorAll('[data-testid="provider-identity-decision"]'),
-    ).toHaveLength(0)
-    // The stranger is named by its three words; its log tells its facts;
-    // its two vaults are listed once, under it.
-    expect(other.dataset.standing).toBe('unchecked')
+    expect(own?.querySelectorAll('button')).toHaveLength(0)
+    // The stranger is named by its three words; its log tells its facts.
+    expect(other.dataset.setup).toBe('requestToJoin')
     expect(
       other.querySelector('[data-testid="provider-vault-identity"]')
         ?.textContent,
     ).toContain('ripple-canvas-orbit')
-    expect(String(other.dataset.storeIds).split(' ')).toHaveLength(2)
+    expect(
+      other
+        .querySelector('[data-testid="provider-identity-standing"]')
+        ?.textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.FirstRunIdentityNotMember))
     expect(
       Array.from(
         other.querySelectorAll('[data-testid="provider-vault-identity-log"]'),
@@ -217,24 +276,111 @@ describe('Google Drive provider setup', () => {
         replacements: { count: '2' },
       }),
     )
-    // It is decided as a whole: leave it, or ask to join it.
-    const decisions = Array.from(
-      other.querySelectorAll<HTMLElement>(
-        '[data-testid="provider-identity-decision"]',
-      ),
-    )
-    expect(decisions.map((button) => button.dataset.decision)).toEqual([
-      'leave',
-      'askToJoin',
-    ])
-    expect(decisions[0]?.getAttribute('aria-checked')).toBe('true')
+    // Its one action asks to join it; nothing is planned or decided.
+    expect(
+      other.querySelectorAll('[data-testid="setup-identity-join"]'),
+    ).toHaveLength(1)
+    expect(view.queryAllByTestId('provider-identity-decision')).toHaveLength(0)
     expect(view.getAllByTestId('connect-provider-btn')).toHaveLength(1)
     expect(view.getByTestId('connect-provider-btn').textContent).toContain(
-      vault.t(I18N_KEYS.AuthStorageConnectAndSync),
+      vault.t({
+        key: I18N_KEYS.ProviderIdentitiesSaveHere,
+        replacements: { identity: 'Personal' },
+      }),
     )
   })
 
-  test('picking a decision plans it, and Leave as is takes it back out', async () => {
+  test('with an identity in use, asking to join runs at once and lists again', async () => {
+    const listed = listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          summary('store_othervault1', { state: 'locked' }, ['requestAccess']),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const applied: IdentityPlanOutcome = {
+      kind: IdentityPlanOutcomeKind.Applied,
+    }
+    const run = vi
+      .spyOn(IdentityPlanActions.prototype, 'run')
+      .mockResolvedValue(ok(applied))
+    const { view, vault, onConnect } = renderWizard(signedInDrive())
+    useIdentity(vault)
+
+    await fireEvent.click(await view.findByTestId('setup-identity-join'))
+
+    await vi.waitFor(() => expect(listed).toHaveBeenCalledTimes(2))
+    const call = run.mock.calls.at(0)
+    if (!call) throw new Error('the join was not asked')
+    const [request] = call
+    expect(request.source).toEqual({
+      kind: 'googleDrive',
+      accessToken: 'drive-token',
+    })
+    expect(request.planned.map((entry) => entry.decision)).toEqual([
+      'askToJoin',
+    ])
+    // Asking connects nothing: the step's button still saves the identity
+    // in use.
+    expect(onConnect).not.toHaveBeenCalled()
+  })
+
+  test('with an identity in use, a member continues and an asked join is checked again', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [
+          joinedSummary('idn_approvedabc', 'approved'),
+          joinedSummary('idn_requestedab', 'requested'),
+        ],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const applied: IdentityPlanOutcome = {
+      kind: IdentityPlanOutcomeKind.Applied,
+    }
+    const run = vi
+      .spyOn(IdentityPlanActions.prototype, 'run')
+      .mockResolvedValue(ok(applied))
+    const { view, vault } = renderWizard(signedInDrive())
+    useIdentity(vault)
+
+    await vi.waitFor(() =>
+      expect(view.getAllByTestId('setup-identity')).toHaveLength(2),
+    )
+    const [member, asked] = view.getAllByTestId('setup-identity')
+    if (!asked) throw new Error('the asked identity is not listed')
+    expect(
+      member
+        ?.querySelector('[data-testid="provider-identity-standing"]')
+        ?.textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.FirstRunIdentityMember))
+    expect(
+      asked
+        .querySelector('[data-testid="provider-identity-standing"]')
+        ?.textContent?.trim(),
+    ).toBe(vault.t(I18N_KEYS.AccessCheckIdentityRequested))
+    expect(
+      asked.querySelectorAll('[data-testid="setup-identity-check"]'),
+    ).toHaveLength(1)
+
+    await fireEvent.click(view.getByTestId('setup-identity-continue'))
+
+    await vi.waitFor(() => expect(run).toHaveBeenCalledOnce())
+    const call = run.mock.calls.at(0)
+    if (!call) throw new Error('the member did not continue')
+    const [request] = call
+    expect(
+      request.planned.map((entry) => [
+        entry.choice.identity.identityId,
+        entry.decision,
+      ]),
+    ).toEqual([['idn_approvedabc', 'finishJoining']])
+  })
+
+  test('on the recovery screen, picking a decision plans it, and Leave as is takes it back out', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -245,8 +391,6 @@ describe('Google Drive provider setup', () => {
       },
     })
     const { view, vault } = renderWizard(signedInDrive())
-    // Drive setup runs with an identity in use.
-    vault.isAuthenticated = true
 
     const join = await DecisionButtons.of(view, 'askToJoin')
     await fireEvent.click(join)
@@ -308,7 +452,7 @@ describe('Google Drive provider setup', () => {
     expect(check).not.toHaveBeenCalled()
   })
 
-  test('finding the passkey offers adding or merging, and the plan runs before Connect & sync', async () => {
+  test('on the recovery screen, finding the passkey offers adding it, and the plan runs before Connect & sync', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -367,7 +511,6 @@ describe('Google Drive provider setup', () => {
         ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
       )
     const { view, vault, onConnect } = renderWizard(signedInDrive())
-    vault.isAuthenticated = true
 
     const identity = await view.findByTestId('provider-identity')
     expect(identity.dataset.standing).toBe('unchecked')
@@ -402,15 +545,15 @@ describe('Google Drive provider setup', () => {
     expect(
       view.queryAllByTestId('provider-identity-find-passkey'),
     ).toHaveLength(0)
-    // An identity the passkey opens is added to this browser or merged
-    // into the identity in use, as a whole.
+    // With no identity in use, one the passkey opens is added to this
+    // browser as a whole.
     expect(
       view
         .getAllByTestId('provider-identity-decision')
         .map((button) => button.dataset.decision),
-    ).toEqual(['leave', 'addToBrowser', 'mergeIntoCurrent'])
+    ).toEqual(['leave', 'addToBrowser'])
 
-    await fireEvent.click(await DecisionButtons.of(view, 'mergeIntoCurrent'))
+    await fireEvent.click(await DecisionButtons.of(view, 'addToBrowser'))
     await fireEvent.click(view.getByTestId('connect-provider-btn'))
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
@@ -423,12 +566,12 @@ describe('Google Drive provider setup', () => {
       accessToken: 'drive-token',
     })
     expect(request.planned.map((entry) => entry.decision)).toEqual([
-      'mergeIntoCurrent',
+      'addToBrowser',
     ])
     expect(connect).toHaveBeenCalledOnce()
   })
 
-  test('a decision that fails stops the plan before Connect & sync', async () => {
+  test('with an identity in use, an action that fails says so and connects nothing', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -442,11 +585,9 @@ describe('Google Drive provider setup', () => {
       err(new IdentityPlanFailure(IdentityPlanFailureKind.Join)),
     )
     const { view, vault, onConnect } = renderWizard(signedInDrive())
-    // Drive setup runs with an identity in use.
-    vault.isAuthenticated = true
+    useIdentity(vault)
 
-    await fireEvent.click(await DecisionButtons.of(view, 'askToJoin'))
-    await fireEvent.click(view.getByTestId('connect-provider-btn'))
+    await fireEvent.click(await view.findByTestId('setup-identity-join'))
 
     await vi.waitFor(() =>
       expect(view.getByTestId('google-oauth-error').textContent).toContain(

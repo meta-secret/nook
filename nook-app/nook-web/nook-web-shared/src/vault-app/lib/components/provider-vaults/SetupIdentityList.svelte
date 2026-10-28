@@ -2,7 +2,8 @@
 The identities a sync provider holds, as setup shows them: one card each,
 with the one action Rust decided from this browser's key. A member
 continues; anyone else asks to join; a join already asked can be checked
-again. Picking runs at once: there is no plan to apply.
+again. The identity this browser already holds has no action: the step's
+own button saves it there. Picking runs at once: there is no plan to apply.
 -->
 <script lang="ts">
   import { ArrowRight, RefreshCw, Send } from '@lucide/svelte'
@@ -10,12 +11,14 @@ again. Picking runs at once: there is no plan to apply.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import IdentityCardHeader from '$lib/components/provider-vaults/IdentityCardHeader.svelte'
+  import { IdentityCardTag } from '$lib/components/provider-vaults/identity-card-tag'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     choices,
     working,
+    disabled = false,
     onContinue,
     onAskToJoin,
     onCheck,
@@ -24,13 +27,15 @@ again. Picking runs at once: there is no plan to apply.
     choices: readonly ProviderIdentityChoice[]
     /** The identity an action runs for; empty while none runs. */
     working: string
+    /** Another action on the page runs. */
+    disabled?: boolean
     onContinue: (choice: ProviderIdentityChoice) => void | Promise<void>
     onAskToJoin: (choice: ProviderIdentityChoice) => void | Promise<void>
     /** Read a join this browser already asked for again. */
     onCheck: (choice: ProviderIdentityChoice) => void | Promise<void>
   } = $props()
 
-  const busy = $derived(working !== '' || vault.isVerifying)
+  const busy = $derived(disabled || working !== '' || vault.isVerifying)
 </script>
 
 <div class="space-y-3" data-testid="setup-identity-list">
@@ -42,8 +47,8 @@ again. Picking runs at once: there is no plan to apply.
       data-identity-id={choice.identity.identityId}
       data-setup={choice.setup.kind}
     >
-      <IdentityCardHeader {vault} {choice} />
-      {#if choice.setup.kind === 'continue'}
+      <IdentityCardHeader {vault} {choice} tag={IdentityCardTag.Setup} />
+      {#if choice.setup.kind === 'continue' && choice.setup.decision !== 'leave'}
         <Button
           type="button"
           size="sm"
