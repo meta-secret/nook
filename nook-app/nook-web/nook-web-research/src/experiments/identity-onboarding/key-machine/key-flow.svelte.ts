@@ -28,9 +28,10 @@ export class KeyFlow {
   approved = $state<readonly string[]>([])
   providerHolds = $state<ProviderHolds>(ProviderHolds.Identities)
   passkeyFit = $state<PasskeyFit>(PasskeyFit.Opens)
-  synced = $state(false)
-  /** The user checked the provider's identities with a passkey. */
-  remoteChecked = $state(false)
+  /** Your identity is saved to the provider. */
+  saved = $state(false)
+  /** Provider identities you tried to unlock with your passkey. */
+  tried = $state<readonly string[]>([])
 
   /** The path taken, and where in it the screen is. */
   history = $state<readonly KeyState[]>([KeyState.Empty])
@@ -92,8 +93,8 @@ export class KeyFlow {
     this.chosen = work
     this.merged = []
     this.approved = []
-    this.synced = false
-    this.remoteChecked = false
+    this.saved = false
+    this.tried = []
   }
 
   /** A freshly created identity has one key, this browser's passkey; each

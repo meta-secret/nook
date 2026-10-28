@@ -21,8 +21,8 @@ the sync provider holds and whether your passkey opens its identities. -->
     { id: ProviderHolds.Nothing, label: 'Provider empty' },
   ]
   const fits: readonly { id: PasskeyFit; label: string }[] = [
-    { id: PasskeyFit.Opens, label: 'Passkey opens one' },
-    { id: PasskeyFit.Sealed, label: 'Sealed to me' },
+    { id: PasskeyFit.Opens, label: 'Passkey unlocks one' },
+    { id: PasskeyFit.Sealed, label: 'Unlocks none' },
   ]
   const segment = 'px-3 py-1.5 transition'
   const on = 'bg-[#e9e8e4] text-[#0b0c0d]'

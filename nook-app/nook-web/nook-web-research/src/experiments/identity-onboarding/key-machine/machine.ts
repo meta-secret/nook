@@ -14,8 +14,7 @@ export enum KeyState {
   RemoteIdentities = 'remote-identities',
   JoinPending = 'join-pending',
   ImportProvider = 'import-provider',
-  ImportPasskey = 'import-passkey',
-  ImportChoose = 'import-choose',
+  ImportPick = 'import-pick',
   UsingRemote = 'using-remote',
 }
 
@@ -89,8 +88,8 @@ export const machine: readonly StateNode[] = [
     title: 'Remote identities found',
     group: StateGroup.Remote,
     next: [
-      { to: KeyState.JoinPending, label: 'sealed to you → join request' },
-      { to: KeyState.Synced, label: 'yours merged, rest skipped' },
+      { to: KeyState.JoinPending, label: 'won’t unlock → ask to join' },
+      { to: KeyState.Synced, label: 'save yours (unlocked ones merged)' },
     ],
   },
   {
@@ -106,22 +105,16 @@ export const machine: readonly StateNode[] = [
     state: KeyState.ImportProvider,
     title: 'Pick sync provider',
     group: StateGroup.Import,
-    next: [{ to: KeyState.ImportPasskey, label: 'signed in' }],
+    next: [{ to: KeyState.ImportPick, label: 'signed in' }],
   },
   {
-    state: KeyState.ImportPasskey,
-    title: 'Find yours by passkey',
+    state: KeyState.ImportPick,
+    title: 'Unlock yours',
     group: StateGroup.Import,
     next: [
-      { to: KeyState.UsingRemote, label: 'passkey opens one' },
-      { to: KeyState.ImportChoose, label: 'opens none' },
+      { to: KeyState.UsingRemote, label: 'unlocks → use it' },
+      { to: KeyState.JoinPending, label: 'won’t unlock → ask to join' },
     ],
-  },
-  {
-    state: KeyState.ImportChoose,
-    title: 'Pick yours by its words',
-    group: StateGroup.Import,
-    next: [{ to: KeyState.JoinPending, label: 'join request' }],
   },
   {
     state: KeyState.UsingRemote,
@@ -185,7 +178,7 @@ export enum TokenStatus {
   Synced = 'synced',
   /** Kept by the provider; none of your keys opens it. */
   Sealed = 'sealed',
-  /** Your passkey just opened it; its name shows. */
+  /** Your passkey unlocked it, or a join made it yours; its name shows. */
   Opened = 'opened',
   /** A join request waits on its devices. */
   Pending = 'pending',

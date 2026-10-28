@@ -49,7 +49,7 @@ drawn before there is something to show. -->
           <span class="inline-flex items-center gap-1"><Lock class="size-3" aria-hidden="true" /> sealed</span>
         {/if}
         {#if has(TokenStatus.Opened)}
-          <span class="inline-flex items-center gap-1 text-[#9cc3a4]"><LockOpen class="size-3" aria-hidden="true" /> opened</span>
+          <span class="inline-flex items-center gap-1 text-[#9cc3a4]"><LockOpen class="size-3" aria-hidden="true" /> unlocked</span>
         {/if}
         {#if has(TokenStatus.Pending)}
           <span class="inline-flex items-center gap-1 text-[#d2b07a]"><Send class="size-3" aria-hidden="true" /> request</span>

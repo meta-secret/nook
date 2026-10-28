@@ -1,8 +1,9 @@
 <!-- The screen for the machine's current state: a scene of where the
 identities are, a headline of a few words, and the state's transitions as
-cards. Identities on a provider show by their three words until a passkey or
-a join opens them. The identity on this browser never changes: one of yours
-found on the provider merges into it, and it only gains keys. -->
+cards. Each identity found on a provider is its own card: you unlock it with
+your passkey, and it either turns out to be yours or you ask to join it. The
+identity on this browser never changes: one of yours merges into it, and it
+only gains keys. -->
 <script lang="ts">
   import ActionCard from './ActionCard.svelte'
   import Scene from './Scene.svelte'
@@ -24,16 +25,16 @@ found on the provider merges into it, and it only gains keys. -->
 
   const grid = 'grid gap-3 sm:grid-cols-2'
 
-  /** The first remote identity is the one your passkey opens, when the
+  /** The first remote identity is the one your passkey unlocks, when the
    * simulator says so. */
   function opensFor(identity: IdentityFixture): boolean {
     const [first] = remoteIdentities
     return flow.passkeyFit === PasskeyFit.Opens && identity.id === first?.id
   }
 
-  /** Your passkey opened it, or a device approved your join request. */
+  /** Your passkey unlocked it, or a device approved your join request. */
   function revealed(identity: IdentityFixture): boolean {
-    return (flow.remoteChecked && opensFor(identity)) || flow.approved.includes(identity.id)
+    return (flow.tried.includes(identity.id) && opensFor(identity)) || flow.approved.includes(identity.id)
   }
 
   function nameOf(identity: IdentityFixture): string {
@@ -67,31 +68,52 @@ found on the provider merges into it, and it only gains keys. -->
     remoteIdentities.filter((identity) => !flow.merged.some((done) => done.id === identity.id)),
   )
 
-  /** The provider's identities as the remote step draws them. */
-  const found = $derived<readonly Token[]>([
-    local(TokenStatus.Synced),
-    ...undecided.map((identity) =>
-      remote(identity, revealed(identity) ? TokenStatus.Opened : TokenStatus.Sealed),
-    ),
-  ])
+  function onProvider(identity: IdentityFixture): Token {
+    return remote(identity, revealed(identity) ? TokenStatus.Opened : TokenStatus.Sealed)
+  }
 
-  const sealedAll = $derived<readonly Token[]>(
-    remoteIdentities.map((identity) => remote(identity, TokenStatus.Sealed)),
-  )
+  /** The provider as the remote step draws it: yours once saved, then the
+   * identities still to decide. */
+  const providerTokens = $derived<readonly Token[]>([
+    ...(flow.saved ? [local(TokenStatus.Synced)] : []),
+    ...undecided.map(onProvider),
+  ])
 
   function connect(provider: string): void {
     flow.provider = provider
-    flow.synced = true
-    flow.remoteChecked = false
-    flow.go(
-      flow.providerHolds === ProviderHolds.Nothing ? KeyState.Synced : KeyState.RemoteIdentities,
-    )
+    flow.tried = []
+    if (flow.providerHolds === ProviderHolds.Nothing) {
+      save()
+      return
+    }
+    flow.saved = false
+    flow.go(KeyState.RemoteIdentities)
+  }
+
+  function save(): void {
+    flow.saved = true
+    flow.go(KeyState.Synced)
+  }
+
+  function unlock(identity: IdentityFixture): void {
+    flow.tried = [...flow.tried, identity.id]
   }
 
   /** Fold one of your identities into the one on this browser, in place:
-   * its token leaves the provider and yours gains its keys. */
+   * its token leaves the provider, and yours is saved there with its keys. */
   function merge(identity: IdentityFixture): void {
     flow.merged = [...flow.merged, identity]
+    flow.saved = true
+  }
+
+  function use(identity: IdentityFixture): void {
+    flow.chosen = identity
+    flow.go(KeyState.UsingRemote)
+  }
+
+  function askToJoin(identity: IdentityFixture): void {
+    flow.chosen = identity
+    flow.go(KeyState.JoinPending)
   }
 
   function approve(): void {
@@ -103,6 +125,25 @@ found on the provider merges into it, and it only gains keys. -->
     flow.go(KeyState.RemoteIdentities)
   }
 </script>
+
+{#snippet foundCard(identity: IdentityFixture)}
+  {#if revealed(identity)}
+    {#if flow.hasLocal}
+      <ActionCard
+        title="Merge {nameOf(identity)} into {flow.local().name}"
+        tag="Yours"
+        tagTone="ok"
+        onPick={() => merge(identity)}
+      />
+    {:else}
+      <ActionCard title="Use {nameOf(identity)}" tag="Yours" tagTone="ok" onPick={() => use(identity)} />
+    {/if}
+  {:else if flow.tried.includes(identity.id)}
+    <ActionCard title="Ask to join {identity.words}" tag="Locked" onPick={() => askToJoin(identity)} />
+  {:else}
+    <ActionCard title="Unlock {identity.words}" passkey onPick={() => unlock(identity)} />
+  {/if}
+{/snippet}
 
 <div class="space-y-6">
   {#if flow.current === KeyState.Empty}
@@ -151,7 +192,7 @@ found on the provider merges into it, and it only gains keys. -->
     {#if flow.providerHolds === ProviderHolds.Identities && undecided.length > 0}
       <ActionCard
         title="{undecided.length} more in {flow.provider}"
-        tag="Sealed"
+        tag="Locked"
         onPick={() => flow.go(KeyState.RemoteIdentities)}
       />
     {/if}
@@ -159,44 +200,17 @@ found on the provider merges into it, and it only gains keys. -->
     <Scene
       browser={[local(TokenStatus.Here)]}
       provider={flow.provider}
-      remote={found}
-      link={flow.remoteChecked ? SceneLink.Passkey : SceneLink.Sync}
+      remote={providerTokens}
+      link={flow.saved ? SceneLink.Sync : SceneLink.None}
     />
     <h1 class={ui.title}>
-      {undecided.length > 0 ? `${undecided.length} more found` : `${flow.local().name} · ${keyCount()}`}
+      {undecided.length > 0 ? `${undecided.length} found` : `${flow.local().name} · ${keyCount()}`}
     </h1>
     <div class={grid}>
-      {#if !flow.remoteChecked}
-        <ActionCard
-          title="Check with passkey"
-          passkey
-          onPick={() => {
-            flow.remoteChecked = true
-          }}
-        />
-      {/if}
       {#each undecided as identity (identity.id)}
-        {#if revealed(identity)}
-          <ActionCard
-            title="Merge into {flow.local().name}"
-            tag={nameOf(identity)}
-            tagTone="ok"
-            onPick={() => merge(identity)}
-          />
-        {:else if flow.remoteChecked}
-          <ActionCard
-            title="Ask to join {identity.words}"
-            onPick={() => {
-              flow.chosen = identity
-              flow.go(KeyState.JoinPending)
-            }}
-          />
-        {/if}
+        {@render foundCard(identity)}
       {/each}
-      <ActionCard
-        title={undecided.length > 0 ? 'Skip' : 'Done'}
-        onPick={() => flow.go(KeyState.Synced)}
-      />
+      <ActionCard title={flow.saved ? 'Done' : `Save ${flow.local().name}`} onPick={save} />
     </div>
   {:else if flow.current === KeyState.JoinPending}
     <Scene
@@ -215,32 +229,18 @@ found on the provider merges into it, and it only gains keys. -->
           title={name}
           onPick={() => {
             flow.provider = name
-            flow.go(KeyState.ImportPasskey)
+            flow.tried = []
+            flow.go(KeyState.ImportPick)
           }}
         />
       {/each}
     </div>
-  {:else if flow.current === KeyState.ImportPasskey}
-    <Scene browser={[]} provider={flow.provider} remote={sealedAll} />
+  {:else if flow.current === KeyState.ImportPick}
+    <Scene browser={[]} provider={flow.provider} remote={remoteIdentities.map(onProvider)} />
     <h1 class={ui.title}>Which is yours?</h1>
-    <ActionCard
-      title="Check with passkey"
-      passkey
-      onPick={() =>
-        flow.go(flow.passkeyFit === PasskeyFit.Opens ? KeyState.UsingRemote : KeyState.ImportChoose)}
-    />
-  {:else if flow.current === KeyState.ImportChoose}
-    <Scene browser={[]} provider={flow.provider} remote={sealedAll} />
-    <h1 class={ui.title}>None opened · ask to join</h1>
     <div class={grid}>
       {#each remoteIdentities as identity (identity.id)}
-        <ActionCard
-          title={identity.words}
-          onPick={() => {
-            flow.chosen = identity
-            flow.go(KeyState.JoinPending)
-          }}
-        />
+        {@render foundCard(identity)}
       {/each}
     </div>
   {:else}
