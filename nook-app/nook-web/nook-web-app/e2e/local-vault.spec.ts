@@ -24,6 +24,18 @@ import {
   VaultSection,
 } from './helpers'
 
+/** How far another tab has dropped its copy after this tab deleted it. */
+enum OtherTabDropState {
+  Unreachable = 'unreachable',
+  NoVault = 'no-vault',
+  StillAuthenticated = 'still-authenticated',
+  SessionProbeKept = 'session-probe-kept',
+  StorageRejected = 'storage-rejected',
+  Dropped = 'dropped',
+}
+// The other tab's page reads the states from this plain copy of the enum.
+const otherTabDropStates = { ...OtherTabDropState }
+
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
@@ -397,31 +409,31 @@ test.describe('local vault', () => {
     expect(remaining.caches).not.toContain('nook-cleanup-probe')
     expect(remaining.cookie).not.toContain('nook_cleanup_probe=')
     // The other tab reloads as it drops its copy; an evaluation that the
-    // reload interrupts is read again from the reloaded page.
+    // reload interrupts is read again from the reloaded page. The poll names
+    // the step the other tab has not reached, so a failure says which.
     await expect
       .poll(
         () =>
           otherTab
-            .evaluate(async () => {
+            .evaluate(async (state) => {
               const vault = window.__nookVault
-              if (!vault || vault.isAuthenticated) return false
+              if (!vault) return state.NoVault
+              if (vault.isAuthenticated) return state.StillAuthenticated
               const cleanupProbe = sessionStorage
                 .getItem('nook_cleanup_probe')
                 ?.valueOf()
-              if (cleanupProbe) {
-                return false
-              }
+              if (cleanupProbe) return state.SessionProbeKept
               try {
                 await vault.enqueueStorage(() => vault.admitManager())
-                return true
+                return state.Dropped
               } catch {
-                return false
+                return state.StorageRejected
               }
-            })
-            .catch(() => false),
+            }, otherTabDropStates)
+            .catch(() => OtherTabDropState.Unreachable),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
-      .toBe(true)
+      .toBe(OtherTabDropState.Dropped)
     await otherTab.close()
   })
 
