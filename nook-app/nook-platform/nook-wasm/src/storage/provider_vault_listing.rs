@@ -14,7 +14,7 @@
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent, EventId,
     EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, KnownIdentityName,
-    KnownVaultName, ListedIdentityLog, LocalEventWrite, LocalVaultOccupancy,
+    KnownVaultName, ListedIdentityLog, ListingAppKey, LocalEventWrite, LocalVaultOccupancy,
     ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
     ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
     ProviderVaultTime, StoreId,
@@ -76,7 +76,7 @@ impl DriveVaultListing<'_> {
     /// and verified; nothing in it is encrypted.
     pub(crate) async fn identity_logs(
         &self,
-        this_browser: Option<&AppId>,
+        this_browser: Option<&ListingAppKey>,
     ) -> Result<Vec<ListedIdentityLog>, NookError> {
         self.identity_log_events()
             .await?
@@ -381,6 +381,9 @@ pub(crate) struct BrowserHeldVaults {
     pub(crate) other_identity_vaults: Vec<BrowserIdentityVault>,
     /// This browser's app key under the identity in use.
     pub(crate) app_id: Option<AppId>,
+    /// That key and the identity in use, which each identity's log is read
+    /// against.
+    pub(crate) listing_key: Option<ListingAppKey>,
     /// The names this browser keeps for its registered vaults.
     pub(crate) names: Vec<KnownVaultName>,
     /// The labels of the identities on this browser.
@@ -418,6 +421,7 @@ impl BrowserHeldVaults {
             identity_vaults: keys.identity_vaults(),
             other_identity_vaults: keys.other_identity_vaults(),
             app_id: keys.identity_app_id(),
+            listing_key: keys.listing_key(),
             names,
             identity_names,
         })

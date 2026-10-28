@@ -298,6 +298,7 @@ Behavior-focused Rust tests cover the log in
 - **Provider listing facts and access checks** (nook-core)
   - `a_signed_log_tells_its_devices_their_newest_join_and_its_vaults`
   - `a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails`
+  - `the_log_tells_this_browser_where_its_join_request_stands`
   - `the_member_passkey_opens_its_identity_and_every_vault_it_keeps`
   - `another_passkey_opens_no_identity_and_no_vault`
   - `a_backup_password_opens_its_vault_but_never_the_identity`

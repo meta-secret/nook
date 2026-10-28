@@ -166,7 +166,7 @@ impl NookVaultManager {
         &self,
         source: &DiscoveredVaultSource<'_>,
         observations: &[ProviderVaultObservation],
-        this_browser: Option<&nook_core::AppId>,
+        this_browser: Option<&nook_core::ListingAppKey>,
     ) -> Result<Vec<ListedIdentityLog>, NookError> {
         let mut identities: Vec<IdentityId> = Vec::new();
         for observation in observations {
@@ -237,7 +237,7 @@ impl NookVaultManager {
             .inspect_discovered_vaults(&source, &held.unheld(&observations), held.app_id.as_ref())
             .await?;
         let identity_logs = self
-            .discovered_identity_logs(&source, &observations, held.app_id.as_ref())
+            .discovered_identity_logs(&source, &observations, held.listing_key.as_ref())
             .await?;
         let listing = LocalVaultClassification {
             local_vault: &LocalVaultOccupancy::Closed,

@@ -15,8 +15,8 @@
 use crate::errors::VaultResult;
 use crate::{
     AppId, IdentityDirectory, IdentitySelection, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
-    LocalEventStore, LocalEventWrite, LocalIdentityKeyring, StoreId, VaultMetaGraphProjection,
-    VaultMetaState, VaultProjection,
+    ListingAppKey, LocalEventStore, LocalEventWrite, LocalIdentityKeyring, StoreId,
+    VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -63,6 +63,19 @@ impl BrowserVaultKeys<'_> {
             .iter()
             .find(|entry| entry.identity_id() == selected)
             .map(|entry| entry.app_id().clone())
+    }
+
+    /// The identity in use and its app key, which a listing relates every
+    /// identity's log to: whether it holds the identity, or asked to join it.
+    #[must_use]
+    pub fn listing_key(&self) -> Option<ListingAppKey> {
+        let IdentitySelection::Selected(selected) = self.directory.selection() else {
+            return None;
+        };
+        self.identity_app_id().map(|app_id| ListingAppKey {
+            app_id,
+            identity_id: selected.clone(),
+        })
     }
 
     /// Vaults another identity on this browser holds, where that identity's

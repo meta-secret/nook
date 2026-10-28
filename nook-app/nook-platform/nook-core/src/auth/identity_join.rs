@@ -13,8 +13,8 @@
 )]
 
 use nook_auth2::{
-    AppId, AppKey, IdentityDirectory, IdentityInvitationBinding, IdentityInvitationBindingRequest,
-    LocalIdentityLog, StoreId, VaultKeys,
+    AppId, AppKey, IdentityConnectionKey, IdentityDirectory, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, LocalIdentityLog, MultiDeviceError, StoreId, VaultKeys,
 };
 use nook_event_log::{
     EventError, EventId, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
@@ -113,6 +113,43 @@ impl IdentityJoinAnswer<'_> {
     }
 }
 
+/// Which app key asks to join an identity.
+pub struct IdentityJoinKey<'a> {
+    pub directory: &'a IdentityDirectory,
+    /// The unlocked app key.
+    pub app_key: &'a AppKey,
+    /// The identity to ask.
+    pub invited: &'a IdentityId,
+    /// The control log of the app key's current local identity.
+    pub local_log: LocalIdentityLog,
+}
+
+impl IdentityJoinKey<'_> {
+    /// A fresh key asks itself, as an invite join needs. A key that already
+    /// belongs to an identity needs a new one, protected for this identity.
+    /// A key already bound to the identity, or an identity another key here
+    /// holds, is refused.
+    pub fn choose(&self) -> VaultResult<IdentityConnectionKey> {
+        match self
+            .directory
+            .invitation_binding(&IdentityInvitationBindingRequest {
+                app_key: self.app_key,
+                invited: self.invited,
+                local_log: self.local_log,
+            }) {
+            Ok(IdentityInvitationBinding::Adopt { .. }) => Ok(IdentityConnectionKey::CurrentAppKey),
+            Ok(IdentityInvitationBinding::AlreadyBound) => Err(EventError::IdentityControlInvalid(
+                "this browser already belongs to the identity".to_owned(),
+            )
+            .into()),
+            Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. }) => {
+                Ok(IdentityConnectionKey::NewAppKey)
+            }
+            Err(refused) => Err(refused.into()),
+        }
+    }
+}
+
 /// Where one app key's request to join an identity stands in its log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityJoinProgress {
@@ -207,8 +244,8 @@ mod tests {
         SigningIdentity,
     };
     use nook_auth2::{
-        IdentityCreation, IdentityId, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel,
-        MemberLabelState, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+        IdentityCreation, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel, MemberLabelState,
+        ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
     };
     use nook_event_log::MemberVaultDek;
 
@@ -686,6 +723,36 @@ mod tests {
         let asking = Device::new()?;
         let browser = Browser::with_identity_in_use_and(&asking)?;
         assert!(browser.completion(&asking, &identity.state()?).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn a_fresh_key_asks_itself_and_a_key_in_use_needs_a_new_one() -> anyhow::Result<()> {
+        let identity = Identity::with_two_vaults()?;
+        let asking = Device::new()?;
+        let browser = Browser::with_identity_in_use_and(&asking)?;
+        let key = |app_key: &AppKey, invited: &IdentityId| {
+            IdentityJoinKey {
+                directory: &browser.directory,
+                app_key,
+                invited,
+                local_log: LocalIdentityLog::Empty,
+            }
+            .choose()
+        };
+        let invited = identity.log.identity_id();
+
+        assert_eq!(
+            key(&asking.app, invited)?,
+            IdentityConnectionKey::CurrentAppKey
+        );
+        // The identity in use keeps its vaults: it asks with a new key.
+        assert_eq!(
+            key(&browser.in_use_key, invited)?,
+            IdentityConnectionKey::NewAppKey
+        );
+        // An identity this browser already holds is not asked for again.
+        assert!(key(&asking.app, &browser.in_use).is_err());
         Ok(())
     }
 }
