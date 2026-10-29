@@ -135,7 +135,7 @@ export class IdentityDecisionText {
       case "leave":
         return vault.t(I18N_KEYS.ProviderIdentitiesLeave);
       case "addToBrowser":
-        return vault.isAuthenticated
+        return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
       case "askToJoin":

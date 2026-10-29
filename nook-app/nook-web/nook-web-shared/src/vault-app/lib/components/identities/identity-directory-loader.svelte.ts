@@ -1,4 +1,5 @@
 import { err } from "neverthrow";
+import { NookIdentityLocalAccessKind } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   IdentityDirectoryLoadKind,
@@ -27,6 +28,18 @@ export class IdentityDirectoryLoader {
 
   private set state(state: IdentityDirectoryLoadState) {
     this.vault.identityDirectory = state;
+  }
+
+  /** The name of the identity this browser uses; empty until the directory
+   * is read, or while it has none. */
+  get currentLabel(): string {
+    const state = this.state;
+    if (state.kind !== IdentityDirectoryLoadKind.Ready) return "";
+    const current = state.view.identities.find(
+      (identity) =>
+        identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser,
+    );
+    return current ? current.label : "";
   }
 
   async reload(): Promise<void> {

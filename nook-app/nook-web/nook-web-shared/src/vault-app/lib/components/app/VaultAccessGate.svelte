@@ -15,7 +15,7 @@
     configured_vault_application,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import {
     ExtensionConnectIntentKind,
@@ -27,7 +27,9 @@
   import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
   import FirstRunVaultStep from '$lib/components/login/FirstRunVaultStep.svelte'
   import FirstRunJoinStep from '$lib/components/login/FirstRunJoinStep.svelte'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import UnlockedIdentityPages from '$lib/components/identity-control/UnlockedIdentityPages.svelte'
+  import { IdentityPages } from '$lib/vault/identity-pages'
+  import { FirstRunStage, WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import type { VaultState } from '$lib/vault.svelte'
@@ -89,7 +91,9 @@
     /** Unlock a vault from its identity card; its device key unlocks there. */
     onUnlockOnCard: () => Promise<void>
     /** Unlock only the identity whose key the paired extension holds. */
-    onUnlockPairedIdentity: (target: PairedIdentityUnlockTarget) => Promise<void>
+    onUnlockPairedIdentity: (
+      target: PairedIdentityUnlockTarget,
+    ) => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
@@ -135,6 +139,9 @@
         vault.firstRun === FirstRunStage.Joining),
   )
 
+  /** An identity unlocked without a vault opened one of its pages. */
+  const identityPages = new IdentityPages(untrack(() => vault))
+
   function identityTransitionPending(): boolean {
     return vault.identityTransitionPending
   }
@@ -142,6 +149,7 @@
   onDestroy(() => {
     if (vault.isAuthenticated) {
       vault.identityTransitionPending = false
+      vault.identityPage = WorkspaceSection.Identities
     }
   })
 </script>
@@ -160,6 +168,8 @@
       {:else}
         <FirstRunJoinStep {vault} />
       {/if}
+    {:else if identityPages.pageShown}
+      <UnlockedIdentityPages {vault} />
     {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending() || (vault.hasManager && !vault.isInitializing)}
       <LoginGate
         {vault}

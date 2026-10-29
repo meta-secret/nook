@@ -16,11 +16,9 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick, untrack, type ComponentProps } from 'svelte'
-  import { X } from '@lucide/svelte'
   import { type ExtensionSetupOffer } from '$lib/app/extension-setup'
   import {
     configured_vault_application_supports_extension,
-    NookIdentityLocalAccessKind,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
@@ -31,7 +29,7 @@ band, the scrolling page and the status line.
   import IdentityKeysPage from '$lib/components/identity-control/IdentityKeysPage.svelte'
   import VaultExtensionControl from './VaultExtensionControl.svelte'
   import IdentityPageFrame from '$lib/components/identity-control/IdentityPageFrame.svelte'
-  import IdentityPanel from '$lib/components/identity-control/IdentityPanel.svelte'
+  import IdentityOverviewPanel from '$lib/components/identity-control/IdentityOverviewPanel.svelte'
   import BrowserSettingsPanel from '$lib/components/settings/BrowserSettingsPanel.svelte'
   import IdentityDevicesPanel from '$lib/components/identity-control/IdentityDevicesPanel.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
@@ -45,7 +43,6 @@ band, the scrolling page and the status line.
   } from '$lib/components/identities/identity-card-model'
   import { IdentitySwitch } from '$lib/components/identities/identity-switch'
   import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
-  import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import PageBar from '$lib/components/workspace/PageBar.svelte'
   import {
     ManageNavEntryKind,
@@ -108,7 +105,9 @@ band, the scrolling page and the status line.
     onEditorOpenChange: (open: boolean) => void
     /** Use an identity whose key the paired extension holds, leaving the
      * one in use. */
-    onUnlockPairedIdentity: (target: PairedIdentityUnlockTarget) => Promise<void>
+    onUnlockPairedIdentity: (
+      target: PairedIdentityUnlockTarget,
+    ) => Promise<void>
   } = $props()
 
   const appVersion = '0.1.0'
@@ -140,17 +139,7 @@ band, the scrolling page and the status line.
     void vault.localVaults.length
     void directory.reload()
   })
-  const currentIdentity = $derived.by(() => {
-    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false
-    for (const identity of directory.state.view.identities) {
-      if (identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser)
-        return identity
-    }
-    return false
-  })
-  const identityLabel = $derived(
-    currentIdentity === false ? '' : currentIdentity.label,
-  )
+  const identityLabel = $derived(directory.currentLabel)
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
@@ -502,29 +491,13 @@ band, the scrolling page and the status line.
 <!-- The current identity's panel, opened beside its card on the hub:
      actions first, details after. -->
 {#snippet identityOverview()}
-  <div class="grid gap-4">
-    <header class="flex items-center justify-between gap-3">
-      <h2 class="text-lg font-semibold tracking-tight text-foreground">
-        {vault.t(I18N_KEYS.IdentityOverviewEyebrow)}
-      </h2>
-      <button
-        type="button"
-        class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
-        title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
-        data-testid="identity-overview-close"
-        onclick={() => openSection(WorkspaceSection.Identities)}
-      >
-        <X class="size-4" aria-hidden="true" />
-      </button>
-    </header>
-    <IdentityPanel
-      {vault}
-      health={identityHealth}
-      onOpen={openSection}
-      onAddSyncProvider={addSyncProvider}
-    />
-  </div>
+  <IdentityOverviewPanel
+    {vault}
+    health={identityHealth}
+    onOpen={openSection}
+    onAddSyncProvider={addSyncProvider}
+    onClose={() => openSection(WorkspaceSection.Identities)}
+  />
 {/snippet}
 
 <!-- One of the identity's pages, opened from its card or its overview. -->
@@ -573,7 +546,9 @@ band, the scrolling page and the status line.
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
-      {...SUPPORTS_EXTENSION ? { onUnlockElsewhere: onUnlockPairedIdentity } : {}}
+      {...SUPPORTS_EXTENSION
+        ? { onUnlockElsewhere: onUnlockPairedIdentity }
+        : {}}
       currentHealth={identityHealth}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
@@ -612,7 +587,7 @@ band, the scrolling page and the status line.
         : identityName}
     title={barTitle}
     testId={section}
-    backLabel={backLabel}
+    {backLabel}
     onBack={goBack}
   >
     {@render identityPanel()}

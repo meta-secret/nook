@@ -235,9 +235,26 @@ test.describe('an identity without a vault', () => {
     })
     await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
     await expect(solo.getByTestId('identity-vault-row')).toHaveCount(0)
-    // Managing it opens a vault first, so its card offers no rows that
-    // could not open.
-    await expect(solo.getByTestId('identity-overview-toggle')).toHaveCount(0)
+    // Its overview and pages open with no vault: they act on the identity.
+    await solo.getByTestId('identity-overview-toggle').click()
+    const overview = page.getByTestId('identity-overview')
+    await expect(overview).toBeVisible()
+    await overview.getByTestId('overview-open-devices').click()
+    const devicesPage = page.locator(
+      '[data-testid="identity-page"][data-page="devices"]',
+    )
+    await expect(devicesPage.getByTestId('vault-devices-panel')).toBeVisible()
+    await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
+    await page.getByTestId('identity-page-back').click()
+    await expect(overview).toBeVisible()
+    await overview.getByTestId('identity-action-add-sync').click()
+    await expect(
+      page
+        .locator('[data-testid="identity-page"][data-page="sync"]')
+        .getByTestId('storage-providers-section'),
+    ).toBeVisible()
+    await page.getByTestId('identity-page-back').click()
+    await expect(overview).toBeVisible()
 
     // New vault on the card creates one whenever it is wanted.
     await solo.getByTestId('identity-new-vault').click()

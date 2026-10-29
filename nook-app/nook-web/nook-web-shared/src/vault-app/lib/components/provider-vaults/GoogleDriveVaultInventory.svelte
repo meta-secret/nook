@@ -94,7 +94,7 @@ decrypts in memory and changes nothing.
       const request: IdentityChoicesRequest = {
         vaults: listedVaults(inventory.listing),
         checks,
-        authenticated: vault.isAuthenticated,
+        authenticated: vault.identityInUse,
       }
       return identityChoices(request)
     },
@@ -174,7 +174,7 @@ decrypts in memory and changes nothing.
 
   /** Adding a sync provider to the identity in use: each identity runs its
    * one setup action at once, and nothing is planned. */
-  const setupMode = $derived(vault.isAuthenticated)
+  const setupMode = $derived(vault.identityInUse)
   /** The identity a setup action runs for; empty while none runs. */
   let workingOn = $state('')
 

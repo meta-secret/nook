@@ -184,6 +184,12 @@ then "*identity* is ready" with its first vault's name, or Later.
   this browser's passkey.
 - Devices and Sync act on the identity. They need the identity's app key
   unlocked, not an open vault.
+- An identity with no vault is managed the same way. Unlocked, its card's
+  Identity row opens its overview; Sync, Devices, Add a device, Keys, and
+  Settings open in place of the hub with no vault open, and Back returns to
+  the overview. Vaults offers New vault on the card. A provider added there
+  is saved and receives the identity's log; the provider's identity list
+  treats the identity as the one in use, as it does with a vault open.
 - Every vault belongs to exactly one identity. Cards list a vault under the
   identity with a verified access record for it (the current identity first
   when several claim it), and local vaults no identity has opened yet under

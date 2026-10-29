@@ -55,6 +55,7 @@
   } from '$lib/auth/providers'
   import { WorkspaceRoute } from '$lib/app/workspace-route'
   import { WorkspaceSectionRoute } from '$lib/vault/ui'
+  import { IdentityPages } from '$lib/vault/identity-pages'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
@@ -312,9 +313,11 @@
     vault.vaultImportOpen = true
   }
 
-  /** A page chosen from Manage on a locked card: unlock, then open it. */
+  /** A page chosen from Manage on a locked card: unlock, then open it. An
+   * identity with no vault to open shows its pages without one. */
+  const identityPages = new IdentityPages(untrack(() => vault))
   function manageSection(target: IdentitySectionTarget): void {
-    if (!target.storeId) return
+    if (!target.storeId) return identityPages.manage(target.section)
     const destination: UnlockDestination = {
       storeId: target.storeId,
       page: {
@@ -795,11 +798,7 @@
         />
       {:else if showSetup}
         {#if vault.remoteVaultChoices.length > 0}
-          <RemoteVaultChoice
-            {vault}
-            busy={isVerifying}
-            onApplied={onUnlock}
-          />
+          <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
         {:else if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}

@@ -10,13 +10,14 @@ join) sit between the hero and the cards.
   import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import { Button } from '$lib/components/ui/button'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
   import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
+  import UnlockedIdentityOverview from '$lib/components/identity-control/UnlockedIdentityOverview.svelte'
   import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
   import {
     DeviceRecoveryKind,
@@ -293,11 +294,11 @@ join) sit between the hero and the cards.
     return target
   }
 
-  /** Managing an identity opens one of its vaults first: an identity with
-   * none here offers New vault instead of rows that could not open. */
-  function manageable(identityId: string): boolean {
-    return targetFor(identityId).storeId !== ''
-  }
+  /** With no vault open, the unlocked identity's overview is the hub's own:
+   * its pages open without a vault. */
+  const unlockedOverview = $derived(
+    !vault.isAuthenticated && vault.identityPage === WorkspaceSection.Overview,
+  )
 
   /** The current identity's card, which carries the "New vault" row. */
   const currentCardShown = $derived(
@@ -320,6 +321,12 @@ join) sit between the hero and the cards.
       ),
   )
 </script>
+
+{#snippet unlockedIdentityOverview()}
+  {#if currentHealth}
+    <UnlockedIdentityOverview {vault} health={currentHealth} {onNewVault} />
+  {/if}
+{/snippet}
 
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="identities-hub">
   {#if !firstRun}
@@ -499,10 +506,7 @@ join) sit between the hero and the cards.
               : onNewVault}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
-            {...card.current &&
-            currentHealth &&
-            onManageSection &&
-            manageable(card.identityId)
+            {...card.current && currentHealth && onManageSection
               ? {
                   health: currentHealth,
                   onProtect: (action: NookIdentityNextStep) => {
@@ -516,11 +520,13 @@ join) sit between the hero and the cards.
                   },
                 }
               : {}}
-            overviewOpen={card.current && overviewOpen}
+            overviewOpen={card.current && (overviewOpen || unlockedOverview)}
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }
-              : {}}
-            {...onManageSection && manageable(card.identityId)
+              : unlockedOverview && card.current
+                ? { overviewPanel: unlockedIdentityOverview }
+                : {}}
+            {...onManageSection
               ? {
                   onManageSection: (section: WorkspaceSection) => {
                     const target: IdentitySectionTarget = {

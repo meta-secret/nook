@@ -131,6 +131,9 @@ export class VaultUiState {
   firstRunVaultName = $state("");
   /** An invite kept in iCloud asked this browser to sign in to iCloud. */
   joinICloudSignIn = $state<JoinICloudSignIn>(JoinICloudSignIn.NotNeeded);
+  /** The page of an identity unlocked without an open vault: its overview
+   * beside its card, or one of its pages; Identities is the hub alone. */
+  identityPage = $state<WorkspaceSection>(WorkspaceSection.Identities);
   /** Where a new identity created during setup is kept. */
   firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
   /** The identity this browser asked to join during setup. */
