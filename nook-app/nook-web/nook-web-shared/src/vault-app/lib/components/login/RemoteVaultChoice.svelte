@@ -82,6 +82,10 @@ identity decrypts in memory and changes nothing.
 
   async function apply(): Promise<void> {
     working = true
+    // A keyring recovered here opens its vault next: the import continues
+    // with that vault, as with one picked from a list of vaults.
+    const recovered = planned.find((entry) => entry.decision === 'addToBrowser')
+    const [recoveredVault] = recovered ? recovered.choice.vaults : []
     try {
       const run: IdentityPlanRun = {
         source: recoveryProviderSource(vault),
@@ -99,6 +103,13 @@ identity decrypts in memory and changes nothing.
         // A join waits for a fresh key; its ceremony asks, then lists again.
         case IdentityPlanOutcomeKind.WaitsForKey:
           return
+      }
+      if (recoveredVault) {
+        const chosen = vault.chooseRemoteVault(recoveredVault.storeId)
+        if (chosen.isErr()) {
+          vault.errorMsg = vault.t(chosen.error.translationKey)
+          return
+        }
       }
     } finally {
       working = false

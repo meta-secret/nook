@@ -3,8 +3,10 @@ import type { ComponentProps } from 'svelte'
 import { ok } from 'neverthrow'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, {
+  NookVaultManager,
   type CredentialCheckReport,
   type FilingIdentity,
+  type NookIdentityAdded,
   type ProviderIdentityJoin,
   type ProviderVaultSummary,
 } from '$app-wasm'
@@ -168,6 +170,64 @@ describe('Recovery vault choice', () => {
     expect(decisionsOf(familyCard)).toEqual(['leave', 'addToBrowser'])
     // The identity no passkey opened can only be asked to let this browser in.
     expect(decisionsOf(strangerCard)).toEqual(['leave', 'askToJoin'])
+  })
+
+  test('a keyring recovered with its passkey opens its vault next', async () => {
+    const report: CredentialCheckReport = {
+      credential: { kind: 'passkey', fingerprint: 'passkey_a1b2c3d4e5f60708' },
+      identities: [
+        {
+          identityId: family.identityId,
+          words: family.words,
+          name: { state: 'named', name: 'Family' },
+          outcome: 'opens',
+          vaults: [
+            {
+              storeId: 'store_familyvault',
+              shortId: 'familyva',
+              outcome: { state: 'opens', name: { state: 'unknown' } },
+            },
+          ],
+        },
+      ],
+    }
+    vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
+      ok(report),
+    )
+    const { view, vault, onApplied } = renderChoice([
+      choice(familyVault),
+      choice(strangerVault),
+    ])
+    const manager = new NookVaultManager()
+    const addedFamily: NookIdentityAdded = {
+      identityId: family.identityId,
+      selection: 'inUse',
+    }
+    const added = vi
+      .spyOn(manager, 'add_identity_with_passkey')
+      .mockResolvedValue(addedFamily)
+    vi.spyOn(vault, 'admitManager').mockReturnValue(ok(manager))
+    VaultStateTestFixture.runStorageImmediately(vault)
+    const chosen = vi
+      .spyOn(vault, 'chooseRemoteVault')
+      .mockReturnValue(ok(true))
+    const [whichPasskey] = view.getAllByTestId('provider-identity-find-passkey')
+    if (!whichPasskey) throw new Error('no passkey check offered')
+    await fireEvent.click(whichPasskey)
+    const recover = await vi.waitFor(() => {
+      const button = view
+        .getAllByTestId('provider-identity-decision')
+        .find((each) => each.dataset.decision === 'addToBrowser')
+      if (!button) throw new Error('no recovery offered')
+      return button
+    })
+    await fireEvent.click(recover)
+    await fireEvent.click(view.getByTestId('remote-vault-choice-apply'))
+
+    await vi.waitFor(() => expect(onApplied).toHaveBeenCalledOnce())
+    expect(added).toHaveBeenCalledOnce()
+    // The other keyring's vault stays where it is.
+    expect(chosen).toHaveBeenCalledExactlyOnceWith('store_familyvault')
   })
 
   test('asking to join with no protected key queues the join for the device protection gate', async () => {
