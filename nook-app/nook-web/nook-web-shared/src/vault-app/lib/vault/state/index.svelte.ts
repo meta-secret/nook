@@ -109,14 +109,12 @@ const providerKeys = [
 ] as const satisfies readonly (keyof VaultProviderState)[];
 
 const sessionKeys = [
-  "externalIdentityHandoff",
   "managerSession",
   "hasManager",
   "admitManager",
   "openManager",
   "deviceProtectionStatus",
   "deviceProtectionLockedStatus",
-  "identityKeySource",
   "isAuthenticated",
   "sessionEpoch",
   "sessionExpiredByIdle",
@@ -283,14 +281,12 @@ class VaultStateSlicesImplementation {
   declare icloudOAuthReady: VaultProviderState["icloudOAuthReady"];
   declare icloudOAuthBusy: VaultProviderState["icloudOAuthBusy"];
 
-  declare externalIdentityHandoff: VaultSessionState["externalIdentityHandoff"];
   declare readonly managerSession: VaultSessionState["managerSession"];
   declare readonly hasManager: VaultSessionState["hasManager"];
   declare admitManager: VaultSessionState["admitManager"];
   declare openManager: VaultSessionState["openManager"];
   declare deviceProtectionStatus: VaultSessionState["deviceProtectionStatus"];
   declare deviceProtectionLockedStatus: VaultSessionState["deviceProtectionLockedStatus"];
-  declare identityKeySource: VaultSessionState["identityKeySource"];
   declare isAuthenticated: VaultSessionState["isAuthenticated"];
   declare sessionEpoch: VaultSessionState["sessionEpoch"];
   declare sessionExpiredByIdle: VaultSessionState["sessionExpiredByIdle"];

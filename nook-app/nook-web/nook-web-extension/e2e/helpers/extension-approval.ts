@@ -1,6 +1,32 @@
 import { expect, type Page } from '@playwright/test'
 
 /**
+ * A connect page on a browser without a keyring runs the website's own first
+ * run: Create identity, then the website's own passkey makes its key (the
+ * protect step, or the overlay elsewhere, asks for it). The extension never
+ * lends its key; the consent that follows approves the extension as another
+ * app of that keyring.
+ */
+export async function createWebsiteIdentityForConnect(
+  vaultPage: Page,
+): Promise<void> {
+  await vaultPage.getByTestId('first-run-create-identity-btn').click()
+  const protect = vaultPage
+    .getByTestId('first-run-protect-step')
+    .or(vaultPage.getByTestId('passkey-auth-overlay'))
+  const consent = vaultPage.getByTestId('extension-connect-consent')
+  await expect(protect.or(consent).first()).toBeVisible({ timeout: 30_000 })
+  if (!(await consent.isVisible())) {
+    const createChoice = vaultPage.getByTestId(
+      'device-protection-create-new-choice',
+    )
+    if (await createChoice.isVisible()) await createChoice.click()
+    await vaultPage.getByTestId('device-protection-setup-btn').click()
+  }
+  await expect(consent).toBeVisible({ timeout: 30_000 })
+}
+
+/**
  * Waits for a delivered approval, then for the extension's ready setup.
  * After the extension takes the grant the consent closes at once and the page
  * moves on (the identities, or the first vault's ready step). A failure keeps
@@ -70,8 +96,8 @@ async function nameFirstIdentityHere(
   await vaultPage.getByTestId('first-run-sync-skip').click()
   await vaultPage.getByTestId('first-run-identity-name-input').fill(vaultName)
   await vaultPage.getByTestId('first-run-identity-create-btn').click()
-  // A key the extension lends gets its first vault at once; an identity
-  // that already exists here asks about a vault first.
+  // A new identity asks about its first vault; one that already has a vault
+  // goes straight on.
   const vaultStep = vaultPage.getByTestId('first-run-vault-step')
   await expect(
     vaultStep

@@ -44,9 +44,9 @@ can always choose the browser or a security key instead. Locked, unavailable,
 or account-less Nook sessions automatically use that native fallback.
 
 After a passkey or PIN authorization, the extension keeps its decrypted device
-identity only in an offscreen extension document under a 15-minute renewable
-lease. Successful identity handoffs renew the lease; status, read, retry, and
-closing or reopening the side panel or authentication tab do not. Reopening
+identity only in an offscreen extension document under a 15-minute lease.
+Status, read, retry, and closing or reopening the side panel or
+authentication tab do not renew it. Reopening
 either during a live lease remains unlocked. Lease expiry, explicit lock, or
 browser/context restart requires reauthentication. This preserves required
 prompts rather than reducing them. The identity is never written to browser-vendor storage.

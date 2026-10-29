@@ -26,8 +26,7 @@
   },
   "session": {
     "expired_idle": "Session expired — unlock again to continue.",
-    "idle_warning": "Locking in 30 seconds due to inactivity…",
-    "paired_extension_lock_failed": "The Nook extension didn't lock. Lock it from its side panel."
+    "idle_warning": "Locking in 30 seconds due to inactivity…"
   },
   "nav": {
     "devices_access": "Access"
@@ -124,7 +123,6 @@
     "landing_step_choose": "Create a new vault",
     "landing_step_sentinel": "Choose Sentinel dashboard",
     "landing_step_join": "Respond to invitation",
-    "landing_create_simple_with_extension": "Uses the extension's device key.",
     "get_started_paths_title": "What do you want to do?",
     "get_started_paths_description": "Sentinel participants join only through an invitation created by the vault owner.",
     "get_started_path_sentinel_title": "Create Sentinel vault",
@@ -284,9 +282,6 @@
     "vault_picker_subtitle": "Open an existing vault on this device, create another, or import one from a sync provider.",
     "vault_workflow_import_description": "Connect a sync provider to open a vault that already exists elsewhere.",
     "vault_picker_hint": "Each vault has its own secrets and sync providers.",
-    "vault_picker_extension_pairing_checking": "Checking extension pairing…",
-    "vault_picker_extension_paired": "Paired with this extension",
-    "vault_picker_extension_not_paired": "Not paired with this extension",
     "vault_picker_extension_pairing_purpose": "Choose this vault to connect it to the browser extension.",
     "vault_picker_unnamed": "Unnamed vault",
     "vault_name_label": "Vault name",
@@ -327,12 +322,9 @@
     "pair_body": "The extension is installed but not connected to this vault yet. Open it here, unlock the extension device, then choose Connect to Simple Vault.",
     "switch_title": "Extension connected to another vault",
     "switch_body": "This extension still has independent access to its previous vault. Switch its active vault only after approving this vault.",
-    "connected_vault": "Extension vault: {vault} ({store})",
     "vault_install_title": "Fill passwords from this vault on websites with the Nook browser extension.",
     "vault_connect": "Use with extension",
     "vault_connect_title": "Let the browser extension fill passwords from this vault. It can serve several vaults.",
-    "vault_connected": "Extension",
-    "vault_connected_title": "The browser extension fills passwords from this vault.",
     "vault_panel_failed": "Nook could not open its panel. Click the Nook icon in the browser toolbar."
   },
   "vault": {
@@ -373,8 +365,6 @@
     "switcher_create_new": "Create another vault",
     "switcher_import_existing": "Import existing vault",
     "switcher_manage_vaults": "Manage vaults",
-    "switcher_extension_badge": "Browser extension",
-    "switcher_extension_connected": "Browser extension connected to {vault}",
     "create_title": "Create vault",
     "manage_title": "Manage vaults",
     "manager_name_label": "Vault name",
@@ -1847,9 +1837,7 @@
       "title": "Use Nook on websites",
       "description": "Keep the complete vault on simple.nokey.sh and allow this browser extension to provide Nook where you sign in.",
       "device_protection": "The extension remains a separately revocable Nook device. The Nook tab protects its device key with a passkey; it does not contain a second vault interface.",
-      "messaging_unavailable": "The Nook extension could not be reached from this browser.",
       "identity_handoff_failed": "The extension device could not be unlocked for this vault. Reopen Nook from the unlocked extension and try again.",
-      "paired_unlock_timed_out": "The Nook extension is still locked. Unlock it in its side panel, then press Unlock here again.",
       "start_failed": "The extension could not start browser access setup.",
       "protection_opened": "Finish passkey protection in the Nook tab, then return here for vault approval.",
       "starting": "Opening protection…",
@@ -1914,9 +1902,6 @@
       "fill_no_form": "No login form on this page. Open the sign-in form, then fill again.",
       "fill_site_changed": "This tab moved to another site. Choose a login again.",
       "fill_locked": "Nook locked before filling. Unlock it, then fill again.",
-      "vault_page_waiting_cue": "Next step",
-      "vault_page_waiting_title": "Your vault page is waiting",
-      "vault_page_waiting": "Unlock Nook here and the vault page continues on its own.",
       "fill_failed": "Nook could not fill this login. Try again.",
       "site_no_filling_vault": "None of your connected vaults fills passwords yet.",
       "site_locked": "Nook locked while loading this site's saved items. Try again.",
@@ -2416,10 +2401,7 @@
     "how_it_works": "How the new device gets access",
     "single_device": "Only this device can open your keyring. Add another so losing it doesn't lock you out.",
     "not_member_title": "This key can't invite devices yet",
-    "not_member_extension": "Nook is using the key your browser extension holds, and that key hasn't joined {identity} yet. Only a member of {identity} can invite a new device.",
-    "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device.",
-    "use_browser_key": "Use this browser's passkey",
-    "use_browser_key_hint": "Nook locks this page and opens {identity} again with this browser's passkey. The extension stays unlocked and is invited to join {identity}."
+    "not_member_browser": "This browser hasn't joined {identity} yet. Only a member of {identity} can invite a new device."
   },
   "first_run": {
     "title": "Create your keyring",

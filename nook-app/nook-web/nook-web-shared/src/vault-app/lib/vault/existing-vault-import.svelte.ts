@@ -1,7 +1,6 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   JoinEnrollmentState,
-  type CompanionProviderPresence,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
 import {
@@ -17,9 +16,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import { ExistingVaultProviderDraft } from "$lib/vault/existing-vault-provider.svelte";
 import {
   ActiveVaultKind,
-  LocalVaultCatalogKind,
   LoginSetupKind,
-  LoginVaultSelectionKind,
   RecoveryDiscoveryKind,
   type ActiveVault,
 } from "$lib/vault/state/provider.svelte";
@@ -36,29 +33,6 @@ export class ExistingVaultImportLifecycle {
   });
 
   constructor(private readonly vault: VaultState) {}
-
-  unlockDecision(companionProvider: CompanionProviderPresence) {
-    return this.vault.clientPolicy.existing_vault_import_unlock_decision(
-      companionProvider,
-    );
-  }
-
-  get unlockStoreId(): string {
-    const vault = this.vault;
-    if (vault.activeVault.kind === ActiveVaultKind.Open) {
-      const storeId = vault.activeVault.storeId.trim();
-      if (storeId) return storeId;
-    }
-    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
-      const storeId = vault.selectedLoginVault.storeId.trim();
-      if (storeId) return storeId;
-    }
-    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
-      const storeId = vault.localVaultCatalog.first.storeId.trim();
-      if (storeId) return storeId;
-    }
-    return "";
-  }
 
   get waitingForDevice(): boolean {
     return this.queue.kind === ExistingVaultImportQueueKind.WaitingForDevice;

@@ -55,8 +55,6 @@ export class ExtensionSessionSenderPolicy {
       ExtensionSessionRequestAudience.ExtensionPages,
     [ExtensionSessionMessageType.UnlockPin]:
       ExtensionSessionRequestAudience.ExtensionPages,
-    [ExtensionSessionMessageType.SealIdentityHandoff]:
-      ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.ImportVault]:
       ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.JoinIdentity]:

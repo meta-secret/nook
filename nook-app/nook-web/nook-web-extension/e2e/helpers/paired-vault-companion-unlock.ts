@@ -3,25 +3,9 @@ import { pressIfReady } from '../../../nook-web-app/e2e/helpers/workspace-naviga
 import { VaultPanelUnlockProgress } from '../../../nook-web-app/e2e/helpers/settings-auth'
 import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
 
-export enum PairedVaultCompanionUnlockKind {
-  Optional = 'optional',
-  Required = 'required',
-}
-
-export type PairedVaultCompanionUnlock = {
-  readonly context: BrowserContext
-  readonly vaultPage: Page
-  readonly companionUnlock: PairedVaultCompanionUnlockKind
-  readonly extensionId: string
-}
-
 type CompanionPopupUnlock = {
   readonly page: Page
   readonly diagnostics: CompanionPopupDiagnostics
-}
-
-type CompanionAdoptionVisibilityOptions = {
-  readonly timeout: number
 }
 
 type CompanionPopupHandle = {
@@ -285,16 +269,7 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
       '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"]',
     ),
   )
-  // An identity that the paired extension restores while its vault panel
-  // is open loses the panel's Unlock, and its vault opens only as a panel
-  // opens on the unlocked identity: close that panel to open it again.
-  const liveOpenRow = row.and(
-    vaultPage.locator(
-      '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-vault-row"][aria-expanded="true"]',
-    ),
-  )
   const gettingAccess = vaultPage.getByTestId('vault-panel-getting-access')
-  // The restored identity may unlock itself while its old button disappears.
   await expect
     .poll(
       async () => {
@@ -317,12 +292,6 @@ export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
             break
         }
         switch (await gettingAccess.isVisible()) {
-          case true:
-            return VaultPanelUnlockProgress.Waiting
-          case false:
-            break
-        }
-        switch (await pressIfReady(liveOpenRow)) {
           case true:
             return VaultPanelUnlockProgress.Waiting
           case false:
@@ -396,72 +365,4 @@ async function describeVaultPage(page: Page): Promise<string> {
     }
   })
   return JSON.stringify(state)
-}
-
-export async function unlockPairedVaultThroughCompanion(
-  request: PairedVaultCompanionUnlock,
-): Promise<void> {
-  const { context, vaultPage, companionUnlock, extensionId } = request
-  const authenticatedShell = vaultPage.getByTestId('authenticated-shell')
-  const unlockButton = vaultPage.getByTestId('identity-vault-row').first()
-  const adoptionVisibilityOptions: CompanionAdoptionVisibilityOptions = {
-    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-  }
-
-  await expect(authenticatedShell.or(unlockButton)).toBeVisible({
-    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-  })
-  const authenticated = await authenticatedShell.isVisible()
-  if (
-    companionUnlock === PairedVaultCompanionUnlockKind.Required &&
-    authenticated
-  ) {
-    await unlockExtensionThroughCompanion({ context, extensionId })
-  } else if (!authenticated) {
-    const existingCompanionPages = context
-      .pages()
-      .filter((page) => isOwnedCompanionPopup(page, extensionId))
-    await startVaultPanelUnlock(vaultPage)
-    await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-
-    if (companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
-      try {
-        await expectVaultOpened(vaultPage)
-      } catch {
-        const companionPopup = await openOwnedCompanionPopup({
-          context,
-          extensionId,
-          ignoredPages: existingCompanionPages,
-        })
-        try {
-          await completeCompanionPopupUnlock(companionPopup)
-          await expectVaultOpened(vaultPage, adoptionVisibilityOptions.timeout)
-        } finally {
-          if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
-            await companionPopup.page.close()
-          }
-        }
-      }
-    } else {
-      // The vault opens the browser-owned side panel, which Playwright does not
-      // expose as a Page; the same packaged auth UI unlocks from a tab.
-      const companionPopup = await openOwnedCompanionPopup({
-        context,
-        extensionId,
-        ignoredPages: existingCompanionPages,
-      })
-      try {
-        await completeCompanionPopupUnlock(companionPopup)
-        await expectVaultOpened(vaultPage, adoptionVisibilityOptions.timeout)
-      } finally {
-        if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
-          await companionPopup.page.close()
-        }
-      }
-    }
-  }
-
-  await expect(authenticatedShell).toBeVisible({
-    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-  })
 }

@@ -29,10 +29,7 @@ function member(
     appId,
     label: unknown,
     currentBrowser: false,
-    localProtection: DeviceAccessProtectionKind.Missing,
-    protectionAssociation: protection,
-    associatedPasskeyName: unknown,
-    associatedPasskeyFingerprint: unknown,
+    localProtection: protection,
   }
 }
 

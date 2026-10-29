@@ -30,20 +30,14 @@ import {
 } from '../lib/extension-session-readiness'
 import {
   clearExtensionSessionSensitiveRequest,
-  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-  COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
   ExtensionSessionQueueKind,
   ExtensionSessionQueuePriority,
   type ExtensionSessionNonImportRequest,
   type ExtensionSessionRequest,
-  type CompanionIdentityDiscoverySessionTransportRequest,
-  type CompanionIdentityHandoffSessionTransportRequest,
   type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
-  decodeCompanionIdentityDiscoverySessionTransportRequest,
-  decodeCompanionIdentityHandoffSessionTransportRequest,
   parseExtensionSessionRequest,
   stageExtensionSessionSensitiveRequest,
 } from './session-request-adapter'
@@ -51,7 +45,6 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   isCompanionWasmSessionMessageType,
   type CompanionWasmSessionMessage,
@@ -74,12 +67,6 @@ type SensitivePayloadResidency =
 export type SessionMessageDispatchContext<SessionResponse> = {
   handleMessage: (
     message: ExtensionSessionRequest,
-  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  handleCompanionIdentityDiscovery: (
-    message: CompanionIdentityDiscoverySessionTransportRequest,
-  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  handleCompanionIdentityHandoff: (
-    message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
   handleCompanionWasmMessage?: (
     message: CompanionWasmSessionMessage,
@@ -109,7 +96,6 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.Reset:
       return SessionOperationPriority.Expiry
     case ExtensionSessionMessageType.MigrateAuthProviders:
-    case ExtensionSessionMessageType.SealIdentityHandoff:
     case ExtensionSessionMessageType.PlanLoginSave:
     case ExtensionSessionMessageType.CommitLoginSave:
     case ExtensionSessionMessageType.RevealLogin:
@@ -449,40 +435,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     return this.operations.enqueue(nookNamedArgs1_1)
   }
 
-  private enqueueCompanionIdentityHandoff(
-    message: CompanionIdentityHandoffSessionTransportRequest,
-  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
-      operation: () => this.context.handleCompanionIdentityHandoff(message),
-      options: {
-        priority: SessionOperationPriority.Interactive,
-        expiry: {
-          kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
-        },
-        cleanup: { kind: SessionOperationCleanupKind.None },
-      },
-    }
-    return this.operations.enqueue(enqueueArgs)
-  }
-
-  private enqueueCompanionIdentityDiscovery(
-    message: CompanionIdentityDiscoverySessionTransportRequest,
-  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
-      operation: () => this.context.handleCompanionIdentityDiscovery(message),
-      options: {
-        priority: SessionOperationPriority.Probe,
-        expiry: {
-          kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
-        },
-        cleanup: { kind: SessionOperationCleanupKind.None },
-      },
-    }
-    return this.operations.enqueue(enqueueArgs)
-  }
-
   enqueueCompanionWasmMessage(
     message: CompanionWasmSessionMessage,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
@@ -614,76 +566,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
             sendResponse({ ok: false, error: failure.message }),
           ),
         )
-        return true
-      }
-      if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
-        if (!serviceWorkerSender) {
-          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error: 'Forbidden companion identity discovery request.',
-          }
-          sendResponse(forbiddenResponse)
-          return false
-        }
-        void companionWasmReady.then(() => {
-          const decoded = runConcreteDecoder(
-            decodeCompanionIdentityDiscoverySessionTransportRequest,
-            message,
-          )
-          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
-            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-              ok: false,
-              error: 'Forbidden companion identity discovery request.',
-            }
-            sendResponse(forbiddenResponse)
-            return
-          }
-          void this.enqueueCompanionIdentityDiscovery(decoded.value).then(
-            (result) =>
-              result.match(sendResponse, (failure) => {
-                const response: Parameters<typeof sendResponse>[0] = {
-                  ok: false,
-                  error: failure.message,
-                }
-                sendResponse(response)
-              }),
-          )
-        })
-        return true
-      }
-      if (message.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE) {
-        if (!serviceWorkerSender) {
-          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error: 'Forbidden companion identity handoff request.',
-          }
-          sendResponse(forbiddenResponse)
-          return false
-        }
-        void companionWasmReady.then(() => {
-          const decoded = runConcreteDecoder(
-            decodeCompanionIdentityHandoffSessionTransportRequest,
-            message,
-          )
-          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
-            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-              ok: false,
-              error: 'Forbidden companion identity handoff request.',
-            }
-            sendResponse(forbiddenResponse)
-            return
-          }
-          void this.enqueueCompanionIdentityHandoff(decoded.value).then(
-            (result) =>
-              result.match(sendResponse, (failure) => {
-                const response: Parameters<typeof sendResponse>[0] = {
-                  ok: false,
-                  error: failure.message,
-                }
-                sendResponse(response)
-              }),
-          )
-        })
         return true
       }
       const dispatchFailureResponse: Parameters<typeof sendResponse>[0] = {

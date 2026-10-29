@@ -48,9 +48,6 @@ export type IdentityMemberView = {
   readonly label: DashboardText;
   readonly currentBrowser: boolean;
   readonly localProtection: DeviceAccessProtectionKind;
-  readonly protectionAssociation: DeviceAccessProtectionKind;
-  readonly associatedPasskeyName: DashboardText;
-  readonly associatedPasskeyFingerprint: DashboardText;
 };
 
 export type IdentityDirectoryEntry = {
@@ -194,30 +191,10 @@ class NativeIdentityMember {
   read(): Result<IdentityMemberView, VaultStorageFailure> {
     const member = this.member;
     try {
-      let associatedPasskeyName: DashboardText = new UnknownDashboardText();
-      let associatedPasskeyFingerprint: DashboardText =
-        new UnknownDashboardText();
-      switch (member.protectionAssociation) {
-        case DeviceAccessProtectionKind.PasskeyStandard:
-        case DeviceAccessProtectionKind.PasskeyAntiHacker: {
-          associatedPasskeyName = this.passkeyName();
-          associatedPasskeyFingerprint = new KnownDashboardText(
-            member.associated_passkey_fingerprint(),
-          );
-          break;
-        }
-        case DeviceAccessProtectionKind.Missing:
-        case DeviceAccessProtectionKind.PinOrPassphrase:
-        case DeviceAccessProtectionKind.CompanionSession:
-          break;
-      }
       const view: IdentityMemberView = {
         appId: member.appId,
         currentBrowser: member.currentBrowser,
         localProtection: member.localProtection,
-        protectionAssociation: member.protectionAssociation,
-        associatedPasskeyName,
-        associatedPasskeyFingerprint,
         label:
           member.labelKind === NookIdentityMemberLabelKind.Known
             ? new KnownDashboardText(member.label())
@@ -228,16 +205,6 @@ class NativeIdentityMember {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
       member.free();
-    }
-  }
-
-  private passkeyName(): DashboardText {
-    const name = this.member.associated_passkey_name();
-    switch (name.length) {
-      case 0:
-        return new UnknownDashboardText();
-      default:
-        return new KnownDashboardText(name);
     }
   }
 }

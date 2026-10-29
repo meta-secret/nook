@@ -9,8 +9,6 @@ import {
 
 /** Owns extension runtime readiness and lazy legacy response decoder startup. */
 class CompanionWasmReadiness {
-  private ready = false
-
   async waitForExtensionClassification(): Promise<void> {
     const message: CompanionWasmRuntimeMessage = {
       type: CompanionWasmSessionMessageType.ClassifyPageInputs,
@@ -41,11 +39,6 @@ class CompanionWasmReadiness {
     const { companionWasmReady } =
       await import('../../../../nook-web-shared/src/extension/companion-ready')
     await companionWasmReady
-    this.ready = true
-  }
-
-  isReadySynchronously(): boolean {
-    return this.ready
   }
 }
 

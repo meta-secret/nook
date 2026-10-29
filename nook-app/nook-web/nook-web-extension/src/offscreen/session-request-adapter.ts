@@ -1,14 +1,8 @@
 import { Effect, Schema } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type {
-  CompanionIdentityDiscoverySessionTransportRequest as GeneratedCompanionIdentityDiscoverySessionTransportRequest,
-  CompanionIdentityHandoffSessionTransportRequest as GeneratedCompanionIdentityHandoffSessionTransportRequest,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
-  decode_companion_identity_discovery_session_transport_request,
-  decode_companion_identity_handoff_session_transport_request,
   decode_extension_session_request,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
   type ExtensionStorageProviderIdentity,
@@ -94,19 +88,7 @@ type ExtensionSessionImportTransportRequest = {
 export type ExtensionSessionTransportRequest =
   | GeneratedExtensionSessionNonImportRequest
   | ExtensionSessionImportTransportRequest
-  | CompanionIdentityDiscoverySessionTransportRequest
-  | CompanionIdentityHandoffSessionTransportRequest
   | CompanionWasmSessionMessage
-
-export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
-  'nook:extension-session-authorize-companion-identity-handoff'
-export const COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE =
-  'nook:extension-session-discover-companion-identity'
-
-export type CompanionIdentityDiscoverySessionTransportRequest =
-  GeneratedCompanionIdentityDiscoverySessionTransportRequest
-export type CompanionIdentityHandoffSessionTransportRequest =
-  GeneratedCompanionIdentityHandoffSessionTransportRequest
 
 export type ParsedExtensionSessionTransportRequest = ExtensionSessionRequest
 export type ExtensionSessionNonImportRequest =
@@ -131,8 +113,6 @@ export enum ExtensionSessionRequestParseKind {
 export enum ExtensionSessionRequestDecodeFailureKind {
   RawEnvelope = 'raw-envelope-decode-failed',
   SessionRequest = 'session-request-decode-failed',
-  CompanionIdentityDiscovery = 'companion-identity-discovery-decode-failed',
-  CompanionIdentityHandoff = 'companion-identity-handoff-decode-failed',
   StorageProvider = 'storage-provider-decode-failed',
   ImportProviders = 'import-providers-decode-failed',
 }
@@ -232,46 +212,6 @@ export function decodeExtensionSessionRawEnvelope(
   )
 }
 
-export function decodeCompanionIdentityDiscoverySessionTransportRequest(
-  value: ExtensionSessionRuntimeMessageValue,
-): Effect.Effect<
-  CompanionIdentityDiscoverySessionTransportRequest,
-  ExtensionSessionRequestDecodeFailure
-> {
-  type CompanionIdentityDiscoveryDecodeAttempt = {
-    readonly try: () => CompanionIdentityDiscoverySessionTransportRequest
-    readonly catch: () => ExtensionSessionRequestDecodeFailure
-  }
-  const attempt: CompanionIdentityDiscoveryDecodeAttempt = {
-    try: () =>
-      decode_companion_identity_discovery_session_transport_request(value),
-    catch: (): ExtensionSessionRequestDecodeFailure => ({
-      kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityDiscovery,
-    }),
-  }
-  return Effect.try(attempt)
-}
-
-export function decodeCompanionIdentityHandoffSessionTransportRequest(
-  value: ExtensionSessionRuntimeMessageValue,
-): Effect.Effect<
-  CompanionIdentityHandoffSessionTransportRequest,
-  ExtensionSessionRequestDecodeFailure
-> {
-  type CompanionIdentityHandoffDecodeAttempt = {
-    readonly try: () => CompanionIdentityHandoffSessionTransportRequest
-    readonly catch: () => ExtensionSessionRequestDecodeFailure
-  }
-  const attempt: CompanionIdentityHandoffDecodeAttempt = {
-    try: () =>
-      decode_companion_identity_handoff_session_transport_request(value),
-    catch: (): ExtensionSessionRequestDecodeFailure => ({
-      kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityHandoff,
-    }),
-  }
-  return Effect.try(attempt)
-}
-
 export type ExtensionSessionRequestParse =
   | { kind: ExtensionSessionRequestParseKind.Invalid }
   | {
@@ -332,7 +272,6 @@ const sensitiveSessionFields: Readonly<
   ],
   [ExtensionSessionMessageType.CreatePin]: [ExtensionSessionSensitiveField.Pin],
   [ExtensionSessionMessageType.UnlockPin]: [ExtensionSessionSensitiveField.Pin],
-  [ExtensionSessionMessageType.SealIdentityHandoff]: [],
   [ExtensionSessionMessageType.ImportVault]: [],
   [ExtensionSessionMessageType.JoinIdentity]: [
     ExtensionSessionSensitiveField.Code,

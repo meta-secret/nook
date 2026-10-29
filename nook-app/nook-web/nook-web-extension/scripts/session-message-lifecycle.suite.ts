@@ -26,18 +26,6 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     const stagedProviders = [githubProvider('github_pat_expired_staged_secret')]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -75,18 +63,6 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     const events: string[] = []
     const dispatcher: ExtensionSessionMessageDispatcher<unknown> =
       new ExtensionSessionMessageDispatcher({
-        handleCompanionIdentityDiscovery: async () =>
-          err(
-            new SessionOperationFailure(
-              SessionOperationFailureKind.InvalidRequest,
-            ),
-          ),
-        handleCompanionIdentityHandoff: async () =>
-          err(
-            new SessionOperationFailure(
-              SessionOperationFailureKind.InvalidRequest,
-            ),
-          ),
         decodeProviders,
         handleMessage: async (message) => {
           events.push(`start ${message.type}`)
@@ -144,18 +120,6 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
       },
     })
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async () => ok({ ok: true }),
     })
@@ -220,18 +184,6 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
 
   test('responds to a status request when the session queue rejects', async () => {
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async () => ok({ ok: true }),
     })
@@ -255,18 +207,6 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
 
   test('leaves content companion WASM requests for the service worker', async () => {
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       handleCompanionWasmMessage: async () => ok({ ok: true }),
       decodeProviders,
       handleMessage: async () => ok({ ok: true }),

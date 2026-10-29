@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest'
 import { VaultAppRouteCoordinator } from '$lib/app/vault-app-route-coordinator.svelte'
-import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -18,13 +17,10 @@ function coordinator() {
 }
 
 describe('leaving the extension connect page', () => {
-  test.each([
-    ExtensionConsentCloseOutcome.Approved,
-    ExtensionConsentCloseOutcome.Cancelled,
-  ])('returns to the identities, not into a vault (%s)', (outcome) => {
+  test('approving or declining returns to the identities, not into a vault', () => {
     const { vault, routes } = coordinator()
 
-    routes.finishExtensionConnect(outcome)
+    routes.finishExtensionConnect()
 
     expect(vault.workspaceSection).toBe(WorkspaceSection.Identities)
     expect(window.location.pathname).toMatch(/\/identities$/)

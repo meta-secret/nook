@@ -1,9 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
-import type {
-  NookFreshIdentityNaming,
-  NookProviderSource,
-  ProviderIdentityChoice,
-} from "$app-wasm";
+import type { NookProviderSource, ProviderIdentityChoice } from "$app-wasm";
 import {
   GOOGLE_DRIVE_OAUTH_FILE_PRESET,
   OAUTH_FILE_PROVIDER_TYPE,
@@ -53,6 +49,11 @@ export type FirstRunIdentityRun = FirstRunIdentity & {
   readonly action: FirstRunIdentityAction;
 };
 
+/** The fresh identity took its name. */
+enum FirstRunNamingOutcome {
+  Named = "named",
+}
+
 /** The identity could not be named. */
 class FirstRunNamingFailure {
   readonly translationKey = I18N_KEYS.FirstRunNameFailed;
@@ -70,8 +71,7 @@ export class FirstRunActions {
   /** The device key is ready. During first run it only makes the identity's
    * key, and setup moves on to the sync provider; outside setup it creates
    * the vault as before. A key that becomes ready again while setup is past
-   * it (an extension's key arrives once its approval and its queued request
-   * both land) changes nothing: the vault waits for the identity. */
+   * it changes nothing: the vault waits for the identity. */
   async createWithDeviceKeys(label: string): Promise<void> {
     const vault = this.vault;
     switch (vault.firstRun) {
@@ -124,8 +124,7 @@ export class FirstRunActions {
   /** Name the new identity. Kept on this browser, it then asks whether to
    * create a first vault. On the sync provider it creates that vault at
    * once: the signed-in provider stays staged, so the vault connects it next
-   * without another sign-in. A key the extension lends has no identity until
-   * its first vault, which is created at once as well. */
+   * without another sign-in. */
   async createNamed(name: string): Promise<void> {
     const vault = this.vault;
     const label = name.trim();
@@ -135,10 +134,7 @@ export class FirstRunActions {
       vault.errorMsg = vault.t(named.error.translationKey);
       return;
     }
-    if (
-      vault.firstRunPlace === FirstRunPlace.ThisBrowser &&
-      this.existsHere(named.value)
-    ) {
+    if (vault.firstRunPlace === FirstRunPlace.ThisBrowser) {
       vault.firstRun = FirstRunStage.Vault;
       return;
     }
@@ -316,31 +312,21 @@ export class FirstRunActions {
    * exists to seal it. */
   private async nameIdentity(
     label: string,
-  ): Promise<Result<NookFreshIdentityNaming, FirstRunNamingFailure>> {
+  ): Promise<Result<FirstRunNamingOutcome, FirstRunNamingFailure>> {
     const vault = this.vault;
     const ran = await vault.enqueueStorage<
-      NookFreshIdentityNaming,
+      FirstRunNamingOutcome,
       FirstRunNamingFailure
     >(async () => {
       const admitted = vault.admitManager();
       if (admitted.isErr()) return err(new FirstRunNamingFailure());
       try {
-        return ok(await admitted.value.name_fresh_identity(label));
+        await admitted.value.name_fresh_identity(label);
+        return ok(FirstRunNamingOutcome.Named);
       } catch {
         return err(new FirstRunNamingFailure());
       }
     });
     return ran.mapErr(() => new FirstRunNamingFailure());
-  }
-
-  /** Whether the named identity exists on this browser already, so it can
-   * stay without a vault. */
-  private existsHere(naming: NookFreshIdentityNaming): boolean {
-    switch (naming.state) {
-      case "named":
-        return true;
-      case "atFirstVault":
-        return false;
-    }
   }
 }

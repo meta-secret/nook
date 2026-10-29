@@ -97,18 +97,6 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     }
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async (message) => {
         if (message.type === ExtensionSessionMessageType.ImportVault) {
@@ -155,18 +143,6 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -217,18 +193,6 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
       githubProvider('github_pat_canceled_staged_secret'),
     ]
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -276,18 +240,6 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     const stagedProviders = [githubProvider('github_pat_expired_queue_secret')]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders: async () => stagedProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)

@@ -2,9 +2,9 @@
 //! the identity an enrollment code invites it into.
 
 use nook_core::{
-    AppKeyIdentityMembership, FreshIdentityNamed, FreshIdentityNaming, IdentityControlLog,
-    IdentityControlState, IdentityEvent, IdentityEventSigning, IdentityGenesisRequest, IdentityId,
-    IdentityInvitationBinding, IdentityInvitationBindingRequest, LocalIdentityLog,
+    FreshIdentityNaming, IdentityControlLog, IdentityControlState, IdentityEvent,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -12,7 +12,6 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
-use crate::manager::session::FirstVaultIdentityName;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::{IdentityDirectoryWrite, KeyringDbRebindLocalIdentity};
 use crate::{NookDatabase, NookError};
@@ -69,18 +68,6 @@ impl NookVaultManager {
     }
 }
 
-/// Where a fresh identity's name went.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum NookFreshIdentityNaming {
-    /// The identity exists on this browser and carries the name: setup may
-    /// leave it without a vault.
-    Named,
-    /// The key has no identity here yet: the first vault's genesis creates
-    /// it under the name, so setup creates that vault next.
-    AtFirstVault,
-}
-
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Create the identity's control log when this identity has none yet.
@@ -134,58 +121,24 @@ impl NookVaultManager {
 
     /// Name this browser's identity while it is still fresh. Setup asks for
     /// the name only when it creates a new identity, after the passkey made
-    /// its key; the control log, created later, seals that name. A key the
-    /// browser extension lends has no local identity yet: the name waits on
-    /// this session for the first vault's genesis, which creates it.
+    /// its key; the control log, created later, seals that name.
     #[wasm_bindgen]
-    pub async fn name_fresh_identity(
-        &mut self,
-        label: String,
-    ) -> Result<tsify::Ts<NookFreshIdentityNaming>, JsError> {
+    pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
         let label = Self::local_identity_label(&label).map_err(JsError::new)?;
         let app_key = self.unlocked_app_key()?;
-        let membership = NookDatabase::load_identity_directory()
-            .await?
-            .identity_for_app_key(&app_key)
-            .map_err(NookDatabase::map_domain_error)?;
-        let local_log = match membership {
-            AppKeyIdentityMembership::Enrolled(_) => Self::local_identity_log(&app_key).await?,
-            AppKeyIdentityMembership::Unenrolled => LocalIdentityLog::Empty,
-        };
-        let name = label.clone();
-        let at_first_vault = NookDatabase::update_identity_directory(move |directory| {
-            let named = directory
+        let local_log = Self::local_identity_log(&app_key).await?;
+        NookDatabase::update_identity_directory(move |directory| {
+            let directory = directory
                 .name_fresh_identity(&FreshIdentityNaming {
                     app_key: &app_key,
                     label: &label,
                     local_log,
                 })
                 .map_err(NookDatabase::map_domain_error)?;
-            Ok(match named {
-                FreshIdentityNamed::Renamed(directory) => IdentityDirectoryWrite {
-                    directory,
-                    value: false,
-                },
-                FreshIdentityNamed::AtFirstVault(directory) => IdentityDirectoryWrite {
-                    directory,
-                    value: true,
-                },
-            })
+            Ok(IdentityDirectoryWrite::from(directory))
         })
         .await?;
-        let (staged, naming) = if at_first_vault {
-            (
-                FirstVaultIdentityName::Named(name),
-                NookFreshIdentityNaming::AtFirstVault,
-            )
-        } else {
-            (
-                FirstVaultIdentityName::Unnamed,
-                NookFreshIdentityNaming::Named,
-            )
-        };
-        self.device.first_vault_identity_name = staged;
-        Tsify::into_ts(&naming).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        Ok(())
     }
 }
 
@@ -228,10 +181,7 @@ mod browser_tests {
         assert_eq!(identity_label().await?, before);
 
         // The key's own identity exists here, so it carries the name now.
-        let named = js(manager.name_fresh_identity(" Solo ".to_owned()).await)?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(named, NookFreshIdentityNaming::Named);
+        js(manager.name_fresh_identity(" Solo ".to_owned()).await)?;
         assert_eq!(identity_label().await?, "Solo");
 
         // Once its control log exists, the identity keeps its name.

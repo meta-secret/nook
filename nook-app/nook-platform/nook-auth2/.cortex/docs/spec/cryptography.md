@@ -11,8 +11,8 @@ a manifest is not evidence that every feature uses that crate.
 ## Primary mechanisms
 
 - **age X25519 recipient encryption**
-  - **Implemented purpose:** Per-app vault-key envelopes, enrollment material, and extension identity handoff
-  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`, `nook-app/nook-platform/nook-core/src/auth/extension_identity_handoff.rs`
+  - **Implemented purpose:** Per-app vault-key envelopes and enrollment material
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`
 - **age scrypt encryption**
   - **Implemented purpose:** Vault secret records keyed by random vault material; password-protected wrapping identities
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`, `nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs`
@@ -91,7 +91,7 @@ parameters are not the production defaults.
 - `members_key`
   - Symmetric vault key for protected membership catalog entries.
 - App age X25519 identity
-  - Opens app-addressed vault-key and handoff envelopes.
+  - Opens app-addressed vault-key envelopes.
   - Private material is protected by passkey or PIN mode.
 - App Ed25519 signing identity
   - Signs canonical event bodies.

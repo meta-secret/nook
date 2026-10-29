@@ -118,8 +118,7 @@ text stays only for a requirement, a consequence, or a promise.
 - **Name**: "Name your identity", one field (empty takes the suggested
   name). Only members see the name. On the Drive path, its first vault is
   created under the same name and the signed-in Drive connects next without
-  another sign-in. A key the browser extension lends gets that vault at once
-  too: its identity exists only from that vault.
+  another sign-in.
 - **Vault** (kept on this browser): "Create your first vault?" with the
   vault's name, or **Not now**. Not now ends setup with the identity and no
   vault: the identities page shows its card with New vault, never the Start

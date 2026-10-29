@@ -20,15 +20,8 @@ use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
 use crate::VaultSnapshotLookup;
 use crate::conversion::LoadedVault;
-use crate::manager::device_protection::ExtensionIdentityPublication;
-#[cfg(test)]
-use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::VerifiedPreviousEpoch;
-#[cfg(test)]
-use nook_core::AppKeyIdentityMembership;
-#[cfg(test)]
-use nook_core::MemberLabelState;
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
@@ -70,16 +63,8 @@ impl NookError {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
-    use crate::storage::identity_record::IdentityDirectoryWrite;
-    use crate::storage::identity_record::SimpleGenesisProgress;
-
-    use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
-
     use super::*;
-    use crate::manager::PendingExtensionIdentityEnrollment;
     use crate::manager::VaultNameState;
-    use crate::manager::device_protection::PendingExtensionIdentityHandoff;
-    use nook_core::{AppKey, SigningIdentity};
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -188,168 +173,6 @@ mod tests {
         assert!(matches!(
             &manager.vault.vault_name,
             VaultNameState::Named(name) if name == "Local vault"
-        ));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
-        NookDatabase::clear_identity_directory_for_test().await?;
-        let authorizer = AppKey::generate()?;
-        let extension = AppKey::generate()?;
-        let store_id = nook_core::StoreId::generate()?;
-        let owner_key = authorizer.clone();
-        let owner_store = store_id.clone();
-        NookDatabase::update_identity_directory(move |mut directory| {
-            let resolved_identity = directory
-                .create_identity(IdentityCreation {
-                    label: "Personal",
-                    app_key: &owner_key,
-                    member_label: MemberLabelState::Unnamed,
-                })
-                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-            directory = resolved_identity.directory;
-            let owner_id = resolved_identity.identity_id;
-            let opened_identity = directory
-                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
-                    identity_id: &owner_id,
-                    vault: IdentityVaultKeyOpening {
-                        app_key: &owner_key,
-                        store_id: owner_store,
-                    },
-                })
-                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-            directory = opened_identity.directory;
-            Ok(IdentityDirectoryWrite::from(directory))
-        })
-        .await?;
-
-        let (signing, signing_seed) = SigningIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.id = extension.device_id().as_str().to_owned();
-        manager.device.identity_private_key = extension.secret_string().into_inner();
-        manager.vault.store_id = store_id.to_string();
-        manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                    authorizer,
-                    store_id,
-                },
-                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
-                signing_public_key: signing.public_key(),
-                handoff_signing_seed: signing_seed.as_str().to_owned(),
-                persist_signing_seed: false,
-                previous_session_signing_seed: String::new(),
-            });
-        assert!(manager.extension_identity_handoff_requires_connect());
-
-        manager.ensure_identity_after_connect(&extension).await?;
-        let deferred = NookDatabase::load_identity_directory().await?;
-        assert_eq!(
-            deferred.identity_for_app_key(&extension)?,
-            AppKeyIdentityMembership::Unenrolled
-        );
-
-        manager
-            .complete_connected_identity(&extension, SimpleGenesisProgress::NotPending)
-            .await?;
-        let committed = NookDatabase::load_identity_directory().await?;
-        assert!(matches!(
-            committed.identity_for_app_key(&extension)?,
-            AppKeyIdentityMembership::Enrolled(_)
-        ));
-        assert!(matches!(
-            &manager.device.pending_extension_handoff,
-            ExtensionIdentityPublication::Idle
-        ));
-        NookDatabase::clear_identity_directory_for_test().await?;
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn paired_identity_handoff_rejects_a_different_connected_vault() -> Result<(), JsError> {
-        let extension = AppKey::generate()?;
-        let staged_store_id = nook_core::StoreId::generate()?;
-        let connected_store_id = nook_core::StoreId::generate()?;
-        let (signing, signing_seed) = SigningIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.id = extension.device_id().as_str().to_owned();
-        manager.device.identity_private_key = extension.secret_string().into_inner();
-        manager.vault.store_id = connected_store_id.to_string();
-        manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                    authorizer: AppKey::generate()?,
-                    store_id: staged_store_id,
-                },
-                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
-                signing_public_key: signing.public_key(),
-                handoff_signing_seed: signing_seed.as_str().to_owned(),
-                persist_signing_seed: false,
-                previous_session_signing_seed: String::new(),
-            });
-
-        let Err(error) = manager.finalize_paired_vault_handoff().await else {
-            return Err(JsError::new(
-                "a paired handoff must verify its connected vault",
-            ));
-        };
-
-        assert!(error.to_string().contains("different vault"));
-        assert!(matches!(
-            &manager.device.pending_extension_handoff,
-            ExtensionIdentityPublication::Staged(_)
-        ));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn paired_session_unlock_clears_pending_without_enrolling() -> Result<(), JsError> {
-        let extension = AppKey::generate()?;
-        let store_id = nook_core::StoreId::generate()?;
-        let (signing, signing_seed) = SigningIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.id = extension.device_id().as_str().to_owned();
-        manager.device.identity_private_key = extension.secret_string().into_inner();
-        manager.vault.store_id = store_id.to_string();
-        manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-                enrollment: PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
-                    store_id,
-                },
-                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
-                signing_public_key: signing.public_key(),
-                handoff_signing_seed: signing_seed.as_str().to_owned(),
-                persist_signing_seed: false,
-                previous_session_signing_seed: String::new(),
-            });
-
-        manager.finalize_paired_vault_handoff().await?;
-
-        assert!(matches!(
-            &manager.device.pending_extension_handoff,
-            ExtensionIdentityPublication::Idle
         ));
         Ok(())
     }
@@ -759,7 +582,7 @@ impl NookVaultManager {
 
         self.purge_legacy_plaintext_search_catalog().await?;
         if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
-            self.reset_vault_session_for_handoff_retry();
+            self.reset_vault_session();
             return Err(error.into());
         }
         VerifiedVaultAccessFlow::Connect
@@ -775,7 +598,7 @@ impl NookVaultManager {
         } {
             Ok(pending) => pending,
             Err(error) => {
-                self.reset_vault_session_for_handoff_retry();
+                self.reset_vault_session();
                 return Err(error.into());
             }
         };
@@ -783,7 +606,7 @@ impl NookVaultManager {
             .complete_connected_identity(&identity, pending_cleanup)
             .await
         {
-            self.reset_vault_session_for_handoff_retry();
+            self.reset_vault_session();
             return Err(error.into());
         }
         drop(self.status.tx.send("READY".to_owned()));

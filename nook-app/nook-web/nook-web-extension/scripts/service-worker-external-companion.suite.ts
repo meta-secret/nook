@@ -1,17 +1,9 @@
-import { describe, expect, mock, spyOn, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { Effect } from 'effect'
 import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import {
-  ExtensionPairedVaultLockRequestMessageType,
-  ExtensionPairedVaultUnlockRequestMessageType,
-} from '../../nook-web-shared/src/extension/runtime-messages'
-import {
-  ExternalSenderTrustDecision,
-  ExternalSenderTrustPolicy,
-} from '../src/background/service-worker/routing-trust'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 import {
   externalDependencies,
@@ -21,144 +13,7 @@ import {
   openCompanionLauncher,
 } from './service-worker-routing-test-support'
 
-function pairedVaultUnlockSender(): chrome.runtime.MessageSender {
-  return {
-    url: 'https://simple.example.test/',
-    tab: {
-      id: 3,
-      index: 0,
-      pinned: false,
-      highlighted: true,
-      windowId: 42,
-      active: true,
-      frozen: false,
-      incognito: false,
-      selected: true,
-      discarded: false,
-      autoDiscardable: true,
-      groupId: -1,
-      lastAccessed: 0,
-    },
-  }
-}
-
 describe('external companion routing', () => {
-  test('opens the trusted paired-unlock side panel synchronously from its sender window', async () => {
-    const operations: string[] = []
-    const open = mock(() => {
-      operations.push('open-panel')
-      return Promise.resolve()
-    })
-    const close = mock(() => Promise.resolve())
-    Object.assign(chrome, { sidePanel: { open, close } })
-    const admitSynchronously = mock(() => {
-      operations.push('admit-sender')
-      return ExternalSenderTrustDecision.Admitted
-    })
-    const requestPairedVaultUnlock = mock(
-      async ({
-        message,
-      }: Parameters<
-        typeof externalDependencies.requestPairedVaultUnlock
-      >[0]) => {
-        operations.push('request-vault-unlock')
-        return {
-          ok: true as const,
-          requestId: message.payload.requestId,
-          vaultStoreId: message.payload.vaultStoreId,
-        }
-      },
-    )
-    const asyncAdmission = spyOn(
-      ExternalSenderTrustPolicy,
-      'admits',
-    ).mockImplementation(async () => {
-      operations.push('async-admit')
-      return false
-    })
-    const dependencies: ExternalCompanionRoutingDependencies = {
-      ...externalDependencies,
-      admitsUnlockSenderSynchronously: admitSynchronously,
-      requestPairedVaultUnlock,
-    }
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-    const message = {
-      type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-      payload: { requestId: 'request-1', vaultStoreId: 'store_abcdefghijk' },
-    }
-    try {
-      const route = new ExternalCompanionRouter({
-        dependencies,
-        message,
-        sender: pairedVaultUnlockSender(),
-        sendResponse,
-      }).route()
-
-      expect(open).toHaveBeenCalledWith({ windowId: 42 })
-      expect(operations).toEqual([
-        'admit-sender',
-        'open-panel',
-        'request-vault-unlock',
-      ])
-      expect(await route).toBe(true)
-      await flushResponses()
-      expect(sendResponse).toHaveBeenCalledWith({
-        ok: true,
-        requestId: 'request-1',
-        vaultStoreId: 'store_abcdefghijk',
-      })
-      expect(asyncAdmission).not.toHaveBeenCalled()
-    } finally {
-      asyncAdmission.mockRestore()
-    }
-  })
-
-  test('fails closed before opening a panel when synchronous trust is not ready', async () => {
-    const open = mock(() => Promise.resolve())
-    const close = mock(() => Promise.resolve())
-    Object.assign(chrome, { sidePanel: { open, close } })
-    const admitSynchronously = mock(() => ExternalSenderTrustDecision.NotReady)
-    const decodeUnlock = mock(
-      externalDependencies.decodeExtensionPairedVaultUnlockRequestMessage,
-    )
-    const requestPairedVaultUnlock = mock(
-      externalDependencies.requestPairedVaultUnlock,
-    )
-    const dependencies: ExternalCompanionRoutingDependencies = {
-      ...externalDependencies,
-      admitsUnlockSenderSynchronously: admitSynchronously,
-      decodeExtensionPairedVaultUnlockRequestMessage: decodeUnlock,
-      requestPairedVaultUnlock,
-    }
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-
-    expect(
-      await new ExternalCompanionRouter({
-        dependencies,
-        message: {
-          type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-          payload: {
-            requestId: 'request-2',
-            vaultStoreId: 'store_abcdefghijk',
-          },
-        },
-        sender: pairedVaultUnlockSender(),
-        sendResponse,
-      }).route(),
-    ).toBe(false)
-    expect(sendResponse).toHaveBeenCalledWith({
-      ok: false,
-      reason: 'unlock-trust-policy-not-ready',
-    })
-    expect(open).not.toHaveBeenCalled()
-    expect(decodeUnlock).not.toHaveBeenCalled()
-    expect(requestPairedVaultUnlock).not.toHaveBeenCalled()
-  })
-
   test('exports the requested vault only after approved external-origin admission', async () => {
     const response = { kind: 'NotPaired' as const }
     const exportEvents = mock(() => Effect.succeed(response))
@@ -249,100 +104,6 @@ describe('external companion routing', () => {
     expect(sendResponse).toHaveBeenCalledWith(response)
   })
 
-  test('passes the decoded new-device identity handoff wire request unchanged', async () => {
-    const createIdentityHandoff = mock(() =>
-      Promise.resolve({
-        ok: true as const,
-        envelope: 'sealed',
-        nextNonce: 'next',
-      }),
-    )
-    const dependencies: ExternalCompanionRoutingDependencies = {
-      ...externalDependencies,
-      createIdentityHandoff,
-    }
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-    const message = {
-      type: 'nook:extension-identity-handoff-request' as const,
-      payload: {
-        recipientPublicKey: 'age1recipient',
-        nonce: 'handoff-nonce',
-        expectedDeviceId: 'device-id',
-        expectedDevicePublicKey: 'age1device',
-        expectedDeviceSigningPublicKey: 'signing-key',
-      },
-    }
-
-    expect(
-      await new ExternalCompanionRouter({
-        dependencies,
-        message,
-        sender: { url: 'https://simple.example.test/' },
-        sendResponse,
-      }).route(),
-    ).toBe(true)
-    await flushResponses()
-
-    expect(createIdentityHandoff).toHaveBeenCalledTimes(1)
-    expect(createIdentityHandoff).toHaveBeenCalledWith(message)
-    expect(sendResponse).toHaveBeenCalledWith({
-      ok: true,
-      envelope: 'sealed',
-      nextNonce: 'next',
-    })
-  })
-
-  test.each([
-    { locked: true, response: { ok: true, requestId: 'lock-1' } },
-    { locked: false, response: { ok: false, reason: 'session-lock-failed' } },
-  ])(
-    'locks the extension for its trusted paired vault page (locked: $locked)',
-    async ({ locked, response }) => {
-      const lockExtensionSession = mock(() => Promise.resolve(locked))
-      const { ExternalCompanionRouter } =
-        await import('../src/background/service-worker/external-companion-routing')
-      const sendResponse = mock(() => {})
-      const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] =
-        {
-          dependencies: { ...externalDependencies, lockExtensionSession },
-          message: {
-            type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
-            payload: { requestId: 'lock-1' },
-          },
-          sender: { url: 'https://simple.example.test/' },
-          sendResponse,
-        }
-      expect(await new ExternalCompanionRouter(request).route()).toBe(true)
-      await flushResponses()
-      expect(lockExtensionSession).toHaveBeenCalledTimes(1)
-      expect(sendResponse).toHaveBeenCalledWith(response)
-    },
-  )
-
-  test('ignores a lock request from a foreign origin', async () => {
-    const lockExtensionSession = mock(() => Promise.resolve(true))
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-    const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] = {
-      dependencies: { ...externalDependencies, lockExtensionSession },
-      message: {
-        type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
-        payload: { requestId: 'lock-1' },
-      },
-      sender: { url: 'https://foreign.example/' },
-      sendResponse,
-    }
-    expect(await new ExternalCompanionRouter(request).route()).toBe(false)
-    expect(lockExtensionSession).not.toHaveBeenCalled()
-    expect(sendResponse).toHaveBeenCalledWith({
-      ok: false,
-      reason: 'forbidden-sender',
-    })
-  })
-
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =
@@ -378,28 +139,12 @@ describe('external companion routing', () => {
     const decodePairingApprovedMessage = mock(
       externalDependencies.decodePairingApprovedMessage,
     )
-    const decodeExtensionIdentityHandoffRequestMessage = mock(
-      externalDependencies.decodeExtensionIdentityHandoffRequestMessage,
-    )
-    const decodeExtensionPairedVaultIdentityDiscoveryMessage = mock(
-      externalDependencies.decodeExtensionPairedVaultIdentityDiscoveryMessage,
-    )
-    const decodeExtensionPairedVaultIdentityHandoffRequestMessage = mock(
-      externalDependencies.decodeExtensionPairedVaultIdentityHandoffRequestMessage,
-    )
-    const decodeExtensionPairedVaultUnlockRequestMessage = mock(
-      externalDependencies.decodeExtensionPairedVaultUnlockRequestMessage,
-    )
     const decodeOpenCompanionLauncherMessage = mock(
       externalDependencies.decodeOpenCompanionLauncherMessage,
     )
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
       decodePairingApprovedMessage,
-      decodeExtensionIdentityHandoffRequestMessage,
-      decodeExtensionPairedVaultIdentityDiscoveryMessage,
-      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
-      decodeExtensionPairedVaultUnlockRequestMessage,
       decodeOpenCompanionLauncherMessage,
       importPairingAfterCompanionReady,
     }
@@ -423,16 +168,6 @@ describe('external companion routing', () => {
       reason: 'forbidden-sender',
     })
     expect(decodePairingApprovedMessage).not.toHaveBeenCalled()
-    expect(decodeExtensionIdentityHandoffRequestMessage).not.toHaveBeenCalled()
-    expect(
-      decodeExtensionPairedVaultIdentityDiscoveryMessage,
-    ).not.toHaveBeenCalled()
-    expect(
-      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
-    ).not.toHaveBeenCalled()
-    expect(
-      decodeExtensionPairedVaultUnlockRequestMessage,
-    ).not.toHaveBeenCalled()
     expect(decodeOpenCompanionLauncherMessage).not.toHaveBeenCalled()
     expect(importPairingAfterCompanionReady).not.toHaveBeenCalled()
   })

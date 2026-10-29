@@ -6,35 +6,24 @@ lists them (for example while the identity directory cannot be read).
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ChevronRight } from '@lucide/svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
-  import {
-    LoginVaultExtensionPairingStatusLookup,
-    type LoginVaultExtensionPairingStatusEntry,
-  } from '$lib/components/login/login-vault-extension-pairing-status'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
 
   let {
     vault,
     vaults,
-    extensionConnectPairingStatusEntries,
     isVerifying,
     isInitializing,
     onChooseVault,
   }: {
     vault: VaultState
     vaults: NookLocalVaultEntry[]
-    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
     isVerifying: boolean
     isInitializing: boolean
     onChooseVault: (storeId: string) => void | Promise<void>
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  const pairingStatusLookup = $derived(
-    new LoginVaultExtensionPairingStatusLookup(
-      extensionConnectPairingStatusEntries,
-    ),
-  )
 </script>
 
 <section class="grid gap-3" data-testid="login-vault-picker">
@@ -51,13 +40,7 @@ lists them (for example while the identity directory cannot be read).
           onclick={() => onChooseVault(entry.storeId)}
         >
           <span class="min-w-0 flex-1">
-            <LoginVaultCard
-              {vault}
-              {entry}
-              extensionPairingStatus={pairingStatusLookup.statusForStore(
-                entry.storeId,
-              )}
-            />
+            <LoginVaultCard {vault} {entry} />
           </span>
           <ChevronRight
             class="size-4 flex-none text-muted-foreground"

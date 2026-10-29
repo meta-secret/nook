@@ -20,6 +20,7 @@ import {
   installForcePinDeviceProtection,
 } from './pin-device'
 import {
+  createWebsiteIdentityForConnect,
   leaveFirstRunReady,
   waitForExtensionPairingReady,
 } from './extension-approval'
@@ -193,8 +194,8 @@ export async function launchPairedPinExtension(
 
   if (!(await consent.isVisible())) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage.getByTestId('first-run-create-identity-btn').click()
-    await expect(consent).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+    // The website's own passkey makes its key; the extension keeps its PIN.
+    await createWebsiteIdentityForConnect(simplePage)
   }
   await simplePage.getByTestId('approve-extension-device-btn').click()
   await waitForExtensionPairingReady(

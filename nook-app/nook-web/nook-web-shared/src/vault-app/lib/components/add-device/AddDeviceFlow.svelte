@@ -8,7 +8,6 @@ Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
   import { Cloud, CloudOff, KeyRound, ShieldCheck } from "@lucide/svelte";
-  import { VaultIdentityKeySource } from "$app-wasm";
   import { onMount, type ComponentProps } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
@@ -21,7 +20,6 @@ Every place that offers "Add a device" opens this.
   import { localizeProviderLabel } from "$lib/auth/providers";
   import { enrollmentBrowser } from "$lib/enrollment/code";
   import type { VaultState } from "$lib/vault.svelte";
-  import { BrowserKeySwitch } from "$lib/vault/browser-key-switch";
   import { DeviceJoinMounts } from "./device-join-mounts";
   import PairingDiagram from "./PairingDiagram.svelte";
   import { PairingProgress, PairingStage } from "./pairing-stage";
@@ -86,27 +84,14 @@ Every place that offers "Add a device" opens this.
     };
     return vault.t(introRequest);
   });
-  /** Why the key in use cannot invite: the paired extension's key, or this
-   * browser's own key, has not joined the identity. */
+  /** Why the key in use cannot invite: this browser's key has not joined
+   * the identity. */
   const notMember = $derived.by(() => {
     const notMemberRequest: Parameters<typeof vault.t>[0] = {
-      key:
-        vault.identityKeySource === VaultIdentityKeySource.PairedCompanion
-          ? I18N_KEYS.AddDeviceNotMemberExtension
-          : I18N_KEYS.AddDeviceNotMemberBrowser,
+      key: I18N_KEYS.AddDeviceNotMemberBrowser,
       replacements: { identity: identityName },
     };
     return vault.t(notMemberRequest);
-  });
-  /** The extension's key is in use and this browser holds its own key
-   * behind a passkey: the page can switch to it. */
-  const browserKey = $derived(new BrowserKeySwitch(vault));
-  const browserKeyHint = $derived.by(() => {
-    const hintRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.AddDeviceUseBrowserKeyHint,
-      replacements: { identity: identityName },
-    };
-    return vault.t(hintRequest);
   });
   const manualJoin = $derived.by(() => {
     const appUrl = enrollmentBrowser
@@ -243,25 +228,8 @@ Every place that offers "Add a device" opens this.
               <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
                 {notMember}
               </p>
-              {#if browserKey.available}
-                <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
-                  {browserKeyHint}
-                </p>
-              {/if}
             </div>
           </div>
-          {#if browserKey.available}
-            <Button
-              type="button"
-              class="nk-go h-11 justify-self-start px-5"
-              data-testid="add-device-use-browser-key"
-              disabled={isBusy}
-              onclick={() => void browserKey.run()}
-            >
-              <KeyRound class="size-4" />
-              {vault.t(I18N_KEYS.AddDeviceUseBrowserKey)}
-            </Button>
-          {/if}
         </div>
       {:else}
         <OnboardDevice

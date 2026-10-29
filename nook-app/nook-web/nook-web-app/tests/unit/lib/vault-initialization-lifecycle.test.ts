@@ -20,13 +20,9 @@ vi.mock('$app-wasm', async (importOriginal) => ({
 import {
   DeviceProtectionStatus,
   DeviceProtectionDeviceModeState,
-  ExternalDeviceIdentityAuthorizationMode,
   NookClientRunModeUtil,
   NookRuntimeConfig,
   NookVaultManager,
-  VaultIdentityKeySource,
-  type NookAdoptedExtensionIdentityHandoff,
-  type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
 import { VaultState } from '$lib/vault.svelte'
 import { DeviceProtectionLockOutcome } from '$lib/vault/device-protection.svelte'
@@ -35,7 +31,6 @@ import {
   shouldAutoAuthorizeE2e,
   type E2eAutoAuthorizationPolicy,
 } from '$lib/vault/lifecycle'
-import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
@@ -45,37 +40,15 @@ import { TranslationMessage } from '$lib/vault/translation'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
 import { unselectedVaultScope } from '$lib/auth/providers'
 import { LocaleUpdateOutcome } from '$lib/vault/locale'
-import { extensionConnectionBrowser } from '$lib/extension/connect'
-import { VaultStartupUnlockDecision } from '$app-wasm'
 
-/** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
-class IdentityHandoffFixture {
+/** Only the native boundary is doubled; browser lifecycle is real. */
+class VaultLifecycleFixture {
   readonly manager = new NookVaultManager()
   readonly state: VaultState
   readonly lifecycle: VaultInitializationActions
   readonly clearUnlockedSession: MockInstance<
     VaultState['clearUnlockedSession']
   >
-  readonly rollback = vi.fn((): void => {})
-  readonly confirm = vi.fn((): void => {})
-  readonly requiresConnect = vi.fn(() => false)
-  readonly committed = {
-    confirm: this.confirm,
-    rollback: vi.fn((): void => {}),
-    free: vi.fn(),
-    [Symbol.dispose]: vi.fn(),
-  } satisfies NookCommittedExtensionIdentityHandoff
-  readonly commit = vi.fn(async () => this.committed)
-  readonly adopted = {
-    requires_connect: this.requiresConnect,
-    mark_existing_vault_import: vi.fn((): void => {}),
-    commit: this.commit,
-    after_verified_connect: vi.fn(() => this.committed),
-    rollback: this.rollback,
-    free: vi.fn(),
-    [Symbol.dispose]: vi.fn(),
-  } satisfies NookAdoptedExtensionIdentityHandoff
-  private storageAdmission: Result<void, VaultStorageFailure> = ok()
 
   constructor() {
     const browserWindow = globalThis.window
@@ -97,9 +70,9 @@ class IdentityHandoffFixture {
     this.state.isInitializing = false
     this.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     this.state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey
-    vi.spyOn(this.manager, 'device_id', 'get').mockReturnValue('adopted-device')
+    vi.spyOn(this.manager, 'device_id', 'get').mockReturnValue('browser-device')
     vi.spyOn(this.manager, 'device_public_key', 'get').mockReturnValue(
-      'adopted-public-key',
+      'browser-public-key',
     )
     vi.spyOn(this.state, 't').mockImplementation((request) =>
       new TranslationMessage(request).translationKey(),
@@ -112,40 +85,7 @@ class IdentityHandoffFixture {
   private async enqueueStorage<T, E>(
     operation: () => Result<T, E> | Promise<Result<T, E>>,
   ): Promise<Result<T, E | VaultStorageFailure>> {
-    if (this.storageAdmission.isErr()) return err(this.storageAdmission.error)
     return operation()
-  }
-
-  denyCommitAdmission(kind: VaultStorageFailureKind): void {
-    this.requiresConnect.mockImplementationOnce(() => {
-      // Simulate deletion/generation invalidation immediately before commit admission.
-      this.storageAdmission = err(new VaultStorageFailure(kind))
-      return false
-    })
-  }
-
-  authorize(
-    mode = ExternalDeviceIdentityAuthorizationMode.DeferInitialization,
-  ): Promise<boolean> {
-    return this.lifecycle.authorizeWithExternalDeviceIdentity({
-      adopt: async () => ok(this.adopted),
-      mode,
-    })
-  }
-
-  expectRelocked(): void {
-    expect(this.clearUnlockedSession).toHaveBeenCalledExactlyOnceWith(false)
-    expect(this.state.externalIdentityHandoff).toEqual({
-      kind: BrowserIdentityHandoffKind.Inactive,
-    })
-    expect(this.state.deviceProtectionStatus).toBe(
-      DeviceProtectionStatus.Passkey,
-    )
-    expect(this.state.isAuthenticated).toBe(false)
-    expect(this.state.deviceId).toBe('')
-    expect(this.state.devicePublicKey).toBe('')
-    expect(this.state.deviceAuthorizationInProgress).toBe(false)
-    expect(this.state.isVerifying).toBe(false)
   }
 
   dispose(): void {
@@ -160,17 +100,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('external browser identity handoff commit ownership', () => {
-  test('keeps an explicitly locked website vault on the website unlock route without a provider', () => {
-    const fixture = new IdentityHandoffFixture()
+describe('vault initialization lifecycle', () => {
+  test('keeps an explicitly locked website vault locked', () => {
+    const fixture = new VaultLifecycleFixture()
     try {
       fixture.state.localVaultPresent = true
       sessionStorage.setItem('nook_vault_session_locked', 'true')
-      expect(
-        fixture.state.startupUnlockDecision(
-          extensionConnectionBrowser.companionProviderPresence(),
-        ),
-      ).toBe(VaultStartupUnlockDecision.WebsiteDevice)
       expect(fixture.state.shouldAutoUnlock()).toBe(false)
       expect(fixture.state.errorMsg).toBe('')
     } finally {
@@ -179,7 +114,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('defers device synchronization until pending enrollment is admitted', async () => {
-    const fixture = new IdentityHandoffFixture()
+    const fixture = new VaultLifecycleFixture()
     try {
       const synchronizationFailure = new VaultStorageFailure(
         VaultStorageFailureKind.OperationFailed,
@@ -222,7 +157,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('exposes recovery when persisted protection status cannot be read', async () => {
-    const fixture = new IdentityHandoffFixture()
+    const fixture = new VaultLifecycleFixture()
     try {
       fixture.state.clearManager()
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
@@ -254,7 +189,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('auto-unlocks a persisted local vault only after initialization is ready', async () => {
-    const fixture = new IdentityHandoffFixture()
+    const fixture = new VaultLifecycleFixture()
     try {
       fixture.state.clearManager()
       fixture.state.localVaultPresent = true
@@ -319,7 +254,7 @@ describe('external browser identity handoff commit ownership', () => {
         'data-nook-extension-runtime-id',
         'extension-123',
       )
-      const fixture = new IdentityHandoffFixture()
+      const fixture = new VaultLifecycleFixture()
       try {
         fixture.state.clearManager()
         fixture.state.localVaultPresent = true
@@ -398,7 +333,7 @@ describe('external browser identity handoff commit ownership', () => {
   )
 
   test('relocks automatic authorization when typed initialization continuation fails', async () => {
-    const fixture = new IdentityHandoffFixture()
+    const fixture = new VaultLifecycleFixture()
     try {
       const continuationFailure = new VaultStorageFailure(
         VaultStorageFailureKind.OperationFailed,
@@ -455,7 +390,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('preserves the original relock and error surface when completion throws', async () => {
-    const fixture = new IdentityHandoffFixture()
+    const fixture = new VaultLifecycleFixture()
     try {
       const completionFailure = new Error('completion policy failed')
       fixture.state.clearManager()
@@ -534,129 +469,5 @@ describe('external browser identity handoff commit ownership', () => {
       sessionLocked: false,
     }
     expect(shouldAutoAuthorizeE2e(unlockedPolicy)).toBe(true)
-  })
-
-  test.each([
-    VaultStorageFailureKind.DeletionActive,
-    VaultStorageFailureKind.GenerationChanged,
-  ])(
-    'rolls back when commit admission fails with %s before invoking its callback',
-    async (kind) => {
-      const fixture = new IdentityHandoffFixture()
-      try {
-        fixture.denyCommitAdmission(kind)
-        expect(await fixture.authorize()).toBe(false)
-        expect(fixture.state.identityKeySource).toBe(
-          VaultIdentityKeySource.ThisBrowser,
-        )
-        expect(fixture.adopted.mark_existing_vault_import).toHaveBeenCalledWith(
-          fixture.manager,
-        )
-        expect(fixture.commit).not.toHaveBeenCalled()
-        expect(fixture.confirm).not.toHaveBeenCalled()
-        expect(fixture.rollback).toHaveBeenCalledExactlyOnceWith(
-          fixture.manager,
-        )
-        fixture.expectRelocked()
-        expect(fixture.state.errorMsg).toBe(
-          new VaultStorageFailure(kind).translationKey,
-        )
-      } finally {
-        fixture.dispose()
-      }
-    },
-  )
-
-  test('an identity the extension hands over opens no vault by itself: its caller opens one', async () => {
-    const fixture = new IdentityHandoffFixture()
-    try {
-      const continued = vi
-        .spyOn(fixture.lifecycle, 'continueInitializationAfterDeviceUnlock')
-        .mockResolvedValue(
-          ok({ deviceId: 'adopted-device', devicePublicKey: 'key' }),
-        )
-
-      expect(
-        await fixture.authorize(
-          ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
-        ),
-      ).toBe(true)
-
-      expect(continued).toHaveBeenCalledExactlyOnceWith(
-        VaultStartupUnlockDecision.DiscoverCompanion,
-      )
-    } finally {
-      fixture.dispose()
-    }
-  })
-
-  test('unlocks only the identity in identity-only mode: no vault session starts', async () => {
-    const fixture = new IdentityHandoffFixture()
-    try {
-      const continued = vi.spyOn(
-        fixture.lifecycle,
-        'continueInitializationAfterDeviceUnlock',
-      )
-      const loadDb = vi.spyOn(fixture.state, 'loadDb')
-
-      expect(
-        await fixture.authorize(
-          ExternalDeviceIdentityAuthorizationMode.IdentityOnly,
-        ),
-      ).toBe(true)
-
-      expect(fixture.state.deviceProtectionStatus).toBe(
-        DeviceProtectionStatus.Unlocked,
-      )
-      expect(fixture.state.deviceId).toBe('adopted-device')
-      // The extension holds the key now, so the two lock together.
-      expect(fixture.state.identityKeySource).toBe(
-        VaultIdentityKeySource.PairedCompanion,
-      )
-      expect(continued).not.toHaveBeenCalled()
-      expect(loadDb).not.toHaveBeenCalled()
-      expect(fixture.state.isAuthenticated).toBe(false)
-    } finally {
-      fixture.dispose()
-    }
-  })
-
-  test('confirms a successful commit without rolling back the consumed handle', async () => {
-    const fixture = new IdentityHandoffFixture()
-    try {
-      expect(await fixture.authorize()).toBe(true)
-      expect(fixture.commit).toHaveBeenCalledExactlyOnceWith(fixture.manager)
-      expect(fixture.confirm).toHaveBeenCalledExactlyOnceWith(fixture.manager)
-      expect(fixture.rollback).not.toHaveBeenCalled()
-      expect(fixture.clearUnlockedSession).not.toHaveBeenCalled()
-      expect(fixture.state.externalIdentityHandoff).toEqual({
-        kind: BrowserIdentityHandoffKind.Inactive,
-      })
-      expect(fixture.state.deviceProtectionStatus).toBe(
-        DeviceProtectionStatus.Unlocked,
-      )
-      expect(fixture.state.deviceId).toBe('adopted-device')
-      expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
-      expect(fixture.state.isVerifying).toBe(false)
-    } finally {
-      fixture.dispose()
-    }
-  })
-
-  test('relocks after a consuming commit fails without invoking native rollback twice', async () => {
-    const fixture = new IdentityHandoffFixture()
-    try {
-      // Rust owns cleanup after its consuming commit rejects. The browser must not reuse it.
-      fixture.commit.mockRejectedValueOnce(
-        new Error('native consuming commit failed'),
-      )
-      expect(await fixture.authorize()).toBe(false)
-      expect(fixture.commit).toHaveBeenCalledExactlyOnceWith(fixture.manager)
-      expect(fixture.confirm).not.toHaveBeenCalled()
-      expect(fixture.rollback).not.toHaveBeenCalled()
-      fixture.expectRelocked()
-    } finally {
-      fixture.dispose()
-    }
   })
 })

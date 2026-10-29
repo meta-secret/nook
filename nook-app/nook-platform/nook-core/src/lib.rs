@@ -22,17 +22,15 @@ mod sync;
 mod vault;
 
 pub(crate) use auth::{
-    device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
-    sealed_invite, website_login_save,
+    device_key_protection, enrollment, multi_device, password_envelope, sealed_invite,
+    website_login_save,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
-    AppProtectionAppBinding, AppProtectionAppBindingRequest, AppProtectionAssociation,
-    AppProtectionDescriptor, AppProtectionDescriptorError, AppProtectionDescriptorSource,
-    AuthenticatorGuidEvidence, DEVICE_ACCESS_PROFILE_VERSION,
-    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessCredentialKind,
-    DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
-    DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
+    AppProtectionAppBinding, AppProtectionAppBindingRequest, AuthenticatorGuidEvidence,
+    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
+    DeviceAccessCredentialKind, DeviceAccessIdentityObservation, DeviceAccessIdentityState,
+    DeviceAccessProfile, DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
     DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
     DeviceCredentialProfile, DiscardedClientEnvironment, IdentityAppInventory,
     IdentityAppInventoryError, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
@@ -129,15 +127,9 @@ pub use enrollment::{
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
-    ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, ProviderFailureCause,
-    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
-    VaultError, VaultFormatError, VaultRecoveryErrorKind, VaultResult, VaultSyncError,
-};
-pub use extension_identity_handoff::{
-    ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
-    ExtensionIdentityHandoffSealRequest, ExtensionIdentityHandoffSource,
-    ExtensionIdentityHandoffSourceBinding, HandoffEventLog, HandoffSigningSeedChoice,
-    HandoffSigningSeedSelection, StoredSigningSeed,
+    MultiDeviceError, PasswordError, ProviderFailureCause, SecretPayloadError, SessionError,
+    ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
+    VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
@@ -290,20 +282,18 @@ pub use auth::vault_meta_actions::{
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment,
-    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
-    DirectoryVaultEnrollment, FreshIdentityNamed, FreshIdentityNaming, IdentityConnectionKey,
-    IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
-    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentityInviteId, IdentityLegacyVaultImport,
-    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
-    IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
-    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
-    IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
-    IdentityVaultKeys, LocalIdentityKeyRetirement, LocalIdentityLog, MemberDekEnvelope,
-    RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant, SentinelShareEnvelope,
-    StagedIdentityRebase, VaultMember,
+    AppId, AppKey, AppKeyIdentityMembership, DirectoryLegacyVaultImport,
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, FreshIdentityNaming,
+    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
+    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
+    IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityInviteId,
+    IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
+    IdentityMemberSigningUpdate, IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection,
+    IdentitySelection, IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, IdentityVaultEventId,
+    IdentityVaultKeyOpening, IdentityVaultKeys, LocalIdentityKeyRetirement, LocalIdentityLog,
+    MemberDekEnvelope, RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
+    ReplicatedIdentityMembership, ReplicatedVaultGrant, SentinelShareEnvelope, VaultMember,
 };
 
 pub use multi_device::{
@@ -449,17 +439,13 @@ pub use vault_architecture::{
     SharedJoinerIdentityKind, VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
 };
 pub use vault_client_policy::{
-    ActiveVaultStore, CompanionProviderPresence, DeviceIdentityInitializationMode,
-    DeviceProtectionStatus, ExternalDeviceIdentityAuthorizationMode, InvalidDeviceProtectionStatus,
-    JoinEnrollmentState, ProviderSyncFailureHandling, ProviderSyncFreshness,
-    ProviderSyncVisibility, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
-    SentinelVaultUnlockState, UnauthenticatedSyncDecision, VaultAccessObservation,
-    VaultClientPolicy, VaultCompanionAutoResumeDecision, VaultCompanionLockDecision,
-    VaultCompanionUnlockDecision, VaultConnectGateDecision, VaultConnectProbeDecision,
-    VaultEditDecision, VaultEditMessage, VaultEditTranslation, VaultExistingImportUnlockRequest,
-    VaultIdentityKeySource, VaultStartupUnlockDecision, VaultStartupUnlockRequest,
-    VaultStorageSyncDecision, VaultSwitchDecision, VaultSyncTimerStartDecision,
-    VaultSyncTimerTickDecision,
+    ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
+    InvalidDeviceProtectionStatus, JoinEnrollmentState, ProviderSyncFailureHandling,
+    ProviderSyncFreshness, ProviderSyncVisibility, RemoteVaultAssessDecision,
+    RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
+    VaultAccessObservation, VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision,
+    VaultEditDecision, VaultEditMessage, VaultEditTranslation, VaultStorageSyncDecision,
+    VaultSwitchDecision, VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,
@@ -471,9 +457,9 @@ pub use vault_epoch_crypto::{
     VaultMetaRewrap, VaultNameEpochReencryption,
 };
 pub use vault_event_session::{
-    EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,
-    VaultEventSession, VaultEventSessionRejection, VaultHydratedProjection, VaultOutboxFlush,
-    VaultOutboxFlushed, VaultProjectionObservation, VaultProjectionRefresh,
+    EventPublicationDestination, StoredSigningSeed, VaultEpochRotated, VaultEventAppend,
+    VaultEventAppended, VaultEventSession, VaultEventSessionRejection, VaultHydratedProjection,
+    VaultOutboxFlush, VaultOutboxFlushed, VaultProjectionObservation, VaultProjectionRefresh,
     VaultSecurityEpochRotationInput, VaultSessionProjection,
 };
 pub use vault_format::{

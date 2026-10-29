@@ -1,7 +1,5 @@
 import { ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { ExtensionSessionLockedNotice } from '../../../nook-web-shared/src/extension/runtime-messages'
-import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -12,23 +10,6 @@ import {
 } from '../lib/serialized-wire-value-adapter'
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
-
-// The extension's lock reaches the vault page, which locks an identity this
-// extension holds; only this extension's own worker may send it.
-type LockNoticeListenerArguments = [
-  message: BrowserRuntimeMessageValue,
-  sender: chrome.runtime.MessageSender,
-]
-chrome.runtime.onMessage.addListener((...args: LockNoticeListenerArguments) => {
-  const [message, sender] = args
-  if (sender.id !== chrome.runtime.id || Boolean(sender.tab)) return
-  const notice = runConcreteDecoder(
-    ExtensionSessionLockedNotice.decode,
-    message,
-  )
-  if (notice.kind !== ConcreteDecoderResultKind.Decoded) return
-  window.postMessage(notice.value, window.location.origin)
-})
 
 void companionWasmReady.then(() => {
   window.addEventListener('message', (event: MessageEvent) => {

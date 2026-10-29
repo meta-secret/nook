@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
   import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
     readonly code: string
@@ -35,7 +34,6 @@
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookIdentityHealth } from '$app-wasm'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
-  import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
 
   const APP_KIND = configured_vault_application()
 
@@ -52,8 +50,6 @@
     vault,
     showAccessGate,
     existingVaultNeedsDeviceUnlock,
-    identityKeyInExtension,
-    usesExtensionDeviceIdentity,
     showPasskeyOverlay,
     sentinelInvitationRequest,
     sentinelParticipantResponsePending,
@@ -61,13 +57,11 @@
     sentinelOnboardingPackage,
     onUnlock,
     onUnlockOnCard,
-    onUnlockPairedIdentity,
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
     onUnlockWithPassword,
     onSentinelUnlocked,
     onCreateDeviceVault,
-    extensionConnectPairingStatusEntries,
     onStartSentinelGenesis,
     onCreateSentinelParticipantKey,
     onCreateSentinelParticipantResponse,
@@ -78,28 +72,19 @@
     vault: VaultState
     showAccessGate: boolean
     existingVaultNeedsDeviceUnlock: boolean
-    /** This page adopted its identity from the paired extension, which holds
-     * its key: unlocking it goes there, not to a passkey on this browser. */
-    identityKeyInExtension: boolean
-    usesExtensionDeviceIdentity: boolean
     showPasskeyOverlay: boolean
     sentinelInvitationRequest: string
     sentinelParticipantResponsePending: boolean
     sentinelParticipantResponse: string
     sentinelOnboardingPackage: string
-    onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
+    onUnlock: () => Promise<void>
     /** Unlock a vault from its identity card; its device key unlocks there. */
     onUnlockOnCard: () => Promise<void>
-    /** Unlock only the identity whose key the paired extension holds. */
-    onUnlockPairedIdentity: (
-      target: PairedIdentityUnlockTarget,
-    ) => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
-    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelParticipantKey: () => Promise<SentinelActionResult<string>>
     onCreateSentinelParticipantResponse: (
@@ -182,11 +167,8 @@
         isVerifying={vault.isVerifying}
         isInitializing={vault.isInitializing}
         deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
-        {identityKeyInExtension}
-        {usesExtensionDeviceIdentity}
         {onUnlock}
         {onUnlockOnCard}
-        {onUnlockPairedIdentity}
         {...identityHealth ? { identityHealth } : {}}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -203,7 +185,6 @@
         {onUnlockWithPassword}
         {onSentinelUnlocked}
         {onCreateDeviceVault}
-        {extensionConnectPairingStatusEntries}
         {extensionConnectRequest}
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}

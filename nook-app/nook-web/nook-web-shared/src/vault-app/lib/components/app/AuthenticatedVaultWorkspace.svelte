@@ -6,7 +6,6 @@ passwords, settings) adds its rail. Every page is one framed sheet: a page
 band, the scrolling page and the status line.
 -->
 <script lang="ts">
-  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
   import { WorkspaceLocation, WorkspaceRoute } from '$lib/app/workspace-route'
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   type SecretAddModeChange = {
@@ -55,16 +54,6 @@ band, the scrolling page and the status line.
     ManageNavLookup,
   } from '$lib/components/workspace/manage-nav'
   import { StatusTag, StatusTone } from '$lib/components/ui/status-tag'
-  import {
-    ConnectedVaultMenuNoteKind,
-    ConnectedVaultMenuPresentation,
-    VaultExtensionPresentation,
-    VaultGrantPresentation,
-    type ConnectedVaultMenuNoteRequest,
-    type ExtensionConnectedEntryRequest,
-    type VaultExtensionLinkRequest,
-    type VaultSwitcherEntryLabel,
-  } from '$lib/components/vault-switcher-extension'
   import { generate_password, SecretType } from '$lib/nook'
   import {
     SecretTypeSelectionKind,
@@ -99,7 +88,6 @@ band, the scrolling page and the status line.
     onExtensionOpenPanel,
     onSettingsReconnect,
     onEditorOpenChange,
-    onUnlockPairedIdentity,
     extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
     onFinishExtensionConnect = () => {},
   }: {
@@ -111,11 +99,6 @@ band, the scrolling page and the status line.
     onExtensionOpenPanel: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
-    /** Use an identity whose key the paired extension holds, leaving the
-     * one in use. */
-    onUnlockPairedIdentity: (
-      target: PairedIdentityUnlockTarget,
-    ) => Promise<void>
     /** A browser extension asking to connect: approved beside the current
      * identity's card, on the hub, with no page of its own. */
     extensionConnectRequest?: ExtensionConnectIntent
@@ -174,47 +157,6 @@ band, the scrolling page and the status line.
         return entry.display_label(unnamedLabel)
     }
     return vault.t(I18N_KEYS.WorkspaceVaultFallback)
-  })
-  const extensionEntryLabels = $derived.by((): VaultSwitcherEntryLabel[] =>
-    vault.localVaults.map((entry) => {
-      const label: VaultSwitcherEntryLabel = {
-        storeId: entry.storeId,
-        displayName: entry.display_label(unnamedLabel),
-      }
-      return label
-    }),
-  )
-  const extensionLink = $derived.by(() => {
-    const linkRequest: VaultExtensionLinkRequest = {
-      offer: extensionSetupState,
-      activeStoreId,
-      entries: extensionEntryLabels,
-    }
-    return new VaultExtensionPresentation(linkRequest).link
-  })
-  const extensionStoreIds = $derived(
-    vault.localVaults
-      .filter((entry) => {
-        const grantRequest: ExtensionConnectedEntryRequest = {
-          link: extensionLink,
-          storeId: entry.storeId,
-        }
-        return new VaultGrantPresentation(grantRequest).connected
-      })
-      .map((entry) => entry.storeId),
-  )
-  const extensionNote = $derived.by(() => {
-    const noteRequest: ConnectedVaultMenuNoteRequest = {
-      link: extensionLink,
-      entries: extensionEntryLabels,
-    }
-    const note = new ConnectedVaultMenuPresentation(noteRequest).note
-    if (note.kind !== ConnectedVaultMenuNoteKind.MissingLocally) return ''
-    const noteText: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.VaultSwitcherExtensionConnected,
-      replacements: { vault: note.vaultName },
-    }
-    return vault.t(noteText)
   })
 
   const identityName = $derived(
@@ -422,7 +364,6 @@ band, the scrolling page and the status line.
 {#snippet vaultAdmin()}
   <VaultAdmin
     {vault}
-    {extensionSetupState}
     {section}
     onCreateVault={(label: string) =>
       vault.createLocalVaultWithDeviceKeys(label)}
@@ -566,8 +507,6 @@ band, the scrolling page and the status line.
     <IdentitiesHub
       {vault}
       canAddVault
-      {extensionStoreIds}
-      {extensionNote}
       busy={vault.isVerifying || vault.isInitializing}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
       onUnlockVault={(storeId: string) => void vault.switchToVault(storeId)}
@@ -578,9 +517,6 @@ band, the scrolling page and the status line.
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
-      {...SUPPORTS_EXTENSION
-        ? { onUnlockElsewhere: onUnlockPairedIdentity }
-        : {}}
       currentHealth={identityHealth}
       overview={identityOverview}
       overviewOpen={!consentPending && section === WorkspaceSection.Overview}

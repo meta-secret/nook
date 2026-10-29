@@ -1,34 +1,13 @@
 import { I18N_KEYS } from "../../nook-web-shared/src/generated/i18n-keys";
-import { err, type Result } from "neverthrow";
-import {
-  VaultStorageFailure,
-  VaultStorageFailureKind,
-} from "$lib/runtime/storage-failure";
-export class PairedExtensionDiscoveryFailure extends Error {
-  readonly translationKey =
-    I18N_KEYS.ErrorsValidationSentinelExtensionForbidden;
-}
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
-import { CompanionProviderPresence } from "$app-wasm";
-import type {
-  NookVaultManager,
-  CompanionIdentityStatus,
-  NookAdoptedExtensionIdentityHandoff,
-} from "$app-wasm";
-import type {
-  ExtensionConnectRequestFor,
-  PairedExtensionIdentityDiscoveryFor,
-} from "$web-shared/extension/extension-connect-types";
+import type { ExtensionConnectRequestFor } from "$web-shared/extension/extension-connect-types";
 import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
-import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 import type { ExtensionVaultEventLogChannel } from "$lib/extension/vault-event-log";
 
-export { ExtensionIdentityRequestSource };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -48,21 +27,6 @@ export const ExtensionConnectScope = new SentinelExtensionConnectScopeCatalog();
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ProtocolExtensionConnectScope>;
-export type PairedExtensionIdentityDiscovery =
-  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
-
-export type PairedExtensionIdentityDiscoveryResult = Result<
-  {
-    readonly discovery: PairedExtensionIdentityDiscovery;
-    readonly canonicalStatus: CompanionIdentityStatus;
-  },
-  PairedExtensionDiscoveryFailure
->;
-
-export type ExtensionIdentityAdoption = {
-  manager: NookVaultManager;
-  request: ExtensionConnectRequest;
-};
 
 export enum ExtensionConnectRequestStateKind {
   Absent = "absent",
@@ -97,10 +61,6 @@ export const extensionConnectRequestFromLocation: (
   kind: ExtensionConnectRequestStateKind.Absent,
 });
 
-export function companionProviderPresence(): CompanionProviderPresence {
-  return CompanionProviderPresence.Absent;
-}
-
 export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
   return { kind: InstalledExtensionRuntimeKind.NotInstalled };
 }
@@ -113,56 +73,6 @@ export async function openExtensionSidePanel(): Promise<boolean> {
   return false;
 }
 
-export async function discoverPairedExtensionIdentity(
-  _vaultStoreId: string,
-): Promise<PairedExtensionIdentityDiscovery> {
-  void _vaultStoreId;
-  return {
-    status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-  };
-}
-
-export async function discoverAdmittedPairedExtensionIdentity(
-  _vaultStoreId: string,
-): Promise<
-  Result<
-    {
-      readonly discovery: PairedExtensionIdentityDiscovery;
-      readonly canonicalStatus: CompanionIdentityStatus;
-    },
-    PairedExtensionDiscoveryFailure
-  >
-> {
-  void _vaultStoreId;
-  return err(new PairedExtensionDiscoveryFailure());
-}
-
-export async function requestPairedExtensionUnlock(
-  _vaultStoreId: string,
-): Promise<boolean> {
-  void _vaultStoreId;
-  return false;
-}
-
-export async function requestPairedExtensionLock(): Promise<boolean> {
-  return false;
-}
-
-/** Sentinel pairs with no extension, so no lock notice ever arrives. */
-export function followPairedExtensionLock(onlocked: () => void): () => void {
-  void onlocked;
-  return () => {};
-}
-
-export async function adoptExtensionIdentity(
-  args: ExtensionIdentityAdoption,
-): Promise<Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>> {
-  void args;
-  return err(
-    new VaultStorageFailure(VaultStorageFailureKind.IdentityHandoffRejected),
-  );
-}
-
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -173,17 +83,10 @@ export const extensionConnectionBrowser = {
   extensionConnectRequestFromLocation,
   readInstalledExtensionRuntimeId,
   pullVaultEventLog(): ReturnType<ExtensionVaultEventLogChannel["pull"]> {
-    throw new PairedExtensionDiscoveryFailure();
+    throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
   },
-  companionProviderPresence,
   openInstalledExtension,
   openExtensionSidePanel,
-  discoverPairedExtensionIdentity,
-  discoverAdmittedPairedExtensionIdentity,
-  requestPairedExtensionUnlock,
-  requestPairedExtensionLock,
-  followPairedExtensionLock,
-  adoptExtensionIdentity,
   async deliverExtensionPairingApproval(
     _request: ExtensionPairingApprovalDelivery,
   ): Promise<ExtensionPairingDelivery> {

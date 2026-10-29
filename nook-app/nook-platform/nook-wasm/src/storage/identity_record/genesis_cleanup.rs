@@ -1,103 +1,23 @@
-//! Atomic publication and cleanup for completed Simple-vault genesis.
+//! Cleanup for completed Simple-vault genesis.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::genesis_flow::PendingSimpleGenesisFlow;
-struct StagedGenesisPublication<'a> {
-    store: &'a rexie::Store,
-    pending: PendingSimpleGenesis,
-}
-use crate::storage::event_db;
 use crate::{NookDatabase, NookError};
-use nook_core::{IdentityDirectory, StagedIdentityRebase};
 use rexie::TransactionMode;
 
-use super::{
-    IDENTITY_DIRECTORY_KEY, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis,
-    SimpleGenesisCompletion,
-};
+use super::{PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis};
+
+/// The genesis marker a connected Simple vault no longer needs.
+pub(crate) struct SimpleGenesisCompletion<'a> {
+    pub(crate) pending: &'a PendingSimpleGenesis,
+}
 
 impl SimpleGenesisCompletion<'_> {
-    async fn publish_staged_identity(
-        &self,
-        request: StagedGenesisPublication<'_>,
-    ) -> Result<(), NookError> {
-        let StagedGenesisPublication { store, pending } = request;
-        let directory_id =
-            serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
-                NookError::IndexedDb(format!("Genesis identity key error: {error:?}"))
-            })?;
-        let current = store.get(directory_id.clone()).await.map_err(|error| {
-            NookError::IndexedDb(format!("Genesis identity read error: {error:?}"))
-        })?;
-        let current = current
-            .filter(|value| !value.is_undefined() && !value.is_null())
-            .map(|value| {
-                let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-                    NookError::IndexedDb(format!("Genesis identity decode error: {error:?}"))
-                })?;
-                NookDatabase::decode_directory_value(&raw)
-            })
-            .transpose()?
-            .unwrap_or_else(IdentityDirectory::empty);
-        let PendingSimpleGenesisFlow::Staged(staged) = pending.flow else {
-            return Err(NookError::IndexedDb(
-                "Staged genesis identity state disappeared.".to_owned(),
-            ));
-        };
-        let directory = if current == staged.base_directory {
-            let candidate = staged.directory;
-            candidate
-                .validate()
-                .map_err(NookDatabase::map_domain_error)?;
-            candidate
-        } else {
-            current
-                .rebase_staged_vault_creation(StagedIdentityRebase {
-                    base: &staged.base_directory,
-                    candidate: &staged.directory,
-                    identity_id: &pending.identity_id,
-                })
-                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?
-        };
-        let encoded = serde_json::to_string(&directory).map_err(|error| {
-            NookError::IndexedDb(format!("Genesis identity encode error: {error}"))
-        })?;
-        let encoded = serde_wasm_bindgen::to_value(&encoded).map_err(|error| {
-            NookError::IndexedDb(format!("Genesis identity value error: {error:?}"))
-        })?;
-        store
-            .put(&encoded, Some(&directory_id))
-            .await
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Genesis identity write error: {error:?}"))
-            })?;
-        let Self::Staged { signing_seed, .. } = self else {
-            return Err(NookError::IndexedDb(
-                "Staged genesis completion is missing its signing seed.".to_owned(),
-            ));
-        };
-        let seed_key =
-            serde_wasm_bindgen::to_value(event_db::SIGNING_SEED_KEY).map_err(|error| {
-                NookError::IndexedDb(format!("Genesis signing key error: {error:?}"))
-            })?;
-        let seed_value = serde_wasm_bindgen::to_value(signing_seed).map_err(|error| {
-            NookError::IndexedDb(format!("Genesis signing value error: {error:?}"))
-        })?;
-        store
-            .put(&seed_value, Some(&seed_key))
-            .await
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Genesis signing write error: {error:?}"))
-            })?;
-        Ok(())
-    }
-
     pub(crate) async fn clear_pending(self) -> Result<(), NookError> {
-        let completed = self.pending();
+        let completed = self.pending;
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
@@ -119,13 +39,6 @@ impl SimpleGenesisCompletion<'_> {
                 && pending.identity_id == completed.identity_id
                 && pending.created_at == completed.created_at
             {
-                if pending.is_staged() {
-                    self.publish_staged_identity(StagedGenesisPublication {
-                        store: &store,
-                        pending,
-                    })
-                    .await?;
-                }
                 store.delete(id).await.map_err(|error| {
                     NookError::IndexedDb(format!("Genesis cleanup delete error: {error:?}"))
                 })?;

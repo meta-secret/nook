@@ -7,7 +7,6 @@ import {
 } from '$lib/app/route-state'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   extensionConnectionBrowser,
 } from '$lib/extension/connect'
@@ -34,14 +33,13 @@ describe('extension connect route parsing', () => {
     const request =
       extensionConnectionBrowser.extensionConnectRequestFromLocation(
         locationFromUrl(
-          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&nonce=n-1&scopes=vault-access,password-filling,sync-provider-credentials&connect_id=connect-1',
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&scopes=vault-access,password-filling,sync-provider-credentials&connect_id=connect-1',
         ),
       )
 
     expect(request).toEqual({
       kind: ExtensionConnectRequestStateKind.Requested,
       request: {
-        source: ExtensionIdentityRequestSource.ExtensionConnect,
         follow: {
           kind: ExtensionConnectFollowKind.Named,
           connectId: 'connect-1',
@@ -51,7 +49,6 @@ describe('extension connect route parsing', () => {
         deviceSigningPublicKey: 'sign-pk',
         extensionRuntimeId: 'ext-123',
         deviceLabel: 'Nook Extension',
-        nonce: 'n-1',
         scopes: [
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.PasswordFilling,
@@ -65,7 +62,7 @@ describe('extension connect route parsing', () => {
     const request =
       extensionConnectionBrowser.extensionConnectRequestFromLocation(
         locationFromUrl(
-          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&nonce=n-1&scopes=vault-access',
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&scopes=vault-access',
         ),
       )
     switch (request.kind) {
@@ -83,7 +80,7 @@ describe('extension connect route parsing', () => {
     const request =
       extensionConnectionBrowser.extensionConnectRequestFromLocation(
         locationFromUrl(
-          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&nonce=n-1&scopes=vault-access',
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&scopes=vault-access',
         ),
       )
 

@@ -15,10 +15,7 @@ describe('vault access gate', () => {
     const props = {
       vault,
       showAccessGate: false,
-      extensionConnectPairingStatusEntries: [],
       existingVaultNeedsDeviceUnlock: false,
-      identityKeyInExtension: false,
-      usesExtensionDeviceIdentity: false,
       showPasskeyOverlay: false,
       sentinelInvitationRequest: '',
       sentinelParticipantResponsePending: false,
@@ -26,7 +23,6 @@ describe('vault access gate', () => {
       sentinelOnboardingPackage: '',
       onUnlock: vi.fn(async () => {}),
       onUnlockOnCard: vi.fn(async () => {}),
-      onUnlockPairedIdentity: vi.fn(async () => {}),
       onUseEnrollmentCode: vi.fn(async () => {}),
       onAcceptSentinelOnboardingPackage: vi.fn(async () => {}),
       onUnlockWithPassword: vi.fn(async () => {}),

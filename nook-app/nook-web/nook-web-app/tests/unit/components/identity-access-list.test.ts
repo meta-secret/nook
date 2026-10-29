@@ -145,68 +145,6 @@ describe('identity access cards', () => {
 })
 
 describe('identity key inventory', () => {
-  test('shows an independent extension passkey beneath the same identity without local unlock or rename capability', () => {
-    const view = passkeyView()
-    const identity: IdentityDirectoryEntry = {
-      identityId: 'identity_personal',
-      words: [],
-      label: 'Personal',
-      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
-      members: [
-        {
-          appId: 'device_5678',
-          label: known('Nook in this browser'),
-          currentBrowser: true,
-          localProtection: DeviceAccessProtectionKind.PasskeyStandard,
-          protectionAssociation: DeviceAccessProtectionKind.PasskeyStandard,
-          associatedPasskeyName: known('Work laptop'),
-          associatedPasskeyFingerprint: known('passkey_1234'),
-        },
-        {
-          appId: 'app_extension',
-          label: known('Nook Extension'),
-          currentBrowser: false,
-          localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.PasskeyAntiHacker,
-          associatedPasskeyName: known('Extension passkey'),
-          associatedPasskeyFingerprint: known('passkey_extension'),
-        },
-      ],
-      vaults: [],
-    }
-    const request: ConstructorParameters<typeof IdentityKeyInventory>[0] = {
-      vault,
-      identity,
-      view,
-    }
-    const rows = new IdentityKeyInventory(request).rows
-    expect(rows).toHaveLength(2)
-    for (const row of rows.slice(1)) {
-      expect(row.kind).toBe(IdentityKeyInventoryRowKind.Protector)
-      expect(row.title).toBe('Extension passkey')
-      expect(row.renamable).toBe(false)
-      expect(row.apps).toHaveLength(1)
-      for (const app of row.apps) {
-        expect(app.title).toBe('Nook Extension')
-        expect(app.appId).toBe('app_extension')
-      }
-      expect(row.passkeySummary.kind).toBe(PasskeyCardSummaryKind.Present)
-      switch (row.passkeySummary.kind) {
-        case PasskeyCardSummaryKind.Absent:
-          throw new Error('Expected the extension passkey summary')
-        case PasskeyCardSummaryKind.Present:
-          expect(row.passkeySummary.summary.title).toBe('Extension passkey')
-          expect(
-            row.passkeySummary.summary.facts.map((fact) => fact.value),
-          ).toContain('passkey_extension')
-          expect(
-            row.passkeySummary.summary.facts.map((fact) => fact.value),
-          ).toContain(I18N_KEYS.DevicesAccessUnknownLegacy)
-          break
-      }
-    }
-  })
-
   test('nests the protected app and keeps remote apps in a linked group', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
@@ -220,18 +158,12 @@ describe('identity key inventory', () => {
           label: known('Nook on MacBook'),
           currentBrowser: true,
           localProtection: DeviceAccessProtectionKind.PasskeyStandard,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
         {
           appId: 'device_peer',
           label: known('Nook on phone'),
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
       ],
       vaults: [],
@@ -286,9 +218,6 @@ describe('identity key inventory', () => {
           label: known('Nook on work phone'),
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
       ],
       vaults: [],
@@ -324,18 +253,12 @@ describe('identity key inventory', () => {
           label: unknownText,
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
         {
           appId: 'app_peer_87654321',
           label: unknownText,
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
       ],
       vaults: [],
@@ -370,9 +293,6 @@ describe('identity key inventory', () => {
           label: unknownText,
           currentBrowser: true,
           localProtection: DeviceAccessProtectionKind.CompanionSession,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
       ],
       vaults: [],
@@ -407,9 +327,6 @@ describe('identity key inventory', () => {
           label: known('Nook in this browser'),
           currentBrowser: true,
           localProtection: DeviceAccessProtectionKind.Missing,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
         },
       ],
       vaults: [],

@@ -13,14 +13,8 @@ import {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
-  NookCompanionExtensionEndpoint,
-  NookDiscoveredCompanionExtensionEndpoint,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type {
-  CompanionExtensionPresence,
-  CompanionIdentityDiscoveryObservation,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionRequest } from './session-request-adapter'
@@ -99,29 +93,6 @@ export type OpenPasskeyVaultRequest = {
 
 export enum PasskeyVaultOpenOutcome {
   Opened = 'opened',
-}
-
-export type CompanionDiscoveryEndpoint =
-  | {
-      kind: CompanionDiscoveryEndpointKind.Initial
-      endpoint: Pick<NookCompanionExtensionEndpoint, 'discover' | 'free'>
-    }
-  | {
-      kind: CompanionDiscoveryEndpointKind.Discovered
-      endpoint: Pick<
-        NookDiscoveredCompanionExtensionEndpoint,
-        'rediscover' | 'free'
-      >
-    }
-export enum CompanionDiscoveryEndpointKind {
-  Initial = 'initial',
-  Discovered = 'discovered',
-}
-
-export type CompanionVaultDiscoveryArgs = {
-  activeManager: Pick<NookVaultManager, 'open_extension_passkey_vault_js'>
-  endpoint: CompanionDiscoveryEndpoint
-  presence: CompanionExtensionPresence
 }
 
 export type PasskeyEventProviderFlushRequest = {
@@ -341,78 +312,6 @@ export async function openPasskeyVault({
     return ok(PasskeyVaultOpenOutcome.Opened)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
-  }
-}
-
-export type FreshCompanionDiscoveryRequest = {
-  readonly previous: CompanionDiscoveryEndpoint
-  readonly candidate: Extract<
-    CompanionDiscoveryEndpoint,
-    { kind: CompanionDiscoveryEndpointKind.Initial }
-  >
-}
-
-export function freshCompanionDiscoveryEndpoint({
-  previous,
-  candidate,
-}: FreshCompanionDiscoveryRequest) {
-  if (previous.kind === CompanionDiscoveryEndpointKind.Discovered)
-    previous.endpoint.free()
-  return candidate
-}
-
-enum CompanionDiscoveryUse {
-  Pending = 'pending',
-  Consumed = 'consumed',
-}
-
-export class CompanionVaultDiscovery {
-  private use = CompanionDiscoveryUse.Pending
-  constructor(private readonly args: CompanionVaultDiscoveryArgs) {}
-
-  async discover(
-    discovery: CompanionIdentityDiscoveryObservation,
-  ): Promise<
-    Result<NookDiscoveredCompanionExtensionEndpoint, SessionOperationFailure>
-  > {
-    if (this.use !== CompanionDiscoveryUse.Pending)
-      return err(
-        new SessionOperationFailure(SessionOperationFailureKind.Consumed),
-      )
-    this.use = CompanionDiscoveryUse.Consumed
-    const { activeManager, endpoint, presence } = this.args
-    try {
-      if (presence.kind === 'unlocked') {
-        const grant: ExtensionVaultGrant = {
-          vaultStoreId: presence.vault_store_id,
-          deviceId: presence.app_key.appKey.appId,
-          devicePublicKey: presence.app_key.appKey.encryptionPublicKey,
-          deviceSigningPublicKey: presence.app_key.appKey.signingPublicKey,
-        }
-        const openArgs: OpenPasskeyVaultRequest = { activeManager, grant }
-        const opened = await openPasskeyVault(openArgs)
-        if (opened.isErr()) {
-          endpoint.endpoint.free()
-          return err(opened.error)
-        }
-      }
-    } catch {
-      endpoint.endpoint.free()
-      return err(
-        new SessionOperationFailure(SessionOperationFailureKind.Failed),
-      )
-    }
-    try {
-      return ok(
-        endpoint.kind === CompanionDiscoveryEndpointKind.Initial
-          ? endpoint.endpoint.discover(discovery)
-          : endpoint.endpoint.rediscover(discovery),
-      )
-    } catch {
-      return err(
-        new SessionOperationFailure(SessionOperationFailureKind.Failed),
-      )
-    }
   }
 }
 

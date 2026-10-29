@@ -315,7 +315,7 @@ impl NookVaultManager {
     /// Persist already-sealed provider credentials without unlocking the device.
     ///
     /// Used by extension pairing when the offscreen session was closed/locked
-    /// between identity handoff and grant import.
+    /// between pairing approval and grant import.
     #[wasm_bindgen]
     pub async fn save_presealed_auth_providers_snapshot(
         &self,

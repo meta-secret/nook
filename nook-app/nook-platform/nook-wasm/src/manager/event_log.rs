@@ -2,7 +2,6 @@
 
 use crate::EventDbSaveHeads;
 use crate::EventDbSaveKeyEpoch;
-use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::event_db::StoredKeyEpoch;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::identity_record::StoredIdentityProtection;
@@ -150,15 +149,6 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_signing_identity(
         &mut self,
     ) -> Result<SigningIdentity, NookError> {
-        if matches!(
-            &self.device.pending_extension_handoff,
-            ExtensionIdentityPublication::Staged(_)
-        ) && !self.event_log.signing_seed.is_empty()
-        {
-            return Ok(SigningIdentity::from_seed_hex_stored(
-                &self.event_log.signing_seed,
-            )?);
-        }
         let app_key = self.device_identity()?;
         if matches!(
             NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
@@ -184,7 +174,7 @@ impl NookVaultManager {
                 return Ok(identity);
             }
         } else {
-            // Prefer a durable authorized signer over a transient handoff seed
+            // Prefer a durable authorized signer over an in-memory session seed
             // when the vault already has events. Persist in-memory seeds only
             // for empty-log create paths.
             match NookDatabase::load_signing_seed().await? {
