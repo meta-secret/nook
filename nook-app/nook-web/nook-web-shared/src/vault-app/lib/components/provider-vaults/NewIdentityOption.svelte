@@ -26,7 +26,7 @@ identity in use there as a new one.
 
 <button
   type="button"
-  class="group flex w-full items-center gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 disabled:opacity-60"
+  class="group flex w-full items-center gap-3 bg-foreground/[0.04] p-4 text-left transition-colors hover:bg-foreground/[0.08] disabled:opacity-60"
   data-testid={testId}
   {disabled}
   onclick={onCreate}

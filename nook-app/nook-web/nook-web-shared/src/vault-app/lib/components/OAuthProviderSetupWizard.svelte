@@ -21,6 +21,11 @@
     type ConnectPlanButton,
   } from "$lib/components/provider-vaults/drive-vault-inventory";
   import NewIdentityOption from "$lib/components/provider-vaults/NewIdentityOption.svelte";
+  import FirstRunDiagram from "$lib/components/login/FirstRunDiagram.svelte";
+  import {
+    firstRunSyncDiagram,
+    type FirstRunSyncDiagramRequest,
+  } from "$lib/components/login/first-run-diagram";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
@@ -162,6 +167,15 @@
   }
 
   /** The step's button when no listing owns it: Connect & sync alone. */
+  /** Signed in to Drive, the step draws what it does instead of saying it. */
+  const driveDiagram = $derived.by(() => {
+    const request: FirstRunSyncDiagramRequest = {
+      vault,
+      provider: vault.t(I18N_KEYS.ProviderPickerGoogleDrive),
+    };
+    return firstRunSyncDiagram(request);
+  });
+
   const directConnect: ConnectPlanButton = {
     busy: false,
     label: "",
@@ -436,9 +450,13 @@
       bind:open={syncStepOpen}
       testId={isICloud ? "icloud-setup-sync-step" : "google-setup-sync-step"}
     >
-      <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-      </p>
+      {#if driveAccessToken && !isICloud}
+        <FirstRunDiagram diagram={driveDiagram} />
+      {:else}
+        <p class="text-sm text-muted-foreground text-pretty">
+          {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
+        </p>
+      {/if}
       {#if isICloud && !sharedTargetReady}
         <p
           class="text-[11px] text-muted-foreground text-pretty"

@@ -377,19 +377,19 @@
                         >
                           {formatSyncStatus(provider)}
                         </span>
-                        <span
-                          class="block text-[11px] {supportsVaultReplication
-                            ? 'text-muted-foreground'
-                            : 'text-amber-700 dark:text-amber-300'}"
-                          data-testid="provider-capability-{provider.id}"
-                        >
-                          {vault.t(providerCapabilityLabelKey(provider))}
-                          {#if !supportsVaultReplication}
+                        <!-- What a provider replicates is said only when this
+                             vault cannot use it. -->
+                        {#if !supportsVaultReplication}
+                          <span
+                            class="block text-[11px] text-amber-700 dark:text-amber-300"
+                            data-testid="provider-capability-{provider.id}"
+                          >
+                            {vault.t(providerCapabilityLabelKey(provider))}
                             · {vault.t(
                               I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
                             )}
-                          {/if}
-                        </span>
+                          </span>
+                        {/if}
                       </span>
                     </div>
                     {#if onSyncProvider}
@@ -445,7 +445,7 @@
                     {/if}
                   </div>
                   {#if sharedConfig !== false}
-                    <div class="nk-subpanel-recessed p-3 sm:p-4">
+                    <div class="mt-3 border-t border-border pt-3">
                       <AuthorizedAccountsPanel
                         {vault}
                         config={sharedConfig}

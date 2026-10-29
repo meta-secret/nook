@@ -8,12 +8,7 @@ identity can be created there instead, or kept on this browser only.
 <script lang="ts">
   import { untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import {
-    Cloud,
-    Laptop,
-    MonitorSmartphone,
-    RefreshCw,
-  } from '@lucide/svelte'
+  import { Cloud, RefreshCw } from '@lucide/svelte'
   import type { NookProviderSource, ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -38,7 +33,10 @@ identity can be created there instead, or kept on this browser only.
   } from '$lib/components/provider-vaults/drive-vault-inventory'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
   import FirstRunDiagram from './FirstRunDiagram.svelte'
-  import type { FirstRunDiagramView } from './first-run-diagram'
+  import {
+    firstRunSyncDiagram,
+    type FirstRunSyncDiagramRequest,
+  } from './first-run-diagram'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -75,30 +73,12 @@ identity can be created there instead, or kept on this browser only.
       ? new OAuthFilePresentation(vault.oauthFileDraft.config).oauthAccountLabel()
       : '',
   )
-  /** This device's vaults reach its other devices through the provider. */
-  const diagram = $derived<FirstRunDiagramView>({
-    label: vault.t(I18N_KEYS.FirstRunSyncDiagramLabel),
-    testId: 'first-run-sync-diagram',
-    nodes: [
-      {
-        icon: MonitorSmartphone,
-        label: vault.t(I18N_KEYS.JoinThisDevice),
-        testId: 'first-run-sync-diagram-here',
-        current: false,
-      },
-      {
-        icon: Cloud,
-        label: vault.t(I18N_KEYS.JoinNodeProvider),
-        testId: 'first-run-sync-diagram-provider',
-        current: true,
-      },
-      {
-        icon: Laptop,
-        label: vault.t(I18N_KEYS.FirstRunSyncDiagramDevices),
-        testId: 'first-run-sync-diagram-devices',
-        current: false,
-      },
-    ],
+  const diagram = $derived.by(() => {
+    const request: FirstRunSyncDiagramRequest = {
+      vault,
+      provider: vault.t(I18N_KEYS.JoinNodeProvider),
+    }
+    return firstRunSyncDiagram(request)
   })
   const originSupport = resolveCurrentOAuthOriginSupport(
     BrowserOAuthProvider.GoogleDrive,

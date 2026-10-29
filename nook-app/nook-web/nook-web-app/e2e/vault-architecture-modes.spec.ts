@@ -710,9 +710,10 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId(`provider-capability-${PERSONAL_ONLY_PROVIDER.id}`),
     ).toContainText(/unavailable for this vault/i)
+    // One it can use says nothing about it.
     await expect(
       page.getByTestId(`provider-capability-${SHARED_PROVIDER.id}`),
-    ).toContainText(/personal and shared replication/i)
+    ).toHaveCount(0)
 
     await openOnboardDevicePanel(page)
     await expect(

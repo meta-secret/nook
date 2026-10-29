@@ -1,5 +1,12 @@
 import type { Component } from "svelte";
-import { Fingerprint, UserRound, Vault } from "@lucide/svelte";
+import {
+  Cloud,
+  Fingerprint,
+  Laptop,
+  MonitorSmartphone,
+  UserRound,
+  Vault,
+} from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 
@@ -58,6 +65,44 @@ export function firstRunKeyDiagram({
         label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
         testId: "first-run-diagram-vaults",
         current: current === FirstRunKeyStep.Vaults,
+      },
+    ],
+  };
+}
+
+export type FirstRunSyncDiagramRequest = {
+  readonly vault: VaultState;
+  /** The provider's box: its name, or "Sync provider" before one is chosen. */
+  readonly provider: string;
+};
+
+/** This device's vaults reach its other devices through the provider,
+ * which is filled in. */
+export function firstRunSyncDiagram({
+  vault,
+  provider,
+}: FirstRunSyncDiagramRequest): FirstRunDiagramView {
+  return {
+    label: vault.t(I18N_KEYS.FirstRunSyncDiagramLabel),
+    testId: "first-run-sync-diagram",
+    nodes: [
+      {
+        icon: MonitorSmartphone,
+        label: vault.t(I18N_KEYS.JoinThisDevice),
+        testId: "first-run-sync-diagram-here",
+        current: false,
+      },
+      {
+        icon: Cloud,
+        label: provider,
+        testId: "first-run-sync-diagram-provider",
+        current: true,
+      },
+      {
+        icon: Laptop,
+        label: vault.t(I18N_KEYS.FirstRunSyncDiagramDevices),
+        testId: "first-run-sync-diagram-devices",
+        current: false,
       },
     ],
   };

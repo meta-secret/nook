@@ -293,6 +293,12 @@ join) sit between the hero and the cards.
     return target
   }
 
+  /** Managing an identity opens one of its vaults first: an identity with
+   * none here offers New vault instead of rows that could not open. */
+  function manageable(identityId: string): boolean {
+    return targetFor(identityId).storeId !== ''
+  }
+
   /** The current identity's card, which carries the "New vault" row. */
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
@@ -493,7 +499,10 @@ join) sit between the hero and the cards.
               : onNewVault}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
-            {...card.current && currentHealth && onManageSection
+            {...card.current &&
+            currentHealth &&
+            onManageSection &&
+            manageable(card.identityId)
               ? {
                   health: currentHealth,
                   onProtect: (action: NookIdentityNextStep) => {
@@ -511,7 +520,7 @@ join) sit between the hero and the cards.
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }
               : {}}
-            {...onManageSection
+            {...onManageSection && manageable(card.identityId)
               ? {
                   onManageSection: (section: WorkspaceSection) => {
                     const target: IdentitySectionTarget = {

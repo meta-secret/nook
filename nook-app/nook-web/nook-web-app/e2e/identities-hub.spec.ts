@@ -235,6 +235,9 @@ test.describe('an identity without a vault', () => {
     })
     await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
     await expect(solo.getByTestId('identity-vault-row')).toHaveCount(0)
+    // Managing it opens a vault first, so its card offers no rows that
+    // could not open.
+    await expect(solo.getByTestId('identity-overview-toggle')).toHaveCount(0)
 
     // New vault on the card creates one whenever it is wanted.
     await solo.getByTestId('identity-new-vault').click()

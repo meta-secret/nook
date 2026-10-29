@@ -103,7 +103,8 @@ vaults, each filling in its own box.
 - **Vault** (kept on this browser): "Create your first vault?" with the
   vault's name, or **Not now**. Not now ends setup with the identity and no
   vault: the identities page shows its card with New vault, never the Start
-  screen again.
+  screen again. Managing an identity opens one of its vaults, so a card with
+  none offers New vault and Lock only.
 - **Join**: "Request sent" with this browser's device id, the value the
   approving device shows. Check again reads the answer; there is no polling.
   Back returns to the identities.

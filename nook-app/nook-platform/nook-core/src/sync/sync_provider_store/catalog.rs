@@ -68,7 +68,7 @@ impl StorageProviderData {
                 }
             },
             StorageProviderType::OauthFile => {
-                let (file, account) = match &provider.oauth_file {
+                let (file, account, preset) = match &provider.oauth_file {
                     StoredOAuthFileConfiguration::Configured(oauth) => {
                         let file = match &oauth.file_name {
                             StoredOAuthRemoteFileName::FileName(name)
@@ -103,14 +103,20 @@ impl StorageProviderData {
                                 }
                             }
                         };
-                        (file, account)
+                        (file, account, oauth.preset)
                     }
                     StoredOAuthFileConfiguration::NotApplicable => (
                         DEFAULT_DRIVE_BACKUP_NAME,
                         labels.google_not_signed_in.as_str(),
+                        OauthFilePreset::GoogleDrive,
                     ),
                 };
-                format!("{file} · {account}")
+                // Google Drive keeps one Nook folder per account, so its row
+                // names the account alone; an iCloud record keeps its name.
+                match preset {
+                    OauthFilePreset::GoogleDrive => account.to_owned(),
+                    OauthFilePreset::ICloud => format!("{file} · {account}"),
+                }
             }
             StorageProviderType::Github => {
                 let repo = match &provider.github_repo {
@@ -699,6 +705,18 @@ mod tests {
             .build())
             .storage_detail(&labels),
             format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
+        );
+        // A Google Drive row names its account, not a file in the folder.
+        assert_eq!(
+            (OAuthCatalogFixture {
+                id: "drive",
+                preset: OauthFilePreset::GoogleDrive,
+                file_id: StoredOAuthRemoteFileId::Unresolved,
+                file_name: "nook-events"
+            }
+            .build())
+            .storage_detail(&labels),
+            labels.google_signed_in
         );
     }
 
