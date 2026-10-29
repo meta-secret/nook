@@ -715,9 +715,23 @@
     data-testid="login-access-sheet"
   >
     <header
-      class="border-b border-border pb-4 {framed ? 'px-5 pt-5 sm:px-6' : ''}"
+      class="flex items-center gap-3 border-b border-border pb-4 {framed
+        ? 'px-5 pt-5 sm:px-6'
+        : ''}"
     >
-      <div class="space-y-1">
+      <!-- Recovery opened from the first screen goes back from its title. -->
+      {#if showProviderSetup && !showSetup && (vault.vaultImportOpen || !vault.localVaultPresent) && !addProviderOpen}
+        <BackButton
+          label={vault.t(I18N_KEYS.FirstRunBack)}
+          testId="login-back-to-get-started"
+          onBack={() => {
+            vault.cancelExistingVaultOpen()
+            vault.vaultImportOpen = false
+            firstScreenRequested = true
+          }}
+        />
+      {/if}
+      <div class="min-w-0 flex-1 space-y-1">
         <h2 class="text-lg font-semibold tracking-tight text-foreground">
           {#if showSentinelCeremony && !showSetup && !showProviderSetup}
             {vault.t(I18N_KEYS.LoginUnlockVault)}
@@ -864,19 +878,6 @@
           </form>
         {/if}
       {:else if showProviderSetup}
-        {#if (vault.vaultImportOpen || !vault.localVaultPresent) && !addProviderOpen}
-          <div class="mb-4">
-            <BackButton
-              label={vault.t(I18N_KEYS.FirstRunBack)}
-              testId="login-back-to-get-started"
-              onBack={() => {
-                vault.cancelExistingVaultOpen()
-                vault.vaultImportOpen = false
-                firstScreenRequested = true
-              }}
-            />
-          </div>
-        {/if}
         <LoginProviderManagement
           {vault}
           variant={LoginProviderManagementVariant.Setup}

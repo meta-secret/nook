@@ -450,24 +450,29 @@ itself, so nothing here waits for it.
       </ol>
     </div>
 
-    {@render done()}
-
-    <footer
-      class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground"
-    >
-      <span class="max-w-[60ch] text-pretty">{manualJoin}</span>
-      <button
+    <!-- A new invite is the other action here, not a footnote. -->
+    <div class="flex flex-wrap items-center gap-3">
+      {@render done()}
+      <Button
         type="button"
-        class="underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground"
+        variant="outline"
+        class="h-11 px-5"
         data-testid="onboard-clear-code-btn"
         onclick={() => {
           onClearCode()
           passphrase = vault.identityControl.newPassphrase()
         }}
       >
+        <RefreshCw class="size-4" />
         {vault.t(I18N_KEYS.AddDeviceNewInvite)}
-      </button>
-    </footer>
+      </Button>
+    </div>
+
+    <p
+      class="max-w-[60ch] border-t border-border pt-4 text-xs text-pretty text-muted-foreground"
+    >
+      {manualJoin}
+    </p>
   {/if}
 
   {#if isSentinelVault}

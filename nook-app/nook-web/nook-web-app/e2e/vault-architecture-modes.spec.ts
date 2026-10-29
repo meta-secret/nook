@@ -471,7 +471,7 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
     await expect(start).toContainText('Create your identity')
     await expect(page.getByTestId('login-join-identity-btn')).toContainText(
-      'Already use Nook on another device?',
+      'Join with an invite link',
     )
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
       'Recover from a sync provider',

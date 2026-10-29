@@ -107,3 +107,34 @@ export function firstRunSyncDiagram({
     ],
   };
 }
+
+/** Recovery: the sync provider, filled in, holds the vaults the passkey
+ * opens. */
+export function firstRunRecoveryDiagram(
+  vault: VaultState,
+): FirstRunDiagramView {
+  return {
+    label: vault.t(I18N_KEYS.FirstRunRestoreDiagramLabel),
+    testId: "first-run-recovery-diagram",
+    nodes: [
+      {
+        icon: Cloud,
+        label: vault.t(I18N_KEYS.JoinNodeProvider),
+        testId: "first-run-recovery-diagram-provider",
+        current: true,
+      },
+      {
+        icon: Fingerprint,
+        label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
+        testId: "first-run-recovery-diagram-passkey",
+        current: false,
+      },
+      {
+        icon: Vault,
+        label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
+        testId: "first-run-recovery-diagram-vaults",
+        current: false,
+      },
+    ],
+  };
+}

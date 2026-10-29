@@ -35,7 +35,7 @@ paragraph.
 {/snippet}
 
 <figure
-  class="m-0 flex items-start gap-x-2 px-8"
+  class="m-0 mx-auto flex w-full max-w-md items-start gap-x-2 px-8"
   aria-label={diagram.label}
   data-testid={diagram.testId}
 >

@@ -1181,6 +1181,7 @@ export const I18N_KEYS = {
   FirstRunRestoreBody: 'first_run.restore_body',
   FirstRunRestoreChooseVault: 'first_run.restore_choose_vault',
   FirstRunRestoreChooseVaultBody: 'first_run.restore_choose_vault_body',
+  FirstRunRestoreDiagramLabel: 'first_run.restore_diagram_label',
   FirstRunRestorePick: 'first_run.restore_pick',
   FirstRunRestoreTitle: 'first_run.restore_title',
   FirstRunRestoreVaultItem: 'first_run.restore_vault_item',

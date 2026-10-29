@@ -1565,7 +1565,7 @@
     "this_device": "This device",
     "this_device_desc": "Encrypted vault in browser storage — no provider login",
     "local_folder": "Local backup",
-    "local_folder_desc": "Choose a folder — backup encrypted event files on this computer",
+    "local_folder_desc": "A folder on this computer",
     "local_folder_unavailable_desc": "Requires a browser with writable folder access",
     "local_folder_unavailable_brave": "In Brave, turn on File System Access API in brave://flags",
     "unsupported_replication_desc": "This provider does not support the selected replication mode.",
@@ -1573,11 +1573,11 @@
     "capability_personal_only": "Personal replication only",
     "capability_personal_shared": "Personal and shared replication",
     "github": "GitHub",
-    "github_desc": "Sign in to GitHub — sync encrypted vault to your repo",
+    "github_desc": "Sign in to GitHub",
     "google_drive": "Google Drive",
-    "google_drive_desc": "Sign in with Google — sync the encrypted vault to a Drive folder you can share with your other accounts",
+    "google_drive_desc": "Sign in with Google",
     "icloud": "iCloud",
-    "icloud_desc": "Sign in with Apple — sync the encrypted vault to an iCloud share your other accounts can join"
+    "icloud_desc": "Sign in with Apple"
   },
   "provider_setup": {
     "change_provider": "Change provider",
@@ -2405,7 +2405,7 @@
     "open_scan": "Scan this code with the new device's camera, or open the link there.",
     "open_passphrase": "Type this passphrase when it asks.",
     "open_join": "It joins by itself. There is nothing to approve here.",
-    "join_manual": "No camera? Open {url} on the new device and choose “Already use Nook on another device?”.",
+    "join_manual": "No camera? Open {url} on the new device and choose “Join with an invite link”.",
     "copy": "Copy",
     "copied": "Copied",
     "done": "Done",
@@ -2481,7 +2481,8 @@
     "restore_choose_vault": "Identities on this provider",
     "restore_choose_vault_body": "Recover yours with its passkey, or ask one of its devices to let this browser join.",
     "restore_vault_item": "Vault {id}",
-    "restore_body": "For when no device with your identity is left. You need your passkey synced to this device (iCloud Keychain or Google Password Manager) or the vault’s passphrase. If another device still has your identity, add this device from there instead."
+    "restore_body": "Needs your synced passkey or the vault’s passphrase.",
+    "restore_diagram_label": "How a sync provider gives your vaults back"
   },
   "identity_health": {
     "label": "Identity health",
