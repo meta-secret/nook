@@ -20,7 +20,11 @@ import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
-import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
+import {
+  FirstRunPlace,
+  FirstRunStage,
+  WorkspaceSection,
+} from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -278,7 +282,7 @@ describe('first-run setup settles the identity before any vault', () => {
 })
 
 describe('a keyring brought here keeps its provider and opens its vault', () => {
-  test('Drive is saved and synced, then the granted vault opens through it', async () => {
+  test('Drive is saved and synced, the granted vault opens, and setup ends on its card', async () => {
     const vault = VaultStateTestFixture.create()
     const order: string[] = []
     vi.spyOn(
@@ -309,6 +313,7 @@ describe('a keyring brought here keeps its provider and opens its vault', () => 
         order.push('open')
         return Promise.resolve(ok(IdentityActionOutcome.Completed))
       })
+    const section = vi.spyOn(vault, 'openSection').mockImplementation(() => {})
     vault.firstRun = FirstRunStage.Sync
 
     const connected = await new FirstRunActions(vault).connectProvider()
@@ -317,5 +322,8 @@ describe('a keyring brought here keeps its provider and opens its vault', () => 
     expect(order).toEqual(['folder', 'save', 'sync', 'open'])
     expect(open).toHaveBeenCalledWith('store_personalv1')
     expect(vault.firstRun).toBe(FirstRunStage.Off)
+    // Not inside the vault: its card, with the vault's panel beside it.
+    expect(section).toHaveBeenCalledWith(WorkspaceSection.Identities)
+    expect(vault.vaultPanelStoreId).toBe('store_personalv1')
   })
 })

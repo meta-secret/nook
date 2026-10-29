@@ -25,7 +25,11 @@ import {
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
 import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
-import { FirstRunPlace, FirstRunStage } from "$lib/vault/state/ui.svelte";
+import {
+  FirstRunPlace,
+  FirstRunStage,
+  WorkspaceSection,
+} from "$lib/vault/state/ui.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** One identity a sync provider holds, and the provider it was read from. */
@@ -251,8 +255,10 @@ export class FirstRunActions {
    * folder, save it, and copy the identity's log there. Then a vault the
    * identity granted this browser opens through it, as after an invite:
    * each vault is its own folder under the Nook folder, so it opens by its
-   * id. An identity with no vault ends setup on its card. A step that fails
-   * keeps setup where it is, with its error. */
+   * id. Setup then ends on the identities page, not inside the vault: the
+   * identity's card, with the vault's panel beside it, shows what there is
+   * to do next (its pages, Import, the identity's own management). A step
+   * that fails keeps setup where it is, with its error. */
   async connectProvider(): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
@@ -282,6 +288,8 @@ export class FirstRunActions {
       }
     }
     vault.firstRun = FirstRunStage.Off;
+    vault.openSection(WorkspaceSection.Identities);
+    if (away !== false) vault.vaultPanelStoreId = away.storeId;
     return true;
   }
 
