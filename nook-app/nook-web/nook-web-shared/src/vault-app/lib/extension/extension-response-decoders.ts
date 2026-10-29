@@ -32,25 +32,26 @@ export class ExtensionResponseDecodeFailure {
   constructor(readonly cause: Schema.SchemaError) {}
 }
 
-class CompanionLauncherResponseFields {
+class AcknowledgedResponseFields {
   static build() {
     return { ok: Schema.Literal(true) };
   }
 }
-const CompanionLauncherResponseSchema = Schema.Struct(
-  CompanionLauncherResponseFields.build(),
+const AcknowledgedResponseSchema = Schema.Struct(
+  AcknowledgedResponseFields.build(),
 );
 
-type CompanionLauncherResponse = Schema.Schema.Type<
-  typeof CompanionLauncherResponseSchema
+type AcknowledgedResponse = Schema.Schema.Type<
+  typeof AcknowledgedResponseSchema
 >;
 
 /** Owns structural admission for responses from the companion runtime. */
 export class CompanionResponseDecoder {
-  decodeLauncher(
+  /** A plain `{ ok: true }` acknowledgement. */
+  decodeAcknowledged(
     value: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<CompanionLauncherResponse, ExtensionResponseDecodeFailure> {
-    return Schema.decodeUnknownEffect(CompanionLauncherResponseSchema)(
+  ): Effect.Effect<AcknowledgedResponse, ExtensionResponseDecodeFailure> {
+    return Schema.decodeUnknownEffect(AcknowledgedResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(

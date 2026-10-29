@@ -1747,6 +1747,7 @@
     "recently": "recently"
   },
   "extension": {
+    "providers_handover_failed": "The browser extension did not receive this change to your sync providers.",
     "manifest": {
       "name": "Nook Passwords",
       "description": "Nook browser companion for password form detection and future autofill.",

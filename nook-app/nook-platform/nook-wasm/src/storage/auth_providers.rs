@@ -10,7 +10,9 @@ mod publication;
 use crate::NookError;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use publication::ProviderSnapshotStore;
-pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
+pub(crate) use publication::{
+    PresealedProviderMerge, PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
+};
 
 use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;

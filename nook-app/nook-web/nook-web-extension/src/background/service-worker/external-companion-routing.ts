@@ -13,6 +13,8 @@ import {
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
+import type * as BackgroundVaultRuntime from '../vault-runtime'
+import { ExtensionKeyringProvidersMessageType } from '../../../../nook-web-shared/src/extension/keyring-providers-message'
 import { ExtensionSessionLifecycle } from './session-lifecycle'
 import {
   ConcreteDecoderResultKind,
@@ -54,6 +56,8 @@ export type ExternalCompanionRoutingDependencies = {
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
   /** Focuses the tab whose widget started the connect that was just approved. */
   returnToConnectOrigin: () => Promise<void>
+  /** Rust takes the keyring's providers the web app handed over. */
+  takeKeyringProviderShares: typeof BackgroundVaultRuntime.backgroundVaultRuntime.takeKeyringProviderShares
 }
 
 type MessageResponse = { ok: boolean; reason?: string }
@@ -74,6 +78,10 @@ const invalidPairingGrantResponse: MessageResponse = {
 const eventLogImportFailureResponse: MessageResponse = {
   ok: false,
   reason: 'event-log-import-failed',
+}
+const keyringProvidersFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'keyring-providers-not-taken',
 }
 
 function pairingGrantDecodeFailureResponse(
@@ -115,6 +123,7 @@ export class ExternalCompanionRouter {
       openCompanionLauncher,
       refreshAuthenticationSurfaces,
       returnToConnectOrigin,
+      takeKeyringProviderShares,
     } = dependencies
     const exportRoute = this.observeVaultEventLogRoute()
     switch (exportRoute) {
@@ -122,6 +131,17 @@ export class ExternalCompanionRouter {
         return this.exportVaultEventLog()
       case ExternalVaultEventLogRoute.Other:
         break
+    }
+    if (
+      message.type ===
+      ExtensionKeyringProvidersMessageType.NookExtensionKeyringProviders
+    ) {
+      // Rust admits the shares and keeps the copy sealed to a key held here;
+      // the keyring's other apps' copies are not for this extension.
+      void takeKeyringProviderShares(message.payload)
+        .then(() => sendResponse(successResponse))
+        .catch(() => sendResponse(keyringProvidersFailureResponse))
+      return true
     }
     const launcherMessage = runConcreteDecoder(
       decodeOpenCompanionLauncherMessage,

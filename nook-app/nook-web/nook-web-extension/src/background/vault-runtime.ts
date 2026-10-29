@@ -27,6 +27,7 @@ import initNookWasm, {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   ExtensionPairingState,
+  NookKeyringProviderSharesAdmission,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
@@ -236,6 +237,21 @@ class BackgroundVaultRuntime {
       } finally {
         statusValue.free()
       }
+    } finally {
+      manager.free()
+    }
+  }
+
+  /** Take the keyring's providers the web app handed over: Rust admits
+   * them and keeps the copy sealed to a key this extension holds, locked or
+   * not. Answers whether one was taken. */
+  async takeKeyringProviderShares(
+    shares: NookKeyringProviderSharesAdmission,
+  ): Promise<boolean> {
+    await this.ensureExtensionWasm()
+    const manager = new NookVaultManager()
+    try {
+      return await manager.take_keyring_provider_shares(shares)
     } finally {
       manager.free()
     }

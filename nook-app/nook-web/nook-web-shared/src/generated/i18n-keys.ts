@@ -921,6 +921,7 @@ export const I18N_KEYS = {
   ExtensionPopupInitializationDeviceStatusFailed: 'extension.popup_initialization.device_status_failed',
   ExtensionPopupInitializationPairingStateFailed: 'extension.popup_initialization.pairing_state_failed',
   ExtensionPopupInitializationSessionDeviceFailed: 'extension.popup_initialization.session_device_failed',
+  ExtensionProvidersHandoverFailed: 'extension.providers_handover_failed',
   ExtensionRequestEyebrow: 'extension.request.eyebrow',
   ExtensionRequestNoVaults: 'extension.request.no_vaults',
   ExtensionRequestTitle: 'extension.request.title',

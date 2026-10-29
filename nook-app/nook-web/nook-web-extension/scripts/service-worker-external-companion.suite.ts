@@ -5,6 +5,7 @@ import {
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
+import { ExtensionKeyringProvidersMessageType } from '../../nook-web-shared/src/extension/keyring-providers-message'
 import {
   externalDependencies,
   externalPairingMessage,
@@ -14,6 +15,70 @@ import {
 } from './service-worker-routing-test-support'
 
 describe('external companion routing', () => {
+  describe('keyring providers the web app hands over', () => {
+    const sharesMessage = {
+      type: ExtensionKeyringProvidersMessageType.NookExtensionKeyringProviders,
+      payload: { apps: [{ appId: 'app-extension', providers: [] }] },
+    }
+
+    async function route(
+      takeKeyringProviderShares: ExternalCompanionRoutingDependencies['takeKeyringProviderShares'],
+      senderUrl: string,
+    ) {
+      const dependencies: ExternalCompanionRoutingDependencies = {
+        ...externalDependencies,
+        takeKeyringProviderShares,
+      }
+      const { ExternalCompanionRouter } =
+        await import('../src/background/service-worker/external-companion-routing')
+      const sendResponse = mock(() => {})
+      const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] =
+        {
+          dependencies,
+          message: sharesMessage,
+          sender: { url: senderUrl },
+          sendResponse,
+        }
+      const accepted = await new ExternalCompanionRouter(request).route()
+      await flushResponses()
+      return { accepted, sendResponse }
+    }
+
+    test('reach Rust from Simple Vault and are acknowledged', async () => {
+      const take = mock(() => Promise.resolve(true))
+      const { accepted, sendResponse } = await route(
+        take,
+        'https://simple.example.test/',
+      )
+      expect(accepted).toBe(true)
+      expect(take).toHaveBeenCalledWith(sharesMessage.payload)
+      expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+    })
+
+    test('from another origin are refused before Rust sees them', async () => {
+      const take = mock(() => Promise.resolve(true))
+      const { accepted, sendResponse } = await route(
+        take,
+        'https://foreign.example/',
+      )
+      expect(accepted).toBe(false)
+      expect(take).not.toHaveBeenCalled()
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: false,
+        reason: 'forbidden-sender',
+      })
+    })
+
+    test('that Rust refuses are reported as not taken', async () => {
+      const take = mock(() => Promise.reject(new Error('plaintext')))
+      const { sendResponse } = await route(take, 'https://simple.example.test/')
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: false,
+        reason: 'keyring-providers-not-taken',
+      })
+    })
+  })
+
   test('exports the requested vault only after approved external-origin admission', async () => {
     const response = { kind: 'NotPaired' as const }
     const exportEvents = mock(() => Effect.succeed(response))

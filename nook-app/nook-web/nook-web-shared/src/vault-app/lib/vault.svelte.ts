@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
+import { KeyringProvidersHandOver } from "$lib/extension/keyring-providers";
 import { VaultAccessStatus, type NookVaultSyncResult } from "$lib/nook";
 import {
   DeviceIdentityInitializationMode,
@@ -331,10 +332,19 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async persistProviders(opts: providersActions.ProviderPersistenceOptions) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new providersActions.VaultProviderActions(this).persistProviders({
-      opts,
-    });
+    const persistence: Parameters<
+      providersActions.VaultProviderActions["persistProviders"]
+    >[0] = { opts };
+    const persisted = await new providersActions.VaultProviderActions(
+      this,
+    ).persistProviders(persistence);
+    if (persisted.isErr()) return persisted;
+    // The extension syncs through the keyring's providers too. The save
+    // stands when the hand-over fails; the failure is shown.
+    const handedOver = await new KeyringProvidersHandOver(this).deliver();
+    if (handedOver.isErr())
+      this.errorMsg = this.t(handedOver.error.translationKey);
+    return persisted;
   }
 
   beginProviderSetup(request: ProviderSetupRequest) {

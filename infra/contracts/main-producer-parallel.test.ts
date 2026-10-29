@@ -108,6 +108,8 @@ const scenarios = [
 /** The producer runs eight probes, some sleeping 3 s, on a loaded runner; the
  * bound only stops a hung producer. */
 const SCENARIO_TIMEOUT_MS = 20_000;
+/** A stopped task's TERM trap only touches a file; this bound is far longer. */
+const TASK_EXIT_GRACE_MS = 5_000;
 setDefaultTimeout(SCENARIO_TIMEOUT_MS * 2);
 
 for (const scenario of scenarios) {
@@ -256,10 +258,23 @@ exit "$status"`,
         const pidFile = join(root, `${kind}.pid`);
         if (existsSync(pidFile)) {
           const pid = readFileSync(pidFile, "utf8").trim();
-          const observed = spawnSync("ps", ["-o", "stat=", "-p", pid]);
+          // The producer waits for each task's subshell; a task the cleanup
+          // stopped may still be running its TERM trap when the producer
+          // returns, so it gets a short bound to finish exiting.
+          const exitBy = Date.now() + TASK_EXIT_GRACE_MS;
+          let observed = spawnSync("ps", ["-o", "stat=", "-p", pid]);
+          let state = observed.stdout.toString().trim();
+          while (
+            state.length > 0 &&
+            !state.startsWith("Z") &&
+            Date.now() < exitBy
+          ) {
+            Bun.sleepSync(50);
+            observed = spawnSync("ps", ["-o", "stat=", "-p", pid]);
+            state = observed.stdout.toString().trim();
+          }
           expect(observed.error).toBeFalsy();
           expect(observed.stderr.toString().trim()).toBe("");
-          const state = observed.stdout.toString().trim();
           if (state.length === 0) {
             expect(observed.status).toBe(1);
           } else {

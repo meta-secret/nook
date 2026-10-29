@@ -1138,6 +1138,7 @@ pub const EXTENSION_POPUP_INITIALIZATION_PAIRING_STATE_FAILED: &str =
     "extension.popup_initialization.pairing_state_failed";
 pub const EXTENSION_POPUP_INITIALIZATION_SESSION_DEVICE_FAILED: &str =
     "extension.popup_initialization.session_device_failed";
+pub const EXTENSION_PROVIDERS_HANDOVER_FAILED: &str = "extension.providers_handover_failed";
 pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
 pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";

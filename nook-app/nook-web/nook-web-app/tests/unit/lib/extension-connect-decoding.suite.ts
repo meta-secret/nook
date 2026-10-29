@@ -3,10 +3,10 @@ import { Effect } from 'effect'
 import { companionResponseDecoder } from '$lib/extension/connect'
 
 describe('extension runtime response decoding', () => {
-  test('rejects launcher acknowledgements with unrelated fields', () => {
+  test('rejects acknowledgements with unrelated fields', () => {
     const decoded = Effect.runSync(
       Effect.result(
-        companionResponseDecoder.decodeLauncher({ ok: true, stale: true }),
+        companionResponseDecoder.decodeAcknowledged({ ok: true, stale: true }),
       ),
     )
 

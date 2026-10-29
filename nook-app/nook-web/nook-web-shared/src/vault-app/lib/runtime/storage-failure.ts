@@ -32,6 +32,7 @@ export enum VaultStorageFailureKind {
   ReloadFailed = "reload-failed",
   ExtensionPublicationFailed = "extension-publication-failed",
   ExtensionApprovalContextChanged = "extension-approval-context-changed",
+  ExtensionProvidersHandOverFailed = "extension-providers-hand-over-failed",
 }
 
 /** Stable codes attached by the native provider adapter across the WASM boundary. */
@@ -98,6 +99,8 @@ export class VaultStorageFailure {
         return I18N_KEYS.AuthStorageGithubTokenRejected;
       case VaultStorageFailureKind.ExtensionApprovalContextChanged:
         return I18N_KEYS.ExtensionConsentApprovalFailed;
+      case VaultStorageFailureKind.ExtensionProvidersHandOverFailed:
+        return I18N_KEYS.ExtensionProvidersHandoverFailed;
       case VaultStorageFailureKind.ExtensionPublicationFailed:
       case VaultStorageFailureKind.OperationFailed:
       case VaultStorageFailureKind.LockUnavailable:
