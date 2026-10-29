@@ -136,8 +136,15 @@ identity, joining from it is the path instead.
 
 Shaped like the first run and shown above the workspace and the locked
 screen, since adopting the identity ends the current session midway:
-**Name** the identity, **Key** (its own passkey, with a preview of its card),
-then "*identity* is ready" with its first vault's name, or Later.
+**Name** the identity, **Key** (its own passkey), then "*identity* is ready"
+with its first vault's name, or Later. Key is one centred column like the
+Passkey step: a short title, one line that each identity has its own
+passkey, the diagram Your passkey → *identity* → Your vaults, and Create
+new passkey.
+
+Wherever a passkey is created, its form is one button: the device
+protection mode and the passkey's name wait under **Passkey options**, since
+the defaults suit nearly everyone.
 
 ## Vault page
 

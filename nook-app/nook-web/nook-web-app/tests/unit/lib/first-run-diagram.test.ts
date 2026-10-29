@@ -4,6 +4,7 @@ import {
   FirstRunDiagramArrow,
   firstRunKeyDiagram,
   firstRunSyncDiagram,
+  type FirstRunKeyDiagramRequest,
   type FirstRunSyncDiagramRequest,
 } from '$lib/components/login/first-run-diagram'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -30,8 +31,13 @@ describe('first-run diagrams', () => {
     expect(nodes.map((node) => node.label)).toContain('Google Drive')
   })
 
-  test('the passkey leads on to the identity and its vaults', () => {
-    const nodes = firstRunKeyDiagram(VaultStateTestFixture.create()).nodes
+  test('the passkey leads on to the identity it opens, by name, and its vaults', () => {
+    const request: FirstRunKeyDiagramRequest = {
+      vault: VaultStateTestFixture.create(),
+      identity: 'Work',
+    }
+    const nodes = firstRunKeyDiagram(request).nodes
+    expect(nodes.map((node) => node.label)).toContain('Work')
     expect(nodes.map((node) => node.arrow)).toEqual([
       FirstRunDiagramArrow.Forward,
       FirstRunDiagramArrow.Forward,

@@ -36,9 +36,19 @@ export type FirstRunDiagramView = {
   readonly nodes: readonly FirstRunDiagramNode[];
 };
 
+export type FirstRunKeyDiagramRequest = {
+  readonly vault: VaultState;
+  /** The identity the passkey opens: its name, or "Your identity" while it
+   * has none. */
+  readonly identity: string;
+};
+
 /** The passkey, made on this step, opens the identity, which holds the
  * vaults. */
-export function firstRunKeyDiagram(vault: VaultState): FirstRunDiagramView {
+export function firstRunKeyDiagram({
+  vault,
+  identity,
+}: FirstRunKeyDiagramRequest): FirstRunDiagramView {
   return {
     label: vault.t(I18N_KEYS.FirstRunDiagramLabel),
     testId: "first-run-key-diagram",
@@ -52,7 +62,7 @@ export function firstRunKeyDiagram(vault: VaultState): FirstRunDiagramView {
       },
       {
         icon: UserRound,
-        label: vault.t(I18N_KEYS.FirstRunDiagramIdentity),
+        label: identity || vault.t(I18N_KEYS.FirstRunDiagramIdentity),
         testId: "first-run-diagram-identity",
         current: false,
         arrow: FirstRunDiagramArrow.Forward,

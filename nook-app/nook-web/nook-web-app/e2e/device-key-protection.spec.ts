@@ -33,6 +33,11 @@ async function revealDeviceProtectionCreateWorkflow(page: Page) {
   await expect(
     page.getByTestId('device-protection-create-workflow'),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  // The passkey's label and mode wait under Passkey options.
+  const options = page.getByTestId('device-protection-options')
+  if (!(await options.evaluate((element) => element.hasAttribute('open')))) {
+    await page.getByTestId('device-protection-options-toggle').click()
+  }
 }
 
 async function clickDeviceProtectionSetup(page: Page) {

@@ -570,6 +570,7 @@ pub const DEVICE_PROTECTION_NEW_PASSKEY_ALTERNATIVE_ACTION: &str =
 pub const DEVICE_PROTECTION_NEXT_STEP: &str = "device_protection.next_step";
 pub const DEVICE_PROTECTION_NOT_FOUND_DESCRIPTION: &str = "device_protection.not_found_description";
 pub const DEVICE_PROTECTION_NOT_FOUND_TITLE: &str = "device_protection.not_found_title";
+pub const DEVICE_PROTECTION_OPTIONS: &str = "device_protection.options";
 pub const DEVICE_PROTECTION_PASSKEY_CREATE_NOT_ALLOWED: &str =
     "device_protection.passkey_create_not_allowed";
 pub const DEVICE_PROTECTION_PASSKEY_DEFAULT_LABEL: &str = "device_protection.passkey_default_label";
@@ -1427,7 +1428,6 @@ pub const FIRST_RUN_PATH_ADD_DEVICE: &str = "first_run.path_add_device";
 pub const FIRST_RUN_PATH_CHECK: &str = "first_run.path_check";
 pub const FIRST_RUN_PATH_RECOVER: &str = "first_run.path_recover";
 pub const FIRST_RUN_PROTECT_BODY: &str = "first_run.protect_body";
-pub const FIRST_RUN_PROTECT_HINT: &str = "first_run.protect_hint";
 pub const FIRST_RUN_PROTECT_TITLE: &str = "first_run.protect_title";
 pub const FIRST_RUN_RESTORE_BODY: &str = "first_run.restore_body";
 pub const FIRST_RUN_RESTORE_CHOOSE_VAULT: &str = "first_run.restore_choose_vault";

@@ -56,7 +56,10 @@ async function startNewIdentity(page: Page, name: string): Promise<void> {
   await expect(page.getByTestId('new-identity-key')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('new-identity-preview')).toContainText(name)
+  // The passkey diagram names the identity it opens.
+  await expect(
+    page.getByTestId('new-identity-key').getByTestId('first-run-key-diagram'),
+  ).toContainText(name)
 }
 
 /** Give the identity a PIN, as a browser without passkeys would. */
