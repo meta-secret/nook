@@ -750,6 +750,8 @@ pub const ERRORS_GITHUB_CREDENTIALS_REQUIRED: &str = "errors.github_credentials_
 pub const ERRORS_GITHUB_ENROLLMENT_CREDENTIALS_REQUIRED: &str =
     "errors.github_enrollment_credentials_required";
 pub const ERRORS_GOOGLE_SIGN_IN_REQUIRED: &str = "errors.google_sign_in_required";
+pub const ERRORS_IDENTITY_JOIN_PASSKEY_IN_USE: &str = "errors.identity_join.passkey_in_use";
+pub const ERRORS_IDENTITY_JOIN_PASSKEY_LOCKED: &str = "errors.identity_join.passkey_locked";
 pub const ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED: &str = "errors.local_backup_folder_required";
 pub const ERRORS_MANAGER_UNINITIALIZED: &str = "errors.manager_uninitialized";
 pub const ERRORS_SHARED_PROVIDER_ACCESS_REQUIRED: &str = "errors.shared_provider_access_required";

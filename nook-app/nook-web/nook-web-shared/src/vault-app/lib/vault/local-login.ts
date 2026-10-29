@@ -598,9 +598,10 @@ export class VaultLoginActions {
       state.startVaultSync();
       creationState = LocalVaultCreationState.Committed;
     } catch (e) {
+      // Rust says a known failure as a translation key: show its text.
       const message =
         e instanceof Error
-          ? e.message
+          ? state.resolveErrorMessage(e.message)
           : state.t(I18N_KEYS.ErrorsVaultCreationFailed);
       log.warn("local vault create failed");
       state.errorMsg = message;

@@ -215,7 +215,12 @@ export class IdentityControlModel {
     });
     if (mounted.isErr()) return err(mounted.error);
     for (const provider of mounted.value) {
-      const args = this.vault.providerWasmArgs(provider);
+      let args: NookStorageConnectArgs;
+      try {
+        args = this.vault.providerWasmArgs(provider);
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure));
+      }
       const synced = await this.syncOneMount(args);
       if (synced.isErr()) return err(synced.error);
     }

@@ -25,6 +25,7 @@ import {
   FirstRunStage,
   WorkspaceSection,
 } from '$lib/vault/state/ui.svelte'
+import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -253,6 +254,43 @@ describe('first-run setup settles the identity before any vault', () => {
     await new FirstRunActions(setup.vault).createNamed('Family')
 
     expect(setup.created).toEqual(['Family'])
+  })
+
+  test('a new identity on the sync provider is created with no sign-in staged', async () => {
+    // A staged sign-in would be saved with the vault as a Google Drive
+    // provider without its Nook folder, which no sync can use.
+    const setup = new Setup().at(FirstRunStage.Name)
+    setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
+    setup.names('named')
+    new FirstRunActions(setup.vault).beginGoogleDrive()
+    const stagedAtCreation: LoginSetupKind[] = []
+    vi.spyOn(setup.vault, 'createLocalVaultWithDeviceKeys').mockImplementation(
+      () => {
+        stagedAtCreation.push(setup.vault.loginSetup.kind)
+        return Promise.resolve()
+      },
+    )
+
+    await new FirstRunActions(setup.vault).createNamed('Family')
+
+    expect(stagedAtCreation).toEqual([LoginSetupKind.Inactive])
+  })
+
+  test('a key that cannot ask yet says why instead of only failing', async () => {
+    const setup = new Setup().at(FirstRunStage.Sync)
+    vi.spyOn(setup.manager, 'begin_identity_join').mockResolvedValue(
+      'new-key-staged',
+    )
+
+    await new FirstRunActions(setup.vault).runOn(ask())
+
+    expect(setup.vault.errorMsg).toContain(
+      setup.vault.t(I18N_KEYS.ProviderIdentitiesJoinFailed),
+    )
+    expect(setup.vault.errorMsg).toContain(
+      setup.vault.t(I18N_KEYS.ErrorsIdentityJoinPasskeyInUse),
+    )
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Sync)
   })
 
   test('the vault step creates the vault it names and ends setup', async () => {

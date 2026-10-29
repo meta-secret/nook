@@ -618,6 +618,8 @@ export const I18N_KEYS = {
   ErrorsGithubCredentialsRequired: 'errors.github_credentials_required',
   ErrorsGithubEnrollmentCredentialsRequired: 'errors.github_enrollment_credentials_required',
   ErrorsGoogleSignInRequired: 'errors.google_sign_in_required',
+  ErrorsIdentityJoinPasskeyInUse: 'errors.identity_join.passkey_in_use',
+  ErrorsIdentityJoinPasskeyLocked: 'errors.identity_join.passkey_locked',
   ErrorsLocalBackupFolderRequired: 'errors.local_backup_folder_required',
   ErrorsManagerUninitialized: 'errors.manager_uninitialized',
   ErrorsSharedProviderAccessRequired: 'errors.shared_provider_access_required',

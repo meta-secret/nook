@@ -1038,6 +1038,10 @@
     "sentinel_unlock_copy_response": "Copy response"
   },
   "errors": {
+    "identity_join": {
+      "passkey_in_use": "This browser's passkey already holds a keyring with vaults here, and one passkey holds one keyring. Keep that keyring, or ask to join from another browser profile.",
+      "passkey_locked": "Unlock this browser's passkey, then ask again."
+    },
     "validation": {
       "local_data_changed_in_another_tab": "Local browser data changed. Reload the page to continue.",
       "github_pat_empty": "Enter a GitHub personal access token to connect.",

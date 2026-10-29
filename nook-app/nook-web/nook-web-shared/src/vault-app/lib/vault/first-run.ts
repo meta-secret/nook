@@ -144,6 +144,10 @@ export class FirstRunActions {
     }
     const draft = vault.oauthFileDraft;
     vault.firstRunVaultName = label;
+    // The vault is made on this browser first. A sign-in still staged would
+    // be saved with it as a Google Drive provider without its Nook folder,
+    // which no sync can use; it is staged again below to connect with one.
+    vault.cancelProviderSetup();
     await vault.createLocalVaultWithDeviceKeys(label);
     if (!vault.isAuthenticated) return;
     if (
@@ -216,8 +220,15 @@ export class FirstRunActions {
       return;
     }
     if (asked.value !== IdentityJoinAsked.Requested) {
-      const failure = new IdentityPlanFailure(IdentityPlanFailureKind.Join);
-      vault.errorMsg = vault.t(failure.translationKey);
+      // Setup asks only with a fresh key; say why this one cannot.
+      const failure = new IdentityPlanFailure(
+        IdentityPlanFailureKind.Join,
+      ).because(
+        asked.value === IdentityJoinAsked.WaitsForDevice
+          ? I18N_KEYS.ErrorsIdentityJoinPasskeyLocked
+          : I18N_KEYS.ErrorsIdentityJoinPasskeyInUse,
+      );
+      vault.errorMsg = failure.message(vault);
       return;
     }
     vault.firstRunJoin = { kind: FirstRunJoinKind.Asked, join };
