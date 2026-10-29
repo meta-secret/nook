@@ -245,3 +245,67 @@ impl CheckedPasskey<'_> {
     let password = zeroize::Zeroizing::new(password);
     source.contents().await?.check_backup_password(&password)
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use crate::NookVaultManager;
+    use nook_core::IdentityId;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_backup_password_opens_nothing_where_only_an_identity_log_is_kept()
+    -> anyhow::Result<()> {
+        let folder = format!("check-{}", IdentityId::generate()?.as_str());
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("access check pin".to_owned())
+            .await)?;
+        js(manager.ensure_identity_control_log().await)?;
+        let identity_id = NookDatabase::load_identity_directory()
+            .await?
+            .selected()?
+            .identity_id
+            .clone();
+        let events = NookDatabase::load_identity_log(&identity_id)
+            .await?
+            .storage_bytes()?;
+        let handles = LocalFolderHandles::current();
+        handles.register_private_folder(&folder).await?;
+        handles
+            .write_identity_log(&folder, &identity_id, &events)
+            .await?;
+
+        // This browser and the folder both keep the identity's log and no
+        // vault, so a backup password has nothing to open in either.
+        for source in [
+            NookAccessCheckSource::ThisBrowser,
+            NookAccessCheckSource::LocalFolder {
+                handle_id: folder.clone(),
+            },
+        ] {
+            let source = Tsify::into_ts(&source).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let report =
+                js(check_backup_password_access(&source, "not a backup".to_owned()).await)?
+                    .to_rust()
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            assert!(report.identities.is_empty());
+        }
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+}

@@ -495,6 +495,85 @@ impl LocalFolderHandles {
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{EventId, EventStorageBytes, IdentityId, PlacedNamespace};
+
+/// Folders for browser tests: the browser's private file system stands in
+/// for a folder the person picked.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+impl LocalFolderHandles {
+    /// A folder named `handle_id` in the browser's private file system,
+    /// registered under that id as if the person had picked it. The same id
+    /// opens the same folder again.
+    pub(crate) async fn register_private_folder(&self, handle_id: &str) -> anyhow::Result<()> {
+        let fail = |error: wasm_bindgen::JsValue| anyhow::anyhow!("{error:?}");
+        let navigator =
+            Reflect::get(&js_sys::global(), &JsString::from("navigator")).map_err(fail)?;
+        let storage = Reflect::get(&navigator, &JsString::from("storage")).map_err(fail)?;
+        let get_directory: Function = Reflect::get(&storage, &JsString::from("getDirectory"))
+            .map_err(fail)?
+            .dyn_into()
+            .map_err(fail)?;
+        let root: Object = JsFuture::from(
+            get_directory
+                .call0(&storage)
+                .map_err(fail)?
+                .dyn_into::<Promise>()
+                .map_err(fail)?,
+        )
+        .await
+        .map_err(fail)?
+        .dyn_into()
+        .map_err(fail)?;
+        let open_directory: Function = Reflect::get(&root, &JsString::from("getDirectoryHandle"))
+            .map_err(fail)?
+            .dyn_into()
+            .map_err(fail)?;
+        let options = Object::new();
+        Reflect::set(&options, &JsString::from("create"), &Boolean::from(true)).map_err(fail)?;
+        let handle: Object = JsFuture::from(
+            open_directory
+                .call2(&root, &JsString::from(handle_id), &options)
+                .map_err(fail)?
+                .dyn_into::<Promise>()
+                .map_err(fail)?,
+        )
+        .await
+        .map_err(fail)?
+        .dyn_into()
+        .map_err(fail)?;
+        self.store(FolderRegistration { handle_id, handle }).await?;
+        Ok(())
+    }
+
+    /// Put an identity's control log into a registered folder, as a device
+    /// of the identity syncing there does.
+    pub(crate) async fn write_identity_log(
+        &self,
+        handle_id: &str,
+        identity_id: &IdentityId,
+        events: &[(EventId, EventStorageBytes)],
+    ) -> anyhow::Result<()> {
+        let records = events
+            .iter()
+            .map(|(event_id, bytes)| {
+                Ok(super::LocalFolderEventWrite {
+                    event_id: event_id.as_str().to_owned(),
+                    content: String::from_utf8(bytes.as_ref().to_vec())?,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        self.open_folder(handle_id)
+            .await?
+            .write_events(
+                &PlacedNamespace::identity_log(identity_id.clone()),
+                &records,
+            )
+            .await?;
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
     use super::*;
     use wasm_bindgen::closure::Closure;

@@ -46,3 +46,36 @@ pub struct NookProviderIdentityChoices {
     };
     Tsify::into_ts(&choices).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn an_empty_listing_has_no_identity_to_decide_in_either_session() -> anyhow::Result<()> {
+        for session in [IdentitySession::IdentityInUse, IdentitySession::NoIdentity] {
+            let request = Tsify::into_ts(&NookProviderIdentityChoicesRequest {
+                vaults: Vec::new(),
+                checks: Vec::new(),
+                session,
+            })
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let choices = provider_identity_choices(&request)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?
+                .to_rust()
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            assert!(choices.identities.is_empty());
+        }
+        Ok(())
+    }
+}

@@ -362,3 +362,178 @@ impl NookVaultManager {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{AppKey, EventId, IdentityMemberKeys, MemberLabel, SigningIdentity};
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    fn folder_source(handle_id: &str) -> anyhow::Result<tsify::Ts<NookProviderSource>> {
+        let source = NookProviderSource::LocalFolder {
+            handle_id: handle_id.to_owned(),
+        };
+        Tsify::into_ts(&source).map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    /// The identity in use and its control log, as this browser stores it.
+    async fn identity_in_use() -> anyhow::Result<(IdentityId, Vec<(EventId, EventStorageBytes)>)> {
+        let identity_id = NookDatabase::load_identity_directory()
+            .await?
+            .selected()?
+            .identity_id
+            .clone();
+        let events = NookDatabase::load_identity_log(&identity_id)
+            .await?
+            .storage_bytes()?;
+        Ok((identity_id, events))
+    }
+
+    /// Another app asks to join the identity: its request, signed by its own
+    /// key on the log's heads, lands in this browser's copy of the log.
+    async fn asking_app(identity_id: &IdentityId) -> anyhow::Result<AppId> {
+        let app = AppKey::generate()?;
+        let signer = SigningIdentity::generate()?.0;
+        let member = IdentityMemberKeys {
+            app_id: app.app_id().clone(),
+            encryption_public_key: app.public_key(),
+            signing_public_key: signer.public_key(),
+            label: MemberLabel::from_trusted("Phone".to_owned()),
+        };
+        let events: Vec<EventStorageBytes> = NookDatabase::load_identity_log(identity_id)
+            .await?
+            .storage_bytes()?
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect();
+        let created_at = NookVaultManager::identity_event_time()?;
+        let IdentityJoinRequestPlan::Write(write) = (ProviderIdentityJoinRequest {
+            identity_id,
+            events: &events,
+            member: &member,
+            signing: &signer,
+            created_at: &created_at,
+        })
+        .plan()?
+        else {
+            anyhow::bail!("a new app's first request is written");
+        };
+        NookDatabase::save_identity_events(IdentityLogWrite {
+            identity_id,
+            events: &[(write.event_id, write.bytes)],
+        })
+        .await?;
+        Ok(app.app_id().clone())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_fresh_browser_asks_to_join_an_identity_in_a_folder_and_waits() -> anyhow::Result<()>
+    {
+        let folder = format!("join-{}", IdentityId::generate()?.as_str());
+        let mut manager = NookVaultManager::new();
+        // The identity's founder keeps its control log in the folder.
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("join founder pin".to_owned())
+            .await)?;
+        js(manager.ensure_identity_control_log().await)?;
+        let (family, events) = identity_in_use().await?;
+        let handles = LocalFolderHandles::current();
+        handles.register_private_folder(&folder).await?;
+        handles
+            .write_identity_log(&folder, &family, &events)
+            .await?;
+
+        // Another browser, with a fresh key, finds it there and asks to join.
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("join asker pin".to_owned())
+            .await)?;
+        handles.register_private_folder(&folder).await?;
+        let start = js(manager
+            .begin_identity_join(family.as_str().to_owned(), "Family")
+            .await)?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(start, NookIdentityConnectionStart::CurrentKey);
+        let source = folder_source(&folder)?;
+        let requested = js(manager
+            .request_identity_join(&source, family.as_str().to_owned())
+            .await)?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(requested.identity_id, family.as_str());
+        // Asking again reports the first request instead of writing another.
+        let again = js(manager
+            .request_identity_join(&source, family.as_str().to_owned())
+            .await)?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(again, requested);
+
+        // No device answered yet: completing changes nothing.
+        let completion = js(manager
+            .complete_identity_join(&source, family.as_str().to_owned())
+            .await)?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(completion, NookIdentityJoinCompletion::Pending);
+        // An identity the folder holds no log for cannot be completed.
+        assert!(
+            manager
+                .complete_identity_join(&source, IdentityId::generate()?.as_str().to_owned())
+                .await
+                .is_err()
+        );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_device_of_the_identity_approves_one_asking_app_and_denies_another()
+    -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("join approver pin".to_owned())
+            .await)?;
+        js(manager.ensure_identity_control_log().await)?;
+        let (family, _) = identity_in_use().await?;
+        let approved = asking_app(&family).await?;
+        let denied = asking_app(&family).await?;
+
+        js(manager
+            .approve_identity_join(approved.as_str().to_owned())
+            .await)?;
+        js(manager.deny_identity_join(denied.as_str().to_owned()).await)?;
+
+        let state =
+            IdentityControlState::project(&NookDatabase::load_identity_log(&family).await?)?;
+        assert!(state.member(&approved).is_some());
+        assert!(state.pending_join(&approved).is_none());
+        assert!(state.member(&denied).is_none());
+        assert!(state.denied_joins.contains(&denied));
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+}

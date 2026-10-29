@@ -188,3 +188,62 @@ impl NookVaultManager {
         Tsify::into_ts(&naming).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    async fn identity_label() -> anyhow::Result<String> {
+        Ok(NookDatabase::load_identity_directory()
+            .await?
+            .selected()?
+            .label
+            .clone())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_fresh_identity_takes_its_name_until_its_log_exists() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("naming pin".to_owned())
+            .await)?;
+        // A blank name is refused and changes nothing.
+        let before = identity_label().await?;
+        assert!(manager.name_fresh_identity("   ".to_owned()).await.is_err());
+        assert_eq!(identity_label().await?, before);
+
+        // The key's own identity exists here, so it carries the name now.
+        let named = js(manager.name_fresh_identity(" Solo ".to_owned()).await)?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(named, NookFreshIdentityNaming::Named);
+        assert_eq!(identity_label().await?, "Solo");
+
+        // Once its control log exists, the identity keeps its name.
+        js(manager.ensure_identity_control_log().await)?;
+        assert!(
+            manager
+                .name_fresh_identity("Other".to_owned())
+                .await
+                .is_err()
+        );
+        assert_eq!(identity_label().await?, "Solo");
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+}
