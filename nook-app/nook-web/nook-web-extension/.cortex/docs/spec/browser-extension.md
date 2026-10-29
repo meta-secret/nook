@@ -1492,6 +1492,20 @@ phone or computer is.
 - **Providers:** The approval carries every sync provider of the keyring,
   sealed to the extension's app key. The extension never sets up a provider
   itself.
+  - **Later changes:** After the web app saves its providers, Rust
+    (`keyring_provider_shares`) seals its remote providers to each other app
+    of the keyring, with each member's key from the keyring's log. The web
+    app sends them to the installed extension directly
+    (`nook:extension-keyring-providers`); a browser with no extension, or a
+    keyring with no other app, sends nothing.
+  - **Taking them:** The service worker admits only Simple Vault senders.
+    Rust (`take_keyring_provider_shares`) keeps the copy sealed to an app key
+    the extension holds, locked or not, and refuses plaintext credentials.
+    Those providers replace that key's remote providers, so an added provider
+    arrives and a removed one goes; browser-local rows stay.
+  - **Failure:** A hand-over the extension does not acknowledge shows an
+    error on the website. The website's save stands, and the next provider
+    change sends the whole set again.
 - **Later vaults:** Each unlock in the side panel or the authentication tab
   refreshes the unlocked identity. The extension unions the identity's log
   with every sync provider that replicates it. It then pairs each vault the

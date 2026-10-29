@@ -10,7 +10,7 @@ use crate::SetLocalVaultLabelRequest;
 #[cfg(all(test, target_arch = "wasm32"))]
 use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
-    PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
+    PresealedProviderMerge, PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
 use crate::storage::identity_record::StoredIdentityProtection;
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -338,6 +338,7 @@ impl NookVaultManager {
         PresealedProviderSnapshotPublication {
             app_id: &app_id,
             snapshot: &snapshot,
+            merge: PresealedProviderMerge::VaultGrants,
         }
         .save()
         .await?;

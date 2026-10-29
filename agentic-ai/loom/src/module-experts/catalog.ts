@@ -273,6 +273,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ExtensionConnectConsent.svelte',
   'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/google-login-continuation-messages.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/keyring-providers-message.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/lifecycle-runtime-messages.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-classified-observations.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-field-direct-classification.ts',

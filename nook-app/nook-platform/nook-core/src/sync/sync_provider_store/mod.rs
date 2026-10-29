@@ -24,8 +24,10 @@ pub use draft_connection::{
 };
 mod enrollment;
 mod identity_mounts;
+mod keyring_providers;
 mod wire;
 pub use identity_mounts::{DeviceJoinReach, IdentityMountCapability, ProviderReplicationTarget};
+pub use keyring_providers::AppProviderShare;
 mod oauth;
 mod save;
 mod scope;

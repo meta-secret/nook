@@ -51,17 +51,30 @@ impl ProviderSnapshotPublication<'_> {
         })
     }
 }
+/// How presealed rows join the rows the recipient already holds.
+pub(crate) enum PresealedProviderMerge {
+    /// A pairing grant replaces the rows of the vault it is for.
+    VaultGrants,
+    /// Another app of the keyring hands over every remote provider.
+    KeyringProviders,
+}
+
 /// Locked import binds an explicit recipient without requiring its private key.
 pub(crate) struct PresealedProviderSnapshotPublication<'a> {
     pub(crate) app_id: &'a AppId,
     pub(crate) snapshot: &'a AuthProvidersSnapshotData,
+    pub(crate) merge: PresealedProviderMerge,
 }
 impl PresealedProviderSnapshotPublication<'_> {
     pub(crate) async fn save(self) -> Result<(), NookError> {
         self.prepare().await?.persist().await
     }
     async fn prepare(self) -> Result<PreparedProviderSnapshotWrite, NookError> {
-        let Self { app_id, snapshot } = self;
+        let Self {
+            app_id,
+            snapshot,
+            merge,
+        } = self;
 
         if snapshot.credential_storage_admission()
             != ProviderCredentialStorageAdmission::MarkerCompatible
@@ -98,7 +111,12 @@ impl PresealedProviderSnapshotPublication<'_> {
                 "auth-provider-credential-must-be-encrypted".to_owned(),
             ));
         }
-        let merged = existing.replace_active_vault_grants(snapshot);
+        let merged = match merge {
+            PresealedProviderMerge::VaultGrants => existing.replace_active_vault_grants(snapshot),
+            PresealedProviderMerge::KeyringProviders => {
+                existing.replace_keyring_providers(&snapshot.providers)
+            }
+        };
         Ok(PreparedProviderSnapshotWrite {
             database: rexie,
             transaction,
@@ -185,7 +203,9 @@ impl ProviderSnapshotStore<'_> {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
-    use super::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
+    use super::{
+        PresealedProviderMerge, PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
+    };
     use crate::{AuthProviderDatabase, NookDatabase, NookError, ProviderDbWriteSnapshotAt};
     use nook_core::ProviderVaultScope;
     use nook_core::StoredGithubPat;
@@ -250,6 +270,7 @@ mod tests {
             PresealedProviderSnapshotPublication {
                 app_id: self.identity.app_id(),
                 snapshot: &self.snapshot,
+                merge: PresealedProviderMerge::VaultGrants,
             }
         }
         async fn scoped(&self) -> Result<Value, NookError> {
@@ -468,6 +489,7 @@ mod tests {
         PresealedProviderSnapshotPublication {
             app_id: first.app_id(),
             snapshot: &incoming,
+            merge: PresealedProviderMerge::VaultGrants,
         }
         .save()
         .await?;
@@ -515,6 +537,7 @@ mod tests {
         PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),
             snapshot: &incoming,
+            merge: PresealedProviderMerge::VaultGrants,
         }
         .save()
         .await?;
@@ -566,6 +589,7 @@ mod tests {
         let result = PresealedProviderSnapshotPublication {
             app_id: identity.app_id(),
             snapshot: &incoming,
+            merge: PresealedProviderMerge::VaultGrants,
         }
         .save()
         .await;
@@ -611,6 +635,7 @@ mod tests {
                 providers: Vec::new(),
                 active_vault_store_id: ActiveVaultScope::StoreId("store-incoming".to_owned()),
             },
+            merge: PresealedProviderMerge::VaultGrants,
         }
         .save()
         .await?;

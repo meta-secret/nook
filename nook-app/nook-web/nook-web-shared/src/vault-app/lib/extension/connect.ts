@@ -4,9 +4,21 @@ type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
 };
+type KeyringProvidersDelivery = {
+  readonly extensionRuntimeId: string;
+  readonly message: ExtensionKeyringProvidersMessage;
+};
+type AcknowledgedDelivery = {
+  readonly extensionRuntimeId: string;
+  readonly message: RuntimeMessage;
+};
 
 import { ApplicationPath } from "$lib/runtime/routes";
-import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
+import type {
+  ExtensionPairingApprovedMessage,
+  RuntimeMessage,
+} from "$web-shared/extension/runtime-messages";
+import type { ExtensionKeyringProvidersMessage } from "$web-shared/extension/keyring-providers-message";
 import type { ExtensionConnectRequestFor } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
@@ -216,20 +228,40 @@ class ExtensionConnectionBrowser {
     const message: ExtensionSidePanelSignal = {
       type: ExtensionSidePanelSignalType.NookOpenSidePanel,
     };
-    const sendExtensionMessageArgs: Parameters<
-      ExtensionMessageChannel["send"]
-    >[0] = {
-      extensionId: installedExtension.extensionRuntimeId,
+    const signal: AcknowledgedDelivery = {
+      extensionRuntimeId: installedExtension.extensionRuntimeId,
+      message,
+    };
+    return this.sendAcknowledged(signal);
+  }
+
+  /** Hand the installed extension the keyring's providers after they
+   * changed. Answers whether it acknowledged them. */
+  deliverKeyringProviders(
+    delivery: KeyringProvidersDelivery,
+  ): Promise<boolean> {
+    return this.sendAcknowledged(delivery);
+  }
+
+  /** Send a message the extension answers with a plain acknowledgement. */
+  private async sendAcknowledged({
+    extensionRuntimeId,
+    message,
+  }: AcknowledgedDelivery): Promise<boolean> {
+    const sendArgs: Parameters<ExtensionMessageChannel["send"]>[0] = {
+      extensionId: extensionRuntimeId,
       message,
       responseWait: {
         kind: ExtensionMessageResponseWaitKind.Bounded,
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
+    const delivery = await this.messageChannel.send(sendArgs);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
-      Effect.result(companionResponseDecoder.decodeLauncher(delivery.response)),
+      Effect.result(
+        companionResponseDecoder.decodeAcknowledged(delivery.response),
+      ),
     );
     return decoded._tag === "Success";
   }

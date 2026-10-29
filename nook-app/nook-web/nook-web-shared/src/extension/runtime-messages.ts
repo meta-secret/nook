@@ -1,4 +1,5 @@
 import type { ExtensionSidePanelSignal } from "./side-panel-signal-message";
+import type { ExtensionKeyringProvidersMessage } from "./keyring-providers-message";
 import { err, ok, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
 import {
@@ -468,6 +469,7 @@ export type RuntimeMessage =
   | BeginExtensionPairingMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
+  | ExtensionKeyringProvidersMessage
   | ExtensionSidePanelSignal;
 
 export const ExtensionStorageProviderPayload =

@@ -14,6 +14,7 @@ mod local_folder_log;
 mod log_creation;
 mod membership;
 mod passkey_addition;
+mod provider_share;
 mod vault_access;
 mod vault_removal;
 

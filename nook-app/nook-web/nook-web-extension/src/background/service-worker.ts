@@ -277,6 +277,10 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ),
     returnToConnectOrigin:
       siteVaultConnect.returnToOrigin.bind(siteVaultConnect),
+    takeKeyringProviderShares:
+      backgroundVaultRuntime.takeKeyringProviderShares.bind(
+        backgroundVaultRuntime,
+      ),
   }
 
 const focusedLoginMessageRouteRequest: ConstructorParameters<

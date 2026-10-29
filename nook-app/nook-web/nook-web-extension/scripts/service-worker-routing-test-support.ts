@@ -239,6 +239,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   returnToConnectOrigin: mock(() => Promise.resolve()),
+  takeKeyringProviderShares: mock(() => Promise.resolve(true)),
 }
 
 async function flushResponses(): Promise<void> {
