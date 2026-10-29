@@ -6,6 +6,33 @@ and product-specific interaction requirements.
 
 ## Required actions
 
+### Visual hierarchy
+
+Decide what a screen is for before changing it. Step back from the requested
+component and name the one action or fact the user most needs there. Build the
+change around that element.
+
+- Give the most important element the strongest treatment on the screen. Use
+  the primary variant, the most space, and the first place the eye lands.
+- Keep secondary actions and facts visibly quieter. Use outline or dashed
+  controls, muted text, and later positions.
+- Show at most one leading action per panel. Never repeat an action in a second
+  control to draw attention to it.
+- Prefer a visual element over an explanatory sentence. Use an icon tile, a
+  tag, a slot, or a state mark. Keep any remaining copy to one short line.
+- Match the visual's weight to the screen. Diagrams belong to setup and
+  approval steps, not to settings panels.
+- Remove or demote what a new element competes with before adding it.
+- Review the result before reporting it. Can a first-time user tell what to do
+  next? Does the most important element dominate? Does anything look important
+  without being important?
+
+**Prohibited:** restyle a panel's blocking action as a muted dashed row to match
+its neighbours. Then add an amber row below it that repeats the same action.
+
+**Preferred:** make the blocking action the panel's single primary control.
+Show what it unblocks as a quiet locked row that names the step first.
+
 ### Existing visual system
 
 Inspect the shipping app.css and adjacent shared primitives before changing UI.

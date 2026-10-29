@@ -91,6 +91,11 @@ describe('identity panel', () => {
       'risk',
     )
     expect(view.queryAllByTestId('overview-open-sync')).toHaveLength(0)
+    // Adding a provider is the one lead action: everything else waits on it.
+    const leads = view.container.querySelectorAll('[data-lead="true"]')
+    expect([...leads].map((lead) => lead.getAttribute('data-testid'))).toEqual([
+      'identity-action-add-sync',
+    ])
     await fireEvent.click(view.getByTestId('identity-action-add-sync'))
 
     expect(onAddSyncProvider).toHaveBeenCalledOnce()
