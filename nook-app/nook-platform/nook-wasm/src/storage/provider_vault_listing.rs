@@ -20,8 +20,10 @@ use nook_core::{
     ProviderVaultTime, StoreId,
 };
 
+use futures_util::{StreamExt, TryStreamExt, stream};
+
 use super::drive_events::DriveEventStore;
-use super::drive_namespace::DriveNamespace;
+use super::drive_namespace::{DriveNamespace, ListedNamespaceFolder};
 use super::remote_event::RemoteEventRead;
 use crate::{NookDatabase, NookError};
 
@@ -31,6 +33,10 @@ pub(crate) struct DriveVaultListing<'a> {
     pub(crate) root: &'a DriveEventParent,
 }
 
+/// How many namespace folders a listing reads at once; each also keeps its
+/// own downloads in flight.
+const DRIVE_FOLDER_CONCURRENCY: usize = 4;
+
 impl DriveVaultListing<'_> {
     /// One observation per vault namespace; a namespace duplicated by hand
     /// fails closed, as sync does.
@@ -38,36 +44,45 @@ impl DriveVaultListing<'_> {
         let folders =
             DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
                 .await?;
-        let mut observations: Vec<ProviderVaultObservation> = Vec::new();
+        let mut vaults: Vec<(StoreId, ListedNamespaceFolder)> = Vec::new();
         for folder in folders {
             let Some(store_id) = folder.store_id().cloned() else {
                 continue;
             };
-            if observations
-                .iter()
-                .any(|observation| observation.store_id == store_id)
-            {
+            if vaults.iter().any(|(listed, _)| *listed == store_id) {
                 return Err(NookError::Drive(
                     "Google Drive contains ambiguous namespace folders; sync stopped before choosing one."
                         .to_owned(),
                 ));
             }
-            let location = EventLogLocation::Vault(store_id.clone());
-            let events = DriveEventStore {
-                token: self.token,
-                parent: &folder.folder,
-                location: &location,
-            }
-            .list_drive_event_times()
-            .await?;
-            observations.push(ProviderVaultObservation {
-                store_id,
-                identity: folder.placed.identity().clone(),
-                namespace_created: folder.created.provider_time()?,
-                events,
-            });
+            vaults.push((store_id, folder));
         }
-        Ok(observations)
+        stream::iter(vaults)
+            .map(|(store_id, folder)| self.observation(store_id, folder))
+            .buffered(DRIVE_FOLDER_CONCURRENCY)
+            .try_collect()
+            .await
+    }
+
+    async fn observation(
+        &self,
+        store_id: StoreId,
+        folder: ListedNamespaceFolder,
+    ) -> Result<ProviderVaultObservation, NookError> {
+        let location = EventLogLocation::Vault(store_id.clone());
+        let events = DriveEventStore {
+            token: self.token,
+            parent: &folder.folder,
+            location: &location,
+        }
+        .list_drive_event_times()
+        .await?;
+        Ok(ProviderVaultObservation {
+            store_id,
+            identity: folder.placed.identity().clone(),
+            namespace_created: folder.created.provider_time()?,
+            events,
+        })
     }
 }
 
@@ -92,29 +107,41 @@ impl DriveVaultListing<'_> {
         let folders =
             DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Identity)
                 .await?;
-        let mut logs = Vec::new();
-        for folder in folders {
-            let identity_id = folder.placed.identity().clone();
-            let location = EventLogLocation::Identity(identity_id.clone());
-            let store = DriveEventStore {
-                token: self.token,
-                parent: &folder.folder,
-                location: &location,
-            };
-            let mut events = Vec::new();
-            for raw_id in store.list_drive_event_ids().await? {
-                let event_id = EventId::parse(&raw_id)?;
-                if let RemoteEventRead::Retrieved(bytes) = store.read_drive_event(&event_id).await?
-                {
-                    events.push(bytes);
-                }
-            }
-            logs.push(ProviderIdentityLogEvents {
-                identity_id,
-                events,
-            });
+        stream::iter(folders)
+            .map(|folder| async move {
+                let identity_id = folder.placed.identity().clone();
+                let events = self.log_events(&identity_id, &folder.folder).await?;
+                Ok::<_, NookError>(ProviderIdentityLogEvents {
+                    identity_id,
+                    events,
+                })
+            })
+            .buffered(DRIVE_FOLDER_CONCURRENCY)
+            .try_collect()
+            .await
+    }
+
+    /// The events an identity's log folder holds, read and not yet verified.
+    async fn log_events(
+        &self,
+        identity_id: &IdentityId,
+        folder: &DriveEventParent,
+    ) -> Result<Vec<EventStorageBytes>, NookError> {
+        let location = EventLogLocation::Identity(identity_id.clone());
+        let read = DriveEventStore {
+            token: self.token,
+            parent: folder,
+            location: &location,
         }
-        Ok(logs)
+        .read_drive_events()
+        .await?;
+        Ok(read
+            .into_iter()
+            .filter_map(|(_, event)| match event {
+                RemoteEventRead::Retrieved(bytes) => Some(bytes),
+                RemoteEventRead::Unavailable => None,
+            })
+            .collect())
     }
 }
 
@@ -149,20 +176,7 @@ impl DriveVaultListing<'_> {
         identity_id: &IdentityId,
     ) -> Result<Vec<EventStorageBytes>, NookError> {
         let folder = self.identity_log_folder(identity_id).await?;
-        let location = EventLogLocation::Identity(identity_id.clone());
-        let store = DriveEventStore {
-            token: self.token,
-            parent: &folder,
-            location: &location,
-        };
-        let mut events = Vec::new();
-        for raw_id in store.list_drive_event_ids().await? {
-            let event_id = EventId::parse(&raw_id)?;
-            if let RemoteEventRead::Retrieved(bytes) = store.read_drive_event(&event_id).await? {
-                events.push(bytes);
-            }
-        }
-        Ok(events)
+        self.log_events(identity_id, &folder).await
     }
 
     /// Write one event into an identity's log folder the root already holds.
@@ -273,19 +287,20 @@ impl DriveVaultListing<'_> {
         folder: &DriveEventParent,
     ) -> Result<Vec<LocalEventWrite>, NookError> {
         let location = EventLogLocation::Vault(store_id.clone());
-        let store = DriveEventStore {
+        let read = DriveEventStore {
             token: self.token,
             parent: folder,
             location: &location,
-        };
-        let mut events = Vec::new();
-        for raw_id in store.list_drive_event_ids().await? {
-            let event_id = EventId::parse(&raw_id)?;
-            if let RemoteEventRead::Retrieved(bytes) = store.read_drive_event(&event_id).await? {
-                events.push(LocalEventWrite { event_id, bytes });
-            }
         }
-        Ok(events)
+        .read_drive_events()
+        .await?;
+        Ok(read
+            .into_iter()
+            .filter_map(|(event_id, event)| match event {
+                RemoteEventRead::Retrieved(bytes) => Some(LocalEventWrite { event_id, bytes }),
+                RemoteEventRead::Unavailable => None,
+            })
+            .collect())
     }
 }
 
@@ -296,18 +311,20 @@ impl DriveVaultListing<'_> {
         let folders =
             DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
                 .await?;
-        let mut vaults = Vec::new();
-        for folder in folders {
-            let Some(store_id) = folder.store_id().cloned() else {
-                continue;
-            };
-            vaults.push(CheckedVaultEvents {
+        stream::iter(folders.into_iter().filter_map(|folder| {
+            let store_id = folder.store_id().cloned()?;
+            Some((store_id, folder))
+        }))
+        .map(|(store_id, folder)| async move {
+            Ok::<_, NookError>(CheckedVaultEvents {
                 events: self.namespace_events(&store_id, &folder.folder).await?,
                 filed_under: folder.placed.identity().clone(),
                 store_id,
-            });
-        }
-        Ok(vaults)
+            })
+        })
+        .buffered(DRIVE_FOLDER_CONCURRENCY)
+        .try_collect()
+        .await
     }
 }
 
@@ -322,15 +339,20 @@ impl DriveVaultListing<'_> {
         let folders =
             DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
                 .await?;
+        let read: Vec<(StoreId, Vec<LocalEventWrite>)> =
+            stream::iter(folders.into_iter().filter_map(|folder| {
+                let store_id = folder.store_id().cloned()?;
+                store_ids.contains(&store_id).then_some((store_id, folder))
+            }))
+            .map(|(store_id, folder)| async move {
+                let events = self.namespace_events(&store_id, &folder.folder).await?;
+                Ok::<_, NookError>((store_id, events))
+            })
+            .buffered(DRIVE_FOLDER_CONCURRENCY)
+            .try_collect()
+            .await?;
         let mut inspected = InspectedVaults::default();
-        for folder in folders {
-            let Some(store_id) = folder.store_id().cloned() else {
-                continue;
-            };
-            if !store_ids.contains(&store_id) {
-                continue;
-            }
-            let events = self.namespace_events(&store_id, &folder.folder).await?;
+        for (store_id, events) in read {
             inspected.record(store_id, events, app_id)?;
         }
         Ok(inspected)
