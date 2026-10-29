@@ -285,9 +285,9 @@ test.describe('vault architecture modes', () => {
       ).toHaveCount(0)
       await page.getByTestId('sentinel-onboarding-create-keys').click()
       // Creating the keys makes this browser's key with its passkey.
-      const nameStep = page.getByTestId('sentinel-genesis-name-step')
+      const keysReady = page.getByTestId('sentinel-genesis-name-step')
       const prompt = page.getByTestId('device-protection-gate')
-      await expect(nameStep.or(prompt).first()).toBeVisible({
+      await expect(keysReady.or(prompt).first()).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       if (await prompt.isVisible()) await answerPasskeyPrompt(page)
