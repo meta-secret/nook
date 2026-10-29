@@ -215,9 +215,13 @@
           class="space-y-4"
           data-testid="device-protection-authenticate-workflow"
         >
-          <p class="text-center text-sm text-muted-foreground">
-            {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
-          </p>
+          <!-- Embedded in a step that already says what the passkey is for,
+               the button needs no hint of its own. -->
+          {#if frame !== DeviceProtectionGateFrame.Embedded}
+            <p class="text-center text-sm text-muted-foreground">
+              {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
+            </p>
+          {/if}
           <Button
             class="w-full"
             disabled={vault.isVerifying}

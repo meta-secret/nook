@@ -78,9 +78,10 @@ Passkey, Sync provider, Identity, and Vault.
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
   record describes. A link below checks which passkey or backup password
   opens what, before anything is recovered.
-- **Passkey** ("This is you"): a new passkey, or one made for Nook before,
-  makes this browser's key. A preview of the identity's card shows no vault
-  yet. Back returns to Start.
+- **Passkey** ("One passkey opens it all"): one line and a small diagram,
+  Your passkey → Your identity → Your vaults, say what it is for. A new
+  passkey, or one made for Nook before, makes this browser's key. Back
+  returns to Start.
 - **Sync provider**: Google Drive signs in, and Nook lists the identities in
   its Nook folder. Each card has the one action Rust decides from this
   browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
