@@ -9,6 +9,7 @@ three words, as on its card); a vault shows its name once a check opened
 it.
 -->
 <script lang="ts">
+  import type { Component } from 'svelte'
   import {
     Check,
     Fingerprint,
@@ -110,30 +111,66 @@ it.
         return []
     }
   }
+
+  function credentialIcon(credential: CheckedCredential): Component {
+    switch (credential.kind) {
+      case 'passkey':
+        return Fingerprint
+      case 'backupPassword':
+        return RectangleEllipsis
+    }
+  }
+
+  /** How a keyring's row marks what the checked key does to it. */
+  type OutcomeLook = {
+    readonly icon: Component
+    readonly mark: string
+    readonly tag: string
+    readonly dimmed: boolean
+  }
+
+  function outcomeLook(outcome: IdentityCheckOutcome): OutcomeLook {
+    switch (outcome) {
+      case 'opens':
+        return {
+          icon: Check,
+          mark: 'border-success/50 text-success',
+          tag: 'nk-tag nk-tag-success',
+          dimmed: false,
+        }
+      case 'vaultsOnly':
+        return {
+          icon: FolderKey,
+          mark: 'border-warning/50 text-warning',
+          tag: 'nk-tag nk-tag-warning',
+          dimmed: false,
+        }
+      case 'doesNotOpen':
+        return {
+          icon: X,
+          mark: 'border-border text-muted-foreground',
+          tag: 'nk-tag',
+          dimmed: true,
+        }
+    }
+  }
+
+  function vaultIcon(vaultCheck: VaultCheck): Component {
+    switch (vaultCheck.outcome.state) {
+      case 'opens':
+        return FolderKey
+      case 'doesNotOpen':
+      case 'noBackupPassword':
+        return Lock
+    }
+  }
 </script>
-
-{#snippet credentialIcon(credential: CheckedCredential)}
-  {#if credential.kind === 'passkey'}
-    <Fingerprint class="size-4" />
-  {:else}
-    <RectangleEllipsis class="size-4" />
-  {/if}
-{/snippet}
-
-{#snippet outcomeIcon(outcome: IdentityCheckOutcome)}
-  {#if outcome === 'opens'}
-    <Check class="size-3.5" />
-  {:else if outcome === 'vaultsOnly'}
-    <FolderKey class="size-3.5" />
-  {:else}
-    <X class="size-3.5" />
-  {/if}
-{/snippet}
 
 <div class="space-y-3" data-testid="access-check-results">
   <p class="nk-subpanel-head">{vault.t(I18N_KEYS.AccessCheckResultsTitle)}</p>
   <ol class="grid gap-3" data-testid="access-check-checks">
     {#each reports as report, index (index)}
+      {@const CredentialIcon = credentialIcon(report.credential)}
       <li
         class="nk-subpanel-recessed grid gap-3 p-4"
         data-testid="access-check-credential"
@@ -141,7 +178,7 @@ it.
       >
         <header class="flex items-center gap-3">
           <span class="nk-vault-icon text-foreground" aria-hidden="true">
-            {@render credentialIcon(report.credential)}
+            <CredentialIcon class="size-4" />
           </span>
           <span
             class="min-w-0 flex-1 truncate text-sm font-medium text-foreground"
@@ -164,25 +201,20 @@ it.
               {#each byOutcome(report.identities) as identity (identity.identityId)}
                 {@const name = checked.identityName(identity.identityId)}
                 {@const vaults = openedVaults(identity)}
+                {@const look = outcomeLook(identity.outcome)}
+                {@const OutcomeIcon = look.icon}
                 <li
-                  class="grid gap-1.5 {identity.outcome === 'doesNotOpen'
-                    ? 'opacity-60'
-                    : ''}"
+                  class="grid gap-1.5 {look.dimmed ? 'opacity-60' : ''}"
                   data-testid="access-check-identity"
                   data-identity-id={identity.identityId}
                   data-outcome={identity.outcome}
                 >
                   <div class="flex min-w-0 items-center gap-2.5">
                     <span
-                      class="grid size-5 flex-none place-items-center border {identity.outcome ===
-                      'opens'
-                        ? 'border-success/50 text-success'
-                        : identity.outcome === 'vaultsOnly'
-                          ? 'border-warning/50 text-warning'
-                          : 'border-border text-muted-foreground'}"
+                      class="grid size-5 flex-none place-items-center border {look.mark}"
                       aria-hidden="true"
                     >
-                      {@render outcomeIcon(identity.outcome)}
+                      <OutcomeIcon class="size-3.5" />
                     </span>
                     <span
                       class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5"
@@ -201,34 +233,24 @@ it.
                         <span class="truncate">{identity.words.join('-')}</span>
                       </span>
                     </span>
-                    <span
-                      class={identity.outcome === 'opens'
-                        ? 'nk-tag nk-tag-success'
-                        : identity.outcome === 'vaultsOnly'
-                          ? 'nk-tag nk-tag-warning'
-                          : 'nk-tag'}>{outcomeLabel(identity.outcome)}</span
+                    <span class={look.tag}
+                      >{outcomeLabel(identity.outcome)}</span
                     >
                   </div>
                   {#if vaults.length > 0}
                     <ul class="ml-7.5 flex flex-wrap gap-1.5">
                       {#each vaults as vaultCheck (vaultCheck.storeId)}
+                        {@const VaultIcon = vaultIcon(vaultCheck)}
                         <li
                           class="inline-flex min-w-0 items-center gap-1.5 border border-border/60 px-2 py-0.5 text-xs text-foreground"
                           data-testid="access-check-vault"
                           data-store-id={vaultCheck.storeId}
                           title={vaultCheck.storeId}
                         >
-                          {#if vaultCheck.outcome.state === 'opens'}
-                            <FolderKey
-                              class="size-3 flex-none text-muted-foreground"
-                              aria-hidden="true"
-                            />
-                          {:else}
-                            <Lock
-                              class="size-3 flex-none text-muted-foreground"
-                              aria-hidden="true"
-                            />
-                          {/if}
+                          <VaultIcon
+                            class="size-3 flex-none text-muted-foreground"
+                            aria-hidden="true"
+                          />
                           <span class="truncate">{vaultLabel(vaultCheck)}</span>
                         </li>
                       {/each}
