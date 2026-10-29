@@ -5,3 +5,14 @@ export enum OptionState {
   Working = 'working',
   Done = 'done',
 }
+
+/** What an option's step knows about it; working wins over done. */
+export type OptionProgress = {
+  readonly working: boolean
+  readonly done: boolean
+}
+
+export function optionState(progress: OptionProgress): OptionState {
+  if (progress.working) return OptionState.Working
+  return progress.done ? OptionState.Done : OptionState.Idle
+}

@@ -6,11 +6,15 @@ is done, then setup goes on to read the Nook folder there. -->
   import Option from './Option.svelte'
   import type { SetupFlow } from './flow.svelte'
   import { Step, account } from './model'
-  import { OptionState } from './option-state'
+  import { type OptionProgress, optionState } from './option-state'
 
   let { flow }: { flow: SetupFlow } = $props()
 
   let working = $state(false)
+  const connection = $derived.by(() => {
+    const progress: OptionProgress = { working, done: flow.connected }
+    return optionState(progress)
+  })
 
   async function connect(): Promise<void> {
     working = true
@@ -35,11 +39,7 @@ is done, then setup goes on to read the Nook folder there. -->
       ? 'Signing in…'
       : 'Sign in with Google'}
   action="Connect"
-  state={working
-    ? OptionState.Working
-    : flow.connected
-      ? OptionState.Done
-      : OptionState.Idle}
+  state={connection}
   onPick={connect}
 >
   {#snippet lead()}

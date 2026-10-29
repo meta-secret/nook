@@ -125,12 +125,12 @@ describe('providerStorageDetail', () => {
     ).toBe('Vault in browser storage on this device')
   })
 
-  test('distinguishes two Google Drive vault files', () => {
-    const personal: StorageProvider = {
+  test('names the Google account a Drive provider syncs with', () => {
+    const drive: StorageProvider = {
       ...providerPersistenceDefaults(),
       id: 'gd-1',
       type: 'oauth-file',
-      label: 'Google Drive · personal.yaml',
+      label: 'Google Drive',
       oauthFile: configuredOAuthFile({
         ...defaultOAuthFileConfig({
           preset: 'google-drive',
@@ -143,33 +143,10 @@ describe('providerStorageDetail', () => {
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
-    const work: StorageProvider = {
-      ...providerPersistenceDefaults(),
-      id: 'gd-2',
-      type: 'oauth-file',
-      label: 'Google Drive · work.yaml',
-      oauthFile: configuredOAuthFile({
-        ...defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: DEFAULT_DRIVE_BACKUP_NAME,
-        }),
-        accessToken: storedOAuthCredential('ya29.test'),
-        fileName: storedOAuthRemoteFileName('work.yaml'),
-        accountEmail: storedOAuthAccountEmail('me@example.com'),
-      }),
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-06-24T00:00:00.000Z',
-    }
 
     expect(
-      providerStorageDetail(providerStorageDescriptionRequest(personal)),
-    ).toBe('personal.yaml · me@example.com')
-    expect(providerStorageDetail(providerStorageDescriptionRequest(work))).toBe(
-      'work.yaml · me@example.com',
-    )
-    expect(
-      providerStorageDetail(providerStorageDescriptionRequest(personal)),
-    ).not.toBe(providerStorageDetail(providerStorageDescriptionRequest(work)))
+      providerStorageDetail(providerStorageDescriptionRequest(drive)),
+    ).toBe('me@example.com')
   })
 })
 

@@ -7,7 +7,11 @@ on. -->
   import Option from './Option.svelte'
   import type { SetupFlow } from './flow.svelte'
   import { PasskeyChoice, Step } from './model'
-  import { OptionState } from './option-state'
+  import {
+    type OptionProgress,
+    type OptionState,
+    optionState,
+  } from './option-state'
 
   let { flow }: { flow: SetupFlow } = $props()
 
@@ -33,11 +37,11 @@ on. -->
   ]
 
   function stateOf(choice: PasskeyChoice): OptionState {
-    if (working)
-      return picked === choice ? OptionState.Working : OptionState.Idle
-    return flow.passkey && flow.choice === choice
-      ? OptionState.Done
-      : OptionState.Idle
+    const progress: OptionProgress = {
+      working: working && picked === choice,
+      done: !working && flow.passkey && flow.choice === choice,
+    }
+    return optionState(progress)
   }
 
   async function pick(choice: PasskeyChoice): Promise<void> {

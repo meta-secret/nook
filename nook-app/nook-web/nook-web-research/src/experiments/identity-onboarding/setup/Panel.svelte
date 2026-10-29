@@ -12,12 +12,11 @@ in. -->
   import StartStep from './StartStep.svelte'
   import SyncStep from './SyncStep.svelte'
   import type { SetupFlow } from './flow.svelte'
-  import { Stage, Step } from './model'
+  import { Step, stages } from './model'
   import { ui } from './ui'
 
   let { flow }: { flow: SetupFlow } = $props()
 
-  const stages = Object.values(Stage)
   const reached = $derived(flow.stageOf(flow.step))
   const canReturn = $derived(flow.canBack() && flow.step !== Step.Sync)
 </script>

@@ -70,11 +70,11 @@ export const existingEvents = 48
 export const newEvents = 3
 
 /** The three stages the progress bar shows. */
-export enum Stage {
-  Passkey = 'Passkey',
-  Sync = 'Sync provider',
-  Identity = 'Identity',
-}
+export const stages: readonly string[] = [
+  'Passkey',
+  'Sync provider',
+  'Identity',
+]
 
 export type StepNode = {
   readonly step: Step
