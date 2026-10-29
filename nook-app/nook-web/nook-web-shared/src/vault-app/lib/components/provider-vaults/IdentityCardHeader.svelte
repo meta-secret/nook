@@ -66,9 +66,9 @@ tag says what this browser's passkey is to the identity instead.
   function setupLine(setup: IdentitySetup): string {
     switch (setup.kind) {
       case 'continue':
-        return setup.decision === 'leave'
-          ? vault.t(I18N_KEYS.FirstRunIdentityInUse)
-          : vault.t(I18N_KEYS.FirstRunIdentityMember)
+        return vault.t(I18N_KEYS.FirstRunIdentityMember)
+      case 'inUse':
+        return vault.t(I18N_KEYS.FirstRunIdentityInUse)
       case 'requestToJoin':
         return standing.kind === 'joinDenied'
           ? standingLine(standing)

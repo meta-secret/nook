@@ -89,7 +89,8 @@ decides from its standing (`IdentitySetup`), and picking it runs at once.
 Setup already used the passkey that made this browser's key, so it never
 offers adding by another passkey.
 
-- **This browser:** **Continue** (Leave: connect and sync).
+- **This browser, first run:** **Continue** (Leave: connect and sync).
+- **This browser, identity in use:** **In use** (no action).
 - **Join approved:** **Continue** (Finish joining).
 - **Opens with a checked passkey:** **Continue** (Add to this browser).
 - **Join requested:** **Waiting** (Check again).
@@ -99,11 +100,13 @@ offers adding by another passkey.
 - Below the list, after an "or", **Create a new identity** is always
   offered. First run names a fresh identity there. With an identity in use,
   it saves that identity on the provider as a new one and connects.
-- With an identity in use, **This browser** is that identity: its card has
-  no action. Another action re-reads the folder when it finishes.
+- With an identity in use, **This browser** is that identity, so Rust
+  answers `InUse` and its card has no action. On first run nothing is in
+  use yet, so the same standing continues on the identity. Another action
+  re-reads the folder when it finishes.
 - The card's tag says what this browser's passkey is to the identity:
-  **In use here**, **Member**, **Not a member**, **Join requested**, or
-  **Join request denied**.
+  **In use here** (only with an identity in use), **Member**, **Not a
+  member**, **Join requested**, or **Join request denied**.
 - A passkey made for Nook before re-derives the same app key, so an identity
   it is a member of reads as **Join approved** with no extra tap.
 - A new passkey is a member of nothing: every identity asks to join.

@@ -263,7 +263,7 @@ describe('Google Drive provider setup', () => {
     if (!other) throw new Error('the stranger is not listed')
     // The identity in use has no action of its own: the step's button
     // saves it here.
-    expect(own?.dataset.setup).toBe('continue')
+    expect(own?.dataset.setup).toBe('inUse')
     expect(own?.textContent).toContain('Personal')
     expect(
       own

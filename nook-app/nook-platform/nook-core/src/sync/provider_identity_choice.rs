@@ -61,12 +61,17 @@ pub enum IdentityStanding {
 impl IdentityStanding {
     /// The one setup action this standing allows. A member continues; anyone
     /// else asks to join, never adds by another passkey: setup already used
-    /// the passkey that made this browser's key.
+    /// the passkey that made this browser's key. With an identity in use,
+    /// the identity this browser's key belongs to is that identity: there is
+    /// nothing to set up for it.
     #[must_use]
-    pub fn setup(&self) -> IdentitySetup {
+    pub fn setup(&self, session: IdentitySession) -> IdentitySetup {
         match self {
-            Self::ThisBrowser => IdentitySetup::Continue {
-                decision: IdentityDecision::Leave,
+            Self::ThisBrowser => match session {
+                IdentitySession::IdentityInUse => IdentitySetup::InUse,
+                IdentitySession::NoIdentity => IdentitySetup::Continue {
+                    decision: IdentityDecision::Leave,
+                },
             },
             Self::JoinApproved => IdentitySetup::Continue {
                 decision: IdentityDecision::FinishJoining,
@@ -104,6 +109,8 @@ pub enum IdentitySetup {
     /// This browser's key is a member: setup finishes on the identity after
     /// the decision that brings it here (**Leave** when it already is).
     Continue { decision: IdentityDecision },
+    /// The identity in use here: nothing to set up.
+    InUse,
     /// No key here is a member: ask one of its devices to let this browser in.
     RequestToJoin,
     /// This browser asked; a device of the identity answers.
@@ -159,7 +166,7 @@ impl ProviderIdentityChoices<'_> {
         for choice in &mut choices {
             choice.standing = self.standing(choice);
             choice.decisions = self.decisions(&choice.standing);
-            choice.setup = choice.standing.setup();
+            choice.setup = choice.standing.setup(self.session);
         }
         choices
     }
@@ -691,6 +698,32 @@ mod tests {
                 decision: IdentityDecision::Leave
             }
         );
+        Ok(())
+    }
+
+    #[test]
+    fn the_identity_this_browsers_key_belongs_to_is_in_use_when_one_is() -> anyhow::Result<()> {
+        let mine = Fixture::identity(MINE, ProviderIdentityLog::Absent)?;
+        let vaults = [Fixture::vault(MY_VAULT, &mine, ProviderVaultAccess::Syncs)?];
+        let setup = |session| -> anyhow::Result<IdentitySetup> {
+            let choices = ProviderIdentityChoices {
+                vaults: &vaults,
+                checks: &[],
+                session,
+            }
+            .choices();
+            Ok(Fixture::at(&choices, 0)?.setup)
+        };
+
+        // On a browser with no identity yet, its member key continues on it.
+        assert_eq!(
+            setup(IdentitySession::NoIdentity)?,
+            IdentitySetup::Continue {
+                decision: IdentityDecision::Leave
+            }
+        );
+        // With an identity in use, it is that identity.
+        assert_eq!(setup(IdentitySession::IdentityInUse)?, IdentitySetup::InUse);
         Ok(())
     }
 

@@ -54,6 +54,18 @@ const ASKED: Listed = {
   standing: { kind: 'joinRequested' },
   setup: { kind: 'waiting' },
 }
+/** On a fresh browser, an identity its passkey's key is a member of. */
+const KEY_MEMBER: Listed = {
+  id: 'idn_keymemberab',
+  standing: { kind: 'thisBrowser' },
+  setup: { kind: 'continue', decision: 'leave' },
+}
+/** With an identity in use, that identity. */
+const IN_USE: Listed = {
+  id: 'idn_inuseabcde',
+  standing: { kind: 'thisBrowser' },
+  setup: { kind: 'inUse' },
+}
 const ELSEWHERE: Listed = {
   id: 'idn_elsewhereab',
   standing: { kind: 'otherIdentityHere', identityLabel: 'Work' },
@@ -69,7 +81,9 @@ class Listing {
   render(working: string): void {
     const props: ComponentProps<typeof SetupIdentityList> = {
       vault: this.vault,
-      choices: [MEMBER, LOCKED, ASKED, ELSEWHERE].map(choice),
+      choices: [MEMBER, LOCKED, ASKED, ELSEWHERE, KEY_MEMBER, IN_USE].map(
+        choice,
+      ),
       working,
       onContinue: (picked: ProviderIdentityChoice) => {
         this.continued.push(picked.identity.identityId)
@@ -103,6 +117,30 @@ function action({ id, testId }: CardAction): HTMLElement {
 }
 
 describe('setup lists each identity with the one action Rust decided', () => {
+  test('a key member on a fresh browser continues; the identity in use has nothing to do', async () => {
+    const listing = new Listing()
+    listing.render('')
+    const standing = (id: string) =>
+      card(id)
+        .querySelector('[data-testid="provider-identity-standing"]')
+        ?.textContent?.trim()
+
+    const continueOn: CardAction = {
+      id: KEY_MEMBER.id,
+      testId: 'setup-identity-continue',
+    }
+    await fireEvent.click(action(continueOn))
+    expect(listing.continued).toEqual([KEY_MEMBER.id])
+    expect(standing(KEY_MEMBER.id)).toBe(
+      listing.vault.t(I18N_KEYS.FirstRunIdentityMember),
+    )
+
+    expect(card(IN_USE.id).querySelectorAll('button')).toHaveLength(0)
+    expect(standing(IN_USE.id)).toBe(
+      listing.vault.t(I18N_KEYS.FirstRunIdentityInUse),
+    )
+  })
+
   test('a member continues, a locked identity is asked to join, an asked one is checked', async () => {
     const listing = new Listing()
     listing.render('')

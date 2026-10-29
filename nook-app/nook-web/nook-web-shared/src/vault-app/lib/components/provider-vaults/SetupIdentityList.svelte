@@ -42,9 +42,9 @@ own button saves it there. Picking runs at once: there is no plan to apply.
   function offer(choice: ProviderIdentityChoice): SetupIdentityOffer {
     switch (choice.setup.kind) {
       case 'continue':
-        return choice.setup.decision === 'leave'
-          ? SetupIdentityOffer.NoAction
-          : SetupIdentityOffer.Continue
+        return SetupIdentityOffer.Continue
+      case 'inUse':
+        return SetupIdentityOffer.NoAction
       case 'requestToJoin':
         return SetupIdentityOffer.Join
       case 'waiting':
