@@ -69,7 +69,11 @@ manager imports keep "identities" for their person and address items.
   identity's card, never on a page of its own. While locked, that panel
   unlocks the identity; once unlocked, the approval itself (the extension
   device and the access it asks for, with Approve and Cancel) takes its
-  place, and either answer leaves the hub as it is.
+  place, and either answer leaves the hub as it is. Both steps draw what the
+  extension joins (Extension → keyring → all its vaults, or → this vault
+  when the keyring has no cloud sync provider) instead of a sentence, list
+  the access as one tile per permission, and fold the device's public keys
+  under its fingerprint.
 - A locked identity never opens the old Keys page; the URL is kept and
   unlocking resumes it.
 

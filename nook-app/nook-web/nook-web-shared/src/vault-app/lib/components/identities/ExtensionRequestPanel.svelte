@@ -1,17 +1,24 @@
 <!--
-A browser extension asking to connect, shown beside the identity card while
-this browser is locked. It names the extension device and the access it
-asks for. The extension joins the identity, not one vault, so the one action
-unlocks the identity; its selected vault (or first one here) opens behind it
-for the approval step that follows.
+A browser extension asking to connect, shown beside the keyring's card while
+this browser is locked. A diagram shows what it joins, and the facts beside
+the action name its device and the access it asks for. The extension joins
+the keyring, not one vault, so the one action unlocks the keyring; its
+selected vault (or first one here) opens behind it for the approval step
+that follows.
 -->
 <script lang="ts">
-  import { Check, Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
+  import { Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
-  import { ExtensionConsentScopeTranslation } from '../extension-connect-consent-state'
+  import ExtensionConnectFacts from '../ExtensionConnectFacts.svelte'
+  import FirstRunDiagram from '../login/FirstRunDiagram.svelte'
+  import {
+    ExtensionConnectReach,
+    extensionConnectDiagram,
+    type ExtensionConnectDiagramRequest,
+  } from '../extension-connect-diagram'
   import {
     IdentityKeyKind,
     IdentityVaultRowState,
@@ -64,10 +71,12 @@ for the approval step that follows.
     return vault.t(labelRequest)
   })
 
-  /** The device id in groups of four, as fingerprints read elsewhere. */
-  const deviceGroups = $derived(
-    request.deviceId.toUpperCase().match(/.{1,4}/g) || [],
-  )
+  const diagramRequest = $derived<ExtensionConnectDiagramRequest>({
+    vault,
+    keyring: card.label,
+    reach: ExtensionConnectReach.Keyring,
+  })
+  const diagram = $derived(extensionConnectDiagram(diagramRequest))
 </script>
 
 <div
@@ -89,11 +98,10 @@ for the approval step that follows.
       >
         {title}
       </h2>
-      <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.ExtensionRequestBody)}
-      </p>
     </span>
   </header>
+
+  <FirstRunDiagram {diagram} />
 
   <!-- One request card in two halves: the action on the left, as a large
        steel card, and the facts it is acting on, recessed, on the right.
@@ -120,7 +128,8 @@ for the approval step that follows.
           {/if}
         </span>
         <span class="grid gap-1">
-          <span class="text-lg font-semibold tracking-tight">{unlockLabel}</span>
+          <span class="text-lg font-semibold tracking-tight">{unlockLabel}</span
+          >
           <span class="text-sm font-normal opacity-75">
             {vault.t(I18N_KEYS.ExtensionRequestVaultAction)}
           </span>
@@ -134,36 +143,6 @@ for the approval step that follows.
       </p>
     {/if}
 
-    <dl class="nk-subpanel-recessed grid content-start gap-4 p-5 text-sm">
-      <div class="grid gap-1.5">
-        <dt class="nk-subpanel-head">
-          {vault.t(I18N_KEYS.ExtensionConsentDevice)}
-        </dt>
-        <dd
-          class="font-mono text-sm tracking-[0.08em] text-foreground"
-          data-testid="extension-request-device"
-        >
-          {deviceGroups.join(' ')}
-        </dd>
-      </div>
-      <div class="grid gap-1.5">
-        <dt class="nk-subpanel-head">
-          {vault.t(I18N_KEYS.ExtensionConsentRequestedAccess)}
-        </dt>
-        <dd>
-          <ul class="grid gap-1.5">
-            {#each request.scopes as scope (scope)}
-              <li class="flex items-center gap-2 text-foreground">
-                <Check
-                  class="size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                {vault.t(new ExtensionConsentScopeTranslation(scope).key)}
-              </li>
-            {/each}
-          </ul>
-        </dd>
-      </div>
-    </dl>
+    <ExtensionConnectFacts {vault} {request} />
   </section>
 </div>

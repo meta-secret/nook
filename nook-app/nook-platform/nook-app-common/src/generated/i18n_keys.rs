@@ -1009,11 +1009,14 @@ pub const EXTENSION_CONSENT_APPROVED: &str = "extension.consent.approved";
 pub const EXTENSION_CONSENT_APPROVED_REOPEN: &str = "extension.consent.approved_reopen";
 pub const EXTENSION_CONSENT_APPROVED_RETURN: &str = "extension.consent.approved_return";
 pub const EXTENSION_CONSENT_DEVICE: &str = "extension.consent.device";
+pub const EXTENSION_CONSENT_DIAGRAM_EXTENSION: &str = "extension.consent.diagram_extension";
+pub const EXTENSION_CONSENT_DIAGRAM_LABEL: &str = "extension.consent.diagram_label";
+pub const EXTENSION_CONSENT_DIAGRAM_THIS_VAULT: &str = "extension.consent.diagram_this_vault";
+pub const EXTENSION_CONSENT_DIAGRAM_VAULTS: &str = "extension.consent.diagram_vaults";
 pub const EXTENSION_CONSENT_ENCRYPTION_KEY: &str = "extension.consent.encryption_key";
 pub const EXTENSION_CONSENT_GRANT_REJECTED: &str = "extension.consent.grant_rejected";
 pub const EXTENSION_CONSENT_HANDOFF_FAILED: &str = "extension.consent.handoff_failed";
 pub const EXTENSION_CONSENT_HANDOFF_FAILED_DETAIL: &str = "extension.consent.handoff_failed_detail";
-pub const EXTENSION_CONSENT_JOINS_IDENTITY: &str = "extension.consent.joins_identity";
 pub const EXTENSION_CONSENT_MESSAGING_UNAVAILABLE: &str = "extension.consent.messaging_unavailable";
 pub const EXTENSION_CONSENT_PROGRESS_AUTHORIZING: &str = "extension.consent.progress_authorizing";
 pub const EXTENSION_CONSENT_PROGRESS_DELIVERING: &str = "extension.consent.progress_delivering";
@@ -1145,7 +1148,6 @@ pub const EXTENSION_POPUP_INITIALIZATION_PAIRING_STATE_FAILED: &str =
     "extension.popup_initialization.pairing_state_failed";
 pub const EXTENSION_POPUP_INITIALIZATION_SESSION_DEVICE_FAILED: &str =
     "extension.popup_initialization.session_device_failed";
-pub const EXTENSION_REQUEST_BODY: &str = "extension.request.body";
 pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
 pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";

@@ -2167,14 +2167,14 @@
     },
     "consent": {
       "title": "Approve Nook extension",
-      "device": "Extension device",
-      "encryption_key": "Encryption public key",
-      "signing_key": "Signing public key",
-      "requested_access": "Requested access",
-      "scope_vault_access": "Vault access",
-      "scope_password_filling": "Password filling",
-      "scope_passkey_management": "Passkey registration and sign-in",
-      "scope_sync_provider_credentials": "Sync-provider credentials",
+      "device": "Device",
+      "encryption_key": "Encryption",
+      "signing_key": "Signing",
+      "requested_access": "Access",
+      "scope_vault_access": "Vaults",
+      "scope_password_filling": "Passwords",
+      "scope_passkey_management": "Passkeys",
+      "scope_sync_provider_credentials": "Sync sign-in",
       "unlock_first": "Unlock Simple Vault first, then approve this extension device.",
       "messaging_unavailable": "Browser extension messaging is unavailable.",
       "grant_rejected": "The extension did not accept the Simple Vault pairing grant.",
@@ -2190,8 +2190,11 @@
       "progress_delivering": "Handing access to the extension…",
       "progress_finishing": "Updating this keyring's devices…",
       "approve": "Approve extension",
-      "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}. It stays a filling companion with these permissions only.",
-      "vault_only": "{identity} has no cloud sync provider yet, so the extension connects this vault only. Add one to connect every vault in {identity}."
+      "vault_only": "Add a sync provider to connect every vault.",
+      "diagram_label": "What the extension joins",
+      "diagram_extension": "Extension",
+      "diagram_vaults": "All its vaults",
+      "diagram_this_vault": "This vault"
     },
     "popup": {
       "checking_this_page": "Checking this page",
@@ -2217,7 +2220,6 @@
     "request": {
       "eyebrow": "Connection request",
       "title": "{label} wants to join a keyring",
-      "body": "It joins the keyring you choose and fills passwords from all of its vaults, including new ones. Unlock that keyring here; you approve on the next step.",
       "unlock_identity": "Unlock {identity}",
       "vault_action": "Then review what it can do",
       "no_vaults": "This keyring has no vault yet. Create one, then connect it."

@@ -1,18 +1,20 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { ShieldCheck } from '@lucide/svelte'
   import { onDestroy } from 'svelte'
   import { NookExtensionConsentPhaseState } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type { ExtensionConnectRequest } from '../extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
-  import { ExtensionConsentScopeTranslation } from './extension-connect-consent-state'
+  import ExtensionConnectFacts from './ExtensionConnectFacts.svelte'
+  import FirstRunDiagram from './login/FirstRunDiagram.svelte'
+  import {
+    ExtensionConnectReach,
+    extensionConnectDiagram,
+    type ExtensionConnectDiagramRequest,
+  } from './extension-connect-diagram'
   import { DeviceJoinMounts } from '$lib/components/add-device/device-join-mounts'
   import { ExtensionConnectScope } from '$web-shared/extension/extension-connect-scope'
-  import {
-    ExtensionConsentIdentityText,
-    type ExtensionConsentIdentityTextLayout,
-  } from './extension-consent-identity-text'
   import {
     ExtensionConsentDeliveryOutcomeKind,
     ExtensionConsentRejectionKind,
@@ -106,15 +108,14 @@
       : vault.identityControl.snapshot.identityLabel ||
           vault.t(I18N_KEYS.WorkspaceIdentityFallback),
   )
-  const consentDescription = $derived.by(() => {
-    const descriptionRequest: Parameters<typeof vault.t>[0] = {
-      key: joinsIdentity
-        ? I18N_KEYS.ExtensionConsentJoinsIdentity
-        : I18N_KEYS.ExtensionConsentVaultOnly,
-      replacements: { identity: identityName },
-    }
-    return vault.t(descriptionRequest)
+  const diagramRequest = $derived<ExtensionConnectDiagramRequest>({
+    vault,
+    keyring: identityName,
+    reach: joinsIdentity
+      ? ExtensionConnectReach.Keyring
+      : ExtensionConnectReach.ThisVault,
   })
+  const diagram = $derived(extensionConnectDiagram(diagramRequest))
   const workflowState = $derived(session.state)
   const availability = $derived(
     session.workflow.approvalAvailability(workflowState),
@@ -171,21 +172,6 @@
   })
   onDestroy(() => session.dispose())
 
-  const identityTextLayout: ExtensionConsentIdentityTextLayout = {
-    head: 14,
-    tail: 10,
-  }
-  const displayedDevicePublicKey = $derived(
-    new ExtensionConsentIdentityText(request.devicePublicKey).truncate(
-      identityTextLayout,
-    ),
-  )
-  const displayedDeviceSigningPublicKey = $derived(
-    new ExtensionConsentIdentityText(request.deviceSigningPublicKey).truncate(
-      identityTextLayout,
-    ),
-  )
-
   async function approveExtension() {
     await session.approve()
   }
@@ -195,84 +181,36 @@
   }
 </script>
 
-<section class="min-w-0" data-testid="extension-connect-consent">
-  <div class="flex items-start gap-3">
-    <div
-      class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary"
-    >
-      <ShieldCheck class="size-5" />
-    </div>
-    <div class="min-w-0 space-y-1">
-      <h2 class="text-lg font-semibold text-foreground">
-        {vault.t(I18N_KEYS.ExtensionConsentTitle)}
-      </h2>
-      <p class="text-sm leading-relaxed text-muted-foreground">
-        {consentDescription}
+<section
+  class="grid min-w-0 content-start gap-6"
+  data-testid="extension-connect-consent"
+>
+  <header class="flex items-center gap-3">
+    <span class="nk-vault-icon nk-vault-icon-open size-10" aria-hidden="true">
+      <ShieldCheck class="size-4" />
+    </span>
+    <h2 class="text-lg font-semibold tracking-tight text-foreground">
+      {vault.t(I18N_KEYS.ExtensionConsentTitle)}
+    </h2>
+  </header>
+
+  <div class="grid gap-3">
+    <FirstRunDiagram {diagram} />
+    {#if !joinsIdentity}
+      <p
+        class="text-center text-xs text-muted-foreground"
+        data-testid="extension-connect-vault-only"
+      >
+        {vault.t(I18N_KEYS.ExtensionConsentVaultOnly)}
       </p>
-    </div>
+    {/if}
   </div>
 
-  <div
-    class="mt-4 grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3"
-  >
-    <div>
-      <p
-        class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-      >
-        {vault.t(I18N_KEYS.ExtensionConsentDevice)}
-      </p>
-      <p class="mt-1 text-sm font-semibold text-foreground">
-        {request.deviceLabel}
-      </p>
-      <p class="mt-1 break-all font-mono text-[11px] text-muted-foreground">
-        {request.deviceId}
-      </p>
-    </div>
-    <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
-      <p class="flex items-center gap-2 text-xs font-medium text-foreground">
-        <KeyRound class="size-3.5 text-muted-foreground" />
-        {vault.t(I18N_KEYS.ExtensionConsentEncryptionKey)}
-      </p>
-      <p
-        class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
-        title={request.devicePublicKey}
-      >
-        {displayedDevicePublicKey}
-      </p>
-    </div>
-    <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
-      <p class="flex items-center gap-2 text-xs font-medium text-foreground">
-        <KeyRound class="size-3.5 text-muted-foreground" />
-        {vault.t(I18N_KEYS.ExtensionConsentSigningKey)}
-      </p>
-      <p
-        class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
-        title={request.deviceSigningPublicKey}
-      >
-        {displayedDeviceSigningPublicKey}
-      </p>
-    </div>
-  </div>
-
-  <div class="mt-4 space-y-2">
-    <p class="text-sm font-medium text-foreground">
-      {vault.t(I18N_KEYS.ExtensionConsentRequestedAccess)}
-    </p>
-    <ul class="grid gap-2" data-testid="extension-connect-scopes">
-      {#each request.scopes as scope (scope)}
-        <li
-          class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
-        >
-          <Check class="size-3.5 text-primary" />
-          {vault.t(new ExtensionConsentScopeTranslation(scope).key)}
-        </li>
-      {/each}
-    </ul>
-  </div>
+  <ExtensionConnectFacts {vault} {request} />
 
   {#if notice.kind === ExtensionConsentWorkflowNoticeKind.Message && !isDeliveredSuccess}
     <p
-      class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+      class="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
       role="alert"
     >
       {vault.t(notice.translationKey)}
@@ -280,7 +218,7 @@
   {:else if notice.kind === ExtensionConsentWorkflowNoticeKind.Rejected}
     {#if notice.rejection.kind === ExtensionConsentRejectionKind.WithReason}
       <p
-        class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+        class="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
         data-extension-pairing-rejection-reason={notice.rejection.reason}
         role="alert"
       >
@@ -288,7 +226,7 @@
       </p>
     {:else}
       <p
-        class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+        class="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
         role="alert"
       >
         {vault.t(notice.translationKey)}
@@ -298,7 +236,7 @@
 
   {#if (workflowState.kind === ExtensionConsentWorkflowKind.Completed && workflowState.outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) || (workflowState.kind === ExtensionConsentWorkflowKind.Failed && workflowState.phase.state === NookExtensionConsentPhaseState.Approved)}
     <p
-      class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
+      class="rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
     >
       {vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)}
@@ -307,7 +245,7 @@
 
   {#if activity.kind === ExtensionConsentActivityKind.Working}
     <div
-      class="mt-4 grid gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-3"
+      class="grid gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-3"
       role="status"
       aria-live="polite"
       data-testid="extension-connect-progress"
@@ -327,7 +265,8 @@
             <span class="nk-progress-sweep"></span>
           {:else}
             <span
-              class="block h-0.5 {segment === ExtensionConsentActivitySegment.Done
+              class="block h-0.5 {segment ===
+              ExtensionConsentActivitySegment.Done
                 ? 'bg-[var(--titanium)]'
                 : 'bg-foreground/10'}"
             ></span>
@@ -336,7 +275,7 @@
       </div>
     </div>
   {:else}
-    <div class="mt-4 flex flex-wrap justify-end gap-2">
+    <div class="flex flex-wrap justify-end gap-2">
       <Button type="button" variant="outline" onclick={closeConsent}>
         {closeOutcome === ExtensionConsentCloseOutcome.Approved
           ? vault.t(I18N_KEYS.CommonDone)

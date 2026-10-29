@@ -3,8 +3,8 @@ import {
   Cloud,
   Fingerprint,
   Laptop,
+  KeyRound,
   MonitorSmartphone,
-  UserRound,
   Vault,
 } from "@lucide/svelte";
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -61,7 +61,7 @@ export function firstRunKeyDiagram({
         arrow: FirstRunDiagramArrow.Forward,
       },
       {
-        icon: UserRound,
+        icon: KeyRound,
         label: identity || vault.t(I18N_KEYS.FirstRunDiagramIdentity),
         testId: "first-run-diagram-identity",
         current: false,
