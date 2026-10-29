@@ -247,9 +247,12 @@ export class FirstRunActions {
     await this.connectProvider();
   }
 
-  /** Bind the provider's Nook folder and connect it: the identity's events
-   * sync, and setup ends once a vault of it is open with the provider saved.
-   * A connection that fails keeps setup where it is, with its error. */
+  /** The identity just brought here keeps the provider: bind its Nook
+   * folder, save it, and copy the identity's log there. Then a vault the
+   * identity granted this browser opens through it, as after an invite:
+   * each vault is its own folder under the Nook folder, so it opens by its
+   * id. An identity with no vault ends setup on its card. A step that fails
+   * keeps setup where it is, with its error. */
   async connectProvider(): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
@@ -260,10 +263,26 @@ export class FirstRunActions {
       vault.errorMsg = vault.t(folder.error.translationKey);
       return false;
     }
-    await vault.connectStagedProvider();
-    const connected = vault.isAuthenticated && !vault.errorMsg;
-    if (connected) vault.firstRun = FirstRunStage.Off;
-    return connected;
+    const saved = await vault.ensureProviderSaved();
+    if (saved.isErr()) {
+      vault.errorMsg = vault.t(saved.error.translationKey);
+      return false;
+    }
+    const mounted = await vault.identityControl.syncWithMounts();
+    if (mounted.isErr()) {
+      vault.errorMsg = vault.t(mounted.error.translationKey);
+      return false;
+    }
+    const away = vault.identityControl.grantedVaultElsewhere();
+    if (away !== false) {
+      const opened = await vault.identityControl.openVault(away.storeId);
+      if (opened.isErr()) {
+        vault.errorMsg = vault.t(opened.error.translationKey);
+        return false;
+      }
+    }
+    vault.firstRun = FirstRunStage.Off;
+    return true;
   }
 
   private intent({ choice, source }: FirstRunIdentity): IdentityJoinIntent {

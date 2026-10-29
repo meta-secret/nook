@@ -9,6 +9,7 @@ import {
   generate_password,
   type AuthProvidersSnapshot,
   type IdentityControlSnapshot,
+  type IdentityVaultView,
   type NookEnrollmentIssueInput,
   type NookSecretPage,
   type NookStorageConnectArgs,
@@ -308,6 +309,19 @@ export class IdentityControlModel {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** The first vault the identity granted this browser that it does not
+   * hold yet, which opens through one of the identity's providers. */
+  grantedVaultElsewhere(): IdentityVaultView | false {
+    const snapshot = this.snapshot;
+    if (snapshot === false) return false;
+    const local = this.vault.localVaults.map((entry) => entry.storeId);
+    const [away] = snapshot.vaults.filter(
+      (entry) =>
+        entry.grantedToCurrentInstallation && !local.includes(entry.storeId),
+    );
+    return away ? away : false;
   }
 
   /** What an identity page shows when it opens: with a vault open, the log

@@ -17,6 +17,9 @@ import {
   type FirstRunIdentityRun,
 } from '$lib/vault/first-run'
 import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
+import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
+import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -271,5 +274,48 @@ describe('first-run setup settles the identity before any vault', () => {
 
     expect(setup.created).toEqual([])
     expect(setup.vault.firstRun).toBe(FirstRunStage.Off)
+  })
+})
+
+describe('a keyring brought here keeps its provider and opens its vault', () => {
+  test('Drive is saved and synced, then the granted vault opens through it', async () => {
+    const vault = VaultStateTestFixture.create()
+    const order: string[] = []
+    vi.spyOn(
+      VaultOAuthActions.prototype,
+      'connectGoogleVaultFolder',
+    ).mockImplementation(() => {
+      order.push('folder')
+      return Promise.resolve(
+        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Existing }),
+      )
+    })
+    vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {
+      order.push('save')
+      return Promise.resolve(ok(ProviderSaveOutcome.Saved))
+    })
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockImplementation(() => {
+      order.push('sync')
+      return Promise.resolve(ok(IdentityActionOutcome.Completed))
+    })
+    vi.spyOn(vault.identityControl, 'grantedVaultElsewhere').mockReturnValue({
+      storeId: 'store_personalv1',
+      grantedToCurrentInstallation: true,
+      membersMissingDek: [],
+    })
+    const open = vi
+      .spyOn(vault.identityControl, 'openVault')
+      .mockImplementation(() => {
+        order.push('open')
+        return Promise.resolve(ok(IdentityActionOutcome.Completed))
+      })
+    vault.firstRun = FirstRunStage.Sync
+
+    const connected = await new FirstRunActions(vault).connectProvider()
+
+    expect(connected).toBe(true)
+    expect(order).toEqual(['folder', 'save', 'sync', 'open'])
+    expect(open).toHaveBeenCalledWith('store_personalv1')
+    expect(vault.firstRun).toBe(FirstRunStage.Off)
   })
 })

@@ -97,12 +97,8 @@ export class IdentityPages {
       },
     };
     vault.showSuccess(vault.t(request));
-    const local = new Set(vault.localVaults.map((entry) => entry.storeId));
-    const [away] = (snapshot === false ? [] : snapshot.vaults).filter(
-      (entry) =>
-        entry.grantedToCurrentInstallation && !local.has(entry.storeId),
-    );
-    if (away) vault.vaultPanelStoreId = away.storeId;
+    const away = vault.identityControl.grantedVaultElsewhere();
+    if (away !== false) vault.vaultPanelStoreId = away.storeId;
   }
 
   async removeProvider(id: string): Promise<void> {
