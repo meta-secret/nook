@@ -111,7 +111,11 @@ export class SetupFlow {
   /** The passkey chosen in step two is one of this identity's keys. A new
    * passkey is a member of nothing. */
   isMember(identity: Identity): boolean {
-    return this.choice === PasskeyChoice.Existing && this.memberOf === MemberOf.Work && identity.id === work.id
+    return (
+      this.choice === PasskeyChoice.Existing &&
+      this.memberOf === MemberOf.Work &&
+      identity.id === work.id
+    )
   }
 
   /** Finish setup on an identity: a member's, a joined one, or a new one. */
@@ -122,7 +126,15 @@ export class SetupFlow {
   }
 
   createIdentity(): void {
-    this.finish({ id: 'idn_new', name: this.newName, words: 'spoon-river-calm', devices: 1 }, true)
+    this.finish(
+      {
+        id: 'idn_new',
+        name: this.newName,
+        words: 'spoon-river-calm',
+        devices: 1,
+      },
+      true,
+    )
   }
 
   events(): number {

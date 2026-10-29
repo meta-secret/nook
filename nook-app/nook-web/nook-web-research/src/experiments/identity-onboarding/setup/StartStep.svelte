@@ -16,7 +16,11 @@ one button that begins it. -->
   ]
 </script>
 
-<Heading eyebrow="Setup" title="Create your identity" sub="A passkey on this browser, synced through Google Drive." />
+<Heading
+  eyebrow="Setup"
+  title="Create your identity"
+  sub="A passkey on this browser, synced through Google Drive."
+/>
 <ol class="flex flex-col gap-px">
   {#each path as stage, index (stage.label)}
     <li class="flex items-center gap-4 bg-[#16191c] px-5 py-4">
@@ -27,5 +31,7 @@ one button that begins it. -->
   {/each}
 </ol>
 <div class="mt-auto pt-10">
-  <button type="button" class={ui.primary} onclick={() => flow.go(Step.Passkey)}>Create identity</button>
+  <button type="button" class={ui.primary} onclick={() => flow.go(Step.Passkey)}
+    >Create identity</button
+  >
 </div>

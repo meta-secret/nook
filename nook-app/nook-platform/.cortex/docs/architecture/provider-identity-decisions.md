@@ -89,14 +89,12 @@ decides from its standing (`IdentitySetup`), and picking it runs at once.
 Setup already used the passkey that made this browser's key, so it never
 offers adding by another passkey.
 
-| Standing | Setup action |
-|---|---|
-| This browser | **Continue** (Leave: connect and sync) |
-| Join approved | **Continue** (Finish joining) |
-| Opens with a checked passkey | **Continue** (Add to this browser) |
-| Join requested | **Waiting** (Check again) |
-| Unchecked, not opened, join denied | **Request to join** |
-| Other identity here | none |
+- **This browser:** **Continue** (Leave: connect and sync).
+- **Join approved:** **Continue** (Finish joining).
+- **Opens with a checked passkey:** **Continue** (Add to this browser).
+- **Join requested:** **Waiting** (Check again).
+- **Not on this browser, not opened, or join denied:** **Request to join**.
+- **Other identity here:** no action.
 
 - Below the list, after an "or", **Create a new identity** is always
   offered. First run names a fresh identity there. With an identity in use,

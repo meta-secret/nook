@@ -22,15 +22,30 @@ is done, then setup goes on to read the Nook folder there. -->
   }
 </script>
 
-<Heading eyebrow="Step 2 of 3 · Sync provider" title="Add a sync provider" sub="Your identity's events are kept there, encrypted." />
+<Heading
+  eyebrow="Step 2 of 3 · Sync provider"
+  title="Add a sync provider"
+  sub="Your identity's events are kept there, encrypted."
+/>
 <Option
   title="Google Drive"
-  hint={flow.connected ? account : working ? 'Signing in…' : 'Sign in with Google'}
+  hint={flow.connected
+    ? account
+    : working
+      ? 'Signing in…'
+      : 'Sign in with Google'}
   action="Connect"
-  state={working ? OptionState.Working : flow.connected ? OptionState.Done : OptionState.Idle}
+  state={working
+    ? OptionState.Working
+    : flow.connected
+      ? OptionState.Done
+      : OptionState.Idle}
   onPick={connect}
 >
   {#snippet lead()}
-    <span class="grid size-11 shrink-0 place-items-center bg-[#23272b] text-[#c9ccd0]"><HardDrive class="size-5" aria-hidden="true" /></span>
+    <span
+      class="grid size-11 shrink-0 place-items-center bg-[#23272b] text-[#c9ccd0]"
+      ><HardDrive class="size-5" aria-hidden="true" /></span
+    >
   {/snippet}
 </Option>

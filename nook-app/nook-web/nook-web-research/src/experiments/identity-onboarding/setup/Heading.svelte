@@ -4,7 +4,17 @@ short line under it. -->
   import type { Snippet } from 'svelte'
   import { ui } from './ui'
 
-  let { eyebrow, title, sub = '', children }: { eyebrow: string; title: string; sub?: string; children?: Snippet } = $props()
+  let {
+    eyebrow,
+    title,
+    sub = '',
+    children,
+  }: {
+    eyebrow: string
+    title: string
+    sub?: string
+    children?: Snippet
+  } = $props()
 </script>
 
 <header class="mb-8">

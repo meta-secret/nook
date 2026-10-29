@@ -21,7 +21,9 @@ controls sit in a rail beside the panel. -->
 
 <main class={ui.page}>
   <ExperimentBack {navigate} />
-  <div class="mx-auto flex w-full max-w-[900px] flex-col items-center gap-12 px-5 pt-24 pb-16 md:flex-row md:items-start md:justify-between">
+  <div
+    class="mx-auto flex w-full max-w-[900px] flex-col items-center gap-12 px-5 pt-24 pb-16 md:flex-row md:items-start md:justify-between"
+  >
     <Rail {flow} />
     <Panel {flow} />
   </div>

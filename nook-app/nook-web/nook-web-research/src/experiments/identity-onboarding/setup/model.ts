@@ -44,8 +44,18 @@ export type Identity = {
   readonly devices: number
 }
 
-export const work: Identity = { id: 'idn_work', name: 'Work', words: 'ripple-canvas-orbit', devices: 3 }
-export const family: Identity = { id: 'idn_family', name: 'Family', words: 'clap-feel-strong', devices: 2 }
+export const work: Identity = {
+  id: 'idn_work',
+  name: 'Work',
+  words: 'ripple-canvas-orbit',
+  devices: 3,
+}
+export const family: Identity = {
+  id: 'idn_family',
+  name: 'Family',
+  words: 'clap-feel-strong',
+  devices: 2,
+}
 
 /** The identities in the folder when it holds any. */
 export const folderIdentities: readonly Identity[] = [work, family]

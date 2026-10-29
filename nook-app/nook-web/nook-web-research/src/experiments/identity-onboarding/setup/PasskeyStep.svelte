@@ -15,15 +15,29 @@ on. -->
   /** The option being worked on while the passkey prompt is open. */
   let picked = $state<PasskeyChoice>(PasskeyChoice.New)
 
-  const tile = 'grid size-11 shrink-0 place-items-center bg-[#23272b] text-[#c9ccd0]'
+  const tile =
+    'grid size-11 shrink-0 place-items-center bg-[#23272b] text-[#c9ccd0]'
   const options = [
-    { choice: PasskeyChoice.New, icon: KeyRound, title: 'Create a new passkey', hint: 'Saved to your password manager' },
-    { choice: PasskeyChoice.Existing, icon: Fingerprint, title: 'Use an existing passkey', hint: 'One you made for Nook before' },
+    {
+      choice: PasskeyChoice.New,
+      icon: KeyRound,
+      title: 'Create a new passkey',
+      hint: 'Saved to your password manager',
+    },
+    {
+      choice: PasskeyChoice.Existing,
+      icon: Fingerprint,
+      title: 'Use an existing passkey',
+      hint: 'One you made for Nook before',
+    },
   ]
 
   function stateOf(choice: PasskeyChoice): OptionState {
-    if (working) return picked === choice ? OptionState.Working : OptionState.Idle
-    return flow.passkey && flow.choice === choice ? OptionState.Done : OptionState.Idle
+    if (working)
+      return picked === choice ? OptionState.Working : OptionState.Idle
+    return flow.passkey && flow.choice === choice
+      ? OptionState.Done
+      : OptionState.Idle
   }
 
   async function pick(choice: PasskeyChoice): Promise<void> {
@@ -37,7 +51,11 @@ on. -->
   }
 </script>
 
-<Heading eyebrow="Step 1 of 3 · Passkey" title="Your passkey" sub="It opens your identity on this browser." />
+<Heading
+  eyebrow="Step 1 of 3 · Passkey"
+  title="Your passkey"
+  sub="It opens your identity on this browser."
+/>
 <div class="flex flex-col gap-px">
   {#each options as option (option.choice)}
     <Option
@@ -48,11 +66,15 @@ on. -->
       onPick={() => pick(option.choice)}
     >
       {#snippet lead()}
-        <span class={tile}><option.icon class="size-5" aria-hidden="true" /></span>
+        <span class={tile}
+          ><option.icon class="size-5" aria-hidden="true" /></span
+        >
       {/snippet}
     </Option>
   {/each}
 </div>
 {#if working}
-  <p class="mt-5 font-mono text-[12px] text-[#8fa3c0]">Waiting for your passkey…</p>
+  <p class="mt-5 font-mono text-[12px] text-[#8fa3c0]">
+    Waiting for your passkey…
+  </p>
 {/if}

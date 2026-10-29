@@ -4,7 +4,8 @@ export const ui = {
   page: 'min-h-svh bg-[#0b0c0d] text-[#e9e8e4]',
   panel: 'relative flex min-h-[640px] w-[460px] shrink-0 flex-col bg-[#111315]',
   eyebrow: 'font-mono text-[11px] tracking-[0.18em] text-[#8fa3c0] uppercase',
-  title: 'mt-2 text-[28px] leading-[1.15] font-semibold tracking-tight text-balance',
+  title:
+    'mt-2 text-[28px] leading-[1.15] font-semibold tracking-tight text-balance',
   sub: 'mt-2 text-[14px] leading-relaxed text-pretty text-[#8a8f96]',
   mono: 'font-mono text-[12px] text-[#80858c]',
   primary:

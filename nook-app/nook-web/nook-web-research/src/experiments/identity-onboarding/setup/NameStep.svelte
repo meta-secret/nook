@@ -12,13 +12,30 @@ only its members see it. -->
   const ready = $derived(flow.newName.trim() !== '')
 </script>
 
-<Heading eyebrow="Step 3 of 3 · Identity" title="Name your identity" sub="Only its members see the name." />
+<Heading
+  eyebrow="Step 3 of 3 · Identity"
+  title="Name your identity"
+  sub="Only its members see the name."
+/>
 
-<input class={ui.input} bind:value={flow.newName} placeholder="Personal" aria-label="Identity name" />
-<p class="mt-4 inline-flex items-center gap-2 font-mono text-[12px] text-[#80858c]">
-  <Folder class="size-3.5" aria-hidden="true" /> {folder.join(' › ')}
+<input
+  class={ui.input}
+  bind:value={flow.newName}
+  placeholder="Personal"
+  aria-label="Identity name"
+/>
+<p
+  class="mt-4 inline-flex items-center gap-2 font-mono text-[12px] text-[#80858c]"
+>
+  <Folder class="size-3.5" aria-hidden="true" />
+  {folder.join(' › ')}
 </p>
 
 <div class="mt-auto pt-10">
-  <button type="button" class={ui.primary} disabled={!ready} onclick={() => flow.createIdentity()}>Create in Google Drive</button>
+  <button
+    type="button"
+    class={ui.primary}
+    disabled={!ready}
+    onclick={() => flow.createIdentity()}>Create in Google Drive</button
+  >
 </div>
