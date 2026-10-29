@@ -26,15 +26,15 @@ test.describe('identity onboarding provider picker', () => {
   test('asks for a sync provider before an identity code can be created', async ({
     page,
   }) => {
-    // The identity panel leads with a sync provider; until one exists the
-    // devices section says so in place of adding a device.
+    // The identity panel leads with a sync provider and holds adding a device
+    // until one exists.
     await openIdentityPanel(page)
     await expect(page.getByTestId('identity-action-add-sync')).toHaveAttribute(
       'data-lead',
       'true',
     )
-    await expect(page.getByTestId('identity-action-add-device')).toHaveCount(0)
-    await expect(page.getByTestId('identity-device-needs-cloud')).toBeVisible()
+    const addDevice = page.getByTestId('identity-action-add-device')
+    await expect(addDevice).toBeDisabled()
     await expect(page.getByTestId('identity-panel-devices')).toContainText(
       'Add a cloud sync provider first',
     )
