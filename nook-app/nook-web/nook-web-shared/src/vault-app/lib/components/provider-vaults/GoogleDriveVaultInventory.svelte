@@ -196,8 +196,10 @@ decrypts in memory and changes nothing.
     }
   }
 
-  /** The handler of one setup action: it runs for the identity picked, and
-   * the folder is read again unless a join waits for its own key. */
+  /** The handler of one setup action: it runs for the identity picked. An
+   * identity brought here (Continue, or a join found approved) completes the
+   * step as first run does: the provider connects and syncs. Otherwise the
+   * folder is read again unless a join waits for its own key. */
   function act(
     action: FirstRunIdentityAction,
   ): (choice: ProviderIdentityChoice) => Promise<void> {
@@ -213,6 +215,10 @@ decrypts in memory and changes nothing.
         const ran = await new IdentityPlanActions(vault).run(run)
         if (ran.isErr()) vault.errorMsg = vault.t(ran.error.translationKey)
         else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
+        else if (action !== FirstRunIdentityAction.AskToJoin) {
+          await onConnect()
+          return
+        }
         await load(accessToken)
       } finally {
         workingOn = ''

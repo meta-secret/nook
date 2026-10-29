@@ -18,14 +18,16 @@ describe('first-run diagrams', () => {
       vault: VaultStateTestFixture.create(),
       provider: 'Google Drive',
     }
-    const [here, provider, devices] = firstRunSyncDiagram(request).nodes
+    const nodes = firstRunSyncDiagram(request).nodes
 
-    expect(here.testId).toBe('first-run-sync-diagram-here')
-    expect(provider.label).toBe('Google Drive')
-    expect(provider.current).toBe(true)
-    expect(provider.arrow).toBe(FirstRunDiagramArrow.Forward)
-    expect(devices.testId).toBe('first-run-sync-diagram-devices')
-    expect(devices.arrow).toBe(FirstRunDiagramArrow.Back)
+    expect(
+      nodes.map((node) => [node.testId, node.arrow, node.current]),
+    ).toEqual([
+      ['first-run-sync-diagram-here', FirstRunDiagramArrow.Forward, false],
+      ['first-run-sync-diagram-provider', FirstRunDiagramArrow.Forward, true],
+      ['first-run-sync-diagram-devices', FirstRunDiagramArrow.Back, false],
+    ])
+    expect(nodes.map((node) => node.label)).toContain('Google Drive')
   })
 
   test('the passkey leads on to the identity and its vaults', () => {

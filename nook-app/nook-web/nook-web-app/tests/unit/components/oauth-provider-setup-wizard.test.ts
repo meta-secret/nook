@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { err, ok } from 'neverthrow'
+import { DeviceProtectionStatus } from '$app-wasm'
 import type {
   CredentialCheckReport,
   IdentityControlSnapshot,
@@ -34,6 +35,7 @@ import {
   type IdentityControlView,
 } from '$lib/vault/identity-control.svelte'
 import type { VaultState } from '$lib/vault.svelte'
+import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import OAuthProviderSetupWizard from '../../../../nook-web-shared/src/vault-app/lib/components/OAuthProviderSetupWizard.svelte'
 
@@ -346,7 +348,7 @@ describe('Google Drive provider setup', () => {
     expect(onConnect).not.toHaveBeenCalled()
   })
 
-  test('with an identity in use, a member continues and an asked join is checked again', async () => {
+  test('with an identity in use, a member continues and the provider connects', async () => {
     listVaults({
       root: 'found',
       listing: {
@@ -363,7 +365,12 @@ describe('Google Drive provider setup', () => {
     const run = vi
       .spyOn(IdentityPlanActions.prototype, 'run')
       .mockResolvedValue(ok(applied))
-    const { view, vault } = renderWizard(signedInDrive())
+    const connect = vi
+      .spyOn(VaultOAuthActions.prototype, 'connectGoogleVaultFolder')
+      .mockResolvedValue(
+        ok({ name: 'Nook', origin: GoogleVaultFolderOrigin.Created }),
+      )
+    const { view, vault, onConnect } = renderWizard(signedInDrive())
     useIdentity(vault)
 
     await vi.waitFor(() =>
@@ -397,6 +404,32 @@ describe('Google Drive provider setup', () => {
         entry.decision,
       ]),
     ).toEqual([['idn_approvedabc', 'finishJoining']])
+    // Bringing the identity here completes the step: Drive connects.
+    await vi.waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
+    expect(connect).toHaveBeenCalledOnce()
+  })
+
+  test('an identity unlocked without a vault is the identity in use there', async () => {
+    listVaults({
+      root: 'found',
+      listing: {
+        vaults: [joinedSummary('idn_approvedabc', 'approved')],
+        replacement: { state: 'unavailable' },
+      },
+    })
+    const { view, vault } = renderWizard(signedInDrive())
+    useIdentity(vault)
+    vault.isAuthenticated = false
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    vault.identityPage = WorkspaceSection.Sync
+
+    await vi.waitFor(() =>
+      expect(view.getAllByTestId('setup-identity')).toHaveLength(1),
+    )
+    expect(view.getByTestId('setup-identity-continue')).toBeTruthy()
+    expect(view.getByTestId('connect-provider-btn').textContent).toContain(
+      vault.t(I18N_KEYS.FirstRunSyncCreateTitle),
+    )
   })
 
   test('on the recovery screen, picking a decision plans it, and Leave as is takes it back out', async () => {

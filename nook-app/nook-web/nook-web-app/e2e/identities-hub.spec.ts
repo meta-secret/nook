@@ -1,15 +1,22 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installGoogleOAuthMock,
   installPasskeyMock,
   nameFirstIdentityOnly,
   openIdentitiesPage,
   openVaultRow,
   startFirstRun,
   UI_TIMEOUT_MS,
+  waitForGoogleOAuthSignedIn,
 } from './helpers'
+import {
+  E2eSyncProviderId,
+  createSyncTarget,
+  installSyncRemote,
+} from './sync-provider'
 
 const WORK_PIN = '246810'
 
@@ -201,6 +208,32 @@ test.describe('identities hub', () => {
   })
 })
 
+/** First run keeps a new identity, Solo, on this browser and skips its first
+ * vault; its unlocked card is returned. */
+async function soloWithoutVault(page: Page): Promise<Locator> {
+  await page.goto('/app/')
+  await startFirstRun(page)
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  const createChoice = page.getByTestId('device-protection-create-new-choice')
+  if (await createChoice.isVisible()) await createChoice.click()
+  await page.getByTestId('device-protection-setup-btn').click()
+  await nameFirstIdentityOnly(page, 'Solo')
+
+  // Kept on this browser, the identity asks about its first vault.
+  await expect(page.getByTestId('first-run-vault-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('first-run-vault-skip').click()
+
+  const solo = card(page, 'Solo')
+  await expect(solo).toHaveAttribute('data-status', 'unlocked', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  return solo
+}
+
 test.describe('an identity without a vault', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -212,27 +245,8 @@ test.describe('an identity without a vault', () => {
   test('first run can leave the identity without a vault until one is wanted', async ({
     page,
   }) => {
-    await page.goto('/app/')
-    await startFirstRun(page)
-    await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    const createChoice = page.getByTestId('device-protection-create-new-choice')
-    if (await createChoice.isVisible()) await createChoice.click()
-    await page.getByTestId('device-protection-setup-btn').click()
-    await nameFirstIdentityOnly(page, 'Solo')
-
-    // Kept on this browser, the identity asks about its first vault.
-    await expect(page.getByTestId('first-run-vault-step')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.getByTestId('first-run-vault-skip').click()
-
     // It stands on its own card with no vault, not on the first screen.
-    const solo = card(page, 'Solo')
-    await expect(solo).toHaveAttribute('data-status', 'unlocked', {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    const solo = await soloWithoutVault(page)
     await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
     await expect(solo.getByTestId('identity-vault-row')).toHaveCount(0)
     // Its overview and pages open with no vault: they act on the identity.
@@ -263,5 +277,39 @@ test.describe('an identity without a vault', () => {
     await expect(
       openVaultRow(page).or(page.getByTestId('vault-panel')).first(),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  })
+
+  test('adds Google Drive with no vault, and Drive is listed as its provider', async ({
+    page,
+  }) => {
+    const target = createSyncTarget(
+      '',
+      'vaultless-drive',
+      E2eSyncProviderId.File,
+    )
+    await installSyncRemote(page, target)
+    await installGoogleOAuthMock(page, target.pat)
+    const solo = await soloWithoutVault(page)
+
+    await solo.getByTestId('identity-overview-toggle').click()
+    const overview = page.getByTestId('identity-overview')
+    await overview.getByTestId('identity-action-add-sync').click()
+    await page.getByTestId('provider-option-oauth-file').click()
+    await page.getByTestId('google-sign-in-btn').click()
+    await waitForGoogleOAuthSignedIn(page)
+    await page.getByTestId('connect-provider-btn').click()
+
+    // Saved, and no vault opened for it.
+    const syncPage = page.locator(
+      '[data-testid="identity-page"][data-page="sync"]',
+    )
+    await expect(
+      syncPage.getByTestId('settings-provider-oauth-file'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
+    await page.getByTestId('identity-page-back').click()
+    await expect(
+      overview.getByTestId('identity-panel-provider-oauth-file'),
+    ).toBeVisible()
   })
 })
