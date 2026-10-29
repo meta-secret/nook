@@ -24,7 +24,7 @@ FROM rust-ecosystem-nightly AS rust-dylint-toolchain
 
 # cargo-dylint release binaries bake a CI-only driver path, so install the
 # pinned crates once in the Dylint-only lineage. Fuzz never inherits this.
-ENV CARGO_DYLINT_VERSION=6.0.1
+ENV CARGO_DYLINT_VERSION=6.3.0
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo install cargo-dylint dylint-link \
