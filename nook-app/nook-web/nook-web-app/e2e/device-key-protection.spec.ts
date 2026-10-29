@@ -346,10 +346,13 @@ test.describe('passkey device-key protection', () => {
     ).toHaveText('Create passkey')
 
     await page.getByTestId('device-protection-create-new-choice').click()
-    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
+    // The device mode waits under Passkey options.
+    await expect(page.getByTestId('mode-group-device')).toBeHidden()
+    await page.getByTestId('device-protection-options-toggle').click()
+    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-authenticate-workflow'),
     ).toHaveCount(0)
@@ -755,7 +758,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      "Could not safely reset this browser's device identity.",
+      "Could not safely reset this browser's device key.",
     )
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
@@ -860,7 +863,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-use-existing-choice').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'Set a local PIN or passphrase to protect a new device identity instead',
+      'Set a local PIN or passphrase to protect a new device key instead',
     )
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),

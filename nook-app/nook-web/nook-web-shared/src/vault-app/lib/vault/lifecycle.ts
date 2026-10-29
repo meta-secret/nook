@@ -29,7 +29,6 @@ import {
 } from "$app-wasm";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
-  setupDeviceProtection,
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
 } from "$lib/auth/passkey-device-protection";
@@ -65,7 +64,6 @@ enum DeviceInitializationCompletionOutcome {
 enum DeviceIdentityAuthorizationState {
   NotStarted,
   PasskeyUnlocked,
-  ProtectionConfigured,
 }
 
 type DeviceInitializationContinuationRequest = {
@@ -238,37 +236,9 @@ export class VaultInitializationActions {
             state.deviceProtectionStatus === DeviceProtectionStatus.Pin
           ) {
             return;
-          } else if (!state.localVaultPresent) {
-            // A surviving local vault must not mint a replacement app key. That
-            // key is not on the roster, and backup-password recovery would fail.
-            const authorization = await state.enqueueStorage(
-              async (): Promise<
-                Result<
-                  DeviceIdentityAuthorizationState,
-                  PasskeyCeremonyFailure | StorageOperationFailure
-                >
-              > => {
-                const manager = state.admitManager();
-                if (manager.isErr()) return storageErr(manager.error);
-                const protectionRequest: Parameters<
-                  typeof setupDeviceProtection
-                >[0] = {
-                  manager: manager.value,
-                  passkeyLabel: "",
-                  deviceMode: state.draftDeviceMode,
-                };
-                return (await setupDeviceProtection(protectionRequest)).map(
-                  () => DeviceIdentityAuthorizationState.ProtectionConfigured,
-                );
-              },
-            );
-            if (authorization.isErr()) {
-              state.errorMsg = state.t(authorization.error.translationKey);
-              return;
-            }
-            deviceIdentityAuthorization = authorization.value;
-            state.deviceAuthorizationInProgress = true;
           }
+          // A browser with no key yet makes it in first run's passkey step,
+          // as it does outside e2e; it never gets one before that step.
         }
 
         if (
