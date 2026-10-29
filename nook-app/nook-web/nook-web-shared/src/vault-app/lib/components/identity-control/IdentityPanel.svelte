@@ -4,8 +4,7 @@ sub-panels from most to least prominent. First what keeps it replicated and
 resilient: its sync providers, then its devices, each a section listing
 them with its add action. A device joins through a sync provider, so adding
 one stays locked until the identity has a provider; until then the providers
-section draws that (this device → sync provider ← other devices) instead of
-explaining it. Then the other
+list holds one empty, dashed row in its place, and that row adds one. Then the other
 management actions (its vaults, this browser), then the details (sign-in
 keys). Each action says what it leads to; nothing hides behind a menu.
 -->
@@ -35,11 +34,6 @@ keys). Each action says what it leads to; nothing hides behind a menu.
   } from "$lib/components/add-device/device-join-mounts";
   import type { VaultState } from "$lib/vault.svelte";
   import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
-  import FirstRunDiagram from "$lib/components/login/FirstRunDiagram.svelte";
-  import {
-    firstRunSyncDiagram,
-    type FirstRunSyncDiagramRequest,
-  } from "$lib/components/login/first-run-diagram";
 
   let {
     vault,
@@ -86,13 +80,6 @@ keys). Each action says what it leads to; nothing hides behind a menu.
       DeviceJoinAvailability.NeedsCloud
     );
   });
-  /** The same drawing the Add sync provider step shows: what a provider
-   * is for, before there is one. */
-  const syncDiagramRequest = $derived<FirstRunSyncDiagramRequest>({
-    vault,
-    provider: vault.t(I18N_KEYS.JoinNodeProvider),
-  });
-  const syncDiagram = $derived(firstRunSyncDiagram(syncDiagramRequest));
   const devicesAtRisk = $derived(
     health.nextStep === NookIdentityNextStep.AddDevice,
   );
@@ -264,9 +251,23 @@ keys). Each action says what it leads to; nothing hides behind a menu.
         {/if}
       </div>
       {#if vault.syncProviders.length === 0}
-        <div class="py-2">
-          <FirstRunDiagram diagram={syncDiagram} />
-        </div>
+        <!-- The place the first provider takes, as the card's add rows
+             look: a dashed slot that adds one. -->
+        <button
+          type="button"
+          class="nk-vault-row nk-vault-row-add text-muted-foreground hover:text-foreground"
+          data-lead={needsCloud ? "true" : "false"}
+          data-testid="identity-action-add-sync"
+          onclick={onAddSyncProvider}
+        >
+          <span class="nk-vault-icon" aria-hidden="true">
+            <Cloud class="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-sm font-medium"
+            >{vault.t(I18N_KEYS.AddDeviceCloudAction)}</span
+          >
+          <Plus class="size-4 flex-none" aria-hidden="true" />
+        </button>
       {:else}
         <ul class="divide-y divide-border/60">
           {#each vault.syncProviders as provider (provider.id)}
@@ -289,21 +290,19 @@ keys). Each action says what it leads to; nothing hides behind a menu.
             </li>
           {/each}
         </ul>
+        <Button
+          type="button"
+          size="sm"
+          variant={needsCloud ? "default" : "outline"}
+          data-lead={needsCloud ? "true" : "false"}
+          class="justify-self-start"
+          data-testid="identity-action-add-sync"
+          onclick={onAddSyncProvider}
+        >
+          <Plus class="size-4" aria-hidden="true" />
+          {vault.t(I18N_KEYS.AddDeviceCloudAction)}
+        </Button>
       {/if}
-      <Button
-        type="button"
-        size="sm"
-        variant={needsCloud ? "default" : "outline"}
-        data-lead={needsCloud ? "true" : "false"}
-        class={vault.syncProviders.length === 0
-          ? "justify-self-center"
-          : "justify-self-start"}
-        data-testid="identity-action-add-sync"
-        onclick={onAddSyncProvider}
-      >
-        <Plus class="size-4" aria-hidden="true" />
-        {vault.t(I18N_KEYS.AddDeviceCloudAction)}
-      </Button>
     </div>
 
     <div class="border-t border-border/60"></div>
