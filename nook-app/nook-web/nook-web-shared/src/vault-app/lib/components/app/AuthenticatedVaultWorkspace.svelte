@@ -16,6 +16,12 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick, untrack, type ComponentProps } from 'svelte'
+  import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
+  import {
+    ExtensionConnectIntentKind,
+    type ExtensionConnectIntent,
+  } from '$lib/app/route-state'
   import { type ExtensionSetupOffer } from '$lib/app/extension-setup'
   import {
     configured_vault_application_supports_extension,
@@ -94,6 +100,8 @@ band, the scrolling page and the status line.
     onSettingsReconnect,
     onEditorOpenChange,
     onUnlockPairedIdentity,
+    extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
+    onFinishExtensionConnect = () => {},
   }: {
     vault: VaultState
     extensionSetupState: ExtensionSetupOffer
@@ -108,7 +116,20 @@ band, the scrolling page and the status line.
     onUnlockPairedIdentity: (
       target: PairedIdentityUnlockTarget,
     ) => Promise<void>
+    /** A browser extension asking to connect: approved beside the current
+     * identity's card, on the hub, with no page of its own. */
+    extensionConnectRequest?: ExtensionConnectIntent
+    onFinishExtensionConnect?: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
+
+  const consentPending = $derived(
+    extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested,
+  )
+  // The approval takes the place beside the card: a vault's panel there
+  // closes for it.
+  $effect(() => {
+    if (consentPending) untrack(() => (vault.vaultPanelStoreId = ''))
+  })
 
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
@@ -513,6 +534,17 @@ band, the scrolling page and the status line.
   {/if}
 {/snippet}
 
+<!-- A browser extension asking to connect, approved beside the card. -->
+{#snippet extensionConsent()}
+  {#if extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested}
+    <ExtensionConnectConsent
+      {vault}
+      request={extensionConnectRequest.request}
+      onClose={onFinishExtensionConnect}
+    />
+  {/if}
+{/snippet}
+
 {#snippet vaultExtension()}
   <VaultExtensionControl
     {vault}
@@ -526,7 +558,7 @@ band, the scrolling page and the status line.
     {vault}
     onDone={() => finishFirstRun(WorkspaceSection.Identities)}
   />
-{:else if section === WorkspaceSection.Identities || section === WorkspaceSection.Overview}
+{:else if consentPending || section === WorkspaceSection.Identities || section === WorkspaceSection.Overview}
   <div
     class="grid min-w-0 grid-cols-1 gap-4"
     data-testid="identities-workspace"
@@ -551,7 +583,8 @@ band, the scrolling page and the status line.
         : {}}
       currentHealth={identityHealth}
       overview={identityOverview}
-      overviewOpen={section === WorkspaceSection.Overview}
+      overviewOpen={!consentPending && section === WorkspaceSection.Overview}
+      {...consentPending ? { requestPanel: extensionConsent } : {}}
       onManageVault={(target: IdentitySectionTarget) =>
         void manageVault(target)}
       onManageSection={(target: IdentitySectionTarget) => {

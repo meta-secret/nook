@@ -16,7 +16,6 @@
   import AppHelpWorkspace from '$lib/components/app/AppHelpWorkspace.svelte'
   import AccessCheckPage from '$lib/components/access-check/AccessCheckPage.svelte'
   import AppPersistentChrome from '$lib/components/app/AppPersistentChrome.svelte'
-  import ExtensionConnectConsentWorkspace from '$lib/components/app/ExtensionConnectConsentWorkspace.svelte'
   import InvalidExtensionConnectWorkspace from '$lib/components/app/InvalidExtensionConnectWorkspace.svelte'
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
@@ -172,15 +171,13 @@
           {...accessGateProps}
           extensionConnectRequest={extensionConnectRequestState}
         />
-      {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
-        <ExtensionConnectConsentWorkspace
-          {vault}
-          request={extensionConnectRequestState.request}
-          {appVersion}
-          onClose={onFinishExtensionConnect}
-        />
       {:else if vault.isAuthenticated}
-        <AuthenticatedVaultWorkspace {...authenticatedWorkspaceProps} />
+        <!-- A connecting extension is approved beside the identity's card. -->
+        <AuthenticatedVaultWorkspace
+          {...authenticatedWorkspaceProps}
+          extensionConnectRequest={extensionConnectRequestState}
+          {onFinishExtensionConnect}
+        />
       {/if}
     </div>
 

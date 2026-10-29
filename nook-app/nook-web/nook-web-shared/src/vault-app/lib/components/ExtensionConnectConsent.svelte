@@ -195,10 +195,7 @@
   }
 </script>
 
-<section
-  class="rounded-xl border border-border/60 bg-card p-4 shadow-sm sm:p-5"
-  data-testid="extension-connect-consent"
->
+<section class="min-w-0" data-testid="extension-connect-consent">
   <div class="flex items-start gap-3">
     <div
       class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary"

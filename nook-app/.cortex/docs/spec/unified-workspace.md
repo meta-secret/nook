@@ -65,6 +65,11 @@ manager imports keep "identities" for their person and address items.
   **New identity** starts the new-identity flow (below). Beside it, a
   quieter **Check access** opens the check of which identity a passkey or
   backup password opens; the header carries no such button.
+- A browser extension asking to connect is answered beside the current
+  identity's card, never on a page of its own. While locked, that panel
+  unlocks the identity; once unlocked, the approval itself (the extension
+  device and the access it asks for, with Approve and Cancel) takes its
+  place, and either answer leaves the hub as it is.
 - A locked identity never opens the old Keys page; the URL is kept and
   unlocking resumes it.
 
