@@ -214,13 +214,16 @@ export async function beginAddSyncProvider(page: Page): Promise<void> {
 }
 
 /** Open the add-device flow from the identity panel. Without a cloud sync
- * provider the panel locks the action, so the flow, whose first step then
- * asks for a provider, opens directly as its route would. */
+ * provider the panel shows what blocks it instead of the action, so the
+ * flow, whose first step then asks for a provider, opens directly as its
+ * route would. */
 export async function openAddDevice(page: Page): Promise<void> {
   await openIdentityPanel(page)
   const item = page.getByTestId('identity-action-add-device').first()
-  await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  if (await item.isEnabled()) {
+  await expect(
+    item.or(page.getByTestId('identity-device-needs-cloud')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if (await item.isVisible()) {
     await item.click()
   } else {
     await page.evaluate(() => {

@@ -84,16 +84,22 @@ describe('identity panel', () => {
   test('without a cloud provider, adding one leads and adding a device waits', async () => {
     const { view, onAddSyncProvider } = renderPanel([])
 
+    // What blocks adding a device leads the devices section, and leads to
+    // adding a provider.
+    expect(view.queryAllByTestId('identity-action-add-device')).toHaveLength(0)
     expect(
-      view.getByTestId('identity-action-add-device').hasAttribute('disabled'),
+      view
+        .getByTestId('identity-panel-devices')
+        .contains(view.getByTestId('identity-device-needs-cloud')),
     ).toBe(true)
     expect(view.getByTestId('identity-panel-providers').dataset.state).toBe(
       'risk',
     )
     expect(view.queryAllByTestId('overview-open-sync')).toHaveLength(0)
     await fireEvent.click(view.getByTestId('identity-action-add-sync'))
+    await fireEvent.click(view.getByTestId('identity-device-needs-cloud'))
 
-    expect(onAddSyncProvider).toHaveBeenCalledOnce()
+    expect(onAddSyncProvider).toHaveBeenCalledTimes(2)
   })
 
   test('each action and detail opens its page', async () => {

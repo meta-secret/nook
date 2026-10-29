@@ -2,8 +2,9 @@
 The identity this browser uses, in one panel beside its card, as three
 sub-panels from most to least prominent. First what keeps it replicated and
 resilient: its sync providers, then its devices, each a section listing
-them with its add action. A device joins through a sync provider, so adding
-one stays locked until the identity has a provider; until then the providers
+them with its add action. A device joins through a sync provider, so until
+the identity has a cloud one the devices section says so first, as an amber
+row in place of its add action, and that row leads to adding one; until then the providers
 list holds one empty, dashed row in its place, and that row adds one. Then the other
 management actions (its vaults, this browser), then the details (sign-in
 keys). Each action says what it leads to; nothing hides behind a menu.
@@ -350,31 +351,47 @@ keys). Each action says what it leads to; nothing hides behind a menu.
           </li>
         {/each}
       </ul>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button
+      {#if needsCloud}
+        <!-- What blocks adding a device is what this section says first,
+             drawn as the card's amber protection row, and it leads there. -->
+        <button
           type="button"
-          size="sm"
-          variant={!needsCloud && devicesAtRisk ? "default" : "outline"}
-          data-lead={!needsCloud && devicesAtRisk ? "true" : "false"}
-          data-testid="identity-action-add-device"
-          disabled={needsCloud}
-          onclick={() => onOpen(WorkspaceSection.AddDevice)}
+          class="nk-vault-row bg-warning/5"
+          data-testid="identity-device-needs-cloud"
+          onclick={onAddSyncProvider}
         >
-          {#if needsCloud}
-            <Lock class="size-4" aria-hidden="true" />
-          {:else}
+          <span
+            class="nk-vault-icon border-warning/50 text-warning"
+            aria-hidden="true"
+          >
+            <Lock class="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-[0.9375rem] font-medium"
+            >{vault.t(I18N_KEYS.IdentityMenuAddDeviceNeedsCloud)}</span
+          >
+          <ChevronRight
+            class="size-4 flex-none text-muted-foreground opacity-60"
+            aria-hidden="true"
+          />
+        </button>
+      {:else}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={devicesAtRisk ? "default" : "outline"}
+            data-lead={devicesAtRisk ? "true" : "false"}
+            data-testid="identity-action-add-device"
+            onclick={() => onOpen(WorkspaceSection.AddDevice)}
+          >
             <Plus class="size-4" aria-hidden="true" />
-          {/if}
-          {vault.t(I18N_KEYS.AddDeviceTitle)}
-        </Button>
-        <span class="text-xs text-muted-foreground">
-          {vault.t(
-            needsCloud
-              ? I18N_KEYS.IdentityMenuAddDeviceNeedsCloud
-              : I18N_KEYS.IdentityMenuAddDeviceHint,
-          )}
-        </span>
-      </div>
+            {vault.t(I18N_KEYS.AddDeviceTitle)}
+          </Button>
+          <span class="text-xs text-muted-foreground">
+            {vault.t(I18N_KEYS.IdentityMenuAddDeviceHint)}
+          </span>
+        </div>
+      {/if}
     </div>
   </section>
 
