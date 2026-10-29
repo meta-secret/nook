@@ -212,48 +212,45 @@ export class IdentityControlModel {
     });
     if (mounted.isErr()) return err(mounted.error);
     for (const provider of mounted.value) {
-      let args: NookStorageConnectArgs;
-      try {
-        args = this.vault.providerWasmArgs(provider);
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
-      const synced = await this.syncOneMount(args);
+      const synced = await this.syncOneMount(provider);
       if (synced.isErr()) return err(synced.error);
     }
     log.info("identity log synchronized with mounts");
     return this.loadSnapshot();
   }
 
-  /** Delete a removed vault's files at one identity mount. A local folder
-   * this browser cannot open fails rather than being skipped. */
+  /** The folder handle of a local-folder mount. A folder this browser
+   * cannot open fails rather than being skipped. */
+  private localFolderHandleId(
+    provider: StorageProvider,
+  ): Result<string, VaultStorageFailure> {
+    const unavailable = new VaultStorageFailure(
+      VaultStorageFailureKind.LocalFolderUnavailable,
+    );
+    const configuration = new StorageProviderPresentation(
+      provider,
+    ).localFolderProviderConfiguration();
+    if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+      return err(unavailable);
+    }
+    const handle = new LocalFolderPresentation(
+      configuration.config,
+    ).localFolderHandle();
+    return handle.kind === LocalFolderHandleKind.Selected
+      ? ok(handle.handleId)
+      : err(unavailable);
+  }
+
+  /** Delete a removed vault's files at one identity mount. */
   private async deleteAtMount({
     storeId,
     provider,
   }: MountVaultDeletion): Promise<Result<boolean, VaultStorageFailure>> {
     if (provider.type === "local-folder") {
-      const configuration = new StorageProviderPresentation(
-        provider,
-      ).localFolderProviderConfiguration();
-      if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.LocalFolderUnavailable,
-          ),
-        );
-      }
-      const handle = new LocalFolderPresentation(
-        configuration.config,
-      ).localFolderHandle();
-      if (handle.kind !== LocalFolderHandleKind.Selected) {
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.LocalFolderUnavailable,
-          ),
-        );
-      }
+      const handleId = this.localFolderHandleId(provider);
+      if (handleId.isErr()) return err(handleId.error);
       return this.withManager((manager) =>
-        manager.delete_removed_vault_at_local_folder(storeId, handle.handleId),
+        manager.delete_removed_vault_at_local_folder(storeId, handleId.value),
       );
     }
     const args = this.vault.providerWasmArgs(provider);
@@ -267,9 +264,25 @@ export class IdentityControlModel {
     );
   }
 
+  /** Union the identity log with one mount: a local folder through its own
+   * handle, any other provider through the prepared storage. */
   private async syncOneMount(
-    args: NookStorageConnectArgs,
+    provider: StorageProvider,
   ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    if (provider.type === "local-folder") {
+      const handleId = this.localFolderHandleId(provider);
+      if (handleId.isErr()) return err(handleId.error);
+      const synced = await this.withManager((manager) =>
+        manager.sync_identity_log_with_local_folder(handleId.value),
+      );
+      return synced.map(() => IdentityActionOutcome.Completed);
+    }
+    let args: NookStorageConnectArgs;
+    try {
+      args = this.vault.providerWasmArgs(provider);
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
     const synced = await this.withManager((manager) =>
       manager.sync_identity_log_with_provider(args.mode, args.pat, args.repo),
     );
