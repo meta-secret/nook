@@ -93,3 +93,104 @@ impl NookVaultManager {
         Tsify::into_ts(&export).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{AppKey, SigningIdentity};
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    /// The extension's keys as its connect request carries them.
+    struct ExtensionKeys {
+        app: AppKey,
+        signer: SigningIdentity,
+    }
+
+    impl ExtensionKeys {
+        fn generate() -> anyhow::Result<Self> {
+            Ok(Self {
+                app: AppKey::generate()?,
+                signer: SigningIdentity::generate()?.0,
+            })
+        }
+
+        async fn add_to(&self, manager: &mut NookVaultManager) -> Result<bool, JsError> {
+            manager
+                .add_identity_member(
+                    self.app.app_id().to_string(),
+                    self.app.public_key().to_string(),
+                    self.signer.public_key().to_string(),
+                    "Nook Extension".to_owned(),
+                )
+                .await
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn the_web_app_adds_the_extension_once_and_hands_it_the_keyring_log() -> anyhow::Result<()>
+    {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("web app pin".to_owned())
+            .await)?;
+        js(manager.ensure_identity_control_log().await)?;
+        let extension = ExtensionKeys::generate()?;
+
+        assert!(js(extension.add_to(&mut manager).await)?);
+        // A member already: adding it again changes nothing.
+        assert!(!js(extension.add_to(&mut manager).await)?);
+        let state = manager.current_identity_state().await?;
+        assert!(state.member(extension.app.app_id()).is_some());
+
+        let export = js(manager.export_identity_log().await)?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let identity_id =
+            NookVaultManager::current_identity_id(&manager.unlocked_app_key()?).await?;
+        assert_eq!(export.identity_id, identity_id.as_str());
+        assert_eq!(
+            export.events.len(),
+            NookDatabase::load_identity_log(&identity_id)
+                .await?
+                .storage_bytes()?
+                .len()
+        );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn an_app_id_its_key_does_not_derive_is_refused() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("web app pin".to_owned())
+            .await)?;
+        js(manager.ensure_identity_control_log().await)?;
+        let extension = ExtensionKeys::generate()?;
+        let other = AppKey::generate()?;
+
+        let refused = manager
+            .add_identity_member(
+                other.app_id().to_string(),
+                extension.app.public_key().to_string(),
+                extension.signer.public_key().to_string(),
+                "Nook Extension".to_owned(),
+            )
+            .await;
+
+        assert!(refused.is_err());
+        let state = manager.current_identity_state().await?;
+        assert!(state.member(extension.app.app_id()).is_none());
+        assert!(state.member(other.app_id()).is_none());
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+}

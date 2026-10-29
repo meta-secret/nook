@@ -98,3 +98,56 @@ impl NookVaultManager {
         Tsify::into_ts(&start).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    async fn begin(
+        manager: &mut NookVaultManager,
+        label: &str,
+    ) -> anyhow::Result<NookIdentityConnectionStart> {
+        manager
+            .begin_identity_connection(label)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    #[wasm_bindgen_test]
+    async fn a_fresh_key_connects_itself_and_a_key_in_use_stages_another() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        manager
+            .finish_pin_device_protection("extension pin".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+
+        // Nothing ties the key to a keyring yet: it connects the first one.
+        assert_eq!(
+            begin(&mut manager, "Personal").await?,
+            NookIdentityConnectionStart::CurrentKey
+        );
+        // Its keyring has a log now, so the next keyring gets its own key.
+        manager
+            .ensure_identity_control_log()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(
+            begin(&mut manager, "Work").await?,
+            NookIdentityConnectionStart::NewKeyStaged
+        );
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        Ok(())
+    }
+}
