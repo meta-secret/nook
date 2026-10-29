@@ -506,7 +506,7 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   await panel.open({ ...unlockedScenario, vaults: SidePanelStubVaults.None })
   const card = page.getByTestId('side-panel-connect-card')
   await expect(card.getByRole('heading')).toHaveText(
-    'No identity connected yet',
+    'No keyring connected yet',
   )
   await expect(card.getByTestId('side-panel-connect-close')).toHaveCount(0)
   await expect(card.getByTestId('side-panel-vault-name')).toHaveCount(0)
