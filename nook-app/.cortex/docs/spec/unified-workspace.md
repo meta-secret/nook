@@ -66,10 +66,12 @@ Simple and unified apps. Sentinel is never offered.
 The identity is settled before any vault exists. The step bar counts
 Passkey, Sync provider, and Identity.
 
-- **Start**: "Create your identity" and one Create identity button. Below
-  it, a distinct card, **Already use Nook on another device? Add this
-  device**, opens the join screen. A quiet link, **Lost access to your
-  devices? Recover from a sync provider**, opens recovery.
+- **Start**: "Create your identity", one short line, and one Create
+  identity button. Under an "or", the other paths are equal rows, each an
+  icon, a short title, and an arrow: **Add this device to my identity**
+  opens the join screen, **Recover from a sync provider** opens recovery,
+  and **Check a passkey or backup password** opens Check access. One fact
+  line closes the screen.
 - **Recovery**: the provider's identities are listed as identity cards,
   each with one decision (recover it with its passkey, or ask to join) and
   one Apply button, as the

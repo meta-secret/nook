@@ -110,7 +110,7 @@ test.describe('vault connect flow', () => {
     await expect(
       page.getByTestId('first-run-create-identity-btn'),
     ).toBeEnabled()
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('login-paths')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
     await expect(page.getByTestId('first-vault-start')).not.toBeVisible()
