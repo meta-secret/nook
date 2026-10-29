@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect, setDefaultTimeout } from "bun:test";
 import {
   mkdtempSync,
   existsSync,
@@ -105,6 +105,11 @@ const scenarios = [
   },
 ];
 
+/** The producer runs eight probes, some sleeping 3 s, on a loaded runner; the
+ * bound only stops a hung producer. */
+const SCENARIO_TIMEOUT_MS = 20_000;
+setDefaultTimeout(SCENARIO_TIMEOUT_MS * 2);
+
 for (const scenario of scenarios) {
   test(`Main gates every publisher on all private tasks and loggers: ${scenario.failure}, log ${scenario.logFailure}`, () => {
     const root = mkdtempSync(join(tmpdir(), "nook-main-join-"));
@@ -129,7 +134,8 @@ case "$1" in
     if [ "\${E2E_OUTPUT:-}" = type=cacheonly ]; then kind=construction; else kind=image; fi ;;
   *) exit 90 ;;
 esac
-echo $$ > "$PROBE_DIR/$kind.pid"
+echo $$ > "$PROBE_DIR/$kind.pid.partial"
+mv "$PROBE_DIR/$kind.pid.partial" "$PROBE_DIR/$kind.pid"
 trap 'touch "$PROBE_DIR/$kind.stopped"; exit 143' TERM
 case "$kind" in
   preflight-cache|cache|image)
@@ -216,7 +222,7 @@ exit "$status"`,
         ],
         {
           encoding: "utf8",
-          timeout: 5000,
+          timeout: SCENARIO_TIMEOUT_MS,
           env: {
             ...process.env,
             PATH: `${bin}:${process.env.PATH}`,

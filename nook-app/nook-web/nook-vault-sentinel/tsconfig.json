@@ -23,9 +23,6 @@
       "$lib/components/extension-connect-progress-steps": [
         "./src/extension-connect-progress-steps-disabled.ts"
       ],
-      "$lib/vault/paired-extension-identity-join": [
-        "./src/paired-extension-identity-join-disabled.ts"
-      ],
       "$lib": ["../nook-web-shared/src/vault-app/lib"],
       "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
       "$vault-shared": ["../nook-web-shared/src/vault-app"],

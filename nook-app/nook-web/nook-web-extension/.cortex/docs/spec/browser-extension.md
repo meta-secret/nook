@@ -13,12 +13,8 @@ initiating normal window.
 Both surfaces use the same device-protection component. A launcher reuses only
 a tab whose intent matches the requested action. It leaves an open tab with
 another intent untouched and opens the requested intent in a separate tab in
-that window. When the user explicitly chooses Unlock on a paired Simple Vault
-website, the website request opens the side panel in that window while the
-click still carries its user gesture; the website then resumes on its own once
-the panel unlocks the extension. When the user connects an identity, the
-extension sends its public keys directly to the configured Simple Vault
-deployment.
+that window. When the user connects an identity, the extension sends its
+public keys directly to the configured Simple Vault deployment.
 That deployment remains the only surface for creating, importing, unlocking,
 browsing, editing, recovering, and administering vaults.
 
@@ -124,9 +120,8 @@ administer vault items.
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
 3. When the person unlocks or sets up the extension in the side panel with
-   no identity connected, the panel starts the connect itself, once. A panel
-   the extension opens for a vault's unlock request does not. Otherwise the
-   user starts it with Connect an identity, Connect another identity, or
+   no identity connected, the panel starts the connect itself, once. Otherwise
+   the user starts it with Connect an identity, Connect another identity, or
    Connect / pair in the authentication tab. The extension
    then opens the configured Simple Vault `/extension-connect` route. The
    route receives the extension's runtime id and public device request. It
@@ -135,8 +130,11 @@ administer vault items.
    panel opens that route directly, never the authentication tab.
    - The route carries no start choice. The page owns create, join, and the
      identity choice.
-   - A browser with no vault shows its first-vault screen. There the person
-     creates the first vault or joins with Add this device.
+   - A browser with no keyring shows its first-run screen. There the person
+     creates the identity or joins with Add this device. Creating it runs
+     the website's normal first run with the website's own passkey: the sync
+     provider's identities, or a new identity named here. The consent then
+     approves the extension, which selects that identity's first vault.
    - A browser that already holds a vault shows its usual unlock. There the
      person chooses the identity to connect.
    - The page reports its [connect steps](#connect-steps) to the side panel.
@@ -144,18 +142,24 @@ administer vault items.
    There is no website-first enable screen, floating companion window, or
    toolbar popup.
 
-4. The user creates, imports, or unlocks the full Simple vault on the website.
-   When creating a vault from this route, the unlocked extension sends its age
-   identity and matching event-signing seed in a one-time, nonce-bound age
-   envelope. Rust/WASM adopts that identity only for the website session, so
-   the website does not create or request a second passkey-protected device.
-5. Simple Vault shows explicit consent and approves the extension as a vault
-   device through the Rust/WASM authorization boundary.
-6. Simple Vault sends the approved grant together with the canonical encrypted,
-   signed event log. The extension validates and imports it through Rust/WASM
-   into extension-origin IndexedDB.
+4. The user creates, imports, or unlocks the full Simple vault on the website
+   with the website's own app key and passkey. The website never asks the
+   extension for its key, and the extension never sends it.
+5. Simple Vault shows explicit consent. Approving adds the extension to the
+   vault's keyring as an app with its own key, through the Rust/WASM
+   authorization boundary: each vault's DEK is encrypted to that key. There is
+   no single-vault approval.
+6. Simple Vault sends the approved grant with the canonical encrypted, signed
+   event log, the keyring's control log, the records of the keyring's other
+   vaults this browser holds, and every sync provider of the keyring. The
+   extension validates and imports them through Rust/WASM into
+   extension-origin IndexedDB. It joins the keyring first, with its unlocked
+   key; an extension that cannot join (locked, say) stores nothing, and the
+   website shows the approval as not taken.
 7. The extension becomes “connected” only after the imported graph contains a
    current, non-revoked approval and key envelope for its protected device.
+   A member extension's Connect starts another keyring with its own new key;
+   it never re-approves the keyring it already belongs to.
 
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
@@ -177,8 +181,8 @@ no authority, as on the [active-tab target](#active-tab-target) route.
   before it sends the request. It names the connect page's port; see
   [connect port admission](#connect-port-admission). It only matches that port
   and grants no authority.
-- The service worker adds it to the connect URL as `connect_id`. It stays
-  separate from the handoff nonce, which is single-use handoff material.
+- The service worker adds it to the connect URL as `connect_id`. The connect
+  URL carries no nonce.
 - The authentication tab sends its own random id. No panel follows that connect,
   so the id matches nothing.
 
@@ -193,8 +197,7 @@ no authority, as on the [active-tab target](#active-tab-target) route.
 3. When candidates exist, it reuses one:
    - the window's active tab, when it is a candidate;
    - otherwise the first candidate in tab-strip order, the lowest tab index.
-4. It navigates the reused tab to the fresh connect URL, with a new handoff
-   nonce, and makes it active.
+4. It navigates the reused tab to the fresh connect URL and makes it active.
    - Without a candidate, it opens the connect URL in a new active tab of that
      window.
 5. It focuses the window and returns the tab id.
@@ -305,38 +308,28 @@ document. Each open side panel, one per window, therefore sees each page's port.
 
 ### Current Primary Device-Key And Authentication UX
 
-The current implementation calls the extension's installation-specific key a
-“device identity.” It is the preferred local device key whenever the approved,
-unlocked extension is available. Opening Simple Vault from the extension,
-refreshing the page, locking and reopening the vault, or navigating within the
-site must not prompt for a second website passkey. The site requests a fresh
-encrypted handoff from the extension and uses that identity only in WASM memory.
+The Simple Vault website and the extension are two separate apps. Each app
+has its own app key, protected by its own passkey or PIN. The website only
+ever uses its own app key. It never requests, adopts, or holds the
+extension's app key, and the extension never seals its key for the website.
 
 This rule applies to both supported starting points:
 
-- **Extension-first vault:** the unlocked extension identity creates the vault.
-  The vault is encrypted for the extension device, and the site continues to
-  request a fresh extension handoff after a refresh or explicit lock.
-- **Existing website vault:** the unlocked website device approves the
-  extension as another authorized device. Rust adds a vault-key envelope for
-  the extension public key. After approval, the extension identity becomes the
-  preferred local unlock path while the website device remains a fallback.
+- **Extension first:** opening `/extension-connect` on a browser with no
+  keyring runs the website's normal first run with the website's own passkey.
+  The consent then approves the extension.
+- **Existing website vault:** the website, unlocked with its own passkey,
+  approves the extension as another app of the identity. Rust adds a
+  vault-key envelope for the extension public key.
+
+Each app unlocks and locks on its own. Refreshing the page, locking and
+reopening the vault, or opening Simple Vault from the extension asks for the
+website's own passkey or PIN, never for the extension.
 
 The extension and website are different WebAuthn relying-party origins. They
-cannot share one passkey credential or silently create an independently usable
-website passkey from an extension ceremony. Therefore:
-
-- normal extension-first setup performs only the extension passkey ceremony;
-- a separately usable website fallback exists only when the website already has
-  a protected device or the user explicitly enrolls one later;
-- enrolling that fallback requires one website-origin passkey or PIN ceremony;
-- generating website keys without independently protecting their private
-  material does not count as a backup and must not be presented as one.
-
-This avoids double authentication in the primary flow without making a false
-recovery promise. If the extension is deleted before a website fallback or
-another recovery method exists, the site cannot reconstruct the extension
-private identity.
+cannot share one passkey credential, so each app has its own passkey
+ceremony. Deleting the extension leaves the website's app key and its vaults
+intact.
 
 ## Toolbar Behavior
 
@@ -1486,20 +1479,33 @@ admitted with an empty label.
 The extension is a member device of each identity it connects, the way a new
 phone or computer is.
 
-- **Join:** An approval carries an identity invite whose passphrase is sealed
-  to the extension's app key. The offscreen session opens it, binds the key's
-  local identity to the invited identity, signs the join, and pairs the
-  identity's other vaults through the same import as the approved vault. An
-  identity with no cloud sync provider pairs only the approved vault.
+- **Join:** The web app adds the extension's app key to the keyring by the
+  keys its connect request carried (`add_identity_member`): Rust checks the
+  app id against the public key and encrypts every vault's DEK at its current
+  epoch to it. The approval carries the keyring's control log; the offscreen
+  session completes the join from it (`join_identity_from_log`), so the key's
+  local identity takes the keyring's id. It then opens each other vault from
+  the records the approval carried (`connect_identity_vault_from_records`)
+  through the same import as the approved vault. No sync provider is needed;
+  a keyring vault this browser does not hold arrives through the keyring's
+  providers.
+- **Providers:** The approval carries every sync provider of the keyring,
+  sealed to the extension's app key. The extension never sets up a provider
+  itself.
 - **Later vaults:** Each unlock in the side panel or the authentication tab
   refreshes the unlocked identity. The extension unions the identity's log
   with every sync provider that replicates it. It then pairs each vault the
   identity grants it and it holds no grant for. Rust
   plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
-  granted it yet are reported, not skipped. A failed refresh or vault shows an
-  error and pairs nothing further.
+  granted it yet are reported, not skipped. The same refresh reads every
+  vault the extension already holds again through the keyring's first
+  provider it can open, so changes from the keyring's other apps arrive
+  without the web app open. A failed refresh or vault shows an error and
+  pairs nothing further.
   - The refresh reply names provider ids only. The identity's provider stays
     saved in the session, so no credential travels to the service worker.
+  - A local folder belongs to the web app's origin, so the extension opens
+    no vault through one.
 - **One key per identity:** The identity directory binds one app key to one
   local identity, as on the web app. Rust decides which key connects the next
   identity (`IdentityDirectory::connection_key`):
@@ -1556,63 +1562,22 @@ phone or computer is.
 - **Pairing storage:** Read and write pairing records only through Rexie.
   - Decode each record strictly; approval times are Unix milliseconds.
   - `chrome.storage.local` never holds pairing rows.
-- **Extension-first creation:** `/extension-connect` may temporarily use the
-  unlocked extension identity.
-  1. The website creates a one-time age recipient whose private key remains in
-     its WASM manager.
-  2. The extension encrypts its age private key and event-signing seed to that
-     recipient.
-  3. Website Rust/WASM decrypts the envelope and validates the route nonce plus
-     advertised device ID and public keys.
-  4. Keep adopted material staged until authorization completes.
-  5. Write an inactive, resumable genesis transaction with both members, public
-     keys, and authorized DEK envelopes.
-  6. On verified connect, publish the directory and matching signing seed
-     atomically only when its base matches current identity state.
-  - Resume partial genesis instead of rewinding event stores.
-  - On failure, clear decrypted web state and stop sync.
-- **Existing-vault handoff:** Use an explicit Rust handoff state.
-  - Publish the extension member and signer only after verified connect
-    establishes the vault owner and active signed-roster access.
-  - Never place raw private material in URLs, TypeScript, browser-vendor storage,
-    website IndexedDB, or logs.
-- **Handoff discovery:** Request a new handoff after website reload, including
-  arrival at the normal vault route.
-  - Discover pairing by local vault store ID.
-  - Return a handoff only for a current grant to that exact vault.
-  - Honor explicit pairing intent from an authenticated unpaired vault.
-  - Do not let a cached different/deleted-vault record hide pairing or trap the
-    user in an open-vault loop.
-- **Nonce ownership:** Record each nonce, vault store ID, and public device tuple
-  in extension-only `chrome.storage.session`.
-  - Consume the nonce before sealing.
-  - Issue a fresh nonce for later lock/unlock.
-  - Only the service worker invokes offscreen secret sealing.
-  - After failed adoption, reset device identity and event-log signing state
-    before another attempt.
+- **Separate app keys:** The website and the extension are separate apps. Each
+  has its own app key and its own passkey or PIN.
+  - `/extension-connect` never uses the extension's key. On a browser with no
+    keyring, the website's normal first run creates the website's own app key
+    with its own passkey, and the consent then approves the extension.
+  - The extension's private key and event-signing seed never leave the
+    extension.
 - **Website-data deletion:** Do not revoke or erase the extension device.
   - Keep its encrypted projection and sync-provider grants independently paired.
-  - Reopen the same local-folder `vaultStoreId` by discovering that pairing.
-  - Show explicit different-vault state for another vault.
   - Switch active vault only after newly validated approval.
   - Invalid approval must not reset the current unlocked session.
 
-When both devices exist, unlock selection is deterministic:
-
-1. use the approved, unlocked extension identity by default;
-   - After the website vault locks, keep retrying that adoption until it
-     succeeds or the paired unlock wait expires.
-   - Do not open the website passkey overlay while the companion still reports
-     Unlocked or Locked for that vault.
-   - A locked website app key must not block re-adopting that unlocked
-     companion identity.
-2. if the extension is locked, the user may unlock it from the side panel or
-   the shared extension authentication tab and retry. The website must not
-   attempt an extension-origin WebAuthn ceremony.
-3. if the extension is locked, unavailable, revoked, or cannot unlock, offer
-   the website's protected device as the fallback when one exists;
-4. if no independent website device or recovery method exists, explain that the
-   extension is required rather than showing an unrelated new-passkey setup.
+Each app unlocks with its own key. The website unlocks with its own passkey or
+PIN and never asks the extension to unlock it. The extension unlocks from the
+side panel or the shared extension authentication tab. The website must not
+attempt an extension-origin WebAuthn ceremony.
 
 Neither the launcher nor the side panel becomes a vault browser. This site
 lists only the current site's logins. Website passkey prompts may list
@@ -1650,9 +1615,9 @@ re-sealed for the extension device before leaving the approving vault session.
 ## Revocation And Failure
 
 - Closing the side panel or the authentication tab does not lock or unpair the
-  extension. The decrypted offscreen identity uses a 15-minute renewable lease.
-  Successful identity handoffs renew it. Status, read, and retry operations do
-  not, and neither does closing or reopening the panel or tab. Reopening during
+  extension. The decrypted offscreen identity uses a 15-minute lease. Status,
+  read, and retry operations do not renew it, and neither does closing or
+  reopening the panel or tab. Reopening during
   a live lease remains unlocked. Lease expiry, explicit lock, and
   browser/context restart keep reauthentication required; this flow does not
   reduce any policy-required prompt.
@@ -1666,13 +1631,10 @@ re-sealed for the extension device before leaving the approving vault session.
 - A denied or malformed request adds no device and transfers no vault state.
 - Pairing grant import must not persist quarantined/unauthorized event bytes.
   A rejected import (`event-log-access-not-granted`) rolls back that vault's
-  local event projection so a later Approve can succeed. Simple Vault must
-  persist the event-signing seed from identity handoff when creating an empty
-  event log, keep any durable authorized local signer when the log already has
-  events (a reinstalled extension handoff must not overwrite it), and refuse to
-  append events the causal graph would quarantine; otherwise unauthorized
-  `JoinApproved` reaches the extension or Approve fails as an unauthorized
-  actor.
+  local event projection so a later Approve can succeed. Simple Vault signs
+  with its own durable local signer and refuses to append events the causal
+  graph would quarantine; otherwise unauthorized `JoinApproved` reaches the
+  extension or Approve fails as an unauthorized actor.
 - A replicated `DeviceRevoked` event clears connected state, disables
   matching/filling, and removes the stale grant metadata.
 - Rotation requires a new device request and approval.

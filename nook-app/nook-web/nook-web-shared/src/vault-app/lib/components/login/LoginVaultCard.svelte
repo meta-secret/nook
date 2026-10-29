@@ -3,22 +3,13 @@
   import { FolderKey } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    LoginVaultExtensionPairingStatusKind,
-    type LoginVaultExtensionPairingStatus,
-  } from '$lib/components/login/login-vault-extension-pairing-status'
-  import LoginVaultPairingStatus from './LoginVaultPairingStatus.svelte'
 
   let {
     vault,
     entry,
-    extensionPairingStatus = {
-      kind: LoginVaultExtensionPairingStatusKind.NotShown,
-    },
   }: {
     vault: VaultState
     entry: NookLocalVaultEntry
-    extensionPairingStatus?: LoginVaultExtensionPairingStatus
   } = $props()
 </script>
 
@@ -39,6 +30,5 @@
         {entry.storeId}
       </span>
     </span>
-    <LoginVaultPairingStatus {vault} status={extensionPairingStatus} />
   </span>
 </div>

@@ -1,16 +1,16 @@
 //! Portable identity collection and active-identity selection policy.
-mod enrollment;
 mod invitation;
 mod recovery;
 mod replication;
 pub use crate::MemberLabelState;
 pub use invitation::{
-    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, LocalIdentityLog,
+    FreshIdentityNaming, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 pub use recovery::RecoveryRetirement;
 pub use replication::{
-    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
+    ReplicatedIdentityAddition, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedVaultGrant,
 };
 
 /// Membership of an admitted app key in the local identity directory.
@@ -27,20 +27,16 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AppKey, DeviceSigningPublicKey, IdentityId, IdentityLegacyVaultImport,
-    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberVaultGrant, IdentityRecord,
-    IdentityVaultKeyOpening, StoreId,
+    IdentityLegacyVaultReconciliation, IdentityMember, IdentityRecord, IdentityVaultKeyOpening,
+    StoreId,
 };
 
-mod staged_rebase;
-pub use staged_rebase::StagedIdentityRebase;
 mod transition;
 pub use transition::{
-    DirectoryCreationEnrollment, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
-    DirectoryOwnedVaultOpening, DirectoryVaultEnrollment, IdentityCreation,
-    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
-    LocalIdentityKeyRetirement,
+    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
+    IdentityCreation, IdentityDirectoryRejection, IdentityDirectoryResolution,
+    IdentityDirectoryVaultKeys, LocalIdentityKeyRetirement,
 };
-use transition::{IdentityEnrollmentPreparation, PreparedIdentityMembership};
 
 /// Explicit local identity-selection state. A directory may retain peer-only
 /// identities without selecting one as this installation's active identity.

@@ -5,79 +5,12 @@ import {
   ExtensionSetupStatus,
   extensionInstallationBrowser,
 } from '$lib/extension/install'
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
-import type {
-  CompanionIdentityDiscoveryTransportResponse,
-  ExtensionPairedVaultIdentityDiscoveryMessage,
-} from '$web-shared/extension/runtime-messages'
-import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
-import type {
-  CompanionIdentityDiscoveryObservation,
-  CompanionIdentityStatus,
-} from '$app-wasm'
-
-const activeVault = {
-  kind: ActiveVaultKind.Open,
-  storeId: 'store-1',
-} as const
-
-type SimulatedPairedIdentityStatus =
-  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-
-type PairedIdentityDiscoverySimulationMessage =
-  ExtensionPairedVaultIdentityDiscoveryMessage & {
-    payload: CompanionIdentityDiscoveryObservation
-  }
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-nook-extension-runtime-id')
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
-
-function installExtensionIdentityTransportSimulation(
-  status: SimulatedPairedIdentityStatus,
-): void {
-  document.documentElement.setAttribute(
-    'data-nook-extension-runtime-id',
-    'extension-1',
-  )
-  vi.stubGlobal('chrome', {
-    runtime: {
-      sendMessage: (
-        _extensionId: string,
-        message: PairedIdentityDiscoverySimulationMessage,
-        callback: (
-          response: CompanionIdentityDiscoveryTransportResponse,
-        ) => void,
-      ) => {
-        const request = message.payload.request
-        const responseStatus: CompanionIdentityStatus =
-          status ===
-          ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-            ? {
-                status,
-                request_id: request.requestId,
-                vault_store_id: request.vaultStoreId,
-                connected_vault_store_id: 'store-previous',
-                connected_vault_name: 'Previous vault',
-              }
-            : {
-                status,
-                request_id: request.requestId,
-                vault_store_id: request.vaultStoreId,
-              }
-        const response: CompanionIdentityDiscoveryTransportResponse = {
-          ok: true,
-          status: responseStatus,
-        }
-        callback(response)
-      },
-    },
-  })
-}
 
 describe('extension install target', () => {
   test('supports installation in a desktop browser', () => {
@@ -146,7 +79,7 @@ describe('extension install target', () => {
     ).toBe(false)
     expect(
       extensionInstallationBrowser.shouldOfferExtensionSetup({
-        status: ExtensionSetupStatus.InstalledUnpaired,
+        status: ExtensionSetupStatus.Installed,
         environment: environment,
       }),
     ).toBe(true)
@@ -218,49 +151,20 @@ describe('extension install target', () => {
 })
 
 describe('extension setup status', () => {
-  test('reports not_installed when the content-script attribute is missing', async () => {
-    await expect(
-      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
-    ).resolves.toEqual({
+  test('reports not_installed when the content-script attribute is missing', () => {
+    expect(extensionInstallationBrowser.resolveExtensionSetupState()).toEqual({
       status: ExtensionSetupStatus.NotInstalled,
     })
   })
 
-  test('reports installed_unpaired when the extension is present but not paired', async () => {
-    installExtensionIdentityTransportSimulation(
-      ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+  test('reports installed when the extension marks this page', () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-1',
     )
 
-    await expect(
-      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
-    ).resolves.toEqual({
-      status: ExtensionSetupStatus.InstalledUnpaired,
-    })
-  })
-
-  test('reports paired when the extension holds a locked grant', async () => {
-    installExtensionIdentityTransportSimulation(
-      ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
-    )
-
-    await expect(
-      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
-    ).resolves.toEqual({
-      status: ExtensionSetupStatus.Paired,
-    })
-  })
-
-  test('reports the vault identity when the extension is paired elsewhere', async () => {
-    installExtensionIdentityTransportSimulation(
-      ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
-    )
-
-    await expect(
-      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
-    ).resolves.toEqual({
-      status: ExtensionSetupStatus.PairedElsewhere,
-      connectedVaultStoreId: 'store-previous',
-      connectedVaultName: 'Previous vault',
+    expect(extensionInstallationBrowser.resolveExtensionSetupState()).toEqual({
+      status: ExtensionSetupStatus.Installed,
     })
   })
 })

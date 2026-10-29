@@ -76,14 +76,11 @@ export type ExtensionLifecycleRoutingDependencies = {
   openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
-  /** Tell open vault pages the extension locked. */
-  announceExtensionSessionLocked: () => Promise<void>
 }
 
 /** What locking the extension session needs. */
 export type ExtensionSessionLockDependencies = Pick<
   ExtensionLifecycleRoutingDependencies,
-  | 'announceExtensionSessionLocked'
   | 'beginAccountPickerAuthorizationCleanup'
   | 'clearPendingAccountPickers'
   | 'clearStagedAuthenticatorEnrollments'
@@ -362,10 +359,8 @@ class AuthorizationCleanupLifecycle {
 }
 
 /**
- * Locks the extension session, whatever asked: its own panel, its idle expiry
- * or a paired vault page. The extension's own surfaces re-read their state
- * (a panel locked from a page shows it), and open vault pages hear it, so a
- * page whose identity this extension holds locks with it. True once locked.
+ * Locks the extension session, whatever asked: its own panel or its idle
+ * expiry. The extension's own surfaces re-read their state. True once locked.
  */
 export async function lockExtensionSession(
   dependencies: ExtensionSessionLockDependencies,
@@ -397,7 +392,6 @@ export async function lockExtensionSession(
   } catch {
     // The session is already locked; a surface that missed this re-reads on focus.
   }
-  await dependencies.announceExtensionSessionLocked()
   return true
 }
 

@@ -103,7 +103,7 @@ declare_lint_pass! {
 
 #[allow(
     clippy::no_mangle_with_rust_abi,
-    reason = "Dylint 6.0.1 requires this Rust ABI loader entry point"
+    reason = "Dylint 6.3.0 requires this Rust ABI loader entry point"
 )]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",

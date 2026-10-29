@@ -1,12 +1,7 @@
 <script lang="ts">
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import {
-    BookOpen,
-    EllipsisVertical,
-    Lock,
-    Moon,
-    Sun,
-  } from '@lucide/svelte'
+  import { BookOpen, EllipsisVertical, Lock, Moon, Sun } from '@lucide/svelte'
   import {
     configured_vault_application_is_sentinel,
     simple_vault_app_url,
@@ -48,7 +43,10 @@
   } = $props()
 
   const authenticatedSessionControlsVisible = $derived(
-    vault.isAuthenticated && !vault.helpOpen && !legalPageOpen,
+    vault.isAuthenticated &&
+      !vault.helpOpen &&
+      !vault.accessCheckOpen &&
+      !legalPageOpen,
   )
   const identitiesLinkVisible = $derived(
     authenticatedSessionControlsVisible &&
@@ -312,6 +310,12 @@
           label={vault.t(I18N_KEYS.AppBack)}
           testId="help-header-close"
           onBack={() => vault.closeHelp()}
+        />
+      {:else if vault.accessCheckOpen}
+        <BackButton
+          label={vault.t(I18N_KEYS.AppBack)}
+          testId="access-check-header-close"
+          onBack={() => new VaultWorkspaceActions(vault).closeAccessCheck()}
         />
       {:else}
         <Button

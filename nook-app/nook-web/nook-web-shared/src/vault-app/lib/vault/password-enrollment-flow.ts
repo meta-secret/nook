@@ -69,6 +69,7 @@ import {
   type ICloudOAuthTokens,
   iCloudOAuthSession,
 } from "$lib/auth/icloud/oauth";
+import { JoinICloudSignIn } from "$lib/vault/state/ui.svelte";
 
 enum SavedEnrollmentProviderKind {
   Local = "local",
@@ -436,9 +437,12 @@ export class PasswordEnrollmentActions {
                   await iCloudOAuthSession.requestICloudWebAuthToken(request);
               }
               if (tokens.isErr()) {
+                // The join screen shows the iCloud sign-in only now.
+                state.joinICloudSignIn = JoinICloudSignIn.Needed;
                 state.errorMsg = state.t(tokens.error.translationKey);
                 return;
               }
+              state.joinICloudSignIn = JoinICloudSignIn.NotNeeded;
               const accepted = await iCloudOAuthSession.acceptICloudSharedVault(
                 storageTarget.storageTargetId,
               );

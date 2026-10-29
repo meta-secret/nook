@@ -3,7 +3,6 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
-import { CompanionDiscoveryEndpointKind } from '../src/offscreen/session-vault-operations'
 import { describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
@@ -15,25 +14,11 @@ import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/au
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
-  CompanionVaultDiscovery,
-  type CompanionVaultDiscoveryArgs,
   importExtensionVaultWithDependencies,
   type ImportExtensionVaultDependencies,
   type ImportExtensionVaultWithDependenciesArgs,
   type ExtensionVaultImportManager,
 } from '../src/offscreen/session-vault-operations'
-import type {
-  CompanionExtensionPresence,
-  CompanionIdentityDiscoveryObservation,
-} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-
-type InitialCompanionDiscoveryEndpoint = Extract<
-  CompanionVaultDiscoveryArgs['endpoint'],
-  { kind: CompanionDiscoveryEndpointKind.Initial }
->
-type DiscoveredCompanionEndpoint = ReturnType<
-  InitialCompanionDiscoveryEndpoint['endpoint']['discover']
->
 
 type ImportManagerState = {
   protection: DeviceProtectionStatus
@@ -317,156 +302,5 @@ describe('extension vault import operations', () => {
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate'])
     expect(provider.githubPat).toEqual({ state: 'missing' })
-  })
-})
-
-enum CompanionVaultOpenOutcome {
-  Opened = 'opened',
-  Mismatched = 'mismatched',
-}
-
-class CompanionVaultDiscoveryScenario {
-  readonly operationOrder: string[] = []
-  readonly presence = {
-    kind: 'unlocked',
-    vault_type: 'simple',
-    vault_store_id: 'vault',
-    vault_name: 'Simple Vault',
-    app_key: {
-      extensionRuntimeId: 'runtime',
-      appKey: {
-        appId: 'device',
-        encryptionPublicKey: 'public',
-        signingPublicKey: 'signing',
-        installationLabel: 'Browser',
-      },
-      nonce: 'nonce',
-      scopes: ['vault-access'],
-    },
-  } satisfies CompanionExtensionPresence
-
-  private readonly discovery = {
-    request: {
-      requestId: 'request',
-      vaultStoreId: 'vault',
-      expiresAt: 200,
-    },
-    observedAt: 100,
-  } satisfies CompanionIdentityDiscoveryObservation
-
-  private readonly activeManager: CompanionVaultDiscoveryArgs['activeManager'] =
-    {
-      open_extension_passkey_vault_js: this.openVault.bind(this),
-    }
-
-  private readonly endpoint: CompanionVaultDiscoveryArgs['endpoint'] = {
-    kind: CompanionDiscoveryEndpointKind.Initial,
-    endpoint: {
-      discover: () => new DiscoveredCompanionEndpointFixture(this),
-      free: () => {},
-    },
-  }
-
-  constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
-
-  private async openVault(
-    ...args: [string, string, string, string]
-  ): Promise<void> {
-    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] =
-      args
-    this.operationOrder.push(
-      `open:${vaultStoreId}:${deviceId}:${devicePublicKey}:${deviceSigningPublicKey}`,
-    )
-    if (this.openOutcome === CompanionVaultOpenOutcome.Mismatched) {
-      throw new Error('ActiveExtensionVaultMismatch')
-    }
-  }
-
-  reportUnlocked(): ReturnType<
-    Extract<
-      CompanionVaultDiscoveryArgs['endpoint'],
-      { kind: CompanionDiscoveryEndpointKind.Initial }
-    >['endpoint']['discover']
-  >['status'] {
-    this.operationOrder.push('discover')
-    return {
-      status: 'unlocked',
-      request_id: 'request',
-      vault_store_id: 'vault',
-      app_key: this.presence.app_key,
-    }
-  }
-
-  discover() {
-    const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
-      activeManager: this.activeManager,
-      endpoint: this.endpoint,
-      presence: this.presence,
-    }
-    const companionDiscovery = new CompanionVaultDiscovery(
-      companionDiscoveryArgs,
-    )
-    return companionDiscovery.discover(this.discovery)
-  }
-}
-
-class DiscoveredCompanionEndpointFixture implements DiscoveredCompanionEndpoint {
-  constructor(private readonly scenario: CompanionVaultDiscoveryScenario) {}
-
-  get status(): DiscoveredCompanionEndpoint['status'] {
-    return this.scenario.reportUnlocked()
-  }
-
-  authorize_and_seal(
-    ..._args: Parameters<DiscoveredCompanionEndpoint['authorize_and_seal']>
-  ): ReturnType<DiscoveredCompanionEndpoint['authorize_and_seal']> {
-    void _args
-    throw new Error('Authorization is outside this discovery scenario')
-  }
-
-  rediscover(
-    ..._args: Parameters<DiscoveredCompanionEndpoint['rediscover']>
-  ): DiscoveredCompanionEndpoint {
-    void _args
-    return this
-  }
-
-  free(): void {}
-
-  [Symbol.dispose](): void {
-    this.free()
-  }
-}
-
-describe('companion discovery vault restoration', () => {
-  test('reopens a persisted paired vault before reporting unlocked after restart', async () => {
-    const scenario = new CompanionVaultDiscoveryScenario(
-      CompanionVaultOpenOutcome.Opened,
-    )
-
-    const discovery = await scenario.discover()
-    expect(discovery.isOk()).toBe(true)
-    if (discovery.isErr()) return
-    const discovered = discovery.value
-    const status = discovered.status
-
-    expect(status.status).toBe('unlocked')
-    expect(scenario.operationOrder).toEqual([
-      'open:vault:device:public:signing',
-      'discover',
-    ])
-  })
-
-  test('does not report unlocked when Rust rejects the persisted vault identity', async () => {
-    const scenario = new CompanionVaultDiscoveryScenario(
-      CompanionVaultOpenOutcome.Mismatched,
-    )
-
-    expect(await scenario.discover()).toEqual(
-      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
-    )
-    expect(scenario.operationOrder).toEqual([
-      'open:vault:device:public:signing',
-    ])
   })
 })

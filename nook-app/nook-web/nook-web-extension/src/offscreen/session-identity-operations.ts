@@ -2,8 +2,10 @@ import { err, ok, type Result } from 'neverthrow'
 import {
   decode_storage_providers,
   list_local_vaults,
+  NookExternalEventLogRecords,
   provider_wasm_args,
   type EventLogStorageRecord,
+  type NookSecretPage,
   type NookVaultManager,
   type StorageConnectArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -27,9 +29,10 @@ type ConnectIdentityVaultRequest = Extract<
 export type ExtensionIdentityManager = Pick<
   NookVaultManager,
   | 'load_auth_providers_snapshot'
-  | 'join_identity_with_sealed_invite'
+  | 'join_identity_from_log'
   | 'identity_control_snapshot'
   | 'connect_identity_vault'
+  | 'connect_identity_vault_from_records'
   | 'export_event_log_records_js'
 >
 
@@ -96,11 +99,10 @@ async function mountArgs({
 }
 
 /**
- * Join the identity of an approved vault as a new device does: this
- * installation's local identity binds to the invited one and signs itself
- * in with the invite, through the identity's sync provider. Lists the
- * identity's vaults, so each can be opened with the key the identity now
- * grants this installation.
+ * Join the keyring the web app just added this app to, from the keyring's
+ * log the approval carried: this app's key is a member there already, so
+ * its local identity takes the keyring's id. Lists the keyring's vaults, so
+ * each can be opened with the key the keyring grants this app.
  */
 export async function joinExtensionIdentity({
   manager,
@@ -108,20 +110,12 @@ export async function joinExtensionIdentity({
 }: JoinExtensionIdentityRequest): Promise<
   Result<JoinIdentityResponse | JoinIdentityRefusal, SessionOperationFailure>
 > {
-  const { identityId, memberLabel, code, sealedPassphrase, mountProviderId } =
-    message.payload
+  const { identityId, memberLabel, identityEvents } = message.payload
   try {
-    const mountRequest: IdentityMountRequest = { manager, mountProviderId }
-    const args = await mountArgs(mountRequest)
-    if (args.isErr()) return err(args.error)
-    await manager.join_identity_with_sealed_invite(
+    await manager.join_identity_from_log(
       identityId,
       memberLabel,
-      code,
-      sealedPassphrase,
-      args.value.mode,
-      args.value.pat,
-      args.value.repo,
+      identityEvents,
     )
     const snapshot = await manager.identity_control_snapshot(
       await manager.load_auth_providers_snapshot(),
@@ -144,10 +138,48 @@ export async function joinExtensionIdentity({
   }
 }
 
+/** Open the vault from where its source says, with the keyring's key. */
+async function openIdentityVault({
+  manager,
+  message,
+}: ConnectExtensionIdentityVaultRequest): Promise<
+  Result<NookSecretPage, SessionOperationFailure>
+> {
+  const { vaultStoreId, source } = message.payload
+  switch (source.kind) {
+    case 'records':
+      return ok(
+        await manager.connect_identity_vault_from_records(
+          vaultStoreId,
+          NookExternalEventLogRecords.from_array(source.eventLogRecords),
+          1,
+        ),
+      )
+    case 'mount': {
+      const mountRequest: IdentityMountRequest = {
+        manager,
+        mountProviderId: source.mountProviderId,
+      }
+      const args = await mountArgs(mountRequest)
+      if (args.isErr()) return err(args.error)
+      return ok(
+        await manager.connect_identity_vault(
+          args.value.mode,
+          args.value.pat,
+          args.value.repo,
+          vaultStoreId,
+          1,
+        ),
+      )
+    }
+  }
+}
+
 /**
- * Open one vault of the joined identity with the key the identity grants
- * this installation, enroll in it, and hand back its event log, which the
- * extension imports like an approved vault's.
+ * Open one vault of the joined keyring with the key the keyring grants
+ * this app, from the records the web app handed over or a keyring sync
+ * provider, enroll in it, and hand back its event log, which the extension
+ * imports like an approved vault's.
  */
 export async function connectExtensionIdentityVault({
   manager,
@@ -155,19 +187,12 @@ export async function connectExtensionIdentityVault({
 }: ConnectExtensionIdentityVaultRequest): Promise<
   Result<ConnectIdentityVaultResponse, SessionOperationFailure>
 > {
-  const { vaultStoreId, mountProviderId } = message.payload
+  const { vaultStoreId } = message.payload
   try {
-    const mountRequest: IdentityMountRequest = { manager, mountProviderId }
-    const args = await mountArgs(mountRequest)
-    if (args.isErr()) return err(args.error)
-    const page = await manager.connect_identity_vault(
-      args.value.mode,
-      args.value.pat,
-      args.value.repo,
-      vaultStoreId,
-      1,
-    )
-    page.free()
+    const opening: ConnectExtensionIdentityVaultRequest = { manager, message }
+    const page = await openIdentityVault(opening)
+    if (page.isErr()) return err(page.error)
+    page.value.free()
     const records = await manager.export_event_log_records_js()
     let eventLogRecords: EventLogStorageRecord[]
     try {

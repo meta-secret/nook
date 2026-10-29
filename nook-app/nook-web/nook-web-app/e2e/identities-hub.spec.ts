@@ -1,12 +1,23 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installGoogleOAuthMock,
   installPasskeyMock,
+  nameFirstIdentityOnly,
   openIdentitiesPage,
+  openVaultRow,
+  startFirstRun,
   UI_TIMEOUT_MS,
+  waitForGoogleOAuthSignedIn,
 } from './helpers'
+import {
+  E2eSyncProviderId,
+  createSyncTarget,
+  installSyncRemote,
+} from './sync-provider'
+import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 
 const WORK_PIN = '246810'
 
@@ -45,7 +56,10 @@ async function startNewIdentity(page: Page, name: string): Promise<void> {
   await expect(page.getByTestId('new-identity-key')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('new-identity-preview')).toContainText(name)
+  // The passkey diagram names the identity it opens.
+  await expect(
+    page.getByTestId('new-identity-key').getByTestId('first-run-key-diagram'),
+  ).toContainText(name)
 }
 
 /** Give the identity a PIN, as a browser without passkeys would. */
@@ -195,5 +209,114 @@ test.describe('identities hub', () => {
     await expect(page.getByTestId('identity-card')).toHaveCount(1, {
       timeout: UI_TIMEOUT_MS,
     })
+  })
+})
+
+/** First run keeps a new identity, Solo, on this browser and skips its first
+ * vault; its unlocked card is returned. */
+async function soloWithoutVault(page: Page): Promise<Locator> {
+  await page.goto('/app/')
+  await startFirstRun(page)
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  const createChoice = page.getByTestId('device-protection-create-new-choice')
+  if (await createChoice.isVisible()) await createChoice.click()
+  await page.getByTestId('device-protection-setup-btn').click()
+  await nameFirstIdentityOnly(page, 'Solo')
+
+  // Kept on this browser, the identity asks about its first vault.
+  await expect(page.getByTestId('first-run-vault-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('first-run-vault-skip').click()
+
+  const solo = card(page, 'Solo')
+  await expect(solo).toHaveAttribute('data-status', 'unlocked', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  return solo
+}
+
+test.describe('an identity without a vault', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await installPasskeyMock(page)
+  })
+
+  test('first run can leave the identity without a vault until one is wanted', async ({
+    page,
+  }) => {
+    // It stands on its own card with no vault, not on the first screen.
+    const solo = await soloWithoutVault(page)
+    await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
+    await expect(solo.getByTestId('identity-vault-row')).toHaveCount(0)
+    // Its overview and pages open with no vault: they act on the identity.
+    await solo.getByTestId('identity-overview-toggle').click()
+    const overview = page.getByTestId('identity-overview')
+    await expect(overview).toBeVisible()
+    await overview.getByTestId('overview-open-devices').click()
+    const devicesPage = page.locator(
+      '[data-testid="identity-page"][data-page="devices"]',
+    )
+    await expect(devicesPage.getByTestId('vault-devices-panel')).toBeVisible()
+    await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
+    await page.getByTestId('identity-page-back').click()
+    await expect(overview).toBeVisible()
+    await overview.getByTestId('identity-action-add-sync').click()
+    await expect(
+      page
+        .locator('[data-testid="identity-page"][data-page="sync"]')
+        .getByTestId('storage-providers-section'),
+    ).toBeVisible()
+    await page.getByTestId('identity-page-back').click()
+    await expect(overview).toBeVisible()
+
+    // New vault on the card creates one whenever it is wanted.
+    await solo.getByTestId('identity-new-vault').click()
+    await page.getByTestId('login-vault-name-input').fill('Later')
+    await page.getByTestId('login-create-additional-vault-btn').click()
+    await expect(
+      openVaultRow(page).or(page.getByTestId('vault-panel')).first(),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  })
+
+  test('adds Google Drive with no vault, and Drive is listed as its provider', async ({
+    page,
+  }) => {
+    const target = createSyncTarget(
+      '',
+      'vaultless-drive',
+      E2eSyncProviderId.File,
+    )
+    await installSyncRemote(page, target)
+    await installGoogleOAuthMock(page, target.pat)
+    const solo = await soloWithoutVault(page)
+
+    await solo.getByTestId('identity-overview-toggle').click()
+    const overview = page.getByTestId('identity-overview')
+    await overview.getByTestId('identity-action-add-sync').click()
+    await page.getByTestId('provider-option-oauth-file').click()
+    await page.getByTestId('google-sign-in-btn').click()
+    await waitForGoogleOAuthSignedIn(page)
+    await page.getByTestId('connect-provider-btn').click()
+
+    // Setup ends on the hub, saying the identity is set up and synced; no
+    // vault opened for it, and its overview lists Drive.
+    await expect(page.getByTestId('identities-hub')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByText(
+        enLocale.provider_identities.set_up_here.replace('{identity}', 'Solo'),
+      ),
+    ).toBeVisible()
+    await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
+    await solo.getByTestId('identity-overview-toggle').click()
+    await expect(
+      overview.getByTestId('identity-panel-provider-oauth-file'),
+    ).toBeVisible()
   })
 })

@@ -242,7 +242,7 @@ pub struct ProviderVaultSummary {
 }
 
 impl ProviderVaultSummary {
-    fn short_id(store_id: &StoreId) -> String {
+    pub(crate) fn short_id(store_id: &StoreId) -> String {
         let raw = store_id.as_str();
         raw.strip_prefix("store_")
             .unwrap_or(raw)
@@ -410,8 +410,8 @@ pub struct ProviderVaultListingRequest<'a> {
 impl ProviderVaultListingRequest<'_> {
     /// Summarize every listed vault, decide how this device can open it, and
     /// offer what the user may do: a vault this device can open replaces an
-    /// empty open vault, merges into one with records, or comes in beside
-    /// it; a vault nothing here opens can only be requested.
+    /// empty open vault or comes in beside the open one; a vault nothing
+    /// here opens can only be requested.
     #[must_use]
     pub fn listing(self) -> ProviderVaultListing {
         let Self {
@@ -448,7 +448,7 @@ impl ProviderVaultListingRequest<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ProviderLogCount;
+    use crate::{ProviderIdentityJoin, ProviderLogCount};
     use std::slice;
 
     fn at(raw: &str) -> anyhow::Result<ProviderVaultTime> {
@@ -662,9 +662,9 @@ mod tests {
     }
 
     #[test]
-    fn an_openable_vault_replaces_an_empty_vault_and_merges_into_a_full_one() -> anyhow::Result<()>
-    {
-        use ProviderVaultAction::{ImportSeparately, MergeIntoOpen, RequestAccess, UseInstead};
+    fn an_openable_vault_replaces_an_empty_vault_and_comes_in_beside_a_full_one()
+    -> anyhow::Result<()> {
+        use ProviderVaultAction::{ImportSeparately, RequestAccess, UseInstead};
         let local = store("store_localvault1")?;
         let other = store("store_othervault1")?;
         let identity = filer()?;
@@ -717,14 +717,11 @@ mod tests {
                 vec![UseInstead, ImportSeparately]
             )
         );
-        // An open vault with records or another app merges instead.
+        // An open vault with records or another app is never replaced.
         for occupancy in [open(&local, 3, 1), open(&local, 0, 2)] {
             assert_eq!(
                 listed(occupancy, &openable),
-                (
-                    EmptyVaultReplacement::Unavailable,
-                    vec![MergeIntoOpen, ImportSeparately]
-                )
+                (EmptyVaultReplacement::Unavailable, vec![ImportSeparately])
             );
         }
         assert_eq!(
@@ -829,6 +826,8 @@ mod tests {
             devices: ProviderLogCount::from(2),
             newest_device: at("2026-10-27T17:28:00Z")?,
             vaults: ProviderLogCount::from(1),
+            this_browser: false,
+            join: ProviderIdentityJoin::NotAsked,
         };
         let theirs_log = [ListedIdentityLog {
             identity_id: theirs.clone(),
@@ -911,6 +910,8 @@ mod tests {
                             at: ProviderInstant(7),
                         },
                         vaults: ProviderLogCount::from(3),
+                        this_browser: false,
+                        join: ProviderIdentityJoin::NotAsked,
                     },
                 },
                 created: ProviderVaultTime::Unreported,
@@ -940,6 +941,8 @@ mod tests {
                             "devices": 2,
                             "newestDevice": { "state": "reported", "at": 7 },
                             "vaults": 3,
+                            "thisBrowser": false,
+                            "join": "notAsked",
                         },
                     },
                     "created": { "state": "unreported" },

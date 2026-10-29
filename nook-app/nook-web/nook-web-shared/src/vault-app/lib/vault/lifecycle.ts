@@ -11,35 +11,24 @@ import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
-import {
-  AdoptedBrowserIdentity,
-  BrowserIdentityHandoffKind,
-} from "$lib/vault/identity-handoff";
-import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { DeviceIdentityInitializationSnapshot } from "$lib/vault/action-contexts";
 import { VaultManagerRuntime } from "$lib/nook";
-import { extensionConnectionBrowser } from "$lib/extension/connect";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   DeviceMode,
-  VaultIdentityKeySource,
-  VaultStartupUnlockDecision,
   DeviceIdentityInitializationMode,
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
-  ExternalDeviceIdentityAuthorizationMode,
   configured_vault_application,
   has_active_local_vault,
   prepare_new_local_vault_slot,
   set_active_vault,
-  set_vault_session_locked,
   type NookVaultManager,
 } from "$app-wasm";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
-  setupDeviceProtection,
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
 } from "$lib/auth/passkey-device-protection";
@@ -75,17 +64,7 @@ enum DeviceInitializationCompletionOutcome {
 enum DeviceIdentityAuthorizationState {
   NotStarted,
   PasskeyUnlocked,
-  ProtectionConfigured,
 }
-
-type ExternalDeviceIdentityAuthorization = {
-  readonly adopt: (
-    manager: NookVaultManager,
-  ) => Promise<
-    Result<NookAdoptedExtensionIdentityHandoff, StorageOperationFailure>
-  >;
-  readonly mode: ExternalDeviceIdentityAuthorizationMode;
-};
 
 type DeviceInitializationContinuationRequest = {
   readonly state: VaultState;
@@ -257,37 +236,9 @@ export class VaultInitializationActions {
             state.deviceProtectionStatus === DeviceProtectionStatus.Pin
           ) {
             return;
-          } else if (!state.localVaultPresent) {
-            // A surviving local vault must not mint a replacement app key. That
-            // key is not on the roster, and backup-password recovery would fail.
-            const authorization = await state.enqueueStorage(
-              async (): Promise<
-                Result<
-                  DeviceIdentityAuthorizationState,
-                  PasskeyCeremonyFailure | StorageOperationFailure
-                >
-              > => {
-                const manager = state.admitManager();
-                if (manager.isErr()) return storageErr(manager.error);
-                const protectionRequest: Parameters<
-                  typeof setupDeviceProtection
-                >[0] = {
-                  manager: manager.value,
-                  passkeyLabel: "",
-                  deviceMode: state.draftDeviceMode,
-                };
-                return (await setupDeviceProtection(protectionRequest)).map(
-                  () => DeviceIdentityAuthorizationState.ProtectionConfigured,
-                );
-              },
-            );
-            if (authorization.isErr()) {
-              state.errorMsg = state.t(authorization.error.translationKey);
-              return;
-            }
-            deviceIdentityAuthorization = authorization.value;
-            state.deviceAuthorizationInProgress = true;
           }
+          // A browser with no key yet makes it in first run's passkey step,
+          // as it does outside e2e; it never gets one before that step.
         }
 
         if (
@@ -340,10 +291,7 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(continuation.error.translationKey);
         return;
       }
-      const startupDecision = state.startupUnlockDecision(
-        extensionConnectionBrowser.companionProviderPresence(),
-      );
-      const completed = await continuation.value.complete(startupDecision);
+      const completed = await continuation.value.complete();
       if (completed.isErr()) {
         if (
           deviceIdentityAuthorization !==
@@ -380,11 +328,8 @@ export class VaultInitializationActions {
     }
   }
 
-  /** Finish initializing after the device identity unlocked. Only the website
-   * route may open a local vault by itself on completion. */
-  async continueInitializationAfterDeviceUnlock(
-    startupDecision: VaultStartupUnlockDecision = VaultStartupUnlockDecision.WebsiteDevice,
-  ): Promise<
+  /** Finish initializing after the device identity unlocked. */
+  async continueInitializationAfterDeviceUnlock(): Promise<
     Result<
       DeviceIdentityInitializationSnapshot,
       StorageOperationFailure | OAuthFailure
@@ -395,7 +340,7 @@ export class VaultInitializationActions {
     const initialized = await continuation.value.continue();
     if (initialized.isErr()) return storageErr(initialized.error);
     if (!this.state.isInitializing) {
-      const completed = await continuation.value.complete(startupDecision);
+      const completed = await continuation.value.complete();
       if (completed.isErr()) return storageErr(completed.error);
     }
     return initialized;
@@ -436,139 +381,6 @@ export class VaultInitializationActions {
     state.deviceId = identity.value.deviceId;
     state.devicePublicKey = identity.value.devicePublicKey;
     return storageOk(identity.value);
-  }
-
-  async authorizeWithExternalDeviceIdentity({
-    adopt,
-    mode,
-  }: ExternalDeviceIdentityAuthorization): Promise<boolean> {
-    const state = this.state;
-    const manager = state.admitManager();
-    if (manager.isErr()) {
-      state.errorMsg = state.t(manager.error.translationKey);
-      return false;
-    }
-    const priorDeviceProtectionStatus = state.deviceProtectionStatus;
-    state.errorMsg = "";
-    state.isVerifying = true;
-    state.deviceAuthorizationInProgress = true;
-    let completed = false;
-    try {
-      const adopted = await state.enqueueStorage(() => adopt(manager.value));
-      if (adopted.isErr()) {
-        state.errorMsg = state.t(adopted.error.translationKey);
-        return false;
-      }
-      const adoption = new AdoptedBrowserIdentity(adopted.value);
-      state.externalIdentityHandoff = {
-        kind: BrowserIdentityHandoffKind.Adopted,
-        adoption,
-      };
-      switch (mode) {
-        case ExternalDeviceIdentityAuthorizationMode.DeferInitialization: {
-          const marked = await state.enqueueStorage(() =>
-            adoption.markExistingVaultImport(manager.value),
-          );
-          if (marked.isErr()) {
-            state.errorMsg = state.t(marked.error.translationKey);
-            return false;
-          }
-
-          const initialization: DeviceIdentityInitialization = {
-            mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
-          };
-          const initialized = await this.initDeviceIdentity(initialization);
-          if (initialized.isErr()) {
-            state.errorMsg = state.t(initialized.error.translationKey);
-            return false;
-          }
-          break;
-        }
-        case ExternalDeviceIdentityAuthorizationMode.IdentityOnly: {
-          // The identity opens alone, as a passkey on this browser opens its
-          // own: no vault session starts, so no vault opens with it.
-          const initialization: DeviceIdentityInitialization = {
-            mode: DeviceIdentityInitializationMode.RequireCompletedAuthorization,
-          };
-          const initialized = await this.initDeviceIdentity(initialization);
-          if (initialized.isErr()) {
-            state.errorMsg = state.t(initialized.error.translationKey);
-            return false;
-          }
-          break;
-        }
-        case ExternalDeviceIdentityAuthorizationMode.ContinueInitialization: {
-          // An identity the extension hands over opens no vault by itself:
-          // the caller opens the one it was asked for, exactly once.
-          const continued = await this.continueInitializationAfterDeviceUnlock(
-            VaultStartupUnlockDecision.DiscoverCompanion,
-          );
-          if (continued.isErr()) {
-            state.errorMsg = state.t(continued.error.translationKey);
-            return false;
-          }
-          break;
-        }
-      }
-      const handoff = state.externalIdentityHandoff;
-      if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-        const required = handoff.adoption.requiresConnect(manager.value);
-        if (required.isErr()) {
-          state.errorMsg = state.t(required.error.translationKey);
-          return false;
-        }
-        if (!required.value) {
-          const committed = await state.enqueueStorage(() =>
-            adoption.commit(manager.value),
-          );
-          if (committed.isErr()) {
-            state.errorMsg = state.t(committed.error.translationKey);
-            return false;
-          }
-          state.externalIdentityHandoff = {
-            kind: BrowserIdentityHandoffKind.Inactive,
-          };
-        }
-      }
-      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-      state.identityKeySource = VaultIdentityKeySource.PairedCompanion;
-      completed = true;
-      log.info("extension identity adopted");
-      return true;
-    } finally {
-      if (!completed) {
-        const handoff = state.externalIdentityHandoff;
-        state.externalIdentityHandoff = {
-          kind: BrowserIdentityHandoffKind.Inactive,
-        };
-        if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-          const rolledBack = handoff.adoption.rollback(manager.value);
-          if (rolledBack.isErr()) {
-            state.errorMsg = state.t(rolledBack.error.translationKey);
-            log.warn("extension identity durable rollback failed");
-          }
-        }
-        const failureMessage = state.errorMsg;
-        try {
-          set_vault_session_locked(true);
-        } catch {
-          // The in-memory session still has to be cleared when browser-backed
-          // session storage is unavailable during failure compensation.
-        }
-        state.clearUnlockedSession(false);
-        state.deviceId = "";
-        state.devicePublicKey = "";
-        state.deviceProtectionStatus =
-          priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
-            ? state.deviceProtectionLockedStatus
-            : priorDeviceProtectionStatus;
-        state.errorMsg =
-          failureMessage ||
-          state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
-      }
-      state.deviceAuthorizationInProgress = false;
-      state.isVerifying = false;
-    }
   }
 
   async init() {
@@ -834,9 +646,7 @@ class DeviceInitializationContinuation {
     return storageOk(initialized.value);
   }
 
-  async complete(
-    startupDecision: VaultStartupUnlockDecision = VaultStartupUnlockDecision.WebsiteDevice,
-  ): Promise<
+  async complete(): Promise<
     Result<
       DeviceInitializationCompletionOutcome,
       StorageOperationFailure | OAuthFailure
@@ -845,10 +655,7 @@ class DeviceInitializationContinuation {
     const state = this.state;
     const hasPendingEnrollment =
       state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending;
-    const autoUnlock =
-      !hasPendingEnrollment &&
-      startupDecision === VaultStartupUnlockDecision.WebsiteDevice &&
-      state.shouldAutoUnlock();
+    const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {
       await state.loadDb();
       if (

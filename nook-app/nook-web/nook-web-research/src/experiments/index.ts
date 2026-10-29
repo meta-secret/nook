@@ -17,6 +17,7 @@ import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
+import IdentitySetup from './identity-onboarding/setup/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
 import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
@@ -84,6 +85,12 @@ const identityManagement: ExperimentCategory = {
   title: 'Identity Management',
   description: 'Small studies of identities and the public keys they keep.',
 }
+const identityOnboarding: ExperimentCategory = {
+  slug: 'identity-onboarding',
+  title: 'Identity Onboarding',
+  description:
+    'Key management before vaults: create an identity on this browser or import one from a sync provider, then manage the keys that open it.',
+}
 const inspiration: ExperimentCategory = {
   slug: 'inspiration',
   title: 'Inspiration',
@@ -97,6 +104,7 @@ export const categories: ExperimentCategory[] = [
   vault,
   keys,
   identityManagement,
+  identityOnboarding,
   inspiration,
 ]
 
@@ -167,6 +175,13 @@ const identityManagementV2: ExperimentSubcategory = {
   description:
     'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
 }
+const identityOnboardingV1: ExperimentSubcategory = {
+  categorySlug: 'identity-onboarding',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Setup',
+  description:
+    'Create an identity: passkey, Google Drive, then the identities Nook finds there — continue as a member, ask to join, or create one.',
+}
 const inspirationV1: ExperimentSubcategory = {
   categorySlug: 'inspiration',
   slug: ExperimentVersion.V1,
@@ -186,6 +201,7 @@ export const subcategories: ExperimentSubcategory[] = [
   keysV3,
   identityManagementV1,
   identityManagementV2,
+  identityOnboardingV1,
   inspirationV1,
 ]
 
@@ -333,6 +349,15 @@ export const experiments: Experiment[] = [
     description:
       'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
     component: AccessTerminal,
+  },
+  {
+    slug: 'identity-setup',
+    category: identityOnboarding,
+    subcategory: identityOnboardingV1,
+    title: 'Identity setup',
+    description:
+      'Create or use a passkey, connect Google Drive, read its Nook folder, and finish as a member, by a join request, or with a new named identity.',
+    component: IdentitySetup,
   },
   {
     slug: 'identity-keys',

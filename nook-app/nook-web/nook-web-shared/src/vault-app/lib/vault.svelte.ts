@@ -4,15 +4,11 @@ import { Effect } from "effect";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
-import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { VaultAccessStatus, type NookVaultSyncResult } from "$lib/nook";
 import {
   DeviceIdentityInitializationMode,
-  LocalVaultPresence,
-  type CompanionProviderPresence,
-  type NookVaultStartupUnlockRequest,
-  ExternalDeviceIdentityAuthorizationMode,
   is_vault_session_locked,
+  set_vault_session_locked,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
   RemoteVaultRecoveryState,
@@ -20,7 +16,6 @@ import {
   type NookProviderSyncRevision,
   type NookSyncConflictReview,
   type NookSecretPage,
-  type NookVaultManager,
   type PasswordEntryId,
   type StartSentinelGenesisArgs,
   type StoreId,
@@ -46,7 +41,6 @@ import * as secretsActions from "$lib/vault/secrets";
 import * as passwordUnlockActions from "$lib/vault/password-unlock";
 import * as sentinelUnlockActions from "$lib/vault/sentinel-unlock";
 import * as idleSessionActions from "$lib/vault/idle-session";
-import { PairedExtensionLockActions } from "$lib/vault/paired-extension-lock";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
@@ -78,15 +72,6 @@ export {
   type SyncProviderLabel,
   type VaultEditRestriction,
 } from "$lib/vault/runtime-state.svelte";
-
-type ExternalDeviceIdentityAdoptionRequest = {
-  readonly adopt: (
-    manager: NookVaultManager,
-  ) => Promise<
-    Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>
-  >;
-  readonly mode: ExternalDeviceIdentityAuthorizationMode;
-};
 
 interface LocalVaultRenameRequest {
   readonly storeId: StoreId;
@@ -199,17 +184,6 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  async authorizeWithExternalDeviceIdentity({
-    adopt,
-    mode,
-  }: ExternalDeviceIdentityAdoptionRequest): Promise<boolean> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.lifecycleActions.authorizeWithExternalDeviceIdentity({
-      adopt,
-      mode,
-    });
-  }
-
   replaceVaultArchitecture(architecture: VaultArchitecture): void {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return this.architectureActions.replaceVaultArchitecture({ architecture });
@@ -225,16 +199,6 @@ export class VaultState extends VaultRuntimeState {
 
   async refreshArchitectureSecretCreationAllowed() {
     return this.architectureActions.refreshArchitectureSecretCreationAllowed();
-  }
-
-  startupUnlockDecision(companionProvider: CompanionProviderPresence) {
-    const request: NookVaultStartupUnlockRequest = {
-      local_vault_present: this.localVaultPresent
-        ? LocalVaultPresence.Present
-        : LocalVaultPresence.Absent,
-      companion_provider_present: companionProvider,
-    };
-    return this.clientPolicy.startup_unlock_decision(request);
   }
 
   shouldAutoUnlock(): boolean {
@@ -725,6 +689,13 @@ export class VaultState extends VaultRuntimeState {
       this,
     ).connectAndSyncStagedProvider();
     if (!this.isAuthenticated || this.errorMsg) return;
+    // Connecting a provider creates the identity's log, as it does with no
+    // vault open, so the provider receives it.
+    const ensured = await this.identityControl.refresh();
+    if (ensured.isErr()) {
+      this.errorMsg = this.t(ensured.error.translationKey);
+      return;
+    }
     const mounted = await this.identityControl.syncWithMounts();
     if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
@@ -755,17 +726,19 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** The person's lock: the page is kept so unlocking resumes it (the hub
-   * resumes into the vault unlocked), and a paired extension locks with it. */
+   * resumes into the vault unlocked). */
   lockIdentity() {
     if (this.workspaceSection === WorkspaceSection.Identities)
       this.openSection(WorkspaceSection.Vault);
     this.lockVault();
-    PairedExtensionLockActions.forPage(this).lockPairedExtension();
   }
 
   /** The person locks only the identity key, from its card. */
   lockIdentityKey() {
-    PairedExtensionLockActions.forPage(this).lockIdentityKey();
+    set_vault_session_locked(true);
+    void this.lockDeviceProtection().then((locked) => {
+      if (locked.isErr()) this.errorMsg = this.t(locked.error.translationKey);
+    });
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */

@@ -29,6 +29,14 @@ impl NookVaultManager {
         Ok(records)
     }
 
+    /// One vault's stored event log by its store id, open or not.
+    pub(in crate::manager) async fn export_vault_event_records(
+        store_id: &str,
+    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
+        let store = NookDatabase::load_local_event_store(store_id).await?;
+        Self::export_event_records_from_store(&store)
+    }
+
     pub(in crate::manager) async fn export_event_log_records(
         &self,
     ) -> Result<Vec<EventLogStorageRecord>, NookError> {

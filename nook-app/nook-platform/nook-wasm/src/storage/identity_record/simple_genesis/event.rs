@@ -9,12 +9,10 @@ use super::{
     PinnedSimpleGenesisEvent,
 };
 use crate::StoredStringRecord;
-use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::{IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
-use nook_core::StoredSigningSeed;
-use nook_core::{AgeArmoredCiphertext, AppKey, MemberDekEnvelope};
+use nook_core::{AgeArmoredCiphertext, AppKey};
 use std::{cell::RefCell, rc::Rc};
 pub(crate) struct SimpleGenesisEventInput<'a> {
     pub(crate) app_key: &'a AppKey,
@@ -33,64 +31,8 @@ struct PreparedSimpleGenesisEvent {
     proposed_yaml: String,
     proposed_signing_seed: String,
     proposed_signing_seed_envelope: AgeArmoredCiphertext,
-    proposed_member_signing_seed_envelopes: Vec<MemberDekEnvelope>,
 }
 impl PendingSimpleGenesis {
-    fn staged_signing_seed_envelopes(
-        &self,
-        signing_seed: &str,
-    ) -> Result<Vec<MemberDekEnvelope>, NookError> {
-        let pending = self;
-        let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow else {
-            return Ok(Vec::new());
-        };
-        let Some(identity) = staged
-            .directory
-            .identities()
-            .iter()
-            .find(|identity| identity.identity_id == pending.identity_id)
-        else {
-            return Ok(Vec::new());
-        };
-        identity
-            .members
-            .iter()
-            .map(|member| {
-                Ok(nook_core::MemberDekEnvelope {
-                    app_id: member.app_id.clone(),
-                    envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
-                })
-            })
-            .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
-            .map_err(|error| NookError::Database(error.to_string()))
-    }
-
-    pub(crate) fn resume_signing_seed(
-        &self,
-        app_key: &AppKey,
-    ) -> Result<nook_core::StoredSigningSeed, NookError> {
-        let pending = self;
-        if !pending.is_staged() {
-            return Ok(StoredSigningSeed::Missing);
-        }
-        let PendingSimpleGenesisEvent::EventPinned {
-            signing_seed_envelope,
-            member_signing_seed_envelopes,
-            ..
-        } = &pending.event_state
-        else {
-            return Ok(StoredSigningSeed::Missing);
-        };
-        member_signing_seed_envelopes
-            .iter()
-            .find(|entry| entry.app_id == *app_key.app_id())
-            .map_or_else(
-                || app_key.open_utf8(signing_seed_envelope),
-                |entry| app_key.open_utf8(&entry.envelope),
-            )
-            .map(StoredSigningSeed::Stored)
-            .map_err(|error| NookError::Database(error.to_string()))
-    }
     fn prepare_event(
         &self,
         input: SimpleGenesisEventInput<'_>,
@@ -104,8 +46,6 @@ impl PendingSimpleGenesis {
         let proposed_signing_seed_envelope = app_key
             .seal_utf8(&proposed_signing_seed)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let proposed_member_signing_seed_envelopes =
-            pending.staged_signing_seed_envelopes(&proposed_signing_seed)?;
         let app_key = app_key.clone();
         let expected = pending.clone();
         Ok(PreparedSimpleGenesisEvent {
@@ -114,7 +54,6 @@ impl PendingSimpleGenesis {
             proposed_yaml,
             proposed_signing_seed,
             proposed_signing_seed_envelope,
-            proposed_member_signing_seed_envelopes,
         })
     }
     pub(crate) async fn pin_event(
@@ -132,7 +71,6 @@ impl PreparedSimpleGenesisEvent {
             proposed_yaml,
             proposed_signing_seed,
             proposed_signing_seed_envelope,
-            proposed_member_signing_seed_envelopes,
         } = self;
         let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
             "Pending Simple genesis event produced no result.".to_owned(),
@@ -164,8 +102,6 @@ impl PreparedSimpleGenesisEvent {
                         current.event_state = PendingSimpleGenesisEvent::EventPinned {
                             event_yaml: proposed_yaml.clone(),
                             signing_seed_envelope: proposed_signing_seed_envelope.clone(),
-                            member_signing_seed_envelopes: proposed_member_signing_seed_envelopes
-                                .clone(),
                         };
                         PinnedSimpleGenesisEvent {
                             event_yaml: proposed_yaml.clone(),
@@ -175,16 +111,10 @@ impl PreparedSimpleGenesisEvent {
                     PendingSimpleGenesisEvent::EventPinned {
                         event_yaml,
                         signing_seed_envelope,
-                        member_signing_seed_envelopes,
                     } => PinnedSimpleGenesisEvent {
                         event_yaml,
-                        signing_seed: member_signing_seed_envelopes
-                            .iter()
-                            .find(|entry| entry.app_id == *app_key.app_id())
-                            .map_or_else(
-                                || app_key.open_utf8(&signing_seed_envelope),
-                                |entry| app_key.open_utf8(&entry.envelope),
-                            )
+                        signing_seed: app_key
+                            .open_utf8(&signing_seed_envelope)
                             .map_err(|error| NookError::Database(error.to_string()))?,
                     },
                 };

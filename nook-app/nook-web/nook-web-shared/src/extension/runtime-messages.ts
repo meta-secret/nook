@@ -15,21 +15,15 @@ import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import {
-  ExtensionIdentityInviteWireKind,
-  type ExtensionIdentityInviteWire,
-} from "./identity-invite-wire";
+  ExtensionKeyringGrantKind,
+  type ExtensionKeyringGrant,
+  type ExtensionKeyringVault,
+} from "./keyring-grant-wire";
 import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeCauseKind,
   RuntimeMessageDecodeFailureKind,
 } from "./runtime-message-decode-failure";
-import type {
-  CompanionIdentityDiscoveryObservation,
-  CompanionIdentityStatus,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
-
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
-
 import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
@@ -112,7 +106,6 @@ export {
   OpenSimpleVaultMessageSchema as OpenSimpleVaultMessage,
 };
 
-export { ExtensionPairedVaultIdentityStatusMessageStatus };
 export { ExtensionPairingApprovedMessageAdmissionFailure };
 export {
   RuntimeMessageDecodeFailure,
@@ -138,8 +131,8 @@ export type ExtensionPairingApprovedGrant = Omit<
   "syncProviderCount"
 > & {
   providers: ExtensionPairingStorageProviderPayload[];
-  /** How the extension joins the vault's identity, beyond this vault. */
-  identityInvite: ExtensionIdentityInviteWire;
+  /** The keyring the extension is an app of, beyond this vault. */
+  keyring: ExtensionKeyringGrant;
 };
 export type ExtensionPairingStorageProviderPayload =
   RustExtensionPairingStorageProviderPayload;
@@ -168,64 +161,86 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
   }
 }
 
+const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
+  concurrency: "unbounded",
+};
+
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
 
-  /** The identity invite beside an approval; an approval without one comes
-   * from a web app that predates identity connection. */
-  private static identityInvite(
+  /** The keyring the web app added the extension to, with its log and the
+   * records of its other vaults. A web app always sends one. */
+  private static keyring(
     payload: unknown,
   ): Result<
-    ExtensionIdentityInviteWire,
+    ExtensionKeyringGrant,
     ExtensionPairingApprovedMessageAdmissionFailure
   > {
-    const notOffered: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.NotOffered,
-    };
-    if (!payload || typeof payload !== "object") return ok(notOffered);
-    if (!("identityInvite" in payload)) return ok(notOffered);
-    const invite = payload.identityInvite;
-    if (!invite || typeof invite !== "object" || !("kind" in invite))
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
-      );
-    if (invite.kind === ExtensionIdentityInviteWireKind.NotOffered)
-      return ok(notOffered);
-    if (invite.kind === ExtensionIdentityInviteWireKind.NeedsCloud) {
-      const needsCloud: ExtensionIdentityInviteWire = {
-        kind: ExtensionIdentityInviteWireKind.NeedsCloud,
-      };
-      return ok(needsCloud);
-    }
+    const refused = err(
+      ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    );
+    if (!payload || typeof payload !== "object" || !("keyring" in payload))
+      return refused;
+    const keyring = payload.keyring;
     if (
-      invite.kind !== ExtensionIdentityInviteWireKind.Invited ||
-      !("identityId" in invite) ||
-      typeof invite.identityId !== "string" ||
-      !invite.identityId.trim() ||
-      !("identityLabel" in invite) ||
-      typeof invite.identityLabel !== "string" ||
-      !("code" in invite) ||
-      typeof invite.code !== "string" ||
-      !invite.code.trim() ||
-      !("sealedPassphrase" in invite) ||
-      typeof invite.sealedPassphrase !== "string" ||
-      !invite.sealedPassphrase.trim() ||
-      !("mountProviderId" in invite) ||
-      typeof invite.mountProviderId !== "string" ||
-      !invite.mountProviderId.trim()
+      !keyring ||
+      typeof keyring !== "object" ||
+      !("kind" in keyring) ||
+      keyring.kind !== ExtensionKeyringGrantKind.Added ||
+      !("identityId" in keyring) ||
+      typeof keyring.identityId !== "string" ||
+      !keyring.identityId.trim() ||
+      !("identityLabel" in keyring) ||
+      typeof keyring.identityLabel !== "string" ||
+      !("identityEvents" in keyring) ||
+      !Array.isArray(keyring.identityEvents) ||
+      !("vaults" in keyring) ||
+      !Array.isArray(keyring.vaults)
     )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
+      return refused;
+    const identityEvents: string[] = [];
+    for (const candidate of keyring.identityEvents) {
+      const event: unknown = candidate;
+      if (typeof event !== "string" || !event) return refused;
+      identityEvents.push(event);
+    }
+    if (identityEvents.length === 0) return refused;
+    const vaults: ExtensionKeyringVault[] = [];
+    for (const candidate of keyring.vaults) {
+      const vault: unknown = candidate;
+      if (
+        !vault ||
+        typeof vault !== "object" ||
+        !("storeId" in vault) ||
+        typeof vault.storeId !== "string" ||
+        !vault.storeId.trim() ||
+        !("eventLogRecords" in vault) ||
+        !Array.isArray(vault.eventLogRecords)
+      )
+        return refused;
+      const records = Effect.runSync(
+        Effect.result(
+          Effect.all(
+            vault.eventLogRecords.map(ExtensionEventLogRecordSchema.decode),
+            eventLogRecordDecodeOptions,
+          ),
+        ),
       );
-    const invited: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.Invited,
-      identityId: invite.identityId,
-      identityLabel: invite.identityLabel,
-      code: invite.code,
-      sealedPassphrase: invite.sealedPassphrase,
-      mountProviderId: invite.mountProviderId,
+      if (records._tag === "Failure") return refused;
+      const admitted: ExtensionKeyringVault = {
+        storeId: vault.storeId,
+        eventLogRecords: records.success,
+      };
+      vaults.push(admitted);
+    }
+    const added: ExtensionKeyringGrant = {
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: keyring.identityId,
+      identityLabel: keyring.identityLabel,
+      identityEvents,
+      vaults,
     };
-    return ok(invited);
+    return ok(added);
   }
 
   static parse(
@@ -295,12 +310,8 @@ export class ExtensionPairingApprovedGrantAdmission {
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
       providers.push(decoded.success);
     }
-    const identityInvite =
-      ExtensionPairingApprovedGrantAdmission.identityInvite(payload);
-    if (identityInvite.isErr())
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
-      );
+    const keyring = ExtensionPairingApprovedGrantAdmission.keyring(payload);
+    if (keyring.isErr()) return err(keyring.error);
     const grant: ExtensionPairingApprovedGrant = {
       vaultType: vaultType.value,
       deviceId: payload.deviceId,
@@ -317,7 +328,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       approvedAt: payload.approvedAt,
       scopes,
       providers,
-      identityInvite: identityInvite.value,
+      keyring: keyring.value,
     };
     return ok(grant);
   }
@@ -405,9 +416,6 @@ const extensionPairingApprovedMessageFields: ExtensionPairingApprovedMessageFiel
 const extensionPairingApprovedMessageSchema = Schema.Struct(
   extensionPairingApprovedMessageFields,
 );
-const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
-  concurrency: "unbounded",
-};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairingApprovedMessage {
@@ -453,357 +461,11 @@ export class ExtensionPairingApprovedMessage {
   }
 }
 
-export enum ExtensionIdentityHandoffRequestMessageType {
-  NookExtensionIdentityHandoffRequest = "nook:extension-identity-handoff-request",
-}
-
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionIdentityHandoffRequestMessage {
-  private constructor() {}
-  declare readonly type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest;
-  declare readonly payload: {
-    recipientPublicKey: string;
-    nonce: string;
-    expectedDeviceId: string;
-    expectedDevicePublicKey: string;
-    expectedDeviceSigningPublicKey: string;
-  };
-  static decode(
-    message: unknown,
-  ): Effect.Effect<
-    ExtensionIdentityHandoffRequestMessage,
-    RuntimeMessageDecodeFailure
-  > {
-    const recipientPublicKeySchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const nonceSchema = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
-    const expectedDeviceIdSchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const expectedDevicePublicKeySchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const expectedDeviceSigningPublicKeySchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const identityHandoffPayloadFields: {
-      readonly recipientPublicKey: typeof recipientPublicKeySchema;
-      readonly nonce: typeof nonceSchema;
-      readonly expectedDeviceId: typeof expectedDeviceIdSchema;
-      readonly expectedDevicePublicKey: typeof expectedDevicePublicKeySchema;
-      readonly expectedDeviceSigningPublicKey: typeof expectedDeviceSigningPublicKeySchema;
-    } = {
-      recipientPublicKey: recipientPublicKeySchema,
-      nonce: nonceSchema,
-      expectedDeviceId: expectedDeviceIdSchema,
-      expectedDevicePublicKey: expectedDevicePublicKeySchema,
-      expectedDeviceSigningPublicKey: expectedDeviceSigningPublicKeySchema,
-    };
-    const identityHandoffPayloadSchema = Schema.Struct(
-      identityHandoffPayloadFields,
-    );
-    const identityHandoffTypeSchema = Schema.Literal(
-      ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-    );
-    const identityHandoffMessageFields: {
-      readonly type: typeof identityHandoffTypeSchema;
-      readonly payload: typeof identityHandoffPayloadSchema;
-    } = {
-      type: identityHandoffTypeSchema,
-      payload: identityHandoffPayloadSchema,
-    };
-    const identityHandoffMessageSchema = Schema.Struct(
-      identityHandoffMessageFields,
-    );
-    type IdentityHandoffEnvelope = Schema.Schema.Type<
-      typeof identityHandoffMessageSchema
-    >;
-    const identityHandoffRequest: RuntimeMessageDecodeRequest<
-      IdentityHandoffEnvelope,
-      typeof message
-    > = {
-      schema: identityHandoffMessageSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
-    };
-    return decodeRuntimeMessage(identityHandoffRequest);
-  }
-}
-
-export enum ExtensionPairedVaultIdentityDiscoveryMessageType {
-  NookExtensionPairedVaultIdentityDiscovery = "nook:extension-paired-vault-identity-discovery",
-}
-
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionPairedVaultIdentityDiscoveryMessage {
-  private constructor() {}
-  declare readonly type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery;
-  declare readonly payload: unknown;
-  static decode(
-    message: unknown,
-  ): Effect.Effect<
-    ExtensionPairedVaultIdentityDiscoveryMessage,
-    RuntimeMessageDecodeFailure
-  > {
-    const discoveryTypeSchema = Schema.Literal(
-      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-    );
-    const discoveryMessageFields: {
-      readonly type: typeof discoveryTypeSchema;
-      readonly payload: typeof Schema.Unknown;
-    } = {
-      type: discoveryTypeSchema,
-      payload: Schema.Unknown,
-    };
-    const discoveryMessageSchema = Schema.Struct(discoveryMessageFields);
-    type DiscoveryEnvelope = Schema.Schema.Type<typeof discoveryMessageSchema>;
-    const discoveryRequest: RuntimeMessageDecodeRequest<
-      DiscoveryEnvelope,
-      typeof message
-    > = {
-      schema: discoveryMessageSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
-    };
-    return decodeRuntimeMessage(discoveryRequest);
-  }
-}
-
-export type CompanionIdentityDiscoveryTransportResponse =
-  { ok: true; status: CompanionIdentityStatus } | { ok: false };
-
-export enum ExtensionPairedVaultUnlockRequestMessageType {
-  NookExtensionPairedVaultUnlockRequest = "nook:extension-paired-vault-unlock-request",
-}
-
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionPairedVaultUnlockRequestMessage {
-  private constructor() {}
-  declare readonly type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest;
-  declare readonly payload: {
-    requestId: string;
-    vaultStoreId: string;
-  };
-  static decode(
-    message: unknown,
-  ): Effect.Effect<
-    ExtensionPairedVaultUnlockRequestMessage,
-    RuntimeMessageDecodeFailure
-  > {
-    const unlockRequestIdSchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const unlockVaultStoreIdSchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const unlockPayloadFields: {
-      readonly requestId: typeof unlockRequestIdSchema;
-      readonly vaultStoreId: typeof unlockVaultStoreIdSchema;
-    } = {
-      requestId: unlockRequestIdSchema,
-      vaultStoreId: unlockVaultStoreIdSchema,
-    };
-    const unlockPayloadSchema = Schema.Struct(unlockPayloadFields);
-    const unlockTypeSchema = Schema.Literal(
-      ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-    );
-    const unlockMessageFields: {
-      readonly type: typeof unlockTypeSchema;
-      readonly payload: typeof unlockPayloadSchema;
-    } = {
-      type: unlockTypeSchema,
-      payload: unlockPayloadSchema,
-    };
-    const unlockMessageSchema = Schema.Struct(unlockMessageFields);
-    type UnlockEnvelope = Schema.Schema.Type<typeof unlockMessageSchema>;
-    const unlockRequest: RuntimeMessageDecodeRequest<
-      UnlockEnvelope,
-      typeof message
-    > = {
-      schema: unlockMessageSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
-    };
-    return decodeRuntimeMessage(unlockRequest);
-  }
-}
-
-export enum ExtensionPairedVaultLockRequestMessageType {
-  NookExtensionPairedVaultLockRequest = "nook:extension-paired-vault-lock-request",
-}
-
-/** A paired vault page asks the extension to lock with it: the page's
- * identity was handed over by this extension, which holds its key. */
-export class ExtensionPairedVaultLockRequestMessage {
-  private constructor() {}
-  declare readonly type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest;
-  declare readonly payload: { requestId: string };
-  static decode(
-    message: unknown,
-  ): Effect.Effect<
-    ExtensionPairedVaultLockRequestMessage,
-    RuntimeMessageDecodeFailure
-  > {
-    const requestIdSchema = Schema.String.pipe(
-      Schema.check(Schema.isMinLength(1)),
-    );
-    const payloadFields: { readonly requestId: typeof requestIdSchema } = {
-      requestId: requestIdSchema,
-    };
-    const typeSchema = Schema.Literal(
-      ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
-    );
-    const messageFields: {
-      readonly type: typeof typeSchema;
-      readonly payload: Schema.Struct<typeof payloadFields>;
-    } = { type: typeSchema, payload: Schema.Struct(payloadFields) };
-    const messageSchema = Schema.Struct(messageFields);
-    const lockRequest: RuntimeMessageDecodeRequest<
-      Schema.Schema.Type<typeof messageSchema>,
-      typeof message
-    > = {
-      schema: messageSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultLockRequest,
-    };
-    return decodeRuntimeMessage(lockRequest);
-  }
-}
-
-/** The extension's answer to a lock request: locked, for that request. */
-export class ExtensionPairedVaultLockResponse {
-  private constructor() {}
-  declare readonly ok: true;
-  declare readonly requestId: string;
-  static decode(
-    response: unknown,
-  ): Effect.Effect<
-    ExtensionPairedVaultLockResponse,
-    RuntimeMessageDecodeFailure
-  > {
-    const responseFields: {
-      readonly ok: Schema.Literal<true>;
-      readonly requestId: Schema.String;
-    } = { ok: Schema.Literal(true), requestId: Schema.String };
-    const responseSchema = Schema.Struct(responseFields);
-    const lockResponse: RuntimeMessageDecodeRequest<
-      Schema.Schema.Type<typeof responseSchema>,
-      typeof response
-    > = {
-      schema: responseSchema,
-      value: response,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultLockResponse,
-    };
-    return decodeRuntimeMessage(lockResponse);
-  }
-}
-
-export enum ExtensionSessionLockedNoticeType {
-  NookExtensionSessionLocked = "nook:extension-session-locked",
-}
-
-/** The extension locked (its panel, its idle expiry, or a paired page's
- * request). Vault pages hear it through the vault bridge content script; a
- * forged notice can only lock a page, never unlock one. */
-export class ExtensionSessionLockedNotice {
-  private constructor() {}
-  declare readonly type: ExtensionSessionLockedNoticeType.NookExtensionSessionLocked;
-  static readonly locked: ExtensionSessionLockedNotice = {
-    type: ExtensionSessionLockedNoticeType.NookExtensionSessionLocked,
-  };
-  static decode(
-    message: unknown,
-  ): Effect.Effect<ExtensionSessionLockedNotice, RuntimeMessageDecodeFailure> {
-    const noticeFields: {
-      readonly type: Schema.Literal<ExtensionSessionLockedNoticeType.NookExtensionSessionLocked>;
-    } = {
-      type: Schema.Literal(
-        ExtensionSessionLockedNoticeType.NookExtensionSessionLocked,
-      ),
-    };
-    const noticeSchema = Schema.Struct(noticeFields);
-    const notice: RuntimeMessageDecodeRequest<
-      Schema.Schema.Type<typeof noticeSchema>,
-      typeof message
-    > = {
-      schema: noticeSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionSessionLockedNotice,
-    };
-    return decodeRuntimeMessage(notice);
-  }
-}
-
-export enum ExtensionPairedVaultIdentityHandoffRequestMessageType {
-  NookExtensionPairedVaultIdentityHandoffRequest = "nook:extension-paired-vault-identity-handoff-request",
-}
-
-export type CompanionAdmittedIdentityDiscovery = {
-  readonly discovery: CompanionIdentityDiscoveryObservation;
-  readonly status: CompanionIdentityStatus;
-  readonly admittedAt: number;
-};
-
-export type CompanionIdentityHandoffRequest = {
-  readonly transaction: CompanionAdmittedIdentityDiscovery;
-  readonly recipientPublicKey: string;
-};
-
-export type CompanionIdentityHandoffResponse = {
-  readonly request: CompanionIdentityHandoffRequest;
-  readonly encryptedEnvelope: string;
-};
-
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionPairedVaultIdentityHandoffRequestMessage {
-  private constructor() {}
-  declare readonly type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest;
-  declare readonly payload: unknown;
-  static decode(
-    message: unknown,
-  ): Effect.Effect<
-    ExtensionPairedVaultIdentityHandoffRequestMessage,
-    RuntimeMessageDecodeFailure
-  > {
-    const handoffTypeSchema = Schema.Literal(
-      ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-    );
-    const handoffMessageFields: {
-      readonly type: typeof handoffTypeSchema;
-      readonly payload: typeof Schema.Unknown;
-    } = {
-      type: handoffTypeSchema,
-      payload: Schema.Unknown,
-    };
-    const handoffMessageSchema = Schema.Struct(handoffMessageFields);
-    type HandoffEnvelope = Schema.Schema.Type<typeof handoffMessageSchema>;
-    const handoffRequest: RuntimeMessageDecodeRequest<
-      HandoffEnvelope,
-      typeof message
-    > = {
-      schema: handoffMessageSchema,
-      value: message,
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
-    };
-    return decodeRuntimeMessage(handoffRequest);
-  }
-}
-
-export type CompanionIdentityHandoffTransportResponse =
-  | { ok: true; response: CompanionIdentityHandoffResponse }
-  | { ok: false; reason: string };
-
 export type RuntimeMessage =
   | ExtensionVaultEventLogRequestMessage
   | OpenSimpleVaultMessage
   | OpenCompanionLauncherMessage
   | BeginExtensionPairingMessage
-  | ExtensionIdentityHandoffRequestMessage
-  | ExtensionPairedVaultIdentityDiscoveryMessage
-  | ExtensionPairedVaultUnlockRequestMessage
-  | ExtensionPairedVaultLockRequestMessage
-  | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage
   | ExtensionSidePanelSignal;

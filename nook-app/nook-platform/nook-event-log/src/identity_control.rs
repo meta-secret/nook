@@ -13,7 +13,8 @@ mod wire;
 
 pub use builder::{
     IdentityApprovalRequest, IdentityEventSigning, IdentityGenesisRequest, IdentityInviteIssue,
-    IdentityInviteJoin, IdentityNaming, IdentityVaultRegistration, OpenedVaultDek,
+    IdentityInviteJoin, IdentityMemberAddition, IdentityNaming, IdentityVaultRegistration,
+    OpenedVaultDek,
 };
 pub use graph::{
     IdentityControlInsertion, IdentityControlLog, IdentityControlRejection,

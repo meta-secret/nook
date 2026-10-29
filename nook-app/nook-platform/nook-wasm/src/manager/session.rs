@@ -1,5 +1,3 @@
-use super::companion_protocol::PendingCompanionWebsiteHandoff;
-use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, EventGraph, ICloudSharedTarget, SentinelConfiguration, SentinelGenesisPhase,
@@ -9,9 +7,8 @@ use nook_core::{
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 use crate::{NookError, NookEventLogSyncIssue};
 
@@ -421,11 +418,8 @@ pub(in crate::manager) enum LocalIdentityCreation {
 
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
-    pub(in crate::manager) handoff_generation: Rc<()>,
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
-    pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,
-    pub(in crate::manager) pending_extension_handoff: ExtensionIdentityPublication,
     pub(in crate::manager) pending_local_identity_label: LocalIdentityCreation,
 }
 
@@ -513,7 +507,6 @@ impl Drop for NookVaultManager {
         self.storage.access_token.zeroize();
         self.vault.reset();
         self.device.identity_private_key.zeroize();
-        self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
@@ -686,41 +679,5 @@ mod tests {
     fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
-    }
-}
-
-/// The recipient secret and companion transaction are distinct in-memory states.
-/// Neither state is serialized, and replacing it immediately drops protected material.
-#[derive(Default)]
-pub(in crate::manager) enum ExtensionHandoffState {
-    #[default]
-    Idle,
-    Recipient(Zeroizing<String>),
-    Companion(Box<PendingCompanionWebsiteHandoff>),
-}
-impl ExtensionHandoffState {
-    pub(in crate::manager) fn companion(pending: PendingCompanionWebsiteHandoff) -> Self {
-        Self::Companion(Box::new(pending))
-    }
-
-    pub(in crate::manager) fn clear(&mut self) {
-        *self = Self::Idle;
-    }
-    #[cfg(test)]
-    pub(in crate::manager) fn is_empty(&self) -> bool {
-        matches!(self, Self::Idle)
-    }
-    pub(in crate::manager) fn into_recipient(self) -> Result<Zeroizing<String>, NookError> {
-        match self {
-            Self::Recipient(secret) => Ok(secret),
-            Self::Idle | Self::Companion(_) => Err(NookError::Decryption(
-                "Extension identity handoff was not initialized.".to_owned(),
-            )),
-        }
-    }
-}
-impl Zeroize for ExtensionHandoffState {
-    fn zeroize(&mut self) {
-        self.clear();
     }
 }

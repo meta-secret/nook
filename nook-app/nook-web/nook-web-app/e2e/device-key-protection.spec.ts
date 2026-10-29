@@ -15,7 +15,9 @@ import {
   openVaultPage,
   openKeysPage,
   openVaultPanelAndUnlock,
+  startFirstRun,
   unlockVaultOnLogin,
+  openVaultRow,
 } from './helpers'
 
 declare global {
@@ -32,6 +34,11 @@ async function revealDeviceProtectionCreateWorkflow(page: Page) {
   await expect(
     page.getByTestId('device-protection-create-workflow'),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  // The passkey's label and mode wait under Passkey options.
+  const options = page.getByTestId('device-protection-options')
+  if (!(await options.evaluate((element) => element.hasAttribute('open')))) {
+    await page.getByTestId('device-protection-options-toggle').click()
+  }
 }
 
 async function clickDeviceProtectionSetup(page: Page) {
@@ -114,8 +121,7 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('first-vault-start')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
-  await page.getByTestId('login-create-device-vault-btn').click()
+  await startFirstRun(page)
   await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -341,10 +347,13 @@ test.describe('passkey device-key protection', () => {
     ).toHaveText('Create passkey')
 
     await page.getByTestId('device-protection-create-new-choice').click()
-    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
+    // The device mode waits under Passkey options.
+    await expect(page.getByTestId('mode-group-device')).toBeHidden()
+    await page.getByTestId('device-protection-options-toggle').click()
+    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-authenticate-workflow'),
     ).toHaveCount(0)
@@ -662,7 +671,9 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-generated-response'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    // The protection setup made this browser's key and its keyring, which
+    // now waits on its card for a first vault.
+    await expect(page.getByTestId('identity-new-vault')).toBeVisible()
   })
 
   test('derives the device identity and requires passkey authorization after reload', async ({
@@ -723,7 +734,7 @@ test.describe('passkey device-key protection', () => {
     )
   })
 
-  test('fails closed when protected identity metadata is missing after vault use', async ({
+  test('recovers the device key from its passkey when its stored metadata is missing', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -749,10 +760,13 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('device-protection-error')).toContainText(
-      "Could not safely reset this browser's device identity.",
-    )
-    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+    // The passkey derives the same app key again, so the keyring and its
+    // vault open as before; no replacement key is made.
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0, {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('device-protection-error')).toHaveCount(0)
+    await expect(openVaultRow(page)).toBeVisible()
   })
 
   test('falls back to PIN wrapping when the authenticator does not support PRF', async ({
@@ -855,7 +869,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-use-existing-choice').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'Set a local PIN or passphrase to protect a new device identity instead',
+      'Set a local PIN or passphrase to protect a new device key instead',
     )
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),

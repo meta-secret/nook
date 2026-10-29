@@ -20,6 +20,7 @@ import {
   installForcePinDeviceProtection,
 } from './pin-device'
 import {
+  createWebsiteIdentityForConnect,
   leaveFirstRunReady,
   waitForExtensionPairingReady,
 } from './extension-approval'
@@ -125,14 +126,11 @@ async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
 
-  // The Simple app starts with one name field; nothing to choose.
-  const nameInput = page.getByTestId('login-vault-name-input')
-  await expect(nameInput).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Mock auth vault', {
-      timeout: EXTENSION_TIMEOUT_MS,
-    })
-  }
+  // First run starts by creating the identity; its name is asked once setup
+  // keeps it on this browser.
+  await expect(page.getByTestId('first-run-create-identity-btn')).toBeEnabled({
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
 }
 
 export async function launchPairedPinExtension(
@@ -196,9 +194,8 @@ export async function launchPairedPinExtension(
 
   if (!(await consent.isVisible())) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
-    await expect(consent).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+    // The website's own passkey makes its key; the extension keeps its PIN.
+    await createWebsiteIdentityForConnect(simplePage, vaultName)
   }
   await simplePage.getByTestId('approve-extension-device-btn').click()
   await waitForExtensionPairingReady(

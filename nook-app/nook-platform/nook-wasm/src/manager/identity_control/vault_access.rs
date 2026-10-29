@@ -18,9 +18,19 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 
+use crate::manager::NookExternalEventLogRecords;
 use crate::manager::NookVaultManager;
 use crate::manager::verified_access::VerifiedVaultAccessFlow;
 use crate::{NookDatabase, NookError, NookSecretPage};
+
+/// A vault of the current identity, ready to open: its DEK, its records,
+/// and whether they came from a provider rather than this browser's copy.
+struct IdentityVaultOpening {
+    keys: VaultKeys,
+    records: Vec<nook_core::StoredSecretRecord>,
+    event_log_remote: bool,
+    page_limit: u32,
+}
 
 impl NookVaultManager {
     async fn identity_owns_open_vault(&self, store_id: &StoreId) -> Result<bool, NookError> {
@@ -31,6 +41,74 @@ impl NookVaultManager {
             .identities()
             .iter()
             .any(|record| record.identity_id == identity_id && record.owns_vault(store_id)))
+    }
+
+    /// The DEK the identity granted this installation for one of its vaults,
+    /// with that vault made the session's.
+    async fn enter_identity_vault(&mut self, store_id: &StoreId) -> Result<VaultKeys, NookError> {
+        let app_key = self.unlocked_app_key()?;
+        let keys = NookDatabase::load_identity_directory()
+            .await?
+            .open_vault_dek(IdentityVaultKeyOpening {
+                app_key: &app_key,
+                store_id: store_id.clone(),
+            })
+            .map_err(NookDatabase::map_domain_error)?;
+        self.vault.store_id = store_id.as_str().to_owned();
+        Ok(keys)
+    }
+
+    /// Open the session's identity vault from its records with the DEK the
+    /// identity granted, self-enroll, and bring it in line with the
+    /// identity log.
+    async fn open_identity_vault(
+        &mut self,
+        opening: IdentityVaultOpening,
+    ) -> Result<NookSecretPage, JsError> {
+        let IdentityVaultOpening {
+            keys,
+            records,
+            event_log_remote,
+            page_limit,
+        } = opening;
+        let app_key = self.unlocked_app_key()?;
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
+        }
+        if records.is_empty() {
+            return Err(
+                NookError::Database("No vault records found at this provider.".to_owned()).into(),
+            );
+        }
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        self.vault.unlock = VaultUnlock::Keys;
+        self.vault.meta = VaultMetaState::from_stored_records(&records)?;
+        self.ensure_event_log_ready().await?;
+        self.adopt_vault_name_from_events().await?;
+        if !self.vault.meta.auth.contains_key(&app_key.auth_id()) {
+            self.persist_password_unlock_membership(&records, &app_key, &keys)
+                .await?;
+        }
+        if let Err(error) = self.ensure_identity_after_connect(&app_key).await {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
+        if event_log_remote {
+            let yaml = self.serialize_current_projection_yaml()?;
+            NookDatabase::save_to_indexed_db(&yaml).await?;
+        }
+        self.label_local_vault_with_projected_name().await?;
+        self.purge_legacy_plaintext_search_catalog().await?;
+        self.reconcile_open_vault_with_identity_log().await?;
+        let page = VerifiedVaultAccessFlow::Connect
+            .complete(
+                self.query_secret_page("", SecretTypeFilter::All, 0, page_limit),
+                app_key.device_id(),
+                &self.vault.store_id,
+            )
+            .await?;
+        drop(self.status.tx.send("READY".to_owned()));
+        NookSecretPage::from_core(page).map_err(Into::into)
     }
 
     fn open_vault_keys(&self) -> Result<VaultKeys, NookError> {
@@ -86,53 +164,57 @@ impl NookVaultManager {
         let store_id = StoreId::parse(&store_id)?;
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let app_key = self.unlocked_app_key()?;
-        let keys = NookDatabase::load_identity_directory()
-            .await?
-            .open_vault_dek(IdentityVaultKeyOpening {
-                app_key: &app_key,
-                store_id: store_id.clone(),
-            })
-            .map_err(NookDatabase::map_domain_error)?;
-        self.vault.store_id = store_id.as_str().to_owned();
+        let keys = self.enter_identity_vault(&store_id).await?;
         let (event_log_remote, records) = self.load_password_unlock_records("", true).await?;
-        if self.vault.architecture.vault_type == VaultType::Sentinel {
-            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
-        }
-        if records.is_empty() {
-            return Err(
-                NookError::Database("No vault records found at this provider.".to_owned()).into(),
-            );
-        }
-        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.unlock = VaultUnlock::Keys;
-        self.vault.meta = VaultMetaState::from_stored_records(&records)?;
-        self.ensure_event_log_ready().await?;
-        self.adopt_vault_name_from_events().await?;
-        if !self.vault.meta.auth.contains_key(&app_key.auth_id()) {
-            self.persist_password_unlock_membership(&records, &app_key, &keys)
-                .await?;
-        }
-        if let Err(error) = self.ensure_identity_after_connect(&app_key).await {
+        let opening = IdentityVaultOpening {
+            keys,
+            records,
+            event_log_remote,
+            page_limit,
+        };
+        self.open_identity_vault(opening).await
+    }
+
+    /// Open a vault of the current identity from the event records the web
+    /// app handed over, with no provider: the browser extension opens each
+    /// vault of the keyring it was added to this way, with the DEK the
+    /// keyring granted it, then self-enrolls.
+    #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `connect_identity_vault_from_records` paging values through JavaScript Number scalars"
+        )
+    )]
+    pub async fn connect_identity_vault_from_records(
+        &mut self,
+        store_id: String,
+        records: NookExternalEventLogRecords,
+        page_limit: u32,
+    ) -> Result<NookSecretPage, JsError> {
+        drop(self.status.tx.send("CONNECT_START".to_owned()));
+        let store_id = StoreId::parse(&store_id)?;
+        self.prepare_storage("local", "", "").await?;
+        let keys = self.enter_identity_vault(&store_id).await?;
+        // The records name their vault; they must be this one's.
+        self.vault.store_id = String::new();
+        self.sync_external_event_log_records(records.0).await?;
+        if self.vault.store_id != store_id.as_str() {
             self.reset_vault_session();
-            return Err(error.into());
-        }
-        if event_log_remote {
-            let yaml = self.serialize_current_projection_yaml()?;
-            NookDatabase::save_to_indexed_db(&yaml).await?;
-        }
-        self.label_local_vault_with_projected_name().await?;
-        self.purge_legacy_plaintext_search_catalog().await?;
-        self.reconcile_open_vault_with_identity_log().await?;
-        let page = VerifiedVaultAccessFlow::Connect
-            .complete(
-                self.query_secret_page("", SecretTypeFilter::All, 0, page_limit),
-                app_key.device_id(),
-                &self.vault.store_id,
+            return Err(NookError::Database(
+                "The records handed over are not this vault's.".to_owned(),
             )
-            .await?;
-        drop(self.status.tx.send("READY".to_owned()));
-        NookSecretPage::from_core(page).map_err(Into::into)
+            .into());
+        }
+        let records = self.project_local_event_log().await?;
+        let opening = IdentityVaultOpening {
+            keys,
+            records,
+            event_log_remote: true,
+            page_limit,
+        };
+        self.open_identity_vault(opening).await
     }
 
     /// Bring the open vault in line with the identity log. Returns whether the

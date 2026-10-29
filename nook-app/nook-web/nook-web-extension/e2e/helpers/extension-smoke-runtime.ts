@@ -26,13 +26,13 @@ import {
 import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import {
+  createWebsiteIdentityForConnect,
   leaveFirstRunReady,
   waitForExtensionPairingReady,
 } from './extension-approval'
 import {
   readExtensionPersistenceSnapshot,
   readExtensionPairingStorage,
-  removeExtensionPairingStorageKeys,
   writeExtensionPairingStorage,
 } from './extension-pairing-storage'
 import { lockExtensionSession } from './paired-pin-extension'
@@ -41,6 +41,7 @@ import { REAL_SIDE_PANEL_BROWSER_ARG } from './real-side-panel'
 
 export {
   attachNookLogsForTest,
+  createWebsiteIdentityForConnect,
   installMockPasskeyRuntime,
   leaveFirstRunReady,
   lockExtensionSession,
@@ -78,22 +79,6 @@ export async function withE2eDeadline<Result>(
       },
     )
   })
-}
-
-/** Count the persisted vault-lifecycle extension identity adoptions. */
-export async function countIdentityAdoptions(read: {
-  page: Page
-  label: string
-}): Promise<number> {
-  const entries = await withE2eDeadline(
-    readPersistedAppLogs(read.page),
-    read.label,
-  )
-  return entries.filter(
-    (entry) =>
-      entry.scope === 'vault-lifecycle' &&
-      entry.message === 'extension identity adopted',
-  ).length
 }
 
 function pageAddress(page: Page): string {
@@ -257,14 +242,11 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-  // The Simple app starts with one name field; nothing to choose.
-  const nameInput = page.getByTestId('login-vault-name-input')
-  await expect(nameInput).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Test vault', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-  }
+  // First run starts by creating the identity; its name is asked once setup
+  // keeps it on this browser.
+  await expect(page.getByTestId('first-run-create-identity-btn')).toBeEnabled({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 const rootDir = path.resolve(
@@ -776,84 +758,6 @@ export async function reuseNookTabForConnect(
   return nookPage
 }
 
-type PairingLauncherReconnect = {
-  readonly context: BrowserContext
-  readonly simplePage: Page
-  readonly pairingLauncher: Page
-}
-
-/** Reconnect through the existing Nook tab and await the launcher's own close. */
-export async function reconnectVaultFromPairingLauncher(
-  request: PairingLauncherReconnect,
-): Promise<void> {
-  const { context, simplePage, pairingLauncher } = request
-  // The launcher opened in the Nook tab's window, so connecting reuses
-  // that one Nook tab on the connect route instead of opening another.
-  const pagesBeforeReconnect = context
-    .pages()
-    .filter((page) => page !== pairingLauncher)
-  const previousConnectId = new URL(simplePage.url()).searchParams.get(
-    'connect_id',
-  )
-  await Promise.all([
-    // Closing the launcher only acknowledges tabs.update. The old connect
-    // document can still be loaded until the new navigation commits.
-    simplePage.waitForURL(
-      (url) => {
-        const connectId = url.searchParams.get('connect_id')
-        return (
-          belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
-          url.pathname.endsWith('/extension-connect') &&
-          typeof connectId === 'string' &&
-          connectId.length > 0 &&
-          connectId !== previousConnectId
-        )
-      },
-      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS, waitUntil: 'load' },
-    ),
-    pairingLauncher.waitForEvent('close', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    }),
-    pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
-  ])
-  await expect(simplePage).toHaveURL(
-    (url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
-      url.pathname.endsWith('/extension-connect'),
-    { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-  )
-  // The successful pairing reply closes its launcher. Every other page is
-  // retained, and connecting must not create a replacement Nook tab.
-  expect(context.pages()).toHaveLength(pagesBeforeReconnect.length)
-  expect(context.pages()).toEqual(expect.arrayContaining(pagesBeforeReconnect))
-}
-
-type AuthTabWindowRequest = {
-  readonly context: BrowserContext
-  readonly extensionId: string
-}
-
-/**
- * Opens the pairing auth tab in a normal window of its own. That window
- * holds no Simple Vault tab, so its Connect opens a new connect tab there
- * and leaves the Nook tabs of other windows as they are.
- */
-export async function openPairingAuthTabInOwnWindow(
-  request: AuthTabWindowRequest,
-): Promise<Page> {
-  const { context, extensionId } = request
-  const worker = await getServiceWorker(context)
-  const url = `chrome-extension://${extensionId}/popup/index.html?intent=pair`
-  const [authTab] = await Promise.all([
-    waitForNewPage(context, 'pairing auth tab window'),
-    worker.evaluate(async (target) => {
-      await chrome.windows.create({ url: target, type: 'normal' })
-    }, url),
-  ])
-  await expect(authTab).toHaveURL(url)
-  return authTab
-}
-
 export async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
   return withE2eDeadline(
@@ -867,14 +771,6 @@ export async function writeExtensionStorage(
   items: Record<string, unknown>,
 ) {
   await writeExtensionPairingStorage(page, items)
-}
-
-export async function removeExtensionStorageKeys(
-  context: BrowserContext,
-  keys: string[],
-) {
-  const worker = await getServiceWorker(context)
-  await removeExtensionPairingStorageKeys(worker, keys)
 }
 
 export async function sendExternalMessage(

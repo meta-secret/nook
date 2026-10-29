@@ -29,21 +29,17 @@ export class ExtensionSetupOfferModel {
     this.supported = supported;
   }
 
-  async refresh(): Promise<void> {
-    if (!this.supported || !this.vault.isAuthenticated) {
-      this.offer = { kind: ExtensionSetupOfferKind.Hidden };
-      return;
-    }
-    const offer = await extensionSetupBrowser.loadExtensionSetupOffer(
-      this.vault,
-    );
-    if (offer.isOk()) this.offer = offer.value;
+  refresh(): void {
+    this.offer =
+      this.supported && this.vault.isAuthenticated
+        ? extensionSetupBrowser.loadExtensionSetupOffer()
+        : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
   /** Refresh now and whenever the extension's presence changes; returns the
    * cleanup. */
   follow(): () => void {
-    void this.refresh();
+    this.refresh();
     return extensionSetupBrowser.observeExtensionSetupChanges(() =>
       this.refresh(),
     );

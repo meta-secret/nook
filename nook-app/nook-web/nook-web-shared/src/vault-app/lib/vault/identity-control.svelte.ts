@@ -9,6 +9,7 @@ import {
   generate_password,
   type AuthProvidersSnapshot,
   type IdentityControlSnapshot,
+  type IdentityVaultView,
   type NookEnrollmentIssueInput,
   type NookSecretPage,
   type NookStorageConnectArgs,
@@ -31,7 +32,6 @@ type MountVaultDeletion = {
 };
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
-import { PairedExtensionIdentityJoin } from "$lib/vault/paired-extension-identity-join";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
@@ -83,6 +83,17 @@ export type IdentityMemberRename = {
   readonly label: string;
 };
 
+export enum IdentityJoinDecision {
+  Approve = "approve",
+  Deny = "deny",
+}
+
+/** A member's answer to one device asking to join this identity. */
+export type IdentityJoinAnswer = {
+  readonly appId: string;
+  readonly decision: IdentityJoinDecision;
+};
+
 const PASSPHRASE_OPTIONS: PasswordGenerationOptions = {
   length: 20,
   lowercase: true,
@@ -98,8 +109,6 @@ export class IdentityControlModel {
   /** Remote provider rows that carry this identity's control log. */
   mounts = $state<StorageProvider[]>([]);
   busy = $state(false);
-  /** The paired extension's identity join in progress; one at a time. */
-  private extensionJoin: Promise<void> | false = false;
 
   constructor(private readonly vault: VaultState) {}
 
@@ -203,60 +212,45 @@ export class IdentityControlModel {
     });
     if (mounted.isErr()) return err(mounted.error);
     for (const provider of mounted.value) {
-      const args = this.vault.providerWasmArgs(provider);
-      const synced = await this.syncOneMount(args);
+      const synced = await this.syncOneMount(provider);
       if (synced.isErr()) return err(synced.error);
     }
     log.info("identity log synchronized with mounts");
-    const loaded = await this.loadSnapshot();
-    if (loaded.isOk()) this.invitePairedExtension();
-    return loaded;
+    return this.loadSnapshot();
   }
 
-  /** With a cloud copy, bring a paired extension that joined only a vault
-   * into the identity. Runs beside the sync and shows its failure. */
-  private invitePairedExtension(): void {
-    if (this.extensionJoin !== false) return;
-    const vault = this.vault;
-    this.extensionJoin = PairedExtensionIdentityJoin.forPage(vault)
-      .run()
-      .then((joined) => {
-        if (joined.isErr()) vault.errorMsg = vault.t(joined.error);
-      })
-      .finally(() => {
-        this.extensionJoin = false;
-      });
+  /** The folder handle of a local-folder mount. A folder this browser
+   * cannot open fails rather than being skipped. */
+  private localFolderHandleId(
+    provider: StorageProvider,
+  ): Result<string, VaultStorageFailure> {
+    const unavailable = new VaultStorageFailure(
+      VaultStorageFailureKind.LocalFolderUnavailable,
+    );
+    const configuration = new StorageProviderPresentation(
+      provider,
+    ).localFolderProviderConfiguration();
+    if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+      return err(unavailable);
+    }
+    const handle = new LocalFolderPresentation(
+      configuration.config,
+    ).localFolderHandle();
+    return handle.kind === LocalFolderHandleKind.Selected
+      ? ok(handle.handleId)
+      : err(unavailable);
   }
 
-  /** Delete a removed vault's files at one identity mount. A local folder
-   * this browser cannot open fails rather than being skipped. */
+  /** Delete a removed vault's files at one identity mount. */
   private async deleteAtMount({
     storeId,
     provider,
   }: MountVaultDeletion): Promise<Result<boolean, VaultStorageFailure>> {
     if (provider.type === "local-folder") {
-      const configuration = new StorageProviderPresentation(
-        provider,
-      ).localFolderProviderConfiguration();
-      if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.LocalFolderUnavailable,
-          ),
-        );
-      }
-      const handle = new LocalFolderPresentation(
-        configuration.config,
-      ).localFolderHandle();
-      if (handle.kind !== LocalFolderHandleKind.Selected) {
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.LocalFolderUnavailable,
-          ),
-        );
-      }
+      const handleId = this.localFolderHandleId(provider);
+      if (handleId.isErr()) return err(handleId.error);
       return this.withManager((manager) =>
-        manager.delete_removed_vault_at_local_folder(storeId, handle.handleId),
+        manager.delete_removed_vault_at_local_folder(storeId, handleId.value),
       );
     }
     const args = this.vault.providerWasmArgs(provider);
@@ -270,9 +264,25 @@ export class IdentityControlModel {
     );
   }
 
+  /** Union the identity log with one mount: a local folder through its own
+   * handle, any other provider through the prepared storage. */
   private async syncOneMount(
-    args: NookStorageConnectArgs,
+    provider: StorageProvider,
   ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    if (provider.type === "local-folder") {
+      const handleId = this.localFolderHandleId(provider);
+      if (handleId.isErr()) return err(handleId.error);
+      const synced = await this.withManager((manager) =>
+        manager.sync_identity_log_with_local_folder(handleId.value),
+      );
+      return synced.map(() => IdentityActionOutcome.Completed);
+    }
+    let args: NookStorageConnectArgs;
+    try {
+      args = this.vault.providerWasmArgs(provider);
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
     const synced = await this.withManager((manager) =>
       manager.sync_identity_log_with_provider(args.mode, args.pat, args.repo),
     );
@@ -299,15 +309,39 @@ export class IdentityControlModel {
     }
   }
 
+  /** The first vault the identity granted this browser that it does not
+   * hold yet, which opens through one of the identity's providers. */
+  grantedVaultElsewhere(): IdentityVaultView | false {
+    const snapshot = this.snapshot;
+    if (snapshot === false) return false;
+    const local = this.vault.localVaults.map((entry) => entry.storeId);
+    const [away] = snapshot.vaults.filter(
+      (entry) =>
+        entry.grantedToCurrentInstallation && !local.includes(entry.storeId),
+    );
+    return away ? away : false;
+  }
+
+  /** What an identity page shows when it opens: with a vault open, the log
+   * is created or confirmed; without one, only the log it has is read. */
+  async showPage(): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    return this.vault.isAuthenticated ? this.refresh() : this.loadSnapshot();
+  }
+
   /**
-   * Issue a one-time invite code. The open vault is registered with the
-   * identity first, so the code carries its DEK; the invite then reaches
-   * every mount before the joiner looks for it there.
+   * Issue a one-time invite code. Inviting uses the identity, so its log
+   * exists from here on. The open vault is registered with the identity
+   * first, so the code carries its DEK; the invite then reaches every mount
+   * before the joiner looks for it there.
    */
   async issueInvite({
     input,
     passphrase,
   }: IdentityInviteIssue): Promise<Result<string, VaultStorageFailure>> {
+    const ensured = await this.refresh();
+    if (ensured.isErr()) return err(ensured.error);
     const reconciled = await this.reconcileOpenVault();
     if (reconciled.isErr()) return err(reconciled.error);
     const issued = await this.withManager((manager) =>
@@ -334,6 +368,34 @@ export class IdentityControlModel {
 
   rename({ appId, label }: IdentityMemberRename) {
     return this.act((manager) => manager.rename_identity_member(appId, label));
+  }
+
+  /**
+   * Answer a device asking to join this identity. Rust approves it with
+   * every vault's DEK, or denies it; the answer then reaches every mount,
+   * where the asking device reads it.
+   */
+  async answerJoin({
+    appId,
+    decision,
+  }: IdentityJoinAnswer): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    const answered = await this.act((manager) => {
+      switch (decision) {
+        case IdentityJoinDecision.Approve:
+          return manager.approve_identity_join(appId);
+        case IdentityJoinDecision.Deny:
+          return manager.deny_identity_join(appId);
+      }
+    });
+    if (answered.isErr()) return answered;
+    const toast =
+      decision === IdentityJoinDecision.Approve
+        ? I18N_KEYS.IdentityControlJoinRequestApproved
+        : I18N_KEYS.IdentityControlJoinRequestDenied;
+    this.vault.showSuccess(this.vault.t(toast));
+    return answered;
   }
 
   /** Delete a vault from the identity on every device. The removal reaches
@@ -401,11 +463,14 @@ export class IdentityControlModel {
   /**
    * After a vault opens or syncs: create or confirm the identity log, union
    * it with every mount, then apply identity revocations and key epochs to
-   * the open vault.
+   * the open vault. With no vault open, looking at the identity changes
+   * nothing: the log it has is projected, and a fresh identity keeps none
+   * until it is used, so an approved join can still adopt it.
    */
   async followOpenVault(): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure>
   > {
+    if (!this.vault.isAuthenticated) return this.loadSnapshot();
     const refreshed = await this.refresh();
     if (refreshed.isErr()) return refreshed;
     const synced = await this.syncWithMounts();
@@ -438,7 +503,12 @@ export class IdentityControlModel {
       manager.identity_vault_provider(providers, storeId),
     );
     if (row.isErr()) return err(row.error);
-    const args = this.vault.providerWasmArgs(row.value);
+    let args: NookStorageConnectArgs;
+    try {
+      args = this.vault.providerWasmArgs(row.value);
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
     const pageSize = this.vault.secretPageSize;
     const page = await this.withManager((manager) =>
       manager.connect_identity_vault(

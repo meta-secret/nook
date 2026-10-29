@@ -51,9 +51,14 @@ export class IdentityCards {
     });
   }
 
+  /** The vaults the current identity's log lists. They show once the
+   * identity is unlocked, with or without a vault open: a browser that just
+   * joined holds none of them yet and opens them from these rows. */
   private get currentLogVaults(): string[] {
     const snapshot = this.vault.identityControl.snapshot;
-    return this.vault.isAuthenticated && snapshot !== false
+    const unlocked =
+      this.vault.isAuthenticated || this.vault.deviceProtectionReady;
+    return unlocked && snapshot !== false
       ? snapshot.vaults.map((entry) => entry.storeId)
       : [];
   }

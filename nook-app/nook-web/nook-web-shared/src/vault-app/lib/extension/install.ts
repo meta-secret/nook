@@ -4,11 +4,6 @@ import {
   InstalledExtensionRuntimeKind,
   extensionConnectionBrowser,
 } from "$lib/extension/connect";
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
-import {
-  ActiveVaultKind,
-  type ActiveVault,
-} from "$lib/vault/state/provider.svelte";
 
 export enum ExtensionInstallMethod {
   ChromeWebStore = "chrome_web_store",
@@ -30,20 +25,10 @@ export type ExtensionInstallTarget = {
 
 export enum ExtensionSetupStatus {
   NotInstalled = "not_installed",
-  InstalledUnpaired = "installed_unpaired",
-  PairedElsewhere = "paired_elsewhere",
-  Paired = "paired",
+  Installed = "installed",
 }
 
-export type ExtensionSetupState =
-  | { status: ExtensionSetupStatus.NotInstalled }
-  | { status: ExtensionSetupStatus.InstalledUnpaired }
-  | { status: ExtensionSetupStatus.Paired }
-  | {
-      status: ExtensionSetupStatus.PairedElsewhere;
-      connectedVaultName: string;
-      connectedVaultStoreId: string;
-    };
+export type ExtensionSetupState = { status: ExtensionSetupStatus };
 
 type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
@@ -299,42 +284,13 @@ class ExtensionInstallationBrowser {
     };
   }
 
-  async resolveExtensionSetupState(
-    activeVault: ActiveVault,
-  ): Promise<ExtensionSetupState> {
-    if (
-      extensionConnectionBrowser.readInstalledExtensionRuntimeId().kind ===
+  /** Whether the extension is installed beside this page. The page cannot
+   * tell which vaults it serves: its side panel shows that. */
+  resolveExtensionSetupState(): ExtensionSetupState {
+    return extensionConnectionBrowser.readInstalledExtensionRuntimeId().kind ===
       InstalledExtensionRuntimeKind.NotInstalled
-    ) {
-      return { status: ExtensionSetupStatus.NotInstalled };
-    }
-    if (activeVault.kind === ActiveVaultKind.Closed) {
-      return { status: ExtensionSetupStatus.InstalledUnpaired };
-    }
-
-    const discovery =
-      await extensionConnectionBrowser.discoverPairedExtensionIdentity(
-        activeVault.storeId,
-      );
-    if (
-      discovery.status ===
-        ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
-      discovery.status ===
-        ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
-    ) {
-      return { status: ExtensionSetupStatus.Paired };
-    }
-    if (
-      discovery.status ===
-      ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-    ) {
-      return {
-        status: ExtensionSetupStatus.PairedElsewhere,
-        connectedVaultName: discovery.connectedVaultName,
-        connectedVaultStoreId: discovery.connectedVaultStoreId,
-      };
-    }
-    return { status: ExtensionSetupStatus.InstalledUnpaired };
+      ? { status: ExtensionSetupStatus.NotInstalled }
+      : { status: ExtensionSetupStatus.Installed };
   }
 
   openExtensionInstallTarget(target: ExtensionInstallTarget): void {

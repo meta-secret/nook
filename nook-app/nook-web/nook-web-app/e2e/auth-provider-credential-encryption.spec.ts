@@ -16,6 +16,7 @@ import {
   waitForStorageChainIdle,
   waitForVaultSyncIdle,
   expectLoginGateAfterLoad,
+  createFirstRunKey,
 } from './helpers'
 import { AUTH_PROVIDER_HOOK_READ_FAILED } from './helpers/auth-providers'
 
@@ -30,6 +31,8 @@ test.describe('sync provider credential encryption', () => {
   test('saveAuthProviders seals credentials in IndexedDB and load decrypts them', async ({
     page,
   }) => {
+    // Credentials are sealed with this browser's key, made in first run.
+    await createFirstRunKey(page)
     const pat = 'github_pat_11E2EsaveSEALtoken'
     await saveAuthProvidersInBrowser(
       page,
@@ -90,6 +93,8 @@ test.describe('sync provider credential encryption', () => {
   })
 
   test('load rejects a plaintext credential at rest', async ({ page }) => {
+    // Credentials are sealed with this browser's key, made in first run.
+    await createFirstRunKey(page)
     const pat = 'github_pat_22E2EplainTEXT'
     await waitForAuthProvidersE2eHook(page)
     await saveAuthProvidersInBrowser(
@@ -124,6 +129,8 @@ test.describe('sync provider credential encryption', () => {
   test('OAuth access and refresh tokens are sealed at rest', async ({
     page,
   }) => {
+    // Credentials are sealed with this browser's key, made in first run.
+    await createFirstRunKey(page)
     const access = 'ya29.e2e-oauth-access-token'
     const refresh = '1//e2e-refresh-token-secret'
     await saveAuthProvidersInBrowser(

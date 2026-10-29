@@ -6,17 +6,17 @@ join) sit between the hero and the cards.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
-  import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
-  import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
+  import { FolderKey, Plus, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import { Button } from '$lib/components/ui/button'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
-  import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
+  import UnlockedIdentityOverview from '$lib/components/identity-control/UnlockedIdentityOverview.svelte'
   import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
   import {
     DeviceRecoveryKind,
@@ -39,16 +39,10 @@ join) sit between the hero and the cards.
     type IdentityVaultTarget,
     type IdentityCardView,
   } from './identity-card-model'
-  import {
-    LoginVaultExtensionPairingStatusKind,
-    type LoginVaultExtensionPairingStatus,
-  } from '$lib/components/login/login-vault-extension-pairing-status'
 
   let {
     vault,
     selectedStoreId = '',
-    extensionStoreIds = [],
-    extensionNote = '',
     canAddVault = false,
     showCards = true,
     busy = false,
@@ -56,7 +50,6 @@ join) sit between the hero and the cards.
     onNewVault = () => {},
     onSelectVault,
     onUnlockVault,
-    onUnlockElsewhere,
     onManageVault,
     onNewIdentity,
     onUseIdentity,
@@ -68,9 +61,6 @@ join) sit between the hero and the cards.
     overviewOpen = false,
     onLock = () => {},
     onUnlock = () => {},
-    pairingStatusFor = () => ({
-      kind: LoginVaultExtensionPairingStatusKind.NotShown,
-    }),
     unlockPanel,
     passwordFallback,
     vaultExtension,
@@ -84,9 +74,6 @@ join) sit between the hero and the cards.
   }: {
     vault: VaultState
     selectedStoreId?: string
-    extensionStoreIds?: readonly string[]
-    /** Shown when the extension is paired with a vault not on this browser. */
-    extensionNote?: string
     canAddVault?: boolean
     showCards?: boolean
     busy?: boolean
@@ -96,10 +83,6 @@ join) sit between the hero and the cards.
     onSelectVault?: (storeId: string) => void
     /** Unlock a vault from its panel without going into it. */
     onUnlockVault?: (storeId: string) => void
-    /** Unlock an identity whose key the paired extension holds. */
-    onUnlockElsewhere?: (
-      target: PairedIdentityUnlockTarget,
-    ) => void | Promise<void>
     /** One of a vault's own pages, from its panel beside the card. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
@@ -123,7 +106,6 @@ join) sit between the hero and the cards.
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void | Promise<void>
-    pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** A running Sentinel quorum ceremony for `selectedStoreId`: on the
      * card that lists that vault, or on its own when no card does. */
     unlockPanel?: Snippet
@@ -293,6 +275,12 @@ join) sit between the hero and the cards.
     return target
   }
 
+  /** With no vault open, the unlocked identity's overview is the hub's own:
+   * its pages open without a vault. */
+  const unlockedOverview = $derived(
+    !vault.isAuthenticated && vault.identityPage === WorkspaceSection.Overview,
+  )
+
   /** The current identity's card, which carries the "New vault" row. */
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
@@ -315,6 +303,12 @@ join) sit between the hero and the cards.
   )
 </script>
 
+{#snippet unlockedIdentityOverview()}
+  {#if currentHealth}
+    <UnlockedIdentityOverview {vault} health={currentHealth} {onNewVault} />
+  {/if}
+{/snippet}
+
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="identities-hub">
   {#if !firstRun}
     <IdentitiesHero
@@ -323,8 +317,6 @@ join) sit between the hero and the cards.
       showStats={cards.length > 0}
     />
   {/if}
-
-  <IdentityJoinPanel {vault} />
 
   {@render children?.()}
 
@@ -453,6 +445,23 @@ join) sit between the hero and the cards.
         <h2 class="nk-subpanel-head flex-1">
           {vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         </h2>
+        <!-- Which keyring a passkey or backup password opens: a question
+             about these keyrings, so it sits with them, quieter than New. -->
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          class="shrink-0 text-muted-foreground"
+          data-testid="access-check-open-btn"
+          aria-label={vault.t(I18N_KEYS.AccessCheckOpen)}
+          disabled={busy}
+          onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
+        >
+          <ShieldCheck class="size-4" aria-hidden="true" />
+          <span class="hidden sm:inline"
+            >{vault.t(I18N_KEYS.AccessCheckOpen)}</span
+          >
+        </Button>
         <Button
           type="button"
           size="sm"
@@ -482,7 +491,6 @@ join) sit between the hero and the cards.
             {vault}
             {card}
             {selectedStoreId}
-            {extensionStoreIds}
             {busy}
             canAddVault={(canAddVault ||
               (card.identityId === setupIdentityId && !setupShown)) &&
@@ -507,10 +515,12 @@ join) sit between the hero and the cards.
                   },
                 }
               : {}}
-            overviewOpen={card.current && overviewOpen}
+            overviewOpen={card.current && (overviewOpen || unlockedOverview)}
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }
-              : {}}
+              : unlockedOverview && card.current
+                ? { overviewPanel: unlockedIdentityOverview }
+                : {}}
             {...onManageSection
               ? {
                   onManageSection: (section: WorkspaceSection) => {
@@ -524,10 +534,8 @@ join) sit between the hero and the cards.
               : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
-            {pairingStatusFor}
             {...onSelectVault ? { onSelectVault } : {}}
             {...onUnlockVault ? { onUnlockVault } : {}}
-            {...onUnlockElsewhere ? { onUnlockElsewhere } : {}}
             {...onManageVault ? { onManageVault } : {}}
             onClosePanels={() => {
               setupOpen = false
@@ -552,14 +560,6 @@ join) sit between the hero and the cards.
           />
         {/each}
       </section>
-      {#if extensionNote}
-        <p
-          class="nk-tag whitespace-normal"
-          data-testid="identities-extension-note"
-        >
-          {extensionNote}
-        </p>
-      {/if}
     {/if}
   {/if}
 </div>

@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
@@ -19,6 +19,7 @@ import {
   openOnboardDevicePanel,
   submitOnboardEnrollmentCode,
 } from './onboard-invite'
+import { answerPasskeyPrompt } from './vault-setup'
 
 /** One-time passphrase e2e members share with an identity enrollment code. */
 export const E2E_IDENTITY_PASSPHRASE = 'e2e-identity-passphrase'
@@ -45,6 +46,22 @@ export async function issueIdentityEnrollmentCode(
   return { link, passphrase }
 }
 
+/** A browser that has no key yet makes it when the join asks, before the
+ * join goes on; one that has a key goes straight to the outcome. */
+export async function answerPasskeyPromptBeforeJoin(
+  page: Page,
+  outcome: Locator,
+): Promise<void> {
+  const prompt = page
+    .getByTestId('passkey-auth-overlay')
+    .or(page.getByTestId('device-protection-gate'))
+    .first()
+  await expect(prompt.or(outcome).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await prompt.isVisible()) await answerPasskeyPrompt(page)
+}
+
 /** The joining app redeems the code and signs itself into the identity. */
 export async function redeemIdentityEnrollmentCode(
   page: Page,
@@ -59,9 +76,13 @@ export async function redeemIdentityEnrollmentCode(
   })
   await page.getByTestId('enrollment-password-input').fill(passphrase)
   await page.getByTestId('submit-enrollment-code-btn').click()
-  const joined = page.getByTestId('identity-join-ready')
+  // Joined: the vault the invite granted is listed on the identity's card.
+  const joined = page
+    .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
+    .first()
   const failure = page.getByTestId('vault-error')
   try {
+    await answerPasskeyPromptBeforeJoin(page, joined.or(failure).first())
     await expect(joined.or(failure).first()).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -100,10 +121,18 @@ export async function expectIdentityMembers(
     .toBe(true)
 }
 
-/** The joined app opens the vault its invite granted. */
+/** The joined app opens the vault its invite granted, from that vault's row
+ * on the identity's card. */
 export async function openVaultAfterIdentityJoin(page: Page): Promise<void> {
-  const openVault = page.getByTestId('identity-open-vault-btn').first()
+  const awayRow = page
+    .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
+    .first()
+  const openVault = page.getByTestId('vault-panel-open-away')
   try {
+    await expect(awayRow).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await awayRow.click()
     await expect(openVault).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

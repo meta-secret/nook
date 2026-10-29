@@ -88,7 +88,9 @@ const failed = (): SessionOperationFailure =>
 
 /**
  * Bring the unlocked identity's log up to date from every sync provider it
- * replicates through, then list the vaults the extension does not pair yet.
+ * replicates through, then list the vaults the extension does not pair yet
+ * and the providers the extension can open vaults through: a local folder
+ * belongs to the web app's origin, so the extension reads none.
  * An installation that never joined an identity has nothing to sync. A
  * provider that fails ends the refresh with that failure.
  */
@@ -124,7 +126,9 @@ export async function refreshExtensionIdentityVaults({
         storeIds: message.payload.pairedVaultStoreIds,
       }
       const plan = await manager.identity_vault_pairing_plan(providers, paired)
-      if (plan.toPair.length > 0 && mounts.length === 0) {
+      // The extension opens vaults only through these.
+      const readable = mounts.filter((mount) => mount.type !== 'local-folder')
+      if (plan.toPair.length > 0 && readable.length === 0) {
         console.error('Extension identity has vaults to pair but no provider')
         return err(failed())
       }
@@ -134,7 +138,7 @@ export async function refreshExtensionIdentityVaults({
         identityLabel: plan.identityLabel,
         toPair: plan.toPair,
         awaitingGrant: plan.awaitingGrant,
-        mountProviderIds: mounts.map((mount) => mount.id),
+        mountProviderIds: readable.map((mount) => mount.id),
       }
       return ok(response)
     } finally {

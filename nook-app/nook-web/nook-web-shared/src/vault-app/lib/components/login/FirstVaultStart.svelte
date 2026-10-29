@@ -1,65 +1,110 @@
 <!--
-The first screen of a browser with no vault: one name, one button. The
-identity is created with the vault and introduced on the next step, where
-its passkey is made. Joining an identity from another device is the second
-path and stands apart; restoring from a sync provider is a quiet link.
-Opened from the extension, the connect route shows this same screen: the
-person creates or joins here, never in the extension.
+The first screen of a browser with no vault: one button that creates the
+identity. Setup then makes its passkey, signs in to a sync provider, and
+settles the identity there before any vault exists. The other paths sit
+under it as equal rows: add this device to an identity, recover from a sync
+provider, check access. Opened from the extension, the connect route shows
+this same screen: the person creates or joins here, never in the extension.
 -->
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { ArrowRight, MonitorSmartphone, RefreshCw } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
-  import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { FirstRunStage } from "$lib/vault/state/ui.svelte";
+  import type { Component } from 'svelte'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import {
+    ArrowRight,
+    CloudDownload,
+    KeyRound,
+    MonitorSmartphone,
+    RefreshCw,
+    ShieldCheck,
+  } from '@lucide/svelte'
+  import OptionDivider from '$lib/components/provider-vaults/OptionDivider.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
+  import type { EnrollmentCodeUnlock } from './login-create-vault-chooser-contract'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
     isBusy,
     isVerifying,
-    usesExtensionDeviceIdentity = false,
     onCreate,
     onConnectStorage,
     onUseEnrollmentCode,
   }: {
-    vault: VaultState;
-    isBusy: boolean;
-    isVerifying: boolean;
-    /** The paired extension supplies the device key; no passkey is asked. */
-    usesExtensionDeviceIdentity?: boolean;
-    onCreate: (label: string) => void | Promise<void>;
-    onConnectStorage: () => void;
+    vault: VaultState
+    isBusy: boolean
+    isVerifying: boolean
+    onCreate: (label: string) => void | Promise<void>
+    onConnectStorage: () => void
     /** Present when this app can join an identity with an enrollment code. */
-    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
-  } = $props();
+    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>
+  } = $props()
 
-  let name = $state("");
   /** Joining an identity this person already has replaces the screen. */
-  let joining = $state(false);
-  // An empty field takes the suggested name, so one click is enough.
-  const vaultName = $derived(
-    name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
-  );
+  let joining = $state(false)
 
-  const extensionHint = $derived.by(() => {
-    const hintRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.LoginLandingCreateSimpleWithExtension,
-      replacements: { name: vaultName },
-    };
-    return vault.t(hintRequest);
-  });
+  /** One of the other paths: an icon, a short title, an arrow. */
+  type StartPath = {
+    readonly testId: string
+    readonly title: string
+    readonly icon: Component
+    readonly disabled: boolean
+    readonly onOpen: () => void
+  }
 
+  const addDevice = $derived<StartPath>({
+    testId: 'login-join-identity-btn',
+    title: vault.t(I18N_KEYS.FirstRunPathAddDevice),
+    icon: MonitorSmartphone,
+    disabled: isBusy,
+    onOpen: () => (joining = true),
+  })
+  const recover = $derived<StartPath>({
+    testId: 'login-connect-storage-btn',
+    title: vault.t(I18N_KEYS.FirstRunPathRecover),
+    icon: CloudDownload,
+    disabled: isBusy,
+    onOpen: onConnectStorage,
+  })
+  const check = $derived<StartPath>({
+    testId: 'login-access-check-link',
+    title: vault.t(I18N_KEYS.FirstRunPathCheck),
+    icon: ShieldCheck,
+    disabled: false,
+    onOpen: () => new VaultWorkspaceActions(vault).openAccessCheck(),
+  })
+
+  /** The passkey comes next; the identity's name is asked only when setup
+   * creates a new one. */
   async function create(): Promise<void> {
-    if (isBusy) return;
-    vault.firstRunVaultName = vaultName;
-    vault.firstRun = vault.deviceProtectionReady
-      ? FirstRunStage.Backup
-      : FirstRunStage.Protect;
-    await onCreate(vaultName);
+    if (isBusy) return
+    vault.firstRun = FirstRunStage.Protect
+    await onCreate(vault.t(I18N_KEYS.FirstRunNamePlaceholder))
   }
 </script>
+
+{#snippet path(row: StartPath)}
+  <button
+    type="button"
+    class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-foreground/5 disabled:opacity-60"
+    data-testid={row.testId}
+    disabled={row.disabled}
+    onclick={row.onOpen}
+  >
+    <span class="nk-tile nk-tile-sm" aria-hidden="true">
+      <row.icon class="size-4" />
+    </span>
+    <span class="min-w-0 flex-1 text-sm font-medium text-foreground">
+      {row.title}
+    </span>
+    <ArrowRight
+      class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+      aria-hidden="true"
+    />
+  </button>
+{/snippet}
 
 {#if joining && onUseEnrollmentCode}
   <JoinThisDevice
@@ -69,123 +114,59 @@ person creates or joins here, never in the extension.
     onBack={() => (joining = false)}
   />
 {:else}
-<section
-  class="mx-auto grid w-full max-w-md gap-6 py-6 text-center sm:gap-7 sm:py-16"
-  data-testid="first-vault-start"
->
-  <div class="space-y-2">
-    <h1 class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground">
+  <section
+    class="mx-auto grid w-full max-w-md gap-6 py-6 text-center sm:gap-7 sm:py-16"
+    data-testid="first-vault-start"
+  >
+    <h1
+      class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
+    >
       {vault.t(I18N_KEYS.FirstRunTitle)}
     </h1>
-    <p class="text-sm text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.FirstRunSubtitle)}
-    </p>
-  </div>
 
-  <form
-    class="flex flex-col gap-2 sm:flex-row"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void create();
-    }}
-  >
-    <label class="sr-only" for="first-vault-name">
-      {vault.t(I18N_KEYS.FirstRunNameLabel)}
-    </label>
-    <input
-      id="first-vault-name"
-      type="text"
-      class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
-      placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
-      maxlength="64"
-      autocomplete="off"
-      data-testid="login-vault-name-input"
-      bind:value={name}
-      disabled={isBusy}
-    />
     <Button
-      type="submit"
-      class="h-11 shrink-0 sm:h-10"
+      type="button"
+      class="h-11 sm:h-10"
       disabled={isBusy}
-      data-testid="login-create-device-vault-btn"
+      data-testid="first-run-create-identity-btn"
+      onclick={() => void create()}
     >
       {#if isBusy}
         <RefreshCw class="size-4 animate-spin" />
+      {:else}
+        <KeyRound class="size-4" />
       {/if}
       {vault.t(I18N_KEYS.FirstRunCreate)}
     </Button>
-  </form>
-  {#if usesExtensionDeviceIdentity}
+
+    <OptionDivider {vault} />
+
+    <!-- The other paths, as equal rows: an icon, a short title, an arrow. -->
+    <div class="nk-frame divide-y divide-border text-left" data-testid="login-paths">
+      {#if onUseEnrollmentCode}
+        {@render path(addDevice)}
+      {/if}
+      {@render path(recover)}
+      {@render path(check)}
+    </div>
+
+    <!-- What Nook is, in one line; the details live in Help. -->
     <p
-      class="-mt-4 text-xs text-pretty text-muted-foreground"
-      data-testid="first-vault-extension-hint"
+      class="flex flex-col items-center gap-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-2"
+      data-testid="first-vault-facts"
     >
-      {extensionHint}
-    </p>
-  {/if}
-
-  {#if onUseEnrollmentCode}
-    <button
-      type="button"
-      class="group flex w-full items-center gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 disabled:opacity-60"
-      data-testid="login-join-identity-btn"
-      disabled={isBusy}
-      onclick={() => (joining = true)}
-    >
-      <span class="nk-tile shrink-0" aria-hidden="true">
-        <MonitorSmartphone class="size-4" />
-      </span>
-      <span class="min-w-0 flex-1">
-        <span class="block text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.JoinEntryTitle)}
-        </span>
-        <span class="block text-xs text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.JoinEntryBody)}
-        </span>
-      </span>
-      <span
-        class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-foreground"
+      <span>{vault.t(I18N_KEYS.FirstRunFactEncrypted)}</span>
+      <span class="hidden sm:inline" aria-hidden="true">·</span>
+      <span>{vault.t(I18N_KEYS.FirstRunFactNoServer)}</span>
+      <span class="hidden sm:inline" aria-hidden="true">·</span>
+      <button
+        type="button"
+        class="underline underline-offset-4 hover:text-foreground"
+        data-testid="first-vault-how-it-works"
+        onclick={() => vault.openHelp()}
       >
-        <span class="hidden sm:inline">{vault.t(I18N_KEYS.JoinEntryCta)}</span>
-        <ArrowRight
-          class="size-4 transition-transform group-hover:translate-x-0.5"
-          aria-hidden="true"
-        />
-      </span>
-    </button>
-  {/if}
-
-  <div class="flex justify-center text-sm" data-testid="login-path-cloud">
-    <button
-      type="button"
-      class="text-balance text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground hover:decoration-foreground disabled:opacity-60"
-      data-testid="login-connect-storage-btn"
-      disabled={isBusy}
-      onclick={onConnectStorage}
-    >
-      {vault.t(I18N_KEYS.FirstRunRestoreLink)}
-    </button>
-  </div>
-
-  <!-- What Nook is, in one line; the details live in Help. -->
-  <p
-    class="flex flex-col items-center gap-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-2"
-    data-testid="first-vault-facts"
-  >
-    <span>{vault.t(I18N_KEYS.FirstRunFactEncrypted)}</span>
-    <span class="hidden sm:inline" aria-hidden="true">·</span>
-    <span>{vault.t(I18N_KEYS.FirstRunFactNoServer)}</span>
-    <span class="hidden sm:inline" aria-hidden="true">·</span>
-    <span>{vault.t(I18N_KEYS.FirstRunFactYourStorage)}</span>
-    <span class="hidden sm:inline" aria-hidden="true">·</span>
-    <button
-      type="button"
-      class="underline underline-offset-4 hover:text-foreground"
-      data-testid="first-vault-how-it-works"
-      onclick={() => vault.openHelp()}
-    >
-      {vault.t(I18N_KEYS.FirstRunHowItWorks)}
-    </button>
-  </p>
-</section>
+        {vault.t(I18N_KEYS.FirstRunHowItWorks)}
+      </button>
+    </p>
+  </section>
 {/if}

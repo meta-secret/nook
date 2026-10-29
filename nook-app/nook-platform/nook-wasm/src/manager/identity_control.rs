@@ -6,10 +6,14 @@
 //! the resulting membership and this installation's DEK grants in the local
 //! identity directory.
 
+mod app_addition;
 mod connection;
 mod invite;
+mod join_request;
+mod local_folder_log;
 mod log_creation;
 mod membership;
+mod passkey_addition;
 mod vault_access;
 mod vault_removal;
 

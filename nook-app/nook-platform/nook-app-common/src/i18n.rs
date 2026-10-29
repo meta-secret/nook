@@ -301,7 +301,8 @@ impl TranslationCatalog {
     }
 }
 
-/// Translates a key and replaces named placeholders in the resulting message.
+/// Translates a key and fills every occurrence of each named placeholder in
+/// the resulting message.
 impl TranslationCatalog {
     #[must_use]
     pub fn translate_with_replacements(request: TranslateWithReplacementsRequest<'_>) -> String {
@@ -317,7 +318,7 @@ impl TranslationCatalog {
             key,
         });
         for (name, value) in replacements {
-            message = message.replacen(&format!("{{{name}}}"), value, 1);
+            message = message.replace(&format!("{{{name}}}"), value);
         }
         message
     }
@@ -586,7 +587,8 @@ mod tests {
                 key: "message",
                 replacements: &[("value".to_owned(), "first".to_owned())]
             }),
-            "first {value}"
+            // A message that names a value twice shows it both times.
+            "first first"
         );
         assert_eq!(
             TranslationCatalog::resolve_error_message(ResolveErrorMessageRequest {

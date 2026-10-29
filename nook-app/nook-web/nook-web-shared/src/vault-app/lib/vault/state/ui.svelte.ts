@@ -14,6 +14,12 @@ import {
   IdentityDirectoryLoadKind,
   type IdentityDirectoryLoadState,
 } from "$lib/components/devices-access/identity-directory-view";
+import {
+  FirstRunJoinKind,
+  IdentityJoinWaitKind,
+  type FirstRunJoin,
+  type IdentityJoinWait,
+} from "$lib/vault/identity-join-wait";
 
 export enum WorkspaceSection {
   Vault = "vault",
@@ -63,14 +69,41 @@ export class WorkspaceSectionScope {
   }
 }
 
-/** Where a first-vault setup stands after its name was given. */
+/** Where first-run setup stands. The identity is settled before any vault:
+ * the passkey makes this browser's key, the sync provider shows the
+ * identities that key belongs to or may join, and only a new identity gets
+ * a first vault. */
 export enum FirstRunStage {
-  /** No first-vault setup in progress. */
+  /** No first-run setup in progress. */
   Off = "off",
-  /** The vault waits for this browser's passkey or PIN. */
+  /** The identity waits for this browser's passkey or PIN. */
   Protect = "protect",
-  /** The vault exists; offer to back up its identity. */
-  Backup = "backup",
+  /** The key exists: sign in to a sync provider and pick an identity on it. */
+  Sync = "sync",
+  /** A new identity is being named, on the sync provider or this browser. */
+  Name = "name",
+  /** The new identity exists on this browser: create its first vault, or
+   * leave it without one for now. */
+  Vault = "vault",
+  /** This browser asked to join an identity; one of its devices answers. */
+  Joining = "joining",
+  /** The new identity's first vault exists; it connects the sync provider
+   * signed in to during setup. */
+  Connect = "connect",
+}
+
+/** Whether joining with an invite waits for an iCloud sign-in. */
+export enum JoinICloudSignIn {
+  /** No invite asked for iCloud. */
+  NotNeeded = "not-needed",
+  /** The invite is kept in iCloud and this browser is not signed in yet. */
+  Needed = "needed",
+}
+
+/** Where a new identity created during setup is kept. */
+export enum FirstRunPlace {
+  ThisBrowser = "this-browser",
+  SyncProvider = "sync-provider",
 }
 
 /** Where creating another identity stands. */
@@ -90,9 +123,21 @@ export class VaultUiState {
   /** Survives panel cancellation and navigation until the identity authenticates. */
   identityTransitionPending = $state(false);
   helpOpen = $state(false);
+  /** The access check page is open, unlocked or not. */
+  accessCheckOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
-  /** The name given on the first-vault screen, shown by the later steps. */
+  /** The name given to a new identity during setup; its first vault takes
+   * it too. */
   firstRunVaultName = $state("");
+  /** An invite kept in iCloud asked this browser to sign in to iCloud. */
+  joinICloudSignIn = $state<JoinICloudSignIn>(JoinICloudSignIn.NotNeeded);
+  /** The page of an identity unlocked without an open vault: its overview
+   * beside its card, or one of its pages; Identities is the hub alone. */
+  identityPage = $state<WorkspaceSection>(WorkspaceSection.Identities);
+  /** Where a new identity created during setup is kept. */
+  firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
+  /** The identity this browser asked to join during setup. */
+  firstRunJoin = $state.raw<FirstRunJoin>({ kind: FirstRunJoinKind.None });
   newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
   /** The name given to the identity being created. */
   newIdentityName = $state("");
@@ -120,4 +165,7 @@ export class VaultUiState {
   identityDirectory = $state<IdentityDirectoryLoadState>({
     kind: IdentityDirectoryLoadKind.Loading,
   });
+  /** A join to an identity that waits for the fresh key it asks with: the
+   * device protection gate, or a new local identity's key ceremony. */
+  identityJoin = $state<IdentityJoinWait>({ kind: IdentityJoinWaitKind.Idle });
 }

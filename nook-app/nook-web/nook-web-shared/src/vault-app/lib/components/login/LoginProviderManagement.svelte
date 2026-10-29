@@ -9,6 +9,8 @@
   } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
+  import FirstRunDiagram from '$lib/components/login/FirstRunDiagram.svelte'
+  import { firstRunRecoveryDiagram } from '$lib/components/login/first-run-diagram'
   import type {
     ProviderSetupRequest,
     StorageProvider,
@@ -97,6 +99,10 @@
         {/if}
       </p>
     </div>
+
+    {#if !addingProvider && vault.loginRequiresExistingVault}
+      <FirstRunDiagram diagram={firstRunRecoveryDiagram(vault)} />
+    {/if}
 
     {#if onBeginSetup}
       <ProviderPicker

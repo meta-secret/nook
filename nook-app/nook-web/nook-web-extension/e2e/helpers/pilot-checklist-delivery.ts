@@ -179,7 +179,6 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.UnlockOptions:
         case install.session.UnlockPasskey:
         case install.session.CreatePin:
-        case install.session.SealIdentityHandoff:
         case install.session.ImportVault:
         case install.session.JoinIdentity:
         case install.session.ConnectIdentityVault:
@@ -209,8 +208,6 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.RegisterPasskey:
         case install.session.AssertPasskey:
         case install.session.Lock:
-        case 'nook:extension-session-discover-companion-identity':
-        case 'nook:extension-session-authorize-companion-identity-handoff':
           return install.disposition.Forward
       }
     }

@@ -17,7 +17,6 @@
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import { Lock, ShieldCheck } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
@@ -42,7 +41,10 @@
     ProviderSetupRequest,
     StorageProvider,
   } from '$lib/auth/providers'
-  import type { LoginSetup } from '$lib/vault/state/provider.svelte'
+  import {
+    LoginSetupKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import type { NookManualProviderSync } from '$app-wasm'
   import {
@@ -52,7 +54,6 @@
 
   let {
     vault,
-    extensionSetupState,
     isVerifying,
     isInitializing,
     syncProviders,
@@ -91,7 +92,6 @@
     section,
   }: {
     vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
@@ -200,20 +200,16 @@
   data-section={section}
 >
   {#if section === WorkspaceSection.Vaults}
-    <VaultAdminVaults
-      {vault}
-      {extensionSetupState}
-      {isVerifying}
-      {isInitializing}
-      {onCreateVault}
-    />
+    <VaultAdminVaults {vault} {isVerifying} {isInitializing} {onCreateVault} />
   {/if}
 
   {#if section === WorkspaceSection.Sync}
     <ManageSection
       compact
       title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
-      subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
+      subtitle={addProviderOpen || loginSetup.kind === LoginSetupKind.Active
+        ? ''
+        : vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
       testId="storage-providers-section"
     >
       <AuthStorage

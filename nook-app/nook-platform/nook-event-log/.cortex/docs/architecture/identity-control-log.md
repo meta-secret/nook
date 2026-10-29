@@ -69,11 +69,15 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
   - It must be the event's only operation, and its actor must be the joiner's
     own signing key.
   - Each grant names a different vault.
-- **`member-join-requested`**, **`member-approved`**, and
-  **`member-join-denied`**
-  - Earlier builds joined by request and approval. Logs keep these operations
-    and still project them, so members admitted that way stay members.
-    Current builds never write them.
+- **`member-join-requested`**
+  - Holds the asking app key's member keys. It must be the event's only
+    operation, signed by that key.
+  - A browser that cannot open the identity writes it for a fresh app key.
+- **`member-approved`**
+  - Holds the joiner's member keys and one DEK grant per vault the identity
+    keeps, at each vault's current key epoch.
+- **`member-join-denied`**
+  - Answers a pending request without admitting its app key.
 - **`member-revoked`**
   - Ends an app key's membership and drops its DEK envelopes from the projection.
 - **`member-renamed`**
@@ -145,9 +149,9 @@ An event's actor must be an identity member in that event's causal past.
 - `member-revoked` removes membership unless a later approval causally follows
   the revocation.
 - A revocation concurrent with an approval of the same app wins.
-- A self-signed `member-joined-by-invite` that holds is the only operation an
-  outsider may publish. A self-signed `member-join-requested` from an earlier
-  build is still accepted as history.
+- An outsider may publish only a self-signed `member-joined-by-invite` that
+  holds, or a self-signed `member-join-requested`. A request grants nothing
+  until a member approves it.
 - An unauthorized event is quarantined with every causal descendant.
 
 The projection applies the same rule over the whole applicable log, so the
@@ -169,6 +173,8 @@ Ties break by event ID.
 - **Revoked:** app IDs that were members and are no longer effective.
 - **Pending joins:** requests with no causally later approval, denial, or
   revocation for the same app, from apps that are not members.
+- **Denied joins:** apps that never became members and are not asking again,
+  whose request a causally later denial answered.
 - **Vaults:** each registered vault with DEK envelopes per key epoch.
   - The current key epoch comes from the latest registration or rewrap.
   - Revoked members' envelopes are removed.
@@ -243,7 +249,8 @@ identity members on their own.
 - Do not let a provider credential, an enrollment code, or a vault backup
   password grant identity membership.
 - Do not accept an identity event whose actor is not an identity member in its
-  causal past, except a self-signed join that holds an issued invite.
+  causal past, except a self-signed join that holds an issued invite or a
+  self-signed join request.
 - Do not store identity events in a vault namespace or vault events in the
   identity namespace.
 - Do not persist private app keys, signing seeds, or plaintext DEKs in the
@@ -265,6 +272,14 @@ Behavior-focused Rust tests cover the log in
   - `a_join_needs_an_invite_a_member_issued_and_its_key`
   - `an_invite_join_is_signed_by_the_member_it_adds`
   - `an_invite_admits_one_device_in_any_delivery_order`
+- **Denied and repeated join requests**
+  - `denied_and_rerequested_joins_follow_causal_resolution`
+- **Join by request: asking, answering, completing** (nook-core)
+  - `a_locked_browser_asks_once_and_its_request_waits_for_a_member`
+  - `a_join_request_is_approved_with_every_vault_dek_of_the_identity`
+  - `only_a_member_holding_every_vault_dek_can_approve`
+  - `a_denied_request_adds_nothing`
+  - `completion_adds_the_identity_under_its_original_id_beside_the_one_in_use`
 - **Revocation, envelope removal, rewrap after rotation**
   - `revocation_drops_envelopes_and_blocks_later_actions`
 - **Concurrent revoke versus reapproval**
@@ -280,8 +295,10 @@ Behavior-focused Rust tests cover the log in
   the log's name wins**
   - `the_identity_name_is_sealed_to_every_member_including_one_joining`
   - `the_log_name_wins_and_reaches_every_member` (nook-core)
-- **Provider listing facts and the passkey name reveal** (nook-core)
+- **Provider listing facts and access checks** (nook-core)
   - `a_signed_log_tells_its_devices_their_newest_join_and_its_vaults`
   - `a_folder_without_log_events_has_no_facts_and_a_damaged_log_fails`
-  - `the_member_passkey_opens_the_identity_and_vault_names_in_memory`
-  - `another_passkey_opens_nothing`
+  - `the_log_tells_this_browser_where_its_join_request_stands`
+  - `the_member_passkey_opens_its_identity_and_every_vault_it_keeps`
+  - `another_passkey_opens_no_identity_and_no_vault`
+  - `a_backup_password_opens_its_vault_but_never_the_identity`

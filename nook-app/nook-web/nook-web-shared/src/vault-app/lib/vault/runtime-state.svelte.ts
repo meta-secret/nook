@@ -31,6 +31,7 @@ import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as syncActions from "$lib/vault/sync.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import {
   ActiveVaultKind,
   type LocalProviderLookup,
@@ -132,6 +133,16 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
 
   get deviceProtectionReady(): boolean {
     return this.deviceProtectionStatus === DeviceProtectionStatus.Unlocked;
+  }
+
+  /** An identity is in use here, as against setup or recovery: one of its
+   * vaults is open, or it is unlocked with one of its pages open. */
+  get identityInUse(): boolean {
+    return (
+      this.isAuthenticated ||
+      (this.deviceProtectionReady &&
+        this.identityPage !== WorkspaceSection.Identities)
+    );
   }
 
   get syncProviderCount(): number {

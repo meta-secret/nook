@@ -2,11 +2,7 @@
 
 use super::session::LocalIdentityCreation;
 
-#[cfg(test)]
-use crate::manager::session::ExtensionHandoffState;
 use crate::storage::identity_record;
-#[cfg(test)]
-use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::identity_record::PreviousLocalSelection;
 use crate::storage::identity_record::SimpleGenesisProgress;
@@ -24,9 +20,10 @@ const DEFAULT_IDENTITY_LABEL: &str = "Personal";
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::IdbPutStringRequest;
-use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
-use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::identity_record::{
+    IdentityDbSaveProtectedMember, MemberSigner, ProtectedIdentityTarget,
+};
 impl NookVaultManager {
     fn finish_local_identity_activation(&mut self, app_id: &nook_core::AppId) {
         self.reset_local_identity_session();
@@ -36,9 +33,6 @@ impl NookVaultManager {
     }
 
     fn reset_local_identity_session(&mut self) {
-        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
-        self.device.extension_handoff_private_key.zeroize();
-        self.device.extension_handoff_private_key.clear();
         self.reset_vault_session();
         self.storage.access_token.zeroize();
         self.storage = StorageSession::default();
@@ -56,28 +50,25 @@ impl NookVaultManager {
         &mut self,
         app_key: nook_core::AppKey,
         record: &nook_core::WrappedDeviceIdentity,
+        signer: MemberSigner<'_>,
     ) -> Result<String, NookError> {
         let pending_label = self.device.pending_local_identity_label.clone();
-        let saved = match &pending_label {
+        let (label, target) = match &pending_label {
             LocalIdentityCreation::Creating(label) => {
-                NookDatabase::save_new_protected_local_identity(
-                    IdentityDbSaveNewProtectedLocalIdentity {
-                        app_key: &app_key,
-                        record,
-                        label,
-                    },
-                )
-                .await?
+                (label.as_str(), ProtectedIdentityTarget::New)
             }
             LocalIdentityCreation::ExistingIdentity => {
-                NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
-                    app_key: &app_key,
-                    record,
-                    label: DEFAULT_IDENTITY_LABEL,
-                })
-                .await?
+                (DEFAULT_IDENTITY_LABEL, ProtectedIdentityTarget::Existing)
             }
         };
+        let saved = NookDatabase::save_protected_member(IdentityDbSaveProtectedMember {
+            app_key: &app_key,
+            record,
+            label,
+            signer,
+            target,
+        })
+        .await?;
         if !saved.identity.has_app_id(app_key.app_id()) {
             return Err(NookError::Database(
                 "Persisted local identity does not own its app key".to_owned(),
@@ -124,7 +115,7 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    fn local_identity_label(label: &str) -> Result<String, &'static str> {
+    pub(in crate::manager) fn local_identity_label(label: &str) -> Result<String, &'static str> {
         let label = label.trim();
         if label.is_empty() {
             return Err("Identity label cannot be empty.");
@@ -220,10 +211,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manager::device_protection::{
-        PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff,
-    };
-    use nook_core::{AppKey, SigningIdentity, StorageMode};
+    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -263,36 +251,6 @@ mod tests {
         assert!(manager.storage.remote_ref.is_empty());
         assert!(manager.storage.remote_path.is_empty());
         assert!(manager.sync_outbox.access_token.is_empty());
-    }
-
-    #[wasm_bindgen_test]
-    fn identity_transition_drops_pending_extension_authorization() -> Result<(), NookError> {
-        let authorizer = AppKey::generate()?;
-        let (signing, signing_seed) = SigningIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.extension_handoff_private_key =
-            ExtensionHandoffState::Recipient(("handoff-private-key".to_owned()).into());
-        manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                    authorizer,
-                    store_id: nook_core::StoreId::generate()?,
-                },
-                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
-                signing_public_key: signing.public_key(),
-                handoff_signing_seed: signing_seed.into_inner(),
-                persist_signing_seed: true,
-                previous_session_signing_seed: "previous-session-signer".to_owned(),
-            });
-
-        manager.reset_local_identity_session();
-
-        assert!(matches!(
-            &manager.device.pending_extension_handoff,
-            ExtensionIdentityPublication::Idle
-        ));
-        assert!(manager.device.extension_handoff_private_key.is_empty());
-        Ok(())
     }
 }
 

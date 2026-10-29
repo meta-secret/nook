@@ -2,19 +2,14 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
-#[cfg(test)]
-use crate::manager::device_protection::ExtensionIdentityPublication;
-#[cfg(test)]
-use crate::manager::session::ExtensionHandoffState;
 use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare};
-#[cfg(test)]
-use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
+use crate::storage::identity_record::MemberSigner;
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
 use crate::{NookDatabase, NookError};
-use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, StorageMode};
+use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, PasskeyMemberSigner, StorageMode};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -38,7 +33,6 @@ impl NookVaultManager {
     pub fn quiesce_for_local_recovery(&mut self) {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();
-        self.device.extension_handoff_private_key.zeroize();
         self.device.id.clear();
         self.storage.access_token.zeroize();
         self.storage.remote_ref.clear();
@@ -123,42 +117,26 @@ impl NookVaultManager {
         material: &nook_core::PasskeyDeviceIdentityMaterial,
     ) -> Result<String, NookError> {
         let identity = DeviceIdentity::from_secret_str(material.identity_secret())?;
-        self.persist_and_adopt_local_identity(identity, material.record())
+        let signer = match material.signer() {
+            PasskeyMemberSigner::Derived(seed) => MemberSigner::Passkey(seed),
+            PasskeyMemberSigner::Installation => MemberSigner::Installation,
+        };
+        self.persist_and_adopt_local_identity(identity, material.record(), signer)
             .await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff};
     use super::*;
-    use nook_core::{SigningIdentity, StorageMode};
+    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn handoff_projection_and_quiesce_clear_sensitive_session_state() -> Result<(), NookError> {
-        let (signing, signing_seed) = SigningIdentity::generate()?;
+    fn quiesce_clears_sensitive_session_state() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
-        assert!(!manager.extension_identity_handoff_requires_connect());
-        manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-                enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
-                    authorizer: VaultCreationAuthority::NewIdentity,
-                },
-                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
-                signing_public_key: signing.public_key(),
-                handoff_signing_seed: signing_seed.as_str().to_owned(),
-                persist_signing_seed: false,
-                previous_session_signing_seed: "previous-seed".to_owned(),
-            });
-        assert!(manager.extension_identity_handoff_requires_connect());
-        manager.confirm_extension_identity_handoff();
-        assert!(!manager.extension_identity_handoff_requires_connect());
-
         manager.device.id = "device-id".to_owned();
         manager.device.identity_private_key = "private-key".to_owned();
-        manager.device.extension_handoff_private_key =
-            ExtensionHandoffState::Recipient(("handoff-key".to_owned()).into());
         manager.event_log.signing_seed = "signing-seed".to_owned();
         manager.storage.access_token = "provider-token".to_owned();
         manager.storage.remote_ref = "owner/repo".to_owned();
@@ -169,7 +147,6 @@ mod tests {
 
         assert!(manager.device.id.is_empty());
         assert!(manager.device.identity_private_key.is_empty());
-        assert!(manager.device.extension_handoff_private_key.is_empty());
         assert!(manager.event_log.signing_seed.is_empty());
         assert!(manager.storage.access_token.is_empty());
         assert!(manager.storage.remote_ref.is_empty());

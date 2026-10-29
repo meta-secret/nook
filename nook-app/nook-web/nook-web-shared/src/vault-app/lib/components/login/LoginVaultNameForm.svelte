@@ -3,6 +3,7 @@
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultNameHint } from './login-vault-name-form'
 
   const VAULT_NAME_MAX_LENGTH = 64
 
@@ -12,6 +13,7 @@
     isInitializing,
     submitLabel,
     testId = 'login-create-device-vault-btn',
+    hint = VaultNameHint.Shown,
     onCreate,
   }: {
     vault: VaultState
@@ -19,6 +21,7 @@
     isInitializing: boolean
     submitLabel: string
     testId?: string
+    hint?: VaultNameHint
     onCreate: (label: string) => void | Promise<void>
   } = $props()
 
@@ -58,9 +61,11 @@
         }
       }}
     />
-    <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t(I18N_KEYS.LoginVaultNameHint)}
-    </p>
+    {#if hint === VaultNameHint.Shown}
+      <p class="text-xs text-muted-foreground text-pretty">
+        {vault.t(I18N_KEYS.LoginVaultNameHint)}
+      </p>
+    {/if}
   </div>
 
   <Button

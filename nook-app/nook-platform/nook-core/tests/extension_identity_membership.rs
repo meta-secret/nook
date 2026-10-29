@@ -1,29 +1,25 @@
-//! The browser extension joins identities as a member device: an approval
-//! hands it an invite whose passphrase is sealed to its app key, it signs
-//! itself into the identity, pairs vaults members create later, and joins a
-//! second identity with a second app key.
+//! The browser extension is an app of its keyrings with a key of its own:
+//! the web app adds that key to the keyring with every vault's DEK
+//! encrypted to it, and the extension completes its join from the keyring's
+//! log the approval hands it. It pairs vaults members create later and
+//! joins a second keyring with a second app key.
 //!
-//! This composes the same domain steps `join_identity_with_sealed_invite`
-//! runs in the extension's offscreen WASM session, without a sync provider.
+//! This composes the same domain steps `add_identity_member` (web app) and
+//! `join_identity_from_log` (the extension's offscreen WASM session) run,
+//! without a sync provider.
 
 use nook_core::{
-    AppKey, CheckedEnrollmentEnvelope, EnrollmentIdentityTarget, EnrollmentInvite,
-    EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput,
-    EnrollmentProvider, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest,
-    IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
-    IdentityControlSnapshotRequest, IdentityControlStanding, IdentityControlState,
-    IdentityCreation, IdentityDirectory, IdentityEvent, IdentityEventInsertStatus,
-    IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentityInviteId, IdentityInviteIssue, IdentityInviteJoin,
-    IdentityMemberKeys, IdentityVaultEventId, IdentityVaultKeyOpening, IdentityVaultPairingRequest,
-    IdentityVaultRegistration, InvitePassphraseOpen, InvitePassphraseSeal, InviteSigningSeed,
-    IsoTimestamp, LocalIdentityLog, MemberLabel, MemberLabelState, MultiDeviceError,
-    OpenedVaultDek, PersonalEnrollmentProvider, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedIdentityStanding, ReplicatedMembershipRequest,
-    SigningIdentity, StoreId, VaultError, VaultKeys,
+    AppKey, EventId, IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityControlLog,
+    IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
+    IdentityControlStanding, IdentityControlState, IdentityCreation, IdentityDirectory,
+    IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityGenesisRequest,
+    IdentityId, IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
+    IdentityMemberAdd, IdentityMemberKeys, IdentityVaultKeyOpening, IdentityVaultPairingRequest,
+    IdentityVaultRegistration, IsoTimestamp, LocalIdentityLog, MemberLabel, MemberLabelState,
+    MultiDeviceError, OpenedVaultDek, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedIdentityStanding, ReplicatedMembershipRequest, SigningIdentity, StoreId, VaultError,
+    VaultKeys,
 };
-
-const PASSPHRASE: &str = "orbit-lantern-kitten-meadow";
 
 fn at() -> IsoTimestamp {
     IsoTimestamp::from_trusted("2026-10-16T12:00:00Z".to_owned())
@@ -170,79 +166,25 @@ impl WebIdentity {
         Ok(store_id)
     }
 
-    /// Approving the extension: record an invite and issue its code, with
-    /// the code's passphrase sealed to the extension's app key.
-    fn invite(&mut self, extension: &AppKey) -> anyhow::Result<SealedInvite> {
-        let invite_id = IdentityInviteId::generate()?;
-        let signing_seed = InviteSigningSeed::generate()?;
-        let expires_at = IsoTimestamp::from_trusted("2026-10-17T12:00:00Z".to_owned());
+    /// Approving the extension: the web app adds its key, as the connect
+    /// request carried it, with every vault's DEK encrypted to it.
+    fn add(&mut self, extension: &Member) -> anyhow::Result<()> {
         let founder = Member {
             app: self.founder.app.clone(),
             signer: self.founder.signer.clone(),
         };
-        self.append(
-            &founder,
-            IdentityInviteIssue {
-                invite_id: &invite_id,
-                invite_key: &signing_seed.signing_key()?,
-                expires_at: &expires_at,
-            }
-            .operation(),
-        )?;
-        let vaults = self
-            .vaults
-            .iter()
-            .map(|(store_id, key_epoch, keys)| {
-                Ok(EnrollmentInviteVault {
-                    store_id: store_id.clone(),
-                    key_epoch: IdentityVaultEventId::parse(key_epoch.as_str())?,
-                    secrets_key: keys.secrets_key.clone(),
-                    members_key: keys.members_key.clone(),
-                })
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let input = EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                "github_pat_11AAAAbbbbCCCC".to_owned(),
-                "family-vault".to_owned(),
-            )),
-            identity: EnrollmentIdentityTarget {
-                identity_id: self.identity_id.clone(),
-                label: "Family".to_owned(),
-            },
-            invite: EnrollmentInvite {
-                invite_id,
-                signing_seed,
-                vaults,
-            },
-            entry_id: "extension".to_owned(),
-            issued_at: "2026-10-16T12:00:00Z".to_owned(),
-        };
-        let code = EnrollmentIssuance {
-            input: &input,
-            password: PASSPHRASE,
-            entry_label: "",
+        let state = self.state()?;
+        let operations = IdentityMemberAdd {
+            state: &state,
+            approver: &founder.app,
+            member: &extension.keys("Browser extension"),
         }
-        .check()?
-        .issue()?;
-        let sealed_passphrase = InvitePassphraseSeal {
-            recipient: &extension.public_key(),
-            passphrase: PASSPHRASE,
+        .addition()?;
+        for operation in operations {
+            self.append(&founder, operation)?;
         }
-        .seal()?;
-        Ok(SealedInvite {
-            identity_id: self.identity_id.clone(),
-            code,
-            sealed_passphrase,
-        })
+        Ok(())
     }
-}
-
-/// What an approval hands the extension.
-struct SealedInvite {
-    identity_id: IdentityId,
-    code: String,
-    sealed_passphrase: nook_core::AgeArmoredCiphertext,
 }
 
 /// The browser extension: one local identity per app key it protects.
@@ -282,82 +224,35 @@ impl Extension {
             })?)
     }
 
-    /// `join_identity_with_sealed_invite`: open the passphrase with the app
-    /// key, bind the local identity, decrypt the code, sign the join, and
-    /// cache the replicated membership.
+    /// `join_identity_from_log`: with the keyring's log the approval handed
+    /// over, the local identity takes the keyring's id once this app key is
+    /// a member there, and the replicated membership is cached.
     fn join(
         &mut self,
         member: &Member,
-        invite: &SealedInvite,
-        identity: &mut WebIdentity,
+        identity: &WebIdentity,
         local_log: LocalIdentityLog,
     ) -> anyhow::Result<()> {
-        let passphrase = InvitePassphraseOpen {
-            identity: &member.app,
-            sealed: &invite.sealed_passphrase,
+        let state = identity.state()?;
+        let plan = IdentityJoinCompletion {
+            directory: &self.directory,
+            app_key: &member.app,
+            state: &state,
+            local_log,
         }
-        .open()?;
-        let binding = self
-            .directory
-            .invitation_binding(&IdentityInvitationBindingRequest {
-                app_key: &member.app,
-                invited: &invite.identity_id,
-                local_log,
-            })?;
+        .plan()?;
+        let IdentityJoinCompletionPlan::Join(binding) = plan else {
+            anyhow::bail!("the web app has not added this app to the keyring");
+        };
         if let IdentityInvitationBinding::Adopt { local_identity_id } = binding {
             self.directory =
                 self.directory
                     .clone()
                     .adopt_replicated_identity(&ReplicatedIdentityAdoption {
                         local_identity_id: &local_identity_id,
-                        replicated_identity_id: &invite.identity_id,
+                        replicated_identity_id: &identity.identity_id,
                     })?;
         }
-        let normalized = EnrollmentLinkInput {
-            input: &invite.code,
-        }
-        .normalize();
-        let payload =
-            CheckedEnrollmentEnvelope::parse(&normalized)?.decrypt(passphrase.as_str())?;
-        anyhow::ensure!(
-            identity
-                .log
-                .issued_invite_now(&payload.invite.invite_id)
-                .is_some(),
-            "the invite reached the identity log"
-        );
-        let epochs = payload
-            .invite
-            .vaults
-            .iter()
-            .map(|vault| EventId::parse(vault.key_epoch.as_str()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let keys = payload
-            .invite
-            .vaults
-            .iter()
-            .map(EnrollmentInviteVault::keys)
-            .collect::<Vec<_>>();
-        let vaults = payload
-            .invite
-            .vaults
-            .iter()
-            .zip(epochs.iter().zip(keys.iter()))
-            .map(|(vault, (key_epoch, keys))| OpenedVaultDek {
-                store_id: &vault.store_id,
-                key_epoch,
-                keys,
-            })
-            .collect::<Vec<_>>();
-        let operation = IdentityInviteJoin {
-            identity_id: &invite.identity_id,
-            invite_id: &payload.invite.invite_id,
-            invite_key: &payload.invite.signing_seed.signing_key()?,
-            member: &member.keys("Browser extension"),
-            vaults: &vaults,
-        }
-        .operation()?;
-        identity.append(member, operation)?;
         self.sync(member, identity)
     }
 
@@ -395,7 +290,7 @@ impl Extension {
 }
 
 #[test]
-fn the_extension_joins_an_identity_with_the_invite_sealed_to_it() -> anyhow::Result<()> {
+fn the_web_app_adds_the_extension_and_it_joins_from_the_keyring_log() -> anyhow::Result<()> {
     let mut family = WebIdentity::found()?;
     let approved = family.create_vault('A')?;
     let other = family.create_vault('B')?;
@@ -407,8 +302,8 @@ fn the_extension_joins_an_identity_with_the_invite_sealed_to_it() -> anyhow::Res
         IdentityConnectionKey::CurrentAppKey
     );
 
-    let invite = family.invite(&key.app)?;
-    extension.join(&key, &invite, &mut family, local_log)?;
+    family.add(&key)?;
+    extension.join(&key, &family, local_log)?;
 
     let state = family.state()?;
     assert_eq!(
@@ -417,8 +312,8 @@ fn the_extension_joins_an_identity_with_the_invite_sealed_to_it() -> anyhow::Res
     );
     assert!(extension.opens(&key, &approved));
     assert!(extension.opens(&key, &other));
-    // The approval imported one vault; the identity's other vault is paired
-    // through the identity right after the join.
+    // The approval imported one vault; the keyring's other vault is paired
+    // from the records the approval carried, right after the join.
     let plan = IdentityVaultPairingRequest {
         snapshot: &family.snapshot_for(&key)?,
         paired_store_ids: &[approved.to_string()],
@@ -430,7 +325,7 @@ fn the_extension_joins_an_identity_with_the_invite_sealed_to_it() -> anyhow::Res
 }
 
 #[test]
-fn only_the_extension_the_invite_was_sealed_to_can_join() -> anyhow::Result<()> {
+fn only_the_app_the_web_app_added_completes_a_join() -> anyhow::Result<()> {
     let mut family = WebIdentity::found()?;
     family.create_vault('A')?;
     let mut extension = Extension::new();
@@ -438,10 +333,10 @@ fn only_the_extension_the_invite_was_sealed_to_can_join() -> anyhow::Result<()> 
     let mut other_browser = Extension::new();
     let stranger = other_browser.protect()?;
 
-    let invite = family.invite(&key.app)?;
-    let joined = other_browser.join(&stranger, &invite, &mut family, LocalIdentityLog::Empty);
+    family.add(&key)?;
+    let joined = other_browser.join(&stranger, &family, LocalIdentityLog::Empty);
 
-    // The passphrase does not open with the stranger's key.
+    // The log lists no such app: nothing joins.
     assert!(matches!(
         joined.map_err(anyhow::Error::downcast::<VaultError>),
         Err(Ok(_))
@@ -450,7 +345,7 @@ fn only_the_extension_the_invite_was_sealed_to_can_join() -> anyhow::Result<()> 
         ReplicatedIdentityStanding::of(&family.state()?, stranger.app.app_id()),
         ReplicatedIdentityStanding::NotListed
     );
-    // The refused invite leaves the other browser's own identity as it was.
+    // The refused join leaves the other browser's own identity as it was.
     assert!(
         other_browser
             .directory
@@ -467,8 +362,8 @@ fn a_vault_created_after_the_join_is_paired_on_the_next_sync() -> anyhow::Result
     let approved = family.create_vault('A')?;
     let mut extension = Extension::new();
     let key = extension.protect()?;
-    let invite = family.invite(&key.app)?;
-    extension.join(&key, &invite, &mut family, LocalIdentityLog::Empty)?;
+    family.add(&key)?;
+    extension.join(&key, &family, LocalIdentityLog::Empty)?;
 
     let later = family.create_vault('C')?;
     extension.sync(&key, &family)?;
@@ -492,8 +387,8 @@ fn a_second_identity_joins_with_a_second_app_key() -> anyhow::Result<()> {
     let work_vault = work.create_vault('W')?;
     let mut extension = Extension::new();
     let family_key = extension.protect()?;
-    let invite = family.invite(&family_key.app)?;
-    extension.join(&family_key, &invite, &mut family, LocalIdentityLog::Empty)?;
+    family.add(&family_key)?;
+    extension.join(&family_key, &family, LocalIdentityLog::Empty)?;
 
     // The key that joined the family cannot join work as well.
     let family_log = family_key.local_log(&[&family, &work]);
@@ -501,11 +396,17 @@ fn a_second_identity_joins_with_a_second_app_key() -> anyhow::Result<()> {
         extension.connection_key(&family_key, family_log)?,
         IdentityConnectionKey::NewAppKey
     );
-    let refused_invite = work.invite(&family_key.app)?;
-    let refused = extension.join(&family_key, &refused_invite, &mut work, family_log);
+    // Its connect request therefore carries a new key. Were a keyring to add
+    // the family key anyway, the extension refuses to join it with that key.
+    let mut school = WebIdentity::found()?;
+    school.create_vault('S')?;
+    school.add(&family_key)?;
+    let refused = extension.join(&family_key, &school, family_log);
     assert!(matches!(
-        refused.map_err(anyhow::Error::downcast::<MultiDeviceError>),
-        Err(Ok(MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. }))
+        refused.map_err(anyhow::Error::downcast::<VaultError>),
+        Err(Ok(VaultError::MultiDevice(
+            MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. }
+        )))
     ));
 
     // "Connect another identity" protects a second key, which joins work.
@@ -515,8 +416,8 @@ fn a_second_identity_joins_with_a_second_app_key() -> anyhow::Result<()> {
         extension.connection_key(&work_key, work_log)?,
         IdentityConnectionKey::CurrentAppKey
     );
-    let invite = work.invite(&work_key.app)?;
-    extension.join(&work_key, &invite, &mut work, work_log)?;
+    work.add(&work_key)?;
+    extension.join(&work_key, &work, work_log)?;
 
     assert_eq!(extension.directory.identities().len(), 2);
     assert!(extension.opens(&family_key, &family_vault));

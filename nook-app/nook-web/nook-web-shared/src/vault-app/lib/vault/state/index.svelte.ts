@@ -42,8 +42,13 @@ const uiKeys = [
   "workspaceSection",
   "identityTransitionPending",
   "helpOpen",
+  "accessCheckOpen",
   "firstRun",
   "firstRunVaultName",
+  "joinICloudSignIn",
+  "identityPage",
+  "firstRunPlace",
+  "firstRunJoin",
   "newIdentity",
   "newIdentityName",
   "vaultPanelStoreId",
@@ -52,6 +57,7 @@ const uiKeys = [
   "emptyVaultReplacement",
   "forgetEmptyVaultReplacement",
   "identityDirectory",
+  "identityJoin",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -103,14 +109,12 @@ const providerKeys = [
 ] as const satisfies readonly (keyof VaultProviderState)[];
 
 const sessionKeys = [
-  "externalIdentityHandoff",
   "managerSession",
   "hasManager",
   "admitManager",
   "openManager",
   "deviceProtectionStatus",
   "deviceProtectionLockedStatus",
-  "identityKeySource",
   "isAuthenticated",
   "sessionEpoch",
   "sessionExpiredByIdle",
@@ -214,8 +218,13 @@ class VaultStateSlicesImplementation {
   declare workspaceSection: VaultUiState["workspaceSection"];
   declare identityTransitionPending: VaultUiState["identityTransitionPending"];
   declare helpOpen: VaultUiState["helpOpen"];
+  declare accessCheckOpen: VaultUiState["accessCheckOpen"];
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
+  declare joinICloudSignIn: VaultUiState["joinICloudSignIn"];
+  declare identityPage: VaultUiState["identityPage"];
+  declare firstRunPlace: VaultUiState["firstRunPlace"];
+  declare firstRunJoin: VaultUiState["firstRunJoin"];
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
@@ -224,6 +233,7 @@ class VaultStateSlicesImplementation {
   declare emptyVaultReplacement: VaultUiState["emptyVaultReplacement"];
   declare forgetEmptyVaultReplacement: VaultUiState["forgetEmptyVaultReplacement"];
   declare identityDirectory: VaultUiState["identityDirectory"];
+  declare identityJoin: VaultUiState["identityJoin"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];
@@ -271,14 +281,12 @@ class VaultStateSlicesImplementation {
   declare icloudOAuthReady: VaultProviderState["icloudOAuthReady"];
   declare icloudOAuthBusy: VaultProviderState["icloudOAuthBusy"];
 
-  declare externalIdentityHandoff: VaultSessionState["externalIdentityHandoff"];
   declare readonly managerSession: VaultSessionState["managerSession"];
   declare readonly hasManager: VaultSessionState["hasManager"];
   declare admitManager: VaultSessionState["admitManager"];
   declare openManager: VaultSessionState["openManager"];
   declare deviceProtectionStatus: VaultSessionState["deviceProtectionStatus"];
   declare deviceProtectionLockedStatus: VaultSessionState["deviceProtectionLockedStatus"];
-  declare identityKeySource: VaultSessionState["identityKeySource"];
   declare isAuthenticated: VaultSessionState["isAuthenticated"];
   declare sessionEpoch: VaultSessionState["sessionEpoch"];
   declare sessionExpiredByIdle: VaultSessionState["sessionExpiredByIdle"];

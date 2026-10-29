@@ -3,9 +3,9 @@
 pub use nook_auth2::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyDeviceProtectionMode, PasskeyIdentityUnlock, PasskeyProtectionInput,
-    PasskeyRecordMetadata, PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration,
-    PasskeyRegistrationInput, PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput,
-    PasskeyRegistrationResolution, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
-    WebAuthnUserHandle, WrappedDeviceIdentity,
+    PasskeyDeviceProtectionMode, PasskeyIdentityUnlock, PasskeyMemberSigner,
+    PasskeyProtectionInput, PasskeyRecordMetadata, PasskeyRecoveryInput, PasskeyRecoveryRequest,
+    PasskeyRegistration, PasskeyRegistrationInput, PasskeyRegistrationOutcome,
+    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WebAuthnCredentialId,
+    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
 };

@@ -57,9 +57,21 @@ pub struct IdentityConnectionKeyRequest<'a> {
     pub local_log: LocalIdentityLog,
 }
 
+/// A name for the app key's local identity, given while it is still fresh.
+pub struct FreshIdentityNaming<'a> {
+    pub app_key: &'a AppKey,
+    /// Already trimmed and checked by the caller.
+    pub label: &'a str,
+    /// The control log of the app key's current local identity.
+    pub local_log: LocalIdentityLog,
+}
+
 impl IdentityRecord {
-    /// Nothing ties this local identity to an identity yet.
-    fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
+    /// Nothing ties this local identity to an identity yet, so its key can
+    /// still take an approved identity's id. A provider listing asks the same
+    /// question before it offers to finish a join.
+    #[must_use]
+    pub fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
         local_log == LocalIdentityLog::Empty
             && self.vault_deks.is_empty()
             && self.members.len() == 1
@@ -109,6 +121,33 @@ impl IdentityDirectory {
         Ok(IdentityInvitationBinding::Adopt {
             local_identity_id: local.identity_id.clone(),
         })
+    }
+
+    /// Name the app key's local identity while nothing ties it to an identity
+    /// yet, so its log seals that name when it is created. An identity with a
+    /// log, a vault, or another member keeps the name it has. A key with no
+    /// local identity has nothing to name.
+    pub fn name_fresh_identity(
+        self,
+        request: &FreshIdentityNaming<'_>,
+    ) -> MultiDeviceResult<IdentityDirectory> {
+        if request.label.trim().is_empty() {
+            return Err(MultiDeviceError::IdentityLabelEmpty);
+        }
+        let local = self.local_identity_for_app_key(request.app_key)?;
+        if !local.is_fresh_local_identity(request.local_log) {
+            return Err(MultiDeviceError::IdentityAlreadyInUse {
+                identity_id: local.identity_id.to_string(),
+            });
+        }
+        let identity_id = local.identity_id.clone();
+        let mut named = self;
+        for record in &mut named.identities {
+            if record.identity_id == identity_id {
+                request.label.clone_into(&mut record.label);
+            }
+        }
+        Ok(named)
     }
 
     /// Choose the app key that connects this installation to one more
@@ -399,6 +438,102 @@ mod tests {
                 LocalIdentityLog::Empty
             ),
             Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
+        Ok(())
+    }
+
+    fn named(
+        directory: IdentityDirectory,
+        app_key: &AppKey,
+        label: &str,
+        local_log: LocalIdentityLog,
+    ) -> MultiDeviceResult<IdentityDirectory> {
+        directory.name_fresh_identity(&FreshIdentityNaming {
+            app_key,
+            label,
+            local_log,
+        })
+    }
+
+    fn label_of(directory: &IdentityDirectory, identity_id: &IdentityId) -> anyhow::Result<String> {
+        directory
+            .identities()
+            .iter()
+            .find(|record| &record.identity_id == identity_id)
+            .map(|record| record.label.clone())
+            .ok_or_else(|| anyhow::anyhow!("no identity {identity_id}"))
+    }
+
+    #[test]
+    fn a_fresh_identity_takes_the_name_setup_gives_it() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, local) = Installation::new().protect(&key)?;
+
+        let directory = named(
+            installation.directory,
+            &key,
+            "Family",
+            LocalIdentityLog::Empty,
+        )?;
+
+        assert_eq!(label_of(&directory, &local)?, "Family");
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_with_no_local_identity_has_nothing_to_name() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+
+        assert!(matches!(
+            named(
+                IdentityDirectory::empty(),
+                &key,
+                "Family",
+                LocalIdentityLog::Empty
+            ),
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn an_identity_with_a_log_or_a_vault_keeps_its_name() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, local) = Installation::new().protect(&key)?;
+
+        let with_log = named(
+            installation.directory.clone(),
+            &key,
+            "Family",
+            LocalIdentityLog::Replicated,
+        );
+        assert!(matches!(
+            with_log,
+            Err(MultiDeviceError::IdentityAlreadyInUse { identity_id }) if identity_id == local.to_string()
+        ));
+
+        let installation = installation.join_with_vault(&key, &local)?;
+        let with_vault = named(
+            installation.directory,
+            &key,
+            "Family",
+            LocalIdentityLog::Empty,
+        );
+        assert!(matches!(
+            with_vault,
+            Err(MultiDeviceError::IdentityAlreadyInUse { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_blank_name_is_refused() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, _) = Installation::new().protect(&key)?;
+
+        assert!(matches!(
+            named(installation.directory, &key, "   ", LocalIdentityLog::Empty),
+            Err(MultiDeviceError::IdentityLabelEmpty)
         ));
         Ok(())
     }

@@ -17,10 +17,15 @@
   import * as oauthActions from "$lib/vault/oauth";
   import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
   import {
-    ProviderVaultActions,
-    ProviderVaultImportStart,
-    type EmptyVaultSwap,
-  } from "$lib/vault/provider-vaults";
+    ConnectButtonLook,
+    type ConnectPlanButton,
+  } from "$lib/components/provider-vaults/drive-vault-inventory";
+  import NewIdentityOption from "$lib/components/provider-vaults/NewIdentityOption.svelte";
+  import FirstRunDiagram from "$lib/components/login/FirstRunDiagram.svelte";
+  import {
+    firstRunSyncDiagram,
+    type FirstRunSyncDiagramRequest,
+  } from "$lib/components/login/first-run-diagram";
 
   const log = browserLogRuntime.createLogger("icloud-oauth");
 
@@ -161,19 +166,27 @@
       vault.showSuccess(existingFolderNotice);
   }
 
-  /** Import another identity's vault from the listing as a separate vault. */
-  async function importProviderVault(storeId: string) {
-    const start = new ProviderVaultActions(vault).importSeparately(storeId);
-    if (start === ProviderVaultImportStart.ConnectNow)
-      await connectWithVaultTarget();
-  }
+  /** The step's button when no listing owns it: Connect & sync alone. */
+  /** The connection step draws what the provider does instead of saying it. */
+  const providerDiagram = $derived.by(() => {
+    const request: FirstRunSyncDiagramRequest = {
+      vault,
+      provider: vault.t(
+        isICloud
+          ? I18N_KEYS.ProviderPickerIcloud
+          : I18N_KEYS.ProviderPickerGoogleDrive,
+      ),
+    };
+    return firstRunSyncDiagram(request);
+  });
 
-  /** Swap the empty open vault for a listed one, once confirmed. */
-  async function replaceEmptyVault(swap: EmptyVaultSwap) {
-    const start = new ProviderVaultActions(vault).replaceEmptyVault(swap);
-    if (start === ProviderVaultImportStart.ConnectNow)
-      await connectWithVaultTarget();
-  }
+  const directConnect: ConnectPlanButton = {
+    busy: false,
+    label: "",
+    detail: "",
+    look: ConnectButtonLook.Primary,
+    run: connectWithVaultTarget,
+  };
 
   function watchICloudSignInIntent(node: HTMLElement) {
     let deferredSignInPending = false;
@@ -321,112 +334,104 @@
         ? "icloud-setup-connection-step"
         : "google-setup-connection-step"}
     >
-      <p class="text-sm text-foreground text-pretty">
-        {vault.t(
-          isICloud
-            ? I18N_KEYS.ProviderSetupIcloudDesc
-            : I18N_KEYS.ProviderSetupGoogleDriveDesc,
-        )}
-      </p>
+      <!-- One centred column: the picture, then its button. -->
+      <div class="grid justify-items-center gap-4 text-center">
+        <FirstRunDiagram diagram={providerDiagram} />
 
-      {#if isICloud}
-        <div
-          class={cn(
-            "apple-cloudkit-control relative min-h-9 w-full sm:w-fit",
-            (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
-              "pointer-events-none opacity-60",
-          )}
-          data-testid="icloud-sign-in-btn"
-          use:watchICloudSignInIntent
-        >
-          <div id="apple-sign-in-button"></div>
-          <div id="apple-sign-out-button" class="hidden"></div>
-          {#if oauthBusy || icloudSignInPreparing}
-            <div class={icloudSignInButtonClass}>
-              {vault.t(
-                icloudSignInPreparing
-                  ? I18N_KEYS.ProviderSetupIcloudPreparingSignIn
-                  : I18N_KEYS.ProviderSetupIcloudSigningIn,
-              )}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <button
-          type="button"
-          class={googleSignInButtonClass}
-          data-testid="google-sign-in-btn"
-          disabled={oauthBusy || oauthOriginUnsupported}
-          onclick={() =>
-            void new oauthActions.VaultOAuthActions(vault).signInWithGoogle()}
-        >
-          {#if oauthBusy}
-            {vault.t(I18N_KEYS.ProviderSetupGoogleSigningIn)}
-          {:else}
-            {vault.t(I18N_KEYS.ProviderSetupSignInWithGoogle)}
-          {/if}
-        </button>
-      {/if}
+        {#if isICloud}
+          <div
+            class={cn(
+              "apple-cloudkit-control relative min-h-9 w-full sm:w-fit",
+              (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
+                "pointer-events-none opacity-60",
+            )}
+            data-testid="icloud-sign-in-btn"
+            use:watchICloudSignInIntent
+          >
+            <div id="apple-sign-in-button"></div>
+            <div id="apple-sign-out-button" class="hidden"></div>
+            {#if oauthBusy || icloudSignInPreparing}
+              <div class={icloudSignInButtonClass}>
+                {vault.t(
+                  icloudSignInPreparing
+                    ? I18N_KEYS.ProviderSetupIcloudPreparingSignIn
+                    : I18N_KEYS.ProviderSetupIcloudSigningIn,
+                )}
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <button
+            type="button"
+            class={googleSignInButtonClass}
+            data-testid="google-sign-in-btn"
+            disabled={oauthBusy || oauthOriginUnsupported}
+            onclick={() =>
+              void new oauthActions.VaultOAuthActions(vault).signInWithGoogle()}
+          >
+            {#if oauthBusy}
+              {vault.t(I18N_KEYS.ProviderSetupGoogleSigningIn)}
+            {:else}
+              {vault.t(I18N_KEYS.ProviderSetupSignInWithGoogle)}
+            {/if}
+          </button>
+        {/if}
 
-      {#if oauthOriginUnsupported}
-        <p
-          class="text-xs text-muted-foreground"
-          data-testid={isICloud
-            ? "icloud-origin-unsupported"
-            : "google-origin-unsupported"}
-        >
-          {oauthOriginUnsupportedMessage}
-        </p>
-      {/if}
+        {#if oauthOriginUnsupported}
+          <p
+            class="text-xs text-muted-foreground"
+            data-testid={isICloud
+              ? "icloud-origin-unsupported"
+              : "google-origin-unsupported"}
+          >
+            {oauthOriginUnsupportedMessage}
+          </p>
+        {/if}
 
-      <!-- Errors show in the step that is open: Connect & sync once signed in. -->
-      {#if vault.errorMsg && !canConnect}
-        <p
-          class="text-xs text-destructive"
-          data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
-        >
-          {vault.errorMsg}
-        </p>
-      {/if}
+        <!-- Errors show in the step that is open: Connect & sync once signed in. -->
+        {#if vault.errorMsg && !canConnect}
+          <p
+            class="text-xs text-destructive"
+            data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
+          >
+            {vault.errorMsg}
+          </p>
+        {/if}
 
-      {#if oauthSignedIn}
-        <p
-          class="text-xs text-muted-foreground"
-          data-testid={isICloud
-            ? "icloud-account-status"
-            : "google-account-status"}
-        >
-          {isICloud
-            ? (() => {
-                const translationRequest2: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
-                  replacements: {
-                    account:
-                      oauthAccount ||
-                      vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-                  },
-                };
-                return vault.t(translationRequest2);
-              })()
-            : (() => {
-                const translationRequest3: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
-                  replacements: {
-                    account:
-                      oauthAccount ||
-                      vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-                  },
-                };
-                return vault.t(translationRequest3);
-              })()}
-        </p>
-      {/if}
+        {#if oauthSignedIn}
+          <p
+            class="text-xs text-muted-foreground"
+            data-testid={isICloud
+              ? "icloud-account-status"
+              : "google-account-status"}
+          >
+            {isICloud
+              ? (() => {
+                  const translationRequest2: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
+                    replacements: {
+                      account:
+                        oauthAccount ||
+                        vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+                    },
+                  };
+                  return vault.t(translationRequest2);
+                })()
+              : (() => {
+                  const translationRequest3: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
+                    replacements: {
+                      account:
+                        oauthAccount ||
+                        vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+                    },
+                  };
+                  return vault.t(translationRequest3);
+                })()}
+          </p>
+        {/if}
 
-      <p class="text-[11px] text-muted-foreground text-pretty">
-        {isICloud
-          ? vault.t(I18N_KEYS.ProviderSetupIcloudTokensLocalDesc)
-          : vault.t(I18N_KEYS.ProviderSetupGoogleTokensLocalDesc)}
-      </p>
+      </div>
     </SetupWizardStep>
 
     <SetupWizardStep
@@ -441,9 +446,6 @@
       bind:open={syncStepOpen}
       testId={isICloud ? "icloud-setup-sync-step" : "google-setup-sync-step"}
     >
-      <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-      </p>
       {#if isICloud && !sharedTargetReady}
         <p
           class="text-[11px] text-muted-foreground text-pretty"
@@ -454,13 +456,12 @@
       {:else if driveAccessToken}
         <!-- What the account's Nook folder already holds, before Connect &
              sync. It owns the step's one action button: Connect & sync, or the
-             action chosen on one of its vaults. -->
+             identity plan followed by it. -->
         <GoogleDriveVaultInventory
           {vault}
           accessToken={driveAccessToken}
           busy={isVerifying || isInitializing || preparingTarget}
-          onImport={importProviderVault}
-          onReplace={replaceEmptyVault}
+          onConnect={connectWithVaultTarget}
           {connectButton}
         />
       {/if}
@@ -482,39 +483,54 @@
         </p>
       {/if}
       {#if isICloud && !sharedTargetReady}
-        {@render connectButton(false)}
+        {@render connectButton(directConnect)}
       {:else if !driveAccessToken}
-        {@render connectButton(false)}
+        {@render connectButton(directConnect)}
       {/if}
     </SetupWizardStep>
   </div>
 </div>
 
-{#snippet connectButton(inventoryBusy: boolean)}
-  <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-    <Button
-      type="button"
-      class="sm:min-w-[180px]"
-      data-testid="connect-provider-btn"
+{#snippet connectButton(button: ConnectPlanButton)}
+  {#if button.look === ConnectButtonLook.NewIdentity}
+    <NewIdentityOption
+      title={button.label}
+      detail={button.detail}
+      testId="connect-provider-btn"
       disabled={!canConnect ||
-        inventoryBusy ||
+        button.busy ||
         isVerifying ||
         isInitializing ||
         preparingTarget}
-      onclick={() => void connectWithVaultTarget()}
-    >
-      {#if isInitializing}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-      {:else if isVerifying || preparingTarget}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
-      {:else}
-        <ShieldCheck class="size-4" />
-        {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
-      {/if}
-    </Button>
-  </div>
+      busy={isVerifying || preparingTarget}
+      onCreate={() => void button.run()}
+    />
+  {:else}
+    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        class="sm:min-w-[180px]"
+        data-testid="connect-provider-btn"
+        disabled={!canConnect ||
+          button.busy ||
+          isVerifying ||
+          isInitializing ||
+          preparingTarget}
+        onclick={() => void button.run()}
+      >
+        {#if isInitializing}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+        {:else if isVerifying || preparingTarget}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
+        {:else}
+          <ShieldCheck class="size-4" />
+          {button.label || vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+        {/if}
+      </Button>
+    </div>
+  {/if}
 {/snippet}
 
 <style>

@@ -28,6 +28,8 @@
   - Show when Nook first recorded it and when Nook last used it.
   - Use explicit unknown or legacy states when evidence is unavailable.
 - **Browser extension:** Treat it as another app installation.
+  - The website and the extension are separate apps, each with its own app
+    key and passkey. The website only ever uses its own app key.
   - Extension setup enrolls its internal app key into a selected identity.
   - Each further identity it joins gets its own app key, as on the web app;
     see the extension's
@@ -120,8 +122,6 @@ It is never shown as stored on one physical laptop.
   - Do not auto-open a known vault while **Devices & access** owns an identity
     transition. Re-enter the catalog-driven local unlock path only after the
     user leaves the dashboard.
-  - Clear any pending extension handoff and its secrets before a local identity
-    transition can adopt a different app key.
   - After a legacy wrapped app key authenticates, atomically promote it into the
     directory and keyring and seal its existing singleton signing seed.
   - Normal PIN or passkey unlock must finish that promotion when an earlier
@@ -143,60 +143,29 @@ It is never shown as stored on one physical laptop.
   - Prefer the selected identity as survivor unless a pending genesis marker
     durably references another identity in the connected group.
   - Retain every member and vault grant during the merge.
-  - Normalize staged marker base and candidate directories in the same
-    transaction so completion compares migrated snapshots.
-  - Trigger staged snapshot normalization when either the live directory or
-    staged base contains legacy duplicate ownership. Candidate-only duplicate
-    ownership is a new invalid state and must fail closed.
   - Repeat that marker-aware normalization inside every directory write
-    transaction, including authenticated handoff and staged genesis cleanup, so
-    a pre-upgrade tab cannot race the initial migration.
+    transaction, so a pre-upgrade tab cannot race the initial migration.
   - Do not decode a pending marker for a valid directory without duplicate
     ownership.
   - Persist both encryption and event-signing public keys for members.
   - Treat missing signing keys from older records as unavailable, not inferred.
   - Require a verified signing key for every member in new Simple-vault genesis.
-  - Reject an existing-vault handoff while any signed roster event is pending
-    causal ancestry.
   - Require every stored event's computed ID to match its index and row key.
   - Validate the event index before writing a new event row.
-  - On rejected handoff cleanup, scan by the vault event-row prefix.
-  - Remove indexed and unindexed rows even when the index is malformed.
-  - Apply the transactionally selected vault DEKs to the live session before
-    reporting a successful handoff.
   - Attach an imported vault to the identity that already owns the authorized
     app key instead of synthesizing duplicate identity ownership.
 - **Simple genesis marker:** Use `pending_simple_genesis_v1`.
-  - Store `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
-  - Make `flow` explicitly `ordinary` or `staged`.
-  - Let the staged flow own the base directory, inactive candidate directory,
-    signing keys, and identity-owned DEK envelopes.
-  - Validate the staged candidate even when the live directory still equals its
-    base snapshot.
+  - Store `storeId`, `identityId`, `createdAt`, and `eventState`.
   - Make the marker durable before event creation and resume it after reload.
-  - On verified connect, publish the staged directory and matching signing seed,
-    then remove the marker in one compare-and-write transaction.
-  - Fail closed on concurrent identity changes without overwriting them.
-  - Retain unrelated concurrent changes through a typed three-way rebase.
-  - Reject a staged-identity conflict or cross-identity app-key overlap.
-  - Bind extension-first staged genesis to the live authorizer app key.
-  - If no live authorizer exists, bind it to the handed-off app key.
-  - Never derive staged ownership from another tab's persisted selection.
 - **Genesis event state:** Use `awaiting-event` or `event-pinned`.
-  - Let the pinned variant own the complete signed `eventYaml`, an
-    app-key-sealed `signingSeedEnvelope`, and staged-member signer envelopes
-    before the first event-log write.
-  - Let either staged member retry by opening and reusing that exact pair.
+  - Let the pinned variant own the complete signed `eventYaml` and an
+    app-key-sealed `signingSeedEnvelope` before the first event-log write.
+  - Retry by opening and reusing that exact pair.
 - **Strict marker decoding:** Reject a marker that lacks any current field or
   carries an unknown event state; there is no upgrade path for older markers.
 - **Failed or imported genesis:**
-  - Leave active identity state unchanged after failed extension-first creation.
-  - Keep pre-event attempts staged.
   - Resume pinned or partially written genesis from the same marker.
   - Clear decrypted UI state and sync before showing the failure.
-  - Use a separate pending state for existing-vault imports.
-  - Publish only after verified connect establishes the owning identity and
-    validates the active signed roster.
   - Require every event named by the roster index to exist and have a valid
     event ID; missing or malformed evidence fails authorization closed.
   - Reject event rows absent from the index so a pre-upgrade split write cannot
@@ -300,7 +269,6 @@ Current dashboard requirements:
   - An unlocked tab must resolve vault creation and other identity-owned
     mutations from its live app key. Another tab's persisted selection cannot
     redirect or block those operations.
-  - A companion session must not inherit the persisted browser app ID.
   - Rust/WASM projects each identity's locally known vault-access rows together
     with the identity directory. Presentation code must not infer grants by
     intersecting identity and vault snapshots.
@@ -332,8 +300,8 @@ Current dashboard requirements:
   - Activation uses ordinary serialized storage and does not advance the
     destructive-recovery storage generation.
   - Other tabs retain their live app-key sessions after activation.
-  - The prior in-memory app key, vault session, pending extension handoff, and
-    decrypted provider state are cleared.
+  - The prior in-memory app key, vault session, and decrypted provider state
+    are cleared.
   - The selected identity must authenticate before opening vaults.
 - The selected identity defaults to a protection and app inventory.
   - The current protector appears as the managed row.

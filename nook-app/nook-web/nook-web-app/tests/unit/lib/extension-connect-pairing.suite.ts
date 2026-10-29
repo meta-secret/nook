@@ -3,7 +3,6 @@ import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-conn
 import { Effect } from 'effect'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   pairingApprovalResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -16,7 +15,7 @@ import {
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionIdentityInviteWireKind } from '../../../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
@@ -53,14 +52,12 @@ describe('extension pairing approved message', () => {
   >[0] {
     return {
       request: {
-        source: ExtensionIdentityRequestSource.ExtensionConnect,
         follow: { kind: ExtensionConnectFollowKind.Unnamed },
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         extensionRuntimeId: 'extension-123',
         deviceLabel: 'Nook Extension',
-        nonce: 'nonce-1',
         scopes: [ExtensionConnectScope.VaultAccess],
       },
       message: {
@@ -76,7 +73,13 @@ describe('extension pairing approved message', () => {
           approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
-          identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+          keyring: {
+            kind: ExtensionKeyringGrantKind.Added,
+            identityId: 'identity-1',
+            identityLabel: 'Personal',
+            identityEvents: ['identity-event-1'],
+            vaults: [],
+          },
         },
         eventLogRecords,
       },
@@ -265,6 +268,13 @@ describe('extension pairing approved message', () => {
               approvedAt: 1_783_373_640_000,
               scopes: [ExtensionConnectScope.VaultAccess],
               providers: [],
+              keyring: {
+                kind: ExtensionKeyringGrantKind.Added,
+                identityId: 'identity-1',
+                identityLabel: 'Personal',
+                identityEvents: ['identity-event-1'],
+                vaults: [],
+              },
             },
             eventLogRecords,
           }),
@@ -273,46 +283,71 @@ describe('extension pairing approved message', () => {
     ).toBe('Success')
   })
 
-  test('carries the identity invite that lets the extension join the identity', () => {
+  test('carries the keyring the extension was added to, with its log and other vaults', () => {
     const message = approvalDeliveryArgs().message
-    const invite = {
-      kind: ExtensionIdentityInviteWireKind.Invited,
+    const keyring = {
+      kind: ExtensionKeyringGrantKind.Added,
       identityId: 'identity-1',
       identityLabel: 'Personal',
-      code: 'nook-enroll-code',
-      sealedPassphrase: '-----BEGIN AGE ENCRYPTED FILE-----\\nsealed',
-      mountProviderId: 'github-1',
+      identityEvents: ['identity-event-1', 'identity-event-2'],
+      vaults: [{ storeId: 'store_bbbbbbbbbbb', eventLogRecords }],
     }
     const admission = Effect.runSync(
       Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({
           ...message,
-          payload: { ...message.payload, identityInvite: invite },
+          payload: { ...message.payload, keyring },
         }),
       ),
     )
     expect(admission._tag).toBe('Success')
     if (admission._tag === 'Failure') return
-    expect(admission.success.payload.identityInvite).toEqual(invite)
+    const admitted = admission.success.payload.keyring
+    expect(admitted.kind).toBe(ExtensionKeyringGrantKind.Added)
+    if (admitted.kind !== ExtensionKeyringGrantKind.Added) return
+    expect(admitted.identityId).toBe('identity-1')
+    expect(admitted.identityEvents).toEqual(keyring.identityEvents)
+    expect(
+      admitted.vaults.map((vault) => [
+        vault.storeId,
+        vault.eventLogRecords.map((record) => record.eventId),
+      ]),
+    ).toEqual([
+      ['store_bbbbbbbbbbb', eventLogRecords.map((record) => record.eventId)],
+    ])
   })
 
-  test('reads an approval without an identity invite as not offered', () => {
+  test('refuses an approval without the keyring, or with an empty keyring log', () => {
     const message = approvalDeliveryArgs().message
     const payload: Partial<typeof message.payload> = { ...message.payload }
-    delete payload.identityInvite
-    const admission = Effect.runSync(
+    delete payload.keyring
+    const withoutKeyring = Effect.runSync(
       Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({ ...message, payload }),
       ),
     )
-    expect(admission._tag).toBe('Success')
-    if (admission._tag === 'Failure') return
-    expect(admission.success.payload.identityInvite).toEqual({
-      kind: ExtensionIdentityInviteWireKind.NotOffered,
-    })
+    expect(withoutKeyring._tag).toBe('Failure')
+    const emptyLog = Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({
+          ...message,
+          payload: {
+            ...message.payload,
+            keyring: {
+              kind: ExtensionKeyringGrantKind.Added,
+              identityId: 'identity-1',
+              identityLabel: 'Personal',
+              identityEvents: [],
+              vaults: [],
+            },
+          },
+        }),
+      ),
+    )
+    expect(emptyLog._tag).toBe('Failure')
   })
 
-  test('rejects an identity invite without its sealed passphrase', () => {
+  test('a web app never sends a member-only keyring', () => {
     const message = approvalDeliveryArgs().message
     const admission = Effect.runSync(
       Effect.result(
@@ -320,13 +355,7 @@ describe('extension pairing approved message', () => {
           ...message,
           payload: {
             ...message.payload,
-            identityInvite: {
-              kind: ExtensionIdentityInviteWireKind.Invited,
-              identityId: 'identity-1',
-              identityLabel: 'Personal',
-              code: 'nook-enroll-code',
-              mountProviderId: 'github-1',
-            },
+            keyring: { kind: ExtensionKeyringGrantKind.Member },
           },
         }),
       ),

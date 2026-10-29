@@ -8,7 +8,6 @@ import {
   decodeProviders,
 } from './session-message-dispatch-test-support'
 import {
-  NookVaultManager,
   DeviceProtectionStatus,
   configure_vault_application,
   VaultApplication,
@@ -88,8 +87,6 @@ class InstalledVaultEventLogListenerFixture {
     {
       decodeProviders,
       handleMessage: this.handle.bind(this),
-      handleCompanionIdentityDiscovery: this.reject.bind(this),
-      handleCompanionIdentityHandoff: this.reject.bind(this),
     }
   readonly dispatcher = new ExtensionSessionMessageDispatcher(this.context)
   private readonly enqueue = this.dispatcher.enqueue.bind(this.dispatcher)
@@ -99,22 +96,17 @@ class InstalledVaultEventLogListenerFixture {
   >
 
   constructor() {
-    const source = new NookVaultManager()
-    const handoff = source.begin_extension_identity_handoff()
-    try {
-      this.message = {
-        type: ExtensionSessionMessageType.ExportVaultEventLog,
-        payload: {
-          vault_store_id: 'store_abcdefghijk',
-          app_id: '1234567890abcdef',
-          app_public_key: handoff.recipient_public_key,
-          app_signing_public_key: '24'.repeat(32),
-          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-        },
-      }
-    } finally {
-      handoff.free()
-      source.free()
+    this.message = {
+      type: ExtensionSessionMessageType.ExportVaultEventLog,
+      payload: {
+        vault_store_id: 'store_abcdefghijk',
+        app_id: '1234567890abcdef',
+        // A well-formed X25519 age recipient (the age specification's example).
+        app_public_key:
+          'age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p',
+        app_signing_public_key: '24'.repeat(32),
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     }
     const host = {
       chrome: {
@@ -146,7 +138,6 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.UnlockPasskey:
       case ExtensionSessionMessageType.CreatePin:
       case ExtensionSessionMessageType.UnlockPin:
-      case ExtensionSessionMessageType.SealIdentityHandoff:
       case ExtensionSessionMessageType.ImportVault:
       case ExtensionSessionMessageType.JoinIdentity:
       case ExtensionSessionMessageType.ConnectIdentityVault:
@@ -216,7 +207,6 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.UnlockPasskey:
       case ExtensionSessionMessageType.CreatePin:
       case ExtensionSessionMessageType.UnlockPin:
-      case ExtensionSessionMessageType.SealIdentityHandoff:
       case ExtensionSessionMessageType.ImportVault:
       case ExtensionSessionMessageType.JoinIdentity:
       case ExtensionSessionMessageType.ConnectIdentityVault:

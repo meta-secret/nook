@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, mock, test } from 'bun:test'
-import { err, ok } from 'neverthrow'
+import { ok } from 'neverthrow'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   ExtensionSessionMessageDispatcher,
@@ -16,10 +16,7 @@ import {
   ExtensionSessionSenderKind,
   ExtensionSessionSenderPolicy,
 } from '../src/offscreen/session-sender-policy'
-import {
-  SessionOperationFailure,
-  SessionOperationFailureKind,
-} from '../src/lib/session-operation-queue'
+import type { SessionOperationFailure } from '../src/lib/session-operation-queue'
 import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 type RuntimeListener = Parameters<
@@ -164,8 +161,6 @@ const expectedAudiences: Readonly<
     ExtensionSessionRequestAudience.ExtensionPages,
   [ExtensionSessionMessageType.UnlockPin]:
     ExtensionSessionRequestAudience.ExtensionPages,
-  [ExtensionSessionMessageType.SealIdentityHandoff]:
-    ExtensionSessionRequestAudience.ServiceWorker,
   [ExtensionSessionMessageType.ImportVault]:
     ExtensionSessionRequestAudience.ServiceWorker,
   [ExtensionSessionMessageType.JoinIdentity]:
@@ -251,18 +246,6 @@ class OffscreenGateFixture {
     const context: SessionMessageDispatchContext<GateResponse> = {
       decodeProviders,
       handleMessage: this.handled,
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
     }
     const dispatcher = new ExtensionSessionMessageDispatcher(context)
     dispatcher.enqueue = this.enqueued

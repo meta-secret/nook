@@ -55,7 +55,6 @@
     appKind,
     isVerifying,
     isInitializing,
-    usesExtensionDeviceIdentity = false,
     onCreateDeviceVault,
     onConnectStorage,
     onUseEnrollmentCode,
@@ -474,7 +473,6 @@
       {vault}
       {isBusy}
       {isVerifying}
-      {usesExtensionDeviceIdentity}
       onCreate={onCreateDeviceVault}
       {onConnectStorage}
       {...joinIdentityProps}

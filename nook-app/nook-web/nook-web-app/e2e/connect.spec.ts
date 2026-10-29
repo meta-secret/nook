@@ -108,11 +108,10 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
     // Creating and restoring share the first screen as separate actions.
-    await page.getByTestId('login-vault-name-input').fill('Workflow vault')
     await expect(
-      page.getByTestId('login-create-device-vault-btn'),
+      page.getByTestId('first-run-create-identity-btn'),
     ).toBeEnabled()
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('login-paths')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
     await expect(page.getByTestId('first-vault-start')).not.toBeVisible()
@@ -157,7 +156,6 @@ test.describe('vault connect flow', () => {
       device_signing_public_key: 'side-panel-signing-key',
       extension_id: 'side-panel-extension',
       device_label: 'Nook Extension',
-      nonce: 'side-panel-nonce',
       connect_id: 'side-panel-connect',
       scopes: 'vault-access,password-filling',
     })
@@ -166,7 +164,9 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('first-vault-start')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-vault-name-input')).toHaveValue('')
+    await expect(
+      page.getByTestId('first-run-create-identity-btn'),
+    ).toBeVisible()
     await expect(page.getByTestId('login-join-identity-btn')).toBeVisible()
     await expect
       .poll(() =>

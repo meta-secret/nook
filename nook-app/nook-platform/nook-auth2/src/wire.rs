@@ -282,6 +282,12 @@ impl AsRef<str> for SigningSeedHex {
     }
 }
 
+impl Drop for SigningSeedHex {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 impl DecryptedPlaintext {
     pub fn zeroize_plaintext(&mut self) {
         self.0.zeroize();

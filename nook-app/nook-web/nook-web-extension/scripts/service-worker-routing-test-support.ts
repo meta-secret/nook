@@ -1,4 +1,5 @@
 import { pairedVaultsMessages } from '../src/lib/paired-vaults'
+import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -20,7 +21,6 @@ import type {
   ExternalCompanionMessage,
   ExternalCompanionRoutingDependencies,
 } from '../src/background/service-worker/external-companion-routing'
-import { ExternalSenderTrustPolicy } from '../src/background/service-worker/routing-trust'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AccountPickerAuthorizationLifecycle,
@@ -40,11 +40,6 @@ import {
 import {
   ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessageType,
-  ExtensionIdentityHandoffRequestMessage,
-  ExtensionPairedVaultIdentityDiscoveryMessage,
-  ExtensionPairedVaultIdentityHandoffRequestMessage,
-  ExtensionPairedVaultLockRequestMessage,
-  ExtensionPairedVaultUnlockRequestMessage,
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 
@@ -115,6 +110,13 @@ const externalPairingMessage = {
     approvedAt: routedGrant.approvedAt,
     scopes: [...routedGrant.scopes],
     providers: [],
+    keyring: {
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: 'identity-routed',
+      identityLabel: 'Personal',
+      identityEvents: ['identity-event-1'],
+      vaults: [],
+    },
   },
   eventLogRecords: [
     {
@@ -175,13 +177,11 @@ const completeAccountPickerAuthorizationCleanup = mock(() =>
 )
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
-const announceExtensionSessionLocked = mock(() => Promise.resolve())
 /** The service worker opened or reused Nook tab 31. */
 const openExtensionPairing = mock(() => Promise.resolve(31))
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
-  announceExtensionSessionLocked,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
@@ -232,30 +232,13 @@ const unpaired: import('../../nook-web-shared/src/extension/nook-companion-wasm/
   { kind: 'NotPaired' }
 const externalDependencies: ExternalCompanionRoutingDependencies = {
   vaultEventLogExporter: { run: () => Effect.succeed(unpaired) },
-  createIdentityHandoff: unusedAsyncDependency,
-  createPairedIdentityHandoff: unusedAsyncDependency,
-  discoverPairedVaultIdentity: unusedAsyncDependency,
   decodePairingApprovedMessage: ExtensionPairingApprovedMessage.decode,
   importPairingAfterCompanionReady: unusedAsyncDependency,
-  decodeExtensionIdentityHandoffRequestMessage:
-    ExtensionIdentityHandoffRequestMessage.decode,
-  decodeExtensionPairedVaultIdentityDiscoveryMessage:
-    ExtensionPairedVaultIdentityDiscoveryMessage.decode,
-  decodeExtensionPairedVaultIdentityHandoffRequestMessage:
-    ExtensionPairedVaultIdentityHandoffRequestMessage.decode,
-  decodeExtensionPairedVaultUnlockRequestMessage:
-    ExtensionPairedVaultUnlockRequestMessage.decode,
-  decodeExtensionPairedVaultLockRequestMessage:
-    ExtensionPairedVaultLockRequestMessage.decode,
   decodeOpenCompanionLauncherMessage:
     NormalizedOpenCompanionLauncherMessageSchema.decode,
-  admitsUnlockSenderSynchronously:
-    ExternalSenderTrustPolicy.admitsSynchronouslyIfReady,
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
-  requestPairedVaultUnlock: unusedAsyncDependency,
   returnToConnectOrigin: mock(() => Promise.resolve()),
-  lockExtensionSession: mock(() => Promise.resolve(true)),
 }
 
 async function flushResponses(): Promise<void> {
@@ -329,7 +312,6 @@ async function routeDecodedLocalUpdate(
 
 export {
   AccountPickerCleanupMarkerStatus,
-  announceExtensionSessionLocked,
   completedCleanup,
   externalDependencies,
   externalPairingMessage,

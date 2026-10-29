@@ -2,10 +2,10 @@
 The identity this browser uses, in one panel beside its card, as three
 sub-panels from most to least prominent. First what keeps it replicated and
 resilient: its sync providers, then its devices, each a section listing
-them with its add action. A device joins through a sync provider, so adding
-one stays locked until the identity has a provider. Then the other
-management actions (its vaults, this browser), then the details (sign-in
-keys). Each action says what it leads to; nothing hides behind a menu.
+them, then a dashed slot that adds the next. A device joins through a sync
+provider, so until the identity has a cloud one the devices slot is locked
+and tagged with what comes first. Then the other management actions (its
+vaults, this browser), then the details (sign-in keys). Each action says what it leads to; nothing hides behind a menu.
 -->
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
@@ -128,16 +128,26 @@ keys). Each action says what it leads to; nothing hides behind a menu.
     return new ProviderSyncStatusView(statusRequest).text;
   }
 
-  const memberNames = $derived(
-    members.map((member) =>
-      memberName(member.label, member.appId, member.isCurrentInstallation),
-    ),
-  );
-  /** This browser counts as a device before the device list loads. */
-  const deviceNames = $derived(
-    memberNames.length > 0
-      ? memberNames
-      : [vault.t(I18N_KEYS.IdentityOverviewThisBrowser)],
+  type DeviceRow = { readonly name: string; readonly current: boolean };
+
+  /** This browser counts as a device before the device list loads; its
+   * name says so, so it carries no "This device" tag. */
+  const devices = $derived<readonly DeviceRow[]>(
+    members.length > 0
+      ? members.map((member) => ({
+          name: memberName(
+            member.label,
+            member.appId,
+            member.isCurrentInstallation,
+          ),
+          current: member.isCurrentInstallation,
+        }))
+      : [
+          {
+            name: vault.t(I18N_KEYS.IdentityOverviewThisBrowser),
+            current: false,
+          },
+        ],
   );
 
   onMount(() => {
@@ -207,6 +217,29 @@ keys). Each action says what it leads to; nothing hides behind a menu.
 
 {#snippet vaultsIcon()}<FolderKey class="size-4" />{/snippet}
 {#snippet browserIcon()}<SlidersHorizontal class="size-4" />{/snippet}
+{#snippet cloudIcon()}<Cloud class="size-4" aria-hidden="true" />{/snippet}
+{#snippet deviceIcon()}<MonitorSmartphone class="size-4" aria-hidden="true" />{/snippet}
+
+<!-- The one thing the panel most needs done: the panel's only primary
+     button. It leads by contrast with the quiet slots and outline buttons
+     around it, not by size. At most one shows at a time. -->
+{#snippet leadAction(
+  testId: string,
+  label: string,
+  icon: Snippet,
+  onSelect: () => void,
+)}
+  <Button
+    type="button"
+    class="justify-self-start"
+    data-lead="true"
+    data-testid={testId}
+    onclick={onSelect}
+  >
+    {@render icon()}
+    {label}
+  </Button>
+{/snippet}
 
 <div class="grid min-w-0 gap-6" data-testid="identity-overview">
   <!-- Devices and sync: the raised panel that keeps the identity replicated,
@@ -249,21 +282,16 @@ keys). Each action says what it leads to; nothing hides behind a menu.
           </Button>
         {/if}
       </div>
-      {#if vault.syncProviders.length === 0}
-        <p class="text-xs text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.IdentityHealthSyncBody)}
-        </p>
-      {:else}
+      {#if vault.syncProviders.length > 0}
         <ul class="divide-y divide-border/60">
           {#each vault.syncProviders as provider (provider.id)}
             <li
-              class="flex min-w-0 items-center gap-3 py-2"
+              class="flex min-h-11 min-w-0 items-center gap-3 px-2.5 py-2"
               data-testid="identity-panel-provider-{provider.type}"
             >
-              <Cloud
-                class="size-4 flex-none text-muted-foreground"
-                aria-hidden="true"
-              />
+              <span class="nk-vault-icon" aria-hidden="true">
+                <Cloud class="size-4" />
+              </span>
               <span class="flex min-w-0 flex-1 flex-col">
                 <span class="truncate text-sm text-foreground"
                   >{providerName(provider)}</span
@@ -276,18 +304,33 @@ keys). Each action says what it leads to; nothing hides behind a menu.
           {/each}
         </ul>
       {/if}
-      <Button
-        type="button"
-        size="sm"
-        variant={needsCloud ? "default" : "outline"}
-        data-lead={needsCloud ? "true" : "false"}
-        class="justify-self-start"
-        data-testid="identity-action-add-sync"
-        onclick={onAddSyncProvider}
-      >
-        <Plus class="size-4" aria-hidden="true" />
-        {vault.t(I18N_KEYS.AddDeviceCloudAction)}
-      </Button>
+      {#if needsCloud}
+        <!-- Without a cloud provider nothing is kept outside this browser and
+             no device can join: adding one is what the panel leads with. -->
+        {@render leadAction(
+          "identity-action-add-sync",
+          vault.t(I18N_KEYS.AddDeviceCloudAction),
+          cloudIcon,
+          onAddSyncProvider,
+        )}
+      {:else}
+        <!-- The place the next provider takes, as the card's add rows look. -->
+        <button
+          type="button"
+          class="nk-vault-row nk-vault-row-add text-muted-foreground hover:text-foreground"
+          data-lead="false"
+          data-testid="identity-action-add-sync"
+          onclick={onAddSyncProvider}
+        >
+          <span class="nk-vault-icon" aria-hidden="true">
+            <Cloud class="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-sm font-medium"
+            >{vault.t(I18N_KEYS.AddDeviceCloudAction)}</span
+          >
+          <Plus class="size-4 flex-none" aria-hidden="true" />
+        </button>
+      {/if}
     </div>
 
     <div class="border-t border-border/60"></div>
@@ -320,46 +363,70 @@ keys). Each action says what it leads to; nothing hides behind a menu.
         </Button>
       </div>
       <ul class="divide-y divide-border/60">
-        {#each deviceNames as name, index (index)}
+        {#each devices as device, index (index)}
           <li
-            class="flex min-w-0 items-center gap-3 py-2"
+            class="flex min-h-11 min-w-0 items-center gap-3 px-2.5 py-2"
             data-testid="identity-panel-device"
           >
-            <MonitorSmartphone
-              class="size-4 flex-none text-muted-foreground"
-              aria-hidden="true"
-            />
+            <span class="nk-vault-icon" aria-hidden="true">
+              <MonitorSmartphone class="size-4" />
+            </span>
             <span class="min-w-0 flex-1 truncate text-sm text-foreground"
-              >{name}</span
+              >{device.name}</span
             >
+            {#if device.current}
+              <span class="nk-tag flex-none"
+                >{vault.t(I18N_KEYS.JoinThisDevice)}</span
+              >
+            {/if}
           </li>
         {/each}
       </ul>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button
+      {#if !needsCloud && devicesAtRisk}
+        <!-- Synced but on one device: a second one is what the panel leads
+             with now. -->
+        {@render leadAction(
+          "identity-action-add-device",
+          vault.t(I18N_KEYS.AddDeviceTitle),
+          deviceIcon,
+          () => onOpen(WorkspaceSection.AddDevice),
+        )}
+      {:else}
+        <!-- The place the next device takes, quiet. A device joins through a
+             cloud sync provider, so until there is one the slot is locked and
+             its tag says what comes first; the action is the lead above. -->
+        <button
           type="button"
-          size="sm"
-          variant={!needsCloud && devicesAtRisk ? "default" : "outline"}
-          data-lead={!needsCloud && devicesAtRisk ? "true" : "false"}
+          class="nk-vault-row nk-vault-row-add {needsCloud
+            ? ''
+            : 'text-muted-foreground hover:text-foreground'}"
+          data-lead="false"
           data-testid="identity-action-add-device"
           disabled={needsCloud}
           onclick={() => onOpen(WorkspaceSection.AddDevice)}
         >
+          <span class="nk-vault-icon" aria-hidden="true">
+            <MonitorSmartphone class="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-sm font-medium"
+            >{vault.t(I18N_KEYS.AddDeviceTitle)}</span
+          >
           {#if needsCloud}
-            <Lock class="size-4" aria-hidden="true" />
+            <span class="nk-tag nk-tag-warning min-w-0 shrink">
+              <Lock class="size-3 flex-none" aria-hidden="true" />
+              <span class="truncate"
+                >{vault.t(I18N_KEYS.IdentityMenuAddDeviceNeedsCloud)}</span
+              >
+            </span>
           {:else}
-            <Plus class="size-4" aria-hidden="true" />
+            <span
+              class="hidden min-w-0 truncate text-xs text-muted-foreground sm:inline"
+              >{vault.t(I18N_KEYS.IdentityMenuAddDeviceHint)}</span
+            >
+            <Plus class="size-4 flex-none" aria-hidden="true" />
           {/if}
-          {vault.t(I18N_KEYS.AddDeviceTitle)}
-        </Button>
-        <span class="text-xs text-muted-foreground">
-          {vault.t(
-            needsCloud
-              ? I18N_KEYS.IdentityMenuAddDeviceNeedsCloud
-              : I18N_KEYS.IdentityMenuAddDeviceHint,
-          )}
-        </span>
-      </div>
+        </button>
+      {/if}
     </div>
   </section>
 

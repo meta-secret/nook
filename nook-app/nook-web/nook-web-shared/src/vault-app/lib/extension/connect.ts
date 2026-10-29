@@ -1,100 +1,13 @@
 import { Effect } from "effect";
 import { ExtensionVaultEventLogChannel } from "./vault-event-log";
-import { err, ok, type Result } from "neverthrow";
-import {
-  VaultStorageFailure,
-  VaultStorageFailureKind,
-  NativeVaultStorageFailure,
-} from "$lib/runtime/storage-failure";
-import { CompanionProviderPresence } from "$app-wasm";
-import type {
-  NookAdoptedExtensionIdentityHandoff,
-  CompanionIdentityStatus,
-} from "$app-wasm";
-import { I18N_KEYS } from "../../../generated/i18n-keys";
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
 };
 
-type IdentityEnvelopeRequest = {
-  readonly request: Extract<
-    ExtensionConnectRequest,
-    { source: ExtensionIdentityRequestSource.ExtensionConnect }
-  >;
-  readonly message: ExtensionIdentityHandoffRequestMessage;
-};
-
-type ExtensionIdentityEnvelope = {
-  readonly envelope: string;
-  readonly nextNonce: string;
-};
-
-enum IdentityHandoffAttemptKind {
-  Pending = "pending",
-  Consumed = "consumed",
-}
-
-type IdentityHandoffAttempt = {
-  readonly kind: IdentityHandoffAttemptKind;
-  readonly outcome: Result<
-    NookAdoptedExtensionIdentityHandoff,
-    VaultStorageFailure
-  >;
-};
-
-type PairedIdentityAdoptionAttempt = ExtensionIdentityAdoption & {
-  readonly request: Extract<
-    ExtensionConnectRequest,
-    { source: ExtensionIdentityRequestSource.PairedVault }
-  >;
-  readonly handoff: ReturnType<
-    NookVaultManager["begin_companion_identity_handoff"]
-  >;
-};
-
-type NewIdentityAdoptionAttempt = ExtensionIdentityAdoption & {
-  readonly request: Extract<
-    ExtensionConnectRequest,
-    { source: ExtensionIdentityRequestSource.ExtensionConnect }
-  >;
-  readonly pending: ReturnType<
-    NookVaultManager["begin_extension_identity_handoff"]
-  >;
-};
-
 import { ApplicationPath } from "$lib/runtime/routes";
-import {
-  admit_companion_handoff_response,
-  admit_companion_identity_status,
-  NookExtensionIdentityHandoffContext,
-  NookExtensionIdentityHandoffProviderOutcomeState,
-  type CompanionIdentityDiscoveryObservation,
-  type CompanionIdentityDiscoveryRequest,
-  type CompanionWebsiteHandoffBegin,
-  type NookVaultManager,
-} from "$app-wasm";
-import {
-  ExtensionPairedVaultIdentityDiscoveryMessageType,
-  ExtensionPairedVaultIdentityHandoffRequestMessageType,
-  ExtensionPairedVaultIdentityStatusMessageStatus,
-  ExtensionPairedVaultLockRequestMessageType,
-  ExtensionPairedVaultLockResponse,
-  ExtensionSessionLockedNotice,
-  ExtensionPairedVaultUnlockRequestMessageType,
-  ExtensionIdentityHandoffRequestMessageType,
-  type ExtensionIdentityHandoffRequestMessage,
-  type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type ExtensionPairedVaultIdentityHandoffRequestMessage,
-  type ExtensionPairedVaultLockRequestMessage,
-  type ExtensionPairedVaultUnlockRequestMessage,
-  type ExtensionPairingApprovedMessage,
-} from "$web-shared/extension/runtime-messages";
-import {
-  ExtensionIdentityRequestSource,
-  type ExtensionConnectRequestFor,
-  type PairedExtensionIdentityDiscoveryFor,
-} from "$web-shared/extension/extension-connect-types";
+import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
+import type { ExtensionConnectRequestFor } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionSidePanelSignalType,
@@ -110,7 +23,6 @@ import {
 } from "./extension-pairing-delivery";
 import {
   companionResponseDecoder,
-  identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
 } from "./extension-response-decoders";
 import {
@@ -120,65 +32,23 @@ import {
   ExtensionMessageResponseWaitKind,
   type ChromeExtensionRuntimeResponse,
   type ExtensionBrowserHost,
-  type ExtensionMessageDelivery,
-  type ExtensionMessageRequest,
 } from "./extension-message-channel";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
-export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export { ExtensionConnectScope };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
 export {
-  AcceptedIdentityHandoffResponseSchema,
   companionResponseDecoder,
-  ExtensionResponseDecodeFailureKind as IdentityHandoffResponseDecodeFailureKind,
-  identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
 } from "./extension-response-decoders";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
-
-export type PairedExtensionIdentityDiscovery =
-  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
-
-export enum PairedExtensionDiscoveryFailureKind {
-  NotInstalled = "not-installed",
-  Delivery = "delivery",
-  Decode = "decode",
-  Admission = "admission",
-}
-
-export class PairedExtensionDiscoveryFailure extends Error {
-  get translationKey() {
-    return this.kind === PairedExtensionDiscoveryFailureKind.NotInstalled ||
-      this.kind === PairedExtensionDiscoveryFailureKind.Delivery
-      ? I18N_KEYS.ExtensionConnectMessagingUnavailable
-      : I18N_KEYS.ExtensionConnectStartFailed;
-  }
-  constructor(readonly kind: PairedExtensionDiscoveryFailureKind) {
-    super(I18N_KEYS.ErrorsVaultGeneric);
-  }
-}
-
-export type AdmittedPairedExtensionIdentityDiscovery = {
-  readonly discovery: PairedExtensionIdentityDiscovery;
-  readonly canonicalStatus: CompanionIdentityStatus;
-};
-
-export type PairedExtensionIdentityDiscoveryResult = Result<
-  AdmittedPairedExtensionIdentityDiscovery,
-  PairedExtensionDiscoveryFailure
->;
-
-export type ExtensionIdentityAdoption = {
-  manager: NookVaultManager;
-  request: ExtensionConnectRequest;
-};
 
 export enum ExtensionConnectRequestStateKind {
   Absent = "absent",
@@ -205,8 +75,6 @@ export type InstalledExtensionRuntime =
     };
 
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
-
-const PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS = 150;
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
@@ -269,7 +137,6 @@ class ExtensionConnectionBrowser {
     const [deviceLabel = "Nook Extension - this browser profile"] = [
       params.get("device_label")?.trim(),
     ];
-    const nonce = ((v) => (v ? v : ""))(params.get("nonce")?.trim());
     const scopes = this.parseScopes(params);
 
     if (
@@ -277,7 +144,6 @@ class ExtensionConnectionBrowser {
       !devicePublicKey ||
       !deviceSigningPublicKey ||
       !extensionRuntimeId ||
-      !nonce ||
       scopes.length === 0
     ) {
       return { kind: ExtensionConnectRequestStateKind.Absent };
@@ -286,34 +152,15 @@ class ExtensionConnectionBrowser {
     return {
       kind: ExtensionConnectRequestStateKind.Requested,
       request: {
-        source: ExtensionIdentityRequestSource.ExtensionConnect,
         follow: this.parseFollow(params),
         deviceId,
         devicePublicKey,
         deviceSigningPublicKey,
         extensionRuntimeId,
         deviceLabel,
-        nonce,
         scopes,
       },
     };
-  }
-
-  private requestId(): string {
-    if (typeof this.browser.crypto.randomUUID === "function")
-      return this.browser.crypto.randomUUID();
-    const bytes = new Uint8Array(16);
-    this.browser.crypto.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-      "",
-    );
-  }
-
-  companionProviderPresence(): CompanionProviderPresence {
-    return this.readInstalledExtensionRuntimeId().kind ===
-      InstalledExtensionRuntimeKind.Installed
-      ? CompanionProviderPresence.Present
-      : CompanionProviderPresence.Absent;
   }
 
   readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
@@ -385,548 +232,6 @@ class ExtensionConnectionBrowser {
       Effect.result(companionResponseDecoder.decodeLauncher(delivery.response)),
     );
     return decoded._tag === "Success";
-  }
-
-  private async discoverPairedExtensionIdentityOnce(
-    vaultStoreId: string,
-  ): Promise<PairedExtensionIdentityDiscoveryResult> {
-    const installedExtension = this.readInstalledExtensionRuntimeId();
-    if (
-      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
-    ) {
-      return err(
-        new PairedExtensionDiscoveryFailure(
-          PairedExtensionDiscoveryFailureKind.NotInstalled,
-        ),
-      );
-    }
-
-    const discoveryRequestId = this.requestId();
-    const discoveryRequest = {
-      requestId: discoveryRequestId,
-      vaultStoreId,
-      expiresAt: Date.now() + EXTENSION_MESSAGE_TIMEOUT_MS,
-    } satisfies CompanionIdentityDiscoveryRequest;
-    const protocolDiscovery = {
-      request: discoveryRequest,
-      observedAt: Date.now(),
-    } satisfies CompanionIdentityDiscoveryObservation;
-    const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
-      type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-      payload: protocolDiscovery,
-    };
-
-    const sendExtensionMessageArgs2: Parameters<
-      ExtensionMessageChannel["send"]
-    >[0] = {
-      extensionId: installedExtension.extensionRuntimeId,
-      message,
-      responseWait: {
-        kind: ExtensionMessageResponseWaitKind.Bounded,
-        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-      },
-    };
-    const delivery = await this.messageChannel.send(sendExtensionMessageArgs2);
-    if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
-      return err(
-        new PairedExtensionDiscoveryFailure(
-          PairedExtensionDiscoveryFailureKind.Delivery,
-        ),
-      );
-    const decoded = Effect.runSync(
-      Effect.result(
-        companionResponseDecoder.decodeIdentityDiscovery(delivery.response),
-      ),
-    );
-    if (decoded._tag === "Failure") {
-      return err(
-        new PairedExtensionDiscoveryFailure(
-          PairedExtensionDiscoveryFailureKind.Decode,
-        ),
-      );
-    }
-    let admission: ReturnType<typeof admit_companion_identity_status>;
-    try {
-      const admissionRequest: Parameters<
-        typeof admit_companion_identity_status
-      >[0] = {
-        discovery: protocolDiscovery,
-        status: decoded.success.status,
-        observedAt: Date.now(),
-      };
-      admission = admit_companion_identity_status(admissionRequest);
-    } catch {
-      return err(
-        new PairedExtensionDiscoveryFailure(
-          PairedExtensionDiscoveryFailureKind.Admission,
-        ),
-      );
-    }
-    if (admission.kind !== "accepted") {
-      return err(
-        new PairedExtensionDiscoveryFailure(
-          PairedExtensionDiscoveryFailureKind.Admission,
-        ),
-      );
-    }
-    const transaction = admission.transaction;
-    const status = transaction.status;
-    if (
-      status.status !== ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
-    ) {
-      if (
-        status.status ===
-        ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-      ) {
-        const admitted: AdmittedPairedExtensionIdentityDiscovery = {
-          canonicalStatus: status,
-          discovery: {
-            status:
-              ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
-            connectedVaultStoreId: status.connected_vault_store_id,
-            connectedVaultName: status.connected_vault_name,
-          },
-        };
-        return ok(admitted);
-      }
-      const admitted: AdmittedPairedExtensionIdentityDiscovery = {
-        canonicalStatus: status,
-        discovery: { status: status.status },
-      };
-      return ok(admitted);
-    }
-    const unlockedAppKey = status.app_key;
-    const admitted: AdmittedPairedExtensionIdentityDiscovery = {
-      canonicalStatus: status,
-      discovery: {
-        status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
-        request: {
-          source: ExtensionIdentityRequestSource.PairedVault,
-          vaultStoreId,
-          deviceId: unlockedAppKey.appKey.appId,
-          devicePublicKey: unlockedAppKey.appKey.encryptionPublicKey,
-          deviceSigningPublicKey: unlockedAppKey.appKey.signingPublicKey,
-          extensionRuntimeId: unlockedAppKey.extensionRuntimeId,
-          deviceLabel: unlockedAppKey.appKey.installationLabel,
-          nonce: unlockedAppKey.nonce,
-          scopes: unlockedAppKey.scopes,
-          protocolTransaction: transaction,
-        },
-      },
-    };
-    return ok(admitted);
-  }
-
-  async discoverAdmittedPairedExtensionIdentity(
-    vaultStoreId: string,
-  ): Promise<PairedExtensionIdentityDiscoveryResult> {
-    for (let attempt = 0; ; attempt += 1) {
-      const result =
-        await this.discoverPairedExtensionIdentityOnce(vaultStoreId);
-      if (result.isErr()) return result;
-      if (
-        result.value.discovery.status !==
-          ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
-        attempt === 2
-      )
-        return result;
-      // Retain the existing retry only for admitted semantic unavailability.
-      await new Promise<void>((resolve) => {
-        this.browser.window.setTimeout(
-          resolve,
-          PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS,
-        );
-      });
-    }
-  }
-
-  async discoverPairedExtensionIdentity(
-    vaultStoreId: string,
-  ): Promise<PairedExtensionIdentityDiscovery> {
-    const result =
-      await this.discoverAdmittedPairedExtensionIdentity(vaultStoreId);
-    if (result.isErr()) throw result.error;
-    return result.value.discovery;
-  }
-
-  async requestPairedExtensionUnlock(vaultStoreId: string): Promise<boolean> {
-    const installedExtension = this.readInstalledExtensionRuntimeId();
-    if (
-      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
-    ) {
-      return false;
-    }
-
-    const unlockRequestId = this.requestId();
-    const message: ExtensionPairedVaultUnlockRequestMessage = {
-      type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-      payload: { requestId: unlockRequestId, vaultStoreId },
-    };
-    const sendExtensionMessageArgs3: Parameters<
-      ExtensionMessageChannel["send"]
-    >[0] = {
-      extensionId: installedExtension.extensionRuntimeId,
-      message,
-      responseWait: {
-        kind: ExtensionMessageResponseWaitKind.Bounded,
-        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-      },
-    };
-    const delivery = await this.messageChannel.send(sendExtensionMessageArgs3);
-    if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
-    const decoded = Effect.runSync(
-      Effect.result(companionResponseDecoder.decodeUnlock(delivery.response)),
-    );
-    return (
-      decoded._tag === "Success" &&
-      decoded.success.requestId === unlockRequestId &&
-      decoded.success.vaultStoreId === vaultStoreId
-    );
-  }
-
-  /** Asks the paired extension to lock with this page; true once it says it
-   * locked for this request. */
-  async requestPairedExtensionLock(): Promise<boolean> {
-    const installedExtension = this.readInstalledExtensionRuntimeId();
-    if (
-      installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
-    ) {
-      return false;
-    }
-    const lockRequestId = this.requestId();
-    const message: ExtensionPairedVaultLockRequestMessage = {
-      type: ExtensionPairedVaultLockRequestMessageType.NookExtensionPairedVaultLockRequest,
-      payload: { requestId: lockRequestId },
-    };
-    const lockMessage: Parameters<ExtensionMessageChannel["send"]>[0] = {
-      extensionId: installedExtension.extensionRuntimeId,
-      message,
-      responseWait: {
-        kind: ExtensionMessageResponseWaitKind.Bounded,
-        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-      },
-    };
-    const delivery = await this.messageChannel.send(lockMessage);
-    if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
-    const decoded = Effect.runSync(
-      Effect.result(ExtensionPairedVaultLockResponse.decode(delivery.response)),
-    );
-    return (
-      decoded._tag === "Success" && decoded.success.requestId === lockRequestId
-    );
-  }
-
-  /** Hears the extension's lock notice, which its vault bridge posts to this
-   * page on its own origin; a forged notice can only lock the page. Returns
-   * the teardown. */
-  followPairedExtensionLock(onlocked: () => void): () => void {
-    const page = this.browser.window;
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== page || event.origin !== page.location.origin)
-        return;
-      const notice = Effect.runSync(
-        Effect.result(ExtensionSessionLockedNotice.decode(event.data)),
-      );
-      if (notice._tag === "Success") onlocked();
-    };
-    page.addEventListener("message", onMessage);
-    return () => page.removeEventListener("message", onMessage);
-  }
-
-  private requestIdentityEnvelope({
-    request,
-    message,
-  }: IdentityEnvelopeRequest): Promise<
-    Result<ExtensionIdentityEnvelope, VaultStorageFailure>
-  > {
-    const sendArgs: ExtensionMessageRequest = {
-      extensionId: request.extensionRuntimeId,
-      message,
-      responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
-    };
-    return this.messageChannel.send(sendArgs).then(
-      (delivery) => {
-        if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
-          return err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffUnavailable,
-            ),
-          );
-        const decodedResponse = Effect.runSync(
-          Effect.result(
-            identityHandoffResponseDecoder.decode(delivery.response),
-          ),
-        );
-        if (decodedResponse._tag === "Success") {
-          if (!decodedResponse.success.ok) {
-            return err(
-              this.identityHandoffFailureForProviderOutcome(
-                decodedResponse.success.state,
-              ),
-            );
-          }
-          const identityEnvelope: ExtensionIdentityEnvelope = {
-            envelope: decodedResponse.success.envelope,
-            nextNonce: decodedResponse.success.nextNonce,
-          };
-          return ok(identityEnvelope);
-        }
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffRejected,
-          ),
-        );
-      },
-      () =>
-        err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffUnavailable,
-          ),
-        ),
-    );
-  }
-
-  private identityHandoffFailureForProviderOutcome(
-    state: NookExtensionIdentityHandoffProviderOutcomeState,
-  ): VaultStorageFailure {
-    switch (state) {
-      case NookExtensionIdentityHandoffProviderOutcomeState.RetryAfterUnlock:
-      case NookExtensionIdentityHandoffProviderOutcomeState.Unavailable:
-        return new VaultStorageFailure(
-          VaultStorageFailureKind.IdentityHandoffUnavailable,
-        );
-      case NookExtensionIdentityHandoffProviderOutcomeState.RepairPairing:
-        return new VaultStorageFailure(
-          VaultStorageFailureKind.IdentityHandoffRejected,
-        );
-    }
-  }
-
-  private async completePairedIdentityAdoption({
-    manager,
-    request,
-    handoff,
-  }: PairedIdentityAdoptionAttempt): Promise<IdentityHandoffAttempt> {
-    let payload: ExtensionPairedVaultIdentityHandoffRequestMessage["payload"];
-    try {
-      payload = handoff.request;
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-    const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
-      type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-      payload,
-    };
-    const sendArgs: ExtensionMessageRequest = {
-      extensionId: request.extensionRuntimeId,
-      message,
-      responseWait: {
-        kind: ExtensionMessageResponseWaitKind.Bounded,
-        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-      },
-    };
-    let delivery: ExtensionMessageDelivery;
-    try {
-      delivery = await this.messageChannel.send(sendArgs);
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-    if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffRejected,
-          ),
-        ),
-      };
-    const decoded = Effect.runSync(
-      Effect.result(
-        companionResponseDecoder.decodeIdentityHandoff(delivery.response),
-      ),
-    );
-    if (decoded._tag === "Failure")
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffRejected,
-          ),
-        ),
-      };
-    let admission: ReturnType<typeof admit_companion_handoff_response>;
-    try {
-      admission = admit_companion_handoff_response(decoded.success.response);
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-    if (admission.kind !== "accepted")
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffRejected,
-          ),
-        ),
-      };
-    try {
-      return {
-        kind: IdentityHandoffAttemptKind.Consumed,
-        outcome: ok(await handoff.finish(manager, admission.response)),
-      };
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Consumed,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-  }
-
-  private async completeNewIdentityAdoption({
-    manager,
-    request,
-    pending,
-  }: NewIdentityAdoptionAttempt): Promise<IdentityHandoffAttempt> {
-    let recipientPublicKey: string;
-    try {
-      recipientPublicKey = pending.recipient_public_key;
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-    const nonce = request.nonce;
-    const message: ExtensionIdentityHandoffRequestMessage = {
-      type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-      payload: {
-        recipientPublicKey,
-        nonce,
-        expectedDeviceId: request.deviceId,
-        expectedDevicePublicKey: request.devicePublicKey,
-        expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
-      },
-    };
-    const identityEnvelopeRequest: IdentityEnvelopeRequest = {
-      request,
-      message,
-    };
-    const delivered = await this.requestIdentityEnvelope(
-      identityEnvelopeRequest,
-    );
-    if (delivered.isErr())
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(delivered.error),
-      };
-    let context: ReturnType<
-      typeof NookExtensionIdentityHandoffContext.vault_creation
-    >;
-    try {
-      context = NookExtensionIdentityHandoffContext.vault_creation();
-    } catch (failure) {
-      return {
-        kind: IdentityHandoffAttemptKind.Pending,
-        outcome: err(new NativeVaultStorageFailure(failure)),
-      };
-    }
-    let outcome: IdentityHandoffAttempt["outcome"];
-    try {
-      const adopted = await pending.finish(
-        manager,
-        delivered.value.envelope,
-        nonce,
-        request.deviceId,
-        request.devicePublicKey,
-        request.deviceSigningPublicKey,
-        context,
-      );
-      request.nonce = delivered.value.nextNonce;
-      outcome = ok(adopted);
-    } catch (failure) {
-      outcome = err(new NativeVaultStorageFailure(failure));
-    } finally {
-      context.free();
-    }
-    return { kind: IdentityHandoffAttemptKind.Consumed, outcome };
-  }
-
-  async adoptExtensionIdentity({
-    manager,
-    request,
-  }: ExtensionIdentityAdoption): Promise<
-    Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>
-  > {
-    if (request.source === ExtensionIdentityRequestSource.PairedVault) {
-      const begin: CompanionWebsiteHandoffBegin = {
-        transaction: request.protocolTransaction,
-        context: {
-          kind: "paired-vault",
-          vault_store_id: request.vaultStoreId,
-        },
-      };
-      let handoff: ReturnType<typeof manager.begin_companion_identity_handoff>;
-      try {
-        handoff = manager.begin_companion_identity_handoff(begin);
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
-      const pairedIdentityAdoptionAttempt: PairedIdentityAdoptionAttempt = {
-        manager,
-        request,
-        handoff,
-      };
-      const attempt = await this.completePairedIdentityAdoption(
-        pairedIdentityAdoptionAttempt,
-      );
-      if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
-        try {
-          handoff.cancel(manager);
-        } catch {
-          return err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffCleanupFailed,
-            ),
-          );
-        }
-      }
-      return attempt.outcome;
-    }
-    let pending: ReturnType<typeof manager.begin_extension_identity_handoff>;
-    try {
-      pending = manager.begin_extension_identity_handoff();
-    } catch (failure) {
-      return err(new NativeVaultStorageFailure(failure));
-    }
-    const newIdentityAdoptionAttempt: NewIdentityAdoptionAttempt = {
-      manager,
-      request,
-      pending,
-    };
-    const attempt = await this.completeNewIdentityAdoption(
-      newIdentityAdoptionAttempt,
-    );
-    if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
-      try {
-        pending.cancel(manager);
-      } catch {
-        return err(
-          new VaultStorageFailure(
-            VaultStorageFailureKind.IdentityHandoffCleanupFailed,
-          ),
-        );
-      }
-    }
-    return attempt.outcome;
   }
 }
 

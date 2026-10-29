@@ -11,7 +11,6 @@ import {
   type HandleSessionMessageArgs,
   type SessionOperationContext,
 } from '../src/offscreen/session-operations'
-import { ExtensionSessionGeneration } from '../src/offscreen/session-lease'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -43,10 +42,6 @@ class ExtensionPasskeySetupFixture {
       },
       deviceResult: async () => {
         throw new Error('Setup must activate the session')
-      },
-      currentGeneration: () => ExtensionSessionGeneration.initial(),
-      renewSessionExpiry: () => {
-        throw new Error('Setup must not renew a lease')
       },
       resetOperations: () => {
         throw new Error('Setup must not reset unrelated state')

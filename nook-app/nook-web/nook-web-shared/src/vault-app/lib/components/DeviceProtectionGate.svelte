@@ -215,9 +215,13 @@
           class="space-y-4"
           data-testid="device-protection-authenticate-workflow"
         >
-          <p class="text-center text-sm text-muted-foreground">
-            {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
-          </p>
+          <!-- Embedded in a step that already says what the passkey is for,
+               the button needs no hint of its own. -->
+          {#if frame !== DeviceProtectionGateFrame.Embedded}
+            <p class="text-center text-sm text-muted-foreground">
+              {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
+            </p>
+          {/if}
           <Button
             class="w-full"
             disabled={vault.isVerifying}
@@ -328,32 +332,6 @@
         </div>
       {:else}
         <div class="space-y-4" data-testid="device-protection-create-workflow">
-          <DeviceModeSelect
-            {vault}
-            id="device-protection-mode"
-            disabled={vault.isVerifying}
-          />
-
-          <div class="space-y-2">
-            <label
-              class="block text-sm font-medium"
-              for="device-protection-label"
-            >
-              {vault.t(I18N_KEYS.DeviceProtectionPasskeyLabel)}
-            </label>
-            <input
-              id="device-protection-label"
-              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-              type="text"
-              autocomplete="off"
-              placeholder={vault.t(
-                I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
-              )}
-              bind:value={passkeyLabel}
-              disabled={vault.isVerifying}
-              data-testid="device-protection-label-input"
-            />
-          </div>
           <Button
             class="w-full"
             disabled={vault.isVerifying}
@@ -376,6 +354,43 @@
               ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
               : vault.t(I18N_KEYS.DeviceProtectionSetupAction)}
           </Button>
+          <!-- The defaults suit nearly everyone: the mode and the passkey's
+               name wait here for whoever wants them. -->
+          <details data-testid="device-protection-options">
+            <summary
+              class="mx-auto w-fit cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+              data-testid="device-protection-options-toggle"
+            >
+              {vault.t(I18N_KEYS.DeviceProtectionOptions)}
+            </summary>
+            <div class="mt-4 space-y-4">
+              <DeviceModeSelect
+                {vault}
+                id="device-protection-mode"
+                disabled={vault.isVerifying}
+              />
+              <div class="space-y-2">
+                <label
+                  class="block text-sm font-medium"
+                  for="device-protection-label"
+                >
+                  {vault.t(I18N_KEYS.DeviceProtectionPasskeyLabel)}
+                </label>
+                <input
+                  id="device-protection-label"
+                  class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  type="text"
+                  autocomplete="off"
+                  placeholder={vault.t(
+                    I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
+                  )}
+                  bind:value={passkeyLabel}
+                  disabled={vault.isVerifying}
+                  data-testid="device-protection-label-input"
+                />
+              </div>
+            </div>
+          </details>
           {#if !creationOnly}
             <div class="flex items-center gap-3 pt-1">
               <div class="h-px flex-1 bg-border"></div>

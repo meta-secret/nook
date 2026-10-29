@@ -527,7 +527,6 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<VaultProviderState, "localLoginPreparation" | "vaultArchitecture"> &
   Pick<
     VaultSessionState,
-    | "externalIdentityHandoff"
     | "awaitingJoinApproval"
     | "clearSelectedPasswordEntry"
     | "enrollmentCode"
@@ -602,7 +601,7 @@ export type UiActionsContext = Pick<
   "errorMsg" | "isSaving"
 > &
   Pick<VaultSessionState, "hasManager" | "admitManager"> &
-  Pick<VaultUiState, "helpOpen" | "workspaceSection"> & {
+  Pick<VaultUiState, "helpOpen" | "accessCheckOpen" | "workspaceSection"> & {
     localDataDeletionStarted: boolean;
     cancelAddProvider(): void;
     cancelProviderSetup(): void;

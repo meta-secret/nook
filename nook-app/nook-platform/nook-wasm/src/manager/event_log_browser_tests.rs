@@ -1,13 +1,8 @@
-use super::super::PendingExtensionIdentityEnrollment;
-use super::super::device_protection::PendingExtensionIdentityHandoff;
 use super::*;
 use crate::EventDbRemoveEventFixture;
 use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
-use crate::manager::device_protection::ExtensionIdentityPublication;
-use crate::storage::identity_record::AuthorizerMemberSigning;
 use crate::storage::identity_record::StoredIdentityProtection;
-use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
@@ -18,14 +13,13 @@ use nook_core::StoredSigningSeed;
 
 use crate::storage::identity_record;
 use crate::vault_api_local::list_local_vaults;
-use nook_core::{
-    AppKey, ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity,
-    DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection,
-    SigningIdentity, StorageMode, VaultApplication, VaultArchitecture, VaultNameRef,
-    VaultOperation, VaultStoreIdentity, VaultStoreIdentityRef, VaultType, VaultUnlock,
-    VaultVersionWrite,
-};
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
+use nook_core::{
+    ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity, DeviceKeyProtectionSetup,
+    DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection, SigningIdentity,
+    StorageMode, VaultApplication, VaultArchitecture, VaultNameRef, VaultOperation,
+    VaultStoreIdentity, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
+};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -279,86 +273,6 @@ async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identit
         .await?;
 
     assert_eq!(pending.identity_id, first_identity_id);
-    assert_eq!(
-        NookDatabase::load_identity_directory().await?.selection(),
-        &IdentitySelection::Selected(selected_by_second_tab),
-    );
-    first_tab
-        .delete_local_browser_data()
-        .await
-        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_identity()
--> anyhow::Result<()> {
-    let mut first_tab = NookVaultManager::new();
-    first_tab
-        .delete_local_browser_data()
-        .await
-        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    first_tab
-        .finish_pin_device_protection("first identity pin".to_owned())
-        .await
-        .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
-    let first_key = first_tab.device_identity()?;
-    let first_identity_id = match NookDatabase::load_identity_directory()
-        .await?
-        .identity_for_app_key(&first_key)?
-    {
-        AppKeyIdentityMembership::Enrolled(identity_id) => identity_id,
-        AppKeyIdentityMembership::Unenrolled => {
-            return Err(anyhow::anyhow!("first identity is missing"));
-        }
-    };
-
-    let mut second_tab = NookVaultManager::new();
-    second_tab
-        .begin_local_identity_creation("Work")
-        .await
-        .map_err(|error| anyhow::anyhow!("begin second identity: {error:?}"))?;
-    second_tab
-        .finish_pin_device_protection("second identity pin".to_owned())
-        .await
-        .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
-    let selected_by_second_tab = NookDatabase::load_identity_directory()
-        .await?
-        .selected()?
-        .identity_id
-        .clone();
-    assert_ne!(selected_by_second_tab, first_identity_id);
-
-    let extension_key = AppKey::generate()?;
-    let (extension_signer, extension_signing_seed) = SigningIdentity::generate()?;
-    let (authorizer_signer, _) = SigningIdentity::generate()?;
-    first_tab.device.id = extension_key.app_id().as_str().to_owned();
-    first_tab.device.identity_private_key = extension_key.secret_string().into_inner();
-    first_tab.device.pending_extension_handoff =
-        ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
-            enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
-                authorizer: VaultCreationAuthority::ExistingIdentity(first_key.clone()),
-            },
-            authorizer_signing: AuthorizerSigningUpdate::Verified(AuthorizerMemberSigning {
-                app_id: first_key.app_id().clone(),
-                signing_public_key: authorizer_signer.public_key(),
-            }),
-            signing_public_key: extension_signer.public_key(),
-            handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
-            persist_signing_seed: true,
-            previous_session_signing_seed: String::new(),
-        });
-
-    let pending = first_tab
-        .initialize_genesis_vault_with_identity(&extension_key)
-        .await?;
-
-    assert_eq!(pending.identity_id, first_identity_id);
-    let staged = pending.require_staged_identity()?;
-    assert_eq!(
-        staged.directory.identity_for_app_key(&extension_key)?,
-        AppKeyIdentityMembership::Enrolled(first_identity_id),
-    );
     assert_eq!(
         NookDatabase::load_identity_directory().await?.selection(),
         &IdentitySelection::Selected(selected_by_second_tab),

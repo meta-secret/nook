@@ -8,7 +8,7 @@
 use super as keyring;
 use super::ProtectedLocalIdentitySave;
 use super::signing::{
-    CheckedIdentitySigningMaterial, IdentitySigningEvidence, IdentitySigningSource,
+    CheckedIdentitySigningMaterial, IdentitySigningEvidence, IdentitySigningSource, MemberSigner,
     SigningSeedOrigin,
 };
 #[cfg(test)]
@@ -30,7 +30,7 @@ use crate::{NookDatabase, NookError};
 use nook_core::MemberLabelState;
 use nook_core::{
     AppKey, IdentityDirectory, IdentityId, IdentitySelection, LocalIdentityKeyring,
-    LocalIdentityKeyringEntry, WrappedDeviceIdentity,
+    LocalIdentityKeyringEntry, SigningSeedHex, WrappedDeviceIdentity,
 };
 use nook_core::{DirectoryMemberSigningUpdate, IdentityCreation, IdentityMemberSigningUpdate};
 use rexie::Store;
@@ -44,10 +44,10 @@ pub(crate) struct ProtectedIdentityPublication<'a> {
     pub(crate) wrapped_app_key: &'a WrappedDeviceIdentity,
     pub(crate) label: &'a str,
 }
-struct ProtectedIdentitySelection {
+struct ProtectedIdentitySelection<'s> {
     keyring: LocalIdentityKeyring,
     identity_id: IdentityId,
-    seed_origin: SigningSeedOrigin,
+    seed_origin: SigningSeedOrigin<'s>,
 }
 /// In-memory preparation, not transaction completion. Dropping performs no cleanup.
 /// Callers cannot manufacture or reuse this private, non-Clone publication state.
@@ -63,7 +63,10 @@ struct PreparedProtectedIdentity<'a> {
     signing: CheckedIdentitySigningMaterial,
 }
 impl<'a> ProtectedIdentityPublication<'a> {
-    pub(crate) async fn save_existing(mut self) -> Result<ProtectedLocalIdentitySave, NookError> {
+    pub(crate) async fn save_existing(
+        mut self,
+        signer: MemberSigner<'_>,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
         IdentityTransitionAdmission { store: self.store }
             .check()
             .await?;
@@ -87,13 +90,19 @@ impl<'a> ProtectedIdentityPublication<'a> {
         self.prepare(ProtectedIdentitySelection {
             keyring,
             identity_id: ensured.value.identity_id,
-            seed_origin: SigningSeedOrigin::AdoptSessionSigner,
+            seed_origin: match signer {
+                MemberSigner::Installation => SigningSeedOrigin::AdoptSessionSigner,
+                MemberSigner::Passkey(seed) => SigningSeedOrigin::Passkey(seed),
+            },
         })
         .await?
         .persist()
         .await
     }
-    pub(crate) async fn save_new(mut self) -> Result<ProtectedLocalIdentitySave, NookError> {
+    pub(crate) async fn save_new(
+        mut self,
+        signer: MemberSigner<'_>,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
         IdentityTransitionAdmission { store: self.store }
             .check()
             .await?;
@@ -114,7 +123,34 @@ impl<'a> ProtectedIdentityPublication<'a> {
         self.prepare(ProtectedIdentitySelection {
             keyring,
             identity_id: created.identity_id,
-            seed_origin: SigningSeedOrigin::NewIdentity,
+            seed_origin: match signer {
+                MemberSigner::Installation => SigningSeedOrigin::NewIdentity,
+                MemberSigner::Passkey(seed) => SigningSeedOrigin::Passkey(seed),
+            },
+        })
+        .await?
+        .persist()
+        .await
+    }
+    /// Protect the passkey's app key under an identity this directory just
+    /// gained from a provider, with the signer the identity's log lists.
+    pub(crate) async fn save_added(
+        self,
+        identity_id: IdentityId,
+        signer: &SigningSeedHex,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
+        IdentityTransitionAdmission { store: self.store }
+            .check()
+            .await?;
+        let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
+            store: self.store,
+            directory: &self.directory,
+        })
+        .await?;
+        self.prepare(ProtectedIdentitySelection {
+            keyring,
+            identity_id,
+            seed_origin: SigningSeedOrigin::Passkey(signer),
         })
         .await?
         .persist()
@@ -122,7 +158,7 @@ impl<'a> ProtectedIdentityPublication<'a> {
     }
     async fn prepare(
         mut self,
-        selection: ProtectedIdentitySelection,
+        selection: ProtectedIdentitySelection<'_>,
     ) -> Result<PreparedProtectedIdentity<'a>, NookError> {
         let ProtectedIdentitySelection {
             mut keyring,

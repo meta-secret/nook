@@ -80,6 +80,9 @@ pub struct IdentityControlState {
     pub members: Vec<IdentityControlMember>,
     pub revoked: Vec<AppId>,
     pub pending_joins: Vec<IdentityJoinRequest>,
+    /// Apps that never became members, are not asking again, and whose join
+    /// request a causally later denial answered.
+    pub denied_joins: Vec<AppId>,
     pub vaults: Vec<IdentityControlVault>,
     /// Vaults deleted from the identity. Each device drops its local copy.
     pub removed_vaults: Vec<StoreId>,
@@ -103,6 +106,7 @@ struct ProjectionAccumulator {
     member_keys: BTreeMap<AppId, (IdentityMemberKeys, EventId)>,
     requests: Vec<IdentityJoinRequest>,
     resolutions: Vec<(EventId, AppId)>,
+    denials: Vec<(EventId, AppId)>,
     vaults: BTreeMap<StoreId, VaultAccumulator>,
     /// Tombstones: removal wins over any grant, in whatever order replicas
     /// apply the same events.
@@ -170,8 +174,11 @@ impl ProjectionAccumulator {
                         );
                 }
             }
-            IdentityControlOperation::MemberJoinDenied { app_id }
-            | IdentityControlOperation::MemberRevoked { app_id } => {
+            IdentityControlOperation::MemberJoinDenied { app_id } => {
+                self.resolutions.push((id.clone(), app_id.clone()));
+                self.denials.push((id.clone(), app_id.clone()));
+            }
+            IdentityControlOperation::MemberRevoked { app_id } => {
                 self.resolutions.push((id.clone(), app_id.clone()));
             }
             // An invite grants nothing until its holder joins with it.
@@ -217,6 +224,36 @@ impl ProjectionAccumulator {
                 self.sealed_name.clone_from(recipients);
             }
         }
+    }
+}
+
+/// Named values required to find answered-by-denial join requests.
+struct DeniedJoins<'a> {
+    log: &'a IdentityControlLog,
+    pending: &'a [IdentityJoinRequest],
+}
+
+impl ProjectionAccumulator {
+    /// Apps that never became members and are not asking again, whose
+    /// request a causally later denial answered.
+    fn denied_joins(&self, request: &DeniedJoins<'_>) -> Vec<AppId> {
+        self.requests
+            .iter()
+            .filter(|asked| {
+                let app_id = &asked.member.app_id;
+                !self.member_keys.contains_key(app_id)
+                    && !request
+                        .pending
+                        .iter()
+                        .any(|pending| &pending.member.app_id == app_id)
+                    && self.denials.iter().any(|(denial, denied)| {
+                        denied == app_id && request.log.is_ancestor(&asked.request_event, denial)
+                    })
+            })
+            .map(|asked| asked.member.app_id.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 }
 
@@ -268,6 +305,10 @@ impl IdentityControlState {
             })
             .cloned()
             .collect::<Vec<_>>();
+        let denied_joins = accumulator.denied_joins(&DeniedJoins {
+            log,
+            pending: &pending_joins,
+        });
         let removed_vaults = accumulator.removed_vaults;
         let vaults = accumulator
             .vaults
@@ -300,6 +341,7 @@ impl IdentityControlState {
             members,
             revoked,
             pending_joins,
+            denied_joins,
             vaults,
             removed_vaults: removed_vaults.into_iter().collect(),
             mounts: accumulator.mounts.into_values().collect(),
@@ -549,6 +591,10 @@ mod tests {
         let founder = fixture.founder();
         fixture.append(&founder, vec![deny])?;
         assert!(fixture.state()?.pending_joins.is_empty());
+        assert_eq!(
+            fixture.state()?.denied_joins,
+            vec![joiner.app.app_id().clone()]
+        );
         assert!(
             fixture
                 .state()?
@@ -559,6 +605,8 @@ mod tests {
         fixture.request_join(&joiner)?;
         let state = fixture.state()?;
         assert_eq!(state.pending_joins.len(), 1);
+        // Asking again is a new question, no longer an answered one.
+        assert!(state.denied_joins.is_empty());
         assert!(
             state
                 .members_missing_current_dek(&StoreId::generate()?)

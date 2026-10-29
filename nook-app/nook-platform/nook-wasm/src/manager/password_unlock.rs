@@ -430,16 +430,7 @@ impl NookVaultManager {
                         .to_owned(),
                 ));
             }
-            let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
-            let graph = store.load_graph(&self.vault.store_id)?;
-            let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
-            let user_records: Vec<nook_core::StoredSecretRecord> =
-                projection.live_secrets(&graph).into_values().collect();
-            let mut meta = VaultMetaState::from_stored_records(&user_records)?;
-            VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
-            self.vault.password_entries = projection.password_entries.clone();
-            self.vault.meta = meta;
-            return Ok((true, self.vault.meta.to_stored_records()));
+            return Ok((true, self.project_local_event_log().await?));
         }
 
         if vault_missing || content.trim().is_empty() {
@@ -458,6 +449,23 @@ impl NookVaultManager {
         }
         self.capture_vault_unlock(content)?;
         Ok((false, retained))
+    }
+
+    /// Project the open vault from the event log stored here: its secrets,
+    /// password entries and metadata.
+    pub(in crate::manager) async fn project_local_event_log(
+        &mut self,
+    ) -> Result<Vec<nook_core::StoredSecretRecord>, NookError> {
+        let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
+        let user_records: Vec<nook_core::StoredSecretRecord> =
+            projection.live_secrets(&graph).into_values().collect();
+        let mut meta = VaultMetaState::from_stored_records(&user_records)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
+        self.vault.password_entries = projection.password_entries.clone();
+        self.vault.meta = meta;
+        Ok(self.vault.meta.to_stored_records())
     }
 
     pub(in crate::manager) async fn persist_password_unlock_membership(

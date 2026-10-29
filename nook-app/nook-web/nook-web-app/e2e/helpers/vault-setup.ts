@@ -70,25 +70,103 @@ export function openVaultRow(page: Page): Locator {
   return page.locator('[data-testid="identity-vault-row"][data-state="open"]')
 }
 
-/** Leave the first-run backup step for the new vault when it shows. */
-export async function skipFirstRunBackup(
-  page: Page,
-  readySurface: Locator,
-): Promise<void> {
-  const backupStep = page.getByTestId('first-run-backup-step')
-  await expect(backupStep.or(readySurface).first()).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  if (await backupStep.isVisible()) {
-    await page.getByTestId('first-run-backup-skip').click()
+/** First run's first screen: create the identity. Its passkey comes next;
+ * no vault exists until the identity is settled. */
+export async function startFirstRun(page: Page): Promise<void> {
+  const create = page.getByTestId('first-run-create-identity-btn')
+  await expect(create).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await create.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+/** Answer the passkey prompt on screen: a browser without a key makes one
+ * (first run's passkey step, or the overlay elsewhere); one with a key
+ * unlocks it. */
+export async function answerPasskeyPrompt(page: Page): Promise<void> {
+  const createChoice = page.getByTestId('device-protection-create-new-choice')
+  if (await createChoice.isVisible()) {
+    await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  }
+  const setupBtn = page.getByTestId('device-protection-setup-btn')
+  const unlockBtn = page.getByTestId('device-protection-unlock-btn')
+  if (await setupBtn.isVisible()) {
+    await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  } else if (await unlockBtn.isVisible()) {
+    await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   }
 }
 
-/** The first vault's setup ends on the identities: skip the backup offer,
- * then open the new vault from its row there. */
-export async function expectFirstVaultOpen(page: Page): Promise<void> {
+/** A fresh browser makes its key the way a person does: Create identity,
+ * then first run's passkey step. Setup then waits on its sync provider
+ * step with the key ready. */
+export async function createFirstRunKey(page: Page): Promise<void> {
+  await startFirstRun(page)
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await answerPasskeyPrompt(page)
+  await expect(page.getByTestId('first-run-sync-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+/** After the passkey, setup offers a sync provider: keep the new identity
+ * on this browser instead and name it. */
+export async function nameFirstIdentityOnly(
+  page: Page,
+  identityName: string,
+): Promise<void> {
+  const skip = page.getByTestId('first-run-sync-skip')
+  await expect(skip).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await skip.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const nameInput = page.getByTestId('first-run-identity-name-input')
+  await expect(nameInput).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await nameInput.fill(identityName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await page
+    .getByTestId('first-run-identity-create-btn')
+    .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+/** Keep the new identity on this browser, name it, then create its first
+ * vault under the same name when setup asks. */
+export async function nameFirstIdentityHere(
+  page: Page,
+  vaultName: string,
+): Promise<void> {
+  await nameFirstIdentityOnly(page, vaultName)
+  const vaultStep = page.getByTestId('first-run-vault-step')
+  await expect(vaultStep).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await vaultStep
+    .getByTestId('login-vault-name-input')
+    .fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await vaultStep
+    .getByTestId('login-create-device-vault-btn')
+    .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+/** Name the identity when first run reaches its sync provider step; a
+ * browser that already had an identity goes straight to its vault. */
+async function nameFirstIdentityIfAsked(
+  page: Page,
+  vaultName: string,
+  readySurface: Locator,
+): Promise<void> {
+  const syncStep = page.getByTestId('first-run-sync-step')
+  await expect(syncStep.or(readySurface).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await syncStep.isVisible()) await nameFirstIdentityHere(page, vaultName)
+}
+
+/** The first vault's setup ends on the identities: name the identity when
+ * setup asks, then open the new vault from its row there. */
+export async function expectFirstVaultOpen(
+  page: Page,
+  vaultName = 'Test vault',
+): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
-  await skipFirstRunBackup(page, vaultPanel.or(openVaultRow(page)).first())
+  const ready = vaultPanel.or(openVaultRow(page)).first()
+  await nameFirstIdentityIfAsked(page, vaultName, ready)
+  await expect(ready).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   // The e2e idle lock is 2.5 s: under load it can lock the new vault before
   // the identities page leads into it.
   await disableVaultIdleLock(page)
@@ -106,37 +184,43 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  // Simple and unified apps start with one name field; nothing to choose.
+  // First run starts with Create identity: its passkey, then the sync
+  // provider step (kept on this browser here), then the name. A browser
+  // that already has an identity names its next vault at once.
+  const createIdentity = page.getByTestId('first-run-create-identity-btn')
   const nameInput = page.getByTestId('login-vault-name-input')
-  await expect(nameInput).toBeVisible({
+  await expect(createIdentity.or(nameInput).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(nameInput).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-
-  const createButton = page.getByTestId('login-create-device-vault-btn')
-  await expect(createButton).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if (await createIdentity.isVisible()) {
+    await startFirstRun(page)
+  } else {
+    await expect(nameInput).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    const createButton = page.getByTestId('login-create-device-vault-btn')
+    await expect(createButton).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  }
 
   // Deferred passkey: the first-run protect step (or, elsewhere, the
-  // top-right overlay) asks for it before the vault exists. The backup step
-  // follows creation; tests that need it open Sync themselves.
+  // top-right overlay) asks for it before anything is created. Tests that
+  // need a sync provider add it themselves.
   const passkeyOverlay = page
     .getByTestId('passkey-auth-overlay')
     .or(page.getByTestId('first-run-protect-step'))
   const readySurface = page.getByTestId(readyTestId)
-  const backupStep = page.getByTestId('first-run-backup-step')
+  const syncStep = page.getByTestId('first-run-sync-step')
   const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
         (await passkeyOverlay.isVisible()) ||
         (await readySurface.isVisible()) ||
-        (await backupStep.isVisible()) ||
+        (await syncStep.isVisible()) ||
         (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
@@ -146,21 +230,13 @@ export async function createLocalVaultOnLogin(
       `Local vault creation failed: ${await vaultError.innerText()}`,
     )
   }
-  if (await passkeyOverlay.isVisible()) {
-    const createChoice = page.getByTestId('device-protection-create-new-choice')
-    if (await createChoice.isVisible()) {
-      await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    }
-    const setupBtn = page.getByTestId('device-protection-setup-btn')
-    const unlockBtn = page.getByTestId('device-protection-unlock-btn')
-    if (await setupBtn.isVisible()) {
-      await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    } else if (await unlockBtn.isVisible()) {
-      await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    }
-  }
+  if (await passkeyOverlay.isVisible()) await answerPasskeyPrompt(page)
 
-  await skipFirstRunBackup(page, readySurface.or(openVaultRow(page)).first())
+  await nameFirstIdentityIfAsked(
+    page,
+    vaultName,
+    readySurface.or(openVaultRow(page)).first(),
+  )
   // The vault exists now: keep the 2.5 s e2e idle lock from locking it while
   // the identities page leads into it.
   await disableVaultIdleLock(page)

@@ -7,10 +7,6 @@ panel sits inside the card, which then spans the full row.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import {
-    PairedIdentityUnlockScope,
-    type PairedIdentityUnlockTarget,
-  } from '$lib/app/extension-identity-adoption'
   import IdentityProtectionPanel from './IdentityProtectionPanel.svelte'
   import VaultPanel from './VaultPanel.svelte'
   import VaultActivityStatus from './VaultActivityStatus.svelte'
@@ -30,7 +26,6 @@ panel sits inside the card, which then spans the full row.
     LayoutDashboard,
     LockOpen,
     Plus,
-    Puzzle,
     ShieldAlert,
     UserRoundCheck,
   } from '@lucide/svelte'
@@ -42,11 +37,6 @@ panel sits inside the card, which then spans the full row.
     StatusTone,
   } from '$lib/components/ui/status-tag'
   import type { VaultState } from '$lib/vault.svelte'
-  import LoginVaultPairingStatus from '$lib/components/login/LoginVaultPairingStatus.svelte'
-  import {
-    LoginVaultExtensionPairingStatusKind,
-    type LoginVaultExtensionPairingStatus,
-  } from '$lib/components/login/login-vault-extension-pairing-status'
   import {
     IdentityCardStatus,
     IdentityKeyKind,
@@ -60,7 +50,6 @@ panel sits inside the card, which then spans the full row.
     vault,
     card,
     selectedStoreId = '',
-    extensionStoreIds = [],
     busy = false,
     canAddVault = false,
     onOpenVault,
@@ -68,7 +57,6 @@ panel sits inside the card, which then spans the full row.
     onSelectVault,
     onClosePanels = () => {},
     onUnlockVault,
-    onUnlockElsewhere,
     onManageVault,
     onLock = () => {},
     onUnlock = () => {},
@@ -76,9 +64,6 @@ panel sits inside the card, which then spans the full row.
     health,
     onProtect,
     onManageSection,
-    pairingStatusFor = () => ({
-      kind: LoginVaultExtensionPairingStatusKind.NotShown,
-    }),
     unlockPanel,
     overviewPanel,
     overviewOpen = false,
@@ -90,8 +75,6 @@ panel sits inside the card, which then spans the full row.
     vault: VaultState
     card: IdentityCardView
     selectedStoreId?: string
-    /** Vaults the paired browser extension holds a grant for. */
-    extensionStoreIds?: readonly string[]
     busy?: boolean
     canAddVault?: boolean
     onOpenVault: (storeId: string) => void
@@ -105,10 +88,6 @@ panel sits inside the card, which then spans the full row.
     /** Unlock a vault from its panel and stay on the card; Open vault in
      * the panel then goes in. */
     onUnlockVault?: (storeId: string) => void
-    /** Unlock an identity whose key the paired extension holds. */
-    onUnlockElsewhere?: (
-      target: PairedIdentityUnlockTarget,
-    ) => void | Promise<void>
     /** One of a vault's own pages (its passphrases, imports); a locked
      * vault unlocks first. */
     onManageVault?: (target: IdentitySectionTarget) => void
@@ -124,8 +103,6 @@ panel sits inside the card, which then spans the full row.
     /** Open one of the identity's pages from Manage. Given, Manage on the
      * identity this browser uses opens a menu of them. */
     onManageSection?: (section: WorkspaceSection) => void
-    /** Extension pairing status for a vault row, while pairing is offered. */
-    pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Setup panel (a new vault), shown beside the card's rows. */
     unlockPanel?: Snippet
     /** The identity's overview, opened beside the card. */
@@ -144,59 +121,11 @@ panel sits inside the card, which then spans the full row.
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
-  /** An identity whose key another installation holds has no key on this
-   * browser: the paired extension hands it over for one of its vaults
-   * stored here, the one this page has selected when the card holds it. */
-  const elsewhereStoreId = $derived.by((): string => {
-    if (card.status !== IdentityCardStatus.Elsewhere) return ''
-    const stored = card.vaults
-      .filter(
-        (row) =>
-          row.state === IdentityVaultRowState.Available ||
-          row.state === IdentityVaultRowState.Dormant,
-      )
-      .map((row) => row.storeId)
-    if (stored.includes(selectedStoreId)) return selectedStoreId
-    const [first = ''] = stored
-    return first
-  })
-  const unlocksElsewhere = $derived(
-    Boolean(onUnlockElsewhere) && elsewhereStoreId !== '',
-  )
-  /** While another identity is in use, this one's vaults are dormant: using
-   * it leaves that identity first, so it reads Use identity, as their panels
-   * say, rather than Unlock. */
-  const usesElsewhere = $derived(
-    unlocksElsewhere &&
-      card.vaults.some(
-        (row) =>
-          row.storeId === elsewhereStoreId &&
-          row.state === IdentityVaultRowState.Dormant,
-      ),
-  )
-
-  function unlockElsewhere(storeId: string): void | Promise<void> {
-    if (!onUnlockElsewhere) return
-    const target: PairedIdentityUnlockTarget = {
-      scope: PairedIdentityUnlockScope.CardVault,
-      storeId,
-      leavesCurrentIdentity: card.vaults.some(
-        (row) =>
-          row.storeId === storeId &&
-          row.state === IdentityVaultRowState.Dormant,
-      ),
-    }
-    return onUnlockElsewhere(target)
-  }
-
   /** Unlock at the foot of a locked card: the identity unlocks alone. With a
    * vault's panel open beside the card, that vault then opens in place, as a
-   * click on its row would, so the panel offers its actions. The call runs
-   * within the click, before any wait: a paired extension needs the gesture. */
+   * click on its row would, so the panel offers its actions. */
   async function unlockIdentity(): Promise<void> {
-    await (unlocksElsewhere
-      ? unlockElsewhere(elsewhereStoreId)
-      : onUnlock(card.identityId))
+    await onUnlock(card.identityId)
     const row = vaultOpenRow
     if (live && row?.state === IdentityVaultRowState.Available)
       onUnlockVault?.(row.storeId)
@@ -274,10 +203,10 @@ panel sits inside the card, which then spans the full row.
   const spread = $derived(
     Boolean(
       unlockPanel ||
-        overviewPanel ||
-        requestPanel ||
-        (protection && protectionOpen) ||
-        vaultOpenRow,
+      overviewPanel ||
+      requestPanel ||
+      (protection && protectionOpen) ||
+      vaultOpenRow,
     ),
   )
 
@@ -334,6 +263,13 @@ panel sits inside the card, which then spans the full row.
    * identity, which can delete it everywhere. */
   function rowDisabled(row: IdentityVaultRow): boolean {
     return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
+  }
+
+  /** A vault of the unlocked identity this browser does not hold opens from
+   * its sync provider, with the key the identity granted this browser. */
+  async function openAwayVault(storeId: string): Promise<void> {
+    const opened = await vault.identityControl.openVault(storeId)
+    if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey)
   }
 
   async function deleteAwayVault(storeId: string): Promise<void> {
@@ -406,11 +342,17 @@ panel sits inside the card, which then spans the full row.
     {#if !preview && (card.status === IdentityCardStatus.Locked || card.status === IdentityCardStatus.Elsewhere)}
       <!-- Locking folds what only an unlocked identity offers back into the
            card: its header and vaults stay. -->
-      <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
+      <span
+        class="nk-card-fold"
+        aria-hidden="true"
+        data-testid="identity-card-fold"
       ></span>
     {/if}
-    <header class="relative flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
-      <span class="relative inline-flex flex-none">
+    <!-- Name and state on one line; the badge says how the identity unlocks
+         (its key count in its title), and its ID, three words, tells keyrings
+         apart: every device of a keyring shows the same ones. -->
+    <header class="relative flex items-center gap-3 px-4 py-3.5 sm:px-5">
+      <span class="relative inline-flex flex-none" title={keysLine}>
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
           {card.monogram}
         </span>
@@ -423,42 +365,46 @@ panel sits inside the card, which then spans the full row.
         </span>
       </span>
       <div class="min-w-0 flex-1 pr-4">
-        <h3
-          class="truncate text-lg font-semibold tracking-tight text-foreground"
-          data-testid="identity-card-label"
-        >
-          {card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
-        </h3>
-        <p
-          class="mt-0.5 truncate text-[0.8125rem] text-muted-foreground"
-          data-testid="identity-card-keys"
-        >
-          {keysLine}
-        </p>
-        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          {#if live && !preview}
-            <VaultActivityStatus {vault} idle={unlockedStatus} />
-          {:else if live}
-            {@render unlockedStatus()}
-          {:else}
-            <StatusTag
-              mark={StatusMark.Icon}
-              label={statusLabel}
-              testId="identity-card-status"
-            >
-              {#snippet icon()}
-                <Lock class="size-3" aria-hidden="true" />
-              {/snippet}
-            </StatusTag>
-          {/if}
-          {#if card.fingerprint.length > 0}
-            <span
-              class="nk-fingerprint"
-              title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
-              data-testid="identity-card-words">{card.fingerprint.join('-')}</span
-            >
-          {/if}
+        <div class="flex min-w-0 items-center gap-2">
+          <h3
+            class="min-w-0 truncate text-base font-semibold tracking-tight text-foreground"
+            data-testid="identity-card-label"
+          >
+            {card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
+          </h3>
+          <span class="sr-only" data-testid="identity-card-keys"
+            >{keysLine}</span
+          >
+          <span class="flex flex-none items-center">
+            {#if live && !preview}
+              <VaultActivityStatus {vault} idle={unlockedStatus} />
+            {:else if live}
+              {@render unlockedStatus()}
+            {:else}
+              <StatusTag
+                mark={StatusMark.Icon}
+                label={statusLabel}
+                testId="identity-card-status"
+              >
+                {#snippet icon()}
+                  <Lock class="size-3" aria-hidden="true" />
+                {/snippet}
+              </StatusTag>
+            {/if}
+          </span>
         </div>
+        {#if card.fingerprint.length > 0}
+          <p
+            class="nk-fingerprint mt-1 flex items-center gap-1.5"
+            title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
+            data-testid="identity-card-words"
+          >
+            <span class="nk-fingerprint-label"
+              >{vault.t(I18N_KEYS.WorkspaceFingerprintLabel)}</span
+            >
+            <span class="truncate">{card.fingerprint.join('-')}</span>
+          </p>
+        {/if}
       </div>
     </header>
 
@@ -495,7 +441,8 @@ panel sits inside the card, which then spans the full row.
               >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
             >
             <span
-              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
+              class="truncate text-xs {protection.nudge ===
+              NookIdentityNudge.Urge
                 ? 'text-destructive'
                 : 'text-warning'}">{protectionProgress}</span
             >
@@ -531,9 +478,6 @@ panel sits inside the card, which then spans the full row.
               data-testid="identity-vault-row"
               data-store-id={row.storeId}
               data-state={row.state}
-              data-extension-connected={extensionStoreIds.includes(row.storeId)
-                ? 'true'
-                : 'false'}
               {...row.state === IdentityVaultRowState.Open
                 ? { 'aria-current': 'true' }
                 : {}}
@@ -553,23 +497,7 @@ panel sits inside the card, which then spans the full row.
                 <span class="truncate text-[0.9375rem] font-medium">
                   {row.label || vault.t(I18N_KEYS.WorkspaceVaultFallback)}
                 </span>
-                <LoginVaultPairingStatus
-                  {vault}
-                  status={pairingStatusFor(row.storeId)}
-                />
               </span>
-              {#if extensionStoreIds.includes(row.storeId)}
-                <span
-                  class="nk-tag flex-none text-foreground"
-                  title={vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}
-                  data-testid="identity-vault-extension-badge"
-                >
-                  <Puzzle class="size-3" aria-hidden="true" />
-                  <span class="hidden @sm:inline"
-                    >{vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}</span
-                  >
-                </span>
-              {/if}
               {#if row.state === IdentityVaultRowState.Open}
                 <span class="nk-lead" aria-hidden="true"></span>
                 <StatusTag
@@ -658,7 +586,7 @@ panel sits inside the card, which then spans the full row.
 
     {#if !preview}
       <div class="nk-card-actions">
-        {#if card.status === IdentityCardStatus.Locked || (unlocksElsewhere && !usesElsewhere)}
+        {#if card.status === IdentityCardStatus.Locked}
           <button
             type="button"
             data-testid="identity-unlock"
@@ -680,18 +608,14 @@ panel sits inside the card, which then spans the full row.
             <Lock class="size-4 text-muted-foreground" aria-hidden="true" />
             {vault.t(I18N_KEYS.WorkspaceLock)}
           </button>
-        {:else if card.status === IdentityCardStatus.Inactive || usesElsewhere}
+        {:else if card.status === IdentityCardStatus.Inactive}
           <!-- An identity not in use here makes it current, as its vaults'
-               panels offer: one stored on this browser switches to its key,
-               one the paired extension holds is handed over by it. -->
+               panels offer: it switches to its key stored on this browser. -->
           <button
             type="button"
             data-testid="identity-use"
             disabled={busy}
-            onclick={() =>
-              usesElsewhere
-                ? void unlockElsewhere(elsewhereStoreId)
-                : onUseIdentity(card.identityId)}
+            onclick={() => onUseIdentity(card.identityId)}
           >
             <UserRoundCheck
               class="size-4 text-muted-foreground"
@@ -731,10 +655,7 @@ panel sits inside the card, which then spans the full row.
         {...vaultExtension ? { extension: vaultExtension } : {}}
         onOpen={() => onOpenVault(vaultOpenRow.storeId)}
         onUnlock={() => onUnlockVault?.(vaultOpenRow.storeId)}
-        onUseIdentity={() =>
-          card.status === IdentityCardStatus.Elsewhere
-            ? void unlockElsewhere(vaultOpenRow.storeId)
-            : onUseIdentity(card.identityId)}
+        onUseIdentity={() => onUseIdentity(card.identityId)}
         onManage={(section: WorkspaceSection) => {
           const target: IdentitySectionTarget = {
             identityId: card.identityId,
@@ -744,7 +665,10 @@ panel sits inside the card, which then spans the full row.
           onManageVault?.(target)
         }}
         {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
-          ? { onDelete: () => deleteAwayVault(vaultOpenRow.storeId) }
+          ? {
+              onDelete: () => deleteAwayVault(vaultOpenRow.storeId),
+              onOpenAway: () => openAwayVault(vaultOpenRow.storeId),
+            }
           : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}
       />
@@ -757,7 +681,8 @@ panel sits inside the card, which then spans the full row.
       <IdentityProtectionPanel
         {vault}
         health={protection}
-        identityName={card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
+        identityName={card.label ||
+          vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
         {busy}
         onAction={protect}
         onClose={() => (protectionOpen = false)}

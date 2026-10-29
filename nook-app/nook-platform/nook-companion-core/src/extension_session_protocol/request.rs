@@ -186,33 +186,6 @@ pub struct PinPayload {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct IdentityHandoffPayload {
-    recipient_public_key: String,
-    nonce: String,
-    expected_device_id: String,
-    expected_device_public_key: String,
-    expected_device_signing_public_key: String,
-    queue: QueueDisposition,
-}
-
-impl Zeroize for IdentityHandoffPayload {
-    fn zeroize(&mut self) {
-        self.recipient_public_key.zeroize();
-        self.nonce.zeroize();
-        self.expected_device_id.zeroize();
-        self.expected_device_public_key.zeroize();
-        self.expected_device_signing_public_key.zeroize();
-    }
-}
-
-impl Drop for IdentityHandoffPayload {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ImportVaultPayload {
     vault_store_id: String,
     device_id: String,
@@ -411,8 +384,6 @@ pub enum ExtensionSessionRequest {
     CreatePin(PinPayload),
     #[serde(rename = "nook:extension-session-unlock-pin")]
     UnlockPin(PinPayload),
-    #[serde(rename = "nook:extension-session-seal-identity-handoff")]
-    SealIdentityHandoff(IdentityHandoffPayload),
     #[serde(rename = "nook:extension-session-import-vault")]
     ImportVault(ImportVaultPayload),
     #[serde(rename = "nook:extension-session-join-identity")]
@@ -510,17 +481,6 @@ impl Drop for ExtensionSessionRequestWire {
             ExtensionSessionRequest::UnlockPasskey(payload) => payload.prf_output.zeroize(),
             ExtensionSessionRequest::CreatePin(payload)
             | ExtensionSessionRequest::UnlockPin(payload) => payload.pin.zeroize(),
-            ExtensionSessionRequest::SealIdentityHandoff(payload) => {
-                payload.recipient_public_key.zeroize();
-                payload.nonce.zeroize();
-                payload.expected_device_id.zeroize();
-                payload.expected_device_public_key.zeroize();
-                payload.expected_device_signing_public_key.zeroize();
-            }
-            ExtensionSessionRequest::JoinIdentity(payload) => {
-                payload.code.zeroize();
-                payload.sealed_passphrase.zeroize();
-            }
             ExtensionSessionRequest::AuthenticatorEnrollPreview(payload)
             | ExtensionSessionRequest::AuthenticatorEnrollCode(payload) => {
                 payload.otpauth_uri.zeroize();
@@ -547,6 +507,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::BeginPasskeySetup(_)
             | ExtensionSessionRequest::UnlockOptions(_)
             | ExtensionSessionRequest::ImportVault(_)
+            | ExtensionSessionRequest::JoinIdentity(_)
             | ExtensionSessionRequest::ConnectIdentityVault(_)
             | ExtensionSessionRequest::RefreshIdentityVaults(_)
             | ExtensionSessionRequest::BeginIdentityConnection(_)
@@ -652,23 +613,6 @@ mod tests {
         assert_eq!(payload.pin.0, "123456");
         payload.pin.zeroize();
         assert!(payload.pin.0.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn identity_handoff_payload_zeroizes_every_sensitive_allocation() -> anyhow::Result<()> {
-        let mut request: ExtensionSessionRequest = serde_json::from_str(
-            r#"{"type":"nook:extension-session-seal-identity-handoff","payload":{"recipientPublicKey":"recipient","nonce":"nonce","expectedDeviceId":"device","expectedDevicePublicKey":"public","expectedDeviceSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
-        )?;
-        let ExtensionSessionRequest::SealIdentityHandoff(payload) = &mut request else {
-            anyhow::bail!("decoded request must preserve identity handoff variant");
-        };
-        payload.zeroize();
-        assert!(payload.recipient_public_key.is_empty());
-        assert!(payload.nonce.is_empty());
-        assert!(payload.expected_device_id.is_empty());
-        assert!(payload.expected_device_public_key.is_empty());
-        assert!(payload.expected_device_signing_public_key.is_empty());
         Ok(())
     }
 
@@ -820,11 +764,6 @@ mod tests {
                 "pin",
                 r#"{"type":"nook:extension-session-unlock-pin","payload":{"pin":"123456","queue":{"kind":"message-default"}}}"#,
                 r#""pin":"123456","#,
-            ),
-            (
-                "identity handoff",
-                r#"{"type":"nook:extension-session-seal-identity-handoff","payload":{"recipientPublicKey":"recipient","nonce":"nonce","expectedDeviceId":"device","expectedDevicePublicKey":"public","expectedDeviceSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
-                r#""nonce":"nonce","#,
             ),
             (
                 "passkey lookup",

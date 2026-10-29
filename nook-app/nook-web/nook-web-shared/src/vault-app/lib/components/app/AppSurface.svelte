@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import type { ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
@@ -13,8 +14,8 @@
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import AppHelpWorkspace from '$lib/components/app/AppHelpWorkspace.svelte'
+  import AccessCheckPage from '$lib/components/access-check/AccessCheckPage.svelte'
   import AppPersistentChrome from '$lib/components/app/AppPersistentChrome.svelte'
-  import ExtensionConnectConsentWorkspace from '$lib/components/app/ExtensionConnectConsentWorkspace.svelte'
   import InvalidExtensionConnectWorkspace from '$lib/components/app/InvalidExtensionConnectWorkspace.svelte'
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
@@ -22,7 +23,6 @@
   import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
   import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import { extensionConnectProgress } from '$lib/extension/connect-progress'
-  import { ExtensionIdentityRequestSource } from '$web-shared/extension/extension-connect-types'
   import {
     ExtensionConnectPageReportKind,
     ExtensionConnectPageSteps,
@@ -81,14 +81,8 @@
           case true:
             break
         }
-        const { request } = extensionConnectRequestState
         // The connect route's request names the side panel that follows it.
-        switch (request.source) {
-          case ExtensionIdentityRequestSource.PairedVault:
-            return
-          case ExtensionIdentityRequestSource.ExtensionConnect:
-            break
-        }
+        const { request } = extensionConnectRequestState
         const progressBegin: Parameters<
           typeof extensionConnectProgress.begin
         >[0] = {
@@ -156,6 +150,11 @@
         />
       {:else if vault.helpOpen}
         <AppHelpWorkspace {vault} {colorMode} {appVersion} />
+      {:else if vault.accessCheckOpen}
+        <AccessCheckPage
+          {vault}
+          onClose={() => new VaultWorkspaceActions(vault).closeAccessCheck()}
+        />
       {:else if extensionConnectRoute && extensionConnectRequestState.kind === ExtensionConnectIntentKind.Absent}
         <InvalidExtensionConnectWorkspace {vault} onClose={onNavigateHome} />
       {:else if vault.newIdentity !== NewIdentityStage.Off}
@@ -165,15 +164,13 @@
           {...accessGateProps}
           extensionConnectRequest={extensionConnectRequestState}
         />
-      {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
-        <ExtensionConnectConsentWorkspace
-          {vault}
-          request={extensionConnectRequestState.request}
-          {appVersion}
-          onClose={onFinishExtensionConnect}
-        />
       {:else if vault.isAuthenticated}
-        <AuthenticatedVaultWorkspace {...authenticatedWorkspaceProps} />
+        <!-- A connecting extension is approved beside the identity's card. -->
+        <AuthenticatedVaultWorkspace
+          {...authenticatedWorkspaceProps}
+          extensionConnectRequest={extensionConnectRequestState}
+          {onFinishExtensionConnect}
+        />
       {/if}
     </div>
 

@@ -2,8 +2,8 @@
 use super::{IdentityDirectory, IdentitySelection};
 use crate::MemberLabelState;
 use crate::{
-    AppKey, IdentityId, IdentityMember, IdentityMemberSigningUpdate, IdentityRecord,
-    IdentityRecordRejection, IdentityVaultKeys, MultiDeviceError, VaultKeys,
+    AppKey, IdentityId, IdentityMemberSigningUpdate, IdentityRecord, IdentityRecordRejection,
+    IdentityVaultKeys, MultiDeviceError, VaultKeys,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -150,28 +150,7 @@ pub struct DirectoryOwnedVaultOpening<'a> {
     pub vault: crate::IdentityVaultKeyOpening<'a>,
 }
 
-pub struct DirectoryVaultEnrollment<'a> {
-    pub current_app_key: &'a AppKey,
-    pub new_app_key: &'a AppKey,
-    pub store_id: &'a crate::StoreId,
-}
-
-pub struct DirectoryCreationEnrollment<'a> {
-    pub app_key: &'a AppKey,
-    pub label: &'a str,
-}
-
 pub struct LocalIdentityKeyRetirement<'a> {
     pub identity_id: &'a IdentityId,
     pub app_id: &'a crate::AppId,
-}
-
-pub(super) enum IdentityEnrollmentPreparation {
-    Existing(IdentityId),
-    Grant(PreparedIdentityMembership),
-}
-pub(super) struct PreparedIdentityMembership {
-    pub(super) identity_id: IdentityId,
-    pub(super) member: IdentityMember,
-    pub(super) keys_by_store: Vec<(crate::StoreId, VaultKeys)>,
 }

@@ -268,91 +268,88 @@ describes. No vault is downloaded or decrypted. A vault this browser
 registered is named from its vault registry; every other vault's name is
 encrypted under its own key, so its row shows the short id instead.
 
-Each row also tells, without any key:
+Vaults are grouped by the identity that files them, and the identity is the
+only thing the user decides about. Rust `provider_identity_choices` turns
+the listing and the checks run on the page into one choice per identity
+(`ProviderIdentityChoice`): its standing, the decisions it allows, and its
+vaults. The [identity decisions](provider-identity-decisions.md) record owns
+the rules and the operations behind each decision.
 
-- **Identity words:** three BIP39 words derived from the identity id
-  (`IdentityWords`), the same words the identity card shows.
-- **Public log facts:** from the identity's signed, unencrypted control log,
-  its device count, when the newest device joined, and how many vaults it
-  keeps (`ProviderIdentityLog`).
+Each identity card shows, without any key:
 
-A "Show names" text link runs `reveal_google_drive_names`:
+- **Name:** its name when this browser holds it or a passkey opened it,
+  else three BIP39 words derived from its id (`IdentityWords`).
+- **Tag:** with no identity in use, its standing: opens here, opens from
+  another identity here, opens with a checked passkey, join requested, join
+  denied, join approved, not opened by the checked passkeys, or not on this
+  browser. With an identity in use, what this browser's passkey is to it:
+  in use here, member, not a member, join requested, or join request denied.
+- **Public log facts:** from its signed, unencrypted control log, its device
+  and vault counts (`ProviderIdentityLog`). The log also tells whether this
+  browser's key is a member and where its join request stands.
+- **No vault rows:** vaults are neither listed nor acted on; the step's
+  heading, loading and empty copy all speak of identities.
 
-- One passkey assertion re-derives this device's app key in memory.
-- When that key is a member of a listed identity, its identity-log envelopes
-  open the identity's sealed name and its vaults' keys, and each vault's own
-  log yields its encrypted name.
-- The names are shown for this page only; nothing is stored, imported, or
-  written.
-- The link commits nothing, so the step keeps one action button.
+With an identity in use, as when the Sync page adds Google Drive, each card
+carries its one [setup action](provider-identity-decisions.md#setup-action),
+which runs at once: **Continue** for a member, **Request to join** for
+anyone else, **Check again** for a join already asked. The identity in use
+has none. Below the list, after an "or", **Create a new identity** saves the
+identity in use on the provider as a new one and connects.
+Identities are never merged: a passkey that opens one completes it here.
 
-Rust `ProviderVaultListingRequest` decides, for each listed vault, how this
-device can open it (`ProviderVaultAccess`) and what the user may do
-(`ProviderVaultAction`, recommended action first). The row shows the access
-and one line that says what it means.
+With no identity in use, the decision is one segmented control, **Leave as
+is** first:
 
-- **Syncs:** the identity in use holds the vault. It syncs through the
-  identity mount; the row offers no action.
-- **Other identity here:** another identity on this browser holds the vault
-  and its app key here was granted it. It opens from that identity; the row
-  offers no action.
-- **Granted:** a member approved this app's access request, so its key opens
-  the vault.
-- **Backup password:** the vault's event log keeps a password envelope, so its
-  backup password opens it.
-- **Requested:** this app asked for access; a member approves it when its
-  device syncs the vault. The row offers no action.
-- **Unchecked:** no identity is in use on this browser, as on the login
-  screen after browser data was cleared. Nothing was checked, and the user's
-  passkey or backup password may still open it, so recovery stays offered.
-- **Locked:** nothing on this device opens it. The row says so and offers
-  **Request access**.
+- **Add to this browser** (**Recover it** on a browser with no identity):
+  one passkey tap re-derives the member's app key and signer.
+- **Ask to join** and **Finish joining:** a membership request from a fresh
+  protected key, and its completion once a device approves.
 
-A vault that opens (granted or by backup password) offers actions by what the
-open vault holds:
+The step keeps one action button:
 
-- **Empty open vault:** no items and no other app. **Use this vault instead**
-  comes first: after an explicit confirmation the chosen vault is imported as
-  a separate vault, and once it is open the empty vault is deleted from the
-  identity everywhere. **Import as a separate vault** is the alternative.
-- **Open vault with records:** **Merge into my vault** comes first. After an
-  explicit confirmation, and the backup password when that is how it opens,
-  Rust reads the vault's events, opens its keys, decrypts its live records,
-  and commits them through the open vault's import. Identical logins are
-  matched and different passwords stay separate items. The source vault stays
-  in the folder unchanged. **Import as a separate vault** is the alternative.
-- **No open vault (login screen):** only **Import as a separate vault**, the
-  recovery that tries the passkey or backup password.
+- **Drive wizard with no identity in use:** **Connect and sync**, or
+  **Connect and apply** once a decision is picked. It runs the plan, one
+  identity at a time, then connects; a failing decision stops the plan
+  before connecting.
+- **Recovery screen:** **Apply** runs the plan, then unlocks what it
+  recovered. The list reads the provider staged for the recovery.
+- **Plan summary:** "What will happen" lists every picked decision; picking
+  runs nothing.
+- **Passkey check:** "Which passkey opens it?" runs `check_passkey_access`
+  in memory and changes nothing; an identity it opens offers adding it.
 
-Around the list:
+Backup passwords open single vaults, never identities, so this step has no
+backup-password form; Check access tries one.
 
-- **Request access:** writes a self-signed `join-requested` event, carrying
-  this app's public keys only, into the vault's subfolder on top of its
-  current heads and key epoch. A member's Devices page lists the open vault's
-  requests with **Approve** and **Deny**. Approval wraps the vault keys to the
-  requesting app; that app then lists the vault as granted.
-- **Connect & sync:** stays below the list and says what it does: it saves
-  the provider and syncs this identity's vaults into the Nook folder, each in
-  its own subfolder. The listed vaults stay as they are unless the user
-  chooses an action. It is the step's only primary button; every vault row's
-  actions are secondary, so a row never competes with it.
-- **Recovery picker:** a provider with several vaults shows the same access
-  for every transport and offers recovery only for a vault this device can
-  open.
+**Prohibited:** list a provider's vaults or offer an action on one vault.
 
-**Prohibited:** union another vault's events into the open vault, or offer an
-action that needs keys this device does not hold.
+**Required:** list identities, each with one decision.
 
-**Required:** merge decrypted records through the import pipeline, import a
-vault separately, or ask a member for access; only an empty vault may give
-way, after the user confirms.
+### Check access
 
-Future work, not implemented:
+The Check access page answers the same question outside any setup flow, and
+before an identity is unlocked: the header, the first-run screen, and the
+unlock screen link to it, and so does Manage → Sync providers.
 
-- **Request access via join request:** a vault this device cannot open could
-  ask its owner for access instead of failing.
-- **Copy items into another vault:** a separate explicit action, never sync
-  behavior.
+- **Sources:** this browser's identities and vaults, a Google Drive account
+  (signed in for this page only), a local folder, or, once unlocked, the
+  connected sync provider (iCloud, GitHub, Drive, or folder) with the
+  session's own credentials.
+- **Checks:** one passkey or one backup password at a time
+  (`check_passkey_access`, `check_backup_password_access`, and the
+  manager's `check_passkey_access_from` and
+  `check_backup_password_access_from` for a `NookProviderSource`). Each
+  adds a numbered column to a grid whose rows are the identities, each
+  listing the vaults it keeps. A passkey cell says whether it opens the
+  identity; a backup password cell can only say it opens some of its vaults.
+- **One live action:** a source that still needs a sign-in or a folder keeps
+  Check disabled until it is ready.
+
+Rust `ProviderVaultListingRequest` still decides, for each listed vault, how
+this device can open it (`ProviderVaultAccess`). The identity standing
+folds those accesses in: a vault that syncs makes its identity open here,
+and a vault another identity here holds makes it open from there.
 
 ### iCloud share target
 

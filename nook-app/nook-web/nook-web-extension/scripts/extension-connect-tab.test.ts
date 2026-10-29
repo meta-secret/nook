@@ -11,7 +11,7 @@ import {
 import { browserTab } from './companion-launcher-test-support'
 
 const SIMPLE = 'https://simple.nokey.sh/'
-const CONNECT_URL = `${SIMPLE}extension-connect?nonce=fresh`
+const CONNECT_URL = `${SIMPLE}extension-connect?connect_id=fresh`
 const WINDOW = 4
 const OTHER_WINDOW = 5
 

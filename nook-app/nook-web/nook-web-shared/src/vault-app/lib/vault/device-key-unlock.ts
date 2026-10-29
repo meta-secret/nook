@@ -10,7 +10,6 @@ export enum DeviceKeyUnlockPresentation {
 }
 
 export type VaultUnlockRequest = {
-  readonly skipExtensionDiscovery: boolean;
   readonly presentation: DeviceKeyUnlockPresentation;
 };
 

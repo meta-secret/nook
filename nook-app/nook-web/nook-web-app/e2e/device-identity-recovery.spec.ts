@@ -1,6 +1,10 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS, expectFirstVaultOpen } from './helpers'
+import {
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectFirstVaultOpen,
+  startFirstRun,
+} from './helpers'
 
 declare global {
   interface Window {
@@ -28,12 +32,11 @@ async function createProtectedVault(page: Page): Promise<void> {
       `Protected vault setup failed: ${await vaultError.innerText()}`,
     )
   }
-  await page.getByTestId('login-vault-name-input').fill('Recovery test vault')
-  await page.getByTestId('login-create-device-vault-btn').click()
+  await startFirstRun(page)
   const createChoice = page.getByTestId('device-protection-create-new-choice')
   if (await createChoice.isVisible()) await createChoice.click()
   await page.getByTestId('device-protection-setup-btn').click()
-  await expectFirstVaultOpen(page)
+  await expectFirstVaultOpen(page, 'Recovery test vault')
 }
 
 /**

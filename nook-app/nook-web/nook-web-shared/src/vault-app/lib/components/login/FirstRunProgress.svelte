@@ -1,8 +1,8 @@
 <!--
-Progress of the first-vault setup: name, then key. The name step is the
-first screen, so the key step opens with it already checked; once the key
-exists, setup is complete and the copy screen shows both checked. Keeping a
-copy is offered there, not counted as a step, since it can be skipped.
+Progress of first-run setup: the passkey, the sync provider, the identity on
+it, then its first vault. Naming a new identity and waiting for a join are
+both the identity step; once the first vault connects its provider, every
+step is done.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -15,20 +15,33 @@ copy is offered there, not counted as a step, since it can be skipped.
     current,
   }: {
     vault: VaultState;
-    /** The step on screen; `Off` is the naming screen itself. */
+    /** The stage on screen. */
     current: FirstRunStage;
   } = $props();
 
-  // Backup sits past the last step: every step is done by then.
-  const ORDER: readonly FirstRunStage[] = [
-    FirstRunStage.Off,
-    FirstRunStage.Protect,
-    FirstRunStage.Backup,
-  ];
   const steps = $derived([
-    vault.t(I18N_KEYS.FirstRunStepName),
     vault.t(I18N_KEYS.FirstRunStepProtect),
+    vault.t(I18N_KEYS.FirstRunStepSync),
+    vault.t(I18N_KEYS.FirstRunStepIdentity),
+    vault.t(I18N_KEYS.FirstRunStepVault),
   ]);
+
+  function stepOf(stage: FirstRunStage): number {
+    switch (stage) {
+      case FirstRunStage.Off:
+      case FirstRunStage.Protect:
+        return 0;
+      case FirstRunStage.Sync:
+        return 1;
+      case FirstRunStage.Name:
+      case FirstRunStage.Joining:
+        return 2;
+      case FirstRunStage.Vault:
+        return 3;
+      case FirstRunStage.Connect:
+        return 4;
+    }
+  }
 </script>
 
-<StepProgress {steps} current={ORDER.indexOf(current)} />
+<StepProgress {steps} current={stepOf(current)} />

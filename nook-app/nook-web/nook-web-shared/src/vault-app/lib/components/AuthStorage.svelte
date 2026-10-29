@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookManualProviderSyncState,
@@ -183,13 +184,7 @@
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
   {#if addingProvider && hostBack}
-    <p class="text-sm text-muted-foreground text-pretty">
-      {#if showSetup}
-        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-      {:else}
-        {vault.t(I18N_KEYS.AuthStorageSyncChooseDesc)}
-      {/if}
-    </p>
+    <!-- The host page's title says what is being added. -->
   {:else if addingProvider}
     <div
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
@@ -376,19 +371,19 @@
                         >
                           {formatSyncStatus(provider)}
                         </span>
-                        <span
-                          class="block text-[11px] {supportsVaultReplication
-                            ? 'text-muted-foreground'
-                            : 'text-amber-700 dark:text-amber-300'}"
-                          data-testid="provider-capability-{provider.id}"
-                        >
-                          {vault.t(providerCapabilityLabelKey(provider))}
-                          {#if !supportsVaultReplication}
+                        <!-- What a provider replicates is said only when this
+                             vault cannot use it. -->
+                        {#if !supportsVaultReplication}
+                          <span
+                            class="block text-[11px] text-amber-700 dark:text-amber-300"
+                            data-testid="provider-capability-{provider.id}"
+                          >
+                            {vault.t(providerCapabilityLabelKey(provider))}
                             · {vault.t(
                               I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
                             )}
-                          {/if}
-                        </span>
+                          </span>
+                        {/if}
                       </span>
                     </div>
                     {#if onSyncProvider}
@@ -444,7 +439,7 @@
                     {/if}
                   </div>
                   {#if sharedConfig !== false}
-                    <div class="nk-subpanel-recessed p-3 sm:p-4">
+                    <div class="mt-3 border-t border-border pt-3">
                       <AuthorizedAccountsPanel
                         {vault}
                         config={sharedConfig}
@@ -458,6 +453,17 @@
             <!-- Adding a provider starts from the identity panel; this list
                  manages the providers it has, with their accounts. -->
           {/if}
+          <!-- Which passkey or backup password opens what these providers
+               hold; the check reads only and changes nothing. -->
+          <button
+            type="button"
+            class="inline-flex min-h-9 items-center gap-2 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            data-testid="settings-access-check-link"
+            onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
+          >
+            <ShieldCheck class="size-3.5" aria-hidden="true" />
+            {vault.t(I18N_KEYS.AccessCheckEntryLink)}
+          </button>
         </fieldset>
       {/if}
 

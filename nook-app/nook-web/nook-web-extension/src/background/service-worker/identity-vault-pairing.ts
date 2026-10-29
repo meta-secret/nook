@@ -9,9 +9,9 @@ import {
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  ExtensionIdentityInviteWireKind,
-  type ExtensionIdentityInviteWire,
-} from '../../../../nook-web-shared/src/extension/identity-invite-wire'
+  ExtensionKeyringGrantKind,
+  type ExtensionKeyringGrant,
+} from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ProviderCredentialBuffer } from '../../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
@@ -92,10 +92,27 @@ export type IdentityVaultPairingRequest = {
   readonly sendSessionMessage: IdentitySessionSend
 }
 
+export enum IdentityVaultSourceKind {
+  /** The records the web app handed over when it added the extension. */
+  Records = 'records',
+  /** A sync provider of the keyring the session holds, by id. */
+  Mount = 'mount',
+}
+
+/** Where the session reads one keyring vault from. */
+export type IdentityVaultSource =
+  | {
+      readonly kind: IdentityVaultSourceKind.Records
+      readonly eventLogRecords: ExtensionEventLogRecord[]
+    }
+  | {
+      readonly kind: IdentityVaultSourceKind.Mount
+      readonly mountProviderId: string
+    }
+
 export type IdentityVaultPair = {
   readonly vaultStoreId: string
-  /** The identity's sync provider the session opens the vault through. */
-  readonly mountProviderId: string
+  readonly source: IdentityVaultSource
   /** A grant of this extension device in the identity: same device,
    * scopes and approval, for another vault. */
   readonly template: ExtensionPairingApprovedGrant
@@ -118,7 +135,7 @@ export class IdentityVaultPairing {
       type: ExtensionSessionMessageType.ConnectIdentityVault,
       payload: {
         vaultStoreId: vault.vaultStoreId,
-        mountProviderId: vault.mountProviderId,
+        source: vault.source,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
@@ -133,8 +150,8 @@ export class IdentityVaultPairing {
       }
       return failure
     }
-    const notOffered: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.NotOffered,
+    const member: ExtensionKeyringGrant = {
+      kind: ExtensionKeyringGrantKind.Member,
     }
     const payload: ExtensionPairingApprovedGrant = {
       ...vault.template,
@@ -142,7 +159,7 @@ export class IdentityVaultPairing {
       vaultName: reply.vaultName,
       identityLabel: vault.identityLabel,
       providers: [],
-      identityInvite: notOffered,
+      keyring: member,
     }
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,

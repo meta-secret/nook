@@ -13,7 +13,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 mod event_log;
 pub use event_log::*;
 mod passkey_details;
-mod provider_vault_merge;
+mod provider_vault_request;
 mod secret_history;
 mod secret_import;
 

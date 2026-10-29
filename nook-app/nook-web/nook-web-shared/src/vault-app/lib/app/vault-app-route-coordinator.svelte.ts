@@ -7,7 +7,6 @@ import {
 import { LegalRouteKind, LegalRouteProjection } from "$lib/app/route-state";
 import {
   ExtensionConnectRequestStateKind,
-  ExtensionIdentityRequestSource,
   extensionConnectionBrowser as connectionBrowser,
   type ExtensionConnectRequestState,
 } from "$lib/extension/connect";
@@ -21,7 +20,6 @@ import {
   WorkspaceRouteLookupKind,
 } from "$lib/app/workspace-route";
 import { InitialApplicationRoute } from "$lib/app/initial-application-route";
-import { ExtensionConsentCloseOutcome } from "$lib/components/extension-connect-consent-outcome";
 import { VaultWorkspaceActions } from "$lib/vault/ui";
 import type { VaultState } from "$lib/vault.svelte";
 
@@ -47,9 +45,6 @@ export class VaultAppRouteCoordinator {
   extensionConnectRequestState = $state<ExtensionConnectIntent>({
     kind: ExtensionConnectIntentKind.Absent,
   });
-  extensionIdentityRequestState = $state<ExtensionConnectIntent>({
-    kind: ExtensionConnectIntentKind.Absent,
-  });
   sentinelInvitationRequest = $state("");
   sentinelParticipantResponse = $state("");
   sentinelOnboardingPackage = $state("");
@@ -72,7 +67,6 @@ export class VaultAppRouteCoordinator {
     this.appLogsPage = initialRoute.appLogsPage;
     this.extensionConnectRoute = initialRoute.extensionConnectRoute;
     this.extensionConnectRequestState = initialRoute.extensionConnectIntent;
-    this.extensionIdentityRequestState = initialRoute.extensionConnectIntent;
     this.sentinelInvitationRequest = initialRoute.sentinelInvitationRequest;
     this.sentinelParticipantResponse = initialRoute.sentinelParticipantResponse;
     this.sentinelOnboardingPackage = initialRoute.sentinelOnboardingPackage;
@@ -146,39 +140,13 @@ export class VaultAppRouteCoordinator {
     this.extensionConnectRequestState = new ExtensionConnectionIntentProjection(
       routeConnectRequest,
     ).intent;
-    if (routeConnectRequest.kind === ExtensionConnectRequestStateKind.Requested)
-      this.extensionIdentityRequestState = {
-        kind: ExtensionConnectIntentKind.Requested,
-        request: routeConnectRequest.request,
-      };
   };
 
   navigateHome = (): void => {
     this.navigateTo(WorkspaceRoute.Vault);
   };
 
-  /** A paired extension's request for another vault no longer applies once
-   * this page unlocks `storeId`. */
-  forgetPairedRequestForOtherVault = (storeId: string): void => {
-    const state = this.extensionIdentityRequestState;
-    if (
-      state.kind === ExtensionConnectIntentKind.Requested &&
-      state.request.source === ExtensionIdentityRequestSource.PairedVault &&
-      storeId &&
-      state.request.vaultStoreId !== storeId
-    ) {
-      this.extensionIdentityRequestState = {
-        kind: ExtensionConnectIntentKind.Absent,
-      };
-    }
-  };
-
-  finishExtensionConnect = (outcome: ExtensionConsentCloseOutcome): void => {
-    if (outcome === ExtensionConsentCloseOutcome.Cancelled) {
-      this.extensionIdentityRequestState = {
-        kind: ExtensionConnectIntentKind.Absent,
-      };
-    }
+  finishExtensionConnect = (): void => {
     // Approving or declining a connection returns to the identities, where
     // the connected identity and its vaults are; no vault opens by itself.
     this.navigateTo(WorkspaceRoute.Identities);

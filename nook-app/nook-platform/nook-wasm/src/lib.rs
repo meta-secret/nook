@@ -52,19 +52,13 @@ pub use identity_record::{
 };
 pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
-    NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
-    NookCompanionExtensionEndpoint, NookCompanionPairingApprovalAuthority,
-    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
-    NookCompanionPairingCandidateOutcomeState, NookCompanionPairingExtensionEndpoint,
-    NookDiscoveredCompanionExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
-    NookExtensionDeviceApproval, NookExtensionEventLogImportStatus,
-    NookExtensionIdentityHandoffContext, NookExtensionIdentityHandoffProviderOutcome,
-    NookExtensionIdentityHandoffProviderOutcomeState, NookExternalEventLogRecords,
-    NookPendingCompanionIdentityHandoff, NookPendingExtensionIdentityHandoff,
+    NookCompanionPairingApprovalAuthority, NookCompanionPairingCandidateFailure,
+    NookCompanionPairingCandidateOutcome, NookCompanionPairingCandidateOutcomeState,
+    NookCompanionPairingExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
+    NookExtensionDeviceApproval, NookExtensionEventLogImportStatus, NookExternalEventLogRecords,
     NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
     NookSentinelStoredDeliveriesRequest, NookStoredCompanionPairingActivationCandidate,
-    NookVaultManager, NookVaultNameState, admit_companion_handoff_response,
-    admit_companion_identity_status,
+    NookVaultManager, NookVaultNameState,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
@@ -91,8 +85,7 @@ pub use types::{
     NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
-    NookVaultStartupUnlockRequest, NookVaultSyncResult, NookWebsiteLoginSaveDecision,
-    NookWebsiteLoginSavePlan,
+    NookVaultSyncResult, NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -185,14 +178,6 @@ pub enum NookError {
     AppProtectionUnavailable,
     #[error("App protection belongs to another app")]
     AppProtectionBindingMismatch,
-    #[error(transparent)]
-    AppProtectionDescriptor(#[from] nook_core::AppProtectionDescriptorError),
-    #[error("Peer protection serialization failed")]
-    PeerProtectionEncode(#[source] serde_json::Error),
-    #[error("Peer protection deserialization failed")]
-    PeerProtectionDecode(#[source] serde_json::Error),
-    #[error("App passkey association is unavailable")]
-    AppPasskeyAssociationUnavailable,
     #[error("Passkey metadata no longer matches protected app")]
     PasskeyMetadataGuardRejected,
 
@@ -326,19 +311,18 @@ pub(crate) use conversion::{
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::event_db::EventDbRemoveEventFixture;
-#[cfg(test)]
-pub(crate) use storage::event_db::EventDbSaveEventBytesToStore;
 pub(crate) use storage::event_db::{
-    EventDbAppendOutboxIndex, EventDbLoadLocalEventStoreFromStore, EventDbQueueOutboxEntry,
-    EventDbRemoveOutboxEntry, EventDbSaveEventBytes, EventDbSaveHeads, EventDbSaveKeyEpoch,
+    EventDbAppendOutboxIndex, EventDbQueueOutboxEntry, EventDbRemoveOutboxEntry,
+    EventDbSaveEventBytes, EventDbSaveHeads, EventDbSaveKeyEpoch,
 };
 
+#[cfg(test)]
+pub(crate) use storage::identity_record::IdentityDbSaveNewProtectedLocalIdentity;
 pub(crate) use storage::identity_record::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbEnsureLocalIdentityInDirectory,
     IdentityDbGenerateVaultDekForIdentity, IdentityDbLocalKeyringEntryForAppIdFromStore,
-    IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
-    IdentityDbSetIdentityMemberSigningPublicKey, IdentityDbValidateVaultIdentityEnrollment,
-    IdentityDbWriteIdentityDirectory,
+    IdentityDbSaveProtectedLocalIdentity, IdentityDbSetIdentityMemberSigningPublicKey,
+    IdentityDbValidateVaultIdentityEnrollment, IdentityDbWriteIdentityDirectory,
 };
 
 pub(crate) use storage::identity_record::{

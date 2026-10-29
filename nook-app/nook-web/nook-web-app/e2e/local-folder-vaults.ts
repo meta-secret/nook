@@ -38,6 +38,38 @@ export function filedVaults(records: LocalFolderRecord[]): FiledVault[] {
   return [...vaults.values()]
 }
 
+const FILED_IDENTITY_LOG_PATH = /^meta-secret-nook\/(idn_[^/]+)\/log\/events\//
+
+/** The identities filing a vault in the folder without their control log
+ * there, followed by the folder's layout so a miss shows where things went. */
+function unloggedFilingIdentities(records: LocalFolderRecord[]): string[] {
+  const logged = new Set(
+    records.flatMap((record) => {
+      const match = FILED_IDENTITY_LOG_PATH.exec(record.path)
+      return match && match[1] ? [match[1]] : []
+    }),
+  )
+  const missing = filedVaults(records)
+    .filter((vault) => !logged.has(vault.identityId))
+    .map((vault) => `no log: ${vault.identityId}`)
+  if (missing.length === 0) return []
+  const layout = new Set(
+    records.map((record) => record.path.split('/').slice(0, 4).join('/')),
+  )
+  return [...missing, ...layout]
+}
+
+/** The identity log reaches the folder after the vault's events. Wiping the
+ * browser before it lands would leave the identity unrecoverable there. */
+async function waitForFilingIdentityLogs(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => unloggedFilingIdentities(await localFolderSnapshot(page)),
+      { timeout: 30_000 },
+    )
+    .toEqual([])
+}
+
 /** The store ids of the vaults a folder snapshot holds. */
 export function vaultFolders(records: LocalFolderRecord[]): string[] {
   return [...new Set(filedVaults(records).map((vault) => vault.storeId))]
@@ -75,6 +107,7 @@ export async function backUpTwoVaultsToOneFolder(
     'folder-shared-first-value',
   )
   const firstVault = await waitForLocalFolderEventRecords(page)
+  await waitForFilingIdentityLogs(page)
 
   await clearBrowserVault(page)
   await page.reload()
@@ -92,6 +125,7 @@ export async function backUpTwoVaultsToOneFolder(
       timeout: 30_000,
     })
     .toBe(2)
+  await waitForFilingIdentityLogs(page)
   const sharedFolder = await localFolderSnapshot(page)
   for (const record of firstVault) expect(sharedFolder).toContainEqual(record)
   const [firstStoreId] = vaultFolders(firstVault)

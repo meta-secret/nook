@@ -52,8 +52,8 @@ mod wire;
 pub use auth::device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyIdentityUnlock, PasskeyProtectionInput, PasskeyRecordMetadata, PasskeyRecoveryInput,
-    PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
+    PasskeyIdentityUnlock, PasskeyMemberSigner, PasskeyProtectionInput, PasskeyRecordMetadata,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
     PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
     WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
     WrappedDeviceIdentity,
@@ -76,13 +76,13 @@ pub use auth::identity::{
     IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{
-    AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyVaultImport,
-    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, DirectoryVaultEnrollment,
-    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory,
-    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
-    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentitySelection,
-    LocalIdentityKeyRetirement, LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAdoption,
-    ReplicatedIdentityMembership, ReplicatedVaultGrant, StagedIdentityRebase,
+    AppKeyIdentityMembership, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
+    DirectoryOwnedVaultOpening, FreshIdentityNaming, IdentityConnectionKey,
+    IdentityConnectionKeyRequest, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentitySelection, LocalIdentityKeyRetirement,
+    LocalIdentityLog, RecoveryRetirement, ReplicatedIdentityAddition, ReplicatedIdentityAdoption,
+    ReplicatedIdentityMembership, ReplicatedVaultGrant,
 };
 
 pub use auth::local_identity_keyring::{

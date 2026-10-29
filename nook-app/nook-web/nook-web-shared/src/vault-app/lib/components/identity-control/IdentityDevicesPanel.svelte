@@ -1,7 +1,8 @@
 <!--
 Identity Devices page: the devices that open this identity. It reports;
 adding a device is in Manage on the card. Upgrade notices sit above when the
-identity needs one, and devices asking to open the open vault above the list.
+identity needs one, then devices asking to join the identity and devices
+asking to open the open vault above the list.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -13,6 +14,7 @@ identity needs one, and devices asking to open the open vault above the list.
   import { StatusTag, StatusTone } from "$lib/components/ui/status-tag";
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
+  import IdentityJoinRequests from "./IdentityJoinRequests.svelte";
   import IdentityStandingNotices from "./IdentityStandingNotices.svelte";
   import VaultAccessRequests from "./VaultAccessRequests.svelte";
   import { IdentityStandingPresentation } from "./identity-standing";
@@ -29,6 +31,9 @@ identity needs one, and devices asking to open the open vault above the list.
   const snapshot = $derived(control.snapshot);
   const standing = $derived(new IdentityStandingPresentation(snapshot));
   const members = $derived(snapshot === false ? [] : snapshot.members);
+  const joinRequests = $derived(
+    snapshot === false ? [] : snapshot.joinRequests,
+  );
   const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -64,6 +69,10 @@ identity needs one, and devices asking to open the open vault above the list.
           : I18N_KEYS.AddDeviceSingleDevice,
       )}
     </p>
+  {/if}
+
+  {#if joinRequests.length > 0}
+    <IdentityJoinRequests {vault} requests={joinRequests} {isBusy} />
   {/if}
 
   {#if vault.pendingJoins.length > 0}

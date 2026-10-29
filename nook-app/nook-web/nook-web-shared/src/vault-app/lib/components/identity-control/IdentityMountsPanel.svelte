@@ -19,7 +19,7 @@ with Devices, where its results (join requests) show.
   const unconnected = $derived(mounts.filter((mount) => !mount.connectedHere))
 
   onMount(() => {
-    void control.refresh().then((refreshed) => {
+    void control.showPage().then((refreshed) => {
       if (refreshed.isErr())
         vault.errorMsg = vault.t(refreshed.error.translationKey)
     })

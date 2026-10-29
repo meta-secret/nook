@@ -11,8 +11,8 @@ a manifest is not evidence that every feature uses that crate.
 ## Primary mechanisms
 
 - **age X25519 recipient encryption**
-  - **Implemented purpose:** Per-app vault-key envelopes, enrollment material, and extension identity handoff
-  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`, `nook-app/nook-platform/nook-core/src/auth/extension_identity_handoff.rs`
+  - **Implemented purpose:** Per-app vault-key envelopes and enrollment material
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`
 - **age scrypt encryption**
   - **Implemented purpose:** Vault secret records keyed by random vault material; password-protected wrapping identities
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`, `nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs`
@@ -20,7 +20,7 @@ a manifest is not evidence that every feature uses that crate.
   - **Implemented purpose:** Passkey-wrapped and PIN-wrapped local app encryption identities
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs`
 - **HKDF-SHA256**
-  - **Implemented purpose:** Passkey PRF to app identity or app-identity wrapping key; Sentinel derivation contexts
+  - **Implemented purpose:** Passkey PRF to app identity, member signer, or app-identity wrapping key; Sentinel derivation contexts
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection.rs`, `nook-app/nook-platform/nook-auth2/src/auth/multi_device/sentinel.rs`
 - **PBKDF2-SHA256**
   - **Implemented purpose:** PIN fallback wrapping key
@@ -58,6 +58,12 @@ a manifest is not evidence that every feature uses that crate.
   - Record version: `3`.
   - Input: 32-byte WebAuthn PRF output and bounded user handle.
   - KDF: HKDF-SHA256 with a versioned domain-separation context.
+- **Passkey-derived member signer**
+  - Input: the same PRF output and user handle as the app identity.
+  - KDF: HKDF-SHA256 with its own versioned domain-separation context,
+    distinct from the app identity's.
+  - Output: a 32-byte Ed25519 signing seed, kept in memory and sealed to the
+    app key in the local keyring.
 - **Passkey-wrapped local app identity**
   - Record version: `4`.
   - KDF: HKDF-SHA256 with a random 32-byte salt.
@@ -85,11 +91,13 @@ parameters are not the production defaults.
 - `members_key`
   - Symmetric vault key for protected membership catalog entries.
 - App age X25519 identity
-  - Opens app-addressed vault-key and handoff envelopes.
+  - Opens app-addressed vault-key envelopes.
   - Private material is protected by passkey or PIN mode.
 - App Ed25519 signing identity
   - Signs canonical event bodies.
   - Must remain distinct from the age encryption identity.
+  - A passkey-derived member derives it from its passkey; other members
+    keep a random installation signer.
 - Provider credential key material
   - Seals replication credentials locally.
   - Does not become a vault key or membership proof.

@@ -18,7 +18,6 @@
 //! in this file because every submodule depends on it.
 
 use crate::VaultSnapshotLookup;
-use crate::manager::device_protection::ExtensionIdentityPublication;
 
 use crate::AuthProviderDatabase;
 use crate::DriveStorageClient;
@@ -36,10 +35,10 @@ use nook_core::{
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
+mod access_check;
 mod authenticator_enrollment;
 mod authenticator_fill;
 mod companion_pairing;
-mod companion_protocol;
 mod connect;
 mod device_protection;
 mod diagnostics;
@@ -47,7 +46,6 @@ mod event_log;
 mod genesis;
 mod identity;
 mod identity_control;
-mod identity_handoff;
 mod local_identity;
 mod login_fill;
 mod login_save;
@@ -72,17 +70,6 @@ pub use companion_pairing::{
     NookCompanionPairingExtensionEndpoint, NookExtensionDeviceApproval,
     NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
     NookStoredCompanionPairingActivationCandidate,
-};
-pub use companion_protocol::{
-    NookCompanionExtensionEndpoint, NookDiscoveredCompanionExtensionEndpoint,
-    NookPendingCompanionIdentityHandoff, admit_companion_handoff_response,
-    admit_companion_identity_status,
-};
-pub(crate) use device_protection::PendingExtensionIdentityEnrollment;
-pub use device_protection::{
-    NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
-    NookExtensionIdentityHandoffContext, NookExtensionIdentityHandoffProviderOutcome,
-    NookExtensionIdentityHandoffProviderOutcomeState, NookPendingExtensionIdentityHandoff,
 };
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
@@ -261,19 +248,6 @@ impl NookVaultManager {
         self.sync_outbox.reset();
     }
 
-    /// Clear the failed vault session while retaining the staged signer that a
-    /// verified extension handoff needs when the caller retries connect.
-    pub(in crate::manager) fn reset_vault_session_for_handoff_retry(&mut self) {
-        self.reset_vault_session();
-        if let ExtensionIdentityPublication::Staged(pending) =
-            &self.device.pending_extension_handoff
-        {
-            self.event_log
-                .signing_seed
-                .clone_from(&pending.handoff_signing_seed);
-        }
-    }
-
     /// Zeroize the active session and clear every Nook-owned browser database.
     /// Remote sync replicas and platform authenticator credentials are not touched.
     #[wasm_bindgen]
@@ -283,7 +257,6 @@ impl NookVaultManager {
         self.storage = StorageSession::default();
         self.device.id.clear();
         self.device.identity_private_key.zeroize();
-        self.device.extension_handoff_private_key.zeroize();
 
         let mut errors = Vec::new();
         if let Err(error) = LoggerState::clear_logs_db().await {

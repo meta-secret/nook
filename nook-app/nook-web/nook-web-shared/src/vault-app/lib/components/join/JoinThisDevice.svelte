@@ -3,7 +3,8 @@ The one place a new browser joins an existing identity: what happens in a
 sentence and a small diagram, where to get the invite, and the form. An
 invite link opened on this device arrives with its code filled in; only
 the passphrase is left. Once submitted, the device signs itself in and the
-identities hub lists the vaults it can open.
+identities hub lists the vaults it can open. An invite kept in iCloud asks
+for the iCloud sign-in only when the join reaches it.
 -->
 <script lang="ts">
   import { CheckCircle2, RefreshCw } from "@lucide/svelte";
@@ -14,6 +15,7 @@ identities hub lists the vaults it can open.
   import type { EnrollmentCodeUnlock } from "$lib/components/login/login-create-vault-chooser-contract";
   import type { VaultState } from "$lib/vault.svelte";
   import { IdentityJoinKind } from "$lib/vault/identity-control.svelte";
+  import { JoinICloudSignIn } from "$lib/vault/state/ui.svelte";
   import JoinFlowDiagram from "./JoinFlowDiagram.svelte";
   import { JoinSide } from "./join-flow";
 
@@ -126,7 +128,9 @@ identities hub lists the vaults it can open.
           data-testid="enrollment-password-input"
         />
       </div>
-      <ICloudEnrollmentAuth {vault} />
+      {#if vault.joinICloudSignIn === JoinICloudSignIn.Needed}
+        <ICloudEnrollmentAuth {vault} />
+      {/if}
       <Button
         type="submit"
         class="h-10"

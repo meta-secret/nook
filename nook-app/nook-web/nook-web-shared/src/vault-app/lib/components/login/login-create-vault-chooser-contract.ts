@@ -30,7 +30,6 @@ export type LoginCreateVaultChooserProps = {
   appKind: VaultApplication;
   isVerifying: boolean;
   isInitializing: boolean;
-  usesExtensionDeviceIdentity?: boolean;
   onCreateDeviceVault: (label: string) => void | Promise<void>;
   onConnectStorage: () => void;
   /** Redeems an identity enrollment code so this app can join the identity. */

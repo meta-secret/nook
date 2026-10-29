@@ -36,7 +36,7 @@ export interface ExtensionConnectTabOrigin {
 
 export type ExtensionConnectTabRequest = {
   readonly windowId: number
-  /** The fresh connect URL, with its new handoff nonce. */
+  /** The fresh connect URL for this connect. */
   readonly url: string
 }
 

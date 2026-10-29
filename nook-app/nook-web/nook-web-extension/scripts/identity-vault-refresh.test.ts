@@ -6,7 +6,7 @@ import initNookWasm, {
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { ExtensionEventLogRecord } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionIdentityInviteWireKind } from '../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
   IdentityVaultRefresh,
@@ -161,8 +161,14 @@ describe('pairing the vaults an identity gained, on unlock', () => {
     ])
 
     expect(result).toEqual({ ok: true, paired: 2, awaitingGrant: 1 })
-    const [refresh, firstConnect, secondConnect, ...rest] = fixture.sent
+    const [refresh, firstConnect, secondConnect, resync, ...rest] = fixture.sent
     expect(rest).toHaveLength(0)
+    // The vault the extension already holds is read again through the
+    // keyring's provider, so it syncs without the web app open.
+    expect(resync?.payload).toMatchObject({
+      vaultStoreId: 'store_aaaaaaaaaaa',
+      source: { kind: 'mount', mountProviderId: 'github-family' },
+    })
     expect(refresh?.type).toBe(
       ExtensionSessionMessageType.RefreshIdentityVaults,
     )
@@ -172,13 +178,13 @@ describe('pairing the vaults an identity gained, on unlock', () => {
     })
     expect(firstConnect?.payload).toMatchObject({
       vaultStoreId: 'store_lllllllllll',
-      mountProviderId: 'github-family',
+      source: { kind: 'mount', mountProviderId: 'github-family' },
     })
     expect(secondConnect?.payload).toMatchObject({
       vaultStoreId: 'store_nnnnnnnnnnn',
     })
     const [later] = fixture.imported
-    expect(fixture.imported).toHaveLength(2)
+    expect(fixture.imported).toHaveLength(3)
     // No credential travels: the session keeps the identity's provider.
     expect(later?.providers).toEqual([])
     expect(later?.syncProviderCount).toBe(1)
@@ -192,7 +198,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
         ExtensionConnectScope.VaultAccess,
         ExtensionConnectScope.SyncProviderCredentials,
       ],
-      identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+      keyring: { kind: ExtensionKeyringGrantKind.Member },
     })
   })
 

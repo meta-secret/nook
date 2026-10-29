@@ -18,6 +18,7 @@ export enum WorkspaceRoute {
   Passwords = "passwords",
   Import = "import",
   Help = "help",
+  AccessCheck = "access-check",
 }
 
 export enum WorkspaceRouteLookupKind {
@@ -42,6 +43,7 @@ const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Passwords]: "/identity/passwords",
   [WorkspaceRoute.Import]: "/vault/import",
   [WorkspaceRoute.Help]: "/help",
+  [WorkspaceRoute.AccessCheck]: "/access-check",
 };
 
 /**

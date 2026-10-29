@@ -2,8 +2,8 @@
 //! the identity an enrollment code invites it into.
 
 use nook_core::{
-    IdentityControlLog, IdentityControlState, IdentityEvent, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
+    FreshIdentityNaming, IdentityControlLog, IdentityControlState, IdentityEvent,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
     IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use super::UNENCODABLE_TYPED_OUTPUT;
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
-use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
+use crate::storage::identity_record::{IdentityDirectoryWrite, KeyringDbRebindLocalIdentity};
 use crate::{NookDatabase, NookError};
 
 /// Result of making sure the current identity has a control log.
@@ -116,6 +116,84 @@ impl NookVaultManager {
             replicated_identity_id: &invited,
         })
         .await?;
+        Ok(())
+    }
+
+    /// Name this browser's identity while it is still fresh. Setup asks for
+    /// the name only when it creates a new identity, after the passkey made
+    /// its key; the control log, created later, seals that name.
+    #[wasm_bindgen]
+    pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
+        let label = Self::local_identity_label(&label).map_err(JsError::new)?;
+        let app_key = self.unlocked_app_key()?;
+        let local_log = Self::local_identity_log(&app_key).await?;
+        NookDatabase::update_identity_directory(move |directory| {
+            let directory = directory
+                .name_fresh_identity(&FreshIdentityNaming {
+                    app_key: &app_key,
+                    label: &label,
+                    local_log,
+                })
+                .map_err(NookDatabase::map_domain_error)?;
+            Ok(IdentityDirectoryWrite::from(directory))
+        })
+        .await?;
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    async fn identity_label() -> anyhow::Result<String> {
+        Ok(NookDatabase::load_identity_directory()
+            .await?
+            .selected()?
+            .label
+            .clone())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_fresh_identity_takes_its_name_until_its_log_exists() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        js(manager
+            .finish_pin_device_protection("naming pin".to_owned())
+            .await)?;
+        // A blank name is refused and changes nothing.
+        let before = identity_label().await?;
+        assert!(manager.name_fresh_identity("   ".to_owned()).await.is_err());
+        assert_eq!(identity_label().await?, before);
+
+        // The key's own identity exists here, so it carries the name now.
+        js(manager.name_fresh_identity(" Solo ".to_owned()).await)?;
+        assert_eq!(identity_label().await?, "Solo");
+
+        // Once its control log exists, the identity keeps its name.
+        js(manager.ensure_identity_control_log().await)?;
+        assert!(
+            manager
+                .name_fresh_identity("Other".to_owned())
+                .await
+                .is_err()
+        );
+        assert_eq!(identity_label().await?, "Solo");
+        js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
 }

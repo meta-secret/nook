@@ -17,37 +17,24 @@ import {
   launchExtensionContext,
   openSimpleVaultConnection,
   readExtensionStorage,
-  removeExtensionStorageKeys,
-  countIdentityAdoptions,
+  createWebsiteIdentityForConnect,
   registerWebsitePasskeyThroughExtension,
-  sendExternalMessage,
   setupPasskeyExtensionPopup,
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
   stopExtensionServiceWorker,
-  leaveFirstRunReady,
   waitForExtensionPairingReady,
   waitForNewPage,
   reuseNookTabForConnect,
-  reconnectVaultFromPairingLauncher,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
-import {
-  expectVaultOpened,
-  PairedVaultCompanionUnlockKind,
-  startVaultPanelUnlock,
-  unlockExtensionThroughCompanion,
-  unlockPairedVaultThroughCompanion,
-  type PairedVaultCompanionUnlock,
-} from './helpers/paired-vault-companion-unlock'
+import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
-  flushNookLogPersistQueue,
 } from '../../nook-web-app/e2e/helpers'
 import { RealSidePanel } from './helpers/real-side-panel'
 
@@ -69,7 +56,6 @@ enum ExtensionConnectionParameter {
   DeviceId = 'device_id',
   DevicePublicKey = 'device_public_key',
   DeviceSigningPublicKey = 'device_signing_public_key',
-  HandoffNonce = 'nonce',
 }
 enum ExtensionConnectionParametersParseKind {
   Valid = 'valid',
@@ -81,7 +67,6 @@ type ExtensionConnectionParametersParseResult =
       deviceId: string
       devicePublicKey: string
       deviceSigningPublicKey: string
-      handoffNonce: string
     }
   | {
       kind: ExtensionConnectionParametersParseKind.Invalid
@@ -124,21 +109,11 @@ function parseExtensionConnectionParameters(
       missingParameter: ExtensionConnectionParameter.DeviceSigningPublicKey,
     }
   }
-  const handoffNonce = connectionUrl.searchParams.get(
-    ExtensionConnectionParameter.HandoffNonce,
-  )
-  if (typeof handoffNonce !== 'string' || handoffNonce.trim().length === 0) {
-    return {
-      kind: ExtensionConnectionParametersParseKind.Invalid,
-      missingParameter: ExtensionConnectionParameter.HandoffNonce,
-    }
-  }
   return {
     kind: ExtensionConnectionParametersParseKind.Valid,
     deviceId,
     devicePublicKey,
     deviceSigningPublicKey,
-    handoffNonce,
   }
 }
 
@@ -204,42 +179,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       )
     }
     const extensionDeviceId = connectionParameters.deviceId
-    const extensionDevicePublicKey = connectionParameters.devicePublicKey
-    const extensionDeviceSigningPublicKey =
-      connectionParameters.deviceSigningPublicKey
-    const initialHandoffNonce = connectionParameters.handoffNonce
 
+    // The website runs its own first run: its own passkey makes its own app
+    // key, and the extension is then approved as another app.
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
-      .getByTestId('login-vault-name-input')
-      .fill(extensionApprovalVaultName)
-    await expect(
-      simplePage.getByText(
-        `Create “${extensionApprovalVaultName}” locally using the extension's protected device key.`,
-      ),
-    ).toBeVisible()
-    await expect(simplePage.getByText(/passkey is required/i)).toHaveCount(0)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
-    await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(
-      simplePage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
-    const replayedHandoffResponse =
-      await test.step('reject replayed extension identity handoff', () =>
-        sendExternalMessage(simplePage, extensionId, {
-          type: 'nook:extension-identity-handoff-request',
-          payload: {
-            recipientPublicKey: 'age1replayattempt',
-            nonce: initialHandoffNonce,
-            expectedDeviceId: extensionDeviceId,
-            expectedDevicePublicKey: extensionDevicePublicKey,
-            expectedDeviceSigningPublicKey: extensionDeviceSigningPublicKey,
-          },
-        }))
-    expect(replayedHandoffResponse).toEqual({
-      ok: false,
-      reason: 'extension-identity-handoff-not-issued',
-    })
+    await createWebsiteIdentityForConnect(
+      simplePage,
+      extensionApprovalVaultName,
+    )
     if (!isHostedSmoke) {
       expect(
         await simplePage.evaluate(
@@ -250,7 +197,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
               }
             ).__nookVault?.deviceId,
         ),
-      ).toBe(extensionDeviceId)
+      ).not.toBe(extensionDeviceId)
     }
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
@@ -280,30 +227,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     )
 
-    const [launcherResponse, pairingLauncher] = await Promise.all([
-      sendExternalMessage(simplePage, extensionId, {
-        type: 'nook:open-companion-launcher',
-        payload: { intent: OpenCompanionLauncherIntent.Pair },
-      }),
-      waitForNewPage(context, 'extension pairing launcher'),
-    ])
-    expect(launcherResponse).toEqual({ ok: true })
-    await expect(pairingLauncher).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
-    )
-    await expect(
-      pairingLauncher.getByTestId('extension-toolbar-menu'),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    await expect(pairingLauncher.getByTestId('companion-vaults')).toBeVisible()
-    await expect(
-      pairingLauncher.getByTestId('connect-simple-vault-btn'),
-    ).toBeVisible()
-
-    const reconnectRequest: Parameters<
-      typeof reconnectVaultFromPairingLauncher
-    >[0] = { context, simplePage, pairingLauncher }
-    await reconnectVaultFromPairingLauncher(reconnectRequest)
-    // Back to the vault: the paired, unlocked extension unlocks it again.
+    // Back to the vault: the website unlocks it with its own passkey.
     await simplePage.goto(simpleVaultBaseUrl)
 
     let websitePasskeyState: WebsitePasskeyState = {
@@ -327,17 +251,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await website.page.close()
     }
 
-    // Reopened from its address, the paired extension unlocks the vault.
-    await leaveFirstRunReady(simplePage)
+    // Reopened from its address, the vault asks for the website's own
+    // passkey; the extension is never asked for its key.
+    await authorizeDeviceProtection(simplePage)
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
-    // Whether the reused tab's connect-route load adopts before the spec
-    // navigates it away is timing-dependent, so later counts are relative.
-    await flushNookLogPersistQueue(simplePage)
-    const adoptionsBeforeReopen = await countIdentityAdoptions({
-      page: simplePage,
-      label: 'read lifecycle logs before reopening the paired vault',
-    })
     await simplePage.close()
 
     const connectedPopupPage = await context.newPage()
@@ -361,6 +279,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         url.origin === expected.origin && url.pathname === expected.pathname
       )
     })
+    // The unlocked extension opens the page; the page unlocks its own key.
+    await authorizeDeviceProtection(reopenedVaultPage)
     await expect(
       reopenedVaultPage.getByTestId('authenticated-shell'),
     ).toBeVisible({
@@ -386,20 +306,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
               }
             ).__nookVault?.deviceId,
         ),
-      ).toBe(extensionDeviceId)
+      ).not.toBe(extensionDeviceId)
     }
-    // Reopening a paired vault completes the paired-vault handoff through the
-    // strict Rust session payload. The stored grant above deliberately carries
-    // routing and display metadata that must not enter that payload. The
-    // reopened page adopts exactly once.
-    await expect
-      .poll(() =>
-        countIdentityAdoptions({
-          page: reopenedVaultPage,
-          label: 'read lifecycle logs after reopening the paired vault',
-        }),
-      )
-      .toBe(adoptionsBeforeReopen + 1)
 
     await test.step('present empty authenticator picker', async () => {
       await unlockExtensionThroughCompanion({ context, extensionId })
@@ -595,16 +503,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       reopenedVaultPage.getByTestId('identity-vault-row').first(),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-    // The page's Lock locked the extension with it: it holds this identity's
-    // key, so the vault reopens only once the companion is unlocked again.
-    const firstUnlock: PairedVaultCompanionUnlock = {
-      context,
-      vaultPage: reopenedVaultPage,
-      companionUnlock: PairedVaultCompanionUnlockKind.Required,
-      extensionId,
-    }
-    await test.step('unlock paired vault through companion', () =>
-      unlockPairedVaultThroughCompanion(firstUnlock))
+    // The page's Lock locks the page alone: it holds its own key, and its
+    // own passkey opens the vault again.
+    await test.step('unlock the vault with the website passkey', () =>
+      authorizeDeviceProtection(reopenedVaultPage))
+    await expect(
+      reopenedVaultPage.getByTestId('authenticated-shell'),
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(
@@ -615,17 +520,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
               }
             ).__nookVault?.deviceId,
         ),
-      ).toBe(extensionDeviceId)
+      ).not.toBe(extensionDeviceId)
     }
-    // The companion unlock adopts exactly once more.
-    await expect
-      .poll(() =>
-        countIdentityAdoptions({
-          page: reopenedVaultPage,
-          label: 'read lifecycle logs after unlocking the paired vault',
-        }),
-      )
-      .toBe(adoptionsBeforeReopen + 2)
     if (
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
@@ -708,17 +604,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('identity-vault-row').first(),
       ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-      const restartedUnlock: PairedVaultCompanionUnlock = {
-        context: restartedContext,
-        vaultPage: lockedVaultPage,
-        companionUnlock: PairedVaultCompanionUnlockKind.Required,
-        extensionId: restartedExtensionId,
-      }
-      await test.step('unlock paired vault after extension restart', () =>
-        unlockPairedVaultThroughCompanion(restartedUnlock))
+      // After the browser restarts the vault still opens with the website's
+      // own passkey, whatever state the extension is in.
+      await test.step('unlock the vault with the website passkey after restart', () =>
+        authorizeDeviceProtection(lockedVaultPage))
       await expect(
-        lockedVaultPage.getByTestId('passkey-auth-overlay'),
-      ).toHaveCount(0)
+        lockedVaultPage.getByTestId('authenticated-shell'),
+      ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     } finally {
       const restartedLogOptions: Parameters<typeof attachNookLogsForTest>[2] = {
         attachmentName: ExtensionAppLogAttachmentName.Restarted,
@@ -744,7 +636,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     console.log('[extension e2e] mock credential server closed')
   }
 })
-test('accepts the pairing grant after the extension session was locked', async ({
+test('a locked extension leaves the approval visibly untaken', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -760,42 +652,33 @@ test('accepts the pairing grant after the extension session was locked', async (
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
-      .getByTestId('login-vault-name-input')
-      .fill('Locked session handoff vault')
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
-    await expect(
-      simplePage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
+    await createWebsiteIdentityForConnect(
+      simplePage,
+      'Locked session handoff vault',
+    )
 
-    // Close the offscreen session before Approve. The grant handoff must still
-    // import the event log without requiring an unlocked save_auth_providers_snapshot path.
-    // Only the document closes: an explicit extension Lock would also lock
-    // this page's extension-held identity, and with it the consent.
+    // Close the offscreen session before Approve. Joining the keyring needs
+    // the extension's unlocked key, so the approval stays untaken and the
+    // website says so rather than reporting the extension connected.
     const sessionWorker = await getServiceWorker(context)
     await sessionWorker.evaluate(() => chrome.offscreen.closeDocument())
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
-    await waitForExtensionPairingReady(
-      simplePage,
-      async () => {
-        const storage = await readExtensionStorage(context)
-        return storage[setupStorageKey]
-      },
-      'Locked session handoff vault',
-    )
     await expect(
-      simplePage.getByTestId('extension-connect-consent'),
-    ).toHaveCount(0)
-    await expect(
-      simplePage.locator('[data-extension-pairing-rejection-reason]'),
-    ).toHaveCount(0)
+      simplePage.getByTestId('extension-connect-approved'),
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    const storage = await readExtensionStorage(context)
+    expect(
+      Object.keys(storage).filter((key) =>
+        key.startsWith('nook:extension-pairing-grant:'),
+      ),
+    ).toHaveLength(0)
   } finally {
     await context.close()
   }
 })
 
-test('re-approves an existing local vault after reload without event-log-access-not-granted', async ({
+test("approves the extension into an existing local vault's keyring without event-log-access-not-granted", async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -865,92 +748,11 @@ test('re-approves an existing local vault after reload without event-log-access-
     )
     await expect(connectPage.getByTestId('identities-hub')).toBeVisible()
 
-    const pairedStorage = await readExtensionStorage(context)
-    const grantKeys = Object.keys(pairedStorage).filter((key) =>
-      key.startsWith('nook:extension-pairing-grant:'),
-    )
-    expect(grantKeys.length).toBeGreaterThan(0)
-    await removeExtensionStorageKeys(context, grantKeys)
-
-    // Reload, restore the IndexedDB signing seed, then unlock and re-approve.
-    await simplePage.goto(simpleVaultBaseUrl)
-    const reloadedShell = simplePage.getByTestId('authenticated-shell')
-    const reloadedUnlock = simplePage.getByTestId('identity-vault-row').first()
-    await expect(reloadedShell.or(reloadedUnlock)).toBeVisible({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    if (await reloadedUnlock.isVisible()) {
-      await startVaultPanelUnlock(simplePage)
-      const reloadOverlay = simplePage.getByTestId('passkey-auth-overlay')
-      if (await reloadOverlay.isVisible()) {
-        await simplePage.getByTestId('device-protection-unlock-btn').click()
-      }
-      await expectVaultOpened(simplePage)
-    }
-
-    const repairPopup = await context.newPage()
-    await repairPopup.goto(
-      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
-    )
-    // Removing the active grant must close the session before re-approval.
-    await expect(repairPopup.getByTestId('extension-device-setup')).toBeVisible(
-      {
-        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-      },
-    )
     await expect(
-      repairPopup.getByTestId('connect-simple-vault-btn'),
-    ).toHaveCount(0)
-    await repairPopup.getByTestId('device-protection-unlock-btn').click()
-    await expect(
-      repairPopup.getByTestId('connect-simple-vault-btn'),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    const reconnectPage = await reuseNookTabForConnect({
-      context,
-      nookPage: simplePage,
-      connect: () =>
-        repairPopup.getByTestId('connect-simple-vault-btn').click(),
-    })
-
-    const reconnectConsent = reconnectPage.getByTestId(
-      'extension-connect-consent',
-    )
-    const reconnectUnlock = reconnectPage
-      .getByTestId('identity-vault-row')
-      .first()
-    await expect(reconnectConsent.or(reconnectUnlock)).toBeVisible({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    if (await reconnectUnlock.isVisible()) {
-      // The vault's panel unlocks it; the consent then asks to connect.
-      await authorizeDeviceProtection(reconnectPage)
-      await expect(reconnectConsent).toBeVisible({
-        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-      })
-    }
-
-    await reconnectPage.getByTestId('approve-extension-device-btn').click()
-    await waitForExtensionPairingReady(
-      reconnectPage,
-      async () => {
-        const storage = await readExtensionStorage(context)
-        return storage[setupStorageKey]
-      },
-      vaultName,
-    )
-    await expect(
-      reconnectPage.getByTestId('extension-connect-consent'),
+      connectPage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)
     await expect(
-      reconnectPage.locator('[data-extension-pairing-rejection-reason]'),
-    ).toHaveCount(0)
-    await expect(
-      reconnectPage.getByText('event-log-access-not-granted'),
-    ).toHaveCount(0)
-    await expect(
-      reconnectPage.getByText(
-        'The extension did not accept the Simple Vault pairing grant.',
-      ),
+      connectPage.getByText('event-log-access-not-granted'),
     ).toHaveCount(0)
   } finally {
     await context.close()

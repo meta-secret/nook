@@ -15,8 +15,8 @@
 use crate::errors::VaultResult;
 use crate::{
     AppId, IdentityDirectory, IdentitySelection, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
-    LocalEventStore, LocalEventWrite, LocalIdentityKeyring, StoreId, VaultMetaGraphProjection,
-    VaultMetaState, VaultProjection,
+    ListingAppKey, ListingLocalIdentity, LocalEventStore, LocalEventWrite, LocalIdentityKeyring,
+    LocalIdentityLog, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -63,6 +63,32 @@ impl BrowserVaultKeys<'_> {
             .iter()
             .find(|entry| entry.identity_id() == selected)
             .map(|entry| entry.app_id().clone())
+    }
+
+    /// The identity in use and its app key, which a listing relates every
+    /// identity's log to: whether it holds the identity, or asked to join it.
+    /// `local_log` is the identity in use's own control log here; with it,
+    /// or with vaults, the key can no longer take another identity's id.
+    #[must_use]
+    pub fn listing_key(&self, local_log: LocalIdentityLog) -> Option<ListingAppKey> {
+        let IdentitySelection::Selected(selected) = self.directory.selection() else {
+            return None;
+        };
+        let fresh = self
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| &identity.identity_id == selected)
+            .is_some_and(|identity| identity.is_fresh_local_identity(local_log));
+        self.identity_app_id().map(|app_id| ListingAppKey {
+            app_id,
+            identity_id: selected.clone(),
+            local: if fresh {
+                ListingLocalIdentity::Fresh
+            } else {
+                ListingLocalIdentity::InUse
+            },
+        })
     }
 
     /// Vaults another identity on this browser holds, where that identity's
@@ -269,8 +295,6 @@ impl ProviderVaultAccess {
 pub enum ProviderVaultAction {
     /// Swap the empty open vault for this one, after a confirmation.
     UseInstead,
-    /// Copy its records into the open vault; identical logins are matched.
-    MergeIntoOpen,
     /// Add it beside the open vault.
     ImportSeparately,
     /// Ask a device that can open it to grant this device access.
@@ -284,7 +308,8 @@ pub(crate) enum OpenVaultContents {
     Closed,
     /// The open vault holds nothing and nobody else shares it.
     Empty,
-    /// The open vault holds records or another app shares it.
+    /// The open vault holds records or another app shares it, so it is
+    /// never replaced.
     Occupied,
 }
 
@@ -298,13 +323,9 @@ impl OpenVaultContents {
             ProviderVaultAccess::Locked => vec![ProviderVaultAction::RequestAccess],
             ProviderVaultAccess::Unchecked => vec![ProviderVaultAction::ImportSeparately],
             ProviderVaultAccess::Granted | ProviderVaultAccess::BackupPassword => match self {
-                Self::Closed => vec![ProviderVaultAction::ImportSeparately],
+                Self::Closed | Self::Occupied => vec![ProviderVaultAction::ImportSeparately],
                 Self::Empty => vec![
                     ProviderVaultAction::UseInstead,
-                    ProviderVaultAction::ImportSeparately,
-                ],
-                Self::Occupied => vec![
-                    ProviderVaultAction::MergeIntoOpen,
                     ProviderVaultAction::ImportSeparately,
                 ],
             },
@@ -369,7 +390,7 @@ mod tests {
 
     #[test]
     fn actions_follow_what_the_open_vault_holds() {
-        use ProviderVaultAction::{ImportSeparately, MergeIntoOpen, RequestAccess, UseInstead};
+        use ProviderVaultAction::{ImportSeparately, RequestAccess, UseInstead};
         let password = ProviderVaultAccess::BackupPassword;
         assert_eq!(
             OpenVaultContents::Empty.actions(&password),
@@ -377,7 +398,7 @@ mod tests {
         );
         assert_eq!(
             OpenVaultContents::Occupied.actions(&password),
-            [MergeIntoOpen, ImportSeparately]
+            [ImportSeparately]
         );
         assert_eq!(
             OpenVaultContents::Closed.actions(&password),
@@ -714,8 +735,8 @@ mod tests {
             serde_json::json!({ "state": "locked" })
         );
         assert_eq!(
-            serde_json::to_value(ProviderVaultAction::MergeIntoOpen)?,
-            serde_json::json!("mergeIntoOpen")
+            serde_json::to_value(ProviderVaultAction::ImportSeparately)?,
+            serde_json::json!("importSeparately")
         );
         Ok(())
     }

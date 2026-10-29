@@ -17,8 +17,8 @@ use tsify::Tsify;
 
 use crate::errors::VaultResult;
 use crate::{
-    EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId, ProviderInstant,
-    ProviderVaultTime,
+    AppId, EventStorageBytes, IdentityControlLog, IdentityControlState, IdentityId,
+    IdentityJoinProgress, ProviderInstant, ProviderVaultTime,
 };
 
 /// How many devices or vaults a control log lists.
@@ -54,7 +54,72 @@ pub enum ProviderIdentityLog {
         /// Vaults the identity keeps; removed ones are not counted.
         #[tsify(type = "number")]
         vaults: ProviderLogCount,
+        /// This browser's own app key is one of its devices and this browser
+        /// holds the identity, so it and every vault it keeps open here.
+        this_browser: bool,
+        /// Where this browser's request to join the identity stands.
+        join: ProviderIdentityJoin,
     },
+}
+
+/// Where this browser's request to join an identity stands in its log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderIdentityJoin {
+    /// This browser did not ask, or already holds the identity.
+    NotAsked,
+    /// This browser asked; no device of the identity answered yet.
+    Requested,
+    /// A device of the identity denied the request.
+    Denied,
+    /// A device approved it: the key is a member, and this browser has not
+    /// added the identity yet.
+    Approved,
+    /// The key is a member, but here it already holds the identity in use,
+    /// which has its own log or vaults: one key holds one identity, so this
+    /// one cannot be added here.
+    KeyInUse,
+}
+
+/// Whether the identity in use can still take another identity's id, as
+/// finishing an approved join does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListingLocalIdentity {
+    /// Nothing ties it to an identity yet: a join a device approved finishes
+    /// here.
+    Fresh,
+    /// It holds its own log or vaults: its key cannot take another identity.
+    InUse,
+}
+
+/// The app key of the identity in use on this browser, and that identity.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListingAppKey {
+    pub app_id: AppId,
+    /// The local identity the key belongs to on this browser.
+    pub identity_id: IdentityId,
+    /// Whether that identity can still take another identity's id.
+    pub local: ListingLocalIdentity,
+}
+
+impl ListingAppKey {
+    /// Whether this browser holds the identity, and where its join stands.
+    fn standing_in(&self, state: &IdentityControlState) -> (bool, ProviderIdentityJoin) {
+        match IdentityJoinProgress::of(state, &self.app_id) {
+            IdentityJoinProgress::Approved if self.identity_id == state.identity_id => {
+                (true, ProviderIdentityJoin::NotAsked)
+            }
+            IdentityJoinProgress::Approved => match self.local {
+                ListingLocalIdentity::Fresh => (false, ProviderIdentityJoin::Approved),
+                ListingLocalIdentity::InUse => (false, ProviderIdentityJoin::KeyInUse),
+            },
+            IdentityJoinProgress::Pending => (false, ProviderIdentityJoin::Requested),
+            IdentityJoinProgress::Denied => (false, ProviderIdentityJoin::Denied),
+            IdentityJoinProgress::Revoked | IdentityJoinProgress::NotRequested => {
+                (false, ProviderIdentityJoin::NotAsked)
+            }
+        }
+    }
 }
 
 /// One identity's control log events, as a provider holds them.
@@ -74,7 +139,7 @@ pub struct ListedIdentityLog {
 impl ProviderIdentityLogEvents {
     /// Verify the log and read its facts. Every event must parse and carry a
     /// valid signature, as when the identity syncs its own log.
-    pub fn read(self) -> VaultResult<ListedIdentityLog> {
+    pub fn read(self, this_browser: Option<&ListingAppKey>) -> VaultResult<ListedIdentityLog> {
         let Self {
             identity_id,
             events,
@@ -97,6 +162,10 @@ impl ProviderIdentityLogEvents {
                 )?);
             }
         }
+        let (held_here, join) = this_browser
+            .map_or((false, ProviderIdentityJoin::NotAsked), |key| {
+                key.standing_in(&state)
+            });
         Ok(ListedIdentityLog {
             identity_id,
             log: ProviderIdentityLog::Read {
@@ -108,6 +177,8 @@ impl ProviderIdentityLogEvents {
                         ProviderVaultTime::Reported { at }
                     }),
                 vaults: ProviderLogCount::of(state.vaults.len()),
+                this_browser: held_here,
+                join,
             },
         })
     }
@@ -159,7 +230,7 @@ mod tests {
     }
 
     /// A founder registers one vault on Oct 12; a second device joins on Oct 27.
-    fn two_device_log() -> anyhow::Result<IdentityControlLog> {
+    fn two_device_log() -> anyhow::Result<(IdentityControlLog, AppId)> {
         let founder = Device::new()?;
         let joiner = Device::new()?;
         let founding_time = IsoTimestamp::from_trusted("2026-10-12T00:00:00Z".to_owned());
@@ -212,10 +283,13 @@ mod tests {
             signing_key: founder.signer.signing_key(),
             created_at: &joining_time,
         };
-        Ok(log
-            .clone()
-            .insert(log.build_append(vec![approve], &at_joining)?)?
-            .log)
+        let founder_app = founder.app.app_id().clone();
+        Ok((
+            log.clone()
+                .insert(log.build_append(vec![approve], &at_joining)?)?
+                .log,
+            founder_app,
+        ))
     }
 
     fn provider_events(log: &IdentityControlLog) -> anyhow::Result<ProviderIdentityLogEvents> {
@@ -231,8 +305,8 @@ mod tests {
 
     #[test]
     fn a_signed_log_tells_its_devices_their_newest_join_and_its_vaults() -> anyhow::Result<()> {
-        let log = two_device_log()?;
-        let listed = provider_events(&log)?.read()?;
+        let (log, founder) = two_device_log()?;
+        let listed = provider_events(&log)?.read(None)?;
 
         assert_eq!(
             listed.log,
@@ -242,9 +316,184 @@ mod tests {
                     at: ProviderInstant::parse_rfc3339("2026-10-27T17:28:00Z")?,
                 },
                 vaults: ProviderLogCount::from(1),
+                this_browser: false,
+                join: ProviderIdentityJoin::NotAsked,
             }
         );
         assert_eq!(&listed.identity_id, log.identity_id());
+        // A browser whose app key is one of the devices opens it.
+        let key = ListingAppKey {
+            app_id: founder,
+            identity_id: log.identity_id().clone(),
+            local: ListingLocalIdentity::InUse,
+        };
+        let here = provider_events(&log)?.read(Some(&key))?;
+        assert!(matches!(
+            here.log,
+            ProviderIdentityLog::Read {
+                this_browser: true,
+                join: ProviderIdentityJoin::NotAsked,
+                ..
+            }
+        ));
+        Ok(())
+    }
+
+    /// Where the log tells one asking key's join stands.
+    fn join_of(
+        log: &IdentityControlLog,
+        key: &ListingAppKey,
+    ) -> anyhow::Result<(bool, ProviderIdentityJoin)> {
+        match provider_events(log)?.read(Some(key))?.log {
+            ProviderIdentityLog::Read {
+                this_browser, join, ..
+            } => Ok((this_browser, join)),
+            ProviderIdentityLog::Absent => anyhow::bail!("the log must be read"),
+        }
+    }
+
+    /// A log one founder signs, and the device asking to join it.
+    struct AskedLog {
+        founder: Device,
+        asking: Device,
+        log: IdentityControlLog,
+        at: IsoTimestamp,
+    }
+
+    impl AskedLog {
+        fn founded() -> anyhow::Result<Self> {
+            let founder = Device::new()?;
+            let at = IsoTimestamp::from_trusted("2026-10-28T08:00:00Z".to_owned());
+            let identity_id = IdentityId::generate()?;
+            let log = IdentityControlLog::new(identity_id.clone())
+                .insert(IdentityEvent::genesis(IdentityGenesisRequest {
+                    identity_id: &identity_id,
+                    founder: founder.keys(),
+                    signing: IdentityEventSigning {
+                        signing_key: founder.signer.signing_key(),
+                        created_at: &at,
+                    },
+                })?)?
+                .log;
+            Ok(Self {
+                founder,
+                asking: Device::new()?,
+                log,
+                at,
+            })
+        }
+
+        fn append(
+            &mut self,
+            signer: Signer,
+            operation: IdentityControlOperation,
+        ) -> anyhow::Result<()> {
+            let device = match signer {
+                Signer::Founder => &self.founder,
+                Signer::Asking => &self.asking,
+            };
+            let event = self.log.build_append(
+                vec![operation],
+                &IdentityEventSigning {
+                    signing_key: device.signer.signing_key(),
+                    created_at: &self.at,
+                },
+            )?;
+            self.log = self.log.clone().insert(event)?.log;
+            Ok(())
+        }
+
+        fn state(&self) -> anyhow::Result<IdentityControlState> {
+            Ok(IdentityControlState::project(&self.log)?)
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum Signer {
+        Founder,
+        Asking,
+    }
+
+    #[test]
+    fn the_log_tells_this_browser_where_its_join_request_stands() -> anyhow::Result<()> {
+        let mut asked = AskedLog::founded()?;
+        // The asking key sits under a fresh local identity of its own.
+        let key = ListingAppKey {
+            app_id: asked.asking.app.app_id().clone(),
+            identity_id: IdentityId::generate()?,
+            local: ListingLocalIdentity::Fresh,
+        };
+        assert_eq!(
+            join_of(&asked.log, &key)?,
+            (false, ProviderIdentityJoin::NotAsked)
+        );
+
+        let request = IdentityControlOperation::MemberJoinRequested {
+            member: asked.asking.keys(),
+        };
+        asked.append(Signer::Asking, request)?;
+        assert_eq!(
+            join_of(&asked.log, &key)?,
+            (false, ProviderIdentityJoin::Requested)
+        );
+
+        // A denial is told apart from a key that never asked.
+        let mut denied = AskedLog {
+            founder: Device {
+                app: asked.founder.app.clone(),
+                signer: asked.founder.signer.clone(),
+            },
+            asking: Device {
+                app: asked.asking.app.clone(),
+                signer: asked.asking.signer.clone(),
+            },
+            log: asked.log.clone(),
+            at: asked.at.clone(),
+        };
+        let denial = denied
+            .state()?
+            .denial_operation(asked.asking.app.app_id())?;
+        denied.append(Signer::Founder, denial)?;
+        assert_eq!(
+            join_of(&denied.log, &key)?,
+            (false, ProviderIdentityJoin::Denied)
+        );
+
+        // Approved, the key is a device, but this browser has not added the
+        // identity under its id yet.
+        let approval = asked
+            .state()?
+            .approval_operation(&IdentityApprovalRequest {
+                app_id: asked.asking.app.app_id(),
+                vaults: &[],
+            })?;
+        asked.append(Signer::Founder, approval)?;
+        assert_eq!(
+            join_of(&asked.log, &key)?,
+            (false, ProviderIdentityJoin::Approved)
+        );
+
+        // The same member key whose identity here already has a log or
+        // vaults cannot take this identity too: nothing offers to finish.
+        let in_use = ListingAppKey {
+            local: ListingLocalIdentity::InUse,
+            ..key.clone()
+        };
+        assert_eq!(
+            join_of(&asked.log, &in_use)?,
+            (false, ProviderIdentityJoin::KeyInUse)
+        );
+
+        // Once the key's local identity takes the identity's id, it is held.
+        let added = ListingAppKey {
+            app_id: key.app_id.clone(),
+            identity_id: asked.log.identity_id().clone(),
+            local: ListingLocalIdentity::InUse,
+        };
+        assert_eq!(
+            join_of(&asked.log, &added)?,
+            (true, ProviderIdentityJoin::NotAsked)
+        );
         Ok(())
     }
 
@@ -255,7 +504,7 @@ mod tests {
             identity_id: identity_id.clone(),
             events: Vec::new(),
         }
-        .read()?;
+        .read(None)?;
         assert_eq!(empty.log, ProviderIdentityLog::Absent);
         assert_eq!(
             ListedIdentityLog::of(&identity_id, &[empty]),
@@ -263,11 +512,11 @@ mod tests {
         );
 
         // A log event that does not parse is reported, not skipped.
-        let mut damaged = provider_events(&two_device_log()?)?;
+        let mut damaged = provider_events(&two_device_log()?.0)?;
         damaged.events.push(EventStorageBytes::from(
             b"not: an identity event\n".to_vec(),
         ));
-        assert!(damaged.read().is_err());
+        assert!(damaged.read(None).is_err());
         Ok(())
     }
 }

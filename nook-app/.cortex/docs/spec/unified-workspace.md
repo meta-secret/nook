@@ -9,6 +9,11 @@ identity management never shows a vault's items. There is no separate
 Devices & access page, no header vault switcher, and no
 Vault/Admin/Onboard/Settings bottom navigation.
 
+The UI names an identity a **keyring** (Russian: «связка ключей»): it holds
+the keys that open its vaults. Code, routes, and these specifications keep
+"identity". This browser's own key stays the **device key**, and password
+manager imports keep "identities" for their person and address items.
+
 ## Pages and routes
 
 - **Identities hub:** `/identities`.
@@ -31,8 +36,11 @@ Vault/Admin/Onboard/Settings bottom navigation.
 
 ## Identities hub
 
-- Each identity is a key-tag card: label, monogram, key kind and count,
-  status, a short identity fingerprint, its vault rows, and two actions.
+- Each identity is a key-tag card: its vault rows, two actions, and a
+  compact head. The label and status share one line. The monogram's badge
+  shows the key kind, with the key count in its tooltip. The identity's three
+  words follow, marked # and explained in their tooltip: every device of the
+  identity shows the same words.
 - Status is projected from the identity directory: **Unlocked** (the current
   identity with its device key unlocked, with or without an open vault),
   **Locked** (current identity), **Not active here** (stored on this
@@ -54,7 +62,18 @@ Vault/Admin/Onboard/Settings bottom navigation.
   identity directory cannot be read, are listed on their own so they always
   open.
 - **New vault** on the current identity's card creates a vault for it.
-  **New identity** starts the new-identity flow (below).
+  **New identity** starts the new-identity flow (below). Beside it, a
+  quieter **Check access** opens the check of which identity a passkey or
+  backup password opens; the header carries no such button.
+- A browser extension asking to connect is answered beside the current
+  identity's card, never on a page of its own. While locked, that panel
+  unlocks the identity; once unlocked, the approval itself (the extension
+  device and the access it asks for, with Approve and Cancel) takes its
+  place, and either answer leaves the hub as it is. Both steps draw what the
+  extension joins (Extension → keyring → all its vaults) instead of a
+  sentence, list the access as one tile per permission, and fold the
+  extension's public keys under its fingerprint. The extension always joins
+  the keyring as an app with its own key, never one vault alone.
 - A locked identity never opens the old Keys page; the URL is kept and
   unlocking resumes it.
 
@@ -63,18 +82,51 @@ Vault/Admin/Onboard/Settings bottom navigation.
 A browser without an identity shows one flow in place of the hub, in the
 Simple and unified apps. Sentinel is never offered.
 
-- **Name**: "Name your first vault", one field (empty takes the suggested
-  name) and Create vault. Below it, a distinct card, **Already use Nook on
-  another device? Add this device**, opens the join screen. A quiet link,
-  **Lost access to your devices? Recover from a sync provider**, opens
-  recovery.
-- **Key** ("This is you"): the identity is introduced where its passkey is
-  made; a preview of its card lists the named vault, with passkey or PIN
-  setup beside it. Back returns to the name.
-- **Ready**: "*vault* is ready". Setup counts only Name and Key, both done
-  here; keeping a copy is offered, not required. Add a sync provider opens
-  the picker inside this screen (Back returns to the offer); Not now opens
-  the vault. A provider that connects finishes setup.
+The identity is settled before any vault exists. The step bar counts
+Passkey, Sync provider, Identity, and Vault. Each step is one centred column
+with a short title. A diagram appears once per new idea, in place of a
+paragraph: Your passkey → Your identity → Your vaults on the Passkey step,
+This device → Sync provider ← Your other devices on the Sync step. A line of
+text stays only for a requirement, a consequence, or a promise.
+
+- **Start**: "Create your identity" and one Create identity button, with no
+  subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an
+  icon, a short title, and an arrow: **Join with an invite link** opens
+  the join screen, **Recover from a sync provider** opens recovery,
+  and **Check a passkey or backup password** opens Check access. One fact
+  line closes the screen.
+- **Recovery**: the provider's identities are listed as identity cards,
+  each with one decision (recover it with its passkey, or ask to join) and
+  one Apply button, as the
+  [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
+  record describes. A link below checks which passkey or backup password
+  opens what, before anything is recovered.
+- **Passkey** ("One passkey opens it all"): the diagram says what it is for,
+  and one line makes the promise: no password, no Nook server. A new
+  passkey, or one made for Nook before, makes this browser's key. Back
+  returns to Start.
+- **Sync provider**: before sign-in, one line and a small diagram (This
+  device → Sync provider ← Your other devices) say what it is for. Google
+  Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
+  browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
+  - **Continue** when the key is a member: the identity is added here and
+    its provider connects and syncs; setup ends on its vault.
+  - **Request to join** when it is not: the Join step follows.
+  - **Check again** for a request asked earlier.
+  - **Create a new identity** in that Drive, or **Keep it on this browser
+    only**, leads to Name.
+- **Name**: "Name your identity", one field (empty takes the suggested
+  name). Only members see the name. On the Drive path, its first vault is
+  created under the same name and the signed-in Drive connects next without
+  another sign-in.
+- **Vault** (kept on this browser): "Create your first vault?" with the
+  vault's name, or **Not now**. Not now ends setup with the identity and no
+  vault: the identities page shows its card with New vault, never the Start
+  screen again. Managing an identity opens one of its vaults, so a card with
+  none offers New vault and Lock only.
+- **Join**: "Request sent" with this browser's device id, the value the
+  approving device shows. Check again reads the answer; there is no polling.
+  Back returns to the identities.
 
 ### Join (add this device)
 
@@ -84,7 +136,9 @@ this device, the reader's own device filled in), where to get the invite
 (Devices → Add an app on the other device), the invite link and one-time
 passphrase, and Join. It needs a cloud sync provider. An invite link opened
 on this device lands here with the link filled in. The waiting-for-approval
-state shows on the hub after submitting.
+state shows on the hub after submitting. Signing in to the invite's provider
+is part of joining: an invite kept in iCloud shows the Apple sign-in only
+once Join reaches it, never as an option up front.
 
 ### Recovery
 
@@ -97,8 +151,15 @@ identity, joining from it is the path instead.
 
 Shaped like the first run and shown above the workspace and the locked
 screen, since adopting the identity ends the current session midway:
-**Name** the identity, **Key** (its own passkey, with a preview of its card),
-then "*identity* is ready" with its first vault's name, or Later.
+**Name** the identity, **Key** (its own passkey), then "*identity* is ready"
+with its first vault's name, or Later. Key is one centred column like the
+Passkey step: a short title, one line that each identity has its own
+passkey, the diagram Your passkey → *identity* → Your vaults, and Create
+new passkey.
+
+Wherever a passkey is created, its form is one button: the device
+protection mode and the passkey's name wait under **Passkey options**, since
+the defaults suit nearly everyone.
 
 ## Vault page
 
@@ -137,7 +198,10 @@ then "*identity* is ready" with its first vault's name, or Later.
 - **Vaults** creates, renames, and switches the identity's vaults.
 - **Sync** mounts providers on the identity. The provider list shows each
   provider once; mounts recorded on the identity but not connected here are
-  a warning.
+  a warning. Adding a provider shows no description: the page title names
+  the task, and the sign-in step draws This device → the provider ← Your
+  other devices above its sign-in button, with one line that the sign-in
+  stays in this browser. Connect & sync does not draw it again.
 - **Devices** lists the identity's apps (rename, revoke), approves or denies
   join requests, syncs the identity log, and creates invites (Add an app,
   with the same diagram as the join screen, this device filled in).
@@ -148,6 +212,20 @@ then "*identity* is ready" with its first vault's name, or Later.
   this browser's passkey.
 - Devices and Sync act on the identity. They need the identity's app key
   unlocked, not an open vault.
+- An identity with no vault is managed the same way. Unlocked, its card's
+  Identity row opens its overview; Sync, Devices, Add a device, Keys, and
+  Settings open in place of the hub with no vault open, and Back returns to
+  the overview. Vaults offers New vault on the card. A provider added there
+  is saved and receives the identity's log; the provider's identity list
+  treats the identity as the one in use, as it does with a vault open.
+  Looking at these pages never creates the identity's log: connecting a
+  provider or inviting a device does. Once a provider is added, setup ends
+  on the hub with one line that the identity is set up and synced; a vault
+  the identity holds that this browser does not opens its panel there.
+- A vault of the unlocked identity that this browser does not hold opens
+  from its panel: **Open** brings it from the identity's sync provider with
+  the key the identity granted this browser. The hub shows no separate
+  "joined" banner.
 - Every vault belongs to exactly one identity. Cards list a vault under the
   identity with a verified access record for it (the current identity first
   when several claim it), and local vaults no identity has opened yet under

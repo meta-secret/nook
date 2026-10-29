@@ -51,10 +51,6 @@ const sentinelViteConfig: UserConfig = {
         "./src/ExtensionRequestPanelDisabled.svelte",
         import.meta.url,
       ).pathname,
-      "$lib/vault/paired-extension-identity-join": new URL(
-        "./src/paired-extension-identity-join-disabled.ts",
-        import.meta.url,
-      ).pathname,
       "$lib/extension/connect-progress": new URL(
         "./src/extension-connect-progress-disabled.ts",
         import.meta.url,

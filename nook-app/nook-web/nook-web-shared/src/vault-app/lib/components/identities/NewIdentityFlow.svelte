@@ -6,7 +6,7 @@ adopting the new identity ends the current identity's session midway.
 -->
 <script lang="ts">
   import { err, ok } from "neverthrow";
-  import { KeyRound, RefreshCw } from "@lucide/svelte";
+  import { RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
   import { Button } from "$lib/components/ui/button";
@@ -16,24 +16,26 @@ adopting the new identity ends the current identity's session midway.
   import { IdentitySessionTransition } from "$lib/components/devices-access/identity-session-transition";
   import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
   import StepProgress from "$lib/components/login/StepProgress.svelte";
-  import IdentityCard from "./IdentityCard.svelte";
+  import FirstRunDiagram from "$lib/components/login/FirstRunDiagram.svelte";
   import {
-    IdentityCardStatus,
-    IdentityKeyKind,
-    type IdentityCardView,
-  } from "./identity-card-model";
+    firstRunKeyDiagram,
+    type FirstRunKeyDiagramRequest,
+  } from "$lib/components/login/first-run-diagram";
   import type { VaultState } from "$lib/vault.svelte";
   import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
+  import { untrack } from "svelte";
+  import { IdentityJoinWaitKind } from "$lib/vault/identity-join-wait";
+  import { IdentityJoinActions } from "$lib/vault/identity-plan-actions";
 
   let { vault }: { vault: VaultState } = $props();
 
-  /** Hue of the preview monogram; the real card derives its own. */
-  const PREVIEW_HUE = 165;
-
   let nameInput = $state("");
   let vaultInput = $state("");
-  /** Rust holds a prepared identity until its passkey commits it. */
-  let creationPending = false;
+  /** Rust holds a prepared identity until its passkey commits it. A join to
+   * another identity that waits for this identity's key arrives prepared:
+   * Rust staged it, and the key asks to join once it exists. */
+  const joinWait = untrack(() => vault.identityJoin);
+  let creationPending = joinWait.kind === IdentityJoinWaitKind.NewKey;
   let protectionInFlight = false;
   let cancelRequested = false;
 
@@ -54,20 +56,13 @@ adopting the new identity ends the current identity's session midway.
         ? 1
         : 2,
   );
-  const preview = $derived.by((): IdentityCardView => {
-    const view: IdentityCardView = {
-      identityId: "new-identity-preview",
-      label: identityName,
-      monogram: identityName.charAt(0).toUpperCase(),
-      hue: PREVIEW_HUE,
-      fingerprint: [],
-      keyCount: 1,
-      keyKind: IdentityKeyKind.Passkey,
-      status: IdentityCardStatus.Locked,
-      current: true,
-      vaults: [],
+  /** The passkey made here opens the identity being named. */
+  const keyDiagram = $derived.by(() => {
+    const request: FirstRunKeyDiagramRequest = {
+      vault,
+      identity: identityName,
     };
-    return view;
+    return firstRunKeyDiagram(request);
   });
 
   function withIdentity(key: string): string {
@@ -136,6 +131,12 @@ adopting the new identity ends the current identity's session midway.
 
   async function backToName(): Promise<void> {
     await cancelPrepared();
+    // A join has no name to go back to: leaving its key leaves the join.
+    if (vault.identityJoin.kind === IdentityJoinWaitKind.NewKey) {
+      new IdentityJoinActions(vault).cancel();
+      close();
+      return;
+    }
     nameInput = vault.newIdentityName;
     vault.newIdentityName = "";
     vault.newIdentity = NewIdentityStage.Name;
@@ -157,14 +158,27 @@ adopting the new identity ends the current identity's session midway.
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
+    const wait = vault.identityJoin;
     const loaded = await vault.loadProviders(providerLoad);
     if (loaded.isErr()) {
+      vault.identityJoin = { kind: IdentityJoinWaitKind.Idle };
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return;
     }
     vault.applyActiveProviderCredentials();
     vault.identityTransitionPending = false;
-    vault.newIdentity = NewIdentityStage.Ready;
+    switch (wait.kind) {
+      case IdentityJoinWaitKind.Idle:
+      case IdentityJoinWaitKind.Device:
+        vault.newIdentity = NewIdentityStage.Ready;
+        return;
+      case IdentityJoinWaitKind.NewKey: {
+        // The new key exists: it asks to join, and the flow ends there.
+        const asked = await new IdentityJoinActions(vault).resume(wait);
+        close();
+        if (asked.isErr()) vault.errorMsg = asked.error.message(vault);
+      }
+    }
   }
 
   async function createVault(event: SubmitEvent): Promise<void> {
@@ -219,7 +233,7 @@ adopting the new identity ends the current identity's session midway.
   </section>
 {:else if vault.newIdentity === NewIdentityStage.Key}
   <section
-    class="mx-auto grid w-full max-w-4xl gap-6 py-6 sm:py-10"
+    class="mx-auto grid w-full max-w-md gap-6 py-6 sm:py-10"
     data-testid="new-identity-key"
   >
     <div class="grid gap-4">
@@ -231,46 +245,27 @@ adopting the new identity ends the current identity's session midway.
       />
       <StepProgress {steps} current={stepIndex} />
     </div>
-    <div class="space-y-2">
+    <div class="space-y-2 text-center">
       <h1
         class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
       >
         {withIdentity(I18N_KEYS.NewIdentityKeyTitle)}
       </h1>
-      <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
-        {withIdentity(I18N_KEYS.NewIdentityKeyBody)}
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.NewIdentityKeyBody)}
       </p>
     </div>
-    <div
-      class="grid items-start gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
-    >
-      <div class="min-w-0" inert data-testid="new-identity-preview">
-        <IdentityCard
-          {vault}
-          card={preview}
-          onOpenVault={() => {}}
-        />
-      </div>
-      <div class="grid min-w-0 gap-3">
-        <p class="flex items-center gap-2 text-sm font-medium text-foreground">
-          <KeyRound
-            class="size-4 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          {vault.t(I18N_KEYS.FirstRunProtectHint)}
-        </p>
-        <DeviceProtectionGate
-          {vault}
-          frame={DeviceProtectionGateFrame.Embedded}
-          creationOnly={true}
-          initializeSession={false}
-          recoveryAppId=""
-          onBeforeProtectionAction={protectionStarted}
-          onProtectionActionSettled={protectionSettled}
-          onProtectionReady={() => void adopt()}
-        />
-      </div>
-    </div>
+    <FirstRunDiagram diagram={keyDiagram} />
+    <DeviceProtectionGate
+      {vault}
+      frame={DeviceProtectionGateFrame.Embedded}
+      creationOnly={true}
+      initializeSession={false}
+      recoveryAppId=""
+      onBeforeProtectionAction={protectionStarted}
+      onProtectionActionSettled={protectionSettled}
+      onProtectionReady={() => void adopt()}
+    />
   </section>
 {:else if vault.newIdentity === NewIdentityStage.Ready}
   <section

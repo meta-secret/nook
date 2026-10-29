@@ -561,17 +561,6 @@ impl IdentityRecord {
         }
     }
 
-    pub(crate) fn add_prevalidated_member(mut self, member: IdentityMember) -> Self {
-        let is_new = self
-            .members
-            .iter()
-            .all(|existing| existing.app_id != member.app_id);
-        debug_assert!(is_new, "identity member must be validated before mutation");
-        self.members.push(member);
-        self.control_epoch = self.control_epoch.next();
-        self
-    }
-
     pub fn remove_member(mut self, app_id: &AppId) -> Result<Self, IdentityRecordRejection> {
         let result: MultiDeviceResult<()> = (|| {
             let Some(index) = self

@@ -1,7 +1,5 @@
-import { fireEvent, render } from '@testing-library/svelte'
 import { err, ok } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { ProviderVaultSummary } from '$app-wasm'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -13,7 +11,6 @@ import {
   ProviderVaultImportStart,
 } from '$lib/vault/provider-vaults'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import RemoteVaultChoice from '../../../../nook-web-shared/src/vault-app/lib/components/login/RemoteVaultChoice.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
@@ -130,84 +127,5 @@ describe('provider vault actions', () => {
     expect(vault.emptyVaultReplacement.kind).toBe(
       EmptyVaultReplacementKind.Idle,
     )
-  })
-})
-
-describe('recovery choice between several vaults', () => {
-  test('lists each vault by its summary and recovers the chosen one', async () => {
-    const vault = VaultStateTestFixture.create()
-    const vaults: ProviderVaultSummary[] = [
-      {
-        storeId: CHOSEN,
-        shortId: 'otherva',
-        name: { state: 'unknown' },
-        identity: {
-          identityId: 'idn_strangerabc',
-          shortId: 'stranger',
-          name: { state: 'unknown' },
-          words: ['ripple', 'canvas', 'orbit'],
-          log: { state: 'absent' },
-        },
-        created: { state: 'unreported' },
-        lastActivity: { state: 'unreported' },
-        eventCount: 7,
-        access: { state: 'backupPassword' },
-        actions: ['importSeparately'],
-      },
-    ]
-    vault.remoteVaultChoices = vaults
-    const onChoose = vi.fn()
-    const view = render(RemoteVaultChoice, { vault, busy: false, onChoose })
-
-    const [row] = view.getAllByTestId('provider-vault-row')
-    const eventsRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.ProviderVaultsEvents,
-      replacements: { count: '7' },
-    }
-    expect(row?.textContent).toContain(vault.t(eventsRequest))
-    // Unreported times are left out rather than guessed: the line holds only
-    // the identity filing the vault and its event count.
-    expect(view.getByTestId('provider-vault-meta').children).toHaveLength(2)
-    expect(view.getByTestId('provider-vault-identity').textContent).toBe(
-      vault.t({
-        key: I18N_KEYS.ProviderVaultsFiledUnder,
-        replacements: { identity: 'ripple-canvas-orbit' },
-      }),
-    )
-    await fireEvent.click(view.getByTestId('remote-vault-choice-item'))
-    expect(onChoose).toHaveBeenCalledWith(CHOSEN)
-  })
-
-  test('offers no recovery for a vault nothing on this device opens', () => {
-    const vault = VaultStateTestFixture.create()
-    vault.remoteVaultChoices = [
-      {
-        storeId: CHOSEN,
-        shortId: 'otherva',
-        name: { state: 'unknown' },
-        identity: {
-          identityId: 'idn_strangerabc',
-          shortId: 'stranger',
-          name: { state: 'unknown' },
-          words: ['ripple', 'canvas', 'orbit'],
-          log: { state: 'absent' },
-        },
-        created: { state: 'unreported' },
-        lastActivity: { state: 'unreported' },
-        eventCount: 7,
-        access: { state: 'locked' },
-        actions: ['requestAccess'],
-      },
-    ]
-    const view = render(RemoteVaultChoice, {
-      vault,
-      busy: false,
-      onChoose: vi.fn(),
-    })
-
-    expect(view.getByTestId('provider-vault-access').textContent).toContain(
-      vault.t(I18N_KEYS.ProviderVaultsAccessLocked),
-    )
-    expect(view.queryAllByTestId('remote-vault-choice-item')).toHaveLength(0)
   })
 })

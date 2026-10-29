@@ -52,7 +52,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
     )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await expect(
+      page.getByTestId('first-run-create-identity-btn'),
+    ).toBeVisible()
   } else {
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
@@ -155,7 +157,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await page.goto(
-    `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
+    `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&scopes=vault-access,password-filling`,
   )
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,

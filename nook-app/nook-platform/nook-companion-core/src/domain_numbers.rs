@@ -176,6 +176,30 @@ impl From<u32> for ExtensionEventCount {
     }
 }
 
+/// A browser epoch time admitted only as a whole, positive, JavaScript-safe
+/// millisecond count.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct CompanionEpochMilliseconds(f64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("companion epoch milliseconds are empty or malformed")]
+pub(crate) struct InvalidCompanionEpochMilliseconds;
+
+impl CompanionEpochMilliseconds {
+    pub(crate) fn validate(self) -> Result<(), InvalidCompanionEpochMilliseconds> {
+        if !self.0.is_finite()
+            || self.0 <= 0.0
+            || self.0.fract() != 0.0
+            || self.0 > 9_007_199_254_740_991.0
+        {
+            return Err(InvalidCompanionEpochMilliseconds);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {

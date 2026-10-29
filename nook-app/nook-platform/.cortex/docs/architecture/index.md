@@ -15,6 +15,9 @@
 - **[identity-vault-architecture.md](identity-vault-architecture.md)**
   - Description: Identity and vault ownership boundaries
   - Status: Implemented, including replicated identity control
+- **[provider-identity-decisions.md](provider-identity-decisions.md)**
+  - Description: Per-identity decisions on a sync provider: leave, add to this browser, ask to join, finish joining; setup actions; card presentation
+  - Status: Implemented
 - **[vault-session-and-lock.md](vault-session-and-lock.md)**
   - Description: Lock session, vault vs sync providers, multi-vault model
   - Status: Active; compatibility storage examples are explicitly non-authoritative
@@ -23,4 +26,3 @@
 
 - [Vault application core](../../../nook-core/.cortex/docs/architecture/index.md)
 - [Signed vault event log](../../../nook-event-log/.cortex/docs/architecture/index.md)
-- [Portable companion protocol](../../../nook-companion-core/.cortex/docs/architecture/index.md)
