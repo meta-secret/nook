@@ -337,6 +337,13 @@ panel sits inside the card, which then spans the full row.
     return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
   }
 
+  /** A vault of the unlocked identity this browser does not hold opens from
+   * its sync provider, with the key the identity granted this browser. */
+  async function openAwayVault(storeId: string): Promise<void> {
+    const opened = await vault.identityControl.openVault(storeId)
+    if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey)
+  }
+
   async function deleteAwayVault(storeId: string): Promise<void> {
     const deleted = await vault.identityControl.deleteVaultEverywhere(storeId)
     if (deleted.isOk()) vault.vaultPanelStoreId = ''
@@ -753,7 +760,10 @@ panel sits inside the card, which then spans the full row.
           onManageVault?.(target)
         }}
         {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
-          ? { onDelete: () => deleteAwayVault(vaultOpenRow.storeId) }
+          ? {
+              onDelete: () => deleteAwayVault(vaultOpenRow.storeId),
+              onOpenAway: () => openAwayVault(vaultOpenRow.storeId),
+            }
           : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}
       />

@@ -491,7 +491,12 @@ export class IdentityControlModel {
       manager.identity_vault_provider(providers, storeId),
     );
     if (row.isErr()) return err(row.error);
-    const args = this.vault.providerWasmArgs(row.value);
+    let args: NookStorageConnectArgs;
+    try {
+      args = this.vault.providerWasmArgs(row.value);
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
     const pageSize = this.vault.secretPageSize;
     const page = await this.withManager((manager) =>
       manager.connect_identity_vault(

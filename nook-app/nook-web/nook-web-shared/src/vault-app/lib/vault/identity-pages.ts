@@ -65,8 +65,9 @@ export class IdentityPages {
 
   /** Save the provider just set up, then copy the identity's log to every
    * provider it is kept on; a fresh identity gets its log here, as it is
-   * now in use. Setup then ends on the identity's card, which lists what it
-   * opens, with a line saying it is set up and synced. With none being set
+   * now in use. Setup then ends on the identity's card, with a line saying
+   * it is set up and synced; a vault it holds that this browser does not
+   * opens its panel there, so Open is the next step. With none being set
    * up, only the copy runs. */
   async connectProvider(): Promise<void> {
     const vault = this.vault;
@@ -96,6 +97,12 @@ export class IdentityPages {
       },
     };
     vault.showSuccess(vault.t(request));
+    const local = new Set(vault.localVaults.map((entry) => entry.storeId));
+    const [away] = (snapshot === false ? [] : snapshot.vaults).filter(
+      (entry) =>
+        entry.grantedToCurrentInstallation && !local.has(entry.storeId),
+    );
+    if (away) vault.vaultPanelStoreId = away.storeId;
   }
 
   async removeProvider(id: string): Promise<void> {

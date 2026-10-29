@@ -151,7 +151,11 @@ test.describe('vault password envelope with sync provider', () => {
       .getByTestId('enrollment-password-input')
       .fill(E2E_IDENTITY_PASSPHRASE)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
-    await expect(deviceB.getByTestId('identity-join-ready')).toBeVisible({
+    await expect(
+      deviceB
+        .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
+        .first(),
+    ).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 

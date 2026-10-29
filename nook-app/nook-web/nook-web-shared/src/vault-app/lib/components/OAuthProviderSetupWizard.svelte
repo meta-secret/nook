@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { Lock, RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type { OAuthFilePreset } from "$lib/auth/providers";
@@ -334,7 +334,7 @@
         ? "icloud-setup-connection-step"
         : "google-setup-connection-step"}
     >
-      <!-- One centred column: the picture, its button, then the promise. -->
+      <!-- One centred column: the picture, then its button. -->
       <div class="grid justify-items-center gap-4 text-center">
         <FirstRunDiagram diagram={providerDiagram} />
 
@@ -431,12 +431,6 @@
           </p>
         {/if}
 
-        <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Lock class="size-3 flex-none" aria-hidden="true" />
-          {isICloud
-            ? vault.t(I18N_KEYS.ProviderSetupIcloudTokensLocalDesc)
-            : vault.t(I18N_KEYS.ProviderSetupGoogleTokensLocalDesc)}
-        </p>
       </div>
     </SetupWizardStep>
 

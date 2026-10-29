@@ -198,8 +198,12 @@ then "*identity* is ready" with its first vault's name, or Later.
   treats the identity as the one in use, as it does with a vault open.
   Looking at these pages never creates the identity's log: connecting a
   provider or inviting a device does. Once a provider is added, setup ends
-  on the hub with one line that the identity is set up and synced; an
-  identity just joined lists the vaults to open there.
+  on the hub with one line that the identity is set up and synced; a vault
+  the identity holds that this browser does not opens its panel there.
+- A vault of the unlocked identity that this browser does not hold opens
+  from its panel: **Open** brings it from the identity's sync provider with
+  the key the identity granted this browser. The hub shows no separate
+  "joined" banner.
 - Every vault belongs to exactly one identity. Cards list a vault under the
   identity with a verified access record for it (the current identity first
   when several claim it), and local vaults no identity has opened yet under

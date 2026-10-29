@@ -16,7 +16,6 @@ join) sit between the hero and the cards.
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
-  import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
   import UnlockedIdentityOverview from '$lib/components/identity-control/UnlockedIdentityOverview.svelte'
   import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
   import {
@@ -336,8 +335,6 @@ join) sit between the hero and the cards.
       showStats={cards.length > 0}
     />
   {/if}
-
-  <IdentityJoinPanel {vault} />
 
   {@render children?.()}
 

@@ -320,7 +320,11 @@ test.describe('Google Drive authorized accounts', () => {
         enLocale.errors.validation.joiner_account_mismatch,
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
-      await expect(stranger.getByTestId('identity-join-ready')).toHaveCount(0)
+      await expect(
+        stranger.locator(
+          '[data-testid="identity-vault-row"][data-state="unavailable"]',
+        ),
+      ).toHaveCount(0)
     } finally {
       await stranger.close()
       await strangerContext.close()

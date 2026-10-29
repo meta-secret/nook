@@ -1543,7 +1543,6 @@ pub const IDENTITY_CONTROL_ERROR_PASSPHRASE_SHORT: &str = "identity_control.erro
 pub const IDENTITY_CONTROL_ERROR_PROVIDER_NOT_MOUNT: &str =
     "identity_control.error_provider_not_mount";
 pub const IDENTITY_CONTROL_JOIN_LOCAL_PROVIDER: &str = "identity_control.join_local_provider";
-pub const IDENTITY_CONTROL_JOIN_READY: &str = "identity_control.join_ready";
 pub const IDENTITY_CONTROL_JOIN_REQUEST_APPROVED: &str = "identity_control.join_request_approved";
 pub const IDENTITY_CONTROL_JOIN_REQUEST_DENIED: &str = "identity_control.join_request_denied";
 pub const IDENTITY_CONTROL_JOIN_REQUESTS_BODY: &str = "identity_control.join_requests_body";
@@ -1569,8 +1568,6 @@ pub const IDENTITY_CONTROL_REVOKE_CONFIRM: &str = "identity_control.revoke_confi
 pub const IDENTITY_CONTROL_REVOKED: &str = "identity_control.revoked";
 pub const IDENTITY_CONTROL_SYNC_NOW: &str = "identity_control.sync_now";
 pub const IDENTITY_CONTROL_UNNAMED_APP: &str = "identity_control.unnamed_app";
-pub const IDENTITY_CONTROL_VAULT_OPEN_THROUGH_IDENTITY: &str =
-    "identity_control.vault_open_through_identity";
 pub const IDENTITY_HEALTH_CLOUD_BODY: &str = "identity_health.cloud_body";
 pub const IDENTITY_HEALTH_CLOUD_CTA: &str = "identity_health.cloud_cta";
 pub const IDENTITY_HEALTH_CLOUD_TITLE: &str = "identity_health.cloud_title";
@@ -2288,7 +2285,6 @@ pub const PROVIDER_SETUP_GOOGLE_SHARED_SIGN_IN_FIRST: &str =
 pub const PROVIDER_SETUP_GOOGLE_SIGNED_IN_AS: &str = "provider_setup.google_signed_in_as";
 pub const PROVIDER_SETUP_GOOGLE_SIGNING_IN: &str = "provider_setup.google_signing_in";
 pub const PROVIDER_SETUP_GOOGLE_SYNC_SUBTITLE: &str = "provider_setup.google_sync_subtitle";
-pub const PROVIDER_SETUP_GOOGLE_TOKENS_LOCAL_DESC: &str = "provider_setup.google_tokens_local_desc";
 pub const PROVIDER_SETUP_GOOGLE_VAULTS_LIST_FAILED: &str =
     "provider_setup.google_vaults_list_failed";
 pub const PROVIDER_SETUP_ICLOUD_CONNECTION_SUBTITLE: &str =
@@ -2318,7 +2314,6 @@ pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_TIMEOUT: &str = "provider_setup.icloud_s
 pub const PROVIDER_SETUP_ICLOUD_SIGNED_IN_AS: &str = "provider_setup.icloud_signed_in_as";
 pub const PROVIDER_SETUP_ICLOUD_SIGNING_IN: &str = "provider_setup.icloud_signing_in";
 pub const PROVIDER_SETUP_ICLOUD_SYNC_SUBTITLE: &str = "provider_setup.icloud_sync_subtitle";
-pub const PROVIDER_SETUP_ICLOUD_TOKENS_LOCAL_DESC: &str = "provider_setup.icloud_tokens_local_desc";
 pub const PROVIDER_SETUP_ICLOUD_UNKNOWN_ERROR: &str = "provider_setup.icloud_unknown_error";
 pub const PROVIDER_SETUP_LOCAL_FOLDER_AUTOMATED_BROWSER_ERROR: &str =
     "provider_setup.local_folder_automated_browser_error";
@@ -2829,6 +2824,7 @@ pub const WORKSPACE_VAULT_PANEL_MANAGE: &str = "workspace.vault_panel_manage";
 pub const WORKSPACE_VAULT_PANEL_MANAGE_LOCKED: &str = "workspace.vault_panel_manage_locked";
 pub const WORKSPACE_VAULT_PANEL_MANAGE_SOON: &str = "workspace.vault_panel_manage_soon";
 pub const WORKSPACE_VAULT_PANEL_OPEN: &str = "workspace.vault_panel_open";
+pub const WORKSPACE_VAULT_PANEL_OPEN_AWAY_HINT: &str = "workspace.vault_panel_open_away_hint";
 pub const WORKSPACE_VAULT_PANEL_OPEN_HINT: &str = "workspace.vault_panel_open_hint";
 pub const WORKSPACE_VAULT_PANEL_OR_PASSPHRASE: &str = "workspace.vault_panel_or_passphrase";
 pub const WORKSPACE_VAULT_PANEL_PASSPHRASES_HINT: &str = "workspace.vault_panel_passphrases_hint";

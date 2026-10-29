@@ -1,12 +1,18 @@
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import { err, ok } from 'neverthrow'
-import initNookWasm, { DeviceProtectionStatus } from '$app-wasm'
+import initNookWasm, {
+  DeviceProtectionStatus,
+  type IdentityControlSnapshot,
+} from '$app-wasm'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import {
+  IdentityActionOutcome,
+  IdentityControlViewKind,
+} from '$lib/vault/identity-control.svelte'
 import { IdentityPages } from '$lib/vault/identity-pages'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
@@ -125,6 +131,44 @@ describe('IdentityPages', () => {
       replacements: { identity: vault.t(I18N_KEYS.WorkspaceIdentityFallback) },
     }
     expect(vault.successMsg).toBe(vault.t(done))
+  })
+
+  test('an identity just brought here opens the panel of a vault it holds elsewhere', async () => {
+    const vault = unlocked()
+    const snapshot: IdentityControlSnapshot = {
+      identityId: 'idn_personalide',
+      identityLabel: 'Personal',
+      standing: 'member',
+      members: [],
+      joinRequests: [],
+      vaults: [
+        {
+          storeId: 'store_awayvault1',
+          grantedToCurrentInstallation: true,
+          membersMissingDek: [],
+        },
+      ],
+      mounts: [],
+    }
+    vi.spyOn(vault, 'ensureProviderSaved').mockResolvedValue(
+      ok(ProviderSaveOutcome.Saved),
+    )
+    vi.spyOn(vault.identityControl, 'refresh').mockImplementation(() => {
+      vault.identityControl.view = {
+        kind: IdentityControlViewKind.Ready,
+        snapshot,
+      }
+      return Promise.resolve(ok(IdentityActionOutcome.Completed))
+    })
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
+    vault.activateLoginSetup('oauth-file')
+
+    await new IdentityPages(vault).connectProvider()
+
+    expect(vault.identityPage).toBe(WorkspaceSection.Identities)
+    expect(vault.vaultPanelStoreId).toBe('store_awayvault1')
   })
 
   test('with nothing being set up, connecting only copies the identity log', async () => {
