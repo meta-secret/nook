@@ -89,7 +89,7 @@ decides from its standing (`IdentitySetup`), and picking it runs at once.
 Setup already used the passkey that made this browser's key, so it never
 offers adding by another passkey.
 
-- **This browser, first run:** **Continue** (Leave: connect and sync).
+- **This browser, first run:** **Continue** (Finish joining: a passkey made before restores the identity's record without its log or vault keys, so the provider's log and this key's grants come here; then connect and sync).
 - **This browser, identity in use:** **In use** (no action).
 - **Join approved:** **Continue** (Finish joining).
 - **Opens with a checked passkey:** **Continue** (Add to this browser).

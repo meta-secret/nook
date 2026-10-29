@@ -63,14 +63,17 @@ impl IdentityStanding {
     /// else asks to join, never adds by another passkey: setup already used
     /// the passkey that made this browser's key. With an identity in use,
     /// the identity this browser's key belongs to is that identity: there is
-    /// nothing to set up for it.
+    /// nothing to set up for it. On a browser with no identity in use, a
+    /// passkey made before restores the record of that identity without its
+    /// log or vault keys, so continuing finishes it here as an approved join
+    /// does: the provider's log and this key's vault grants come here.
     #[must_use]
     pub fn setup(&self, session: IdentitySession) -> IdentitySetup {
         match self {
             Self::ThisBrowser => match session {
                 IdentitySession::IdentityInUse => IdentitySetup::InUse,
                 IdentitySession::NoIdentity => IdentitySetup::Continue {
-                    decision: IdentityDecision::Leave,
+                    decision: IdentityDecision::FinishJoining,
                 },
             },
             Self::JoinApproved => IdentitySetup::Continue {
@@ -695,7 +698,7 @@ mod tests {
         assert_eq!(
             Fixture::at(&held, 0)?.setup,
             IdentitySetup::Continue {
-                decision: IdentityDecision::Leave
+                decision: IdentityDecision::FinishJoining
             }
         );
         Ok(())
@@ -715,11 +718,12 @@ mod tests {
             Ok(Fixture::at(&choices, 0)?.setup)
         };
 
-        // On a browser with no identity yet, its member key continues on it.
+        // On a browser with no identity in use, its member key continues on
+        // it, bringing the provider's log and its vault grants here.
         assert_eq!(
             setup(IdentitySession::NoIdentity)?,
             IdentitySetup::Continue {
-                decision: IdentityDecision::Leave
+                decision: IdentityDecision::FinishJoining
             }
         );
         // With an identity in use, it is that identity.
