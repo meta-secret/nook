@@ -334,107 +334,110 @@
         ? "icloud-setup-connection-step"
         : "google-setup-connection-step"}
     >
-      <FirstRunDiagram diagram={providerDiagram} />
+      <!-- One centred column: the picture, its button, then the promise. -->
+      <div class="grid justify-items-center gap-4 text-center">
+        <FirstRunDiagram diagram={providerDiagram} />
 
-      {#if isICloud}
-        <div
-          class={cn(
-            "apple-cloudkit-control relative min-h-9 w-full sm:w-fit",
-            (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
-              "pointer-events-none opacity-60",
-          )}
-          data-testid="icloud-sign-in-btn"
-          use:watchICloudSignInIntent
-        >
-          <div id="apple-sign-in-button"></div>
-          <div id="apple-sign-out-button" class="hidden"></div>
-          {#if oauthBusy || icloudSignInPreparing}
-            <div class={icloudSignInButtonClass}>
-              {vault.t(
-                icloudSignInPreparing
-                  ? I18N_KEYS.ProviderSetupIcloudPreparingSignIn
-                  : I18N_KEYS.ProviderSetupIcloudSigningIn,
-              )}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <button
-          type="button"
-          class={googleSignInButtonClass}
-          data-testid="google-sign-in-btn"
-          disabled={oauthBusy || oauthOriginUnsupported}
-          onclick={() =>
-            void new oauthActions.VaultOAuthActions(vault).signInWithGoogle()}
-        >
-          {#if oauthBusy}
-            {vault.t(I18N_KEYS.ProviderSetupGoogleSigningIn)}
-          {:else}
-            {vault.t(I18N_KEYS.ProviderSetupSignInWithGoogle)}
-          {/if}
-        </button>
-      {/if}
+        {#if isICloud}
+          <div
+            class={cn(
+              "apple-cloudkit-control relative min-h-9 w-full sm:w-fit",
+              (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
+                "pointer-events-none opacity-60",
+            )}
+            data-testid="icloud-sign-in-btn"
+            use:watchICloudSignInIntent
+          >
+            <div id="apple-sign-in-button"></div>
+            <div id="apple-sign-out-button" class="hidden"></div>
+            {#if oauthBusy || icloudSignInPreparing}
+              <div class={icloudSignInButtonClass}>
+                {vault.t(
+                  icloudSignInPreparing
+                    ? I18N_KEYS.ProviderSetupIcloudPreparingSignIn
+                    : I18N_KEYS.ProviderSetupIcloudSigningIn,
+                )}
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <button
+            type="button"
+            class={googleSignInButtonClass}
+            data-testid="google-sign-in-btn"
+            disabled={oauthBusy || oauthOriginUnsupported}
+            onclick={() =>
+              void new oauthActions.VaultOAuthActions(vault).signInWithGoogle()}
+          >
+            {#if oauthBusy}
+              {vault.t(I18N_KEYS.ProviderSetupGoogleSigningIn)}
+            {:else}
+              {vault.t(I18N_KEYS.ProviderSetupSignInWithGoogle)}
+            {/if}
+          </button>
+        {/if}
 
-      {#if oauthOriginUnsupported}
-        <p
-          class="text-xs text-muted-foreground"
-          data-testid={isICloud
-            ? "icloud-origin-unsupported"
-            : "google-origin-unsupported"}
-        >
-          {oauthOriginUnsupportedMessage}
-        </p>
-      {/if}
+        {#if oauthOriginUnsupported}
+          <p
+            class="text-xs text-muted-foreground"
+            data-testid={isICloud
+              ? "icloud-origin-unsupported"
+              : "google-origin-unsupported"}
+          >
+            {oauthOriginUnsupportedMessage}
+          </p>
+        {/if}
 
-      <!-- Errors show in the step that is open: Connect & sync once signed in. -->
-      {#if vault.errorMsg && !canConnect}
-        <p
-          class="text-xs text-destructive"
-          data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
-        >
-          {vault.errorMsg}
-        </p>
-      {/if}
+        <!-- Errors show in the step that is open: Connect & sync once signed in. -->
+        {#if vault.errorMsg && !canConnect}
+          <p
+            class="text-xs text-destructive"
+            data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
+          >
+            {vault.errorMsg}
+          </p>
+        {/if}
 
-      {#if oauthSignedIn}
-        <p
-          class="text-xs text-muted-foreground"
-          data-testid={isICloud
-            ? "icloud-account-status"
-            : "google-account-status"}
-        >
+        {#if oauthSignedIn}
+          <p
+            class="text-xs text-muted-foreground"
+            data-testid={isICloud
+              ? "icloud-account-status"
+              : "google-account-status"}
+          >
+            {isICloud
+              ? (() => {
+                  const translationRequest2: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
+                    replacements: {
+                      account:
+                        oauthAccount ||
+                        vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+                    },
+                  };
+                  return vault.t(translationRequest2);
+                })()
+              : (() => {
+                  const translationRequest3: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
+                    replacements: {
+                      account:
+                        oauthAccount ||
+                        vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+                    },
+                  };
+                  return vault.t(translationRequest3);
+                })()}
+          </p>
+        {/if}
+
+        <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Lock class="size-3 flex-none" aria-hidden="true" />
           {isICloud
-            ? (() => {
-                const translationRequest2: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
-                  replacements: {
-                    account:
-                      oauthAccount ||
-                      vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-                  },
-                };
-                return vault.t(translationRequest2);
-              })()
-            : (() => {
-                const translationRequest3: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
-                  replacements: {
-                    account:
-                      oauthAccount ||
-                      vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-                  },
-                };
-                return vault.t(translationRequest3);
-              })()}
+            ? vault.t(I18N_KEYS.ProviderSetupIcloudTokensLocalDesc)
+            : vault.t(I18N_KEYS.ProviderSetupGoogleTokensLocalDesc)}
         </p>
-      {/if}
-
-      <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Lock class="size-3 flex-none" aria-hidden="true" />
-        {isICloud
-          ? vault.t(I18N_KEYS.ProviderSetupIcloudTokensLocalDesc)
-          : vault.t(I18N_KEYS.ProviderSetupGoogleTokensLocalDesc)}
-      </p>
+      </div>
     </SetupWizardStep>
 
     <SetupWizardStep
