@@ -21,6 +21,7 @@ import {
   type PairedVaultImport,
   type PairedVaultImportRequest,
   type PairingIdentityConnectionRequest,
+  type PairingIdentityImportResult,
 } from '../src/background/service-worker/pairing-identity-connection'
 import type { SessionMessageRequest } from '../src/background/service-worker/pairing-identity'
 import type { ExtensionSessionResponse } from '../src/offscreen/session'
@@ -149,14 +150,27 @@ class SessionFixture {
   }
 }
 
+/** Join, then pair the other vaults, as the approval import does once the
+ * approved vault is stored. */
+async function connectAll(
+  request: PairingIdentityConnectionRequest,
+): Promise<PairingIdentityImportResult> {
+  const connection = new PairingIdentityConnection(request)
+  const keyring = await connection.join()
+  if (!keyring.ok) return keyring
+  const others: Parameters<typeof connection.pairOthers>[0] = {
+    approvedEventCount: 3,
+    joined: keyring.joined,
+  }
+  return connection.pairOthers(others)
+}
+
 test('one more vault of a keyring already joined joins nothing', async () => {
   const fixture = new SessionFixture(true)
   const member: ExtensionKeyringGrant = {
     kind: ExtensionKeyringGrantKind.Member,
   }
-  const result = await new PairingIdentityConnection(
-    fixture.request(approval(member)),
-  ).connect(3)
+  const result = await connectAll(fixture.request(approval(member)))
 
   expect(result).toEqual({ ok: true, eventCount: 3 })
   expect(fixture.sent).toHaveLength(0)
@@ -165,9 +179,7 @@ test('one more vault of a keyring already joined joins nothing', async () => {
 
 test('the extension joins the keyring from its log and pairs its other vaults from their records', async () => {
   const fixture = new SessionFixture(true)
-  const result = await new PairingIdentityConnection(
-    fixture.request(approval(added)),
-  ).connect(3)
+  const result = await connectAll(fixture.request(approval(added)))
 
   expect(result).toEqual({ ok: true, eventCount: 8 })
   const [join, connect, ...rest] = fixture.sent
@@ -199,11 +211,11 @@ test('the extension joins the keyring from its log and pairs its other vaults fr
   ])
 })
 
-test('a failed join is reported, not read as connected', async () => {
+test('a failed join is reported before anything is paired', async () => {
   const fixture = new SessionFixture(false)
   const result = await new PairingIdentityConnection(
     fixture.request(approval(added)),
-  ).connect(3)
+  ).join()
 
   expect(result).toEqual({
     ok: false,
@@ -227,9 +239,7 @@ test('a join the session refuses is reported with no other vault paired', async 
     ...fixture.request(approval(added)),
     sendSessionMessage: refusing,
   }
-  const result = await new PairingIdentityConnection(connectionRequest).connect(
-    3,
-  )
+  const result = await connectAll(connectionRequest)
 
   expect(result).toEqual({
     ok: false,

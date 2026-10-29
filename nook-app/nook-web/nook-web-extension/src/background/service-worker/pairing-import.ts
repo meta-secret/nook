@@ -394,15 +394,6 @@ export class PairingCredentialImportLifecycle {
       // Kept for the identity's other vaults: the first import clears its own.
       const identityProviders = structuredClone(stagedProviders)
       try {
-        const args: ImportDecodedApprovedPairingArgs = {
-          message: this.message,
-          sessionEventLogRecords: this.sessionEventLogRecords,
-          providers: stagedProviders,
-          syncProviderCount: stagedProviders.length,
-          selection: PairingImportSelection.Select,
-        }
-        const approved = await importDecodedApprovedPairing(args)
-        if (!approved.ok) return approved
         const connectionRequest: ConstructorParameters<
           typeof PairingIdentityConnection
         >[0] = {
@@ -413,9 +404,25 @@ export class PairingCredentialImportLifecycle {
           sendSessionMessage: (...request) =>
             extensionPairingIdentity.sendSessionMessage(...request),
         }
-        return await new PairingIdentityConnection(connectionRequest).connect(
-          approved.eventCount,
-        )
+        const connection = new PairingIdentityConnection(connectionRequest)
+        // Join first: a join that cannot run (a locked extension) stores
+        // nothing, rather than an approved vault of a keyring not joined.
+        const keyring = await connection.join()
+        if (!keyring.ok) return keyring
+        const args: ImportDecodedApprovedPairingArgs = {
+          message: this.message,
+          sessionEventLogRecords: this.sessionEventLogRecords,
+          providers: stagedProviders,
+          syncProviderCount: stagedProviders.length,
+          selection: PairingImportSelection.Select,
+        }
+        const approved = await importDecodedApprovedPairing(args)
+        if (!approved.ok) return approved
+        const others: Parameters<typeof connection.pairOthers>[0] = {
+          approvedEventCount: approved.eventCount,
+          joined: keyring.joined,
+        }
+        return await connection.pairOthers(others)
       } finally {
         new ProviderCredentialBuffer(stagedProviders).clear()
         new ProviderCredentialBuffer(identityProviders).clear()
