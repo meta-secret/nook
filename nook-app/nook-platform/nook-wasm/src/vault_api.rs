@@ -345,20 +345,6 @@ impl NookVaultManager {
     }
 }
 
-/// Seal an identity invite's passphrase to the installation that will join
-/// with it (the browser extension being connected to an identity), so the
-/// invite opens only there.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn seal_invite_passphrase_for_device(device_public_key: &str, passphrase: &str) -> Result<String, wasm_bindgen::JsError> {
-    let recipient = DevicePublicKey::parse(device_public_key)?;
-    let sealed = nook_core::InvitePassphraseSeal {
-        recipient: &recipient,
-        passphrase,
-    }
-    .seal()?;
-    Ok(sealed.into_inner())
-}
-
 /// Seal credential fields in a snapshot for another device's public key without
 /// persisting. Used by extension pairing before handing granted provider rows
 /// to the extension's own storage.
