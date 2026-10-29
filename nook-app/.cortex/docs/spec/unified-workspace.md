@@ -31,8 +31,11 @@ Vault/Admin/Onboard/Settings bottom navigation.
 
 ## Identities hub
 
-- Each identity is a key-tag card: label, monogram, key kind and count,
-  status, a short identity fingerprint, its vault rows, and two actions.
+- Each identity is a key-tag card: its vault rows, two actions, and a
+  compact head. The label and status share one line. The monogram's badge
+  shows the key kind, with the key count in its tooltip. The identity's three
+  words follow, marked # and explained in their tooltip: every device of the
+  identity shows the same words.
 - Status is projected from the identity directory: **Unlocked** (the current
   identity with its device key unlocked, with or without an open vault),
   **Locked** (current identity), **Not active here** (stored on this

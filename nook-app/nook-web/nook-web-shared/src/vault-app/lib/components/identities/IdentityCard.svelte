@@ -26,6 +26,7 @@ panel sits inside the card, which then spans the full row.
     ChevronRight,
     Fingerprint,
     FolderKey,
+    Hash,
     Lock,
     LayoutDashboard,
     LockOpen,
@@ -274,10 +275,10 @@ panel sits inside the card, which then spans the full row.
   const spread = $derived(
     Boolean(
       unlockPanel ||
-        overviewPanel ||
-        requestPanel ||
-        (protection && protectionOpen) ||
-        vaultOpenRow,
+      overviewPanel ||
+      requestPanel ||
+      (protection && protectionOpen) ||
+      vaultOpenRow,
     ),
   )
 
@@ -406,11 +407,16 @@ panel sits inside the card, which then spans the full row.
     {#if !preview && (card.status === IdentityCardStatus.Locked || card.status === IdentityCardStatus.Elsewhere)}
       <!-- Locking folds what only an unlocked identity offers back into the
            card: its header and vaults stay. -->
-      <span class="nk-card-fold" aria-hidden="true" data-testid="identity-card-fold"
+      <span
+        class="nk-card-fold"
+        aria-hidden="true"
+        data-testid="identity-card-fold"
       ></span>
     {/if}
-    <header class="relative flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
-      <span class="relative inline-flex flex-none">
+    <!-- Name and state on one line; the badge says how the identity unlocks
+         (its key count in its title), and the words tell identities apart. -->
+    <header class="relative flex items-center gap-3 px-4 py-3.5 sm:px-5">
+      <span class="relative inline-flex flex-none" title={keysLine}>
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
           {card.monogram}
         </span>
@@ -423,42 +429,44 @@ panel sits inside the card, which then spans the full row.
         </span>
       </span>
       <div class="min-w-0 flex-1 pr-4">
-        <h3
-          class="truncate text-lg font-semibold tracking-tight text-foreground"
-          data-testid="identity-card-label"
-        >
-          {card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
-        </h3>
-        <p
-          class="mt-0.5 truncate text-[0.8125rem] text-muted-foreground"
-          data-testid="identity-card-keys"
-        >
-          {keysLine}
-        </p>
-        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          {#if live && !preview}
-            <VaultActivityStatus {vault} idle={unlockedStatus} />
-          {:else if live}
-            {@render unlockedStatus()}
-          {:else}
-            <StatusTag
-              mark={StatusMark.Icon}
-              label={statusLabel}
-              testId="identity-card-status"
-            >
-              {#snippet icon()}
-                <Lock class="size-3" aria-hidden="true" />
-              {/snippet}
-            </StatusTag>
-          {/if}
-          {#if card.fingerprint.length > 0}
-            <span
-              class="nk-fingerprint"
-              title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
-              data-testid="identity-card-words">{card.fingerprint.join('-')}</span
-            >
-          {/if}
+        <div class="flex min-w-0 items-center gap-2">
+          <h3
+            class="min-w-0 truncate text-base font-semibold tracking-tight text-foreground"
+            data-testid="identity-card-label"
+          >
+            {card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
+          </h3>
+          <span class="sr-only" data-testid="identity-card-keys"
+            >{keysLine}</span
+          >
+          <span class="flex flex-none items-center">
+            {#if live && !preview}
+              <VaultActivityStatus {vault} idle={unlockedStatus} />
+            {:else if live}
+              {@render unlockedStatus()}
+            {:else}
+              <StatusTag
+                mark={StatusMark.Icon}
+                label={statusLabel}
+                testId="identity-card-status"
+              >
+                {#snippet icon()}
+                  <Lock class="size-3" aria-hidden="true" />
+                {/snippet}
+              </StatusTag>
+            {/if}
+          </span>
         </div>
+        {#if card.fingerprint.length > 0}
+          <p
+            class="nk-fingerprint mt-1 flex items-center gap-1"
+            title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
+            data-testid="identity-card-words"
+          >
+            <Hash class="size-3 flex-none" aria-hidden="true" />
+            <span class="truncate">{card.fingerprint.join('-')}</span>
+          </p>
+        {/if}
       </div>
     </header>
 
@@ -495,7 +503,8 @@ panel sits inside the card, which then spans the full row.
               >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
             >
             <span
-              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
+              class="truncate text-xs {protection.nudge ===
+              NookIdentityNudge.Urge
                 ? 'text-destructive'
                 : 'text-warning'}">{protectionProgress}</span
             >
@@ -757,7 +766,8 @@ panel sits inside the card, which then spans the full row.
       <IdentityProtectionPanel
         {vault}
         health={protection}
-        identityName={card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
+        identityName={card.label ||
+          vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
         {busy}
         onAction={protect}
         onClose={() => (protectionOpen = false)}
