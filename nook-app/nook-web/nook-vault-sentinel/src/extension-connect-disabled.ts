@@ -7,6 +7,7 @@ import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$we
 import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 import type { ExtensionVaultEventLogChannel } from "$lib/extension/vault-event-log";
+import type { KeyringProvidersDelivery } from "$web-shared/extension/keyring-providers-message";
 
 export {
   ExtensionPairingDeliveryKind,
@@ -91,6 +92,12 @@ export const extensionConnectionBrowser = {
     _request: ExtensionPairingApprovalDelivery,
   ): Promise<ExtensionPairingDelivery> {
     void _request;
+    throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
+  },
+  async deliverKeyringProviders(
+    _delivery: KeyringProvidersDelivery,
+  ): Promise<boolean> {
+    void _delivery;
     throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
   },
 };

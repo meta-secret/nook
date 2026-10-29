@@ -11,3 +11,9 @@ export type ExtensionKeyringProvidersMessage = {
   readonly type: ExtensionKeyringProvidersMessageType.NookExtensionKeyringProviders;
   readonly payload: NookKeyringProviderShares;
 };
+
+/** The keyring's providers for the extension installed in this browser. */
+export type KeyringProvidersDelivery = {
+  readonly extensionRuntimeId: string;
+  readonly shares: NookKeyringProviderShares;
+};

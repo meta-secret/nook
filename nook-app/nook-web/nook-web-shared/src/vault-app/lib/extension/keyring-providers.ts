@@ -5,14 +5,11 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import type { VaultState } from "$lib/vault.svelte";
-import {
-  ExtensionKeyringProvidersMessageType,
-  type ExtensionKeyringProvidersMessage,
-} from "$web-shared/extension/keyring-providers-message";
+// Through the $lib alias, so Sentinel gets its extension-free facade.
 import {
   extensionConnectionBrowser,
   InstalledExtensionRuntimeKind,
-} from "./connect";
+} from "$lib/extension/connect";
 
 /** The open vault whose engine seals the hand-over. */
 type KeyringProvidersVault = Pick<
@@ -55,13 +52,12 @@ export class KeyringProvidersHandOver {
     if (shares.isErr()) return err(shares.error);
     if (shares.value.apps.length === 0)
       return ok(KeyringProvidersHandOverOutcome.NotRequired);
-    const message: ExtensionKeyringProvidersMessage = {
-      type: ExtensionKeyringProvidersMessageType.NookExtensionKeyringProviders,
-      payload: shares.value,
-    };
     const delivery: Parameters<
       typeof extensionConnectionBrowser.deliverKeyringProviders
-    >[0] = { extensionRuntimeId: installed.extensionRuntimeId, message };
+    >[0] = {
+      extensionRuntimeId: installed.extensionRuntimeId,
+      shares: shares.value,
+    };
     const delivered =
       await extensionConnectionBrowser.deliverKeyringProviders(delivery);
     return delivered

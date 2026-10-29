@@ -4,10 +4,6 @@ type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
 };
-type KeyringProvidersDelivery = {
-  readonly extensionRuntimeId: string;
-  readonly message: ExtensionKeyringProvidersMessage;
-};
 type AcknowledgedDelivery = {
   readonly extensionRuntimeId: string;
   readonly message: RuntimeMessage;
@@ -18,7 +14,11 @@ import type {
   ExtensionPairingApprovedMessage,
   RuntimeMessage,
 } from "$web-shared/extension/runtime-messages";
-import type { ExtensionKeyringProvidersMessage } from "$web-shared/extension/keyring-providers-message";
+import {
+  ExtensionKeyringProvidersMessageType,
+  type ExtensionKeyringProvidersMessage,
+  type KeyringProvidersDelivery,
+} from "$web-shared/extension/keyring-providers-message";
 import type { ExtensionConnectRequestFor } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
@@ -237,9 +237,15 @@ class ExtensionConnectionBrowser {
 
   /** Hand the installed extension the keyring's providers after they
    * changed. Answers whether it acknowledged them. */
-  deliverKeyringProviders(
-    delivery: KeyringProvidersDelivery,
-  ): Promise<boolean> {
+  deliverKeyringProviders({
+    extensionRuntimeId,
+    shares,
+  }: KeyringProvidersDelivery): Promise<boolean> {
+    const message: ExtensionKeyringProvidersMessage = {
+      type: ExtensionKeyringProvidersMessageType.NookExtensionKeyringProviders,
+      payload: shares,
+    };
+    const delivery: AcknowledgedDelivery = { extensionRuntimeId, message };
     return this.sendAcknowledged(delivery);
   }
 
