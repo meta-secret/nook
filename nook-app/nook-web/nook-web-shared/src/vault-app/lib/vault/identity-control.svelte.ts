@@ -310,15 +310,26 @@ export class IdentityControlModel {
     }
   }
 
+  /** What an identity page shows when it opens: with a vault open, the log
+   * is created or confirmed; without one, only the log it has is read. */
+  async showPage(): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    return this.vault.isAuthenticated ? this.refresh() : this.loadSnapshot();
+  }
+
   /**
-   * Issue a one-time invite code. The open vault is registered with the
-   * identity first, so the code carries its DEK; the invite then reaches
-   * every mount before the joiner looks for it there.
+   * Issue a one-time invite code. Inviting uses the identity, so its log
+   * exists from here on. The open vault is registered with the identity
+   * first, so the code carries its DEK; the invite then reaches every mount
+   * before the joiner looks for it there.
    */
   async issueInvite({
     input,
     passphrase,
   }: IdentityInviteIssue): Promise<Result<string, VaultStorageFailure>> {
+    const ensured = await this.refresh();
+    if (ensured.isErr()) return err(ensured.error);
     const reconciled = await this.reconcileOpenVault();
     if (reconciled.isErr()) return err(reconciled.error);
     const issued = await this.withManager((manager) =>
@@ -440,11 +451,14 @@ export class IdentityControlModel {
   /**
    * After a vault opens or syncs: create or confirm the identity log, union
    * it with every mount, then apply identity revocations and key epochs to
-   * the open vault.
+   * the open vault. With no vault open, looking at the identity changes
+   * nothing: the log it has is projected, and a fresh identity keeps none
+   * until it is used, so an approved join can still adopt it.
    */
   async followOpenVault(): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure>
   > {
+    if (!this.vault.isAuthenticated) return this.loadSnapshot();
     const refreshed = await this.refresh();
     if (refreshed.isErr()) return refreshed;
     const synced = await this.syncWithMounts();

@@ -63,7 +63,8 @@ export class IdentityPages {
   }
 
   /** Save the provider just set up, then copy the identity's log to every
-   * provider it is kept on. With none being set up, only the copy runs. */
+   * provider it is kept on; a fresh identity gets its log here, as it is
+   * now in use. With none being set up, only the copy runs. */
   async connectProvider(): Promise<void> {
     const vault = this.vault;
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
@@ -72,6 +73,11 @@ export class IdentityPages {
         vault.errorMsg = vault.t(saved.error.translationKey);
         return;
       }
+    }
+    const ensured = await vault.identityControl.refresh();
+    if (ensured.isErr()) {
+      vault.errorMsg = vault.t(ensured.error.translationKey);
+      return;
     }
     await this.syncLog();
   }

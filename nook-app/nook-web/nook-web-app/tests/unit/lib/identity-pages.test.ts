@@ -96,12 +96,16 @@ describe('IdentityPages', () => {
     expect(cancelAdd).toHaveBeenCalledOnce()
   })
 
-  test('connecting saves the provider being set up, then copies the identity log', async () => {
+  test('connecting saves the provider being set up, gives the identity its log, then copies it', async () => {
     const vault = unlocked()
     const order: string[] = []
     vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {
       order.push('save')
       return Promise.resolve(ok(ProviderSaveOutcome.Saved))
+    })
+    vi.spyOn(vault.identityControl, 'refresh').mockImplementation(() => {
+      order.push('log')
+      return Promise.resolve(ok(IdentityActionOutcome.Completed))
     })
     vi.spyOn(vault.identityControl, 'syncWithMounts').mockImplementation(() => {
       order.push('sync')
@@ -111,13 +115,16 @@ describe('IdentityPages', () => {
 
     await new IdentityPages(vault).connectProvider()
 
-    expect(order).toEqual(['save', 'sync'])
+    expect(order).toEqual(['save', 'log', 'sync'])
     expect(vault.errorMsg).toBe('')
   })
 
   test('with nothing being set up, connecting only copies the identity log', async () => {
     const vault = unlocked()
     const save = vi.spyOn(vault, 'ensureProviderSaved')
+    vi.spyOn(vault.identityControl, 'refresh').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
     const sync = vi
       .spyOn(vault.identityControl, 'syncWithMounts')
       .mockResolvedValue(ok(IdentityActionOutcome.Completed))
@@ -155,5 +162,21 @@ describe('IdentityPages', () => {
     await new IdentityPages(vault).syncLog()
 
     expect(vault.errorMsg).toBe(vault.t(failure.translationKey))
+  })
+})
+
+describe('looking at an identity with no vault open', () => {
+  test('reads the log it has and creates none', async () => {
+    const vault = unlocked()
+    const created = vi.spyOn(vault.identityControl, 'refresh')
+    const read = vi
+      .spyOn(vault.identityControl, 'loadSnapshot')
+      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
+
+    await vault.identityControl.followOpenVault()
+    await vault.identityControl.showPage()
+
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(created).not.toHaveBeenCalled()
   })
 })
