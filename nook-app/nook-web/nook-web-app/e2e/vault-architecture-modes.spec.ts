@@ -469,7 +469,7 @@ test.describe('vault architecture modes', () => {
     await continueToPathChooser(page)
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
-    await expect(start).toContainText('Create your identity')
+    await expect(start).toContainText('Create your keyring')
     await expect(page.getByTestId('login-join-identity-btn')).toContainText(
       'Join with an invite link',
     )

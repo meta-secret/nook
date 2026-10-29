@@ -403,7 +403,7 @@ test('Connect another identity opens the one Nook tab and the card follows its s
 }) => {
   const panel = await openUnlocked(page)
   await expect(page.getByTestId('side-panel-identities')).toHaveCount(0)
-  await expect(page.getByText('Identities', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Keyrings', { exact: true })).toHaveCount(0)
   const connections = page.getByTestId('side-panel-connections')
   await expect(
     page
@@ -411,10 +411,10 @@ test('Connect another identity opens the one Nook tab and the card follows its s
       .locator('xpath=following-sibling::*[1]'),
   ).toHaveAttribute('data-testid', 'side-panel-connections')
   const connect = connections.getByTestId('side-panel-connect')
-  await expect(connect).toHaveText('Connect another identity')
+  await expect(connect).toHaveText('Connect another keyring')
   await connect.click()
   const card = connections.getByTestId('side-panel-connect-card')
-  await expect(card.getByRole('heading')).toHaveText('Connect another identity')
+  await expect(card.getByRole('heading')).toHaveText('Connect another keyring')
   // The panel has no vault-name field and no join button of its own.
   await expect(page.getByTestId('side-panel-vault-name')).toHaveCount(0)
   await expect(page.getByTestId('side-panel-join-identity')).toHaveCount(0)
@@ -512,7 +512,7 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
   await expect(card.getByTestId('side-panel-vault-name')).toHaveCount(0)
   await expect(card.getByTestId('side-panel-join-identity')).toHaveCount(0)
   const start = card.getByTestId('side-panel-connect-start')
-  await expect(start).toHaveText('Connect an identity')
+  await expect(start).toHaveText('Connect a keyring')
   await start.click()
   // The panel listens once the Nook tab is open.
   await expect(page.getByTestId('side-panel-connect-step')).toHaveText(
@@ -732,7 +732,7 @@ test('an unreadable vault list offers Try again', async ({ page }) => {
     vaults: SidePanelStubVaults.Unavailable,
   })
   await expect(
-    page.getByText('Nook could not load your identities.'),
+    page.getByText('Nook could not load your keyrings.'),
   ).toBeVisible()
   await panel.update({ vaults: SidePanelStubVaults.Paired })
   await page.getByTestId('side-panel-retry-identities').click()

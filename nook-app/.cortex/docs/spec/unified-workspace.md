@@ -9,6 +9,11 @@ identity management never shows a vault's items. There is no separate
 Devices & access page, no header vault switcher, and no
 Vault/Admin/Onboard/Settings bottom navigation.
 
+The UI names an identity a **keyring** (Russian: «связка ключей»): it holds
+the keys that open its vaults. Code, routes, and these specifications keep
+"identity". This browser's own key stays the **device key**, and password
+manager imports keep "identities" for their person and address items.
+
 ## Pages and routes
 
 - **Identities hub:** `/identities`.

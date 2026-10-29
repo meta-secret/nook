@@ -625,7 +625,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     })
     await expect(
       pairingPopupPage.getByTestId('connect-simple-vault-btn'),
-    ).toHaveText('Connect another identity')
+    ).toHaveText('Connect another keyring')
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
     await pairingPopupPage.getByTestId('connect-simple-vault-btn').click()
     const pairingPage = await pairingPagePromise
