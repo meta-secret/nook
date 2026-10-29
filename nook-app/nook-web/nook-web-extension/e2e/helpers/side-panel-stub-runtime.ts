@@ -465,7 +465,7 @@ export class SidePanelStubPage {
   /** The Nook tab the stub service worker opens or reuses. */
   static readonly CONNECT_TAB_ID = sidePanelStubProtocol.connectTab
   static readonly CONNECT_URL = new URL(
-    'extension-connect?nonce=stub',
+    'extension-connect?connect_id=stub',
     simpleVaultBaseUrl,
   ).toString()
 

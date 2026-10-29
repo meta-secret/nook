@@ -1,9 +1,5 @@
 <script lang="ts">
   import {
-    PairedIdentityUnlockScope,
-    type PairedIdentityUnlockTarget,
-  } from '$lib/app/extension-identity-adoption'
-  import {
     WorkspaceLocation,
     WorkspacePath,
     WorkspaceRouteLookupKind,
@@ -62,17 +58,11 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import {
-    identityUnlockRoute,
-    IdentityUnlockRoute,
     LoginVaultEntryKind,
     type LoginVaultEntry,
   } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import { SentinelGenesisChooserBinding } from '$lib/components/login/sentinel-genesis-chooser-handlers'
-  import {
-    LoginVaultExtensionPairingStatusLookup,
-    type LoginVaultExtensionPairingStatusEntry,
-  } from '$lib/components/login/login-vault-extension-pairing-status'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
@@ -124,7 +114,6 @@
     addProviderOpen = false,
     onUnlock,
     onUnlockOnCard,
-    onUnlockPairedIdentity,
     identityHealth,
     onBeginAddProvider,
     onCancelAddProvider,
@@ -141,13 +130,10 @@
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
-    identityKeyInExtension = false,
-    usesExtensionDeviceIdentity = false,
     sentinelInvitationRequest = '',
     sentinelParticipantResponsePending = false,
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
-    extensionConnectPairingStatusEntries,
     extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
     onAcceptSentinelOnboardingPackage,
   }: {
@@ -164,9 +150,6 @@
     /** Unlock the selected vault from its identity card: this browser's key
      * unlocks on the card, never in the page-level sheet. */
     onUnlockOnCard: () => void | Promise<void>
-    onUnlockPairedIdentity: (
-      target: PairedIdentityUnlockTarget,
-    ) => void | Promise<void>
     /** How the identity is protected; its unlocked card offers the
      * checklist before any vault is open. */
     identityHealth?: NookIdentityHealth
@@ -189,13 +172,10 @@
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
-    identityKeyInExtension?: boolean
-    usesExtensionDeviceIdentity?: boolean
     sentinelInvitationRequest?: string
     sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
-    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
     /** A browser extension asking to connect: its request sits beside the
      * current identity, with the vaults that can answer it. */
     extensionConnectRequest?: ExtensionConnectIntent
@@ -337,28 +317,13 @@
     deviceKeySetupNeeded(vault.deviceProtectionStatus),
   )
 
-  /** The paired extension unlocks for the vault this page has selected. */
-  const pageVaultUnlock: PairedIdentityUnlockTarget = {
-    scope: PairedIdentityUnlockScope.PageVault,
-  }
-
   /** Unlock on a locked card unlocks the identity, and no vault is opened:
    * a vault opens from its row. */
   async function unlockIdentity(): Promise<void> {
     if (vault.deviceProtectionReady || isVerifying) return
-    const routeRequest: Parameters<typeof identityUnlockRoute>[0] = {
-      identityKeyInExtension,
-      pinProtected,
-    }
-    switch (identityUnlockRoute(routeRequest)) {
-      case IdentityUnlockRoute.PairedExtension:
-        await onUnlockPairedIdentity(pageVaultUnlock)
-        return
-      case IdentityUnlockRoute.Pin:
-        pinPrompt = { kind: PinPromptKind.Identity }
-        return
-      case IdentityUnlockRoute.Passkey:
-        break
+    if (pinProtected) {
+      pinPrompt = { kind: PinPromptKind.Identity }
+      return
     }
     const identityOnly: Parameters<
       DeviceProtectionActions['unlockDeviceProtection']
@@ -443,10 +408,9 @@
     }
     // Opening a vault reads it with the device key. A PIN is asked for on
     // the card. Choosing another vault reads it, so the key is unlocked
-    // first. The selected vault unlocks through the card unlock, which tries
-    // a paired extension before this browser's passkey; either way a failure
-    // and its recovery stay on the card. A browser without a key yet (after
-    // a reset) sets one up in the sheet.
+    // first. The selected vault unlocks through the card unlock, with this
+    // browser's passkey; a failure and its recovery stay on the card. A
+    // browser without a key yet (after a reset) sets one up in the sheet.
     if (!vault.deviceProtectionReady && !setupNeeded) {
       if (pinProtected) {
         pinPrompt = { kind: PinPromptKind.Vault, destination }
@@ -532,11 +496,6 @@
     showLocalUnlock && activeLoginVault.kind === LoginVaultEntryKind.Available
       ? activeLoginVault.entry.storeId
       : '',
-  )
-  const pairingStatusLookup = $derived(
-    new LoginVaultExtensionPairingStatusLookup(
-      extensionConnectPairingStatusEntries,
-    ),
   )
   const showQrOnboarding = $derived(
     Boolean(
@@ -643,7 +602,6 @@
     {appKind}
     {isVerifying}
     {isInitializing}
-    {usesExtensionDeviceIdentity}
     {onCreateDeviceVault}
     {onStartSentinelGenesis}
     {...sentinelGenesisHandlers}
@@ -701,7 +659,6 @@
   <LoginVaultPicker
     {vault}
     vaults={vault.localVaults}
-    {extensionConnectPairingStatusEntries}
     {isVerifying}
     {isInitializing}
     onChooseVault={(
@@ -924,8 +881,6 @@
     onNewVault={openNewVault}
     onSelectVault={(storeId: string) => void selectVault(storeId)}
     onUnlockVault={unlockVaultInPlace}
-    onUnlockElsewhere={(target: PairedIdentityUnlockTarget) =>
-      onUnlockPairedIdentity(target)}
     onManageVault={manageSection}
     onManageSection={manageSection}
     {...identityHealth ? { currentHealth: identityHealth } : {}}
@@ -941,8 +896,6 @@
     !newVaultOpen
       ? { requestPanel: extensionRequest }
       : {}}
-    pairingStatusFor={(storeId: string) =>
-      pairingStatusLookup.statusForStore(storeId)}
     {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
       ? { unlockPanel: sentinelCeremony }
       : {}}

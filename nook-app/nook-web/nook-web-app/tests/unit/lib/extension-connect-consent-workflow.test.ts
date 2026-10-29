@@ -31,7 +31,6 @@ import {
 import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   type ExtensionConnectRequest,
 } from '$lib/extension/connect'
 import {
@@ -92,14 +91,12 @@ function createHarness() {
   vault.openManager(new NookVaultManager())
   vault.isAuthenticated = true
   const request: ExtensionConnectRequest = {
-    source: ExtensionIdentityRequestSource.ExtensionConnect,
     follow: { kind: ExtensionConnectFollowKind.Unnamed },
     deviceId: 'device-1',
     devicePublicKey: 'device-key',
     deviceSigningPublicKey: 'signing-key',
     extensionRuntimeId: 'extension-1',
     deviceLabel: 'Nook Extension',
-    nonce: 'nonce-1',
     scopes: [ExtensionConnectScope.VaultAccess],
   }
   const workflowConstruction: ExtensionConsentWorkflowFixtureConstruction = {

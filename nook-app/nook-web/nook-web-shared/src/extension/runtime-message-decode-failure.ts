@@ -12,13 +12,6 @@ export enum RuntimeMessageDecodeFailureKind {
   ExtensionPairingApprovedGrant = "extension-pairing-approved-grant",
   ExtensionPairingStorageProvider = "extension-pairing-storage-provider",
   ExtensionPairingApprovedMessage = "extension-pairing-approved-message",
-  ExtensionIdentityHandoffRequest = "extension-identity-handoff-request",
-  ExtensionPairedVaultIdentityDiscovery = "extension-paired-vault-identity-discovery",
-  ExtensionPairedVaultUnlockRequest = "extension-paired-vault-unlock-request",
-  ExtensionPairedVaultLockRequest = "extension-paired-vault-lock-request",
-  ExtensionPairedVaultLockResponse = "extension-paired-vault-lock-response",
-  ExtensionSessionLockedNotice = "extension-session-locked-notice",
-  ExtensionPairedVaultIdentityHandoffRequest = "extension-paired-vault-identity-handoff-request",
 }
 
 export enum RuntimeMessageDecodeCauseKind {

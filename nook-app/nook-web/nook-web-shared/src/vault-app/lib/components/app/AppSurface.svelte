@@ -23,7 +23,6 @@
   import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
   import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import { extensionConnectProgress } from '$lib/extension/connect-progress'
-  import { ExtensionIdentityRequestSource } from '$web-shared/extension/extension-connect-types'
   import {
     ExtensionConnectPageReportKind,
     ExtensionConnectPageSteps,
@@ -82,14 +81,8 @@
           case true:
             break
         }
-        const { request } = extensionConnectRequestState
         // The connect route's request names the side panel that follows it.
-        switch (request.source) {
-          case ExtensionIdentityRequestSource.PairedVault:
-            return
-          case ExtensionIdentityRequestSource.ExtensionConnect:
-            break
-        }
+        const { request } = extensionConnectRequestState
         const progressBegin: Parameters<
           typeof extensionConnectProgress.begin
         >[0] = {

@@ -1,7 +1,5 @@
 import { Effect, Schema } from "effect";
 import * as AST from "effect/SchemaAST";
-import { NookExtensionIdentityHandoffProviderOutcome } from "$app-wasm";
-import type { NookExtensionIdentityHandoffProviderOutcomeState } from "$app-wasm";
 import {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -23,76 +21,6 @@ export type ExtensionRuntimeResponseObject = {
   readonly [key: string]: ExtensionRuntimeResponseValue;
 };
 
-const extensionRuntimeResponseValueSchema: Schema.Codec<ExtensionRuntimeResponseValue> =
-  Schema.suspend(() => {
-    const recursiveRecordFields: RuntimeResponseRecordFields = {
-      key: Schema.String,
-      value: extensionRuntimeResponseValueSchema,
-    };
-    return Schema.Union([
-      Schema.String,
-      Schema.Number,
-      Schema.Boolean,
-      Schema.mutable(Schema.Array(extensionRuntimeResponseValueSchema)),
-      Schema.Record(recursiveRecordFields.key, recursiveRecordFields.value),
-    ]);
-  });
-
-type RuntimeResponseRecordFields = {
-  readonly key: typeof Schema.String;
-  readonly value: Schema.Codec<ExtensionRuntimeResponseValue>;
-};
-
-const runtimeResponseRecordFields: RuntimeResponseRecordFields = {
-  key: Schema.String,
-  value: extensionRuntimeResponseValueSchema,
-};
-const extensionRuntimeResponseObjectSchema = Schema.Record(
-  runtimeResponseRecordFields.key,
-  runtimeResponseRecordFields.value,
-);
-
-class AcceptedIdentityHandoffResponseFields {
-  static build() {
-    return {
-      ok: Schema.Literal(true),
-      envelope: Schema.String,
-      nextNonce: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
-    };
-  }
-}
-export const AcceptedIdentityHandoffResponseSchema = Schema.Struct(
-  AcceptedIdentityHandoffResponseFields.build(),
-);
-
-export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
-  typeof AcceptedIdentityHandoffResponseSchema
->;
-
-class RejectedIdentityHandoffResponseFields {
-  static build() {
-    return {
-      ok: Schema.Literal(false),
-      reason: Schema.String,
-    };
-  }
-}
-const RejectedIdentityHandoffResponseSchema = Schema.Struct(
-  RejectedIdentityHandoffResponseFields.build(),
-);
-
-type RejectedIdentityHandoffResponseInput = Schema.Schema.Type<
-  typeof RejectedIdentityHandoffResponseSchema
->;
-
-export type RejectedIdentityHandoffResponse = {
-  readonly ok: false;
-  readonly state: NookExtensionIdentityHandoffProviderOutcomeState;
-};
-
-export type IdentityHandoffResponse =
-  AcceptedIdentityHandoffResponse | RejectedIdentityHandoffResponse;
-
 export enum ExtensionResponseDecodeFailureKind {
   InvalidResponse = "invalid-response",
 }
@@ -104,42 +32,6 @@ export class ExtensionResponseDecodeFailure {
   constructor(readonly cause: Schema.SchemaError) {}
 }
 
-export class IdentityHandoffResponseDecoder {
-  decode(
-    value?: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<IdentityHandoffResponse, ExtensionResponseDecodeFailure> {
-    const accepted = Schema.decodeUnknownEffect(
-      AcceptedIdentityHandoffResponseSchema,
-    )(value, strictDecodeOptions).pipe(
-      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
-    );
-    const rejected = Schema.decodeUnknownEffect(
-      RejectedIdentityHandoffResponseSchema,
-    )(value, strictDecodeOptions).pipe(
-      Effect.map(
-        (
-          response: RejectedIdentityHandoffResponseInput,
-        ): RejectedIdentityHandoffResponse => {
-          const outcome =
-            NookExtensionIdentityHandoffProviderOutcome.classify_rejection(
-              response.reason,
-            );
-          try {
-            return { ok: false, state: outcome.state };
-          } finally {
-            outcome.free();
-          }
-        },
-      ),
-      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
-    );
-    return accepted.pipe(Effect.catch(() => rejected));
-  }
-}
-
-export const identityHandoffResponseDecoder =
-  new IdentityHandoffResponseDecoder();
-
 class CompanionLauncherResponseFields {
   static build() {
     return { ok: Schema.Literal(true) };
@@ -149,54 +41,8 @@ const CompanionLauncherResponseSchema = Schema.Struct(
   CompanionLauncherResponseFields.build(),
 );
 
-class CompanionIdentityDiscoveryResponseFields {
-  static build() {
-    return {
-      ok: Schema.Literal(true),
-      status: extensionRuntimeResponseObjectSchema,
-    };
-  }
-}
-const CompanionIdentityDiscoveryResponseSchema = Schema.Struct(
-  CompanionIdentityDiscoveryResponseFields.build(),
-);
-
-class CompanionUnlockResponseFields {
-  static build() {
-    return {
-      ok: Schema.Literal(true),
-      requestId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
-      vaultStoreId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
-    };
-  }
-}
-const CompanionUnlockResponseSchema = Schema.Struct(
-  CompanionUnlockResponseFields.build(),
-);
-
-class CompanionIdentityHandoffResponseFields {
-  static build() {
-    return {
-      ok: Schema.Literal(true),
-      response: extensionRuntimeResponseObjectSchema,
-    };
-  }
-}
-const CompanionIdentityHandoffResponseSchema = Schema.Struct(
-  CompanionIdentityHandoffResponseFields.build(),
-);
-
 type CompanionLauncherResponse = Schema.Schema.Type<
   typeof CompanionLauncherResponseSchema
->;
-type CompanionIdentityDiscoveryResponse = Schema.Schema.Type<
-  typeof CompanionIdentityDiscoveryResponseSchema
->;
-type CompanionUnlockResponse = Schema.Schema.Type<
-  typeof CompanionUnlockResponseSchema
->;
-type CompanionIdentityHandoffResponse = Schema.Schema.Type<
-  typeof CompanionIdentityHandoffResponseSchema
 >;
 
 /** Owns structural admission for responses from the companion runtime. */
@@ -205,42 +51,6 @@ export class CompanionResponseDecoder {
     value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<CompanionLauncherResponse, ExtensionResponseDecodeFailure> {
     return Schema.decodeUnknownEffect(CompanionLauncherResponseSchema)(
-      value,
-      strictDecodeOptions,
-    ).pipe(
-      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
-    );
-  }
-  decodeIdentityDiscovery(
-    value: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<
-    CompanionIdentityDiscoveryResponse,
-    ExtensionResponseDecodeFailure
-  > {
-    return Schema.decodeUnknownEffect(CompanionIdentityDiscoveryResponseSchema)(
-      value,
-      strictDecodeOptions,
-    ).pipe(
-      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
-    );
-  }
-  decodeUnlock(
-    value: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<CompanionUnlockResponse, ExtensionResponseDecodeFailure> {
-    return Schema.decodeUnknownEffect(CompanionUnlockResponseSchema)(
-      value,
-      strictDecodeOptions,
-    ).pipe(
-      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
-    );
-  }
-  decodeIdentityHandoff(
-    value: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<
-    CompanionIdentityHandoffResponse,
-    ExtensionResponseDecodeFailure
-  > {
-    return Schema.decodeUnknownEffect(CompanionIdentityHandoffResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(

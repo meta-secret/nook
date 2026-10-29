@@ -3,7 +3,6 @@ import { ok } from 'neverthrow'
 import initNookWasm, {
   DeviceProtectionStatus,
   NookVaultManager,
-  type NookFreshIdentityNaming,
   type NookIdentityJoinCompletion,
   type NookIdentityJoinRequested,
   type NookProviderSource,
@@ -100,14 +99,13 @@ class Setup {
     return this
   }
 
-  /** Naming answers where the name went. */
-  names(state: NookFreshIdentityNaming['state']): string[] {
+  /** Names given to the fresh identity. */
+  names(): string[] {
     const named: string[] = []
     vi.spyOn(this.manager, 'name_fresh_identity').mockImplementation(
       (label) => {
         named.push(label)
-        const naming: NookFreshIdentityNaming = { state }
-        return Promise.resolve(naming)
+        return Promise.resolve()
       },
     )
     return named
@@ -227,7 +225,7 @@ describe('first-run setup settles the identity before any vault', () => {
   test('an identity kept on this browser is named, then asks about a vault', async () => {
     const setup = new Setup().at(FirstRunStage.Name)
     setup.vault.firstRunPlace = FirstRunPlace.ThisBrowser
-    const named = setup.names('named')
+    const named = setup.names()
 
     await new FirstRunActions(setup.vault).createNamed('  Family  ')
 
@@ -236,20 +234,10 @@ describe('first-run setup settles the identity before any vault', () => {
     expect(setup.vault.firstRun).toBe(FirstRunStage.Vault)
   })
 
-  test('a key the extension lends gets its first vault at once', async () => {
-    const setup = new Setup().at(FirstRunStage.Name)
-    setup.vault.firstRunPlace = FirstRunPlace.ThisBrowser
-    setup.names('atFirstVault')
-
-    await new FirstRunActions(setup.vault).createNamed('Family')
-
-    expect(setup.created).toEqual(['Family'])
-  })
-
   test('a new identity on the sync provider gets its first vault at once', async () => {
     const setup = new Setup().at(FirstRunStage.Name)
     setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
-    setup.names('named')
+    setup.names()
 
     await new FirstRunActions(setup.vault).createNamed('Family')
 
@@ -261,7 +249,7 @@ describe('first-run setup settles the identity before any vault', () => {
     // provider without its Nook folder, which no sync can use.
     const setup = new Setup().at(FirstRunStage.Name)
     setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
-    setup.names('named')
+    setup.names()
     new FirstRunActions(setup.vault).beginGoogleDrive()
     const stagedAtCreation: LoginSetupKind[] = []
     vi.spyOn(setup.vault, 'createLocalVaultWithDeviceKeys').mockImplementation(

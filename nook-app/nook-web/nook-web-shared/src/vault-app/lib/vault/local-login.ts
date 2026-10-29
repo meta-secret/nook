@@ -7,7 +7,6 @@ import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
-import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
@@ -446,7 +445,6 @@ export class VaultLoginActions {
     state.clearOauthFile();
     state.clearLocalFolder();
     state.isVerifying = true;
-    let handoffAwaitingVaultCreation = false;
     let creationState = LocalVaultCreationState.Pending;
 
     try {
@@ -455,24 +453,6 @@ export class VaultLoginActions {
       if (identityInitialization.isErr()) {
         state.errorMsg = state.t(identityInitialization.error.translationKey);
         return;
-      }
-      if (
-        state.externalIdentityHandoff.kind ===
-        BrowserIdentityHandoffKind.Adopted
-      ) {
-        const manager = state.admitManager();
-        if (manager.isErr()) {
-          state.errorMsg = state.t(manager.error.translationKey);
-          return;
-        }
-        const required = state.externalIdentityHandoff.adoption.requiresConnect(
-          manager.value,
-        );
-        if (required.isErr()) {
-          state.errorMsg = state.t(required.error.translationKey);
-          return;
-        }
-        handoffAwaitingVaultCreation = required.value;
       }
       const creatingAdditionalVault = state.localVaults.length > 0;
       if (creatingAdditionalVault) {
@@ -512,27 +492,6 @@ export class VaultLoginActions {
       if (connected.isErr()) {
         state.errorMsg = state.t(connected.error.translationKey);
         return;
-      }
-      if (handoffAwaitingVaultCreation) {
-        const manager = state.admitManager();
-        if (manager.isErr()) {
-          state.errorMsg = state.t(manager.error.translationKey);
-          return;
-        }
-        const handoff = state.externalIdentityHandoff;
-        state.externalIdentityHandoff = {
-          kind: BrowserIdentityHandoffKind.Inactive,
-        };
-        if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-          const confirmed = handoff.adoption.afterVerifiedConnect(
-            manager.value,
-          );
-          if (confirmed.isErr()) {
-            state.errorMsg = state.t(confirmed.error.translationKey);
-            return;
-          }
-        }
-        handoffAwaitingVaultCreation = false;
       }
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",
@@ -608,23 +567,6 @@ export class VaultLoginActions {
     } finally {
       if (creationState === LocalVaultCreationState.Pending) {
         const failureMessage = state.errorMsg;
-        if (handoffAwaitingVaultCreation) {
-          const handoff = state.externalIdentityHandoff;
-          state.externalIdentityHandoff = {
-            kind: BrowserIdentityHandoffKind.Inactive,
-          };
-          if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-            const manager = state.admitManager();
-            const rollback = manager.isOk()
-              ? handoff.adoption.rollback(manager.value)
-              : handoff.adoption.discard();
-            if (manager.isErr() || rollback.isErr())
-              log.warn("failed vault creation handoff rollback failed");
-          }
-          state.deviceId = "";
-          state.devicePublicKey = "";
-          state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
-        }
         set_vault_session_locked(true);
         state.clearUnlockedSession(false);
         state.errorMsg = failureMessage;

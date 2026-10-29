@@ -16,11 +16,6 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
-import type {
-  ActiveExtensionSessionLease,
-  ExtensionSessionGeneration,
-  ExtensionSessionLeaseFailure,
-} from './session-lease'
 import {
   DeviceMode,
   DeviceProtectionStatus,
@@ -118,15 +113,6 @@ type PasskeyUnlockOptionsResponse = {
   readonly ok: true
   readonly material: PasskeyUnlockMaterial
 }
-type IdentityHandoffSealRequest = Parameters<
-  NookVaultManager['seal_extension_identity_handoff']
->[0]
-type IdentityHandoffSealResponse = {
-  readonly ok: true
-  readonly envelope: Awaited<
-    ReturnType<NookVaultManager['seal_extension_identity_handoff']>
-  >
-}
 type WebsitePasskeyAccountListResponse = {
   readonly ok: true
   readonly accounts: ReadonlyArray<{
@@ -178,10 +164,6 @@ export type SessionOperationContext = {
   getManager: () => Promise<NookVaultManager>
   activateSession: () => Promise<DeviceResult>
   deviceResult: (activeManager: NookVaultManager) => Promise<DeviceResult>
-  currentGeneration: () => ExtensionSessionGeneration
-  renewSessionExpiry: (
-    generation: ExtensionSessionGeneration,
-  ) => Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure>
   resetOperations: (error: SessionOperationFailure) => void
 }
 
@@ -217,14 +199,7 @@ export async function handleSessionMessage({
   context,
 }: HandleSessionMessageArgs) {
   try {
-    const {
-      ensureWasm,
-      getManager,
-      activateSession,
-      deviceResult,
-      renewSessionExpiry,
-    } = context
-    const sessionGeneration = context.currentGeneration()
+    const { ensureWasm, getManager, activateSession, deviceResult } = context
     switch (message.type) {
       case ExtensionSessionMessageType.ClassifyGrantAuthority: {
         const args: ClassifySessionGrantAuthorityArgs = {
@@ -409,46 +384,6 @@ export async function handleSessionMessage({
           ok: true,
           device: await activateSession(),
         }
-        return ok(response)
-      }
-      case ExtensionSessionMessageType.SealIdentityHandoff: {
-        const generation = sessionGeneration
-        const payload = message.payload
-        const recipientPublicKey = payload.recipientPublicKey
-        const nonce = payload.nonce
-        if (
-          typeof recipientPublicKey !== 'string' ||
-          typeof nonce !== 'string'
-        ) {
-          return err(
-            new SessionOperationFailure(
-              SessionOperationFailureKind.InvalidRequest,
-            ),
-          )
-        }
-        const activeManager = await getManager()
-        const status = await activeManager.device_protection_status()
-        if (status !== DeviceProtectionStatus.Unlocked) {
-          return err(
-            new SessionOperationFailure(SessionOperationFailureKind.Locked),
-          )
-        }
-        const sealRequest: IdentityHandoffSealRequest = {
-          recipientPublicKey,
-          nonce,
-          expectedDeviceId: payload.expectedDeviceId,
-          expectedDevicePublicKey: payload.expectedDevicePublicKey,
-          expectedDeviceSigningPublicKey:
-            payload.expectedDeviceSigningPublicKey,
-        }
-        const envelope =
-          await activeManager.seal_extension_identity_handoff(sealRequest)
-        const renewal = renewSessionExpiry(generation)
-        if (renewal.isErr())
-          return err(
-            new SessionOperationFailure(SessionOperationFailureKind.Locked),
-          )
-        const response: IdentityHandoffSealResponse = { ok: true, envelope }
         return ok(response)
       }
       case ExtensionSessionMessageType.ImportVault: {

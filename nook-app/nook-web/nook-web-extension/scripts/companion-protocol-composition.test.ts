@@ -1,9 +1,5 @@
-import {
-  freshCompanionDiscoveryEndpoint,
-  CompanionDiscoveryEndpointKind,
-} from '../src/offscreen/session-vault-operations'
 import 'fake-indexeddb/auto'
-import { rejects, throws } from 'node:assert/strict'
+import { rejects } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { Effect } from 'effect'
 import {
@@ -29,26 +25,15 @@ import {
   ExtensionPersistenceDatabaseState,
   ExtensionPersistenceStoreState,
   type ExtensionPersistenceObservation,
-  admit_companion_handoff_response,
-  admit_companion_identity_status,
   NookCompanionPairingWebsiteProtocol,
   type CompanionPairingWebsiteAuthorization,
-  type CompanionExtensionPresence,
-  type CompanionIdentityDiscoveryObservation,
-  type CompanionIdentityHandoffAuthorization,
-  type CompanionIdentityStatusAdmissionRequest,
-  type CompanionIdentityStatus,
-  type CompanionUnlockedAppKey,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  DeviceAccessProtectionKind,
-  load_identity_directory_snapshot,
   default_password_generation_options,
   generate_password,
   default as initNookWasm,
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
-  NookCompanionExtensionEndpoint,
   NookCompanionPairingCandidateFailure,
   type NookCompanionPairingCandidateOutcome,
   NookCompanionPairingCandidateOutcomeState,
@@ -64,8 +49,6 @@ import {
   seal_auth_providers_for_device_public_key,
   VaultApplication,
   type CompanionPairingRequest,
-  type CompanionIdentityHandoffResponse,
-  type CompanionWebsiteHandoffBegin,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 
 type GeneralLoginCompositionContext = {
@@ -191,8 +174,8 @@ class GeneralLoginCompositionScenario {
 
 let extension: NookVaultManager
 let extensionOwned = false
-let presence: CompanionExtensionPresence
-let unlockedAppKey: CompanionUnlockedAppKey
+let extensionAppId = ''
+let extensionSigningPublicKey = ''
 const previousIndexedDBRuntime = {
   IDBCursor: globalThis.IDBCursor,
   IDBCursorWithValue: globalThis.IDBCursorWithValue,
@@ -247,7 +230,7 @@ class CompanionPairingApprovalFixture {
         extensionRuntimeId: 'composition-runtime',
         appId: extension.device_id,
         encryptionPublicKey: extension.device_public_key,
-        signingPublicKey: unlockedAppKey.appKey.signingPublicKey,
+        signingPublicKey: extensionSigningPublicKey,
         installationLabel: 'Composition Extension',
       },
       scopes: ['vault-access', 'sync-provider-credentials'],
@@ -401,68 +384,6 @@ const compositionIndexedDBRuntime = {
   indexedDB: new IDBFactory(),
 }
 
-function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
-  return {
-    request: {
-      requestId,
-      vaultStoreId: extension.vaultStoreId,
-      expiresAt: 200,
-    },
-    observedAt: 100,
-  } satisfies CompanionIdentityDiscoveryObservation
-}
-
-function beginHandoff(
-  requestId: string,
-  previous?: ReturnType<NookCompanionExtensionEndpoint['discover']>,
-) {
-  const initial = new NookCompanionExtensionEndpoint(structuredClone(presence))
-  const observation = discovery(requestId)
-  const candidate = {
-    kind: CompanionDiscoveryEndpointKind.Initial,
-    endpoint: initial,
-  } as const
-  const replacement: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
-    previous: previous
-      ? { kind: CompanionDiscoveryEndpointKind.Discovered, endpoint: previous }
-      : candidate,
-    candidate,
-  }
-  const endpoint = freshCompanionDiscoveryEndpoint(
-    replacement,
-  ).endpoint.discover(structuredClone(observation))
-  const status = endpoint.status
-  const admissionRequest = {
-    discovery: structuredClone(observation),
-    status: structuredClone(status),
-    observedAt: 110,
-  } satisfies CompanionIdentityStatusAdmissionRequest
-  const admission = admit_companion_identity_status(
-    structuredClone(admissionRequest),
-  )
-  if (admission.kind !== 'accepted') {
-    throw new Error('expected the generated discovery admission to succeed')
-  }
-  const website = new NookVaultManager()
-  const begin = {
-    transaction: structuredClone(admission.transaction),
-    context: {
-      kind: 'paired-vault',
-      vault_store_id: extension.vaultStoreId,
-    },
-  } satisfies CompanionWebsiteHandoffBegin
-  const pending = website.begin_companion_identity_handoff(
-    structuredClone(begin),
-  )
-  const request = pending.request
-  const authorization = {
-    request: structuredClone(request),
-    observedAt: 120,
-    presence: structuredClone(presence),
-  } satisfies CompanionIdentityHandoffAuthorization
-  return { authorization, endpoint, request, website, pending }
-}
-
 let compositionSetup: Promise<void> | false = false
 
 beforeAll(() => {
@@ -494,25 +415,8 @@ beforeAll(() => {
     }
     await extension.connect_fresh('local', '', '')
     await extension.set_vault_name('Composition Vault')
-
-    unlockedAppKey = {
-      extensionRuntimeId: 'composition-runtime',
-      appKey: {
-        appId: extension.device_id,
-        encryptionPublicKey: extension.device_public_key,
-        signingPublicKey: await extension.device_signing_public_key_js(),
-        installationLabel: 'Composition Extension',
-      },
-      nonce: 'composition-nonce',
-      scopes: ['vault-access'],
-    } satisfies CompanionUnlockedAppKey
-    presence = {
-      kind: 'unlocked',
-      vault_type: 'simple',
-      vault_store_id: extension.vaultStoreId,
-      vault_name: extension.vaultName,
-      app_key: unlockedAppKey,
-    } satisfies CompanionExtensionPresence
+    extensionAppId = extension.device_id
+    extensionSigningPublicKey = await extension.device_signing_public_key_js()
   })()
   return compositionSetup
 })
@@ -533,26 +437,6 @@ afterAll(async () => {
 })
 
 describe('generated companion protocol composition', () => {
-  test('generated member association getters reject missing metadata before creation is recorded', async () => {
-    const before = await load_identity_directory_snapshot()
-    const identity = before.identity(0)
-    const members = identity.members()
-    try {
-      expect(members).toHaveLength(1)
-      for (const member of members) {
-        expect(member.protectionAssociation).toBe(
-          DeviceAccessProtectionKind.Missing,
-        )
-        expect(() => member.associated_passkey_fingerprint()).toThrow(Error)
-        expect(() => member.associated_passkey_name()).toThrow(Error)
-      }
-    } finally {
-      for (const member of members) member.free()
-      identity.free()
-      before.free()
-    }
-    await extension.record_extension_passkey_creation('Composition passkey')
-  })
   test('both generated packages project the same four canonical scopes', () => {
     expect([
       nook_companion_wasm.extension_vault_access_scope(),
@@ -670,83 +554,11 @@ describe('generated companion protocol composition', () => {
     await rejects(extension.list_website_site_secrets(''), Error)
   })
 
-  test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
-    const previous = beginHandoff('fresh-discovery-prior')
-    expect(previous.endpoint.status.status).toBe('unlocked')
-    const latest = beginHandoff('fresh-discovery-latest', previous.endpoint)
-    throws(() => previous.endpoint.status)
-    const response = await latest.endpoint.authorize_and_seal(
-      extension,
-      structuredClone(latest.authorization),
-    )
-    expect(response.request.transaction.discovery.request.requestId).toBe(
-      'fresh-discovery-latest',
-    )
-    expect(extension.vaultStoreId).toBe(
-      latest.request.transaction.discovery.request.vaultStoreId,
-    )
-  })
-
-  test('rejects the prior transaction at a freshly issued endpoint', async () => {
-    const previous = beginHandoff('fresh-reject-prior')
-    const latest = beginHandoff('fresh-reject-latest', previous.endpoint)
-    throws(() => previous.endpoint.status)
-    await rejects(
-      latest.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(previous.authorization),
-      ),
-      Error,
-    )
-    throws(() => latest.endpoint.status)
-    expect(extension.vaultStoreId).toBe(
-      latest.request.transaction.discovery.request.vaultStoreId,
-    )
-  })
-
-  test('validates fresh presence without consuming a discovered endpoint', () => {
-    const initial = new NookCompanionExtensionEndpoint(
-      structuredClone(presence),
-    )
-    const discovered = initial.discover(discovery('presence-refresh'))
-    const lockedPresence: CompanionExtensionPresence = {
-      kind: 'locked',
-      vault_type: 'simple',
-      vault_store_id: extension.vaultStoreId,
-      vault_name: extension.vaultName,
-    }
-    const candidate = new NookCompanionExtensionEndpoint(
-      structuredClone(lockedPresence),
-    )
-    expect(candidate.presence).toEqual(lockedPresence)
-    candidate.free()
-    expect(discovered.status.status).toBe('unlocked')
-    discovered.free()
-  })
-
-  test('rejects invalid fresh presence without consuming a discovered endpoint', () => {
-    const initial = new NookCompanionExtensionEndpoint(
-      structuredClone(presence),
-    )
-    const discovered = initial.discover(discovery('presence-rejection'))
-    expect(
-      () =>
-        new NookCompanionExtensionEndpoint({
-          kind: 'locked',
-          vault_type: 'simple',
-          vault_store_id: '',
-          vault_name: extension.vaultName,
-        }),
-    ).toThrow()
-    expect(discovered.status.status).toBe('unlocked')
-    discovered.free()
-  })
-
   test('resolves stored Sentinel deliveries without borrowing the live manager', async () => {
     const request = extension.sentinel_stored_deliveries_request()
     const resolution = request.resolve()
 
-    expect(extension.device_id).toBe(unlockedAppKey.appKey.appId)
+    expect(extension.device_id).toBe(extensionAppId)
     expect(extension.vaultStoreId).not.toBe('')
 
     try {
@@ -767,218 +579,5 @@ describe('generated companion protocol composition', () => {
 
   test('stores pairing activation through generated owned wrappers', async () => {
     await PairingActivationScenario.run()
-  })
-
-  test('completes discovery, atomic authorization and sealing, and website finish', async () => {
-    const { authorization, endpoint, website, pending } =
-      beginHandoff('request-success')
-    const response = await endpoint.authorize_and_seal(
-      extension,
-      structuredClone(authorization),
-    )
-    const admission = admit_companion_handoff_response(
-      structuredClone(response),
-    )
-    expect(admission.kind).toBe('accepted')
-    if (admission.kind !== 'accepted') {
-      throw new Error('expected the generated response admission to succeed')
-    }
-
-    const adopted = await pending.finish(
-      website,
-      structuredClone(admission.response),
-    )
-    await website.connect('local', '', '')
-    const committed = adopted.after_verified_connect(website)
-    committed.confirm(website)
-
-    const after = await load_identity_directory_snapshot()
-    const recordedIdentity = after.identity(0)
-    const recordedMembers = recordedIdentity.members()
-    try {
-      expect(recordedMembers).toHaveLength(1)
-      for (const member of recordedMembers) {
-        expect(member.protectionAssociation).toBe(
-          DeviceAccessProtectionKind.PasskeyStandard,
-        )
-        expect(member.associated_passkey_name()).toBe('Composition passkey')
-        expect(member.associated_passkey_fingerprint().length).toBeGreaterThan(
-          0,
-        )
-      }
-    } finally {
-      for (const member of recordedMembers) member.free()
-      recordedIdentity.free()
-      after.free()
-    }
-
-    expect(response.encryptedEnvelope).toContain('BEGIN AGE ENCRYPTED FILE')
-    expect(website.device_id).toBe(extension.device_id)
-    expect(website.device_public_key).toBe(extension.device_public_key)
-    expect(await website.device_signing_public_key_js()).toBe(
-      unlockedAppKey.appKey.signingPublicKey,
-    )
-  })
-
-  test('rejects malformed values and mismatched discovery correlation in Rust', () => {
-    const invalidStatus = {
-      status: 'unlocked',
-      request_id: '',
-      vault_store_id: extension.vaultStoreId,
-      app_key: structuredClone(unlockedAppKey),
-    } satisfies CompanionIdentityStatus
-    const invalidAdmission = {
-      discovery: discovery('request-invalid'),
-      status: invalidStatus,
-      observedAt: 110,
-    } satisfies CompanionIdentityStatusAdmissionRequest
-    expect(admit_companion_identity_status(invalidAdmission)).toEqual({
-      kind: 'rejected',
-      failure: 'invalid-value',
-    })
-
-    const malformed: unknown = { status: 'unlocked' }
-    expect(() =>
-      Reflect.apply(admit_companion_identity_status, globalThis, [malformed]),
-    ).toThrow()
-
-    const handoff = beginHandoff('request-malformed-response')
-    expect(
-      admit_companion_handoff_response({
-        request: handoff.request,
-        encryptedEnvelope: '',
-      } satisfies CompanionIdentityHandoffResponse),
-    ).toEqual({ kind: 'rejected', failure: 'invalid-value' })
-    const staleResponse = {
-      request: structuredClone(handoff.request),
-      encryptedEnvelope: 'sealed',
-    } satisfies CompanionIdentityHandoffResponse
-    staleResponse.request.transaction.discovery.request.expiresAt =
-      staleResponse.request.transaction.admittedAt
-    expect(admit_companion_handoff_response(staleResponse)).toEqual({
-      kind: 'rejected',
-      failure: 'discovery-expired',
-    })
-
-    const initial = new NookCompanionExtensionEndpoint(
-      structuredClone(presence),
-    )
-    const observation = discovery('request-correlation')
-    const endpoint = initial.discover(structuredClone(observation))
-    const status = endpoint.status
-    endpoint.free()
-    const admission = admit_companion_identity_status({
-      discovery: structuredClone(observation),
-      status: structuredClone(status),
-      observedAt: 110,
-    })
-    if (admission.kind !== 'accepted') {
-      throw new Error('expected correlated discovery admission')
-    }
-    admission.transaction.discovery.request.requestId = 'request-other'
-    const mismatched = {
-      transaction: admission.transaction,
-      context: {
-        kind: 'paired-vault',
-        vault_store_id: extension.vaultStoreId,
-      },
-    } satisfies CompanionWebsiteHandoffBegin
-
-    expect(() =>
-      new NookVaultManager().begin_companion_identity_handoff(mismatched),
-    ).toThrow('does not match the active request')
-  })
-
-  test('rejects unrelated and stale status admission in Rust', () => {
-    const initial = new NookCompanionExtensionEndpoint(
-      structuredClone(presence),
-    )
-    const observation = discovery('request-admission')
-    const endpoint = initial.discover(structuredClone(observation))
-    const unrelated = endpoint.status
-    unrelated.request_id = 'request-other'
-    expect(
-      admit_companion_identity_status({
-        discovery: structuredClone(observation),
-        status: unrelated,
-        observedAt: 110,
-      }),
-    ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
-
-    const wrongVault = endpoint.status
-    wrongVault.vault_store_id = 'vault-other'
-    expect(
-      admit_companion_identity_status({
-        discovery: structuredClone(observation),
-        status: wrongVault,
-        observedAt: 110,
-      }),
-    ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
-
-    const exact = endpoint.status
-    endpoint.free()
-    expect(
-      admit_companion_identity_status({
-        discovery: structuredClone(observation),
-        status: exact,
-        observedAt: 200,
-      }),
-    ).toEqual({ kind: 'rejected', failure: 'discovery-expired' })
-  })
-
-  test('consumes mismatched and replayed authorization', async () => {
-    const first = beginHandoff('request-replay')
-    const mismatched = structuredClone(first.authorization)
-    if (mismatched.request.transaction.status.status !== 'unlocked') {
-      throw new Error('expected unlocked transaction')
-    }
-    mismatched.request.transaction.status.app_key.appKey.appId = 'app-mismatch'
-    // Await through the event loop so wasm-bindgen can deliver its rejection.
-    await rejects(
-      first.endpoint.authorize_and_seal(extension, mismatched),
-      Error,
-    )
-    // Consumed wasm-bindgen owners must be checked synchronously: invoking
-    // another async method traps inside its future before it can settle.
-    throws(() => first.endpoint.status)
-  })
-
-  test('consumes stale authorization and concurrent discovery', async () => {
-    const stale = beginHandoff('request-stale')
-    stale.authorization.observedAt = 200
-    await rejects(
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-      Error,
-    )
-    throws(() => stale.endpoint.status)
-
-    const concurrent = beginHandoff('request-concurrent')
-    expect(() =>
-      concurrent.endpoint.rediscover(discovery('request-other')),
-    ).toThrow()
-    throws(() => concurrent.endpoint.status)
-  })
-
-  test('rejects replay and a forged response at retained website state', async () => {
-    const first = beginHandoff('request-forged-response')
-
-    const response = await first.endpoint.authorize_and_seal(
-      extension,
-      structuredClone(first.authorization),
-    )
-    throws(() => first.endpoint.status)
-
-    const forged = structuredClone(
-      response,
-    ) satisfies CompanionIdentityHandoffResponse
-    forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await rejects(
-      first.pending.finish(first.website, forged),
-      /does not match the active request/,
-    )
-    throws(() => first.pending.request)
   })
 })

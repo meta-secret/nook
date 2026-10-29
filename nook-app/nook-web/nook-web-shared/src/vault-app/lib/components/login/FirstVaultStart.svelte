@@ -29,7 +29,6 @@ this same screen: the person creates or joins here, never in the extension.
     vault,
     isBusy,
     isVerifying,
-    usesExtensionDeviceIdentity = false,
     onCreate,
     onConnectStorage,
     onUseEnrollmentCode,
@@ -37,8 +36,6 @@ this same screen: the person creates or joins here, never in the extension.
     vault: VaultState
     isBusy: boolean
     isVerifying: boolean
-    /** The paired extension supplies the device key; no passkey is asked. */
-    usesExtensionDeviceIdentity?: boolean
     onCreate: (label: string) => void | Promise<void>
     onConnectStorage: () => void
     /** Present when this app can join an identity with an enrollment code. */
@@ -141,14 +138,6 @@ this same screen: the person creates or joins here, never in the extension.
       {/if}
       {vault.t(I18N_KEYS.FirstRunCreate)}
     </Button>
-    {#if usesExtensionDeviceIdentity}
-      <p
-        class="-mt-4 text-xs text-pretty text-muted-foreground"
-        data-testid="first-vault-extension-hint"
-      >
-        {vault.t(I18N_KEYS.LoginLandingCreateSimpleWithExtension)}
-      </p>
-    {/if}
 
     <OptionDivider {vault} />
 

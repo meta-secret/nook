@@ -121,12 +121,8 @@ offers adding by another passkey.
 - Setup may instead create a new identity. It is still fresh, so
   `name_fresh_identity` names it before its log exists; an identity with a
   log, a vault, or another member keeps its name (`IdentityAlreadyInUse`).
-- A key the browser extension lends has no local identity on the page until
-  its first vault's genesis creates one. Naming then stages the name on the
-  session (`FreshIdentityNamed::AtFirstVault`), and that genesis creates the
-  identity under it.
-- Gap: a lent key cannot yet be recognised as a member of a listed identity,
-  nor finish a join, because both need its local identity before any vault.
+  Naming requires the app key's local identity: the website names only its
+  own app key's identity.
 
 ## Operations
 

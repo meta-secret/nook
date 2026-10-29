@@ -111,7 +111,6 @@ class VaultAppsInventoryScenario {
       device_signing_public_key: extensionDevice.deviceSigningPublicKey,
       extension_id: 'inventory-test-extension',
       device_label: 'Nook Extension',
-      nonce: 'inventory-test-nonce',
       scopes: 'vault-access,password-filling',
     })
     yield* Effect.promise(() =>

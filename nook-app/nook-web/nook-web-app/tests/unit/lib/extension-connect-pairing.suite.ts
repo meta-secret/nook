@@ -3,7 +3,6 @@ import { ExtensionConnectFollowKind } from '$web-shared/extension/extension-conn
 import { Effect } from 'effect'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   pairingApprovalResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -53,14 +52,12 @@ describe('extension pairing approved message', () => {
   >[0] {
     return {
       request: {
-        source: ExtensionIdentityRequestSource.ExtensionConnect,
         follow: { kind: ExtensionConnectFollowKind.Unnamed },
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         extensionRuntimeId: 'extension-123',
         deviceLabel: 'Nook Extension',
-        nonce: 'nonce-1',
         scopes: [ExtensionConnectScope.VaultAccess],
       },
       message: {

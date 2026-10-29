@@ -13,6 +13,8 @@ use crate::{
 };
 use nook_auth2::{BuildMembersRecordsRequest, VaultMember};
 use nook_event_log::EventGraphRejection;
+use std::fmt;
+use zeroize::Zeroize;
 
 use crate::errors::{VaultError, VaultResult};
 use crate::vault_ids::{AuthKeyId, StoreId};
@@ -32,6 +34,29 @@ pub struct VaultEventSession {
     pub key_epoch: String,
     pub signing: SigningIdentity,
     pub signing_seed: String,
+}
+
+/// Durable event-signer availability on this browser.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StoredSigningSeed {
+    Missing,
+    Stored(String),
+}
+impl fmt::Debug for StoredSigningSeed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => formatter.write_str("StoredSigningSeed::Missing"),
+            Self::Stored(_) => formatter.write_str("StoredSigningSeed::Stored([REDACTED])"),
+        }
+    }
+}
+impl Zeroize for StoredSigningSeed {
+    fn zeroize(&mut self) {
+        if let Self::Stored(seed) = self {
+            seed.zeroize();
+        }
+        *self = Self::Missing;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

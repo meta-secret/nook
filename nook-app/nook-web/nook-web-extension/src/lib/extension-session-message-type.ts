@@ -12,7 +12,6 @@ export const ExtensionSessionMessageType = {
   UnlockPasskey: 'nook:extension-session-unlock-passkey',
   CreatePin: 'nook:extension-session-create-pin',
   UnlockPin: 'nook:extension-session-unlock-pin',
-  SealIdentityHandoff: 'nook:extension-session-seal-identity-handoff',
   ImportVault: 'nook:extension-session-import-vault',
   JoinIdentity: 'nook:extension-session-join-identity',
   ConnectIdentityVault: 'nook:extension-session-connect-identity-vault',

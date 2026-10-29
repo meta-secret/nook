@@ -2,32 +2,21 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
-import { err, ok, type Result } from 'neverthrow'
+import type { Result } from 'neverthrow'
 import {
   ActiveExtensionSessionLease,
   ExtensionSessionGeneration,
-  ExtensionSessionLeaseFailure,
 } from './session-lease'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
-  NookCompanionExtensionEndpoint,
-  type NookDiscoveredCompanionExtensionEndpoint,
   admit_extension_storage_providers,
   NookVaultManager,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type {
-  CompanionIdentityHandoffResponse,
-  CompanionIdentityStatus,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ListeningExtensionSession,
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
-import type {
-  CompanionIdentityDiscoverySessionTransportRequest,
-  CompanionIdentityHandoffSessionTransportRequest,
-  ExtensionSessionRequest,
-} from './session-request-adapter'
+import type { ExtensionSessionRequest } from './session-request-adapter'
 import { ExtensionSessionLifecycleMessageType } from '../lib/extension-session-lifecycle-message-type'
 import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 import {
@@ -38,13 +27,6 @@ import {
 } from './session-operations'
 import { GoogleLoginSessionContinuations } from './google-login-continuation'
 import { vaultWasmStartup } from './vault-wasm-startup'
-import {
-  CompanionVaultDiscovery,
-  freshCompanionDiscoveryEndpoint,
-  CompanionDiscoveryEndpointKind,
-} from './session-vault-operations'
-import { decode_companion_identity_discovery_observation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 import type { CompanionWasmSessionResponse } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
@@ -82,16 +64,6 @@ type SessionExpiryLeaseConfiguration = ConstructorParameters<
   typeof ActiveExtensionSessionLease
 >[0]
 
-type CompanionIdentityHandoffSessionResponse = {
-  readonly ok: true
-  readonly response: CompanionIdentityHandoffResponse
-}
-
-type CompanionIdentityDiscoverySessionResponse = {
-  readonly ok: true
-  readonly status: CompanionIdentityStatus
-}
-
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
 }
@@ -100,10 +72,6 @@ class ExtensionSessionExpiryLifecycle {
     kind: SessionExpiryScheduleKind.Stopped,
   }
   private generation = ExtensionSessionGeneration.initial()
-
-  currentGeneration(): ExtensionSessionGeneration {
-    return this.generation
-  }
 
   activate(onExpire: () => void): void {
     this.generation = this.generation.next()
@@ -126,49 +94,9 @@ class ExtensionSessionExpiryLifecycle {
       lease: new ActiveExtensionSessionLease(leaseConfiguration),
     }
   }
-
-  renew(
-    generation: ExtensionSessionGeneration,
-  ): Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure> {
-    if (
-      !this.generation.matches(generation) ||
-      this.scheduleState.kind !== SessionExpiryScheduleKind.Scheduled
-    ) {
-      return err(ExtensionSessionLeaseFailure.Locked)
-    }
-    const renewed = this.scheduleState.lease.renew(generation)
-    if (renewed.isErr()) return err(renewed.error)
-    return ok(this.scheduleState.lease)
-  }
 }
 
 const sessionExpiryLifecycle = new ExtensionSessionExpiryLifecycle()
-
-enum CompanionEndpointAvailabilityKind {
-  Inactive = 'inactive',
-  Active = 'active',
-}
-
-type CompanionEndpointAvailability =
-  | { kind: CompanionEndpointAvailabilityKind.Inactive }
-  | {
-      kind: CompanionEndpointAvailabilityKind.Active
-      endpoint: NookDiscoveredCompanionExtensionEndpoint
-    }
-
-let companionEndpointAvailability: CompanionEndpointAvailability = {
-  kind: CompanionEndpointAvailabilityKind.Inactive,
-}
-
-function releaseCompanionEndpoint(): void {
-  const current = companionEndpointAvailability
-  companionEndpointAvailability = {
-    kind: CompanionEndpointAvailabilityKind.Inactive,
-  }
-  if (current.kind === CompanionEndpointAvailabilityKind.Active) {
-    current.endpoint.free()
-  }
-}
 
 function ensureWasm(): ReturnType<typeof initNookWasm> {
   return vaultWasmStartup.ensure()
@@ -195,11 +123,9 @@ async function deviceResult(
 }
 
 async function activateSession(): Promise<DeviceResult> {
-  releaseCompanionEndpoint()
   sessionMessageDispatcher.resetOperations()
   const activeManager = await getManager()
   sessionExpiryLifecycle.activate(() => {
-    releaseCompanionEndpoint()
     const expiredManager = managerAvailability
     managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
     if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
@@ -232,12 +158,7 @@ const operationContext: SessionOperationContext = {
   getManager,
   activateSession,
   deviceResult,
-  currentGeneration: () => sessionExpiryLifecycle.currentGeneration(),
-  renewSessionExpiry: (generation) => sessionExpiryLifecycle.renew(generation),
-  resetOperations: (error) => {
-    releaseCompanionEndpoint()
-    sessionMessageDispatcher.replaceOperations(error)
-  },
+  resetOperations: (error) => sessionMessageDispatcher.replaceOperations(error),
 }
 
 type SessionOperationResponse = Awaited<ReturnType<typeof handleSessionMessage>>
@@ -247,117 +168,6 @@ async function handleMessage(
 ): Promise<SessionOperationResponse> {
   const args: HandleSessionMessageArgs = { message, context: operationContext }
   return handleSessionMessage(args)
-}
-
-async function handleCompanionIdentityHandoff(
-  message: CompanionIdentityHandoffSessionTransportRequest,
-) {
-  try {
-    if (
-      companionEndpointAvailability.kind !==
-      CompanionEndpointAvailabilityKind.Active
-    ) {
-      return err(
-        new SessionOperationFailure(SessionOperationFailureKind.Failed),
-      )
-    }
-    const endpoint = companionEndpointAvailability.endpoint
-    companionEndpointAvailability = {
-      kind: CompanionEndpointAvailabilityKind.Inactive,
-    }
-    const generation = sessionExpiryLifecycle.currentGeneration()
-    let consumed = false
-    try {
-      const activeManager = await getManager()
-      consumed = true
-      const response: CompanionIdentityHandoffResponse =
-        await endpoint.authorize_and_seal(
-          activeManager,
-          message.payload.authorization,
-        )
-      const renewal = sessionExpiryLifecycle.renew(generation)
-      if (renewal.isErr())
-        return err(
-          new SessionOperationFailure(SessionOperationFailureKind.Locked),
-        )
-      const result: CompanionIdentityHandoffSessionResponse = {
-        ok: true,
-        response,
-      }
-      return ok(result)
-    } finally {
-      if (!consumed) endpoint.free()
-    }
-  } catch {
-    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
-  }
-}
-
-async function handleCompanionIdentityDiscovery(
-  message: CompanionIdentityDiscoverySessionTransportRequest,
-) {
-  try {
-    await ensureWasm()
-    const activeManager = await getManager()
-    const discovery = decode_companion_identity_discovery_observation(
-      message.payload.discovery,
-    )
-    const candidate = new NookCompanionExtensionEndpoint(
-      message.payload.presence,
-    )
-    const presence = candidate.presence
-    const prior = companionEndpointAvailability
-    companionEndpointAvailability = {
-      kind: CompanionEndpointAvailabilityKind.Inactive,
-    }
-    const initial = {
-      kind: CompanionDiscoveryEndpointKind.Initial,
-      endpoint: candidate,
-    } as const
-    const replacement: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
-      previous:
-        prior.kind === CompanionEndpointAvailabilityKind.Active
-          ? {
-              kind: CompanionDiscoveryEndpointKind.Discovered,
-              endpoint: prior.endpoint,
-            }
-          : initial,
-      candidate: initial,
-    }
-    const endpoint = freshCompanionDiscoveryEndpoint(replacement)
-
-    try {
-      const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
-        activeManager,
-        endpoint,
-        presence,
-      }
-      const companionDiscovery = new CompanionVaultDiscovery(
-        companionDiscoveryArgs,
-      )
-      const discoveryResult = await companionDiscovery.discover(discovery)
-      if (discoveryResult.isErr()) return err(discoveryResult.error)
-      const discovered = discoveryResult.value
-      companionEndpointAvailability = {
-        kind: CompanionEndpointAvailabilityKind.Active,
-        endpoint: discovered,
-      }
-      const status: CompanionIdentityStatus = discovered.status
-      if (status.status !== 'unlocked') releaseCompanionEndpoint()
-      const response: CompanionIdentityDiscoverySessionResponse = {
-        ok: true,
-        status,
-      }
-      return ok(response)
-    } catch {
-      releaseCompanionEndpoint()
-      return err(
-        new SessionOperationFailure(SessionOperationFailureKind.Failed),
-      )
-    }
-  } catch {
-    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
-  }
 }
 
 type SessionSuccess<T> =
@@ -371,19 +181,13 @@ type WebsitePasskeyAccountsSessionResponse = {
   }[]
 }
 export type ExtensionSessionResponse =
-  | SessionSuccess<
-      | Awaited<ReturnType<typeof handleMessage>>
-      | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
-      | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
-    >
+  | SessionSuccess<Awaited<ReturnType<typeof handleMessage>>>
   | WebsitePasskeyAccountsSessionResponse
   | CompanionWasmSessionResponse
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {
     handleMessage,
-    handleCompanionIdentityDiscovery,
-    handleCompanionIdentityHandoff,
     handleCompanionWasmMessage: GoogleLoginSessionContinuations.buildHandler(),
     decodeProviders: async (providers) => {
       return admit_extension_storage_providers(providers)

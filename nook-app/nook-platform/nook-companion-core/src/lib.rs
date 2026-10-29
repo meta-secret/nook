@@ -32,7 +32,6 @@ mod authenticator_preview_response;
 mod backup_code_candidates;
 mod browser_tab_target;
 mod companion_pairing;
-mod companion_protocol;
 pub mod credential_fill;
 pub mod personal_field_classification;
 pub use personal_field_classification::{
@@ -158,24 +157,13 @@ pub use companion_pairing::{
     CompanionPairingWebsiteAuthorizationOutcome, CompanionWebsitePairingEndpoint,
     ConsumedCompanionPairingAuthority,
 };
-pub use companion_protocol::{
-    AuthorizedCompanionIdentityHandoff, CompanionAdmittedIdentityDiscovery,
-    CompanionEpochMilliseconds, CompanionExtensionHandoffEndpoint, CompanionExtensionPresence,
-    CompanionExtensionProtocol, CompanionHandoffResponseAdmission,
-    CompanionIdentityDiscoveryObservation, CompanionIdentityDiscoveryRequest,
-    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffContext,
-    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse,
-    CompanionIdentityHandoffSealer, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
-    CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
-    CompanionInstallationAppKey, CompanionProtocolError, CompanionProtocolFailure,
-    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin, DiscoveredCompanionHandoffEndpoint,
-};
 pub use domain_numbers::{
     AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,
     AuthenticationOutcomeTimeoutMilliseconds, AuthenticationPasskeyAccountCount,
     AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
     AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
-    AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
+    AuthenticationWorkflowTotalSteps, CompanionEpochMilliseconds, ExtensionEventCount,
+    ExtensionSyncProviderCount,
 };
 pub use extension_consent::{
     ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentObservation,

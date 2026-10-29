@@ -41,7 +41,6 @@ import {
 } from '$lib/auth/providers'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
@@ -59,14 +58,12 @@ import { ExtensionKeyringGrantKind } from '$web-shared/extension/keyring-grant-w
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const request: ExtensionConnectRequest = {
-  source: ExtensionIdentityRequestSource.ExtensionConnect,
   follow: { kind: ExtensionConnectFollowKind.Unnamed },
   deviceId: 'device-1',
   devicePublicKey: 'age1device',
   deviceSigningPublicKey: 'signing-key',
   extensionRuntimeId: 'extension-123',
   deviceLabel: 'Nook Extension',
-  nonce: 'nonce-1',
   scopes: [ExtensionConnectScope.VaultAccess],
 }
 

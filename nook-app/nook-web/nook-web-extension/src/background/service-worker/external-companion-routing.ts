@@ -1,7 +1,4 @@
-import {
-  ExternalSenderTrustDecision,
-  ExternalSenderTrustPolicy,
-} from './routing-trust'
+import { ExternalSenderTrustPolicy } from './routing-trust'
 import { Effect } from 'effect'
 import { ExtensionVaultEventLogExport } from './vault-event-log-export'
 import {
@@ -12,16 +9,11 @@ import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension
 import {
   ExtensionPairingApprovedGrantAdmission,
   ExtensionPairingApprovedMessageType,
-  ExtensionPairedVaultUnlockRequestMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
-import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
-import {
-  CompanionLauncherSourceKind,
-  ExtensionSessionLifecycle,
-} from './session-lifecycle'
+import { ExtensionSessionLifecycle } from './session-lifecycle'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -55,43 +47,16 @@ export type ExternalCompanionRoutingRequest = {
 
 export type ExternalCompanionRoutingDependencies = {
   vaultEventLogExporter: Pick<ExtensionVaultEventLogExport, 'run'>
-  createIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createIdentityHandoff
-  createPairedIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createPairedIdentityHandoff
-  discoverPairedVaultIdentity: typeof PairingIdentity.extensionPairingIdentity.discoverPairedVaultIdentity
   decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  decodeExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionIdentityHandoffRequestMessage.decode
-  decodeExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityDiscoveryMessage.decode
-  decodeExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityHandoffRequestMessage.decode
-  decodeExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage.decode
-  decodeExtensionPairedVaultLockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultLockRequestMessage.decode
   decodeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.decode
-  admitsUnlockSenderSynchronously: typeof ExternalSenderTrustPolicy.admitsSynchronouslyIfReady
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
-  requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
   /** Focuses the tab whose widget started the connect that was just approved. */
   returnToConnectOrigin: () => Promise<void>
-  /** Locks the extension session and tells its vault tabs; false when the
-   * cleanup did not complete. */
-  lockExtensionSession: () => Promise<boolean>
 }
 
 type MessageResponse = { ok: boolean; reason?: string }
-
-enum PairedUnlockRouteKind {
-  NotRequested = 'not-requested',
-  Requested = 'requested',
-}
-
-type PairedUnlockRouteState =
-  | { readonly kind: PairedUnlockRouteKind.NotRequested }
-  | {
-      readonly kind: PairedUnlockRouteKind.Requested
-      readonly message: RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage
-      readonly panelOpen: Promise<void>
-      readonly windowId: number
-    }
 
 const forbiddenSenderResponse: MessageResponse = {
   ok: false,
@@ -105,10 +70,6 @@ const launcherFailureResponse: MessageResponse = {
 const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
-}
-const sessionLockFailureResponse: MessageResponse = {
-  ok: false,
-  reason: 'session-lock-failed',
 }
 const eventLogImportFailureResponse: MessageResponse = {
   ok: false,
@@ -141,102 +102,18 @@ export class ExternalCompanionRouter {
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
-    let pairedUnlockRoute: PairedUnlockRouteState = {
-      kind: PairedUnlockRouteKind.NotRequested,
-    }
-    if (
-      message.type ===
-      ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest
-    ) {
-      const trustDecision = dependencies.admitsUnlockSenderSynchronously(sender)
-      if (trustDecision !== ExternalSenderTrustDecision.Admitted) {
-        const trustFailureResponse: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason:
-            trustDecision === ExternalSenderTrustDecision.NotReady
-              ? 'unlock-trust-policy-not-ready'
-              : 'forbidden-sender',
-        }
-        sendResponse(trustFailureResponse)
-        return false
-      }
-      const unlockGestureProbe = runConcreteDecoder(
-        dependencies.decodeExtensionPairedVaultUnlockRequestMessage,
-        message,
-      )
-      if (unlockGestureProbe.kind === ConcreteDecoderResultKind.Rejected) {
-        const invalidUnlockRequestResponse: Parameters<typeof sendResponse>[0] =
-          {
-            ok: false,
-            reason: 'invalid-unlock-request',
-          }
-        sendResponse(invalidUnlockRequestResponse)
-        return false
-      }
-      if (typeof chrome.sidePanel.close !== 'function') {
-        const closeUnavailableResponse: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'side-panel-close-unavailable',
-        }
-        sendResponse(closeUnavailableResponse)
-        return false
-      }
-      const source = ExtensionSessionLifecycle.sourceFromSender(sender)
-      if (source.kind !== CompanionLauncherSourceKind.SourceWindow) {
-        const sourceWindowMissingResponse: Parameters<typeof sendResponse>[0] =
-          {
-            ok: false,
-            reason: 'unlock-source-window-missing',
-          }
-        sendResponse(sourceWindowMissingResponse)
-        return false
-      }
-      try {
-        const sidePanelOpenOptions: chrome.sidePanel.OpenOptions = {
-          windowId: source.windowId,
-        }
-        const panelOpen = chrome.sidePanel.open(sidePanelOpenOptions)
-        pairedUnlockRoute = {
-          kind: PairedUnlockRouteKind.Requested,
-          message: unlockGestureProbe.value,
-          panelOpen,
-          windowId: source.windowId,
-        }
-      } catch {
-        const sidePanelOpenFailureResponse: Parameters<typeof sendResponse>[0] =
-          {
-            ok: false,
-            reason: 'side-panel-open-failed',
-          }
-        sendResponse(sidePanelOpenFailureResponse)
-        return false
-      }
-    }
     const eventLogRecordsSnapshot =
       SerializedWireValueAdapter.snapshotEventLogRecords(message)
-    if (
-      pairedUnlockRoute.kind === PairedUnlockRouteKind.NotRequested &&
-      !(await ExternalSenderTrustPolicy.admits(sender))
-    ) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
     const {
-      createIdentityHandoff,
-      createPairedIdentityHandoff,
-      discoverPairedVaultIdentity,
       decodePairingApprovedMessage,
       importPairingAfterCompanionReady,
-      decodeExtensionIdentityHandoffRequestMessage,
-      decodeExtensionPairedVaultIdentityDiscoveryMessage,
-      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
-      decodeExtensionPairedVaultUnlockRequestMessage,
-      decodeExtensionPairedVaultLockRequestMessage,
       decodeOpenCompanionLauncherMessage,
-      lockExtensionSession,
       openCompanionLauncher,
       refreshAuthenticationSurfaces,
-      requestPairedVaultUnlock,
       returnToConnectOrigin,
     } = dependencies
     const exportRoute = this.observeVaultEventLogRoute()
@@ -259,109 +136,6 @@ export class ExternalCompanionRouter {
       void openCompanionLauncher(launcherRequest)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
-      return true
-    }
-
-    const identityDiscovery = runConcreteDecoder(
-      decodeExtensionPairedVaultIdentityDiscoveryMessage,
-      message,
-    )
-    if (identityDiscovery.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
-      void discoverPairedVaultIdentity(identityDiscovery.value).then(
-        sendResponse,
-      )
-      return true
-    }
-
-    const pairedVaultLock = runConcreteDecoder(
-      decodeExtensionPairedVaultLockRequestMessage,
-      message,
-    )
-    if (pairedVaultLock.kind === ConcreteDecoderResultKind.Decoded) {
-      const { requestId } = pairedVaultLock.value.payload
-      void lockExtensionSession().then((locked) => {
-        const lockedResponse: RuntimeMessages.ExtensionPairedVaultLockResponse =
-          { ok: true, requestId }
-        sendResponse(locked ? lockedResponse : sessionLockFailureResponse)
-      })
-      return true
-    }
-
-    const pairedVaultUnlock =
-      pairedUnlockRoute.kind === PairedUnlockRouteKind.NotRequested
-        ? runConcreteDecoder(
-            decodeExtensionPairedVaultUnlockRequestMessage,
-            message,
-          )
-        : {
-            kind: ConcreteDecoderResultKind.Decoded,
-            value: pairedUnlockRoute.message,
-          }
-    if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
-      const decodedMessage = pairedVaultUnlock.value
-      const source = ExtensionSessionLifecycle.sourceFromSender(sender)
-      const unlockRequest: Parameters<typeof requestPairedVaultUnlock>[0] = {
-        message: decodedMessage,
-        source,
-      }
-      const panelOpen =
-        pairedUnlockRoute.kind === PairedUnlockRouteKind.Requested
-          ? pairedUnlockRoute.panelOpen
-          : Promise.resolve()
-      void Promise.all([panelOpen, requestPairedVaultUnlock(unlockRequest)])
-        .then(async ([, response]) => {
-          if (
-            !response.ok &&
-            pairedUnlockRoute.kind === PairedUnlockRouteKind.Requested
-          ) {
-            const sidePanelCloseOptions: chrome.sidePanel.CloseOptions = {
-              windowId: pairedUnlockRoute.windowId,
-            }
-            try {
-              await chrome.sidePanel.close(sidePanelCloseOptions)
-            } catch {
-              // Preserve the unlock failure response if dismissal also fails.
-            }
-          }
-          sendResponse(response)
-        })
-        .catch(() => {
-          const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            requestId: decodedMessage.payload.requestId,
-            vaultStoreId: decodedMessage.payload.vaultStoreId,
-            reason: 'unlock-launch-failed',
-          }
-          return sendResponse(unlockFailureResponse)
-        })
-      return true
-    }
-
-    const identityHandoff = runConcreteDecoder(
-      decodeExtensionIdentityHandoffRequestMessage,
-      message,
-    )
-    if (identityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
-      void createIdentityHandoff(identityHandoff.value).then(sendResponse)
-      return true
-    }
-
-    const pairedIdentityHandoff = runConcreteDecoder(
-      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
-      message,
-    )
-    if (pairedIdentityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
-      void createPairedIdentityHandoff(pairedIdentityHandoff.value).then(
-        sendResponse,
-      )
       return true
     }
 

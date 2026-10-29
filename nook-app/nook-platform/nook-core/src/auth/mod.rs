@@ -2,7 +2,6 @@
 
 pub(crate) mod device_key_protection;
 pub(crate) mod enrollment;
-pub(crate) mod extension_identity_handoff;
 pub(crate) mod identity_control;
 pub(crate) mod identity_control_snapshot;
 pub(crate) mod identity_join;

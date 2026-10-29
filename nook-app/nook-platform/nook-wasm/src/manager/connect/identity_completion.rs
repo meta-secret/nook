@@ -1,9 +1,9 @@
 //! Identity adoption and verified epoch reconciliation at connect completion.
 use super::{
-    EventGraphAuthorizationProjection, EventId, ExtensionIdentityPublication,
-    IdentityDbEnsureLocalIdentityForAppKey, IdentityVaultDekEpoch, IdentityVaultEventId,
-    NookDatabase, NookError, NookVaultManager, SimpleGenesisCompletion, SimpleGenesisProgress,
-    StoreId, VaultNameState, VerifiedPreviousEpoch, identity_record,
+    EventGraphAuthorizationProjection, EventId, IdentityDbEnsureLocalIdentityForAppKey,
+    IdentityVaultDekEpoch, IdentityVaultEventId, NookDatabase, NookError, NookVaultManager,
+    SimpleGenesisCompletion, SimpleGenesisProgress, StoreId, VaultNameState, VerifiedPreviousEpoch,
+    identity_record,
 };
 
 impl NookVaultManager {
@@ -12,31 +12,15 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
         pending_cleanup: SimpleGenesisProgress,
     ) -> Result<(), NookError> {
-        let staged_genesis = matches!(&pending_cleanup, SimpleGenesisProgress::Pending(pending) if pending.is_staged());
-        if !staged_genesis {
-            self.ensure_identity_after_connect(identity).await?;
-        }
-        self.finalize_existing_vault_import_handoff().await?;
-        self.finalize_paired_vault_handoff().await?;
+        self.ensure_identity_after_connect(identity).await?;
         let SimpleGenesisProgress::Pending(completed) = pending_cleanup else {
             return Ok(());
         };
-        let staged_handoff = completed.is_staged();
-        let completion = if staged_handoff {
-            SimpleGenesisCompletion::Staged {
-                pending: &completed,
-                signing_seed: self.event_log.signing_seed.as_str(),
-            }
-        } else {
-            SimpleGenesisCompletion::Ordinary {
-                pending: &completed,
-            }
-        };
-        completion.clear_pending().await?;
-        if staged_handoff {
-            self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
+        SimpleGenesisCompletion {
+            pending: &completed,
         }
-        Ok(())
+        .clear_pending()
+        .await
     }
 
     /// Persist a first-class Identity after connect, synthesizing from vault auth when needed.
@@ -48,9 +32,6 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if self.defers_identity_reconciliation_until_handoff() {
-            return Ok(());
-        }
         let label = match &self.vault.vault_name {
             VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),

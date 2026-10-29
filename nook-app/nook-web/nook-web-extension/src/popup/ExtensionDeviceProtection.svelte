@@ -58,9 +58,6 @@ controls, messages and Rust/WASM calls live here once.
     readonly purpose: DeviceProtectionPurpose
     readonly onstatus: (status: DeviceProtectionStatus) => void
     readonly onunlocked: (unlock: DeviceProtectionUnlock) => void
-    /** Someone is waiting on this unlock (a paired vault page): its Unlock
-     * control carries the guide that points the person at it. */
-    readonly guided?: boolean
   }
 
   type CeremonyStep = {
@@ -90,7 +87,6 @@ controls, messages and Rust/WASM calls live here once.
     purpose,
     onstatus,
     onunlocked,
-    guided = false,
   }: ExtensionDeviceProtectionProps = $props()
 
   function initialWorkflow(): DeviceProtectionSetupWorkflow {
@@ -492,7 +488,6 @@ controls, messages and Rust/WASM calls live here once.
     {@render noticeBlock()}
     <button
       type="submit"
-      class:guided-action={guided}
       aria-disabled={pending || pin.length === 0}
       aria-busy={pending}
       data-testid="device-protection-pin-unlock-btn"
@@ -503,7 +498,6 @@ controls, messages and Rust/WASM calls live here once.
 {:else}
   <button
     type="button"
-    class:guided-action={guided}
     aria-disabled={pending}
     aria-busy={pending}
     data-testid="device-protection-unlock-btn"

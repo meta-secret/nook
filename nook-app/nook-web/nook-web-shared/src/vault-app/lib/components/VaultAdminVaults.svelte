@@ -11,14 +11,6 @@ belong to another identity stored here stay on that identity's card.
   }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
-  import {
-    VaultGrantPresentation,
-    VaultExtensionPresentation,
-    type ExtensionConnectedEntryRequest,
-    type VaultExtensionLinkRequest,
-    type VaultSwitcherEntryLabel,
-  } from './vault-switcher-extension'
   import {
     Check,
     FolderKey,
@@ -45,13 +37,11 @@ belong to another identity stored here stay on that identity's card.
 
   let {
     vault,
-    extensionSetupState,
     isVerifying,
     isInitializing,
     onCreateVault,
   }: {
     vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
     isVerifying: boolean
     isInitializing: boolean
     /** Create a vault for this identity; it opens once created. */
@@ -108,25 +98,6 @@ belong to another identity stored here stay on that identity's card.
     vault.localVaults.filter((entry) => ownedStoreIds.has(entry.storeId)),
   )
   const unnamedVaultLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
-  const extensionEntryLabels = $derived.by((): VaultSwitcherEntryLabel[] => {
-    const labels: VaultSwitcherEntryLabel[] = []
-    for (const entry of vaults) {
-      const label: VaultSwitcherEntryLabel = {
-        storeId: entry.storeId,
-        displayName: entry.display_label(unnamedVaultLabel),
-      }
-      labels.push(label)
-    }
-    return labels
-  })
-  const extensionLink = $derived.by(() => {
-    const request: VaultExtensionLinkRequest = {
-      offer: extensionSetupState,
-      activeStoreId,
-      entries: extensionEntryLabels,
-    }
-    return new VaultExtensionPresentation(request).link
-  })
   const isBusy = $derived(
     isVerifying ||
       isInitializing ||
@@ -328,27 +299,13 @@ belong to another identity stored here stay on that identity's card.
                   }}
                 />
               {:else}
-                {@const grantRequest: ExtensionConnectedEntryRequest = {
-              link: extensionLink,
-              storeId: entry.storeId,
-            }}
                 <div
                   class="flex h-10 min-w-0 items-center"
                   data-testid="vault-admin-name"
                   data-store-id={entry.storeId}
                 >
-                  <span class="flex min-w-0 items-center gap-2">
-                    <span class="truncate text-sm font-medium text-foreground">
-                      {entry.display_label(unnamedVaultLabel)}
-                    </span>
-                    {#if new VaultGrantPresentation(grantRequest).connected}
-                      <span
-                        class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
-                        data-testid="vault-admin-extension-badge"
-                      >
-                        {vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}
-                      </span>
-                    {/if}
+                  <span class="truncate text-sm font-medium text-foreground">
+                    {entry.display_label(unnamedVaultLabel)}
                   </span>
                 </div>
               {/if}

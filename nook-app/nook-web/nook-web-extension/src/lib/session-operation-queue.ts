@@ -54,7 +54,6 @@ export enum SessionOperationFailureKind {
   InvalidRequest = 'EXTENSION_SESSION_INVALID_REQUEST',
   Locked = 'EXTENSION_SESSION_LOCKED',
   Verification = 'EXTENSION_SESSION_VERIFICATION_FAILED',
-  Consumed = 'EXTENSION_SESSION_CONSUMED',
   Closed = 'EXTENSION_SESSION_CLOSED',
 }
 

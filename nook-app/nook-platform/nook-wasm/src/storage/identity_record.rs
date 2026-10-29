@@ -23,24 +23,12 @@ pub(crate) use lookup::{
 };
 pub(crate) use transition_context::PreviousLocalSelection;
 mod genesis_cleanup;
-mod genesis_flow;
-mod handoff;
 mod keyring;
 mod reconciliation;
 pub(crate) use reconciliation::VerifiedPreviousEpoch;
-mod handoff_authority;
-pub(crate) use handoff_authority::{
-    AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffAuthorization,
-    HandoffSignerPublication, VaultCreationAuthority, VaultCreationAuthorityRef,
-};
 mod recovery;
 pub(crate) mod simple_genesis;
-mod staged_genesis;
-pub(crate) use genesis_flow::{PendingSimpleGenesisFlow, SimpleGenesisCompletion};
-pub(crate) use handoff::{
-    ExistingVaultEnrollment, ExistingVaultImportCommit, IdentityHandoffCommit,
-    IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
-};
+pub(crate) use genesis_cleanup::SimpleGenesisCompletion;
 pub(crate) use keyring::{
     KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, LocalIdentitySigner,
     MemberSigner, ProtectedLocalIdentitySave,
@@ -141,7 +129,6 @@ pub(crate) use simple_genesis::{
     OrdinarySimpleGenesisRequest, PendingSimpleGenesis, SimpleGenesisEventInput,
     SimpleGenesisProgress,
 };
-pub(crate) use staged_genesis::StagedSimpleGenesisInput;
 
 pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 const RETIRED_APP_IDS_KEY: &str = "retired_app_ids_v1";

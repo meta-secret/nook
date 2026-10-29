@@ -17,7 +17,6 @@
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import { Lock, ShieldCheck } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
@@ -55,7 +54,6 @@
 
   let {
     vault,
-    extensionSetupState,
     isVerifying,
     isInitializing,
     syncProviders,
@@ -94,7 +92,6 @@
     section,
   }: {
     vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
@@ -203,13 +200,7 @@
   data-section={section}
 >
   {#if section === WorkspaceSection.Vaults}
-    <VaultAdminVaults
-      {vault}
-      {extensionSetupState}
-      {isVerifying}
-      {isInitializing}
-      {onCreateVault}
-    />
+    <VaultAdminVaults {vault} {isVerifying} {isInitializing} {onCreateVault} />
   {/if}
 
   {#if section === WorkspaceSection.Sync}

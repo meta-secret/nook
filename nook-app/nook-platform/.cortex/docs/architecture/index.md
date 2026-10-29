@@ -26,4 +26,3 @@
 
 - [Vault application core](../../../nook-core/.cortex/docs/architecture/index.md)
 - [Signed vault event log](../../../nook-event-log/.cortex/docs/architecture/index.md)
-- [Portable companion protocol](../../../nook-companion-core/.cortex/docs/architecture/index.md)

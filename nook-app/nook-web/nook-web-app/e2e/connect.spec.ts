@@ -156,7 +156,6 @@ test.describe('vault connect flow', () => {
       device_signing_public_key: 'side-panel-signing-key',
       extension_id: 'side-panel-extension',
       device_label: 'Nook Extension',
-      nonce: 'side-panel-nonce',
       connect_id: 'side-panel-connect',
       scopes: 'vault-access,password-filling',
     })

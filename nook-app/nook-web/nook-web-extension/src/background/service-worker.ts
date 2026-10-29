@@ -5,10 +5,6 @@ import {
   type PilotAttemptMessage,
 } from '../lib/pilot-attempt-messages'
 import { PilotAttempts } from './service-worker/pilot-attempts'
-import {
-  announceExtensionSessionLocked,
-  chromeLockNoticeBrowser,
-} from './service-worker/extension-session-lock-notice'
 import { ExtensionVaultEventLogExport } from './service-worker/vault-event-log-export'
 import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
@@ -33,12 +29,7 @@ import {
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
-  ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
-  ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
-  ExtensionPairedVaultIdentityHandoffRequestMessage as ExtensionPairedVaultIdentityHandoffRequestMessageSchema,
-  ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
-  ExtensionPairedVaultLockRequestMessage as ExtensionPairedVaultLockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
@@ -135,7 +126,6 @@ import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageS
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
-  lockExtensionSession,
   recoverInterruptedAuthorizationCleanup,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
@@ -144,7 +134,6 @@ import {
   type ExternalCompanionMessage,
   type ExternalCompanionRoutingRequest,
 } from './service-worker/external-companion-routing'
-import { ExternalSenderTrustPolicy } from './service-worker/routing-trust'
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
@@ -186,8 +175,6 @@ const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
-  announceExtensionSessionLocked: () =>
-    announceExtensionSessionLocked(chromeLockNoticeBrowser),
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers:
     accountPickerSessions.clearPendingAccountPickers.bind(
@@ -277,45 +264,16 @@ const siteVaultConnect = new SiteVaultConnectService()
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
     vaultEventLogExporter: ExtensionVaultEventLogExport.create(),
-    createIdentityHandoff: extensionPairingIdentity.createIdentityHandoff.bind(
-      extensionPairingIdentity,
-    ),
-    createPairedIdentityHandoff:
-      extensionPairingIdentity.createPairedIdentityHandoff.bind(
-        extensionPairingIdentity,
-      ),
-    discoverPairedVaultIdentity:
-      extensionPairingIdentity.discoverPairedVaultIdentity.bind(
-        extensionPairingIdentity,
-      ),
     decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
     importPairingAfterCompanionReady,
-    decodeExtensionIdentityHandoffRequestMessage:
-      ExtensionIdentityHandoffRequestMessageSchema.decode,
-    decodeExtensionPairedVaultIdentityDiscoveryMessage:
-      ExtensionPairedVaultIdentityDiscoveryMessageSchema.decode,
-    decodeExtensionPairedVaultIdentityHandoffRequestMessage:
-      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.decode,
-    decodeExtensionPairedVaultUnlockRequestMessage:
-      ExtensionPairedVaultUnlockRequestMessageSchema.decode,
-    decodeExtensionPairedVaultLockRequestMessage:
-      ExtensionPairedVaultLockRequestMessageSchema.decode,
-    lockExtensionSession: () =>
-      lockExtensionSession(extensionLifecycleRoutingDependencies),
     decodeOpenCompanionLauncherMessage:
       NormalizedOpenCompanionLauncherMessageSchema.decode,
-    admitsUnlockSenderSynchronously:
-      ExternalSenderTrustPolicy.admitsSynchronouslyIfReady,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
     refreshAuthenticationSurfaces:
       extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
         extensionSessionLifecycle,
-      ),
-    requestPairedVaultUnlock:
-      extensionPairingIdentity.requestPairedVaultUnlock.bind(
-        extensionPairingIdentity,
       ),
     returnToConnectOrigin:
       siteVaultConnect.returnToOrigin.bind(siteVaultConnect),

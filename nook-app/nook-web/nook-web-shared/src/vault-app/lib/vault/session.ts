@@ -8,7 +8,6 @@ import {
 } from "$lib/vault/sync-extension-session";
 import { err as storageErr, ok as storageOk } from "neverthrow";
 
-import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import type { SessionActionsContext } from "$lib/vault/action-contexts";
 import {
   JoinEnrollmentState,
@@ -90,18 +89,6 @@ export class VaultSessionActions {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
-    const handoff = state.externalIdentityHandoff;
-    if (handoff.kind === BrowserIdentityHandoffKind.Adopted) {
-      const required = handoff.adoption.requiresConnect(manager.value);
-      if (required.isErr()) return storageErr(required.error);
-      if (!required.value) {
-        const confirmed = handoff.adoption.afterVerifiedConnect(manager.value);
-        if (confirmed.isErr()) return storageErr(confirmed.error);
-        state.externalIdentityHandoff = {
-          kind: BrowserIdentityHandoffKind.Inactive,
-        };
-      }
-    }
     const architecture = state.refreshVaultArchitectureFromManager();
     if (architecture.isErr()) return storageErr(architecture.error);
     try {

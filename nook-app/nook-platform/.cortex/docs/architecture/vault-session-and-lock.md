@@ -102,9 +102,6 @@ It never deletes:
 - platform-authenticator passkeys; or
 - the separately isolated browser-extension origin.
 
-If the same `store_id` is later reopened, its existing extension pairing is
-discovered again.
-
 ---
 
 ## 2. Lock semantics
@@ -193,11 +190,8 @@ discovered again.
   attempting `connect`.
 - **Provider preflight:** Discover the remote `store_id` from signed encrypted
   events without decrypting the vault.
-  - Simple Vault uses the identifier to ask a paired extension for its
-    memory-only identity.
-  - A locked extension owns and displays its unlock window.
-  - Only when no paired extension is available may the website show its own
-    passkey/PIN device gate.
+  - The website then shows its own passkey/PIN device gate. It never asks
+    the extension for its key.
   - Treat discovery as a bounded busy operation.
   - Reject an empty or incorrect provider when `store_id` is missing, before
     device authorization.
@@ -236,20 +230,12 @@ discovered again.
   PRF output to `chrome.storage`.
   - Expiry or browser shutdown zeroizes the manager and requires authorization
     again.
-- **Automatic discovery:** Simple Vault checks a paired extension every three
-  seconds while both site and extension identity are locked.
-  - Automatic discovery must never open an authentication surface.
-
-When the user explicitly chooses **Unlock**:
-
-- a paired locked extension opens its own browser side panel in the same
-  normal window; successful passkey or PIN authorization continues the website
-  unlock and dismisses the panel without a second user action;
-- the website waits for the extension's memory-only identity handoff; and
-- the website must not fall through to a second website passkey ceremony.
-
-- **Response deadline:** Bound site-to-extension requests to five seconds.
-  - A suspended or broken runtime cannot leave website unlock pending forever.
+- **Separate apps:** The website and the extension are separate apps, each
+  with its own app key and passkey or PIN.
+  - Each app locks and unlocks on its own. A lock on one never locks the
+    other.
+  - The website's **Unlock** asks only for the website's own passkey or PIN.
+    It never asks the extension for its key or waits on the extension.
 
 ---
 

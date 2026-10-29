@@ -89,10 +89,10 @@ separate origins or extension contexts. They do not share an unlocked session,
 IndexedDB namespace, or WebAuthn relying-party identity merely because they
 belong to the same product.
 
-Cross-origin or extension handoff uses explicit, bounded protocols. The
-extension identity handoff is recipient-encrypted and binds the nonce, app
-encryption public key, app signing public key, and app identifier before
-acceptance.
+Simple Vault and the browser extension are separate apps, each with its own
+app key and passkey. Simple Vault only ever uses its own app key; no app key
+crosses the origin boundary. Cross-origin or extension messages use explicit,
+bounded protocols.
 
 ### Replication-provider boundary
 
@@ -217,8 +217,7 @@ A change requires security-team review when it modifies one or more of these:
 - key generation, derivation, wrapping, rotation, recovery, or destruction;
 - authorization, membership, revocation, event signing, or quarantine;
 - plaintext lifetime, logging, serialization, persistence, or transport;
-- browser origin, extension permission, content-script, CSP, or handoff
-  boundary; or
+- browser origin, extension permission, content-script, or CSP boundary; or
 - provider credential sealing or replica acceptance.
 
 The implementation stays with its functional team unless the delivery owner

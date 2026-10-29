@@ -36,15 +36,15 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
-import { leaveFirstRunReady } from './helpers/extension-approval'
+import {
+  createWebsiteIdentityForConnect,
+  leaveFirstRunReady,
+} from './helpers/extension-approval'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
-import {
-  authorizeDeviceProtection,
-  waitForVaultInitialized,
-} from '../../nook-web-app/e2e/helpers/settings-auth'
+import { waitForVaultInitialized } from '../../nook-web-app/e2e/helpers/settings-auth'
 import { openVaultPage } from '../../nook-web-app/e2e/helpers/workspace-navigation'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
@@ -164,7 +164,6 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         url.searchParams.get('device_public_key') === 'age1popup' &&
         url.searchParams.get('device_signing_public_key') ===
           'popup-signing-key' &&
-        url.searchParams.has('nonce') &&
         url.searchParams.get('connect_id') === 'connect-popup-e2e' &&
         url.searchParams.get('scopes') ===
           'vault-access,password-filling,passkey-management,sync-provider-credentials' &&
@@ -572,10 +571,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage.getByTestId('first-run-create-identity-btn').click()
-    await expect(
-      simplePage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
+    await createWebsiteIdentityForConnect(simplePage)
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(
@@ -597,22 +593,18 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await openVaultPage(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
-    // Independent local creation requires a locked companion. Locking the
-    // extension locks this page too: the extension holds its identity key.
+    // The website holds its own key: locking the extension leaves this page
+    // open, and its next local vault needs nothing from the extension.
     await lockExtensionSession(context)
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeHidden()
-    // Reload releases the transient extension handoff before authorizing
-    // the website device for independent local creation.
-    await simplePage.reload()
-    // New vault waits for the identity: Unlock opens it with this website's
-    // own device protection, independently of the locked extension.
-    const lockedCard = simplePage.getByTestId('identity-card').first()
-    await expect(lockedCard).toHaveAttribute('data-status', 'locked')
-    await lockedCard.getByTestId('identity-unlock').click()
-    await expect(lockedCard).toHaveAttribute('data-status', 'unlocked', {
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    await simplePage.getByTestId('header-identities-btn').click()
+    const unlockedCard = simplePage
+      .locator('[data-testid="identity-card"][data-status="unlocked"]')
+      .first()
+    await expect(unlockedCard).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    await lockedCard.getByTestId('identity-new-vault').click()
+    await unlockedCard.getByTestId('identity-new-vault').click()
     await simplePage
       .getByTestId('login-vault-name-input')
       .fill('Second local vault')
@@ -623,53 +615,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       typeof unlockExtensionThroughCompanion
     >[0] = { context, extensionId }
     await unlockExtensionThroughCompanion(companionUnlock)
-    // The auth tab opens in a window of its own: Connect then opens a new
-    // connect tab there, and the unlocked Nook tab used below stays as it is.
-    const pairingPopupPage = await openPairingAuthTabInOwnWindow({
-      context,
-      extensionId,
-    })
-    await expect(
-      pairingPopupPage.getByTestId('connect-simple-vault-btn'),
-    ).toHaveText('Connect another keyring')
-    const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
-    await pairingPopupPage.getByTestId('connect-simple-vault-btn').click()
-    const pairingPage = await pairingPagePromise
-    await expect(pairingPage).toHaveURL(
-      (url) =>
-        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
-        url.pathname === '/extension-connect',
-    )
-    // The vault picker requires an explicit lock in this tab's session storage.
-    // Enter consent without approving pairing, then lock this fresh tab.
-    await authorizeDeviceProtection(pairingPage)
-    await expect(
-      pairingPage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
-    await pairingPage.getByTestId('header-lock-vault-btn').click()
-
-    const pairedVaultOption = pairingPage
-      .getByTestId('identity-vault-row')
-      .filter({
-        has: pairingPage.getByText('Unpair test vault', { exact: true }),
-      })
-    const unpairedVaultOption = pairingPage
-      .getByTestId('identity-vault-row')
-      .filter({
-        has: pairingPage.getByText('Second local vault', { exact: true }),
-      })
-    await expect(pairingPage.getByTestId('identity-vault-row')).toHaveCount(2)
-    await expect(
-      pairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Paired with this extension')
-    await expect(
-      unpairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Not paired with this extension')
-    await expect(
-      unpairedVaultOption.getByTestId('login-vault-extension-connected-vault'),
-    ).toContainText('Unpair test vault')
-    await pairingPage.close()
-
     await simplePage.getByTestId('header-identities-btn').click()
     await simplePage
       .locator(
@@ -708,10 +653,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       replacementPopupPage,
     )
     await advanceCreateVaultWizardToFinalStep(replacementPage)
-    await replacementPage.getByTestId('first-run-create-identity-btn').click()
-    await expect(
-      replacementPage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
+    await createWebsiteIdentityForConnect(replacementPage)
     await replacementPage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(
       replacementPage,

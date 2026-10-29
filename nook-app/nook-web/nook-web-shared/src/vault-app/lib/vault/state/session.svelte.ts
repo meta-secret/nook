@@ -3,16 +3,11 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
-import {
-  BrowserIdentityHandoffKind,
-  type BrowserIdentityHandoff,
-} from "$lib/vault/identity-handoff";
 import type { JoinRequest, VaultMember } from "$lib/nook";
 import {
   DeviceProtectionStatus,
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
-  VaultIdentityKeySource,
   type NookPasswordEntrySummary,
   type NookVaultManager,
   type PasswordEntryId,
@@ -47,9 +42,6 @@ export type EnrollmentEntry =
   | { kind: EnrollmentEntryKind.Inactive }
   | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId };
 export class VaultSessionState {
-  externalIdentityHandoff: BrowserIdentityHandoff = {
-    kind: BrowserIdentityHandoffKind.Inactive,
-  };
   private managerState = $state<ManagerSession>({
     kind: ManagerSessionKind.Unavailable,
   });
@@ -74,11 +66,6 @@ export class VaultSessionState {
   }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
-  );
-  /** Where this page's identity key lives: on this browser, or in the
-   * paired extension that handed it over (the two then lock together). */
-  identityKeySource = $state<VaultIdentityKeySource>(
-    VaultIdentityKeySource.ThisBrowser,
   );
   deviceProtectionLockedStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Passkey,

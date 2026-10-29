@@ -1,4 +1,4 @@
-import { err, ok, type Result } from 'neverthrow'
+import { err, type Result } from 'neverthrow'
 import { Effect } from 'effect'
 import type {
   DecodedExtensionSessionTransportDelivery,
@@ -7,45 +7,20 @@ import type {
   ExtensionSessionTransportResult,
 } from './session-document'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
-import {
-  type BeginExtensionPairingMessage,
-  type CompanionIdentityDiscoveryTransportResponse,
-  type CompanionIdentityHandoffTransportResponse,
-  type ExtensionIdentityHandoffRequestMessage,
-  type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type ExtensionPairedVaultIdentityHandoffRequestMessage,
-  type ExtensionPairedVaultUnlockRequestMessage,
-} from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { BeginExtensionPairingMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
-  admit_companion_handoff_identity_status,
-  admit_companion_identity_status,
-  decode_companion_identity_discovery_observation,
-  decode_extension_paired_vault_identity_handoff_request_message,
-  decode_extension_paired_vault_unlock_request_message,
   decode_extension_session_status_response,
   ExtensionSessionStatusAvailability,
-  type CompanionExtensionPresence,
-  type CompanionIdentityHandoffStatusAdmission,
-  type CompanionIdentityHandoffRequest,
-  type CompanionUnlockedAppKey,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import {
-  RuntimeMessageDecodeFailure,
-  RuntimeMessageDecodeFailureKind,
-} from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
 import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { ExtensionConnectTabs } from './extension-connect-tab'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
-  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-  COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   extensionSessionInteractiveDeadline,
   extensionSessionProbeDeadline,
   type ExtensionSessionTransportRequest,
-  type CompanionIdentityDiscoverySessionTransportRequest,
-  type CompanionIdentityHandoffSessionTransportRequest,
 } from '../../offscreen/session-request-adapter'
 import {
   WebsitePasskeyRequestParseKind,
@@ -60,22 +35,12 @@ import type {
 import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
-  CompanionLauncherSourceKind,
   extensionSessionLifecycle,
 } from './session-lifecycle'
-import type { CompanionLauncherSource } from './session-lifecycle'
-import { identityHandoffSessionRequest } from './session-request-projections'
-import { VaultPageUnlockWait } from '../../lib/vault-page-unlock-wait'
-import {
-  ConcreteDecoderResultKind,
-  runConcreteDecoder,
-} from '../../lib/concrete-decoder'
 import {
   ExtensionPairingStorage,
-  PendingIdentityHandoffKind,
   type ExtensionSessionStorageItems,
   type ExtensionSessionStorageWrite,
-  decodePendingIdentityHandoff,
 } from './pairing-identity-storage'
 
 export {
@@ -83,66 +48,6 @@ export {
   type ExtensionSessionStorageValue,
   type ExtensionSessionStorageWrite,
 } from './pairing-identity-storage'
-
-function decodeCompanionIdentityDiscoveryObservation(value: unknown) {
-  const decoded = Effect.try(() =>
-    decode_companion_identity_discovery_observation(value),
-  )
-  return decoded.pipe(
-    Effect.mapError((cause) => {
-      const failureRequest: Parameters<
-        typeof RuntimeMessageDecodeFailure.fromCause
-      >[0] = {
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
-        cause,
-      }
-      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
-    }),
-  )
-}
-
-function decodeCompanionPairedVaultIdentityHandoffRequest(value: unknown) {
-  const decoded = Effect.try(() =>
-    decode_extension_paired_vault_identity_handoff_request_message(value),
-  )
-  return decoded.pipe(
-    Effect.mapError((cause) => {
-      const failureRequest: Parameters<
-        typeof RuntimeMessageDecodeFailure.fromCause
-      >[0] = {
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
-        cause,
-      }
-      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
-    }),
-  )
-}
-
-function decodeCompanionPairedVaultUnlockRequest(value: unknown) {
-  const decoded = Effect.try(() =>
-    decode_extension_paired_vault_unlock_request_message(value),
-  )
-  return decoded.pipe(
-    Effect.mapError((cause) => {
-      const failureRequest: Parameters<
-        typeof RuntimeMessageDecodeFailure.fromCause
-      >[0] = {
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
-        cause,
-      }
-      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
-    }),
-  )
-}
-
-type CurrentPairedVaultPresenceArgs = {
-  vaultStoreId: string
-  nonce: string
-}
-
-type CompanionUnlockedPresenceShape = {
-  app_key: CompanionUnlockedAppKey
-}
 
 export type SessionMessageRequest = [message: ExtensionSessionTransportRequest]
 
@@ -159,27 +64,9 @@ export enum HasPairingApprovedTypeResultType {
   NookExtensionPairingApproved = 'nook:extension-pairing-approved',
 }
 
-type ExtensionPairedVaultUnlockResponse =
-  | { ok: true; requestId: string; vaultStoreId: string }
-  | {
-      ok: false
-      requestId: string
-      vaultStoreId: string
-      reason: string
-    }
-
-type PairedVaultUnlockRequest = {
-  message: ExtensionPairedVaultUnlockRequestMessage
-  source: CompanionLauncherSource
-}
-
 export enum WebsitePasskeyRequestContextKind {
   Rejected = 'rejected',
   Validated = 'validated',
-}
-
-enum CompanionIdentityDiscoveryDecodeFailureKind {
-  InvalidResponse = 'companion-identity-discovery-response-invalid',
 }
 
 export type WebsitePasskeyRequestContext =
@@ -226,7 +113,6 @@ type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
 
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionPairingIdentity {
-  private pendingIdentityHandoffConsumptions = new Set<string>()
   private readonly pairingStorage = new ExtensionPairingStorage()
   private readonly connectTabs = new ExtensionConnectTabs(simpleVaultRuntime)
   randomNonce(): string {
@@ -260,19 +146,6 @@ class ExtensionPairingIdentity {
     device: BeginExtensionPairingMessage['payload'],
   ): Promise<number> {
     await companionWasmReady
-    const nonce = this.randomNonce()
-    const nookTypedArgs0_1: Parameters<
-      typeof this.pairingStorage.issueIdentityHandoff
-    >[0] = {
-      nonce,
-      pending: {
-        kind: PendingIdentityHandoffKind.Pairing,
-        deviceId: device.deviceId,
-        devicePublicKey: device.devicePublicKey,
-        deviceSigningPublicKey: device.deviceSigningPublicKey,
-      },
-    }
-    await this.pairingStorage.issueIdentityHandoff(nookTypedArgs0_1)
     const url = new URL(
       await simpleVaultRuntime.runtimeSimpleVaultUrl('extension-connect'),
     )
@@ -284,9 +157,8 @@ class ExtensionPairingIdentity {
     )
     url.searchParams.set('extension_id', chrome.runtime.id)
     url.searchParams.set('device_label', device.deviceLabel)
-    url.searchParams.set('nonce', nonce)
-    // Separate from the single-use handoff nonce: it only names the page's
-    // progress port for the side panel that started this connect.
+    // It only names the page's progress port for the side panel that
+    // started this connect.
     url.searchParams.set('connect_id', device.connectId)
     url.searchParams.set(
       'scopes',
@@ -339,216 +211,6 @@ class ExtensionPairingIdentity {
     return document.value.sendMessage(delivery)
   }
 
-  async createIdentityHandoff(
-    message: ExtensionIdentityHandoffRequestMessage,
-  ): Promise<{
-    ok: boolean
-    envelope?: string
-    nextNonce?: string
-    reason?: string
-  }> {
-    await companionWasmReady
-    const handoffRequest = message.payload
-    const nonce = handoffRequest.nonce
-    if (this.pendingIdentityHandoffConsumptions.has(nonce)) {
-      return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-    }
-    this.pendingIdentityHandoffConsumptions.add(nonce)
-    try {
-      const key = this.pairingStorage.pendingIdentityHandoffStorageKey(nonce)
-      const stored = await this.getSessionStorage(key)
-      const storedEntry = Object.entries(stored).find(
-        ([storedKey]) => storedKey === key,
-      )
-      if (!storedEntry) {
-        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-      }
-      const pendingAdmission = runConcreteDecoder(
-        decodePendingIdentityHandoff,
-        storedEntry[1],
-      )
-      if (pendingAdmission.kind === ConcreteDecoderResultKind.Rejected) {
-        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-      }
-      const pending = pendingAdmission.value
-      if (
-        pending.deviceId !== handoffRequest.expectedDeviceId ||
-        pending.devicePublicKey !== handoffRequest.expectedDevicePublicKey ||
-        pending.deviceSigningPublicKey !==
-          handoffRequest.expectedDeviceSigningPublicKey
-      ) {
-        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-      }
-      await this.removeSessionStorage(key)
-
-      const handoffProjection: Parameters<
-        typeof identityHandoffSessionRequest
-      >[0] = {
-        recipientPublicKey: handoffRequest.recipientPublicKey,
-        nonce,
-        expectedDeviceId: handoffRequest.expectedDeviceId,
-        expectedDevicePublicKey: handoffRequest.expectedDevicePublicKey,
-        expectedDeviceSigningPublicKey:
-          handoffRequest.expectedDeviceSigningPublicKey,
-      }
-      const nookTypedArgs0_3 = identityHandoffSessionRequest(handoffProjection)
-      const delivery = await this.sendSessionMessage(nookTypedArgs0_3)
-      if (delivery.isErr()) return delivery.error.response
-      const response = delivery.value
-      if (
-        !!response &&
-        typeof response === 'object' &&
-        'ok' in response &&
-        response.ok === true &&
-        'envelope' in response &&
-        typeof response.envelope === 'string'
-      ) {
-        const nextNonce = this.randomNonce()
-        const nookTypedArgs0_4: Parameters<
-          typeof this.pairingStorage.issueIdentityHandoff
-        >[0] = {
-          nonce: nextNonce,
-          pending,
-        }
-        await this.pairingStorage.issueIdentityHandoff(nookTypedArgs0_4)
-        return { ok: true, envelope: response.envelope, nextNonce }
-      }
-      return { ok: false, reason: 'extension-identity-unavailable' }
-    } catch {
-      return { ok: false, reason: 'extension-identity-handoff-failed' }
-    } finally {
-      this.pendingIdentityHandoffConsumptions.delete(nonce)
-    }
-  }
-
-  private async currentPairedVaultPresence({
-    vaultStoreId,
-    nonce,
-  }: CurrentPairedVaultPresenceArgs): Promise<
-    Result<CompanionExtensionPresence, ExtensionSessionTransportFailure>
-  > {
-    const pairingPolicy = await extensionPairingGrantPolicyReady
-    const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
-    const stored = await this.getPairingStorage()
-    const grant = stored[key]
-    const grantDecode = runConcreteDecoder(
-      pairingPolicy.decodeStoredExtensionPairingGrant,
-      grant,
-    )
-    if (grantDecode.kind === ConcreteDecoderResultKind.Rejected) {
-      const unavailablePresence: CompanionExtensionPresence = {
-        kind: 'unavailable',
-      }
-      return ok(unavailablePresence)
-    }
-    // Presence for a vault is that vault's own grant: each paired vault
-    // approved this extension separately.
-    const currentGrant = grantDecode.value
-
-    const statusRequest: Parameters<typeof this.sendSessionMessage>[0] = {
-      type: 'nook:extension-session-status',
-      payload: {
-        queue: extensionSessionProbeDeadline(Date.now() + 5_000),
-      },
-    }
-    const delivery = await this.sendSessionMessage(statusRequest)
-    if (delivery.isErr()) return err(delivery.error)
-    const statusResponse = delivery.value
-    if (
-      this.websiteSessionStatusTransport(statusResponse) !==
-      ExtensionSessionStatusAvailability.Unlocked
-    ) {
-      const lockedPresence: CompanionExtensionPresence = {
-        kind: 'locked',
-        vault_type: currentGrant.vaultType,
-        vault_store_id: currentGrant.vaultStoreId,
-        vault_name: currentGrant.vaultName,
-      }
-      return ok(lockedPresence)
-    }
-    const unlockedPresence: Extract<
-      CompanionExtensionPresence,
-      CompanionUnlockedPresenceShape
-    > = {
-      kind: 'unlocked',
-      vault_type: currentGrant.vaultType,
-      vault_store_id: currentGrant.vaultStoreId,
-      vault_name: currentGrant.vaultName,
-      app_key: {
-        extensionRuntimeId: chrome.runtime.id,
-        appKey: {
-          appId: currentGrant.deviceId,
-          encryptionPublicKey: currentGrant.devicePublicKey,
-          signingPublicKey: currentGrant.deviceSigningPublicKey,
-          installationLabel: currentGrant.deviceLabel,
-        },
-        nonce,
-        scopes: currentGrant.scopes,
-      },
-    }
-    return ok(unlockedPresence)
-  }
-
-  async createPairedIdentityHandoff(
-    message: ExtensionPairedVaultIdentityHandoffRequestMessage,
-  ): Promise<CompanionIdentityHandoffTransportResponse> {
-    try {
-      await companionWasmReady
-      const decodedRequest = runConcreteDecoder(
-        decodeCompanionPairedVaultIdentityHandoffRequest,
-        message,
-      )
-      if (decodedRequest.kind === ConcreteDecoderResultKind.Rejected) {
-        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-      }
-      const handoffRequest: CompanionIdentityHandoffRequest =
-        decodedRequest.value.payload
-      const statusAdmission: CompanionIdentityHandoffStatusAdmission = {
-        request: handoffRequest,
-        observedAt: Date.now(),
-      }
-      const admission = admit_companion_handoff_identity_status(statusAdmission)
-      if (
-        admission.kind !== 'accepted' ||
-        admission.transaction.status.status !== 'unlocked'
-      ) {
-        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-      }
-      const currentPresenceArgs: CurrentPairedVaultPresenceArgs = {
-        vaultStoreId: admission.transaction.discovery.request.vaultStoreId,
-        nonce: admission.transaction.status.app_key.nonce,
-      }
-      const presence =
-        await this.currentPairedVaultPresence(currentPresenceArgs)
-      if (presence.isErr()) return presence.error.response
-
-      const authorization = {
-        request: handoffRequest,
-        observedAt: Date.now(),
-        presence: presence.value,
-      }
-      const sessionRequest: CompanionIdentityHandoffSessionTransportRequest = {
-        type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
-        payload: { authorization },
-      }
-      const delivery = await this.sendSessionMessage(sessionRequest)
-      if (delivery.isErr()) return delivery.error.response
-      const response = delivery.value
-      if (
-        !!response &&
-        typeof response === 'object' &&
-        'ok' in response &&
-        response.ok === true &&
-        'response' in response
-      ) {
-        return { ok: true, response: response.response }
-      }
-      return { ok: false, reason: 'extension-identity-unavailable' }
-    } catch {
-      return { ok: false, reason: 'extension-identity-handoff-failed' }
-    }
-  }
-
   websiteSessionStatusTransport(
     response: unknown,
   ): ExtensionSessionStatusAvailability {
@@ -556,216 +218,6 @@ class ExtensionPairingIdentity {
       return decode_extension_session_status_response(response)
     } catch {
       return ExtensionSessionStatusAvailability.Unavailable
-    }
-  }
-
-  async discoverPairedVaultIdentity(
-    message: ExtensionPairedVaultIdentityDiscoveryMessage,
-  ): Promise<CompanionIdentityDiscoveryTransportResponse> {
-    await companionWasmReady
-    const observationDecode = runConcreteDecoder(
-      decodeCompanionIdentityDiscoveryObservation,
-      message.payload,
-    )
-    if (observationDecode.kind === ConcreteDecoderResultKind.Rejected) {
-      return { ok: false }
-    }
-    const observation = observationDecode.value
-    const discover = async (
-      presence: CompanionExtensionPresence,
-    ): Promise<CompanionIdentityDiscoveryTransportResponse> => {
-      const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest =
-        {
-          type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-          payload: { presence, discovery: observation },
-        }
-      const decodeResponse = (
-        response: ExtensionSessionResponse,
-      ): Result<
-        CompanionIdentityDiscoveryTransportResponse,
-        CompanionIdentityDiscoveryDecodeFailureKind
-      > => {
-        if (
-          !response ||
-          typeof response !== 'object' ||
-          !('ok' in response) ||
-          response.ok !== true ||
-          !('status' in response)
-        ) {
-          return err(
-            CompanionIdentityDiscoveryDecodeFailureKind.InvalidResponse,
-          )
-        }
-        const statusAdmission: Parameters<
-          typeof admit_companion_identity_status
-        >[0] = {
-          discovery: observation,
-          status: response.status,
-          observedAt: Date.now(),
-        }
-        const admission = admit_companion_identity_status(statusAdmission)
-        if (admission.kind !== 'accepted') {
-          return err(
-            CompanionIdentityDiscoveryDecodeFailureKind.InvalidResponse,
-          )
-        }
-        const decodedResponse: CompanionIdentityDiscoveryTransportResponse = {
-          ok: true,
-          status: admission.transaction.status,
-        }
-        return ok(decodedResponse)
-      }
-      const sessionMessage: DecodedSessionMessageRequest<
-        CompanionIdentityDiscoveryTransportResponse,
-        CompanionIdentityDiscoveryDecodeFailureKind
-      > = [sessionRequest, decodeResponse]
-      const delivery = await this.sendSessionMessage(...sessionMessage)
-      if (delivery.isErr()) return { ok: false }
-      return delivery.value
-    }
-    const unavailablePresence: CompanionExtensionPresence = {
-      kind: 'unavailable',
-    }
-    try {
-      const vaultStoreId = observation.request.vaultStoreId
-      const pairingPolicy = await extensionPairingGrantPolicyReady
-      const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
-      const stored = await this.getPairingStorage()
-      const grant = stored[key]
-      const selectedGrant = pairingPolicy.selectedPairingGrant(stored)
-      // The extension serves every vault it holds a grant for; only a vault
-      // without one is reported as connected elsewhere (below).
-      const grantDecode = runConcreteDecoder(
-        pairingPolicy.decodeStoredExtensionPairingGrant,
-        grant,
-      )
-      if (grantDecode.kind === ConcreteDecoderResultKind.Rejected) {
-        const connectedGrant =
-          selectedGrant.kind === 'selected'
-            ? selectedGrant
-            : pairingPolicy.firstStoredPairingGrant(stored)
-        if (connectedGrant.kind === 'selected') {
-          const connectedPresence: CompanionExtensionPresence = {
-            kind: 'locked',
-            vault_type: connectedGrant.grant.vaultType,
-            vault_store_id: connectedGrant.grant.vaultStoreId,
-            vault_name: connectedGrant.grant.vaultName,
-          }
-          return await discover(connectedPresence)
-        }
-        return await discover(unavailablePresence)
-      }
-      const decodedGrant = grantDecode.value
-
-      const nookTypedArgs0_5: Parameters<typeof this.sendSessionMessage>[0] = {
-        type: 'nook:extension-session-status',
-        payload: {
-          queue: extensionSessionProbeDeadline(Date.now() + 5_000),
-        },
-      }
-      const statusDelivery = await this.sendSessionMessage(nookTypedArgs0_5)
-      if (statusDelivery.isErr()) return statusDelivery.error.response
-      const statusResponse = statusDelivery.value
-      if (
-        this.websiteSessionStatusTransport(statusResponse) !==
-        ExtensionSessionStatusAvailability.Unlocked
-      ) {
-        const lockedPresence: CompanionExtensionPresence = {
-          kind: 'locked',
-          vault_type: decodedGrant.vaultType,
-          vault_store_id: decodedGrant.vaultStoreId,
-          vault_name: decodedGrant.vaultName,
-        }
-        return await discover(lockedPresence)
-      }
-      const nonce = this.randomNonce()
-      const presence: Extract<
-        CompanionExtensionPresence,
-        CompanionUnlockedPresenceShape
-      > = {
-        kind: 'unlocked',
-        vault_type: decodedGrant.vaultType,
-        vault_store_id: decodedGrant.vaultStoreId,
-        vault_name: decodedGrant.vaultName,
-        app_key: {
-          extensionRuntimeId: chrome.runtime.id,
-          appKey: {
-            appId: decodedGrant.deviceId,
-            encryptionPublicKey: decodedGrant.devicePublicKey,
-            signingPublicKey: decodedGrant.deviceSigningPublicKey,
-            installationLabel: decodedGrant.deviceLabel,
-          },
-          nonce,
-          scopes: decodedGrant.scopes,
-        },
-      }
-      return await discover(presence)
-    } catch {
-      return await discover(unavailablePresence)
-    }
-  }
-
-  async requestPairedVaultUnlock({
-    message,
-    source,
-  }: PairedVaultUnlockRequest): Promise<ExtensionPairedVaultUnlockResponse> {
-    const decodedRequest = runConcreteDecoder(
-      decodeCompanionPairedVaultUnlockRequest,
-      message,
-    )
-    if (decodedRequest.kind === ConcreteDecoderResultKind.Rejected) {
-      return {
-        ok: false,
-        requestId: message.payload.requestId,
-        vaultStoreId: message.payload.vaultStoreId,
-        reason: 'invalid-unlock-request',
-      }
-    }
-    const { requestId, vaultStoreId } = decodedRequest.value.payload
-
-    try {
-      const pairingPolicy = await extensionPairingGrantPolicyReady
-      const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
-      const stored = await this.getPairingStorage(key)
-      const grantDecode = runConcreteDecoder(
-        pairingPolicy.decodeStoredExtensionPairingGrant,
-        stored[key],
-      )
-      if (grantDecode.kind === ConcreteDecoderResultKind.Rejected) {
-        return {
-          ok: false,
-          requestId,
-          vaultStoreId,
-          reason: 'vault-not-paired',
-        }
-      }
-
-      const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-      const statusRequest: Parameters<typeof this.sendSessionMessage>[0] = {
-        type: 'nook:extension-session-status',
-        payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
-      }
-      const statusDelivery = await this.sendSessionMessage(statusRequest)
-      if (statusDelivery.isErr())
-        return { ...statusDelivery.error.response, requestId, vaultStoreId }
-      const statusResponse = statusDelivery.value
-      if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
-        // Locked: the panel points the person at Unlock while the page waits.
-        await VaultPageUnlockWait.begin(Date.now())
-      } else if (source.kind === CompanionLauncherSourceKind.SourceWindow) {
-        const sidePanelCloseOptions: chrome.sidePanel.CloseOptions = {
-          windowId: source.windowId,
-        }
-        await chrome.sidePanel.close(sidePanelCloseOptions)
-      }
-      return { ok: true, requestId, vaultStoreId }
-    } catch {
-      return {
-        ok: false,
-        requestId,
-        vaultStoreId,
-        reason: 'unlock-launch-failed',
-      }
     }
   }
 

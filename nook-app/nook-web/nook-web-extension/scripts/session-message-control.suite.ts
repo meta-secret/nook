@@ -58,18 +58,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     }
     const stagedPayloads: { stored_json: string }[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async (message) => {
         if (message.type === ExtensionSessionMessageType.MigrateAuthProviders) {
@@ -296,18 +284,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async (message) =>
         ok({
@@ -515,18 +491,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
@@ -573,18 +537,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     type CompanionQueueOperation = CompanionWasmSessionMessage['type']
     const handled: CompanionQueueOperation[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      handleCompanionIdentityDiscovery: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
-      handleCompanionIdentityHandoff: async () =>
-        err(
-          new SessionOperationFailure(
-            SessionOperationFailureKind.InvalidRequest,
-          ),
-        ),
       decodeProviders,
       handleCompanionWasmMessage: async (message) => {
         handled.push(message.type)

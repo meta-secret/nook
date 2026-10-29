@@ -8,19 +8,17 @@ use crate::EventDbSaveEventBytes;
 use crate::EventDbSaveHeads;
 use crate::IdentityDbSetIdentityMemberSigningPublicKey;
 use crate::NookDatabase;
-use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::identity_record::StoredIdentityRecord;
 use crate::storage::remote_event::RemoteEventRead;
-use nook_core::StoredSigningSeed;
 
 use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::drive_namespace::DriveNamespace;
 use crate::storage::identity_record;
 use nook_core::{
     DriveEventParent, EventLogLocation, EventLogNamespaceKind, IsoTimestamp, MemberLabel,
-    PlacedNamespace, SigningIdentity, StorageMode, StoreId, SymmetricKey, VaultEvent,
-    VaultEventSchemaVersion, VaultPlacement, VaultType,
+    PlacedNamespace, StorageMode, StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion,
+    VaultPlacement, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -76,34 +74,20 @@ impl SimpleGenesisOperationsInput<'_> {
                 members_key_ciphertext: envelopes.members_key,
             }]);
         };
-        let identity_record = if let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow {
-            staged
-                .directory
-                .identities()
-                .iter()
-                .find(|identity| identity.identity_id == pending.identity_id)
-                .cloned()
-                .ok_or_else(|| {
-                    NookError::Database(
-                        "Staged Simple genesis identity no longer exists.".to_owned(),
-                    )
-                })?
-        } else {
-            NookDatabase::set_identity_member_signing_public_key(
-                IdentityDbSetIdentityMemberSigningPublicKey {
-                    identity_id: &pending.identity_id,
-                    app_id: self.identity.device_id(),
-                    signing_public_key: self.signing_public_key,
-                },
-            )
-            .await?;
-            match NookDatabase::load_identity(&pending.identity_id).await? {
-                StoredIdentityRecord::Registered(value) => Ok(value),
-                StoredIdentityRecord::NotRegistered => Err({
-                    NookError::Database("Simple genesis identity no longer exists.".to_owned())
-                }),
-            }?
-        };
+        NookDatabase::set_identity_member_signing_public_key(
+            IdentityDbSetIdentityMemberSigningPublicKey {
+                identity_id: &pending.identity_id,
+                app_id: self.identity.device_id(),
+                signing_public_key: self.signing_public_key,
+            },
+        )
+        .await?;
+        let identity_record = match NookDatabase::load_identity(&pending.identity_id).await? {
+            StoredIdentityRecord::Registered(value) => Ok(value),
+            StoredIdentityRecord::NotRegistered => Err(NookError::Database(
+                "Simple genesis identity no longer exists.".to_owned(),
+            )),
+        }?;
         nook_core::SimpleIdentityGenesisOperationsInput {
             identity: &identity_record,
             keys: self.keys,
@@ -113,56 +97,6 @@ impl SimpleGenesisOperationsInput<'_> {
         }
         .operations()
         .map_err(NookError::from)
-    }
-}
-
-impl NookVaultManager {
-    async fn simple_genesis_signing_identity(
-        &mut self,
-        pending: GenesisContext<'_>,
-    ) -> Result<nook_core::SigningIdentity, NookError> {
-        let GenesisContext::Pending(pending) = pending else {
-            return self.ensure_signing_identity().await;
-        };
-        if !pending.is_staged() {
-            return self.ensure_signing_identity().await;
-        }
-        let app_key = self.device_identity()?;
-        if let StoredSigningSeed::Stored(seed) = pending.resume_signing_seed(&app_key)? {
-            self.event_log.signing_seed = seed;
-        }
-        if self.event_log.signing_seed.is_empty() {
-            self.event_log.signing_seed = match NookDatabase::load_signing_seed().await? {
-                StoredSigningSeed::Stored(seed) => seed,
-                StoredSigningSeed::Missing => {
-                    return Err(NookError::Database(
-                        "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
-                    ));
-                }
-            };
-        }
-        let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
-        let staged = pending.require_staged_identity().map_err(|_| {
-            NookError::IndexedDb("Staged Simple genesis state disappeared.".to_owned())
-        })?;
-        let member = staged
-            .directory
-            .identities()
-            .iter()
-            .find(|identity| identity.identity_id == pending.identity_id)
-            .and_then(|identity| {
-                identity
-                    .members
-                    .iter()
-                    .find(|member| member.app_id == *app_key.app_id())
-            })
-            .ok_or_else(|| NookError::Database("Staged genesis member disappeared.".to_owned()))?;
-        if member.signing_public_key != signing.public_key() {
-            return Err(NookError::Database(
-                "Staged genesis signer does not match the authorized member.".to_owned(),
-            ));
-        }
-        Ok(signing)
     }
 }
 
@@ -580,7 +514,7 @@ impl NookVaultManager {
             pending,
         } = input;
         self.activate_event_log_mode().await?;
-        let signing = self.simple_genesis_signing_identity(pending).await?;
+        let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
         let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
@@ -652,7 +586,7 @@ impl NookVaultManager {
                 NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
                 StoredIdentityProtection::Protected(_)
             );
-            if !pending.is_staged() && !keyring_backed {
+            if !keyring_backed {
                 NookDatabase::save_signing_seed(&pinned.signing_seed).await?;
             }
             pinned.event_yaml.into_bytes()

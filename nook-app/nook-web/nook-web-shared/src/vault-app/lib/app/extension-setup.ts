@@ -1,15 +1,4 @@
-import { err, ok, type Result } from "neverthrow";
-import type { VaultState } from "$lib/vault.svelte";
-import {
-  LoginVaultExtensionPairingStatusKind,
-  LoginVaultExtensionPairingStatusProjection,
-  type LoginVaultExtensionPairingStatusEntry,
-} from "$lib/components/login/login-vault-extension-pairing-status";
-import {
-  extensionConnectionBrowser,
-  InstalledExtensionRuntimeKind,
-  PairedExtensionDiscoveryFailure,
-} from "$lib/extension/connect";
+import { extensionConnectionBrowser } from "$lib/extension/connect";
 
 import {
   type ExtensionSetupState,
@@ -25,65 +14,21 @@ export type ExtensionSetupOffer =
   | { kind: ExtensionSetupOfferKind.Hidden }
   | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };
 
-export type ExtensionPairingStatusRequest = {
-  readonly storeId: string;
-  readonly vault: VaultState;
-};
-
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionSetupBrowser {
   constructor(private readonly browser: typeof globalThis) {}
 
-  async discoverPairingStatus({
-    storeId,
-    vault,
-  }: ExtensionPairingStatusRequest): Promise<LoginVaultExtensionPairingStatusEntry> {
-    switch (extensionConnectionBrowser.readInstalledExtensionRuntimeId().kind) {
-      case InstalledExtensionRuntimeKind.NotInstalled:
-        return { storeId, kind: LoginVaultExtensionPairingStatusKind.NotShown };
-      case InstalledExtensionRuntimeKind.Installed:
-        break;
-    }
-    const admission =
-      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
-        storeId,
-      );
-    if (admission.isErr()) {
-      vault.errorMsg = vault.t(admission.error.translationKey);
-      return { storeId, kind: LoginVaultExtensionPairingStatusKind.Checking };
-    }
-    return {
-      storeId,
-      ...new LoginVaultExtensionPairingStatusProjection(
-        admission.value.discovery,
-      ).status,
+  loadExtensionSetupOffer(): ExtensionSetupOffer {
+    const setup = extensionInstallationBrowser.resolveExtensionSetupState();
+    const offerRequest: Parameters<
+      typeof extensionInstallationBrowser.shouldOfferExtensionSetup
+    >[0] = {
+      status: setup.status,
+      environment: this.browser.navigator,
     };
-  }
-
-  async loadExtensionSetupOffer(
-    vault: VaultState,
-  ): Promise<Result<ExtensionSetupOffer, PairedExtensionDiscoveryFailure>> {
-    try {
-      const setup =
-        await extensionInstallationBrowser.resolveExtensionSetupState(
-          vault.activeVault,
-        );
-      const offerRequest: Parameters<
-        typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-      >[0] = {
-        status: setup.status,
-        environment: this.browser.navigator,
-      };
-      const offer: ExtensionSetupOffer =
-        extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
-          ? { kind: ExtensionSetupOfferKind.Visible, setup }
-          : { kind: ExtensionSetupOfferKind.Hidden };
-      return ok(offer);
-    } catch (failure) {
-      if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
-      vault.errorMsg = vault.t(failure.translationKey);
-      return err(failure);
-    }
+    return extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
+      ? { kind: ExtensionSetupOfferKind.Visible, setup }
+      : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
   async openExtensionInstaller(): Promise<void> {
@@ -96,16 +41,16 @@ class ExtensionSetupBrowser {
     return extensionConnectionBrowser.openExtensionSidePanel();
   }
 
-  observeExtensionSetupChanges(refresh: () => Promise<void>): () => void {
+  observeExtensionSetupChanges(refresh: () => void): () => void {
     const onVisibilityChange = () => {
-      if (this.browser.document.visibilityState === "visible") void refresh();
+      if (this.browser.document.visibilityState === "visible") refresh();
     };
     this.browser.document.addEventListener(
       "visibilitychange",
       onVisibilityChange,
     );
 
-    const observer = new MutationObserver(() => void refresh());
+    const observer = new MutationObserver(() => refresh());
     const observeArgs: Parameters<typeof observer.observe>[1] = {
       attributes: true,
       attributeFilter: ["data-nook-extension-runtime-id"],

@@ -28,7 +28,6 @@ import {
 } from '$lib/components/extension-connect-consent-workflow'
 import {
   ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
   type ExtensionConnectRequest,
 } from '$lib/extension/connect'
 import { ExtensionPairingDeliveryKind } from '$lib/extension/extension-pairing-delivery'
@@ -50,14 +49,12 @@ class ConsentActivity {
     vault.openManager(new NookVaultManager())
     vault.isAuthenticated = true
     const request: ExtensionConnectRequest = {
-      source: ExtensionIdentityRequestSource.ExtensionConnect,
       follow: { kind: ExtensionConnectFollowKind.Unnamed },
       deviceId: 'device-1',
       devicePublicKey: 'device-key',
       deviceSigningPublicKey: 'signing-key',
       extensionRuntimeId: 'extension-1',
       deviceLabel: 'Nook Extension',
-      nonce: 'nonce-1',
       scopes: [ExtensionConnectScope.VaultAccess],
     }
     this.workflow = new ExtensionConnectConsentWorkflow({ vault, request })

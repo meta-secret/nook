@@ -10,10 +10,6 @@ import {
 } from './session-message-dispatch-test-support'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 import type { SessionMessageDispatchContext } from '../src/offscreen/session-message-dispatch'
-import {
-  SessionOperationFailure,
-  SessionOperationFailureKind,
-} from '../src/lib/session-operation-queue'
 import type {
   CompanionWasmSessionResponse,
   CompanionWasmFocusedRecognitionResponse,
@@ -78,14 +74,6 @@ class FocusedSessionRouteFixture {
   readonly handled: ParsedExtensionSessionTransportRequest[] = []
   readonly context: SessionMessageDispatchContext<FocusedRouteResponse> = {
     decodeProviders,
-    handleCompanionIdentityDiscovery: async () =>
-      err(
-        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
-      ),
-    handleCompanionIdentityHandoff: async () =>
-      err(
-        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
-      ),
     handleCompanionWasmMessage,
     handleMessage: async (message) => {
       this.handled.push(message)

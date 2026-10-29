@@ -28,7 +28,7 @@ import {
 import { SidePanelVaultsKind } from '../src/side-panel/side-panel-state'
 import { browserTab } from './companion-launcher-test-support'
 
-const NOOK_URL = 'https://simple.nokey.sh/extension-connect?nonce=n-1'
+const NOOK_URL = 'https://simple.nokey.sh/extension-connect?connect_id=c-1'
 const PANEL_WINDOW = 7
 const CONNECT_TAB = 31
 const CONNECT_ID = 'connect-1'

@@ -17,7 +17,6 @@ use std::{cell::RefCell, rc::Rc};
 
 use serde::{Deserialize, Serialize};
 
-use super::{genesis_flow::PendingSimpleGenesisFlow, staged_genesis::StagedSimpleGenesisIdentity};
 use crate::NookError;
 use crate::storage::indexed_db::StringUpdateGuard;
 
@@ -30,7 +29,6 @@ pub(crate) struct PendingSimpleGenesis {
     pub(crate) identity_id: nook_core::IdentityId,
     pub(crate) created_at: nook_core::IsoTimestamp,
     pub(crate) event_state: PendingSimpleGenesisEvent,
-    pub(crate) flow: PendingSimpleGenesisFlow,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,8 +40,6 @@ pub(crate) enum PendingSimpleGenesisEvent {
         event_yaml: String,
         #[serde(rename = "signingSeedEnvelope")]
         signing_seed_envelope: nook_core::AgeArmoredCiphertext,
-        #[serde(rename = "memberSigningSeedEnvelopes")]
-        member_signing_seed_envelopes: Vec<nook_core::MemberDekEnvelope>,
     },
 }
 
@@ -71,23 +67,6 @@ impl SimpleGenesisProgress {
                 "Pending Simple genesis is missing.".to_owned(),
             )),
         }
-    }
-}
-
-impl PendingSimpleGenesis {
-    pub(crate) fn require_staged_identity(
-        &self,
-    ) -> Result<&StagedSimpleGenesisIdentity, NookError> {
-        match &self.flow {
-            PendingSimpleGenesisFlow::Staged(identity) => Ok(identity),
-            PendingSimpleGenesisFlow::Ordinary => Err(NookError::IndexedDb(
-                "Staged genesis identity is required.".to_owned(),
-            )),
-        }
-    }
-
-    pub(crate) fn is_staged(&self) -> bool {
-        matches!(self.flow, PendingSimpleGenesisFlow::Staged(_))
     }
 }
 
@@ -150,7 +129,6 @@ impl OrdinarySimpleGenesisRequest<'_> {
             created_at: IsoTimestamp::parse(&BrowserTimestamp::now().into_iso_string())
                 .map_err(|error| NookError::Database(error.to_string()))?,
             event_state: PendingSimpleGenesisEvent::AwaitingEvent,
-            flow: PendingSimpleGenesisFlow::Ordinary,
         };
         let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
             "Pending Simple genesis produced no result.".to_owned(),
@@ -234,7 +212,7 @@ mod tests {
         .await?;
         assert_eq!(resumed.store_id, pending.store_id);
         assert_eq!(resumed.identity_id, pending.identity_id);
-        SimpleGenesisCompletion::Ordinary { pending: &pending }
+        SimpleGenesisCompletion { pending: &pending }
             .clear_pending()
             .await?;
         let replacement = OrdinarySimpleGenesisRequest {
@@ -287,7 +265,7 @@ mod tests {
         assert_ne!(different_identity.identity_id, pending.identity_id);
         assert_ne!(different_time.created_at, pending.created_at);
         for completed in [different_store, different_identity, different_time] {
-            SimpleGenesisCompletion::Ordinary {
+            SimpleGenesisCompletion {
                 pending: &completed,
             }
             .clear_pending()
@@ -297,7 +275,7 @@ mod tests {
                 StoredStringRecord::Stored(original.clone())
             );
         }
-        SimpleGenesisCompletion::Ordinary { pending: &pending }
+        SimpleGenesisCompletion { pending: &pending }
             .clear_pending()
             .await?;
         assert!(matches!(

@@ -30,7 +30,6 @@ import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   DeviceProtectionStatus,
-  VaultIdentityKeySource,
   providers_visible_while_device_locked,
   set_vault_session_locked,
 } from "$app-wasm";
@@ -244,7 +243,6 @@ export class DeviceProtectionActions {
       }
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    state.identityKeySource = VaultIdentityKeySource.ThisBrowser;
     // The identity is open again, so an idle expiry no longer applies.
     state.sessionExpiredByIdle = false;
     return storageOk(AuthorizedDeviceInitializationOutcome.Initialized);

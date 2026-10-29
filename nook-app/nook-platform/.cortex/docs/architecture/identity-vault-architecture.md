@@ -107,8 +107,7 @@ scope. Switching identities cannot attempt to open another identity's provider
 credentials or overwrite them.
 After an Add identity protection action persists and adopts another app key,
 the browser clears the prior decrypted provider grants and provider drafts.
-Cancellation or failure preserves the prior session. A committed local identity
-transition also clears pending extension-handoff secrets.
+Cancellation or failure preserves the prior session.
 Protecting an identity that has no keyring entry yet adopts the signer the
 session already signs with; an identity without vaults or signing evidence
 mints its first signer. Existing signing evidence without its seed fails closed
@@ -134,8 +133,8 @@ malformed or future pending-genesis marker.
 
 Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. A member whose signing key is unavailable cannot enter a
-new signed Simple-vault genesis roster until an authenticated handoff or the
-local signer supplies that public key.
+new signed Simple-vault genesis roster until the local signer supplies that
+public key.
 
 Destructive device recovery retires only the explicitly targeted local app key
 whose protection became inaccessible.
@@ -177,33 +176,11 @@ identity may enroll.
     snapshots. A retained public app ID is identity scope, not unlock proof.
   - Load each local identity's vault-access rows from only its own app-scoped
     descriptive profiles.
-- **Fresh-vault extension adoption:**
-  - Stage extension identity adoption through vault initialization.
-  - Bind the staged identity to the live authorizer app key.
-  - If no authorizer exists, bind it to the handed-off extension app key.
-  - Ignore another tab's persisted selection when deriving staged ownership.
-  - Keep fresh-vault membership, signing keys, and per-vault DEK envelopes only
-    in the resumable genesis marker until verified connect succeeds.
-  - Compare the marker's base directory with the current directory during
-    completion.
-  - Publish the staged directory and matching signing seed, then remove the
-    marker atomically.
-  - Retain unrelated concurrent identity and selection changes through a typed
-    three-way rebase.
-  - Abort publication when the staged identity changed concurrently or app-key
-    ownership overlaps another identity.
-  - Retain a rejected marker so retry resumes the same candidate.
-  - After a failed create, clear decrypted host state and stop background sync
-    without rolling back event stores or active identity state.
 - **Existing-vault import:**
-  - Use a distinct pending handoff state.
   - Start from the provider listing in
     [auth-providers.md](auth-providers.md#what-the-provider-already-holds):
     another identity's vault is imported as a separate vault or requested,
     by how this device can open it.
-  - During verified connect, synthesize the vault owner from active signed
-    envelopes and verify the extension signing key against the active event
-    roster.
   - If the authorized app key already belongs to an identity, add the imported
     vault grant to that identity rather than synthesizing a duplicate owner.
   - Reject the roster snapshot if its event index names a missing event or an
@@ -212,13 +189,6 @@ identity may enroll.
     pre-upgrade two-transaction writer window before authorization is trusted.
   - Parse every event row and require its computed event ID to match the index
     and row key before treating it as authorization evidence.
-  - Reject a graph with pending events. A known revocation awaiting a missing
-    parent must not leave an older approval usable for handoff.
-  - Commit the member signer and adopted signing seed atomically.
-  - Return the transactionally selected DEKs and install them in the live vault
-    session before clearing the pending handoff.
-  - Validate a staged candidate before both unchanged-base publication and
-    three-way rebase publication.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth
   rows.
@@ -226,10 +196,7 @@ identity may enroll.
 Simple vault creation uses the following marker contract:
 
 - Store `pending_simple_genesis_v1` in IndexedDB before any event-log state.
-- Record `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
-  - `flow` is explicitly `ordinary` or `staged`.
-  - The staged flow carries the base directory and inactive candidate directory
-    with identity-owned DEK envelopes.
+- Record `storeId`, `identityId`, `createdAt`, and `eventState`.
 - Resume the same store and identity binding after a reload.
 - Block local identity creation and activation while a Simple or Sentinel
   genesis transition or local recovery cleanup remains pending.
@@ -238,11 +205,9 @@ Simple vault creation uses the following marker contract:
   - An older tab cannot delete a newer genesis marker.
 - Let the marker own the genesis timestamp and complete signed event lifecycle.
 - Set `eventState` to `awaiting-event` or `event-pinned`.
-  - The pinned variant owns the signed `eventYaml`, an app-key-sealed
-    `signingSeedEnvelope`, and staged-member signer envelopes before the first
-    event-log write.
-  - Either authorized staged member can resume the exact signer and event after
-    a reload.
+  - The pinned variant owns the signed `eventYaml` and an app-key-sealed
+    `signingSeedEnvelope` before the first event-log write.
+  - The app key can resume the exact signer and event after a reload.
 - Decode the marker strictly: a missing field or unknown event state is an
   error, and older marker shapes are not upgraded.
 
@@ -350,9 +315,7 @@ mounts therefore act on the identity, never on one vault.
      an approved join request; it brings its own vaults.
    - it is not: ask to join one, or keep the fresh identity as a new one.
 3. Name a new identity while it is fresh (`name_fresh_identity`); its log
-   seals that name. Naming reports whether the identity exists here
-   (`Named`) or comes into being with its first vault (`AtFirstVault`, a
-   key the extension lends).
+   seals that name. Naming requires the app key's local identity.
 4. A named identity kept on this browser may stay without a vault: setup
    asks, and the identity's card offers New vault later. Otherwise the first
    vault follows at once.
@@ -502,6 +465,9 @@ identity log and both vaults.
 The extension is another installation with its own `app_id` and app key.
 It is not itself an identity.
 It acts through a selected identity after the matching app key is enrolled.
+The website and the extension are separate apps, each with its own app key
+and passkey. The website only ever uses its own app key; it never adopts the
+extension's.
 
 ## Invariants
 

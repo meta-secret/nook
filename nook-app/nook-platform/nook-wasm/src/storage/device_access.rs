@@ -24,7 +24,6 @@ pub(crate) use nook_core::{
 
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
-pub(crate) mod peer_protection;
 mod profile_store;
 mod verified_vault_access;
 pub(crate) use verified_vault_access::VerifiedVaultAccessUpdate;

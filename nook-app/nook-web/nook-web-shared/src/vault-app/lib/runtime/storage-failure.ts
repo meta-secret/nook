@@ -19,10 +19,6 @@ export enum VaultStorageFailureKind {
   OperationFailed = "operation-failed",
   GitHubTokenRejected = "github-token-rejected",
   VaultSelectionFailed = "vault-selection-failed",
-  IdentityHandoffRejected = "identity-handoff-rejected",
-  IdentityHandoffUnavailable = "identity-handoff-unavailable",
-  IdentityHandoffConsumed = "identity-handoff-consumed",
-  IdentityHandoffCleanupFailed = "identity-handoff-cleanup-failed",
   DuplicateProvider = "duplicate-provider",
   LocalFolderRequired = "local-folder-required",
   LocalFolderUnsupported = "local-folder-unsupported",
@@ -74,11 +70,6 @@ export class VaultStorageFailure {
   }
   get translationKey() {
     switch (this.kind) {
-      case VaultStorageFailureKind.IdentityHandoffRejected:
-      case VaultStorageFailureKind.IdentityHandoffUnavailable:
-      case VaultStorageFailureKind.IdentityHandoffConsumed:
-      case VaultStorageFailureKind.IdentityHandoffCleanupFailed:
-        return I18N_KEYS.ExtensionConnectIdentityHandoffFailed;
       case VaultStorageFailureKind.DuplicateProvider:
         return I18N_KEYS.AuthStorageDuplicateSyncProvider;
       case VaultStorageFailureKind.LocalFolderUnsupported:

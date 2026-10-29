@@ -119,11 +119,7 @@ function keyKind(entry: IdentityDirectoryEntry): IdentityKeyKind {
   let passkeys = 0;
   let pins = 0;
   for (const member of entry.members) {
-    const protection =
-      member.localProtection === DeviceAccessProtectionKind.Missing
-        ? member.protectionAssociation
-        : member.localProtection;
-    switch (protection) {
+    switch (member.localProtection) {
       case DeviceAccessProtectionKind.PasskeyStandard:
       case DeviceAccessProtectionKind.PasskeyAntiHacker:
         passkeys += 1;

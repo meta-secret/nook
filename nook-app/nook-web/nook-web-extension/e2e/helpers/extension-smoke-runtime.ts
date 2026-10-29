@@ -26,6 +26,7 @@ import {
 import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import {
+  createWebsiteIdentityForConnect,
   leaveFirstRunReady,
   waitForExtensionPairingReady,
 } from './extension-approval'
@@ -41,6 +42,7 @@ import { REAL_SIDE_PANEL_BROWSER_ARG } from './real-side-panel'
 
 export {
   attachNookLogsForTest,
+  createWebsiteIdentityForConnect,
   installMockPasskeyRuntime,
   leaveFirstRunReady,
   lockExtensionSession,
@@ -78,22 +80,6 @@ export async function withE2eDeadline<Result>(
       },
     )
   })
-}
-
-/** Count the persisted vault-lifecycle extension identity adoptions. */
-export async function countIdentityAdoptions(read: {
-  page: Page
-  label: string
-}): Promise<number> {
-  const entries = await withE2eDeadline(
-    readPersistedAppLogs(read.page),
-    read.label,
-  )
-  return entries.filter(
-    (entry) =>
-      entry.scope === 'vault-lifecycle' &&
-      entry.message === 'extension identity adopted',
-  ).length
 }
 
 function pageAddress(page: Page): string {

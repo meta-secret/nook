@@ -9,14 +9,7 @@ use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
-mod startup_unlock;
 mod sync_policy;
-
-pub use startup_unlock::{
-    CompanionProviderPresence, VaultCompanionAutoResumeDecision, VaultCompanionLockDecision,
-    VaultCompanionUnlockDecision, VaultExistingImportUnlockRequest, VaultIdentityKeySource,
-    VaultStartupUnlockDecision, VaultStartupUnlockRequest,
-};
 
 pub use connection::{
     ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
@@ -48,16 +41,6 @@ pub enum DeviceProtectionStatus {
 pub enum DeviceIdentityInitializationMode {
     RequireCompletedAuthorization,
     AllowPendingAuthorization,
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExternalDeviceIdentityAuthorizationMode {
-    ContinueInitialization,
-    DeferInitialization,
-    /// Unlock the identity alone: no vault session starts, so no vault
-    /// opens until the person opens one.
-    IdentityOnly,
 }
 
 #[wasm_bindgen]

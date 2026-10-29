@@ -4,7 +4,6 @@ import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import { ok } from 'neverthrow'
 import initNookWasm, {
   DeviceProtectionStatus,
-  VaultIdentityKeySource,
   type IdentityControlSnapshot,
 } from '$app-wasm'
 import {
@@ -59,10 +58,7 @@ function snapshot(
   }
 }
 
-function renderFlow(
-  standing: IdentityControlSnapshot['standing'],
-  keySource: VaultIdentityKeySource,
-) {
+function renderFlow(standing: IdentityControlSnapshot['standing']) {
   const vault = VaultStateTestFixture.create()
   const ready: IdentityControlView = {
     kind: IdentityControlViewKind.Ready,
@@ -70,7 +66,6 @@ function renderFlow(
   }
   vault.identityControl.view = ready
   vault.identityControl.mounts = [cloudMount()]
-  vault.identityKeySource = keySource
   vault.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey
   vault.openActiveVault('store_vault')
   vi.spyOn(vault.identityControl, 'followOpenVault').mockResolvedValue(
@@ -88,48 +83,19 @@ function renderFlow(
 }
 
 describe('add a device', () => {
-  test("says the extension's key has not joined the identity instead of showing nothing", () => {
-    const vault = renderFlow(
-      'notListed',
-      VaultIdentityKeySource.PairedCompanion,
-    )
+  test('says this browser has not joined instead of showing nothing', () => {
+    const vault = renderFlow('pendingJoin')
 
     expect(screen.getByTestId('add-device-stage').dataset.stage).toBe(
       'not-member',
     )
     expect(screen.getByTestId('add-device-not-member').textContent).toContain(
       vault.t({
-        key: I18N_KEYS.AddDeviceNotMemberExtension,
-        replacements: { identity: IDENTITY },
-      }),
-    )
-    expect(screen.queryAllByTestId('onboard-device-submit')).toHaveLength(0)
-  })
-
-  test("offers this browser's passkey while the extension's key is in use", () => {
-    const vault = renderFlow(
-      'notListed',
-      VaultIdentityKeySource.PairedCompanion,
-    )
-
-    expect(
-      screen.getByTestId('add-device-use-browser-key').textContent,
-    ).toContain(vault.t(I18N_KEYS.AddDeviceUseBrowserKey))
-  })
-
-  test('says this browser has not joined when it uses its own key', () => {
-    const vault = renderFlow('pendingJoin', VaultIdentityKeySource.ThisBrowser)
-
-    expect(screen.queryAllByTestId('add-device-use-browser-key')).toHaveLength(
-      0,
-    )
-
-    expect(screen.getByTestId('add-device-not-member').textContent).toContain(
-      vault.t({
         key: I18N_KEYS.AddDeviceNotMemberBrowser,
         replacements: { identity: IDENTITY },
       }),
     )
+    expect(screen.queryAllByTestId('onboard-device-submit')).toHaveLength(0)
   })
 
   test('shows a failure on the page', () => {
