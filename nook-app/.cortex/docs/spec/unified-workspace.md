@@ -62,7 +62,9 @@ manager imports keep "identities" for their person and address items.
   identity directory cannot be read, are listed on their own so they always
   open.
 - **New vault** on the current identity's card creates a vault for it.
-  **New identity** starts the new-identity flow (below).
+  **New identity** starts the new-identity flow (below). Beside it, a
+  quieter **Check access** opens the check of which identity a passkey or
+  backup password opens; the header carries no such button.
 - A locked identity never opens the old Keys page; the URL is kept and
   unlocking resumes it.
 

@@ -7,7 +7,8 @@ join) sit between the hero and the cards.
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
   import type { PairedIdentityUnlockTarget } from '$lib/app/extension-identity-adoption'
-  import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
+  import { FolderKey, Plus, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
@@ -463,6 +464,23 @@ join) sit between the hero and the cards.
         <h2 class="nk-subpanel-head flex-1">
           {vault.t(I18N_KEYS.WorkspaceCardsLabel)}
         </h2>
+        <!-- Which keyring a passkey or backup password opens: a question
+             about these keyrings, so it sits with them, quieter than New. -->
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          class="shrink-0 text-muted-foreground"
+          data-testid="access-check-open-btn"
+          aria-label={vault.t(I18N_KEYS.AccessCheckOpen)}
+          disabled={busy}
+          onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
+        >
+          <ShieldCheck class="size-4" aria-hidden="true" />
+          <span class="hidden sm:inline"
+            >{vault.t(I18N_KEYS.AccessCheckOpen)}</span
+          >
+        </Button>
         <Button
           type="button"
           size="sm"

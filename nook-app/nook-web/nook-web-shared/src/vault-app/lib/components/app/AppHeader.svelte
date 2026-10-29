@@ -1,14 +1,7 @@
 <script lang="ts">
   import { VaultWorkspaceActions } from '$lib/vault/ui'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import {
-    BookOpen,
-    ShieldCheck,
-    EllipsisVertical,
-    Lock,
-    Moon,
-    Sun,
-  } from '@lucide/svelte'
+  import { BookOpen, EllipsisVertical, Lock, Moon, Sun } from '@lucide/svelte'
   import {
     configured_vault_application_is_sentinel,
     simple_vault_app_url,
@@ -213,18 +206,6 @@
               <button
                 type="button"
                 class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                data-testid="header-mobile-access-check-btn"
-                onclick={() => {
-                  closeMobileTools()
-                  new VaultWorkspaceActions(vault).openAccessCheck()
-                }}
-              >
-                <ShieldCheck class="size-4 shrink-0" />
-                <span>{vault.t(I18N_KEYS.AccessCheckOpen)}</span>
-              </button>
-              <button
-                type="button"
-                class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 data-testid="header-mobile-help-open-btn"
                 onclick={() => {
                   closeMobileTools()
@@ -337,22 +318,6 @@
           onBack={() => new VaultWorkspaceActions(vault).closeAccessCheck()}
         />
       {:else}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4 {vault.isAuthenticated
-            ? 'hidden sm:inline-flex'
-            : ''}"
-          aria-label={vault.t(I18N_KEYS.AccessCheckOpen)}
-          data-testid="access-check-open-btn"
-          onclick={() => new VaultWorkspaceActions(vault).openAccessCheck()}
-        >
-          <ShieldCheck class="size-4" />
-          <span class="hidden sm:inline"
-            >{vault.t(I18N_KEYS.AccessCheckOpen)}</span
-          >
-        </Button>
         <Button
           type="button"
           variant="outline"

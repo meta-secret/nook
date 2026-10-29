@@ -9,6 +9,7 @@ import {
   expandSettingsSection,
   expectFirstVaultOpen,
   expectVaultPasswordStatus,
+  openIdentitiesPage,
   openStorageSettings,
   startFirstRun,
   UI_TIMEOUT_MS,
@@ -76,6 +77,8 @@ test.describe('check access', () => {
     await addVaultPassword(page, 'Primary password', 'correct-horse-1')
     await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
+    // Check access sits with the keyrings, on the keyrings page.
+    await openIdentitiesPage(page)
     await page.getByTestId('access-check-open-btn').click()
     await page.getByTestId('access-check-method-password').click()
     await expect(page.getByTestId('access-check-run')).toBeDisabled()
