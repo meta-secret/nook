@@ -4,10 +4,11 @@ is about filled in. The steps say what they are for with it instead of a
 paragraph.
 -->
 <script lang="ts">
-  import { ChevronRight } from '@lucide/svelte'
-  import type {
-    FirstRunDiagramNode,
-    FirstRunDiagramView,
+  import { ChevronLeft, ChevronRight } from '@lucide/svelte'
+  import {
+    FirstRunDiagramArrow,
+    type FirstRunDiagramNode,
+    type FirstRunDiagramView,
   } from './first-run-diagram'
 
   let { diagram }: { diagram: FirstRunDiagramView } = $props()
@@ -45,8 +46,13 @@ paragraph.
         class="mt-[1.375rem] flex min-w-6 flex-1 -translate-y-1/2 items-center text-muted-foreground"
         aria-hidden="true"
       >
-        <span class="h-px flex-1 border-t border-dashed border-border"></span>
-        <ChevronRight class="-ml-1 size-3.5" />
+        {#if box.arrow === FirstRunDiagramArrow.Back}
+          <ChevronLeft class="-mr-1 size-3.5" />
+          <span class="h-px flex-1 border-t border-dashed border-border"></span>
+        {:else}
+          <span class="h-px flex-1 border-t border-dashed border-border"></span>
+          <ChevronRight class="-ml-1 size-3.5" />
+        {/if}
       </span>
     {/if}
     {@render node(box)}

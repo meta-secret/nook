@@ -70,7 +70,7 @@ The identity is settled before any vault exists. The step bar counts
 Passkey, Sync provider, Identity, and Vault. Each step is one centred column
 with a short title. A diagram appears once per new idea, in place of a
 paragraph: Your passkey → Your identity → Your vaults on the Passkey step,
-This device → Sync provider → Your other devices on the Sync step. A line of
+This device → Sync provider ← Your other devices on the Sync step. A line of
 text stays only for a requirement, a consequence, or a promise.
 
 - **Start**: "Create your identity" and one Create identity button, with no
@@ -90,7 +90,7 @@ text stays only for a requirement, a consequence, or a promise.
   passkey, or one made for Nook before, makes this browser's key. Back
   returns to Start.
 - **Sync provider**: before sign-in, one line and a small diagram (This
-  device → Sync provider → Your other devices) say what it is for. Google
+  device → Sync provider ← Your other devices) say what it is for. Google
   Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
   browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
   - **Continue** when the key is a member: the identity is added here and
@@ -177,7 +177,7 @@ then "*identity* is ready" with its first vault's name, or Later.
 - **Sync** mounts providers on the identity. The provider list shows each
   provider once; mounts recorded on the identity but not connected here are
   a warning. Adding a provider shows no description: the page title names
-  the task, and the sign-in step draws This device → the provider → Your
+  the task, and the sign-in step draws This device → the provider ← Your
   other devices above its sign-in button, with one line that the sign-in
   stays in this browser. Connect & sync does not draw it again.
 - **Devices** lists the identity's apps (rename, revoke), approves or denies
