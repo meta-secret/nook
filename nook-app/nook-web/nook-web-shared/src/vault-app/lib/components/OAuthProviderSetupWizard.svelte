@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { Lock, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type { OAuthFilePreset } from "$lib/auth/providers";
@@ -167,11 +167,15 @@
   }
 
   /** The step's button when no listing owns it: Connect & sync alone. */
-  /** Signed in to Drive, the step draws what it does instead of saying it. */
-  const driveDiagram = $derived.by(() => {
+  /** The connection step draws what the provider does instead of saying it. */
+  const providerDiagram = $derived.by(() => {
     const request: FirstRunSyncDiagramRequest = {
       vault,
-      provider: vault.t(I18N_KEYS.ProviderPickerGoogleDrive),
+      provider: vault.t(
+        isICloud
+          ? I18N_KEYS.ProviderPickerIcloud
+          : I18N_KEYS.ProviderPickerGoogleDrive,
+      ),
     };
     return firstRunSyncDiagram(request);
   });
@@ -330,13 +334,7 @@
         ? "icloud-setup-connection-step"
         : "google-setup-connection-step"}
     >
-      <p class="text-sm text-foreground text-pretty">
-        {vault.t(
-          isICloud
-            ? I18N_KEYS.ProviderSetupIcloudDesc
-            : I18N_KEYS.ProviderSetupGoogleDriveDesc,
-        )}
-      </p>
+      <FirstRunDiagram diagram={providerDiagram} />
 
       {#if isICloud}
         <div
@@ -431,7 +429,8 @@
         </p>
       {/if}
 
-      <p class="text-[11px] text-muted-foreground text-pretty">
+      <p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Lock class="size-3 flex-none" aria-hidden="true" />
         {isICloud
           ? vault.t(I18N_KEYS.ProviderSetupIcloudTokensLocalDesc)
           : vault.t(I18N_KEYS.ProviderSetupGoogleTokensLocalDesc)}
@@ -450,13 +449,6 @@
       bind:open={syncStepOpen}
       testId={isICloud ? "icloud-setup-sync-step" : "google-setup-sync-step"}
     >
-      {#if driveAccessToken && !isICloud}
-        <FirstRunDiagram diagram={driveDiagram} />
-      {:else}
-        <p class="text-sm text-muted-foreground text-pretty">
-          {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-        </p>
-      {/if}
       {#if isICloud && !sharedTargetReady}
         <p
           class="text-[11px] text-muted-foreground text-pretty"

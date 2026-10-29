@@ -184,13 +184,7 @@
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
   {#if addingProvider && hostBack}
-    <p class="text-sm text-muted-foreground text-pretty">
-      {#if showSetup}
-        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
-      {:else}
-        {vault.t(I18N_KEYS.AuthStorageSyncChooseDesc)}
-      {/if}
-    </p>
+    <!-- The host page's title says what is being added. -->
   {:else if addingProvider}
     <div
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"

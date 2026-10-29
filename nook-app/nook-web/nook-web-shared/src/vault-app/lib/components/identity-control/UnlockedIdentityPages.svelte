@@ -66,7 +66,9 @@ Back returns to the overview.
       <ManageSection
         compact
         title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
-        subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
+        subtitle={adding
+          ? ''
+          : vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
         testId="storage-providers-section"
       >
         <AuthStorage

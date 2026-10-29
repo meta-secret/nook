@@ -166,6 +166,22 @@ function renderWizard(config: OAuthFileConfig) {
 }
 
 describe('Google Drive provider setup', () => {
+  test('before sign-in, the step draws where the identity goes instead of explaining it', () => {
+    const { view, vault } = renderWizard(
+      defaultOAuthFileConfig({ preset: 'google-drive', fileName: 'vault' }),
+    )
+
+    const step = view.getByTestId('google-setup-connection-step')
+    const diagram = view.getByTestId('first-run-sync-diagram')
+    expect(step.contains(diagram)).toBe(true)
+    expect(diagram.textContent).toContain(
+      vault.t(I18N_KEYS.ProviderPickerGoogleDrive),
+    )
+    expect(step.contains(view.getByTestId('google-sign-in-btn'))).toBe(true)
+    // One diagram on the page: Connect & sync does not draw it again.
+    expect(view.getAllByTestId('first-run-sync-diagram')).toHaveLength(1)
+  })
+
   test('offers no folder name; connecting opens or creates the Nook root first', async () => {
     listVaults({ root: 'absent' })
     const connect = vi

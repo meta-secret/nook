@@ -42,7 +42,10 @@
     ProviderSetupRequest,
     StorageProvider,
   } from '$lib/auth/providers'
-  import type { LoginSetup } from '$lib/vault/state/provider.svelte'
+  import {
+    LoginSetupKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import type { NookManualProviderSync } from '$app-wasm'
   import {
@@ -213,7 +216,9 @@
     <ManageSection
       compact
       title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
-      subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
+      subtitle={addProviderOpen || loginSetup.kind === LoginSetupKind.Active
+        ? ''
+        : vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
       testId="storage-providers-section"
     >
       <AuthStorage

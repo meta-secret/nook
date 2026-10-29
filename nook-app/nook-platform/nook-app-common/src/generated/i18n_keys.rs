@@ -2277,7 +2277,6 @@ pub const PROVIDER_SETUP_GITHUB_CONNECTION_SUBTITLE: &str =
 pub const PROVIDER_SETUP_GITHUB_PAT_DESC: &str = "provider_setup.github_pat_desc";
 pub const PROVIDER_SETUP_GOOGLE_CONNECTION_SUBTITLE: &str =
     "provider_setup.google_connection_subtitle";
-pub const PROVIDER_SETUP_GOOGLE_DRIVE_DESC: &str = "provider_setup.google_drive_desc";
 pub const PROVIDER_SETUP_GOOGLE_FOLDER_EXISTING: &str = "provider_setup.google_folder_existing";
 pub const PROVIDER_SETUP_GOOGLE_OAUTH_UNCONFIGURED: &str =
     "provider_setup.google_oauth_unconfigured";
@@ -2293,7 +2292,6 @@ pub const PROVIDER_SETUP_GOOGLE_VAULTS_LIST_FAILED: &str =
     "provider_setup.google_vaults_list_failed";
 pub const PROVIDER_SETUP_ICLOUD_CONNECTION_SUBTITLE: &str =
     "provider_setup.icloud_connection_subtitle";
-pub const PROVIDER_SETUP_ICLOUD_DESC: &str = "provider_setup.icloud_desc";
 pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
     "provider_setup.icloud_oauth_unconfigured";
 pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
