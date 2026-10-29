@@ -1317,7 +1317,6 @@ export const I18N_KEYS = {
   IdentityHealthStageCopyKept: 'identity_health.stage_copy_kept',
   IdentityHealthStageLocalOnly: 'identity_health.stage_local_only',
   IdentityHealthStageMultiDevice: 'identity_health.stage_multi_device',
-  IdentityHealthSyncBody: 'identity_health.sync_body',
   IdentityHealthSyncCta: 'identity_health.sync_cta',
   IdentityHealthSyncTitle: 'identity_health.sync_title',
   IdentityKeysCountMany: 'identity_keys.count_many',

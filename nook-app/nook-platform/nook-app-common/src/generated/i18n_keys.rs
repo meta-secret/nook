@@ -1580,7 +1580,6 @@ pub const IDENTITY_HEALTH_LABEL: &str = "identity_health.label";
 pub const IDENTITY_HEALTH_STAGE_COPY_KEPT: &str = "identity_health.stage_copy_kept";
 pub const IDENTITY_HEALTH_STAGE_LOCAL_ONLY: &str = "identity_health.stage_local_only";
 pub const IDENTITY_HEALTH_STAGE_MULTI_DEVICE: &str = "identity_health.stage_multi_device";
-pub const IDENTITY_HEALTH_SYNC_BODY: &str = "identity_health.sync_body";
 pub const IDENTITY_HEALTH_SYNC_CTA: &str = "identity_health.sync_cta";
 pub const IDENTITY_HEALTH_SYNC_TITLE: &str = "identity_health.sync_title";
 pub const IDENTITY_KEYS_COUNT_MANY: &str = "identity_keys.count_many";

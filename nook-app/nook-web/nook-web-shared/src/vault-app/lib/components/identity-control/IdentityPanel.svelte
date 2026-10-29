@@ -3,7 +3,9 @@ The identity this browser uses, in one panel beside its card, as three
 sub-panels from most to least prominent. First what keeps it replicated and
 resilient: its sync providers, then its devices, each a section listing
 them with its add action. A device joins through a sync provider, so adding
-one stays locked until the identity has a provider. Then the other
+one stays locked until the identity has a provider; until then the providers
+section draws that (this device → sync provider ← other devices) instead of
+explaining it. Then the other
 management actions (its vaults, this browser), then the details (sign-in
 keys). Each action says what it leads to; nothing hides behind a menu.
 -->
@@ -33,6 +35,11 @@ keys). Each action says what it leads to; nothing hides behind a menu.
   } from "$lib/components/add-device/device-join-mounts";
   import type { VaultState } from "$lib/vault.svelte";
   import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
+  import FirstRunDiagram from "$lib/components/login/FirstRunDiagram.svelte";
+  import {
+    firstRunSyncDiagram,
+    type FirstRunSyncDiagramRequest,
+  } from "$lib/components/login/first-run-diagram";
 
   let {
     vault,
@@ -79,6 +86,13 @@ keys). Each action says what it leads to; nothing hides behind a menu.
       DeviceJoinAvailability.NeedsCloud
     );
   });
+  /** The same drawing the Add sync provider step shows: what a provider
+   * is for, before there is one. */
+  const syncDiagramRequest = $derived<FirstRunSyncDiagramRequest>({
+    vault,
+    provider: vault.t(I18N_KEYS.JoinNodeProvider),
+  });
+  const syncDiagram = $derived(firstRunSyncDiagram(syncDiagramRequest));
   const devicesAtRisk = $derived(
     health.nextStep === NookIdentityNextStep.AddDevice,
   );
@@ -250,9 +264,9 @@ keys). Each action says what it leads to; nothing hides behind a menu.
         {/if}
       </div>
       {#if vault.syncProviders.length === 0}
-        <p class="text-xs text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.IdentityHealthSyncBody)}
-        </p>
+        <div class="py-2">
+          <FirstRunDiagram diagram={syncDiagram} />
+        </div>
       {:else}
         <ul class="divide-y divide-border/60">
           {#each vault.syncProviders as provider (provider.id)}
@@ -281,7 +295,9 @@ keys). Each action says what it leads to; nothing hides behind a menu.
         size="sm"
         variant={needsCloud ? "default" : "outline"}
         data-lead={needsCloud ? "true" : "false"}
-        class="justify-self-start"
+        class={vault.syncProviders.length === 0
+          ? "justify-self-center"
+          : "justify-self-start"}
         data-testid="identity-action-add-sync"
         onclick={onAddSyncProvider}
       >

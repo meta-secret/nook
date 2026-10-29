@@ -2486,7 +2486,6 @@
     "stage_copy_kept": "Copy kept",
     "stage_multi_device": "On several devices",
     "sync_title": "Keep a copy outside this browser",
-    "sync_body": "If this browser’s data is cleared, your keyring and its vaults are gone. A sync provider keeps an encrypted copy.",
     "sync_cta": "Add a sync provider",
     "cloud_title": "Add a cloud provider so another device can join",
     "cloud_body": "Your copy is in a local folder. Other devices reach your keyring only through GitHub or Google Drive.",

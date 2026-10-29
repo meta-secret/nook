@@ -73,6 +73,7 @@ describe('identity panel', () => {
     expect(follows(providers, devices)).toBe(true)
     expect(inside(providers, 'identity-panel-provider-github')).toBe(true)
     expect(inside(providers, 'identity-action-add-sync')).toBe(true)
+    expect(inside(providers, 'first-run-sync-diagram')).toBe(false)
     expect(inside(devices, 'identity-action-add-device')).toBe(true)
     expect(inside(manage, 'overview-open-vaults')).toBe(true)
     expect(inside(manage, 'overview-browser-settings')).toBe(true)
@@ -90,6 +91,12 @@ describe('identity panel', () => {
     expect(view.getByTestId('identity-panel-providers').dataset.state).toBe(
       'risk',
     )
+    // It draws what a provider is for instead of explaining it.
+    expect(
+      view
+        .getByTestId('identity-panel-providers')
+        .contains(view.getByTestId('first-run-sync-diagram')),
+    ).toBe(true)
     expect(view.queryAllByTestId('overview-open-sync')).toHaveLength(0)
     await fireEvent.click(view.getByTestId('identity-action-add-sync'))
 
