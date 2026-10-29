@@ -121,16 +121,11 @@ this same screen: the person creates or joins here, never in the extension.
     class="mx-auto grid w-full max-w-md gap-6 py-6 text-center sm:gap-7 sm:py-16"
     data-testid="first-vault-start"
   >
-    <div class="space-y-2">
-      <h1
-        class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
-      >
-        {vault.t(I18N_KEYS.FirstRunTitle)}
-      </h1>
-      <p class="text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.FirstRunSubtitle)}
-      </p>
-    </div>
+    <h1
+      class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
+    >
+      {vault.t(I18N_KEYS.FirstRunTitle)}
+    </h1>
 
     <Button
       type="button"

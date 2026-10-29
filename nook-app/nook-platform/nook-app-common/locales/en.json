@@ -2420,7 +2420,6 @@
   },
   "first_run": {
     "title": "Create your identity",
-    "subtitle": "A passkey on this browser makes it.",
     "name_label": "Identity name",
     "name_placeholder": "Personal",
     "create": "Create identity",
@@ -2433,7 +2432,7 @@
     "step_vault": "Vault",
     "back": "Back",
     "protect_title": "One passkey opens it all",
-    "protect_body": "It unlocks your identity and its vaults on this device. No password, no Nook server.",
+    "protect_body": "No password. No Nook server.",
     "diagram_label": "How your passkey opens your vaults",
     "diagram_passkey": "Your passkey",
     "diagram_identity": "Your identity",

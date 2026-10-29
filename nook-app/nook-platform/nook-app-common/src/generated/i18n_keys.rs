@@ -1440,7 +1440,6 @@ pub const FIRST_RUN_STEP_IDENTITY: &str = "first_run.step_identity";
 pub const FIRST_RUN_STEP_PROTECT: &str = "first_run.step_protect";
 pub const FIRST_RUN_STEP_SYNC: &str = "first_run.step_sync";
 pub const FIRST_RUN_STEP_VAULT: &str = "first_run.step_vault";
-pub const FIRST_RUN_SUBTITLE: &str = "first_run.subtitle";
 pub const FIRST_RUN_SYNC_BODY: &str = "first_run.sync_body";
 pub const FIRST_RUN_SYNC_CHOOSE_BODY: &str = "first_run.sync_choose_body";
 pub const FIRST_RUN_SYNC_CHOOSE_TITLE: &str = "first_run.sync_choose_title";

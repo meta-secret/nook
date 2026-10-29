@@ -10,11 +10,7 @@ provider comes next and shows the identities that key belongs to.
   import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
   import FirstRunBackLink from "./FirstRunBackLink.svelte";
   import FirstRunDiagram from "./FirstRunDiagram.svelte";
-  import {
-    FirstRunKeyStep,
-    firstRunKeyDiagram,
-    type FirstRunKeyDiagramRequest,
-  } from "./first-run-diagram";
+  import { firstRunKeyDiagram } from "./first-run-diagram";
   import FirstRunProgress from "./FirstRunProgress.svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
@@ -28,13 +24,7 @@ provider comes next and shows the identities that key belongs to.
     onBack: () => void;
   } = $props();
 
-  const diagram = $derived.by(() => {
-    const request: FirstRunKeyDiagramRequest = {
-      vault,
-      current: FirstRunKeyStep.Passkey,
-    };
-    return firstRunKeyDiagram(request);
-  });
+  const diagram = $derived(firstRunKeyDiagram(vault));
 </script>
 
 <section

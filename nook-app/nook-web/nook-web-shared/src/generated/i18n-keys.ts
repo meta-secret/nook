@@ -1189,7 +1189,6 @@ export const I18N_KEYS = {
   FirstRunStepProtect: 'first_run.step_protect',
   FirstRunStepSync: 'first_run.step_sync',
   FirstRunStepVault: 'first_run.step_vault',
-  FirstRunSubtitle: 'first_run.subtitle',
   FirstRunSyncBody: 'first_run.sync_body',
   FirstRunSyncChooseBody: 'first_run.sync_choose_body',
   FirstRunSyncChooseTitle: 'first_run.sync_choose_title',

@@ -64,13 +64,14 @@ A browser without an identity shows one flow in place of the hub, in the
 Simple and unified apps. Sentinel is never offered.
 
 The identity is settled before any vault exists. The step bar counts
-Passkey, Sync provider, Identity, and Vault. Each step is one centred column:
-a short title, one line, and a small diagram in place of paragraphs. The
-Passkey, Name, and Vault steps share Your passkey → Your identity → Your
-vaults, each filling in its own box.
+Passkey, Sync provider, Identity, and Vault. Each step is one centred column
+with a short title. A diagram appears once per new idea, in place of a
+paragraph: Your passkey → Your identity → Your vaults on the Passkey step,
+This device → Sync provider → Your other devices on the Sync step. A line of
+text stays only for a requirement, a consequence, or a promise.
 
-- **Start**: "Create your identity", one short line, and one Create
-  identity button. Under an "or", the other paths are equal rows, each an
+- **Start**: "Create your identity" and one Create identity button, with no
+  subtitle: the Passkey step explains the passkey. Under an "or", the other paths are equal rows, each an
   icon, a short title, and an arrow: **Join with an invite link** opens
   the join screen, **Recover from a sync provider** opens recovery,
   and **Check a passkey or backup password** opens Check access. One fact
@@ -81,8 +82,8 @@ vaults, each filling in its own box.
   [identity decisions](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md)
   record describes. A link below checks which passkey or backup password
   opens what, before anything is recovered.
-- **Passkey** ("One passkey opens it all"): one line and a small diagram,
-  Your passkey → Your identity → Your vaults, say what it is for. A new
+- **Passkey** ("One passkey opens it all"): the diagram says what it is for,
+  and one line makes the promise: no password, no Nook server. A new
   passkey, or one made for Nook before, makes this browser's key. Back
   returns to Start.
 - **Sync provider**: before sign-in, one line and a small diagram (This

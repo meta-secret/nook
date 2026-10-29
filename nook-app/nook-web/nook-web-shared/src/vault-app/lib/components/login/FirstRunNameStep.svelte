@@ -8,12 +8,6 @@ browser, it asks next whether to create a first vault.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
-  import FirstRunDiagram from './FirstRunDiagram.svelte'
-  import {
-    FirstRunKeyStep,
-    firstRunKeyDiagram,
-    type FirstRunKeyDiagramRequest,
-  } from './first-run-diagram'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
@@ -27,13 +21,6 @@ browser, it asks next whether to create a first vault.
   const label = $derived(
     name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
   )
-  const diagram = $derived.by(() => {
-    const request: FirstRunKeyDiagramRequest = {
-      vault,
-      current: FirstRunKeyStep.Identity,
-    }
-    return firstRunKeyDiagram(request)
-  })
   const onProvider = $derived(
     vault.firstRunPlace === FirstRunPlace.SyncProvider,
   )
@@ -69,7 +56,6 @@ browser, it asks next whether to create a first vault.
     </p>
   </div>
 
-  <FirstRunDiagram {diagram} />
 
   <form
     class="flex flex-col gap-2 sm:flex-row"
