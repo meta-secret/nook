@@ -153,9 +153,13 @@ administer vault items.
    event log, the keyring's control log, the records of the keyring's other
    vaults this browser holds, and every sync provider of the keyring. The
    extension validates and imports them through Rust/WASM into
-   extension-origin IndexedDB.
+   extension-origin IndexedDB. It joins the keyring first, with its unlocked
+   key; an extension that cannot join (locked, say) stores nothing, and the
+   website shows the approval as not taken.
 7. The extension becomes “connected” only after the imported graph contains a
    current, non-revoked approval and key envelope for its protected device.
+   A member extension's Connect starts another keyring with its own new key;
+   it never re-approves the keyring it already belongs to.
 
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
