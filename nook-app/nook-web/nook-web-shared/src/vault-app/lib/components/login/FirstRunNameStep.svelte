@@ -4,10 +4,16 @@ in to or on this browser only. Only its members see the name. Kept on this
 browser, it asks next whether to create a first vault.
 -->
 <script lang="ts">
-  import { RefreshCw } from '@lucide/svelte'
+  import { Cloud, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
+  import FirstRunDiagram from './FirstRunDiagram.svelte'
+  import {
+    FirstRunKeyStep,
+    firstRunKeyDiagram,
+    type FirstRunKeyDiagramRequest,
+  } from './first-run-diagram'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
@@ -20,6 +26,16 @@ browser, it asks next whether to create a first vault.
   // An empty field takes the suggested name, so one click is enough.
   const label = $derived(
     name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
+  )
+  const diagram = $derived.by(() => {
+    const request: FirstRunKeyDiagramRequest = {
+      vault,
+      current: FirstRunKeyStep.Identity,
+    }
+    return firstRunKeyDiagram(request)
+  })
+  const onProvider = $derived(
+    vault.firstRunPlace === FirstRunPlace.SyncProvider,
   )
   const where = $derived(
     vault.firstRunPlace === FirstRunPlace.SyncProvider
@@ -42,7 +58,7 @@ browser, it asks next whether to create a first vault.
     <FirstRunProgress {vault} current={FirstRunStage.Name} />
   </div>
 
-  <div class="space-y-2">
+  <div class="space-y-2 text-center">
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
@@ -52,6 +68,8 @@ browser, it asks next whether to create a first vault.
       {vault.t(I18N_KEYS.FirstRunNameBody)}
     </p>
   </div>
+
+  <FirstRunDiagram {diagram} />
 
   <form
     class="flex flex-col gap-2 sm:flex-row"
@@ -86,5 +104,15 @@ browser, it asks next whether to create a first vault.
       {vault.t(I18N_KEYS.FirstRunNameCreate)}
     </Button>
   </form>
-  <p class="nk-spec" data-testid="first-run-name-place">{where}</p>
+  <p
+    class="nk-spec flex items-center justify-center gap-2"
+    data-testid="first-run-name-place"
+  >
+    {#if onProvider}
+      <Cloud class="size-3.5" aria-hidden="true" />
+    {:else}
+      <MonitorSmartphone class="size-3.5" aria-hidden="true" />
+    {/if}
+    {where}
+  </p>
 </section>

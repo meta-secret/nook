@@ -5,13 +5,16 @@ opens the identity, which holds the vaults. No vault exists yet; the sync
 provider comes next and shows the identities that key belongs to.
 -->
 <script lang="ts">
-  import { Fingerprint, UserRound, Vault } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
   import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
   import FirstRunBackLink from "./FirstRunBackLink.svelte";
   import FirstRunDiagram from "./FirstRunDiagram.svelte";
-  import type { FirstRunDiagramView } from "./first-run-diagram";
+  import {
+    FirstRunKeyStep,
+    firstRunKeyDiagram,
+    type FirstRunKeyDiagramRequest,
+  } from "./first-run-diagram";
   import FirstRunProgress from "./FirstRunProgress.svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
@@ -25,30 +28,12 @@ provider comes next and shows the identities that key belongs to.
     onBack: () => void;
   } = $props();
 
-  /** The passkey opens the identity, which holds the vaults. */
-  const diagram = $derived<FirstRunDiagramView>({
-    label: vault.t(I18N_KEYS.FirstRunDiagramLabel),
-    testId: "first-run-key-diagram",
-    nodes: [
-      {
-        icon: Fingerprint,
-        label: vault.t(I18N_KEYS.FirstRunDiagramPasskey),
-        testId: "first-run-diagram-passkey",
-        current: true,
-      },
-      {
-        icon: UserRound,
-        label: vault.t(I18N_KEYS.FirstRunDiagramIdentity),
-        testId: "first-run-diagram-identity",
-        current: false,
-      },
-      {
-        icon: Vault,
-        label: vault.t(I18N_KEYS.FirstRunDiagramVaults),
-        testId: "first-run-diagram-vaults",
-        current: false,
-      },
-    ],
+  const diagram = $derived.by(() => {
+    const request: FirstRunKeyDiagramRequest = {
+      vault,
+      current: FirstRunKeyStep.Passkey,
+    };
+    return firstRunKeyDiagram(request);
   });
 </script>
 

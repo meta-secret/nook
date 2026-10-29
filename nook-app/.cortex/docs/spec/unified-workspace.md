@@ -64,7 +64,10 @@ A browser without an identity shows one flow in place of the hub, in the
 Simple and unified apps. Sentinel is never offered.
 
 The identity is settled before any vault exists. The step bar counts
-Passkey, Sync provider, Identity, and Vault.
+Passkey, Sync provider, Identity, and Vault. Each step is one centred column:
+a short title, one line, and a small diagram in place of paragraphs. The
+Passkey, Name, and Vault steps share Your passkey → Your identity → Your
+vaults, each filling in its own box.
 
 - **Start**: "Create your identity", one short line, and one Create
   identity button. Under an "or", the other paths are equal rows, each an

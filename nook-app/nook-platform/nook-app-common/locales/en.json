@@ -2462,7 +2462,7 @@
     "name_on_browser": "Kept on this browser only",
     "name_failed": "The identity could not be named.",
     "vault_title": "Create your first vault?",
-    "vault_body": "A vault keeps your passwords and secrets. You can add one later from your identity.",
+    "vault_body": "It keeps your passwords and secrets. You can add one later.",
     "vault_create": "Create vault",
     "vault_skip": "Not now",
     "join_title": "Request sent",

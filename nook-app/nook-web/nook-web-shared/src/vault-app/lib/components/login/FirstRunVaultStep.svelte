@@ -6,8 +6,15 @@ the identity without a vault, and its card offers New vault later.
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
+  import FirstRunDiagram from './FirstRunDiagram.svelte'
   import FirstRunProgress from './FirstRunProgress.svelte'
+  import {
+    FirstRunKeyStep,
+    firstRunKeyDiagram,
+    type FirstRunKeyDiagramRequest,
+  } from './first-run-diagram'
   import LoginVaultNameForm from './LoginVaultNameForm.svelte'
+  import { VaultNameHint } from './login-vault-name-form'
   import type { VaultState } from '$lib/vault.svelte'
   import { FirstRunActions } from '$lib/vault/first-run'
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
@@ -15,6 +22,13 @@ the identity without a vault, and its card offers New vault later.
   let { vault }: { vault: VaultState } = $props()
 
   const actions = $derived(new FirstRunActions(vault))
+  const diagram = $derived.by(() => {
+    const request: FirstRunKeyDiagramRequest = {
+      vault,
+      current: FirstRunKeyStep.Vaults,
+    }
+    return firstRunKeyDiagram(request)
+  })
 </script>
 
 <section
@@ -23,7 +37,7 @@ the identity without a vault, and its card offers New vault later.
 >
   <FirstRunProgress {vault} current={FirstRunStage.Vault} />
 
-  <div class="space-y-2">
+  <div class="space-y-2 text-center">
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
@@ -34,15 +48,18 @@ the identity without a vault, and its card offers New vault later.
     </p>
   </div>
 
+  <FirstRunDiagram {diagram} />
+
   <LoginVaultNameForm
     {vault}
     isVerifying={vault.isVerifying}
     isInitializing={vault.isInitializing}
     submitLabel={vault.t(I18N_KEYS.FirstRunVaultCreate)}
+    hint={VaultNameHint.Hidden}
     onCreate={(name: string) => actions.createFirstVault(name)}
   />
 
-  <div>
+  <div class="flex justify-center">
     <Button
       type="button"
       variant="ghost"
