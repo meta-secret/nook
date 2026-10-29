@@ -6,6 +6,9 @@
 //! denies it. The asking browser completes when the user lists again: once
 //! its app key is a member, the identity is added under its original id,
 //! through the same adoption an invite join uses.
+//!
+//! The browser extension completes the same way, from the log the web app
+//! hands it after adding it to the keyring: its key is a member already.
 
 use nook_core::{
     AppId, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
@@ -27,7 +30,7 @@ use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
 use crate::storage::provider_vault_listing::DriveVaultListing;
 use crate::storage::remote_event::RemoteEventRead;
-use crate::{DriveStorageClient, NookDatabase, NookError};
+use crate::{DriveStorageClient, IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError};
 
 /// A join request written into an identity's log at a provider.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -50,6 +53,14 @@ pub enum NookIdentityJoinCompletion {
     Approved,
     /// Denied: nothing changed.
     Denied,
+}
+
+/// An identity's control log, read and not yet verified, for the app key
+/// that completes its join.
+struct IdentityJoinLog<'a> {
+    identity_id: &'a IdentityId,
+    app_key: &'a nook_core::AppKey,
+    events: &'a [EventStorageBytes],
 }
 
 /// An identity log's home at one source, opened once per operation.
@@ -91,6 +102,50 @@ impl NookVaultManager {
             NookProviderSource::LocalFolder { handle_id } => OpenedIdentitySource::LocalFolder(
                 LocalFolderHandles::current().open_folder(handle_id).await?,
             ),
+        })
+    }
+
+    /// Verify the identity's log and complete the join it records for this
+    /// app key: once the key is a member, its local identity takes the
+    /// identity's id and the membership and DEK grants are kept here.
+    async fn complete_join_from_log(
+        join: IdentityJoinLog<'_>,
+    ) -> Result<NookIdentityJoinCompletion, NookError> {
+        let IdentityJoinLog {
+            identity_id,
+            app_key,
+            events,
+        } = join;
+        let log = IdentityControlLog::new(identity_id.clone())
+            .union_storage_bytes(events)
+            .map_err(|rejection| rejection.cause)?;
+        let state = IdentityControlState::project(&log)?;
+        let plan = IdentityJoinCompletion {
+            directory: &NookDatabase::load_identity_directory().await?,
+            app_key,
+            state: &state,
+            local_log: Self::local_identity_log(app_key).await?,
+        }
+        .plan()?;
+        Ok(match plan {
+            IdentityJoinCompletionPlan::Pending => NookIdentityJoinCompletion::Pending,
+            IdentityJoinCompletionPlan::Denied => NookIdentityJoinCompletion::Denied,
+            IdentityJoinCompletionPlan::Join(binding) => {
+                if let IdentityInvitationBinding::Adopt { local_identity_id } = binding {
+                    NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
+                        local_identity_id: &local_identity_id,
+                        replicated_identity_id: identity_id,
+                    })
+                    .await?;
+                }
+                NookDatabase::save_identity_events(IdentityLogWrite {
+                    identity_id,
+                    events: &log.storage_bytes()?,
+                })
+                .await?;
+                Self::apply_identity_state_locally(app_key, &state).await?;
+                NookIdentityJoinCompletion::Approved
+            }
         })
     }
 
@@ -294,38 +349,58 @@ impl NookVaultManager {
             )
             .into());
         }
-        let log = IdentityControlLog::new(identity_id.clone())
-            .union_storage_bytes(&events)
-            .map_err(|rejection| rejection.cause)?;
-        let state = IdentityControlState::project(&log)?;
-        let plan = IdentityJoinCompletion {
-            directory: &NookDatabase::load_identity_directory().await?,
+        let completion = Self::complete_join_from_log(IdentityJoinLog {
+            identity_id: &identity_id,
             app_key: &app_key,
-            state: &state,
-            local_log: Self::local_identity_log(&app_key).await?,
-        }
-        .plan()?;
-        let completion = match plan {
-            IdentityJoinCompletionPlan::Pending => NookIdentityJoinCompletion::Pending,
-            IdentityJoinCompletionPlan::Denied => NookIdentityJoinCompletion::Denied,
-            IdentityJoinCompletionPlan::Join(binding) => {
-                if let IdentityInvitationBinding::Adopt { local_identity_id } = binding {
-                    NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
-                        local_identity_id: &local_identity_id,
-                        replicated_identity_id: &identity_id,
-                    })
-                    .await?;
-                }
-                NookDatabase::save_identity_events(IdentityLogWrite {
-                    identity_id: &identity_id,
-                    events: &log.storage_bytes()?,
-                })
-                .await?;
-                Self::apply_identity_state_locally(&app_key, &state).await?;
-                NookIdentityJoinCompletion::Approved
-            }
-        };
+            events: &events,
+        })
+        .await?;
         Tsify::into_ts(&completion).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+
+    /// Join the keyring the web app just added this app to, from the
+    /// keyring's control log it handed over: this app's own key is a member
+    /// there with every vault DEK, so its local identity takes the
+    /// keyring's id. The browser extension does this; nothing is read from a
+    /// provider.
+    #[wasm_bindgen]
+    pub async fn join_identity_from_log(
+        &mut self,
+        identity_id: String,
+        member_label: String,
+        events: Vec<String>,
+    ) -> Result<(), JsError> {
+        let identity_id = IdentityId::parse(&identity_id)?;
+        let app_key = self.unlocked_app_key()?;
+        let events = events
+            .into_iter()
+            .map(|event| EventStorageBytes::from(event.into_bytes()))
+            .collect::<Vec<_>>();
+        if events.is_empty() {
+            return Err(
+                NookError::Database("The web app handed over no identity log.".to_owned()).into(),
+            );
+        }
+        NookDatabase::ensure_local_identity_for_app_key(IdentityDbEnsureLocalIdentityForAppKey {
+            app_key: &app_key,
+            label: &member_label,
+        })
+        .await?;
+        match Self::complete_join_from_log(IdentityJoinLog {
+            identity_id: &identity_id,
+            app_key: &app_key,
+            events: &events,
+        })
+        .await?
+        {
+            NookIdentityJoinCompletion::Approved => Ok(()),
+            NookIdentityJoinCompletion::Pending | NookIdentityJoinCompletion::Denied => {
+                Err(NookError::Database(
+                    "The web app has not added this app to the keyring.".to_owned(),
+                )
+                .into())
+            }
+        }
     }
 
     /// Approve a device asking to join this identity: it becomes a member

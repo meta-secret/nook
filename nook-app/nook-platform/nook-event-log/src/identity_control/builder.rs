@@ -48,6 +48,14 @@ pub struct IdentityApprovalRequest<'a> {
     pub vaults: &'a [OpenedVaultDek<'a>],
 }
 
+/// Named values required to add an app a member was shown directly.
+pub struct IdentityMemberAddition<'a> {
+    /// The app's own keys, as the member that adds it received them.
+    pub member: &'a IdentityMemberKeys,
+    /// Every vault the identity owns, opened by that member at its current epoch.
+    pub vaults: &'a [OpenedVaultDek<'a>],
+}
+
 /// Named values required to name an identity.
 pub struct IdentityNaming<'a> {
     pub name: &'a str,
@@ -212,8 +220,40 @@ impl IdentityControlState {
                 request.app_id
             ))
         })?;
+        self.require_every_vault(request.vaults)?;
+        Ok(IdentityControlOperation::MemberApproved {
+            member: join.member.clone(),
+            vault_deks: join.member.vault_dek_grants(request.vaults)?,
+        })
+    }
+
+    /// Add an app a member was shown directly, with no join request before
+    /// it, as the web app is shown the browser extension that connects to
+    /// it. The app becomes a member with every vault's DEK at its current
+    /// epoch encrypted to its key, exactly as an approved join would.
+    pub fn addition_operation(
+        &self,
+        request: &IdentityMemberAddition<'_>,
+    ) -> EventResult<IdentityControlOperation> {
+        if self.member(&request.member.app_id).is_some() {
+            return Err(EventError::IdentityControlInvalid(format!(
+                "app {} is already an identity member",
+                request.member.app_id
+            )));
+        }
+        request.member.signing_actor()?;
+        self.require_every_vault(request.vaults)?;
+        Ok(IdentityControlOperation::MemberApproved {
+            member: request.member.clone(),
+            vault_deks: request.member.vault_dek_grants(request.vaults)?,
+        })
+    }
+
+    /// A new member must receive every vault the identity owns, each at its
+    /// current key epoch.
+    fn require_every_vault(&self, vaults: &[OpenedVaultDek<'_>]) -> EventResult<()> {
         for vault in &self.vaults {
-            if !request.vaults.iter().any(|opened| {
+            if !vaults.iter().any(|opened| {
                 opened.store_id == &vault.store_id && opened.key_epoch == &vault.current_key_epoch
             }) {
                 return Err(EventError::IdentityApprovalIncomplete {
@@ -221,10 +261,7 @@ impl IdentityControlState {
                 });
             }
         }
-        Ok(IdentityControlOperation::MemberApproved {
-            member: join.member.clone(),
-            vault_deks: join.member.vault_dek_grants(request.vaults)?,
-        })
+        Ok(())
     }
 
     /// Deny a pending join.
@@ -482,6 +519,81 @@ mod tests {
             member_label(&fixture.state()?, joiner.app.app_id()),
             "Pixel"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_member_adds_an_app_it_was_shown_with_every_vault_dek() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let first_keys = VaultKeys::generate()?;
+        let second_keys = VaultKeys::generate()?;
+        let first = StoreId::generate()?;
+        let second = StoreId::generate()?;
+        let first_epoch = fixture.register_vault(&first_keys, &first)?;
+        let second_epoch = fixture.register_vault(&second_keys, &second)?;
+        let first_dek = OpenedVaultDek {
+            store_id: &first,
+            key_epoch: &first_epoch,
+            keys: &first_keys,
+        };
+        let second_dek = OpenedVaultDek {
+            store_id: &second,
+            key_epoch: &second_epoch,
+            keys: &second_keys,
+        };
+
+        // The extension never asked: its keys came with its connect request.
+        let extension = Installation::new()?;
+        let keys = extension.keys("Nook extension");
+        let state = fixture.state()?;
+        let incomplete = state.addition_operation(&IdentityMemberAddition {
+            member: &keys,
+            vaults: &[first_dek],
+        });
+        assert!(matches!(
+            incomplete,
+            Err(EventError::IdentityApprovalIncomplete { store_id }) if store_id == second.as_str()
+        ));
+
+        let addition = state.addition_operation(&IdentityMemberAddition {
+            member: &keys,
+            vaults: &[first_dek, second_dek],
+        })?;
+        let founder = fixture.founder();
+        fixture.append(&founder, vec![addition])?;
+
+        let state = fixture.state()?;
+        assert_eq!(state.members.len(), 2);
+        for (store_id, vault_keys) in [(&first, &first_keys), (&second, &second_keys)] {
+            let vault = state
+                .vault(store_id)
+                .ok_or_else(|| anyhow::anyhow!("vault must stay registered"))?;
+            let IdentityVaultDekLookup::Granted(dek) =
+                vault.current_dek_for(extension.app.app_id())
+            else {
+                anyhow::bail!("the added app must hold the current DEK of {store_id}");
+            };
+            assert_eq!(
+                extension
+                    .app
+                    .decrypt_envelope(&dek.secrets_key_ciphertext)?,
+                vault_keys.secrets_key
+            );
+        }
+
+        // An app that already is a member is not added twice.
+        let again = state.addition_operation(&IdentityMemberAddition {
+            member: &keys,
+            vaults: &[first_dek, second_dek],
+        });
+        assert!(matches!(again, Err(EventError::IdentityControlInvalid(_))));
+
+        // The added app may now act for the identity itself.
+        let (_, status) = fixture.append(
+            &extension,
+            vec![rename(extension.app.app_id(), "Nook extension, work")],
+        )?;
+        assert_eq!(status, IdentityEventInsertStatus::Applied);
         Ok(())
     }
 

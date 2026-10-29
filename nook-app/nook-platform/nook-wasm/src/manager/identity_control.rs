@@ -6,6 +6,7 @@
 //! the resulting membership and this installation's DEK grants in the local
 //! identity directory.
 
+mod app_addition;
 mod connection;
 mod invite;
 mod join_request;

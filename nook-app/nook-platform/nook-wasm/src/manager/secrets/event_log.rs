@@ -84,6 +84,18 @@ impl NookVaultManager {
         Ok(NookEventLogRecords(records))
     }
 
+    /// One vault's stored event log, open or not: the web app hands every
+    /// vault of the keyring to an app it just added.
+    #[wasm_bindgen]
+    pub async fn export_vault_event_log_records_js(
+        &self,
+        store_id: &str,
+    ) -> Result<NookEventLogRecords, JsError> {
+        let store_id = StoreId::parse(store_id)?;
+        let records = Self::export_vault_event_records(store_id.as_str()).await?;
+        Ok(NookEventLogRecords(records))
+    }
+
     #[wasm_bindgen]
     pub fn parse_event_log_storage_record_js(
         &self,

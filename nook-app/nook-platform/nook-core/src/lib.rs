@@ -278,7 +278,7 @@ pub use auth::identity_control_snapshot::{
 };
 pub use auth::identity_join::{
     IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
-    IdentityJoinProgress,
+    IdentityJoinProgress, IdentityMemberAdd,
 };
 pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::identity_words::IdentityWords;
@@ -336,10 +336,11 @@ pub use nook_event_log::{
     IdentityControlRejection, IdentityControlState, IdentityControlVault, IdentityEvent,
     IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
-    IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget, IdentityNaming,
-    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, MemberSealedName, MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR,
-    PlacedNamespace, ProviderMountId, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
+    IdentityJoinRequest, IdentityMemberAddition, IdentityMemberKeys, IdentityMountTarget,
+    IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
+    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberSealedName, MemberVaultDek,
+    OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId, VaultAuthorizedRoster,
+    VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,

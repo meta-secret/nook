@@ -65,10 +65,10 @@ pub use identity_control::{
     IdentityControlOperation, IdentityControlRejection, IdentityControlState, IdentityControlVault,
     IdentityEvent, IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion,
     IdentityEventSigning, IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue,
-    IdentityInviteJoin, IdentityInviteProof, IdentityJoinRequest, IdentityMemberKeys,
-    IdentityMountTarget, IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant,
-    IdentityVaultDekLookup, IdentityVaultEpochDeks, IdentityVaultRegistration, MemberSealedName,
-    MemberVaultDek, OpenedVaultDek, ProviderMountId,
+    IdentityInviteJoin, IdentityInviteProof, IdentityJoinRequest, IdentityMemberAddition,
+    IdentityMemberKeys, IdentityMountTarget, IdentityNaming, IdentityProviderMount,
+    IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, MemberSealedName, MemberVaultDek, OpenedVaultDek, ProviderMountId,
 };
 pub use location::{
     EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, PROVIDER_ROOT_DIR, PlacedNamespace,

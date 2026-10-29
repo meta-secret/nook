@@ -1,5 +1,7 @@
 //! Joining an identity by request: a member's answer, and how the asking
-//! installation completes once it is answered.
+//! installation completes once it is answered. A member can also add an app
+//! it was shown directly, as the web app adds the browser extension that
+//! connects to it; that app completes the same way.
 //!
 //! A member approves a pending request with every vault of the identity at
 //! its current key epoch, each DEK opened through the member's own envelope
@@ -18,7 +20,8 @@ use nook_auth2::{
 };
 use nook_event_log::{
     EventError, EventId, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
-    IdentityNaming, IdentityVaultDekLookup, OpenedVaultDek,
+    IdentityMemberAddition, IdentityMemberKeys, IdentityNaming, IdentityVaultDekLookup,
+    OpenedVaultDek,
 };
 
 use super::identity_control::ReplicatedIdentityStanding;
@@ -110,6 +113,49 @@ impl IdentityJoinAnswer<'_> {
     pub fn denial(&self) -> VaultResult<IdentityControlOperation> {
         self.require_member()?;
         Ok(self.state.denial_operation(self.app_id)?)
+    }
+}
+
+/// A member adding an app it was shown directly, with no request from it.
+pub struct IdentityMemberAdd<'a> {
+    pub state: &'a IdentityControlState,
+    /// The adding member's own app key.
+    pub approver: &'a AppKey,
+    /// The app's keys, as its connect request carried them.
+    pub member: &'a IdentityMemberKeys,
+}
+
+impl IdentityMemberAdd<'_> {
+    /// Add the app with every vault DEK encrypted to its key, and re-seal
+    /// the identity's name so it reads it too.
+    pub fn addition(&self) -> VaultResult<Vec<IdentityControlOperation>> {
+        let answer = IdentityJoinAnswer {
+            state: self.state,
+            approver: self.approver,
+            app_id: &self.member.app_id,
+        };
+        answer.require_member()?;
+        let opened = answer.opened_vaults()?;
+        let vaults = opened
+            .iter()
+            .map(|(store_id, key_epoch, keys)| OpenedVaultDek {
+                store_id,
+                key_epoch,
+                keys,
+            })
+            .collect::<Vec<_>>();
+        let mut operations = vec![self.state.addition_operation(&IdentityMemberAddition {
+            member: self.member,
+            vaults: &vaults,
+        })?];
+        if let Some(sealed) = self.state.sealed_name_for(self.approver.app_id()) {
+            let name = self.approver.open_utf8(sealed)?;
+            operations.push(self.state.naming_operation(&IdentityNaming {
+                name: &name,
+                joining: Some(self.member),
+            })?);
+        }
+        Ok(operations)
     }
 }
 
@@ -534,6 +580,63 @@ mod tests {
             .sealed_name_for(asking.app.app_id())
             .ok_or_else(|| anyhow::anyhow!("the joiner must hold the identity name"))?;
         assert_eq!(asking.app.open_utf8(sealed)?, "Family");
+        Ok(())
+    }
+
+    #[test]
+    fn a_member_adds_an_app_it_was_shown_and_the_app_completes_its_join() -> anyhow::Result<()> {
+        let mut identity = Identity::with_two_vaults()?;
+        identity.name("Family")?;
+        // The browser extension's keys came with its connect request; it
+        // asked nothing in the log.
+        let extension = Device::new()?;
+        let keys = extension.keys("Nook extension");
+
+        let state = identity.state()?;
+        let addition = IdentityMemberAdd {
+            state: &state,
+            approver: &identity.founder.app,
+            member: &keys,
+        }
+        .addition()?;
+        identity.append_by_founder(addition)?;
+
+        let state = identity.state()?;
+        assert!(state.member(extension.app.app_id()).is_some());
+        for (store_id, vault_keys) in &identity.vaults {
+            let vault = state
+                .vault(store_id)
+                .ok_or_else(|| anyhow::anyhow!("the vault stays registered"))?;
+            let IdentityVaultDekLookup::Granted(dek) =
+                vault.current_dek_for(extension.app.app_id())
+            else {
+                anyhow::bail!("the added app must hold the DEK of {store_id}");
+            };
+            assert_eq!(
+                extension
+                    .app
+                    .decrypt_envelope(&dek.secrets_key_ciphertext)?,
+                vault_keys.secrets_key
+            );
+        }
+        let sealed = state
+            .sealed_name_for(extension.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the added app must hold the identity name"))?;
+        assert_eq!(extension.app.open_utf8(sealed)?, "Family");
+        assert_eq!(
+            IdentityJoinProgress::of(&state, extension.app.app_id()),
+            IdentityJoinProgress::Approved
+        );
+
+        // Only a member adds apps.
+        let stranger = Device::new()?;
+        let refused = IdentityMemberAdd {
+            state: &state,
+            approver: &stranger.app,
+            member: &Device::new()?.keys("Another"),
+        }
+        .addition();
+        assert!(refused.is_err());
         Ok(())
     }
 
