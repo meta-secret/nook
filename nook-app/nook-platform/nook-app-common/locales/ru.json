@@ -2201,11 +2201,9 @@
       "progress_delivering": "Передача доступа расширению…",
       "progress_finishing": "Обновление устройств этой связки ключей…",
       "approve": "Разрешить расширение",
-      "vault_only": "Добавьте провайдер синхронизации, чтобы подключить все сейфы.",
       "diagram_label": "К чему подключается расширение",
       "diagram_extension": "Расширение",
-      "diagram_vaults": "Все её сейфы",
-      "diagram_this_vault": "Этот сейф"
+      "diagram_vaults": "Все её сейфы"
     },
     "popup": {
       "checking_this_page": "Проверяем эту страницу",

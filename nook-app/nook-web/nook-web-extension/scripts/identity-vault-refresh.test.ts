@@ -6,7 +6,7 @@ import initNookWasm, {
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { ExtensionEventLogRecord } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionIdentityInviteWireKind } from '../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
   IdentityVaultRefresh,
@@ -172,7 +172,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
     })
     expect(firstConnect?.payload).toMatchObject({
       vaultStoreId: 'store_lllllllllll',
-      mountProviderId: 'github-family',
+      source: { kind: 'mount', mountProviderId: 'github-family' },
     })
     expect(secondConnect?.payload).toMatchObject({
       vaultStoreId: 'store_nnnnnnnnnnn',
@@ -192,7 +192,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
         ExtensionConnectScope.VaultAccess,
         ExtensionConnectScope.SyncProviderCredentials,
       ],
-      identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+      keyring: { kind: ExtensionKeyringGrantKind.Member },
     })
   })
 

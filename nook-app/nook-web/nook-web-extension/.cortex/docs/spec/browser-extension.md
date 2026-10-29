@@ -152,11 +152,15 @@ administer vault items.
    identity and matching event-signing seed in a one-time, nonce-bound age
    envelope. Rust/WASM adopts that identity only for the website session, so
    the website does not create or request a second passkey-protected device.
-5. Simple Vault shows explicit consent and approves the extension as a vault
-   device through the Rust/WASM authorization boundary.
-6. Simple Vault sends the approved grant together with the canonical encrypted,
-   signed event log. The extension validates and imports it through Rust/WASM
-   into extension-origin IndexedDB.
+5. Simple Vault shows explicit consent. Approving adds the extension to the
+   vault's keyring as an app with its own key, through the Rust/WASM
+   authorization boundary: each vault's DEK is encrypted to that key. There is
+   no single-vault approval.
+6. Simple Vault sends the approved grant with the canonical encrypted, signed
+   event log, the keyring's control log, the records of the keyring's other
+   vaults this browser holds, and every sync provider of the keyring. The
+   extension validates and imports them through Rust/WASM into
+   extension-origin IndexedDB.
 7. The extension becomes “connected” only after the imported graph contains a
    current, non-revoked approval and key envelope for its protected device.
 
@@ -1489,11 +1493,19 @@ admitted with an empty label.
 The extension is a member device of each identity it connects, the way a new
 phone or computer is.
 
-- **Join:** An approval carries an identity invite whose passphrase is sealed
-  to the extension's app key. The offscreen session opens it, binds the key's
-  local identity to the invited identity, signs the join, and pairs the
-  identity's other vaults through the same import as the approved vault. An
-  identity with no cloud sync provider pairs only the approved vault.
+- **Join:** The web app adds the extension's app key to the keyring by the
+  keys its connect request carried (`add_identity_member`): Rust checks the
+  app id against the public key and encrypts every vault's DEK at its current
+  epoch to it. The approval carries the keyring's control log; the offscreen
+  session completes the join from it (`join_identity_from_log`), so the key's
+  local identity takes the keyring's id. It then opens each other vault from
+  the records the approval carried (`connect_identity_vault_from_records`)
+  through the same import as the approved vault. No sync provider is needed;
+  a keyring vault this browser does not hold arrives through the keyring's
+  providers.
+- **Providers:** The approval carries every sync provider of the keyring,
+  sealed to the extension's app key. The extension never sets up a provider
+  itself.
 - **Later vaults:** Each unlock in the side panel or the authentication tab
   refreshes the unlocked identity. The extension unions the identity's log
   with every sync provider that replicates it. It then pairs each vault the

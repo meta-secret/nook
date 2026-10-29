@@ -15,7 +15,6 @@ that follows.
   import ExtensionConnectFacts from '../ExtensionConnectFacts.svelte'
   import FirstRunDiagram from '../login/FirstRunDiagram.svelte'
   import {
-    ExtensionConnectReach,
     extensionConnectDiagram,
     type ExtensionConnectDiagramRequest,
   } from '../extension-connect-diagram'
@@ -74,7 +73,6 @@ that follows.
   const diagramRequest = $derived<ExtensionConnectDiagramRequest>({
     vault,
     keyring: card.label,
-    reach: ExtensionConnectReach.Keyring,
   })
   const diagram = $derived(extensionConnectDiagram(diagramRequest))
 </script>

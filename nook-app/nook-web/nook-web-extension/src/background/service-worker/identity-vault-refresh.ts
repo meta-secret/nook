@@ -1,10 +1,11 @@
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import type { ExtensionPairingApprovedGrant } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionIdentityInviteWireKind } from '../../../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
   IdentityVaultPairing,
+  IdentityVaultSourceKind,
   type IdentitySessionSend,
   type IdentityVaultPair,
   type IdentityVaultPairingRequest,
@@ -135,7 +136,7 @@ export class IdentityVaultRefresh {
       approvedAt: now(),
       scopes: own.scopes,
       providers: [],
-      identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+      keyring: { kind: ExtensionKeyringGrantKind.Member },
     }
     const pairingRequest: IdentityVaultPairingRequest = {
       importVault,
@@ -148,7 +149,7 @@ export class IdentityVaultRefresh {
       for (const vaultStoreId of reply.toPair) {
         const vault: IdentityVaultPair = {
           vaultStoreId,
-          mountProviderId,
+          source: { kind: IdentityVaultSourceKind.Mount, mountProviderId },
           template,
           identityLabel,
           providers: [],

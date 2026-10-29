@@ -70,10 +70,10 @@ manager imports keep "identities" for their person and address items.
   unlocks the identity; once unlocked, the approval itself (the extension
   device and the access it asks for, with Approve and Cancel) takes its
   place, and either answer leaves the hub as it is. Both steps draw what the
-  extension joins (Extension → keyring → all its vaults, or → this vault
-  when the keyring has no cloud sync provider) instead of a sentence, list
-  the access as one tile per permission, and fold the device's public keys
-  under its fingerprint.
+  extension joins (Extension → keyring → all its vaults) instead of a
+  sentence, list the access as one tile per permission, and fold the
+  extension's public keys under its fingerprint. The extension always joins
+  the keyring as an app with its own key, never one vault alone.
 - A locked identity never opens the old Keys page; the URL is kept and
   unlocking resumes it.
 

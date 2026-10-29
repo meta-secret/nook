@@ -11,10 +11,8 @@ import {
 } from "$lib/runtime/storage-failure";
 import {
   activeVaultScope,
-  providerBelongsToVault,
   seal_auth_providers_for_device_public_key,
   type StorageProvider,
-  type VaultProviderMembership,
 } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
@@ -32,13 +30,9 @@ import {
   type ExtensionPairingApprovedMessage,
 } from "$web-shared/extension/runtime-messages";
 import {
-  ExtensionIdentityInviteWireKind,
-  type ExtensionIdentityInviteWire,
-} from "$web-shared/extension/identity-invite-wire";
-import {
-  ExtensionIdentityInvitationKind,
-  ExtensionIdentityInvite,
-} from "./identity-invitation";
+  ExtensionKeyringMembership,
+  type ExtensionKeyringMembershipRequest,
+} from "./keyring-membership";
 
 export type ExtensionVaultCompletion = {
   readonly manager: NookVaultManager;
@@ -259,42 +253,22 @@ export class ExtensionVaultApproval {
     });
     if (providerStoreId.isErr()) return err(providerStoreId.error);
 
-    // The extension joins the vault's identity as a member, the way a new
-    // device does, so it opens every vault of the identity.
-    // It reaches the identity through a sync provider, so it needs their
-    // credentials.
+    // The extension is an app of the keyring, not of one vault: the web app
+    // adds it with every vault's DEK encrypted to its key and hands it the
+    // keyring's log and other vaults.
+    const membership: ExtensionKeyringMembershipRequest = {
+      vault: this.vault,
+      request: this.request,
+      approvedStoreId: providerStoreId.value,
+    };
+    const keyring = await new ExtensionKeyringMembership(membership).grant();
+    if (keyring.isErr()) return err(keyring.error);
+
+    // Every sync provider of the keyring, so the extension syncs on its own;
+    // it never sets one up itself.
     const sharesProviders = this.request.scopes.includes(
       ExtensionConnectScope.SyncProviderCredentials,
     );
-    let identityInvite: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.NotOffered,
-    };
-    let joinMountId = "";
-    if (sharesProviders) {
-      const inviteRequest: ConstructorParameters<
-        typeof ExtensionIdentityInvite
-      >[0] = {
-        vault: this.vault,
-        devicePublicKey: this.request.devicePublicKey,
-      };
-      const invitation = await new ExtensionIdentityInvite(
-        inviteRequest,
-      ).issue();
-      if (invitation.isErr()) return err(invitation.error);
-      if (invitation.value.kind === ExtensionIdentityInvitationKind.Invited) {
-        joinMountId = invitation.value.mount.id;
-        identityInvite = {
-          kind: ExtensionIdentityInviteWireKind.Invited,
-          identityId: invitation.value.identityId,
-          identityLabel: invitation.value.identityLabel,
-          code: invitation.value.code,
-          sealedPassphrase: invitation.value.sealedPassphrase,
-          mountProviderId: joinMountId,
-        };
-      } else {
-        identityInvite = { kind: ExtensionIdentityInviteWireKind.NeedsCloud };
-      }
-    }
 
     let providers: StorageProvider[] = [];
     if (sharesProviders) {
@@ -311,21 +285,10 @@ export class ExtensionVaultApproval {
       });
       if (snapshot.isErr()) return err(snapshot.error);
       try {
-        // The vault's providers, and the identity mount the extension joins
-        // through when it is not one of them.
-        const matching = snapshot.value.providers.filter((provider) => {
-          const membership: VaultProviderMembership = {
-            provider,
-            storeId: providerStoreId.value,
-          };
-          return (
-            providerBelongsToVault(membership) || provider.id === joinMountId
-          );
-        });
         const providerSnapshot: Parameters<
           typeof seal_auth_providers_for_device_public_key
         >[1] = {
-          providers: matching,
+          providers: snapshot.value.providers,
           activeVaultStoreId: activeVaultScope(providerStoreId.value),
         };
         providers = seal_auth_providers_for_device_public_key(
@@ -384,7 +347,7 @@ export class ExtensionVaultApproval {
           approvedAt: authorization.approvedAt,
           scopes: this.request.scopes,
           providers,
-          identityInvite,
+          keyring: keyring.value,
         },
         eventLogRecords,
       };

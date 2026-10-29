@@ -39,7 +39,7 @@ import {
   ExtensionPairingRejectionReason,
 } from '$lib/extension/extension-pairing-delivery'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { ExtensionIdentityInviteWireKind } from '$web-shared/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '$web-shared/extension/keyring-grant-wire'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -76,7 +76,13 @@ const approvedMessage = {
     approvedAt: 1,
     scopes: [ExtensionConnectScope.VaultAccess],
     providers: [],
-    identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+    keyring: {
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: 'identity-1',
+      identityLabel: 'Personal',
+      identityEvents: ['identity-event-1'],
+      vaults: [],
+    },
   },
   eventLogRecords: [],
 } satisfies ExtensionPairingApprovedMessage

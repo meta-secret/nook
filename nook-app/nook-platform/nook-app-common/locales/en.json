@@ -2194,11 +2194,9 @@
       "progress_delivering": "Handing access to the extension…",
       "progress_finishing": "Updating this keyring's devices…",
       "approve": "Approve extension",
-      "vault_only": "Add a sync provider to connect every vault.",
       "diagram_label": "What the extension joins",
       "diagram_extension": "Extension",
-      "diagram_vaults": "All its vaults",
-      "diagram_this_vault": "This vault"
+      "diagram_vaults": "All its vaults"
     },
     "popup": {
       "checking_this_page": "Checking this page",

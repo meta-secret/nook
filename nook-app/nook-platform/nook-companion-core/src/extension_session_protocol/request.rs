@@ -517,10 +517,6 @@ impl Drop for ExtensionSessionRequestWire {
                 payload.expected_device_public_key.zeroize();
                 payload.expected_device_signing_public_key.zeroize();
             }
-            ExtensionSessionRequest::JoinIdentity(payload) => {
-                payload.code.zeroize();
-                payload.sealed_passphrase.zeroize();
-            }
             ExtensionSessionRequest::AuthenticatorEnrollPreview(payload)
             | ExtensionSessionRequest::AuthenticatorEnrollCode(payload) => {
                 payload.otpauth_uri.zeroize();
@@ -547,6 +543,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::BeginPasskeySetup(_)
             | ExtensionSessionRequest::UnlockOptions(_)
             | ExtensionSessionRequest::ImportVault(_)
+            | ExtensionSessionRequest::JoinIdentity(_)
             | ExtensionSessionRequest::ConnectIdentityVault(_)
             | ExtensionSessionRequest::RefreshIdentityVaults(_)
             | ExtensionSessionRequest::BeginIdentityConnection(_)

@@ -1,35 +1,50 @@
-//! Session requests through which the browser extension is a member of its
-//! identities, as a new phone or computer is: it joins with an approval's
-//! invite, opens the identity's vaults, pairs vaults created later, and
-//! connects further identities, each with its own app key.
+//! Session requests through which the browser extension is an app of its
+//! keyrings: the web app adds it with its own key and hands it the keyring's
+//! log and each vault's records; it joins from that log, opens the vaults,
+//! pairs vaults created later, and connects further keyrings, each with its
+//! own app key.
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
 use super::queue::QueueDisposition;
+use super::request::ExtensionEventLogRecord;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-/// Join the identity of an approved vault, as a new device does: the
-/// invite from the approval, through a sync provider the session already
-/// holds (by id, so no credential travels in this request).
+/// Join the keyring the web app just added this app to, from the keyring's
+/// control log it handed over. The log is signed, not secret; no
+/// credential travels in this request.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct JoinIdentityPayload {
     identity_id: String,
     member_label: String,
-    pub(super) code: String,
-    pub(super) sealed_passphrase: String,
-    mount_provider_id: String,
+    identity_events: Vec<String>,
     queue: QueueDisposition,
 }
 
-/// Open one vault of a joined identity with the key the identity grants
-/// this installation, through the identity's sync provider.
+/// Where one vault of the keyring is read from when the extension opens it.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum IdentityVaultSource {
+    /// The records the web app handed over when it added the extension.
+    #[serde(rename_all = "camelCase")]
+    Records {
+        event_log_records: Vec<ExtensionEventLogRecord>,
+    },
+    /// A sync provider the session already holds, by id, so no credential
+    /// travels in this request: vaults created later arrive this way.
+    #[serde(rename_all = "camelCase")]
+    Mount { mount_provider_id: String },
+}
+
+/// Open one vault of the joined keyring with the key the keyring grants
+/// this app.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ConnectIdentityVaultPayload {
     vault_store_id: String,
-    mount_provider_id: String,
+    source: IdentityVaultSource,
     queue: QueueDisposition,
 }
 
@@ -64,49 +79,50 @@ pub struct ActivateIdentityPayload {
 #[cfg(test)]
 mod tests {
     use super::super::request::{ExtensionSessionRequest, ExtensionSessionRequestValidation};
-    use zeroize::Zeroize;
 
-    const JOIN_IDENTITY: &str = r#"{"type":"nook:extension-session-join-identity","payload":{"identityId":"identity-1","memberLabel":"Nook Extension","code":"nook-enroll-code","sealedPassphrase":"age-sealed","mountProviderId":"provider-1","queue":{"kind":"message-default"}}}"#;
+    const JOIN_IDENTITY: &str = r#"{"type":"nook:extension-session-join-identity","payload":{"identityId":"identity-1","memberLabel":"Nook Extension","identityEvents":["event-1"],"queue":{"kind":"message-default"}}}"#;
 
     fn validated(request: &str) -> ExtensionSessionRequestValidation {
         ExtensionSessionRequestValidation::validate_extension_session_request_json(request)
     }
 
     #[test]
-    fn joining_an_identity_names_the_mount_and_carries_no_credential() {
+    fn joining_a_keyring_carries_its_log_and_no_credential() -> anyhow::Result<()> {
         assert_eq!(
             validated(JOIN_IDENTITY),
             ExtensionSessionRequestValidation::Accepted
         );
+        let request: ExtensionSessionRequest = serde_json::from_str(JOIN_IDENTITY)?;
+        assert!(matches!(request, ExtensionSessionRequest::JoinIdentity(_)));
         let with_token = JOIN_IDENTITY.replace(
-            r#""mountProviderId":"provider-1","#,
-            r#""mountProviderId":"provider-1","githubPat":"ghp_secret","#,
+            r#""identityEvents":["event-1"],"#,
+            r#""identityEvents":["event-1"],"githubPat":"ghp_secret","#,
         );
         assert_eq!(
             validated(&with_token),
             ExtensionSessionRequestValidation::Rejected
         );
-    }
-
-    #[test]
-    fn join_identity_payload_zeroizes_the_invite() -> anyhow::Result<()> {
-        let mut request: ExtensionSessionRequest = serde_json::from_str(JOIN_IDENTITY)?;
-        let ExtensionSessionRequest::JoinIdentity(payload) = &mut request else {
-            anyhow::bail!("decoded request must preserve the join identity variant");
-        };
-        payload.code.zeroize();
-        payload.sealed_passphrase.zeroize();
-        assert!(payload.code.is_empty());
-        assert!(payload.sealed_passphrase.is_empty());
         Ok(())
     }
 
     #[test]
-    fn connecting_an_identity_vault_names_the_vault_and_mount() {
-        let request = r#"{"type":"nook:extension-session-connect-identity-vault","payload":{"vaultStoreId":"store_abcdefghijk","mountProviderId":"provider-1","queue":{"kind":"message-default"}}}"#;
+    fn a_keyring_vault_opens_from_handed_over_records_or_a_mount() {
+        let from_records = r#"{"type":"nook:extension-session-connect-identity-vault","payload":{"vaultStoreId":"store_abcdefghijk","source":{"kind":"records","eventLogRecords":[]},"queue":{"kind":"message-default"}}}"#;
+        let from_mount = r#"{"type":"nook:extension-session-connect-identity-vault","payload":{"vaultStoreId":"store_abcdefghijk","source":{"kind":"mount","mountProviderId":"provider-1"},"queue":{"kind":"message-default"}}}"#;
+        for request in [from_records, from_mount] {
+            assert_eq!(
+                validated(request),
+                ExtensionSessionRequestValidation::Accepted
+            );
+        }
+        // A mount carries its id only, never a credential.
+        let with_token = from_mount.replace(
+            r#""mountProviderId":"provider-1""#,
+            r#""mountProviderId":"provider-1","githubPat":"ghp_secret""#,
+        );
         assert_eq!(
-            validated(request),
-            ExtensionSessionRequestValidation::Accepted
+            validated(&with_token),
+            ExtensionSessionRequestValidation::Rejected
         );
     }
 

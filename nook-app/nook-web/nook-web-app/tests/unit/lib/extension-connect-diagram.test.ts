@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm from '$app-wasm'
 import {
-  ExtensionConnectReach,
   extensionConnectDiagram,
   type ExtensionConnectDiagramRequest,
 } from '$lib/components/extension-connect-diagram'
@@ -16,7 +15,6 @@ describe('extension connect diagram', () => {
     const request: ExtensionConnectDiagramRequest = {
       vault: VaultStateTestFixture.create(),
       keyring: 'Personal',
-      reach: ExtensionConnectReach.Keyring,
     }
     const nodes = extensionConnectDiagram(request).nodes
 
@@ -26,20 +24,5 @@ describe('extension connect diagram', () => {
       ['extension-connect-diagram-vaults', false],
     ])
     expect(nodes.map((node) => node.label)).toContain('Personal')
-  })
-
-  test('without a cloud sync provider it reaches this vault only', () => {
-    const request: ExtensionConnectDiagramRequest = {
-      vault: VaultStateTestFixture.create(),
-      keyring: 'Personal',
-      reach: ExtensionConnectReach.ThisVault,
-    }
-
-    expect(
-      extensionConnectDiagram(request).nodes.map((node) => node.testId),
-    ).toEqual([
-      'extension-connect-diagram-extension',
-      'extension-connect-diagram-vault',
-    ])
   })
 })

@@ -31,7 +31,7 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionIdentityInviteWireKind } from '../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
@@ -533,7 +533,13 @@ test('sets up the extension device first and sends its public keys to Simple Vau
           ExtensionConnectScope.PasswordFilling,
         ],
         providers: [],
-        identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+        keyring: {
+          kind: ExtensionKeyringGrantKind.Added,
+          identityId: 'identity-e2e',
+          identityLabel: 'Personal',
+          identityEvents: ['synthetic-identity-event'],
+          vaults: [],
+        },
       },
       eventLogRecords: syntheticEventLogRecords,
     }

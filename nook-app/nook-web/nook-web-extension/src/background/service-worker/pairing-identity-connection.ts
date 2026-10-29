@@ -1,11 +1,12 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionIdentityInviteWireKind } from '../../../../nook-web-shared/src/extension/identity-invite-wire'
+import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
   IdentityVaultPairing,
   IdentityVaultPairingFailure,
+  IdentityVaultSourceKind,
   type IdentitySessionSend,
   type IdentityVaultPair,
   type IdentityVaultPairingRequest,
@@ -77,12 +78,13 @@ function decodeJoinReply(response: unknown): JoinReply {
 }
 
 /**
- * After a vault is approved, the extension joins that vault's identity as a
- * member, the way a new phone or computer does, then pairs every other vault
- * of the identity through the same import as an approved one. Without an
- * invite (an identity with no cloud sync provider, or an older web app) only
- * the approved vault is paired. A join or a vault that fails ends the import
- * with that failure, so it is never reported as connected.
+ * After the web app approves the extension, the extension is an app of the
+ * vault's keyring with its own key: the web app already added it, with
+ * every vault's DEK encrypted to that key. The extension joins from the
+ * keyring's log the approval carries, then pairs each other vault from its
+ * records through the same import as the approved one; nothing is read from
+ * a sync provider. A join or a vault that fails ends the import with that
+ * failure, so it is never reported as connected.
  */
 export class PairingIdentityConnection {
   constructor(private readonly request: PairingIdentityConnectionRequest) {}
@@ -91,20 +93,18 @@ export class PairingIdentityConnection {
     approvedEventCount: number,
   ): Promise<PairingIdentityImportResult> {
     const { message, providers, importVault, sendSessionMessage } = this.request
-    const invite = message.payload.identityInvite
+    const keyring = message.payload.keyring
     const approved: PairingIdentityImportResult = {
       ok: true,
       eventCount: approvedEventCount,
     }
-    if (invite.kind !== ExtensionIdentityInviteWireKind.Invited) return approved
+    if (keyring.kind !== ExtensionKeyringGrantKind.Added) return approved
     const joinMessage: Parameters<IdentitySessionSend>[0] = {
       type: ExtensionSessionMessageType.JoinIdentity,
       payload: {
-        identityId: invite.identityId,
+        identityId: keyring.identityId,
         memberLabel: message.payload.deviceLabel,
-        code: invite.code,
-        sealedPassphrase: invite.sealedPassphrase,
-        mountProviderId: invite.mountProviderId,
+        identityEvents: keyring.identityEvents,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
@@ -124,15 +124,20 @@ export class PairingIdentityConnection {
     }
     const pairing = new IdentityVaultPairing(pairingRequest)
     let eventCount = approvedEventCount
-    for (const vaultStoreId of join.storeIds) {
-      if (vaultStoreId === message.payload.vaultStoreId) continue
-      // The vault arrives as an approved one would: under the same identity,
-      // scopes and extension device, with its own event log.
+    for (const keyringVault of keyring.vaults) {
+      if (keyringVault.storeId === message.payload.vaultStoreId) continue
+      // A vault the keyring no longer lists is not paired.
+      if (!join.storeIds.includes(keyringVault.storeId)) continue
+      // The vault arrives as an approved one would: under the same keyring,
+      // scopes and extension app, with its own event log.
       const vault: IdentityVaultPair = {
-        vaultStoreId,
-        mountProviderId: invite.mountProviderId,
+        vaultStoreId: keyringVault.storeId,
+        source: {
+          kind: IdentityVaultSourceKind.Records,
+          eventLogRecords: keyringVault.eventLogRecords,
+        },
         template: message.payload,
-        identityLabel: invite.identityLabel,
+        identityLabel: keyring.identityLabel,
         providers,
         syncProviderCount: providers.length,
       }

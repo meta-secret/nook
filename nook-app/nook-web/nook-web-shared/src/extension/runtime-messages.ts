@@ -15,9 +15,10 @@ import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import {
-  ExtensionIdentityInviteWireKind,
-  type ExtensionIdentityInviteWire,
-} from "./identity-invite-wire";
+  ExtensionKeyringGrantKind,
+  type ExtensionKeyringGrant,
+  type ExtensionKeyringVault,
+} from "./keyring-grant-wire";
 import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeCauseKind,
@@ -138,8 +139,8 @@ export type ExtensionPairingApprovedGrant = Omit<
   "syncProviderCount"
 > & {
   providers: ExtensionPairingStorageProviderPayload[];
-  /** How the extension joins the vault's identity, beyond this vault. */
-  identityInvite: ExtensionIdentityInviteWire;
+  /** The keyring the extension is an app of, beyond this vault. */
+  keyring: ExtensionKeyringGrant;
 };
 export type ExtensionPairingStorageProviderPayload =
   RustExtensionPairingStorageProviderPayload;
@@ -168,64 +169,86 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
   }
 }
 
+const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
+  concurrency: "unbounded",
+};
+
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
 
-  /** The identity invite beside an approval; an approval without one comes
-   * from a web app that predates identity connection. */
-  private static identityInvite(
+  /** The keyring the web app added the extension to, with its log and the
+   * records of its other vaults. A web app always sends one. */
+  private static keyring(
     payload: unknown,
   ): Result<
-    ExtensionIdentityInviteWire,
+    ExtensionKeyringGrant,
     ExtensionPairingApprovedMessageAdmissionFailure
   > {
-    const notOffered: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.NotOffered,
-    };
-    if (!payload || typeof payload !== "object") return ok(notOffered);
-    if (!("identityInvite" in payload)) return ok(notOffered);
-    const invite = payload.identityInvite;
-    if (!invite || typeof invite !== "object" || !("kind" in invite))
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
-      );
-    if (invite.kind === ExtensionIdentityInviteWireKind.NotOffered)
-      return ok(notOffered);
-    if (invite.kind === ExtensionIdentityInviteWireKind.NeedsCloud) {
-      const needsCloud: ExtensionIdentityInviteWire = {
-        kind: ExtensionIdentityInviteWireKind.NeedsCloud,
-      };
-      return ok(needsCloud);
-    }
+    const refused = err(
+      ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    );
+    if (!payload || typeof payload !== "object" || !("keyring" in payload))
+      return refused;
+    const keyring = payload.keyring;
     if (
-      invite.kind !== ExtensionIdentityInviteWireKind.Invited ||
-      !("identityId" in invite) ||
-      typeof invite.identityId !== "string" ||
-      !invite.identityId.trim() ||
-      !("identityLabel" in invite) ||
-      typeof invite.identityLabel !== "string" ||
-      !("code" in invite) ||
-      typeof invite.code !== "string" ||
-      !invite.code.trim() ||
-      !("sealedPassphrase" in invite) ||
-      typeof invite.sealedPassphrase !== "string" ||
-      !invite.sealedPassphrase.trim() ||
-      !("mountProviderId" in invite) ||
-      typeof invite.mountProviderId !== "string" ||
-      !invite.mountProviderId.trim()
+      !keyring ||
+      typeof keyring !== "object" ||
+      !("kind" in keyring) ||
+      keyring.kind !== ExtensionKeyringGrantKind.Added ||
+      !("identityId" in keyring) ||
+      typeof keyring.identityId !== "string" ||
+      !keyring.identityId.trim() ||
+      !("identityLabel" in keyring) ||
+      typeof keyring.identityLabel !== "string" ||
+      !("identityEvents" in keyring) ||
+      !Array.isArray(keyring.identityEvents) ||
+      !("vaults" in keyring) ||
+      !Array.isArray(keyring.vaults)
     )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
+      return refused;
+    const identityEvents: string[] = [];
+    for (const candidate of keyring.identityEvents) {
+      const event: unknown = candidate;
+      if (typeof event !== "string" || !event) return refused;
+      identityEvents.push(event);
+    }
+    if (identityEvents.length === 0) return refused;
+    const vaults: ExtensionKeyringVault[] = [];
+    for (const candidate of keyring.vaults) {
+      const vault: unknown = candidate;
+      if (
+        !vault ||
+        typeof vault !== "object" ||
+        !("storeId" in vault) ||
+        typeof vault.storeId !== "string" ||
+        !vault.storeId.trim() ||
+        !("eventLogRecords" in vault) ||
+        !Array.isArray(vault.eventLogRecords)
+      )
+        return refused;
+      const records = Effect.runSync(
+        Effect.result(
+          Effect.all(
+            vault.eventLogRecords.map(ExtensionEventLogRecordSchema.decode),
+            eventLogRecordDecodeOptions,
+          ),
+        ),
       );
-    const invited: ExtensionIdentityInviteWire = {
-      kind: ExtensionIdentityInviteWireKind.Invited,
-      identityId: invite.identityId,
-      identityLabel: invite.identityLabel,
-      code: invite.code,
-      sealedPassphrase: invite.sealedPassphrase,
-      mountProviderId: invite.mountProviderId,
+      if (records._tag === "Failure") return refused;
+      const admitted: ExtensionKeyringVault = {
+        storeId: vault.storeId,
+        eventLogRecords: records.success,
+      };
+      vaults.push(admitted);
+    }
+    const added: ExtensionKeyringGrant = {
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: keyring.identityId,
+      identityLabel: keyring.identityLabel,
+      identityEvents,
+      vaults,
     };
-    return ok(invited);
+    return ok(added);
   }
 
   static parse(
@@ -295,12 +318,8 @@ export class ExtensionPairingApprovedGrantAdmission {
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
       providers.push(decoded.success);
     }
-    const identityInvite =
-      ExtensionPairingApprovedGrantAdmission.identityInvite(payload);
-    if (identityInvite.isErr())
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
-      );
+    const keyring = ExtensionPairingApprovedGrantAdmission.keyring(payload);
+    if (keyring.isErr()) return err(keyring.error);
     const grant: ExtensionPairingApprovedGrant = {
       vaultType: vaultType.value,
       deviceId: payload.deviceId,
@@ -317,7 +336,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       approvedAt: payload.approvedAt,
       scopes,
       providers,
-      identityInvite: identityInvite.value,
+      keyring: keyring.value,
     };
     return ok(grant);
   }
@@ -405,9 +424,6 @@ const extensionPairingApprovedMessageFields: ExtensionPairingApprovedMessageFiel
 const extensionPairingApprovedMessageSchema = Schema.Struct(
   extensionPairingApprovedMessageFields,
 );
-const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
-  concurrency: "unbounded",
-};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairingApprovedMessage {

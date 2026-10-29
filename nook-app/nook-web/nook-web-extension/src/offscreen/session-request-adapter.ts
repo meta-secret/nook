@@ -204,8 +204,6 @@ enum ExtensionSessionSensitiveField {
   Username = 'username',
   Password = 'password',
   RequestJson = 'requestJson',
-  Code = 'code',
-  SealedPassphrase = 'sealedPassphrase',
 }
 
 export function decodeExtensionSessionRawEnvelope(
@@ -334,10 +332,7 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.UnlockPin]: [ExtensionSessionSensitiveField.Pin],
   [ExtensionSessionMessageType.SealIdentityHandoff]: [],
   [ExtensionSessionMessageType.ImportVault]: [],
-  [ExtensionSessionMessageType.JoinIdentity]: [
-    ExtensionSessionSensitiveField.Code,
-    ExtensionSessionSensitiveField.SealedPassphrase,
-  ],
+  [ExtensionSessionMessageType.JoinIdentity]: [],
   [ExtensionSessionMessageType.ConnectIdentityVault]: [],
   [ExtensionSessionMessageType.RefreshIdentityVaults]: [],
   [ExtensionSessionMessageType.BeginIdentityConnection]: [],

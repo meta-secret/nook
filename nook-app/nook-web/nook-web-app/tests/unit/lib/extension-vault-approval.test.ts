@@ -54,6 +54,8 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import type { VaultState } from '$lib/vault.svelte'
+import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
+import { ExtensionKeyringGrantKind } from '$web-shared/extension/keyring-grant-wire'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const request: ExtensionConnectRequest = {
@@ -81,6 +83,13 @@ class ExtensionApprovalTestFixture {
       value: 'store-1',
     })
     manager.export_event_log_records_js = vi.fn(async () => records)
+    // The keyring the extension is added to, as an app with its own key.
+    manager.add_identity_member = vi.fn(async () => true)
+    manager.export_identity_log = vi.fn(async () => ({
+      identityId: 'identity-1',
+      events: ['identity-event-1'],
+    }))
+    manager.export_vault_event_log_records_js = vi.fn(async () => records)
     const admitManager = vi.fn<
       () => Result<NookVaultManager, VaultStorageFailure>
     >(() => ok(manager))
@@ -94,6 +103,12 @@ class ExtensionApprovalTestFixture {
     vault.admitManager = admitManager
     vault.t = (key: Parameters<VaultState['t']>[0]) =>
       typeof key === 'string' ? key : 'Unnamed vault'
+    vi.spyOn(vault.identityControl, 'refresh').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
     return { admitManager, manager, records, vault }
   }
 }
@@ -138,6 +153,20 @@ describe('extension vault approval', () => {
       approvedAt: 1_783_373_640_000,
     })
     expect(typeof prepared.value.payload.approvedAt).toBe('number')
+    // The extension joins the keyring by its own keys, not the vault alone.
+    expect(fixture.manager.add_identity_member).toHaveBeenCalledWith(
+      request.deviceId,
+      request.devicePublicKey,
+      request.deviceSigningPublicKey,
+      request.deviceLabel,
+    )
+    expect(prepared.value.payload.keyring).toEqual({
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: 'identity-1',
+      identityLabel: '',
+      identityEvents: ['identity-event-1'],
+      vaults: [],
+    })
     const completion = approval.admitCompletion()
     expect(completion.isOk()).toBe(true)
     if (completion.isErr()) return

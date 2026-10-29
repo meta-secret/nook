@@ -11,9 +11,9 @@ import {
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import {
-  ExtensionIdentityInviteWireKind,
-  type ExtensionIdentityInviteWire,
-} from '../../nook-web-shared/src/extension/identity-invite-wire'
+  ExtensionKeyringGrantKind,
+  type ExtensionKeyringGrant,
+} from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   PairingIdentityConnection,
   PairingIdentityConnectionFailure,
@@ -62,7 +62,7 @@ const record: ExtensionEventLogRecord = {
 }
 
 function approval(
-  identityInvite: ExtensionIdentityInviteWire,
+  keyring: ExtensionKeyringGrant,
 ): ExtensionPairingApprovedMessage {
   const message: ExtensionPairingApprovedMessage = {
     type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
@@ -81,20 +81,22 @@ function approval(
         ExtensionConnectScope.SyncProviderCredentials,
       ],
       providers: [],
-      identityInvite,
+      keyring,
     },
     eventLogRecords: [record],
   }
   return message
 }
 
-const invited: ExtensionIdentityInviteWire = {
-  kind: ExtensionIdentityInviteWireKind.Invited,
+const added: ExtensionKeyringGrant = {
+  kind: ExtensionKeyringGrantKind.Added,
   identityId: 'identity-personal',
   identityLabel: 'Personal',
-  code: 'nook-enroll-code',
-  sealedPassphrase: 'age-sealed-passphrase',
-  mountProviderId: 'github-1',
+  identityEvents: ['identity-event-1'],
+  vaults: [
+    { storeId: APPROVED_STORE, eventLogRecords: [record] },
+    { storeId: WORK_STORE, eventLogRecords: [record] },
+  ],
 }
 
 class SessionFixture {
@@ -147,13 +149,13 @@ class SessionFixture {
   }
 }
 
-test('an approval without an invite pairs only the approved vault', async () => {
+test('one more vault of a keyring already joined joins nothing', async () => {
   const fixture = new SessionFixture(true)
-  const notOffered: ExtensionIdentityInviteWire = {
-    kind: ExtensionIdentityInviteWireKind.NotOffered,
+  const member: ExtensionKeyringGrant = {
+    kind: ExtensionKeyringGrantKind.Member,
   }
   const result = await new PairingIdentityConnection(
-    fixture.request(approval(notOffered)),
+    fixture.request(approval(member)),
   ).connect(3)
 
   expect(result).toEqual({ ok: true, eventCount: 3 })
@@ -161,10 +163,10 @@ test('an approval without an invite pairs only the approved vault', async () => 
   expect(fixture.imported).toHaveLength(0)
 })
 
-test('the extension joins the identity and pairs its other vaults', async () => {
+test('the extension joins the keyring from its log and pairs its other vaults from their records', async () => {
   const fixture = new SessionFixture(true)
   const result = await new PairingIdentityConnection(
-    fixture.request(approval(invited)),
+    fixture.request(approval(added)),
   ).connect(3)
 
   expect(result).toEqual({ ok: true, eventCount: 8 })
@@ -174,11 +176,15 @@ test('the extension joins the identity and pairs its other vaults', async () => 
   expect(join?.payload).toMatchObject({
     identityId: 'identity-personal',
     memberLabel: 'Nook Extension - Chrome',
-    mountProviderId: 'github-1',
+    identityEvents: ['identity-event-1'],
   })
-  // The approved vault is already paired; only the other one is opened.
+  // The approved vault is already paired; only the other one is opened,
+  // from the records the web app handed over, with no sync provider.
   expect(connect?.type).toBe(ExtensionSessionMessageType.ConnectIdentityVault)
-  expect(connect?.payload).toMatchObject({ vaultStoreId: WORK_STORE })
+  expect(connect?.payload).toMatchObject({
+    vaultStoreId: WORK_STORE,
+    source: { kind: 'records', eventLogRecords: [record] },
+  })
   const [work] = fixture.imported
   expect(fixture.imported).toHaveLength(1)
   expect(work?.message.payload).toMatchObject({
@@ -186,7 +192,7 @@ test('the extension joins the identity and pairs its other vaults', async () => 
     vaultName: 'Work',
     identityLabel: 'Personal',
     deviceId: 'device-extension',
-    identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
+    keyring: { kind: ExtensionKeyringGrantKind.Member },
   })
   expect(work?.message.eventLogRecords.map((each) => each.eventId)).toEqual([
     record.eventId,
@@ -196,7 +202,7 @@ test('the extension joins the identity and pairs its other vaults', async () => 
 test('a failed join is reported, not read as connected', async () => {
   const fixture = new SessionFixture(false)
   const result = await new PairingIdentityConnection(
-    fixture.request(approval(invited)),
+    fixture.request(approval(added)),
   ).connect(3)
 
   expect(result).toEqual({
@@ -218,7 +224,7 @@ test('a join the session refuses is reported with no other vault paired', async 
     return Promise.resolve(ok(refused))
   }
   const connectionRequest: PairingIdentityConnectionRequest = {
-    ...fixture.request(approval(invited)),
+    ...fixture.request(approval(added)),
     sendSessionMessage: refusing,
   }
   const result = await new PairingIdentityConnection(connectionRequest).connect(

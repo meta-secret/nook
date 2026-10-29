@@ -9,12 +9,9 @@
   import ExtensionConnectFacts from './ExtensionConnectFacts.svelte'
   import FirstRunDiagram from './login/FirstRunDiagram.svelte'
   import {
-    ExtensionConnectReach,
     extensionConnectDiagram,
     type ExtensionConnectDiagramRequest,
   } from './extension-connect-diagram'
-  import { DeviceJoinMounts } from '$lib/components/add-device/device-join-mounts'
-  import { ExtensionConnectScope } from '$web-shared/extension/extension-connect-scope'
   import {
     ExtensionConsentDeliveryOutcomeKind,
     ExtensionConsentRejectionKind,
@@ -90,18 +87,6 @@
   let session = $derived(createWorkflowSession(sessionRequest))
   const presentation = new ExtensionConsentWorkflowPresentation()
 
-  /** The extension joins the whole identity when it can reach it: a cloud
-   * sync provider and that provider's credentials. Otherwise only this
-   * vault connects, and the consent says so. */
-  const joinsIdentity = $derived.by(() => {
-    if (!request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials))
-      return false
-    const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
-      mounts: vault.identityControl.mounts,
-      replication: vault.vaultArchitecture.replication_type,
-    }
-    return new DeviceJoinMounts(mountRequest).compatible.length > 0
-  })
   const identityName = $derived(
     vault.identityControl.snapshot === false
       ? vault.t(I18N_KEYS.WorkspaceIdentityFallback)
@@ -111,9 +96,6 @@
   const diagramRequest = $derived<ExtensionConnectDiagramRequest>({
     vault,
     keyring: identityName,
-    reach: joinsIdentity
-      ? ExtensionConnectReach.Keyring
-      : ExtensionConnectReach.ThisVault,
   })
   const diagram = $derived(extensionConnectDiagram(diagramRequest))
   const workflowState = $derived(session.state)
@@ -194,17 +176,7 @@
     </h2>
   </header>
 
-  <div class="grid gap-3">
-    <FirstRunDiagram {diagram} />
-    {#if !joinsIdentity}
-      <p
-        class="text-center text-xs text-muted-foreground"
-        data-testid="extension-connect-vault-only"
-      >
-        {vault.t(I18N_KEYS.ExtensionConsentVaultOnly)}
-      </p>
-    {/if}
-  </div>
+  <FirstRunDiagram {diagram} />
 
   <ExtensionConnectFacts {vault} {request} />
 
