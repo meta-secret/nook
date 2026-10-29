@@ -21,6 +21,7 @@ import {
   openIdentityPanel,
   openManagePage,
   ManagePage,
+  expectLoginGateAfterLoad,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -334,9 +335,7 @@ test.describe('vault connect flow', () => {
     })
 
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 

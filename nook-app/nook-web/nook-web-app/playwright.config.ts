@@ -13,8 +13,8 @@ dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 process.env.VITE_VAULT_SYNC_INTERVAL_MS = ((...[v = '500']) => v)(
   process.env.VITE_VAULT_SYNC_INTERVAL_MS,
 )
-/** Fast idle auto-lock in e2e — production default stays 5 minutes via app code. */
-process.env.VITE_VAULT_IDLE_TIMEOUT_MS = ((...[v = '2500']) => v)(
+/** The product's 5-minute idle lock: only idle-session-lock runs it out, on a fake clock. */
+process.env.VITE_VAULT_IDLE_TIMEOUT_MS = ((...[v = '300000']) => v)(
   process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
 )
 process.env.VITE_VAULT_IDLE_WARNING_MS = ((...[v = '0']) => v)(

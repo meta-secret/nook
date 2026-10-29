@@ -8,6 +8,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  disableLoginAutoUnlock,
   expandSecretRow,
   fillSeedPhraseGrid,
   flushNookLogPersistQueue,
@@ -22,7 +23,20 @@ import {
   ManagePage,
   openVaultSection,
   VaultSection,
+  expectLoginGateAfterLoad,
 } from './helpers'
+
+/** How far another tab has dropped its copy after this tab deleted it. */
+enum OtherTabDropState {
+  Unreachable = 'unreachable',
+  NoVault = 'no-vault',
+  StillAuthenticated = 'still-authenticated',
+  SessionProbeKept = 'session-probe-kept',
+  StorageRejected = 'storage-rejected',
+  Dropped = 'dropped',
+}
+// The other tab's page reads the states from this plain copy of the enum.
+const otherTabDropStates = { ...OtherTabDropState }
 
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
@@ -108,11 +122,11 @@ test.describe('local vault', () => {
     await revealSecretInRow(updatedRow)
     await expect(updatedRow.getByText(updatedValue)).toBeVisible()
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -397,31 +411,31 @@ test.describe('local vault', () => {
     expect(remaining.caches).not.toContain('nook-cleanup-probe')
     expect(remaining.cookie).not.toContain('nook_cleanup_probe=')
     // The other tab reloads as it drops its copy; an evaluation that the
-    // reload interrupts is read again from the reloaded page.
+    // reload interrupts is read again from the reloaded page. The poll names
+    // the step the other tab has not reached, so a failure says which.
     await expect
       .poll(
         () =>
           otherTab
-            .evaluate(async () => {
+            .evaluate(async (state) => {
               const vault = window.__nookVault
-              if (!vault || vault.isAuthenticated) return false
+              if (!vault) return state.NoVault
+              if (vault.isAuthenticated) return state.StillAuthenticated
               const cleanupProbe = sessionStorage
                 .getItem('nook_cleanup_probe')
                 ?.valueOf()
-              if (cleanupProbe) {
-                return false
-              }
+              if (cleanupProbe) return state.SessionProbeKept
               try {
                 await vault.enqueueStorage(() => vault.admitManager())
-                return true
+                return state.Dropped
               } catch {
-                return false
+                return state.StorageRejected
               }
-            })
-            .catch(() => false),
+            }, otherTabDropStates)
+            .catch(() => OtherTabDropState.Unreachable),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
-      .toBe(true)
+      .toBe(OtherTabDropState.Dropped)
     await otherTab.close()
   })
 
@@ -531,7 +545,10 @@ test.describe('local vault', () => {
     await revealSecretInRow(row)
     await expect(row.getByRole('heading', { name: 'Recovery' })).toBeVisible()
     await expect(row.getByText('backup')).toBeVisible()
-    await expect(row.getByText('1234')).toBeVisible()
+    // The note's code, not digits that the timestamped title may contain.
+    await expect(
+      row.getByTestId('revealed-secret').getByText('1234', { exact: true }),
+    ).toBeVisible()
 
     await row.getByTestId('edit-secret-btn').click()
     const editForm = page.getByTestId('edit-secret-form')
@@ -545,11 +562,11 @@ test.describe('local vault', () => {
       page.getByRole('heading', { name: title, exact: true }),
     ).toHaveCount(0)
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -566,7 +583,11 @@ test.describe('local vault', () => {
       updatedRow.getByRole('heading', { name: 'Updated recovery' }),
     ).toBeVisible()
     await expect(updatedRow.getByText('replacement')).toBeVisible()
-    await expect(updatedRow.getByText('5678')).toBeVisible()
+    await expect(
+      updatedRow
+        .getByTestId('revealed-secret')
+        .getByText('5678', { exact: true }),
+    ).toBeVisible()
 
     await deleteSecret(page, updatedTitle)
   })
@@ -665,11 +686,11 @@ test.describe('local vault', () => {
     expect(serializedReplacementLogPayloads).not.toContain('9876')
     expect(serializedReplacementLogPayloads).not.toContain(notes)
 
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -839,11 +860,11 @@ test.describe('local vault', () => {
     const value = 'persist-me'
 
     await addSecret(page, key, value)
+    // The reload should land on the login gate, not unlock the vault by itself.
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expectLoginGateAfterLoad(page)
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
