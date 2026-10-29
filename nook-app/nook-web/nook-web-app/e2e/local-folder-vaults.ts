@@ -40,15 +40,23 @@ export function filedVaults(records: LocalFolderRecord[]): FiledVault[] {
 
 const FILED_IDENTITY_LOG_PATH = /^meta-secret-nook\/(idn_[^/]+)\/log\/events\//
 
-/** Every identity filing a vault in the folder has its control log there. */
-function everyFilingIdentityLogged(records: LocalFolderRecord[]): boolean {
+/** The identities filing a vault in the folder without their control log
+ * there, followed by the folder's layout so a miss shows where things went. */
+function unloggedFilingIdentities(records: LocalFolderRecord[]): string[] {
   const logged = new Set(
     records.flatMap((record) => {
       const match = FILED_IDENTITY_LOG_PATH.exec(record.path)
       return match && match[1] ? [match[1]] : []
     }),
   )
-  return filedVaults(records).every((vault) => logged.has(vault.identityId))
+  const missing = filedVaults(records)
+    .filter((vault) => !logged.has(vault.identityId))
+    .map((vault) => `no log: ${vault.identityId}`)
+  if (missing.length === 0) return []
+  const layout = new Set(
+    records.map((record) => record.path.split('/').slice(0, 4).join('/')),
+  )
+  return [...missing, ...layout]
 }
 
 /** The identity log reaches the folder after the vault's events. Wiping the
@@ -56,10 +64,10 @@ function everyFilingIdentityLogged(records: LocalFolderRecord[]): boolean {
 async function waitForFilingIdentityLogs(page: Page): Promise<void> {
   await expect
     .poll(
-      async () => everyFilingIdentityLogged(await localFolderSnapshot(page)),
+      async () => unloggedFilingIdentities(await localFolderSnapshot(page)),
       { timeout: 30_000 },
     )
-    .toBe(true)
+    .toEqual([])
 }
 
 /** The store ids of the vaults a folder snapshot holds. */

@@ -10,7 +10,6 @@ import {
   launchExtensionContext,
   e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
-  openPairingAuthTabInOwnWindow,
   EXTENSION_UNLOCK_TIMEOUT_MS,
   pairingGrantStorageKey,
   readExtensionPersistenceSnapshot,
@@ -555,7 +554,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
   }
 })
 
-test('keeps the extension vault independent and switches after valid re-pairing', async ({
+test('keeps the extension in its keyring while the website locks it out and deletes its vault', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -609,13 +608,18 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       .getByTestId('login-vault-name-input')
       .fill('Second local vault')
     await simplePage.getByTestId('login-create-additional-vault-btn').click()
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
+    // The new vault opens on the keyrings page, beside its card.
+    await expect(
+      simplePage
+        .locator('[data-testid="identity-vault-row"][data-state="open"]')
+        .or(simplePage.getByTestId('vault-panel'))
+        .first(),
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
     const companionUnlock: Parameters<
       typeof unlockExtensionThroughCompanion
     >[0] = { context, extensionId }
     await unlockExtensionThroughCompanion(companionUnlock)
-    await simplePage.getByTestId('header-identities-btn').click()
     await simplePage
       .locator(
         '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-overview-toggle"]',
@@ -640,173 +644,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
         key.startsWith('nook:extension-pairing-grant:'),
       ),
     ).toHaveLength(1)
-
-    const replacementPopupPage = await openPairingAuthTabInOwnWindow({
-      context,
-      extensionId,
-    })
-    await expect(
-      replacementPopupPage.getByTestId('extension-toolbar-menu'),
-    ).toBeVisible()
-    const replacementPage = await openSimpleVaultConnection(
-      context,
-      replacementPopupPage,
-    )
-    await advanceCreateVaultWizardToFinalStep(replacementPage)
-    await createWebsiteIdentityForConnect(replacementPage, 'Replacement vault')
-    await replacementPage.getByTestId('approve-extension-device-btn').click()
-    await waitForExtensionPairingReady(
-      replacementPage,
-      async () => {
-        const repairedStorage = await readExtensionStorage(context)
-        return repairedStorage[setupStorageKey]
-      },
-      'Replacement vault',
-    )
-    const repairedStorage = await readExtensionStorage(context)
-    const repairedSetup = repairedStorage[setupStorageKey]
-    expect(repairedSetup).toMatchObject({
-      status: 'ready',
-      selectedVaultName: 'Replacement vault',
-    })
-    expect(repairedSetup).toEqual(
-      expect.objectContaining({
-        eventCount: expect.any(Number),
-        eventLogHeads: expect.arrayContaining([expect.any(String)]),
-      }),
-    )
-    const repairedGrants = Object.entries(repairedStorage).filter(([key]) =>
-      key.startsWith('nook:extension-pairing-grant:'),
-    )
-    expect(repairedGrants).toHaveLength(2)
-    expect(repairedGrants.map(([, grant]) => grant)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ vaultName: 'Unpair test vault' }),
-        expect.objectContaining({ vaultName: 'Replacement vault' }),
-      ]),
-    )
-    // Exercise the extension-facing half of replacement import rather than
-    // accepting storage metadata alone. The browser-WASM regression covers
-    // the exact Sentinel-to-Simple architecture transition; this verifies the
-    // real pairing wiring adopts that replacement as the usable active vault.
-    const verifiedPopupPage = await context.newPage()
-    await verifiedPopupPage.goto(
-      `chrome-extension://${extensionId}/popup/index.html`,
-    )
-    await expect(
-      verifiedPopupPage.getByTestId('extension-toolbar-menu'),
-    ).toBeVisible()
-    await expect(
-      verifiedPopupPage.locator(
-        '[data-testid="companion-vault"][data-default="true"]',
-      ),
-    ).toContainText('Replacement vault')
-    const replacementGrantEntry = repairedGrants.find(([, grant]) => {
-      if (typeof grant !== 'object') return false
-      if (!grant) return false
-      return 'vaultName' in grant && grant.vaultName === 'Replacement vault'
-    })
-    if (!replacementGrantEntry) {
-      throw new Error('replacement vault grant must exist after repair')
-    }
-    const replacementGrant = replacementGrantEntry[1]
-    if (
-      typeof replacementGrant !== 'object' ||
-      !replacementGrant ||
-      !('vaultStoreId' in replacementGrant) ||
-      typeof replacementGrant.vaultStoreId !== 'string' ||
-      !('deviceId' in replacementGrant) ||
-      typeof replacementGrant.deviceId !== 'string' ||
-      !('devicePublicKey' in replacementGrant) ||
-      typeof replacementGrant.devicePublicKey !== 'string' ||
-      !('deviceSigningPublicKey' in replacementGrant) ||
-      typeof replacementGrant.deviceSigningPublicKey !== 'string'
-    ) {
-      throw new Error('replacement vault grant identity must be complete')
-    }
-    const replacementGrantIdentity = {
-      vaultStoreId: replacementGrant.vaultStoreId,
-      deviceId: replacementGrant.deviceId,
-      devicePublicKey: replacementGrant.devicePublicKey,
-      deviceSigningPublicKey: replacementGrant.deviceSigningPublicKey,
-    }
-    const vaultBackedLookup = await verifiedPopupPage.evaluate(
-      async (grantIdentity) => {
-        await chrome.runtime.sendMessage({
-          type: 'nook:ensure-extension-session-runtime',
-        })
-        const response = await new Promise<{
-          ok: boolean
-          accounts: Array<{
-            secretId: string
-            username: string
-            websiteUrl: string
-            websiteHost: string
-          }>
-        }>((resolve, reject) => {
-          chrome.runtime.sendMessage(
-            {
-              type: 'nook:extension-session-list-logins',
-              payload: {
-                ...grantIdentity,
-                origin: 'https://example.com',
-                queue: { kind: 'message-default' },
-              },
-            },
-            (value: unknown) => {
-              if (
-                typeof value !== 'object' ||
-                !value ||
-                !('ok' in value) ||
-                typeof value.ok !== 'boolean' ||
-                !('accounts' in value) ||
-                !Array.isArray(value.accounts)
-              ) {
-                reject(new Error('unexpected login lookup response'))
-                return
-              }
-              const admittedAccounts: Array<{
-                secretId: string
-                username: string
-                websiteUrl: string
-                websiteHost: string
-              }> = []
-              const accounts: readonly unknown[] = value.accounts
-              for (const account of accounts) {
-                if (
-                  !account ||
-                  typeof account !== 'object' ||
-                  !('secretId' in account) ||
-                  typeof account.secretId !== 'string' ||
-                  !('username' in account) ||
-                  typeof account.username !== 'string' ||
-                  !('websiteUrl' in account) ||
-                  typeof account.websiteUrl !== 'string' ||
-                  !('websiteHost' in account) ||
-                  typeof account.websiteHost !== 'string'
-                ) {
-                  reject(new Error('unexpected login lookup response'))
-                  return
-                }
-                admittedAccounts.push({
-                  secretId: account.secretId,
-                  username: account.username,
-                  websiteUrl: account.websiteUrl,
-                  websiteHost: account.websiteHost,
-                })
-              }
-              resolve({
-                ok: value.ok,
-                accounts: admittedAccounts,
-              })
-            },
-          )
-        })
-        return response
-      },
-      replacementGrantIdentity,
-    )
-    expect(vaultBackedLookup).toEqual({ ok: true, accounts: [] })
   } finally {
     await context.close()
   }

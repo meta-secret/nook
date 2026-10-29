@@ -33,6 +33,7 @@ import {
   parseJson,
   requireRecord,
   createFirstRunKey,
+  answerPasskeyPrompt,
 } from './helpers'
 
 const SIMPLE_SECRET_VALUE = 'architecture-simple-secret-value'
@@ -283,6 +284,13 @@ test.describe('vault architecture modes', () => {
         page.getByTestId('sentinel-genesis-response-input'),
       ).toHaveCount(0)
       await page.getByTestId('sentinel-onboarding-create-keys').click()
+      // Creating the keys makes this browser's key with its passkey.
+      const nameStep = page.getByTestId('sentinel-genesis-name-step')
+      const prompt = page.getByTestId('device-protection-gate')
+      await expect(nameStep.or(prompt).first()).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      if (await prompt.isVisible()) await answerPasskeyPrompt(page)
       await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })

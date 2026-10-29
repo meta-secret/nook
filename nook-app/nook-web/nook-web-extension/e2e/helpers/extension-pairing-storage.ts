@@ -274,30 +274,3 @@ export async function writeExtensionPairingStorage(
   }
   await evaluateExtensionScopeWithArgument([scope, writeStorage, entries])
 }
-
-export async function removeExtensionPairingStorageKeys(
-  scope: ExtensionExecutionScope,
-  keys: string[],
-): Promise<void> {
-  const removeStorageKeys = async (storageKeys: string[]) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('nook_extension', 1)
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
-    try {
-      const transaction = database.transaction('pairing', 'readwrite')
-      const store = transaction.objectStore('pairing')
-      for (const key of storageKeys) {
-        store.delete(key)
-      }
-      await new Promise<void>((resolve, reject) => {
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = () => reject(transaction.error)
-      })
-    } finally {
-      database.close()
-    }
-  }
-  await evaluateExtensionScopeWithArgument([scope, removeStorageKeys, keys])
-}
