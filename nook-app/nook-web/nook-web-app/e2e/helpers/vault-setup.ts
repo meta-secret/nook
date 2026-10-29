@@ -79,18 +79,35 @@ export async function startFirstRun(page: Page): Promise<void> {
 }
 
 /** After the passkey, setup offers a sync provider: keep the new identity
- * on this browser instead and name it. Its first vault takes the name. */
-export async function nameFirstIdentityHere(
+ * on this browser instead and name it. */
+export async function nameFirstIdentityOnly(
   page: Page,
-  vaultName: string,
+  identityName: string,
 ): Promise<void> {
   const skip = page.getByTestId('first-run-sync-skip')
   await expect(skip).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await skip.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  const nameInput = page.getByTestId('login-vault-name-input')
+  const nameInput = page.getByTestId('first-run-identity-name-input')
   await expect(nameInput).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await nameInput.fill(identityName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await page
+    .getByTestId('first-run-identity-create-btn')
+    .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+/** Keep the new identity on this browser, name it, then create its first
+ * vault under the same name when setup asks. */
+export async function nameFirstIdentityHere(
+  page: Page,
+  vaultName: string,
+): Promise<void> {
+  await nameFirstIdentityOnly(page, vaultName)
+  const vaultStep = page.getByTestId('first-run-vault-step')
+  await expect(vaultStep).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await vaultStep
+    .getByTestId('login-vault-name-input')
+    .fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await vaultStep
     .getByTestId('login-create-device-vault-btn')
     .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }

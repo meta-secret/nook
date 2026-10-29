@@ -262,8 +262,21 @@ async function createAndApproveVault(context, popupPage) {
     .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
   if (await firstRunSync.isVisible().catch(() => false)) {
     await simplePage.getByTestId('first-run-sync-skip').click()
-    await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await simplePage
+      .getByTestId('first-run-identity-name-input')
+      .fill(vaultName)
+    await simplePage.getByTestId('first-run-identity-create-btn').click()
+    // An identity that already exists here asks about its first vault.
+    const vaultStep = simplePage.getByTestId('first-run-vault-step')
+    await authenticated
+      .or(vaultStep)
+      .or(simplePage.getByTestId('identities-hub'))
+      .first()
+      .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+    if (await vaultStep.isVisible().catch(() => false)) {
+      await vaultStep.getByTestId('login-vault-name-input').fill(vaultName)
+      await vaultStep.getByTestId('login-create-device-vault-btn').click()
+    }
   }
   // The first run ends on the identities hub, which has no vault shell.
   await authenticated

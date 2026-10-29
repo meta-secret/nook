@@ -68,8 +68,20 @@ async function nameFirstIdentityHere(
   await expect(settled.first()).toBeVisible({ timeout: 30_000 })
   if (!(await syncStep.isVisible())) return
   await vaultPage.getByTestId('first-run-sync-skip').click()
-  await vaultPage.getByTestId('login-vault-name-input').fill(vaultName)
-  await vaultPage.getByTestId('login-create-device-vault-btn').click()
+  await vaultPage.getByTestId('first-run-identity-name-input').fill(vaultName)
+  await vaultPage.getByTestId('first-run-identity-create-btn').click()
+  // A key the extension lends gets its first vault at once; an identity
+  // that already exists here asks about a vault first.
+  const vaultStep = vaultPage.getByTestId('first-run-vault-step')
+  await expect(
+    vaultStep
+      .or(vaultPage.getByTestId('authenticated-shell'))
+      .or(vaultPage.getByTestId('identities-workspace'))
+      .first(),
+  ).toBeVisible({ timeout: 30_000 })
+  if (!(await vaultStep.isVisible())) return
+  await vaultStep.getByTestId('login-vault-name-input').fill(vaultName)
+  await vaultStep.getByTestId('login-create-device-vault-btn').click()
 }
 
 /**

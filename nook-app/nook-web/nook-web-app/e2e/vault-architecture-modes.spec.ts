@@ -561,11 +561,18 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
 
-    // Kept on this browser, the identity is named; an empty name takes the
-    // suggested one, and its first vault takes the same name.
+    // Kept on this browser, the identity is named (an empty name takes the
+    // suggested one); its first vault is then the person's choice.
     await page.getByTestId('first-run-sync-skip').click()
     await expect(page.getByTestId('first-run-name-step')).toBeVisible()
-    await page.getByTestId('login-create-device-vault-btn').click()
+    await page.getByTestId('first-run-identity-create-btn').click()
+    const vaultStep = page.getByTestId('first-run-vault-step')
+    await expect(vaultStep).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+    await vaultStep.getByTestId('login-vault-name-input').fill('Personal')
+    await vaultStep.getByTestId('login-create-device-vault-btn').click()
     await expect(
       page
         .getByTestId('identity-vault-row')

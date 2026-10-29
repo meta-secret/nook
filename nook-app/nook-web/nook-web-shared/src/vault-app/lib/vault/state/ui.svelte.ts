@@ -82,6 +82,9 @@ export enum FirstRunStage {
   Sync = "sync",
   /** A new identity is being named, on the sync provider or this browser. */
   Name = "name",
+  /** The new identity exists on this browser: create its first vault, or
+   * leave it without one for now. */
+  Vault = "vault",
   /** This browser asked to join an identity; one of its devices answers. */
   Joining = "joining",
   /** The new identity's first vault exists; it connects the sync provider

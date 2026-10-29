@@ -59,7 +59,7 @@ joined identity. -->
   <button
     type="button"
     class={ui.sim}
-    onclick={() => flow.finish(flow.identity, false)}
+    onclick={() => flow.finish(flow.identity)}
   >
     <Play class="size-3" aria-hidden="true" /> simulate: approved
   </button>

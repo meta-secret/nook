@@ -64,7 +64,7 @@ A browser without an identity shows one flow in place of the hub, in the
 Simple and unified apps. Sentinel is never offered.
 
 The identity is settled before any vault exists. The step bar counts
-Passkey, Sync provider, and Identity.
+Passkey, Sync provider, Identity, and Vault.
 
 - **Start**: "Create your identity", one short line, and one Create
   identity button. Under an "or", the other paths are equal rows, each an
@@ -91,8 +91,14 @@ Passkey, Sync provider, and Identity.
   - **Create a new identity** in that Drive, or **Keep it on this browser
     only**, leads to Name.
 - **Name**: "Name your identity", one field (empty takes the suggested
-  name). Only members see the name; the first vault takes it too. On the
-  Drive path, the signed-in Drive connects next without another sign-in.
+  name). Only members see the name. On the Drive path, its first vault is
+  created under the same name and the signed-in Drive connects next without
+  another sign-in. A key the browser extension lends gets that vault at once
+  too: its identity exists only from that vault.
+- **Vault** (kept on this browser): "Create your first vault?" with the
+  vault's name, or **Not now**. Not now ends setup with the identity and no
+  vault: the identities page shows its card with New vault, never the Start
+  screen again.
 - **Join**: "Request sent" with this browser's device id, the value the
   approving device shows. Check again reads the answer; there is no polling.
   Back returns to the identities.

@@ -1,8 +1,8 @@
 <!--
-Progress of first-run setup: the passkey, the sync provider, then the
-identity on it. Naming a new identity and waiting for a join are both the
-identity step; once the first vault connects its provider, every step is
-done.
+Progress of first-run setup: the passkey, the sync provider, the identity on
+it, then its first vault. Naming a new identity and waiting for a join are
+both the identity step; once the first vault connects its provider, every
+step is done.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -23,6 +23,7 @@ done.
     vault.t(I18N_KEYS.FirstRunStepProtect),
     vault.t(I18N_KEYS.FirstRunStepSync),
     vault.t(I18N_KEYS.FirstRunStepIdentity),
+    vault.t(I18N_KEYS.FirstRunStepVault),
   ]);
 
   function stepOf(stage: FirstRunStage): number {
@@ -35,8 +36,10 @@ done.
       case FirstRunStage.Name:
       case FirstRunStage.Joining:
         return 2;
-      case FirstRunStage.Connect:
+      case FirstRunStage.Vault:
         return 3;
+      case FirstRunStage.Connect:
+        return 4;
     }
   }
 </script>

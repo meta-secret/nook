@@ -3,6 +3,7 @@ import { ok } from 'neverthrow'
 import initNookWasm, {
   DeviceProtectionStatus,
   NookVaultManager,
+  type NookFreshIdentityNaming,
   type NookIdentityJoinCompletion,
   type NookIdentityJoinRequested,
   type NookProviderSource,
@@ -89,6 +90,19 @@ class Setup {
   at(stage: FirstRunStage): this {
     this.vault.firstRun = stage
     return this
+  }
+
+  /** Naming answers where the name went. */
+  names(state: NookFreshIdentityNaming['state']): string[] {
+    const named: string[] = []
+    vi.spyOn(this.manager, 'name_fresh_identity').mockImplementation(
+      (label) => {
+        named.push(label)
+        const naming: NookFreshIdentityNaming = { state }
+        return Promise.resolve(naming)
+      },
+    )
+    return named
   }
 
   completes(state: NookIdentityJoinCompletion['state']): void {
@@ -202,19 +216,60 @@ describe('first-run setup settles the identity before any vault', () => {
     )
   })
 
-  test('a named identity gets its first vault under the same name', async () => {
+  test('an identity kept on this browser is named, then asks about a vault', async () => {
     const setup = new Setup().at(FirstRunStage.Name)
-    const named: string[] = []
-    vi.spyOn(setup.manager, 'name_fresh_identity').mockImplementation(
-      (label) => {
-        named.push(label)
-        return Promise.resolve()
-      },
-    )
+    setup.vault.firstRunPlace = FirstRunPlace.ThisBrowser
+    const named = setup.names('named')
 
     await new FirstRunActions(setup.vault).createNamed('  Family  ')
 
     expect(named).toEqual(['Family'])
+    expect(setup.created).toEqual([])
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Vault)
+  })
+
+  test('a key the extension lends gets its first vault at once', async () => {
+    const setup = new Setup().at(FirstRunStage.Name)
+    setup.vault.firstRunPlace = FirstRunPlace.ThisBrowser
+    setup.names('atFirstVault')
+
+    await new FirstRunActions(setup.vault).createNamed('Family')
+
     expect(setup.created).toEqual(['Family'])
+  })
+
+  test('a new identity on the sync provider gets its first vault at once', async () => {
+    const setup = new Setup().at(FirstRunStage.Name)
+    setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
+    setup.names('named')
+
+    await new FirstRunActions(setup.vault).createNamed('Family')
+
+    expect(setup.created).toEqual(['Family'])
+  })
+
+  test('the vault step creates the vault it names and ends setup', async () => {
+    const setup = new Setup().at(FirstRunStage.Vault)
+    vi.spyOn(setup.vault, 'createLocalVaultWithDeviceKeys').mockImplementation(
+      (label) => {
+        setup.created.push(label)
+        setup.vault.isAuthenticated = true
+        return Promise.resolve()
+      },
+    )
+
+    await new FirstRunActions(setup.vault).createFirstVault(' Work ')
+
+    expect(setup.created).toEqual(['Work'])
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Off)
+  })
+
+  test('Not now ends setup with the identity and no vault', () => {
+    const setup = new Setup().at(FirstRunStage.Vault)
+
+    new FirstRunActions(setup.vault).skipFirstVault()
+
+    expect(setup.created).toEqual([])
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Off)
   })
 })

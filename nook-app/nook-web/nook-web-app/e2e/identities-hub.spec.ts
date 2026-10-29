@@ -4,7 +4,10 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  nameFirstIdentityOnly,
   openIdentitiesPage,
+  openVaultRow,
+  startFirstRun,
   UI_TIMEOUT_MS,
 } from './helpers'
 
@@ -195,5 +198,50 @@ test.describe('identities hub', () => {
     await expect(page.getByTestId('identity-card')).toHaveCount(1, {
       timeout: UI_TIMEOUT_MS,
     })
+  })
+})
+
+test.describe('an identity without a vault', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await installPasskeyMock(page)
+  })
+
+  test('first run can leave the identity without a vault until one is wanted', async ({
+    page,
+  }) => {
+    await page.goto('/app/')
+    await startFirstRun(page)
+    await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const createChoice = page.getByTestId('device-protection-create-new-choice')
+    if (await createChoice.isVisible()) await createChoice.click()
+    await page.getByTestId('device-protection-setup-btn').click()
+    await nameFirstIdentityOnly(page, 'Solo')
+
+    // Kept on this browser, the identity asks about its first vault.
+    await expect(page.getByTestId('first-run-vault-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('first-run-vault-skip').click()
+
+    // It stands on its own card with no vault, not on the first screen.
+    const solo = card(page, 'Solo')
+    await expect(solo).toHaveAttribute('data-status', 'unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('first-vault-start')).toHaveCount(0)
+    await expect(solo.getByTestId('identity-vault-row')).toHaveCount(0)
+
+    // New vault on the card creates one whenever it is wanted.
+    await solo.getByTestId('identity-new-vault').click()
+    await page.getByTestId('login-vault-name-input').fill('Later')
+    await page.getByTestId('login-create-additional-vault-btn').click()
+    await expect(
+      openVaultRow(page).or(page.getByTestId('vault-panel')).first(),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   })
 })

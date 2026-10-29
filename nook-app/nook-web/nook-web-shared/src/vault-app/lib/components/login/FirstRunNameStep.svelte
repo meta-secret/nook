@@ -1,7 +1,7 @@
 <!--
 Setup creates a new identity: it is named here, on the sync provider signed
-in to or on this browser only. Only its members see the name. Its first
-vault takes the same name, so one field is enough.
+in to or on this browser only. Only its members see the name. Kept on this
+browser, it asks next whether to create a first vault.
 -->
 <script lang="ts">
   import { RefreshCw } from '@lucide/svelte'
@@ -70,7 +70,7 @@ vault takes the same name, so one field is enough.
       placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
       maxlength="64"
       autocomplete="off"
-      data-testid="login-vault-name-input"
+      data-testid="first-run-identity-name-input"
       bind:value={name}
       disabled={vault.isVerifying}
     />
@@ -78,7 +78,7 @@ vault takes the same name, so one field is enough.
       type="submit"
       class="h-11 shrink-0 sm:h-10"
       disabled={vault.isVerifying}
-      data-testid="login-create-device-vault-btn"
+      data-testid="first-run-identity-create-btn"
     >
       {#if vault.isVerifying}
         <RefreshCw class="size-4 animate-spin" />

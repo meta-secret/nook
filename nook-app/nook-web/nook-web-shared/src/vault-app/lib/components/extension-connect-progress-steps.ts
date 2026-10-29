@@ -185,6 +185,7 @@ export class ExtensionConnectPageSteps {
       case FirstRunStage.Protect:
       case FirstRunStage.Sync:
       case FirstRunStage.Name:
+      case FirstRunStage.Vault:
       case FirstRunStage.Joining:
       case FirstRunStage.Connect:
         return ExtensionConnectVaultCreation.Underway;

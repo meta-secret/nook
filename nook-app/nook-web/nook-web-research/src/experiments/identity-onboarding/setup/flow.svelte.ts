@@ -118,23 +118,24 @@ export class SetupFlow {
     )
   }
 
-  /** Finish setup on an identity: a member's, a joined one, or a new one. */
-  finish(identity: Identity, created: boolean): void {
+  /** Finish setup on an identity that exists: a member's or a joined one. */
+  finish(identity: Identity): void {
     this.identity = identity
-    this.created = created
+    this.created = false
     this.go(Step.Sync)
   }
 
+  /** Finish setup on a new identity under the name chosen. */
   createIdentity(): void {
-    this.finish(
-      {
-        id: 'idn_new',
-        name: this.newName,
-        words: 'spoon-river-calm',
-        devices: 1,
-      },
-      true,
-    )
+    const identity: Identity = {
+      id: 'idn_new',
+      name: this.newName,
+      words: 'spoon-river-calm',
+      devices: 1,
+    }
+    this.identity = identity
+    this.created = true
+    this.go(Step.Sync)
   }
 
   events(): number {

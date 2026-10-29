@@ -540,10 +540,13 @@
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
     ),
   )
+  // An identity this browser holds without any vault is shown as its card,
+  // with New vault, never as the first screen that creates an identity.
   const showCreateVault = $derived(
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
+        !identityCardsShown &&
         (!hasProviders || firstScreenRequested))) &&
       !showQrOnboarding &&
       !showSetup &&

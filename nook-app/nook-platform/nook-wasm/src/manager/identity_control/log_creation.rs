@@ -69,6 +69,18 @@ impl NookVaultManager {
     }
 }
 
+/// Where a fresh identity's name went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum NookFreshIdentityNaming {
+    /// The identity exists on this browser and carries the name: setup may
+    /// leave it without a vault.
+    Named,
+    /// The key has no identity here yet: the first vault's genesis creates
+    /// it under the name, so setup creates that vault next.
+    AtFirstVault,
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Create the identity's control log when this identity has none yet.
@@ -126,7 +138,10 @@ impl NookVaultManager {
     /// browser extension lends has no local identity yet: the name waits on
     /// this session for the first vault's genesis, which creates it.
     #[wasm_bindgen]
-    pub async fn name_fresh_identity(&mut self, label: String) -> Result<(), JsError> {
+    pub async fn name_fresh_identity(
+        &mut self,
+        label: String,
+    ) -> Result<tsify::Ts<NookFreshIdentityNaming>, JsError> {
         let label = Self::local_identity_label(&label).map_err(JsError::new)?;
         let app_key = self.unlocked_app_key()?;
         let membership = NookDatabase::load_identity_directory()
@@ -158,11 +173,18 @@ impl NookVaultManager {
             })
         })
         .await?;
-        self.device.first_vault_identity_name = if at_first_vault {
-            FirstVaultIdentityName::Named(name)
+        let (staged, naming) = if at_first_vault {
+            (
+                FirstVaultIdentityName::Named(name),
+                NookFreshIdentityNaming::AtFirstVault,
+            )
         } else {
-            FirstVaultIdentityName::Unnamed
+            (
+                FirstVaultIdentityName::Unnamed,
+                NookFreshIdentityNaming::Named,
+            )
         };
-        Ok(())
+        self.device.first_vault_identity_name = staged;
+        Tsify::into_ts(&naming).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }

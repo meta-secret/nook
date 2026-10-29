@@ -350,10 +350,15 @@ mounts therefore act on the identity, never on one vault.
      an approved join request; it brings its own vaults.
    - it is not: ask to join one, or keep the fresh identity as a new one.
 3. Name a new identity while it is fresh (`name_fresh_identity`); its log
-   seals that name.
-4. Generate the vault DEK and wrap it to the identity's current app keys.
-5. Create the vault bound to that identity.
-6. Register the vault in the identity control log with `vault-registered`.
+   seals that name. Naming reports whether the identity exists here
+   (`Named`) or comes into being with its first vault (`AtFirstVault`, a
+   key the extension lends).
+4. A named identity kept on this browser may stay without a vault: setup
+   asks, and the identity's card offers New vault later. Otherwise the first
+   vault follows at once.
+5. Generate the vault DEK and wrap it to the identity's current app keys.
+6. Create the vault bound to that identity.
+7. Register the vault in the identity control log with `vault-registered`.
 
 **Prohibited:** create a vault from the hub before any identity exists, then
 attach an identity later; or create a first vault before the identity is

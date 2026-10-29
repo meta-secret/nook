@@ -31,7 +31,7 @@ in the same folder instead. -->
 
   function pick(identity: Identity): void {
     if (flow.isMember(identity)) {
-      flow.finish(identity, false)
+      flow.finish(identity)
       return
     }
     flow.identity = identity

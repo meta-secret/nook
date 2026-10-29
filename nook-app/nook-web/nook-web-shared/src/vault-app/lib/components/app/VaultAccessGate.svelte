@@ -25,6 +25,7 @@
   import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
   import FirstRunSyncStep from '$lib/components/login/FirstRunSyncStep.svelte'
   import FirstRunNameStep from '$lib/components/login/FirstRunNameStep.svelte'
+  import FirstRunVaultStep from '$lib/components/login/FirstRunVaultStep.svelte'
   import FirstRunJoinStep from '$lib/components/login/FirstRunJoinStep.svelte'
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
@@ -130,6 +131,7 @@
     !vault.isAuthenticated &&
       (vault.firstRun === FirstRunStage.Sync ||
         vault.firstRun === FirstRunStage.Name ||
+        vault.firstRun === FirstRunStage.Vault ||
         vault.firstRun === FirstRunStage.Joining),
   )
 
@@ -153,6 +155,8 @@
         <FirstRunSyncStep {vault} />
       {:else if vault.firstRun === FirstRunStage.Name}
         <FirstRunNameStep {vault} />
+      {:else if vault.firstRun === FirstRunStage.Vault}
+        <FirstRunVaultStep {vault} />
       {:else}
         <FirstRunJoinStep {vault} />
       {/if}
