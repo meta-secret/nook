@@ -1194,6 +1194,8 @@ export const I18N_KEYS = {
   FirstRunSyncChooseTitle: 'first_run.sync_choose_title',
   FirstRunSyncCreateBody: 'first_run.sync_create_body',
   FirstRunSyncCreateTitle: 'first_run.sync_create_title',
+  FirstRunSyncDiagramDevices: 'first_run.sync_diagram_devices',
+  FirstRunSyncDiagramLabel: 'first_run.sync_diagram_label',
   FirstRunSyncEmpty: 'first_run.sync_empty',
   FirstRunSyncSkip: 'first_run.sync_skip',
   FirstRunSyncTitle: 'first_run.sync_title',

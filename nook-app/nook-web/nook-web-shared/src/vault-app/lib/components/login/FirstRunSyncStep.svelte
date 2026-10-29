@@ -1,13 +1,19 @@
 <!--
 Second step of setup: this browser's key exists, and the sync provider shows
-the identities in its Nook folder. Rust decides each one's single action from
+the identities in its Nook folder. Before sign-in, one line and a small
+diagram say what the provider is for. Rust decides each one's single action from
 that key: a member continues and syncs, anyone else asks to join. A new
 identity can be created there instead, or kept on this browser only.
 -->
 <script lang="ts">
   import { untrack } from 'svelte'
   import { ok, type Result } from 'neverthrow'
-  import { RefreshCw } from '@lucide/svelte'
+  import {
+    Cloud,
+    Laptop,
+    MonitorSmartphone,
+    RefreshCw,
+  } from '@lucide/svelte'
   import type { NookProviderSource, ProviderIdentityChoice } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -31,6 +37,8 @@ identity can be created there instead, or kept on this browser only.
     type DriveVaultInventory,
   } from '$lib/components/provider-vaults/drive-vault-inventory'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
+  import FirstRunDiagram from './FirstRunDiagram.svelte'
+  import type { FirstRunDiagramView } from './first-run-diagram'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -67,6 +75,31 @@ identity can be created there instead, or kept on this browser only.
       ? new OAuthFilePresentation(vault.oauthFileDraft.config).oauthAccountLabel()
       : '',
   )
+  /** This device's vaults reach its other devices through the provider. */
+  const diagram = $derived<FirstRunDiagramView>({
+    label: vault.t(I18N_KEYS.FirstRunSyncDiagramLabel),
+    testId: 'first-run-sync-diagram',
+    nodes: [
+      {
+        icon: MonitorSmartphone,
+        label: vault.t(I18N_KEYS.JoinThisDevice),
+        testId: 'first-run-sync-diagram-here',
+        current: false,
+      },
+      {
+        icon: Cloud,
+        label: vault.t(I18N_KEYS.JoinNodeProvider),
+        testId: 'first-run-sync-diagram-provider',
+        current: true,
+      },
+      {
+        icon: Laptop,
+        label: vault.t(I18N_KEYS.FirstRunSyncDiagramDevices),
+        testId: 'first-run-sync-diagram-devices',
+        current: false,
+      },
+    ],
+  })
   const originSupport = resolveCurrentOAuthOriginSupport(
     BrowserOAuthProvider.GoogleDrive,
   )
@@ -124,7 +157,7 @@ identity can be created there instead, or kept on this browser only.
 </script>
 
 <section
-  class="mx-auto grid w-full max-w-2xl gap-6 py-6 sm:py-10"
+  class="mx-auto grid w-full max-w-md gap-6 py-6 sm:py-10"
   data-testid="first-run-sync-step"
 >
   <div class="grid gap-4">
@@ -137,7 +170,7 @@ identity can be created there instead, or kept on this browser only.
     <FirstRunProgress {vault} current={FirstRunStage.Sync} />
   </div>
 
-  <div class="space-y-2">
+  <div class="space-y-2 text-center">
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
@@ -145,7 +178,7 @@ identity can be created there instead, or kept on this browser only.
         accessToken ? I18N_KEYS.FirstRunSyncChooseTitle : I18N_KEYS.FirstRunSyncTitle,
       )}
     </h1>
-    <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
+    <p class="text-sm text-pretty text-muted-foreground">
       {vault.t(
         accessToken ? I18N_KEYS.FirstRunSyncChooseBody : I18N_KEYS.FirstRunSyncBody,
       )}
@@ -153,7 +186,11 @@ identity can be created there instead, or kept on this browser only.
   </div>
 
   {#if !accessToken}
+    <FirstRunDiagram {diagram} />
     <div class="nk-frame flex flex-wrap items-center gap-3 px-4 py-3">
+      <span class="nk-tile nk-tile-sm" aria-hidden="true">
+        <Cloud class="size-4" />
+      </span>
       <span class="min-w-0 flex-1 text-sm font-semibold text-foreground">
         {vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}
       </span>
@@ -213,7 +250,7 @@ identity can be created there instead, or kept on this browser only.
     {/if}
   {/if}
 
-  <div>
+  <div class="flex justify-center">
     <Button
       type="button"
       variant="ghost"

@@ -82,8 +82,9 @@ Passkey, Sync provider, Identity, and Vault.
   Your passkey → Your identity → Your vaults, say what it is for. A new
   passkey, or one made for Nook before, makes this browser's key. Back
   returns to Start.
-- **Sync provider**: Google Drive signs in, and Nook lists the identities in
-  its Nook folder. Each card has the one action Rust decides from this
+- **Sync provider**: before sign-in, one line and a small diagram (This
+  device → Sync provider → Your other devices) say what it is for. Google
+  Drive signs in, and Nook lists the identities in its Nook folder. Each card has the one action Rust decides from this
   browser's key ([setup action](../../../nook-platform/.cortex/docs/architecture/provider-identity-decisions.md#setup-action)):
   - **Continue** when the key is a member: the identity is added here and
     its provider connects and syncs; setup ends on its vault.
