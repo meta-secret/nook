@@ -35,9 +35,9 @@ function storeIdOf(yaml: string): string {
 
 // The vault page reaches GitHub through Playwright's stub. The extension's
 // offscreen session is outside Playwright's routing, so GitHub resolves
-// nowhere for it: its identity join cannot reach the provider, and that
-// failure must reach the person instead of passing for a connection.
-test('an identity join that cannot reach the provider is reported, and the approved vault stays paired', async ({
+// nowhere for it. The extension still joins the keyring: the web app adds it
+// by its own key and hands it the keyring's log, so no provider is needed.
+test('the extension joins the keyring from the approval without reaching its provider', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -65,8 +65,7 @@ test('an identity join that cannot reach the provider is reported, and the appro
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
 
-    // An identity replicated through a GitHub repo, so the extension is
-    // invited into it.
+    // A keyring replicated through a GitHub repo the extension cannot reach.
     const vaultPage = await context.newPage()
     await github.install(vaultPage, { repoName: GITHUB_REPO })
     await vaultPage.goto(simpleVaultBaseUrl)
@@ -108,19 +107,14 @@ test('an identity join that cannot reach the provider is reported, and the appro
       await authorizeDeviceProtection(connectPage)
     }
     await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    // The identity has a cloud provider, so the consent covers all of it.
-    await expect(consent).toContainText('every vault in')
+    // The extension joins the keyring, never one vault alone.
+    await expect(
+      consent.getByTestId('extension-connect-diagram-keyring'),
+    ).toBeVisible()
 
     await connectPage.getByTestId('approve-extension-device-btn').click()
-    await expect(
-      connectPage.locator('[data-extension-pairing-rejection-reason]'),
-    ).toHaveAttribute(
-      'data-extension-pairing-rejection-reason',
-      'identity-join-failed',
-      { timeout: 90_000 },
-    )
 
-    // The vault the person approved from was paired before the join.
+    // The approved vault is paired, and the keyring join did not fail.
     await expect
       .poll(
         async () =>
@@ -130,6 +124,9 @@ test('an identity join that cannot reach the provider is reported, and the appro
         { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
       )
       .toEqual([storeId])
+    await expect(
+      connectPage.locator('[data-extension-pairing-rejection-reason]'),
+    ).toHaveCount(0)
   } finally {
     await context.close()
   }
