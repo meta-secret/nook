@@ -510,7 +510,7 @@ mod private_folders {
         /// registered under that id as if the person had picked it. The same id
         /// opens the same folder again.
         pub(crate) async fn register_private_folder(&self, handle_id: &str) -> anyhow::Result<()> {
-            let fail = |error: wasm_bindgen::JsValue| anyhow::anyhow!("{error:?}");
+            let fail = |error| anyhow::anyhow!("{error:?}");
             let navigator =
                 Reflect::get(&js_sys::global(), &JsString::from("navigator")).map_err(fail)?;
             let storage = Reflect::get(&navigator, &JsString::from("storage")).map_err(fail)?;
