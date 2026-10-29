@@ -13,11 +13,11 @@
 
 use nook_core::{
     AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent, EventId,
-    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, KnownIdentityName,
-    KnownVaultName, ListedIdentityLog, ListingAppKey, LocalEventWrite, LocalVaultOccupancy,
-    ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
-    ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
-    ProviderVaultTime, StoreId,
+    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, IdentitySelection,
+    KnownIdentityName, KnownVaultName, ListedIdentityLog, ListingAppKey, LocalEventWrite,
+    LocalIdentityLog, LocalVaultOccupancy, ProviderIdentityLogEvents, ProviderVaultEvents,
+    ProviderVaultKeyholding, ProviderVaultListing, ProviderVaultListingRequest,
+    ProviderVaultObservation, ProviderVaultStanding, ProviderVaultTime, StoreId,
 };
 
 use futures_util::{StreamExt, TryStreamExt, stream};
@@ -435,6 +435,18 @@ impl BrowserHeldVaults {
                 name: identity.label.clone(),
             })
             .collect();
+        // Whether the identity in use already has its own control log here,
+        // which decides if its key may still finish another identity's join.
+        let local_log = match directory.selection() {
+            IdentitySelection::Selected(selected) => {
+                if NookDatabase::load_identity_log(selected).await?.is_empty() {
+                    LocalIdentityLog::Empty
+                } else {
+                    LocalIdentityLog::Replicated
+                }
+            }
+            IdentitySelection::Empty => LocalIdentityLog::Empty,
+        };
         let keys = BrowserVaultKeys {
             directory: &directory,
             keyring: &keyring,
@@ -443,7 +455,7 @@ impl BrowserHeldVaults {
             identity_vaults: keys.identity_vaults(),
             other_identity_vaults: keys.other_identity_vaults(),
             app_id: keys.identity_app_id(),
-            listing_key: keys.listing_key(),
+            listing_key: keys.listing_key(local_log),
             names,
             identity_names,
         })

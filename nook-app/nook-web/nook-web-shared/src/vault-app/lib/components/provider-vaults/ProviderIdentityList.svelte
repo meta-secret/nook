@@ -51,6 +51,7 @@ Picking a decision runs nothing; the page's one button applies the plan.
       case 'openedByPasskey':
       case 'joinRequested':
       case 'joinApproved':
+      case 'passkeyInUse':
         return false
     }
   }

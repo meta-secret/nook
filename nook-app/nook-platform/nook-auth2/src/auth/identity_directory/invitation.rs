@@ -78,8 +78,11 @@ pub enum FreshIdentityNamed {
 }
 
 impl IdentityRecord {
-    /// Nothing ties this local identity to an identity yet.
-    fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
+    /// Nothing ties this local identity to an identity yet, so its key can
+    /// still take an approved identity's id. A provider listing asks the same
+    /// question before it offers to finish a join.
+    #[must_use]
+    pub fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
         local_log == LocalIdentityLog::Empty
             && self.vault_deks.is_empty()
             && self.members.len() == 1

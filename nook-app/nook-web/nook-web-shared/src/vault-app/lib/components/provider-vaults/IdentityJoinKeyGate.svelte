@@ -33,7 +33,7 @@ with it. Dismissing the gate leaves the join and asks nothing.
   async function resume(wait: WaitingIdentityJoin): Promise<void> {
     const resumed = await new IdentityJoinActions(vault).resume(wait)
     if (resumed.isErr()) {
-      vault.errorMsg = vault.t(resumed.error.translationKey)
+      vault.errorMsg = resumed.error.message(vault)
       return
     }
     switch (resumed.value) {

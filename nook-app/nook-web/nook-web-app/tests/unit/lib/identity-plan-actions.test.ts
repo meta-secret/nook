@@ -250,4 +250,26 @@ describe('finishing a join a device approved', () => {
       I18N_KEYS.ProviderIdentitiesJoinDenied,
     )
   })
+  test('a refusal from Rust says what failed and why', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    const reason =
+      'This key already belongs to identity idn_local; join another identity with its own key.'
+    vi.spyOn(session.manager, 'complete_identity_join').mockRejectedValue(
+      new Error(reason),
+    )
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('finishJoining'),
+    )
+
+    const failure = ran._unsafeUnwrapErr()
+    expect(failure.translationKey).toBe(
+      I18N_KEYS.ProviderIdentitiesFinishJoinFailed,
+    )
+    const message = failure.message(session.vault)
+    expect(message).toContain(
+      session.vault.t(I18N_KEYS.ProviderIdentitiesFinishJoinFailed),
+    )
+    expect(message).toContain(reason)
+  })
 })

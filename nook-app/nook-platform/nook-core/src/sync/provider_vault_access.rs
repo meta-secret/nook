@@ -15,8 +15,8 @@
 use crate::errors::VaultResult;
 use crate::{
     AppId, IdentityDirectory, IdentitySelection, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
-    ListingAppKey, LocalEventStore, LocalEventWrite, LocalIdentityKeyring, StoreId,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    ListingAppKey, ListingLocalIdentity, LocalEventStore, LocalEventWrite, LocalIdentityKeyring,
+    LocalIdentityLog, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -67,14 +67,27 @@ impl BrowserVaultKeys<'_> {
 
     /// The identity in use and its app key, which a listing relates every
     /// identity's log to: whether it holds the identity, or asked to join it.
+    /// `local_log` is the identity in use's own control log here; with it,
+    /// or with vaults, the key can no longer take another identity's id.
     #[must_use]
-    pub fn listing_key(&self) -> Option<ListingAppKey> {
+    pub fn listing_key(&self, local_log: LocalIdentityLog) -> Option<ListingAppKey> {
         let IdentitySelection::Selected(selected) = self.directory.selection() else {
             return None;
         };
+        let fresh = self
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| &identity.identity_id == selected)
+            .is_some_and(|identity| identity.is_fresh_local_identity(local_log));
         self.identity_app_id().map(|app_id| ListingAppKey {
             app_id,
             identity_id: selected.clone(),
+            local: if fresh {
+                ListingLocalIdentity::Fresh
+            } else {
+                ListingLocalIdentity::InUse
+            },
         })
     }
 

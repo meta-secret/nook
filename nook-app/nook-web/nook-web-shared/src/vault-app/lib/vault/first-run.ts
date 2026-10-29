@@ -198,7 +198,7 @@ export class FirstRunActions {
       };
       const ran = await new IdentityPlanActions(vault).run(run);
       if (ran.isErr()) {
-        vault.errorMsg = vault.t(ran.error.translationKey);
+        vault.errorMsg = ran.error.message(vault);
         return;
       }
     }
@@ -212,7 +212,7 @@ export class FirstRunActions {
     const join = this.intent(identity);
     const asked = await new IdentityJoinActions(vault).ask(join);
     if (asked.isErr()) {
-      vault.errorMsg = vault.t(asked.error.translationKey);
+      vault.errorMsg = asked.error.message(vault);
       return;
     }
     if (asked.value !== IdentityJoinAsked.Requested) {
@@ -244,7 +244,7 @@ export class FirstRunActions {
     if (waiting.kind !== FirstRunJoinKind.Asked) return;
     const finished = await new IdentityJoinActions(vault).finish(waiting.join);
     if (finished.isErr()) {
-      vault.errorMsg = vault.t(finished.error.translationKey);
+      vault.errorMsg = finished.error.message(vault);
       return;
     }
     vault.firstRunJoin = { kind: FirstRunJoinKind.None };

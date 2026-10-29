@@ -176,7 +176,7 @@ adopting the new identity ends the current identity's session midway.
         // The new key exists: it asks to join, and the flow ends there.
         const asked = await new IdentityJoinActions(vault).resume(wait);
         close();
-        if (asked.isErr()) vault.errorMsg = vault.t(asked.error.translationKey);
+        if (asked.isErr()) vault.errorMsg = asked.error.message(vault);
       }
     }
   }

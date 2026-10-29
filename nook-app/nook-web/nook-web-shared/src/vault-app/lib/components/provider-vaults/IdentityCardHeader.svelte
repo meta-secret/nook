@@ -54,6 +54,8 @@ tag says what this browser's passkey is to the identity instead.
         return vault.t(I18N_KEYS.AccessCheckIdentityJoinDenied)
       case 'joinApproved':
         return vault.t(I18N_KEYS.AccessCheckIdentityJoinApproved)
+      case 'passkeyInUse':
+        return vault.t(I18N_KEYS.AccessCheckIdentityPasskeyInUse)
       case 'notOpened':
         return vault.t(I18N_KEYS.AccessCheckIdentityNotOpened)
       case 'unchecked':
@@ -98,6 +100,7 @@ tag says what this browser's passkey is to the identity instead.
         return true
       case 'joinRequested':
       case 'joinDenied':
+      case 'passkeyInUse':
       case 'notOpened':
       case 'unchecked':
         return false

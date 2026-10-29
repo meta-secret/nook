@@ -75,6 +75,21 @@ pub enum ProviderIdentityJoin {
     /// A device approved it: the key is a member, and this browser has not
     /// added the identity yet.
     Approved,
+    /// The key is a member, but here it already holds the identity in use,
+    /// which has its own log or vaults: one key holds one identity, so this
+    /// one cannot be added here.
+    KeyInUse,
+}
+
+/// Whether the identity in use can still take another identity's id, as
+/// finishing an approved join does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListingLocalIdentity {
+    /// Nothing ties it to an identity yet: a join a device approved finishes
+    /// here.
+    Fresh,
+    /// It holds its own log or vaults: its key cannot take another identity.
+    InUse,
 }
 
 /// The app key of the identity in use on this browser, and that identity.
@@ -83,6 +98,8 @@ pub struct ListingAppKey {
     pub app_id: AppId,
     /// The local identity the key belongs to on this browser.
     pub identity_id: IdentityId,
+    /// Whether that identity can still take another identity's id.
+    pub local: ListingLocalIdentity,
 }
 
 impl ListingAppKey {
@@ -92,7 +109,10 @@ impl ListingAppKey {
             IdentityJoinProgress::Approved if self.identity_id == state.identity_id => {
                 (true, ProviderIdentityJoin::NotAsked)
             }
-            IdentityJoinProgress::Approved => (false, ProviderIdentityJoin::Approved),
+            IdentityJoinProgress::Approved => match self.local {
+                ListingLocalIdentity::Fresh => (false, ProviderIdentityJoin::Approved),
+                ListingLocalIdentity::InUse => (false, ProviderIdentityJoin::KeyInUse),
+            },
             IdentityJoinProgress::Pending => (false, ProviderIdentityJoin::Requested),
             IdentityJoinProgress::Denied => (false, ProviderIdentityJoin::Denied),
             IdentityJoinProgress::Revoked | IdentityJoinProgress::NotRequested => {
@@ -305,6 +325,7 @@ mod tests {
         let key = ListingAppKey {
             app_id: founder,
             identity_id: log.identity_id().clone(),
+            local: ListingLocalIdentity::InUse,
         };
         let here = provider_events(&log)?.read(Some(&key))?;
         assert!(matches!(
@@ -400,6 +421,7 @@ mod tests {
         let key = ListingAppKey {
             app_id: asked.asking.app.app_id().clone(),
             identity_id: IdentityId::generate()?,
+            local: ListingLocalIdentity::Fresh,
         };
         assert_eq!(
             join_of(&asked.log, &key)?,
@@ -451,10 +473,22 @@ mod tests {
             (false, ProviderIdentityJoin::Approved)
         );
 
+        // The same member key whose identity here already has a log or
+        // vaults cannot take this identity too: nothing offers to finish.
+        let in_use = ListingAppKey {
+            local: ListingLocalIdentity::InUse,
+            ..key.clone()
+        };
+        assert_eq!(
+            join_of(&asked.log, &in_use)?,
+            (false, ProviderIdentityJoin::KeyInUse)
+        );
+
         // Once the key's local identity takes the identity's id, it is held.
         let added = ListingAppKey {
             app_id: key.app_id.clone(),
             identity_id: asked.log.identity_id().clone(),
+            local: ListingLocalIdentity::InUse,
         };
         assert_eq!(
             join_of(&asked.log, &added)?,

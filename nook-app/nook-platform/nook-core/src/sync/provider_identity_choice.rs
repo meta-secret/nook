@@ -52,6 +52,10 @@ pub enum IdentityStanding {
     /// A device approved this browser's request; finishing adds the
     /// identity here.
     JoinApproved,
+    /// Its passkey's key is a member, but here that key already holds the
+    /// identity in use, which has its own log or vaults. One key holds one
+    /// identity, so this one cannot be added on this browser.
+    PasskeyInUse,
     /// Passkeys were checked here, and none belongs to it.
     NotOpened,
     /// Nothing on this browser has opened it yet.
@@ -84,7 +88,7 @@ impl IdentityStanding {
             },
             Self::JoinRequested => IdentitySetup::Waiting,
             Self::JoinDenied | Self::NotOpened | Self::Unchecked => IdentitySetup::RequestToJoin,
-            Self::OtherIdentityHere { .. } => IdentitySetup::Unavailable,
+            Self::OtherIdentityHere { .. } | Self::PasskeyInUse => IdentitySetup::Unavailable,
         }
     }
 }
@@ -199,6 +203,7 @@ impl ProviderIdentityChoices<'_> {
         // The identity's own log says where this browser's request stands.
         match join {
             ProviderIdentityJoin::Approved => return IdentityStanding::JoinApproved,
+            ProviderIdentityJoin::KeyInUse => return IdentityStanding::PasskeyInUse,
             ProviderIdentityJoin::Requested => return IdentityStanding::JoinRequested,
             ProviderIdentityJoin::Denied => return IdentityStanding::JoinDenied,
             ProviderIdentityJoin::NotAsked => {}
@@ -221,7 +226,8 @@ impl ProviderIdentityChoices<'_> {
             (
                 IdentityStanding::ThisBrowser
                 | IdentityStanding::OtherIdentityHere { .. }
-                | IdentityStanding::JoinRequested,
+                | IdentityStanding::JoinRequested
+                | IdentityStanding::PasskeyInUse,
                 _,
             ) => Vec::new(),
             (IdentityStanding::JoinApproved, _) => {
@@ -611,6 +617,20 @@ mod tests {
                 choice.decisions,
                 vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_member_key_that_holds_the_identity_in_use_offers_nothing() -> anyhow::Result<()> {
+        // The same passkey made the identity in use here, which has vaults,
+        // and is a member of the listed one: finishing would fail, so the
+        // listing says why instead of offering it.
+        for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
+            let choice = Fixture::only_choice(ProviderIdentityJoin::KeyInUse, session)?;
+            assert_eq!(choice.standing, IdentityStanding::PasskeyInUse);
+            assert!(choice.decisions.is_empty());
+            assert_eq!(choice.setup, IdentitySetup::Unavailable);
         }
         Ok(())
     }

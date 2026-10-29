@@ -46,7 +46,31 @@ export enum IdentityPlanFailureKind {
 
 /** A decision that could not run; the plan stops there. */
 export class IdentityPlanFailure {
+  private refusal = "";
+
   constructor(readonly kind: IdentityPlanFailureKind) {}
+
+  /** The same failure with what refused it, as Rust said it. */
+  because(refusal: string): IdentityPlanFailure {
+    const failure = new IdentityPlanFailure(this.kind);
+    failure.refusal = refusal;
+    return failure;
+  }
+
+  /** What failed and, when Rust refused it, why, so the user knows what
+   * went wrong instead of only that something did. */
+  message(vault: VaultState): string {
+    const failed = vault.t(this.translationKey);
+    if (!this.refusal) return failed;
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesFailedBecause,
+      replacements: {
+        failure: failed,
+        reason: vault.resolveErrorMessage(this.refusal),
+      },
+    };
+    return vault.t(request);
+  }
 
   get translationKey(): I18nKey {
     switch (this.kind) {
@@ -81,7 +105,7 @@ class IdentityManagerCalls {
   constructor(private readonly vault: VaultState) {}
 
   /** Run one call after any queued storage work, so it reads a settled
-   * provider. Any refusal is the call's failure. */
+   * provider. Any refusal is the call's failure, carrying what Rust said. */
   async run<T>(call: ManagerCall<T>): Promise<Result<T, IdentityPlanFailure>> {
     const vault = this.vault;
     const ran = await vault.enqueueStorage<T, IdentityPlanFailure>(async () => {
@@ -89,11 +113,19 @@ class IdentityManagerCalls {
       if (admitted.isErr()) return err(call.failure);
       try {
         return ok(await call.run(admitted.value));
-      } catch {
-        return err(call.failure);
+      } catch (refusal) {
+        return err(
+          call.failure.because(
+            refusal instanceof Error ? refusal.message : String(refusal),
+          ),
+        );
       }
     });
-    return ran.mapErr(() => call.failure);
+    // A queue that refused the call (local data being deleted) is the call's
+    // failure; a refusal from Rust keeps its reason.
+    return ran.mapErr((failure) =>
+      failure instanceof IdentityPlanFailure ? failure : call.failure,
+    );
   }
 }
 

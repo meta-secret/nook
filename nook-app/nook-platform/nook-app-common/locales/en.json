@@ -1706,6 +1706,7 @@
     "identity_requested": "Join requested",
     "identity_join_denied": "Join request denied",
     "identity_join_approved": "Join approved",
+    "identity_passkey_in_use": "Its passkey is already in use here",
     "which_passkey": "Which passkey opens it?"
   },
   "devices_card": {
@@ -2630,6 +2631,7 @@
     "finish_joining": "Finish joining",
     "join_pending": "No device of this keyring has approved the request yet. List again after one does.",
     "join_denied": "A device of this keyring denied the request. You can ask again.",
-    "finish_join_failed": "The keyring could not be added to this browser."
+    "finish_join_failed": "The keyring could not be added to this browser.",
+    "failed_because": "{failure} Reason: {reason}"
   }
 }

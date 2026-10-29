@@ -152,7 +152,7 @@ decrypts in memory and changes nothing.
         const run: IdentityPlanRun = { source, planned }
         const ran = await new IdentityPlanActions(vault).run(run)
         if (ran.isErr()) {
-          vault.errorMsg = vault.t(ran.error.translationKey)
+          vault.errorMsg = ran.error.message(vault)
           await load(accessToken)
           return
         }
@@ -213,7 +213,7 @@ decrypts in memory and changes nothing.
           planned: [{ choice, decision: decide(choice) }],
         }
         const ran = await new IdentityPlanActions(vault).run(run)
-        if (ran.isErr()) vault.errorMsg = vault.t(ran.error.translationKey)
+        if (ran.isErr()) vault.errorMsg = ran.error.message(vault)
         else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
         else if (action !== FirstRunIdentityAction.AskToJoin) {
           await onConnect()

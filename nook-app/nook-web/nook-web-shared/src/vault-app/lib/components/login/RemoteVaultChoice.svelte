@@ -89,7 +89,7 @@ identity decrypts in memory and changes nothing.
       }
       const ran = await new IdentityPlanActions(vault).run(run)
       if (ran.isErr()) {
-        vault.errorMsg = vault.t(ran.error.translationKey)
+        vault.errorMsg = ran.error.message(vault)
         return
       }
       plan.clear()
