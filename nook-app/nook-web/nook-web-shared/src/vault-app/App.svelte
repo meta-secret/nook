@@ -315,9 +315,13 @@
   const showExistingVaultPasskeyOverlay = $derived(
     existingVaultUnlock.sheetShown(existingVaultNeedsDeviceUnlock),
   )
+  // A join waits for this browser's key whether its invite came in the URL
+  // or was pasted; either way the passkey asks to make or unlock it.
   const showEnrollmentPasskeyOverlay = $derived(
     pendingEnrollmentDeviceUnlock &&
-      urlEnrollmentPending &&
+      (urlEnrollmentPending ||
+        pendingEnrollmentSubmitState.kind ===
+          EnrollmentSubmitQueueKind.WaitingForDevice) &&
       !vault.deviceProtectionReady,
   )
 

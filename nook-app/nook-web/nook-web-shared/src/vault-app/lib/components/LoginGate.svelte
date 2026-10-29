@@ -89,7 +89,7 @@
   } from '$lib/vault/sentinel-login-presentation.svelte'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
-  import { SentinelGenesisPhase, type VaultApplication } from '$app-wasm'
+  import { SentinelGenesisPhase, VaultApplication } from '$app-wasm'
   import {
     ActiveVaultKind,
     LocalFolderDraftKind,
@@ -504,11 +504,13 @@
   )
   // An identity this browser holds without any vault is shown as its card,
   // with New vault, never as the first screen that creates an identity.
+  // Sentinel creates its vault from this chooser, beside the lone card that
+  // making the initiator's key brings.
   const showCreateVault = $derived(
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
-        !identityCardsShown &&
+        (!identityCardsShown || appKind === VaultApplication.Sentinel) &&
         (!hasProviders || firstScreenRequested))) &&
       !showQrOnboarding &&
       !showSetup &&

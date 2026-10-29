@@ -689,6 +689,13 @@ export class VaultState extends VaultRuntimeState {
       this,
     ).connectAndSyncStagedProvider();
     if (!this.isAuthenticated || this.errorMsg) return;
+    // Connecting a provider creates the identity's log, as it does with no
+    // vault open, so the provider receives it.
+    const ensured = await this.identityControl.refresh();
+    if (ensured.isErr()) {
+      this.errorMsg = this.t(ensured.error.translationKey);
+      return;
+    }
     const mounted = await this.identityControl.syncWithMounts();
     if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
