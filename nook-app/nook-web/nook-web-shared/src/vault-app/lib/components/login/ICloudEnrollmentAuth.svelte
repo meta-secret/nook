@@ -1,3 +1,8 @@
+<!--
+The iCloud sign-in an invite kept in iCloud needs. The join screen shows it
+only once the join reaches that invite: Apple's control is prepared here,
+the person signs in with it, then joins again.
+-->
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { iCloudOAuthSession } from '$lib/auth/icloud/oauth'
@@ -5,13 +10,11 @@
 
   let { vault }: { vault: VaultState } = $props()
 
-  let open = $state(false)
-  let prepareStarted = $state(false)
+  let attempt = $state(0)
   let prepareError = $state('')
 
   $effect(() => {
-    if (!open || prepareStarted) return
-    prepareStarted = true
+    void attempt
     prepareError = ''
     void iCloudOAuthSession
       .prepareICloudSignInControl()
@@ -30,34 +33,23 @@
 </script>
 
 <div
-  class="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-3"
+  class="space-y-2 border border-border bg-card p-3"
   data-testid="enrollment-icloud-auth"
 >
-  <button
-    type="button"
-    class="text-left text-xs font-medium text-primary hover:text-primary/80"
-    aria-expanded={open}
-    data-testid="enrollment-icloud-auth-toggle"
-    onclick={() => {
-      open = !open
-      if (!open && prepareError) {
-        prepareStarted = false
-        prepareError = ''
-      }
-    }}
-  >
-    {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentToggle)}
-  </button>
-  {#if open}
-    <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentHint)}
-    </p>
-    <div id="apple-sign-in-button"></div>
-    <div id="apple-sign-out-button" class="hidden"></div>
-    {#if prepareError}
-      <p class="text-xs text-destructive">
-        {prepareError}
-      </p>
-    {/if}
+  <p class="text-xs text-pretty text-muted-foreground">
+    {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentHint)}
+  </p>
+  <div id="apple-sign-in-button"></div>
+  <div id="apple-sign-out-button" class="hidden"></div>
+  {#if prepareError}
+    <p class="text-xs text-destructive">{prepareError}</p>
+    <button
+      type="button"
+      class="text-xs font-medium text-foreground underline underline-offset-4"
+      data-testid="enrollment-icloud-auth-retry"
+      onclick={() => (attempt += 1)}
+    >
+      {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentRetry)}
+    </button>
   {/if}
 </div>

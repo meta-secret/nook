@@ -68,8 +68,8 @@ Passkey, Sync provider, Identity, and Vault.
 
 - **Start**: "Create your identity", one short line, and one Create
   identity button. Under an "or", the other paths are equal rows, each an
-  icon, a short title, and an arrow: **Add this device to my identity**
-  opens the join screen, **Recover from a sync provider** opens recovery,
+  icon, a short title, and an arrow: **Join with an invite link** opens
+  the join screen, **Recover from a sync provider** opens recovery,
   and **Check a passkey or backup password** opens Check access. One fact
   line closes the screen.
 - **Recovery**: the provider's identities are listed as identity cards,
@@ -111,7 +111,9 @@ this device, the reader's own device filled in), where to get the invite
 (Devices → Add an app on the other device), the invite link and one-time
 passphrase, and Join. It needs a cloud sync provider. An invite link opened
 on this device lands here with the link filled in. The waiting-for-approval
-state shows on the hub after submitting.
+state shows on the hub after submitting. Signing in to the invite's provider
+is part of joining: an invite kept in iCloud shows the Apple sign-in only
+once Join reaches it, never as an option up front.
 
 ### Recovery
 

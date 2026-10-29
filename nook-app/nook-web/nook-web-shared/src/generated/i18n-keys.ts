@@ -1484,7 +1484,7 @@ export const I18N_KEYS = {
   LoginGetStartedPathsDescription: 'login.get_started_paths_description',
   LoginGetStartedPathsTitle: 'login.get_started_paths_title',
   LoginIcloudSharedEnrollmentHint: 'login.icloud_shared_enrollment_hint',
-  LoginIcloudSharedEnrollmentToggle: 'login.icloud_shared_enrollment_toggle',
+  LoginIcloudSharedEnrollmentRetry: 'login.icloud_shared_enrollment_retry',
   LoginIdentityContextBackupDirect: 'login.identity_context_backup_direct',
   LoginIdentityContextCurrent: 'login.identity_context_current',
   LoginIdentityContextCurrentKeysUnavailable: 'login.identity_context_current_keys_unavailable',

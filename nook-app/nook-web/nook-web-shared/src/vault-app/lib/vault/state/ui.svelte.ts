@@ -92,6 +92,14 @@ export enum FirstRunStage {
   Connect = "connect",
 }
 
+/** Whether joining with an invite waits for an iCloud sign-in. */
+export enum JoinICloudSignIn {
+  /** No invite asked for iCloud. */
+  NotNeeded = "not-needed",
+  /** The invite is kept in iCloud and this browser is not signed in yet. */
+  Needed = "needed",
+}
+
 /** Where a new identity created during setup is kept. */
 export enum FirstRunPlace {
   ThisBrowser = "this-browser",
@@ -121,6 +129,8 @@ export class VaultUiState {
   /** The name given to a new identity during setup; its first vault takes
    * it too. */
   firstRunVaultName = $state("");
+  /** An invite kept in iCloud asked this browser to sign in to iCloud. */
+  joinICloudSignIn = $state<JoinICloudSignIn>(JoinICloudSignIn.NotNeeded);
   /** Where a new identity created during setup is kept. */
   firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
   /** The identity this browser asked to join during setup. */
