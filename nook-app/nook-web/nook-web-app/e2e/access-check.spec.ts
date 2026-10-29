@@ -59,7 +59,7 @@ test.describe('check access', () => {
     // Back leaves the check without having changed anything.
     await page.getByTestId('access-check-back-btn').click()
     await expect(page.getByTestId('access-check-page')).toHaveCount(0)
-    await expect(page.getByTestId('identities-hub')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
   test('a backup password opens its vault and a wrong one does not', async ({

@@ -30,6 +30,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
   openVaultPage,
+  answerPasskeyPromptBeforeJoin,
 } from './helpers'
 import {
   E2eSyncProviderId,
@@ -316,6 +317,10 @@ test.describe('Google Drive authorized accounts', () => {
         .getByTestId('enrollment-password-input')
         .fill(E2E_IDENTITY_PASSPHRASE)
       await stranger.getByTestId('submit-enrollment-code-btn').click()
+      await answerPasskeyPromptBeforeJoin(
+        stranger,
+        stranger.getByTestId('vault-error'),
+      )
       await expect(stranger.getByTestId('vault-error')).toContainText(
         enLocale.errors.validation.joiner_account_mismatch,
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

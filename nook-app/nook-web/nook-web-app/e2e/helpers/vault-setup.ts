@@ -78,6 +78,37 @@ export async function startFirstRun(page: Page): Promise<void> {
   await create.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
+/** Answer the passkey prompt on screen: a browser without a key makes one
+ * (first run's passkey step, or the overlay elsewhere); one with a key
+ * unlocks it. */
+export async function answerPasskeyPrompt(page: Page): Promise<void> {
+  const createChoice = page.getByTestId('device-protection-create-new-choice')
+  if (await createChoice.isVisible()) {
+    await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  }
+  const setupBtn = page.getByTestId('device-protection-setup-btn')
+  const unlockBtn = page.getByTestId('device-protection-unlock-btn')
+  if (await setupBtn.isVisible()) {
+    await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  } else if (await unlockBtn.isVisible()) {
+    await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  }
+}
+
+/** A fresh browser makes its key the way a person does: Create identity,
+ * then first run's passkey step. Setup then waits on its sync provider
+ * step with the key ready. */
+export async function createFirstRunKey(page: Page): Promise<void> {
+  await startFirstRun(page)
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await answerPasskeyPrompt(page)
+  await expect(page.getByTestId('first-run-sync-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 /** After the passkey, setup offers a sync provider: keep the new identity
  * on this browser instead and name it. */
 export async function nameFirstIdentityOnly(
@@ -199,19 +230,7 @@ export async function createLocalVaultOnLogin(
       `Local vault creation failed: ${await vaultError.innerText()}`,
     )
   }
-  if (await passkeyOverlay.isVisible()) {
-    const createChoice = page.getByTestId('device-protection-create-new-choice')
-    if (await createChoice.isVisible()) {
-      await createChoice.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    }
-    const setupBtn = page.getByTestId('device-protection-setup-btn')
-    const unlockBtn = page.getByTestId('device-protection-unlock-btn')
-    if (await setupBtn.isVisible()) {
-      await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    } else if (await unlockBtn.isVisible()) {
-      await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    }
-  }
+  if (await passkeyOverlay.isVisible()) await answerPasskeyPrompt(page)
 
   await nameFirstIdentityIfAsked(
     page,

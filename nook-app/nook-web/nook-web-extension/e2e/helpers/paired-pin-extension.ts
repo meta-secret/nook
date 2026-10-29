@@ -195,7 +195,7 @@ export async function launchPairedPinExtension(
   if (!(await consent.isVisible())) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
     // The website's own passkey makes its key; the extension keeps its PIN.
-    await createWebsiteIdentityForConnect(simplePage)
+    await createWebsiteIdentityForConnect(simplePage, vaultName)
   }
   await simplePage.getByTestId('approve-extension-device-btn').click()
   await waitForExtensionPairingReady(

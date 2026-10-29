@@ -127,12 +127,13 @@ test.describe('identity onboarding provider picker', () => {
     await expect(personal).toBeVisible()
     await expect(work).toBeVisible()
 
+    // A Google Drive row names its account; Drive keeps one Nook folder each.
     await expect(
       page.getByTestId('onboard-provider-detail-file-personal'),
-    ).toContainText('personal.yaml')
+    ).toContainText('personal@example.com')
     await expect(
       page.getByTestId('onboard-provider-detail-file-work'),
-    ).toContainText('work.yaml')
+    ).toContainText('work@example.com')
     await expect(providerList).toContainText('personal@example.com')
     await expect(providerList).toContainText('work@example.com')
     await expect(providerList).not.toContainText(personalToken)

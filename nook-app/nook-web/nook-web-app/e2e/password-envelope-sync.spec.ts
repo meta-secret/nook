@@ -31,6 +31,7 @@ import {
   readStringProperty,
   requireRecord,
   openVaultPage,
+  answerPasskeyPromptBeforeJoin,
 } from './helpers'
 import {
   createSyncTarget,
@@ -151,11 +152,11 @@ test.describe('vault password envelope with sync provider', () => {
       .getByTestId('enrollment-password-input')
       .fill(E2E_IDENTITY_PASSPHRASE)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
-    await expect(
-      deviceB
-        .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
-        .first(),
-    ).toBeVisible({
+    const joined = deviceB
+      .locator('[data-testid="identity-vault-row"][data-state="unavailable"]')
+      .first()
+    await answerPasskeyPromptBeforeJoin(deviceB, joined)
+    await expect(joined).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 

@@ -191,7 +191,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     // The website runs its own first run: its own passkey makes its own app
     // key, and the extension is then approved as another app.
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await createWebsiteIdentityForConnect(simplePage)
+    await createWebsiteIdentityForConnect(
+      simplePage,
+      extensionApprovalVaultName,
+    )
     if (!isHostedSmoke) {
       expect(
         await simplePage.evaluate(
@@ -680,7 +683,10 @@ test('accepts the pairing grant after the extension session was locked', async (
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
-    await createWebsiteIdentityForConnect(simplePage)
+    await createWebsiteIdentityForConnect(
+      simplePage,
+      'Locked session handoff vault',
+    )
 
     // Close the offscreen session before Approve. The grant handoff must still
     // import the event log without requiring an unlocked save_auth_providers_snapshot path.

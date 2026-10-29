@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
@@ -19,6 +19,7 @@ import {
   openOnboardDevicePanel,
   submitOnboardEnrollmentCode,
 } from './onboard-invite'
+import { answerPasskeyPrompt } from './vault-setup'
 
 /** One-time passphrase e2e members share with an identity enrollment code. */
 export const E2E_IDENTITY_PASSPHRASE = 'e2e-identity-passphrase'
@@ -45,6 +46,22 @@ export async function issueIdentityEnrollmentCode(
   return { link, passphrase }
 }
 
+/** A browser that has no key yet makes it when the join asks, before the
+ * join goes on; one that has a key goes straight to the outcome. */
+export async function answerPasskeyPromptBeforeJoin(
+  page: Page,
+  outcome: Locator,
+): Promise<void> {
+  const prompt = page
+    .getByTestId('passkey-auth-overlay')
+    .or(page.getByTestId('device-protection-gate'))
+    .first()
+  await expect(prompt.or(outcome).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await prompt.isVisible()) await answerPasskeyPrompt(page)
+}
+
 /** The joining app redeems the code and signs itself into the identity. */
 export async function redeemIdentityEnrollmentCode(
   page: Page,
@@ -65,6 +82,7 @@ export async function redeemIdentityEnrollmentCode(
     .first()
   const failure = page.getByTestId('vault-error')
   try {
+    await answerPasskeyPromptBeforeJoin(page, joined.or(failure).first())
     await expect(joined.or(failure).first()).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

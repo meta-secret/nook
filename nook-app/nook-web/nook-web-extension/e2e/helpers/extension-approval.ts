@@ -3,12 +3,14 @@ import { expect, type Page } from '@playwright/test'
 /**
  * A connect page on a browser without a keyring runs the website's own first
  * run: Create identity, then the website's own passkey makes its key (the
- * protect step, or the overlay elsewhere, asks for it). The extension never
- * lends its key; the consent that follows approves the extension as another
- * app of that keyring.
+ * protect step, or the overlay elsewhere, asks for it). The keyring is kept
+ * on this browser and named, with its first vault under the given name. The
+ * extension never lends its key; the consent that follows approves the
+ * extension as another app of that keyring.
  */
 export async function createWebsiteIdentityForConnect(
   vaultPage: Page,
+  vaultName: string,
 ): Promise<void> {
   await vaultPage.getByTestId('first-run-create-identity-btn').click()
   const protect = vaultPage
@@ -22,6 +24,19 @@ export async function createWebsiteIdentityForConnect(
     )
     if (await createChoice.isVisible()) await createChoice.click()
     await vaultPage.getByTestId('device-protection-setup-btn').click()
+  }
+  const syncStep = vaultPage.getByTestId('first-run-sync-step')
+  await expect(syncStep.or(consent).first()).toBeVisible({ timeout: 30_000 })
+  if (await syncStep.isVisible()) {
+    await vaultPage.getByTestId('first-run-sync-skip').click()
+    const nameInput = vaultPage.getByTestId('first-run-identity-name-input')
+    await expect(nameInput).toBeEnabled({ timeout: 30_000 })
+    await nameInput.fill(vaultName)
+    await vaultPage.getByTestId('first-run-identity-create-btn').click()
+    const vaultStep = vaultPage.getByTestId('first-run-vault-step')
+    await expect(vaultStep).toBeVisible({ timeout: 30_000 })
+    await vaultStep.getByTestId('login-vault-name-input').fill(vaultName)
+    await vaultStep.getByTestId('login-create-device-vault-btn').click()
   }
   await expect(consent).toBeVisible({ timeout: 30_000 })
 }

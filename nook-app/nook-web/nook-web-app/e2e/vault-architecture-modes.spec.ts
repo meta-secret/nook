@@ -32,6 +32,7 @@ import {
   uniqueSecretKey,
   parseJson,
   requireRecord,
+  createFirstRunKey,
 } from './helpers'
 
 const SIMPLE_SECRET_VALUE = 'architecture-simple-secret-value'
@@ -480,10 +481,10 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(start).toContainText('Создайте свою идентичность')
+    await expect(start).toContainText('Создайте свою связку ключей')
     await expect(
       page.getByTestId('first-run-create-identity-btn'),
-    ).toContainText('Создать идентичность')
+    ).toContainText('Создать связку ключей')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -555,9 +556,7 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
     // The passkey makes the key; no vault exists until the identity is settled.
-    await page.getByTestId('first-run-create-identity-btn').click()
-    const sync = page.getByTestId('first-run-sync-step')
-    await expect(sync).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await createFirstRunKey(page)
     await expect(page.getByTestId('first-run-google-sign-in')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
 
@@ -833,6 +832,8 @@ test.describe('vault architecture modes', () => {
       ).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       })
+      // The joiner's own key seals that provider's credentials.
+      await createFirstRunKey(joiner)
       // The joiner already holds a provider for the same folder, signed in
       // as the invited account; the join reuses it.
       await seedUnscopedOauthFileProvidersForEnrollment(joiner, [
