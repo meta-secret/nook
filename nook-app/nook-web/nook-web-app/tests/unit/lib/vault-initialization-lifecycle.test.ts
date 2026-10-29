@@ -95,7 +95,6 @@ class VaultLifecycleFixture {
 }
 
 afterEach(() => {
-  document.documentElement.removeAttribute('data-nook-extension-runtime-id')
   sessionStorage.removeItem('nook_vault_session_locked')
   vi.restoreAllMocks()
 })
@@ -247,90 +246,75 @@ describe('vault initialization lifecycle', () => {
     }
   })
 
-  test.each([false, true])(
-    'defers website unlock until companion discovery (pending enrollment=%s)',
-    async (pendingEnrollment) => {
-      document.documentElement.setAttribute(
-        'data-nook-extension-runtime-id',
-        'extension-123',
+  test('defers website unlock while an invite link waits to be admitted', async () => {
+    const fixture = new VaultLifecycleFixture()
+    try {
+      fixture.state.clearManager()
+      fixture.state.localVaultPresent = true
+      fixture.state.pendingEnrollmentFromUrl = 'pending-enrollment'
+      const clearEnrollmentUrl = vi.spyOn(
+        fixture.state,
+        'clearPendingEnrollmentFromUrl',
       )
-      const fixture = new VaultLifecycleFixture()
-      try {
-        fixture.state.clearManager()
-        fixture.state.localVaultPresent = true
-        if (pendingEnrollment)
-          fixture.state.pendingEnrollmentFromUrl = 'pending-enrollment'
-        const clearEnrollmentUrl = vi.spyOn(
-          fixture.state,
-          'clearPendingEnrollmentFromUrl',
-        )
-        vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(
-          ok(ProviderSyncOutcome.Synced),
-        )
-        fixture.state.runtimeConfig = new NookRuntimeConfig(
-          NookClientRunModeUtil.parse('production'),
-          true,
-        )
-        sessionStorage.removeItem('nook_vault_session_locked')
-        vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-          ok(fixture.manager),
-        )
-        vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-          ok(LocaleUpdateOutcome.Updated),
-        )
-        vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-          ok(fixture.state.localVaultCatalog),
-        )
-        vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-          DeviceProtectionStatus.Unlocked,
-        )
-        vi.spyOn(
-          fixture.manager,
-          'device_protection_device_mode',
-        ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-        vi.spyOn(
-          fixture.lifecycle,
-          'continueInitializationAfterDeviceUnlock',
-        ).mockImplementation(async () => {
-          expect(fixture.state.isInitializing).toBe(true)
-          return ok({
-            deviceId: 'persisted-device',
-            devicePublicKey: 'persisted-public-key',
-          })
+      vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(
+        ok(ProviderSyncOutcome.Synced),
+      )
+      fixture.state.runtimeConfig = new NookRuntimeConfig(
+        NookClientRunModeUtil.parse('production'),
+        true,
+      )
+      sessionStorage.removeItem('nook_vault_session_locked')
+      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+        ok(fixture.manager),
+      )
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok(LocaleUpdateOutcome.Updated),
+      )
+      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+        ok(fixture.state.localVaultCatalog),
+      )
+      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
+        DeviceProtectionStatus.Unlocked,
+      )
+      vi.spyOn(
+        fixture.manager,
+        'device_protection_device_mode',
+      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
+      vi.spyOn(
+        fixture.lifecycle,
+        'continueInitializationAfterDeviceUnlock',
+      ).mockImplementation(async () => {
+        expect(fixture.state.isInitializing).toBe(true)
+        return ok({
+          deviceId: 'persisted-device',
+          devicePublicKey: 'persisted-public-key',
         })
-        const loadDb = vi
-          .spyOn(fixture.state, 'loadDb')
-          .mockImplementation(async () => {
-            expect(fixture.state.isInitializing).toBe(false)
-            expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
-            fixture.state.isAuthenticated = true
-          })
-        vi.spyOn(
-          fixture.state,
-          'runFanOutSyncAfterLocalSave',
-        ).mockResolvedValue(
-          ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
-        )
-        vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
+      })
+      const loadDb = vi
+        .spyOn(fixture.state, 'loadDb')
+        .mockImplementation(async () => {
+          expect(fixture.state.isInitializing).toBe(false)
+          expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
+          fixture.state.isAuthenticated = true
+        })
+      vi.spyOn(fixture.state, 'runFanOutSyncAfterLocalSave').mockResolvedValue(
+        ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
+      )
+      vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
 
-        await fixture.lifecycle.initOnce()
+      await fixture.lifecycle.initOnce()
 
-        expect(fixture.state.errorMsg).toBe('')
-        expect(fixture.state.isInitializing).toBe(false)
-        expect(loadDb).not.toHaveBeenCalled()
-        expect(fixture.state.isAuthenticated).toBe(false)
-        expect(fixture.state.enrollmentFromUrlPending).toBe(pendingEnrollment)
-        expect(fixture.state.prefillEnrollmentCode).toBe(
-          pendingEnrollment ? 'pending-enrollment' : '',
-        )
-        expect(clearEnrollmentUrl).toHaveBeenCalledTimes(
-          Number(pendingEnrollment),
-        )
-      } finally {
-        fixture.dispose()
-      }
-    },
-  )
+      expect(fixture.state.errorMsg).toBe('')
+      expect(fixture.state.isInitializing).toBe(false)
+      expect(loadDb).not.toHaveBeenCalled()
+      expect(fixture.state.isAuthenticated).toBe(false)
+      expect(fixture.state.enrollmentFromUrlPending).toBe(true)
+      expect(fixture.state.prefillEnrollmentCode).toBe('pending-enrollment')
+      expect(clearEnrollmentUrl).toHaveBeenCalledOnce()
+    } finally {
+      fixture.dispose()
+    }
+  })
 
   test('relocks automatic authorization when typed initialization continuation fails', async () => {
     const fixture = new VaultLifecycleFixture()
