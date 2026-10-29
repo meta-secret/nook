@@ -217,12 +217,12 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
 
 {#snippet vaultsIcon()}<FolderKey class="size-4" />{/snippet}
 {#snippet browserIcon()}<SlidersHorizontal class="size-4" />{/snippet}
-{#snippet cloudIcon()}<Cloud />{/snippet}
-{#snippet deviceIcon()}<MonitorSmartphone />{/snippet}
+{#snippet cloudIcon()}<Cloud class="size-4" aria-hidden="true" />{/snippet}
+{#snippet deviceIcon()}<MonitorSmartphone class="size-4" aria-hidden="true" />{/snippet}
 
-<!-- The one thing the panel most needs done, as the app's steel primary
-     card: full width, a large tile, and the largest label on the panel.
-     At most one shows at a time; every other add action is a quiet slot. -->
+<!-- The one thing the panel most needs done: the panel's only primary
+     button. It leads by contrast with the quiet slots and outline buttons
+     around it, not by size. At most one shows at a time. -->
 {#snippet leadAction(
   testId: string,
   label: string,
@@ -231,19 +231,13 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
 )}
   <Button
     type="button"
-    class="h-auto w-full justify-start gap-4 whitespace-normal p-4 text-left [&_svg]:size-5"
+    class="justify-self-start"
     data-lead="true"
     data-testid={testId}
     onclick={onSelect}
   >
-    <span
-      class="grid size-11 flex-none place-items-center border border-current/25"
-      aria-hidden="true">{@render icon()}</span
-    >
-    <span class="min-w-0 flex-1 text-base font-semibold tracking-tight"
-      >{label}</span
-    >
-    <Plus class="flex-none" aria-hidden="true" />
+    {@render icon()}
+    {label}
   </Button>
 {/snippet}
 

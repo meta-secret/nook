@@ -13,7 +13,9 @@ component and name the one action or fact the user most needs there. Build the
 change around that element.
 
 - Give the most important element the strongest treatment on the screen. Use
-  the primary variant, the most space, and the first place the eye lands.
+  the primary variant and the first place the eye lands.
+- Let it lead by contrast, not size. Keep it at the screen's ordinary control
+  size; an oversized card or slab overwhelms the screen instead.
 - Keep secondary actions and facts visibly quieter. Use outline or dashed
   controls, muted text, and later positions.
 - Show at most one leading action per panel. Never repeat an action in a second
