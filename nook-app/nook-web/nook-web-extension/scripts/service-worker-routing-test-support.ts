@@ -1,4 +1,5 @@
 import { pairedVaultsMessages } from '../src/lib/paired-vaults'
+import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -115,6 +116,13 @@ const externalPairingMessage = {
     approvedAt: routedGrant.approvedAt,
     scopes: [...routedGrant.scopes],
     providers: [],
+    keyring: {
+      kind: ExtensionKeyringGrantKind.Added,
+      identityId: 'identity-routed',
+      identityLabel: 'Personal',
+      identityEvents: ['identity-event-1'],
+      vaults: [],
+    },
   },
   eventLogRecords: [
     {
