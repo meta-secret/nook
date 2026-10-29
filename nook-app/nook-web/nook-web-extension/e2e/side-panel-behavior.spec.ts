@@ -524,7 +524,7 @@ test('with no identity the card leads with one Connect, and closing the Nook tab
     message: { kind: ExtensionConnectStepKind.Choosing },
   })
   await expect(card.getByTestId('side-panel-connect-step')).toHaveText(
-    'In the Nook tab, create your first vault or join with an identity you already use.',
+    'In the Nook tab, create your first vault or join with a keyring you already use.',
   )
   // The panel is docked on the right, so the guide points left to the page,
   // and clicking it brings the Nook tab forward.
