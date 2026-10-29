@@ -17,7 +17,6 @@ export const I18N_KEYS = {
   AccessCheckFindPasskey: 'access_check.find_passkey',
   AccessCheckFolderChoose: 'access_check.folder_choose',
   AccessCheckFolderChosen: 'access_check.folder_chosen',
-  AccessCheckIdentityColumn: 'access_check.identity_column',
   AccessCheckIdentityJoinApproved: 'access_check.identity_join_approved',
   AccessCheckIdentityJoinDenied: 'access_check.identity_join_denied',
   AccessCheckIdentityNotOpened: 'access_check.identity_not_opened',

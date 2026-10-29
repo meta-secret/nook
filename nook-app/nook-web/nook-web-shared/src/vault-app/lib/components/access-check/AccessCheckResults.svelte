@@ -1,13 +1,22 @@
 <!--
-What each checked passkey or backup password opens. Passkeys belong to
-identities, so the grid has one row per identity and one column per check:
-a passkey opens an identity, and with it every vault the identity keeps; a
-backup password opens single vaults, never the identity. An identity or
-vault opens only when Rust decrypted its key, so its name shows once any
-check opened it.
+What each checked passkey or backup password opens, one card per check in
+the order they ran. The card starts at the key that was checked and a line
+runs down from it to each keyring found there, marked by what the key does
+to it: a passkey opens a keyring, and with it every vault the keyring
+keeps; a backup password opens single vaults, never the keyring itself. A
+keyring shows its name once a passkey opened it, and always its ID (its
+three words, as on its card); a vault shows its name once a check opened
+it.
 -->
 <script lang="ts">
-  import { FolderKey, UserRound } from '@lucide/svelte'
+  import {
+    Check,
+    Fingerprint,
+    FolderKey,
+    Lock,
+    RectangleEllipsis,
+    X,
+  } from '@lucide/svelte'
   import type {
     CheckedCredential,
     CredentialCheckReport,
@@ -28,7 +37,6 @@ check opened it.
   } = $props()
 
   const checked = $derived(new CheckReports(reports))
-  const identities = $derived(checked.identities())
 
   function credentialLabel(credential: CheckedCredential): string {
     switch (credential.kind) {
@@ -52,13 +60,6 @@ check opened it.
     return vault.t(request)
   }
 
-  /** The identity's name once a passkey opened it, beside its words. */
-  function identityLabel(identity: IdentityCheck): string {
-    const words = identity.words.join('-')
-    const name = checked.identityName(identity.identityId)
-    return name ? `${name} (${words})` : words
-  }
-
   function vaultLabel({ storeId, shortId }: VaultCheck): string {
     const name = checked.vaultName(storeId)
     if (name) return name
@@ -80,115 +81,167 @@ check opened it.
     }
   }
 
-  /** One report's outcome for one identity. */
-  type CellRequest = {
-    report: CredentialCheckReport
-    identityId: string
+  const outcomeOrder: readonly IdentityCheckOutcome[] = [
+    'opens',
+    'vaultsOnly',
+    'doesNotOpen',
+  ]
+
+  /** What the key opened leads; keyrings it does not open follow. */
+  function byOutcome(
+    identities: readonly IdentityCheck[],
+  ): readonly IdentityCheck[] {
+    return outcomeOrder.flatMap((outcome) =>
+      identities.filter((identity) => identity.outcome === outcome),
+    )
   }
 
-  function cell({ report, identityId }: CellRequest): IdentityCheckOutcome {
-    const found = report.identities.find(
-      (identity) => identity.identityId === identityId,
-    )
-    return found ? found.outcome : 'doesNotOpen'
+  /** The vaults a keyring's row lists: those the key opened, by name. A
+   * keyring it does not open lists none. */
+  function openedVaults(identity: IdentityCheck): readonly VaultCheck[] {
+    switch (identity.outcome) {
+      case 'opens':
+        return identity.vaults
+      case 'vaultsOnly':
+        return identity.vaults.filter(
+          (vaultCheck) => vaultCheck.outcome.state === 'opens',
+        )
+      case 'doesNotOpen':
+        return []
+    }
   }
 </script>
 
+{#snippet credentialIcon(credential: CheckedCredential)}
+  {#if credential.kind === 'passkey'}
+    <Fingerprint class="size-4" />
+  {:else}
+    <RectangleEllipsis class="size-4" />
+  {/if}
+{/snippet}
+
+{#snippet outcomeIcon(outcome: IdentityCheckOutcome)}
+  {#if outcome === 'opens'}
+    <Check class="size-3.5" />
+  {:else if outcome === 'vaultsOnly'}
+    <FolderKey class="size-3.5" />
+  {:else}
+    <X class="size-3.5" />
+  {/if}
+{/snippet}
+
 <div class="space-y-3" data-testid="access-check-results">
   <p class="nk-subpanel-head">{vault.t(I18N_KEYS.AccessCheckResultsTitle)}</p>
-  <ul class="space-y-1" data-testid="access-check-credentials">
+  <ol class="grid gap-3" data-testid="access-check-checks">
     {#each reports as report, index (index)}
-      <li class="text-xs text-pretty" data-testid="access-check-credential">
-        <span class="font-mono text-foreground"
-          >{checkNumber(index)} · {credentialLabel(report.credential)}</span
-        >
+      <li
+        class="nk-subpanel-recessed grid gap-3 p-4"
+        data-testid="access-check-credential"
+        data-credential={report.credential.kind}
+      >
+        <header class="flex items-center gap-3">
+          <span class="nk-vault-icon text-foreground" aria-hidden="true">
+            {@render credentialIcon(report.credential)}
+          </span>
+          <span
+            class="min-w-0 flex-1 truncate text-sm font-medium text-foreground"
+            >{credentialLabel(report.credential)}</span
+          >
+          <span class="nk-label">{checkNumber(index)}</span>
+        </header>
+
+        <!-- The line from the key down to what it was tried on. -->
+        <div class="ml-3.5 border-l border-border/70 pl-5">
+          {#if report.identities.length === 0}
+            <p
+              class="py-1 text-xs text-muted-foreground"
+              data-testid="access-check-empty"
+            >
+              {vault.t(I18N_KEYS.AccessCheckNoVaults)}
+            </p>
+          {:else}
+            <ul class="grid gap-2">
+              {#each byOutcome(report.identities) as identity (identity.identityId)}
+                {@const name = checked.identityName(identity.identityId)}
+                {@const vaults = openedVaults(identity)}
+                <li
+                  class="grid gap-1.5 {identity.outcome === 'doesNotOpen'
+                    ? 'opacity-60'
+                    : ''}"
+                  data-testid="access-check-identity"
+                  data-identity-id={identity.identityId}
+                  data-outcome={identity.outcome}
+                >
+                  <div class="flex min-w-0 items-center gap-2.5">
+                    <span
+                      class="grid size-5 flex-none place-items-center border {identity.outcome ===
+                      'opens'
+                        ? 'border-success/50 text-success'
+                        : identity.outcome === 'vaultsOnly'
+                          ? 'border-warning/50 text-warning'
+                          : 'border-border text-muted-foreground'}"
+                      aria-hidden="true"
+                    >
+                      {@render outcomeIcon(identity.outcome)}
+                    </span>
+                    <span
+                      class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5"
+                      title={identity.identityId}
+                    >
+                      {#if name}
+                        <span
+                          class="truncate text-sm font-medium text-foreground"
+                          >{name}</span
+                        >
+                      {/if}
+                      <span class="nk-fingerprint flex items-center gap-1.5">
+                        <span class="nk-fingerprint-label"
+                          >{vault.t(I18N_KEYS.WorkspaceFingerprintLabel)}</span
+                        >
+                        <span class="truncate">{identity.words.join('-')}</span>
+                      </span>
+                    </span>
+                    <span
+                      class={identity.outcome === 'opens'
+                        ? 'nk-tag nk-tag-success'
+                        : identity.outcome === 'vaultsOnly'
+                          ? 'nk-tag nk-tag-warning'
+                          : 'nk-tag'}>{outcomeLabel(identity.outcome)}</span
+                    >
+                  </div>
+                  {#if vaults.length > 0}
+                    <ul class="ml-7.5 flex flex-wrap gap-1.5">
+                      {#each vaults as vaultCheck (vaultCheck.storeId)}
+                        <li
+                          class="inline-flex min-w-0 items-center gap-1.5 border border-border/60 px-2 py-0.5 text-xs text-foreground"
+                          data-testid="access-check-vault"
+                          data-store-id={vaultCheck.storeId}
+                          title={vaultCheck.storeId}
+                        >
+                          {#if vaultCheck.outcome.state === 'opens'}
+                            <FolderKey
+                              class="size-3 flex-none text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          {:else}
+                            <Lock
+                              class="size-3 flex-none text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          {/if}
+                          <span class="truncate">{vaultLabel(vaultCheck)}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
       </li>
     {/each}
-  </ul>
-  {#if identities.length === 0}
-    <p class="text-xs text-muted-foreground" data-testid="access-check-empty">
-      {vault.t(I18N_KEYS.AccessCheckNoVaults)}
-    </p>
-  {:else}
-    <!-- Checks are columns and identities are rows; the grid scrolls on its
-         own so a narrow screen never scrolls the page sideways. -->
-    <div class="overflow-x-auto" data-testid="access-check-grid">
-      <table class="w-full border-collapse text-left text-xs">
-        <thead>
-          <tr class="border-b border-border/60">
-            <th class="py-2 pr-4 font-medium text-muted-foreground" scope="col">
-              {vault.t(I18N_KEYS.AccessCheckIdentityColumn)}
-            </th>
-            {#each reports as report, index (index)}
-              <th
-                class="py-2 pr-4 font-mono font-medium whitespace-nowrap text-muted-foreground"
-                scope="col"
-                title={credentialLabel(report.credential)}
-              >
-                {checkNumber(index)}
-              </th>
-            {/each}
-          </tr>
-        </thead>
-        <tbody>
-          {#each identities as identity (identity.identityId)}
-            <tr
-              class="border-b border-border/40 align-top"
-              data-testid="access-check-identity"
-              data-identity-id={identity.identityId}
-            >
-              <th class="py-2 pr-4 font-normal" scope="row">
-                <span class="flex items-center gap-2">
-                  <UserRound
-                    class="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span
-                    class="text-sm font-medium text-foreground"
-                    title={identity.identityId}>{identityLabel(identity)}</span
-                  >
-                </span>
-                <ul class="mt-1 space-y-0.5">
-                  {#each identity.vaults as vaultCheck (vaultCheck.storeId)}
-                    <li
-                      class="nk-spec flex items-center gap-1.5"
-                      data-testid="access-check-vault"
-                      data-store-id={vaultCheck.storeId}
-                    >
-                      <FolderKey class="size-3 shrink-0" aria-hidden="true" />
-                      <span class="font-mono" title={vaultCheck.storeId}
-                        >{vaultLabel(vaultCheck)}</span
-                      >
-                    </li>
-                  {/each}
-                </ul>
-              </th>
-              {#each reports as report, index (index)}
-                {@const cellRequest: CellRequest = {
-                  report,
-                  identityId: identity.identityId,
-                }}
-                {@const outcome = cell(cellRequest)}
-                <td
-                  class="py-2 pr-4 whitespace-nowrap"
-                  data-testid="access-check-cell"
-                  data-outcome={outcome}
-                >
-                  <span
-                    class={outcome === 'opens'
-                      ? 'nk-tag nk-tag-success'
-                      : outcome === 'vaultsOnly'
-                        ? 'nk-tag nk-tag-warning'
-                        : 'nk-tag'}>{outcomeLabel(outcome)}</span
-                  >
-                </td>
-              {/each}
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  {/if}
+  </ol>
   <p class="text-[11px] text-muted-foreground" role="status">
     {vault.t(I18N_KEYS.AccessCheckResultsNote)}
   </p>

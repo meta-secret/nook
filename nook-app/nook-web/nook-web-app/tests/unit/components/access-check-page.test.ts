@@ -75,16 +75,20 @@ describe('Check access page', () => {
       kind: AccessCheckTargetKind.Source,
       source: { kind: 'thisBrowser' },
     })
-    // One row per identity: a passkey opens an identity with every vault
-    // it keeps, so the vaults are listed under it.
+    // Under the checked key, one row per keyring: a passkey opens a keyring
+    // with every vault it keeps, so those vaults are listed under it; a
+    // keyring it does not open shows only its ID.
     const [personal, other] = view.getAllByTestId('access-check-identity')
-    expect(personal?.textContent).toContain('Personal (amber-falcon-tide)')
+    expect(personal?.textContent).toContain('Personal')
+    expect(personal?.textContent).toContain('amber-falcon-tide')
     expect(personal?.textContent).toContain('Family')
     expect(other?.textContent).toContain('ripple-canvas-orbit')
-    expect(other?.textContent).toContain('othervau')
+    expect(
+      other?.querySelectorAll('[data-testid="access-check-vault"]'),
+    ).toHaveLength(0)
     const outcomes = view
-      .getAllByTestId('access-check-cell')
-      .map((cell) => cell.dataset.outcome)
+      .getAllByTestId('access-check-identity')
+      .map((row) => row.dataset.outcome)
     expect(outcomes).toEqual(['opens', 'doesNotOpen'])
     expect(view.getByTestId('access-check-credential').textContent).toContain(
       vault.t({
@@ -168,7 +172,7 @@ describe('Check access page', () => {
       'value',
       '',
     )
-    expect(view.getByTestId('access-check-cell').dataset.outcome).toBe(
+    expect(view.getByTestId('access-check-identity').dataset.outcome).toBe(
       'vaultsOnly',
     )
     expect(view.getByTestId('access-check-vault').textContent).toContain(
@@ -204,23 +208,23 @@ describe('Check access sources', () => {
     )
   })
 
-  test('results form a grid with one column per check', async () => {
+  test('each check gets its own card, in the order the checks ran', async () => {
     vi.spyOn(AccessCheckActions.prototype, 'checkPasskey').mockResolvedValue(
       ok(passkeyOpens),
     )
     const { view } = renderPage()
 
     await fireEvent.click(view.getByTestId('access-check-run'))
-    await view.findByTestId('access-check-grid')
+    await view.findByTestId('access-check-checks')
     await fireEvent.click(view.getByTestId('access-check-run'))
 
     await vi.waitFor(() =>
       expect(view.getAllByTestId('access-check-credential')).toHaveLength(2),
     )
-    const [personal] = view.getAllByTestId('access-check-identity')
-    expect(
-      personal?.querySelectorAll('[data-testid="access-check-cell"]'),
-    ).toHaveLength(2)
-    expect(view.getAllByRole('columnheader')).toHaveLength(3)
+    const [first, second] = view.getAllByTestId('access-check-credential')
+    for (const card of [first, second])
+      expect(
+        card?.querySelectorAll('[data-testid="access-check-identity"]'),
+      ).toHaveLength(2)
   })
 })

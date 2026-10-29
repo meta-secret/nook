@@ -15,13 +15,12 @@ import {
   UI_TIMEOUT_MS,
 } from './helpers'
 
-/** Run one check on the access check page and wait for its column. */
-async function runCheck(page: Page, columns: number) {
+/** Run one check on the access check page and wait for its card. */
+async function runCheck(page: Page, cards: number) {
   await page.getByTestId('access-check-run').click()
-  await expect(page.getByTestId('access-check-credential')).toHaveCount(
-    columns,
-    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-  )
+  await expect(page.getByTestId('access-check-credential')).toHaveCount(cards, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 test.describe('check access', () => {
@@ -54,10 +53,7 @@ test.describe('check access', () => {
     await expect(identity.getByTestId('access-check-vault')).toContainText(
       'Passkey vault',
     )
-    await expect(identity.getByTestId('access-check-cell')).toHaveAttribute(
-      'data-outcome',
-      'opens',
-    )
+    await expect(identity).toHaveAttribute('data-outcome', 'opens')
 
     // Back leaves the check without having changed anything.
     await page.getByTestId('access-check-back-btn').click()
@@ -88,13 +84,13 @@ test.describe('check access', () => {
     await page.getByTestId('access-check-password').fill('correct-horse-1')
     await runCheck(page, 2)
 
-    // One column per check: the wrong password, then the right one, which
-    // opens the vault but never the identity itself.
-    await expect(page.getByTestId('access-check-cell')).toHaveCount(2)
+    // One card per check: the wrong password, then the right one, which
+    // opens the vault but never the keyring itself.
+    await expect(page.getByTestId('access-check-identity')).toHaveCount(2)
     const outcomes = await page
-      .getByTestId('access-check-cell')
-      .evaluateAll((cells) =>
-        cells.map((cell) => cell.getAttribute('data-outcome')),
+      .getByTestId('access-check-identity')
+      .evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute('data-outcome')),
       )
     expect(outcomes).toEqual(['doesNotOpen', 'vaultsOnly'])
   })

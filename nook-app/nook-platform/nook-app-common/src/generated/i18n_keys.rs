@@ -16,7 +16,6 @@ pub const ACCESS_CHECK_FAILED: &str = "access_check.failed";
 pub const ACCESS_CHECK_FIND_PASSKEY: &str = "access_check.find_passkey";
 pub const ACCESS_CHECK_FOLDER_CHOOSE: &str = "access_check.folder_choose";
 pub const ACCESS_CHECK_FOLDER_CHOSEN: &str = "access_check.folder_chosen";
-pub const ACCESS_CHECK_IDENTITY_COLUMN: &str = "access_check.identity_column";
 pub const ACCESS_CHECK_IDENTITY_JOIN_APPROVED: &str = "access_check.identity_join_approved";
 pub const ACCESS_CHECK_IDENTITY_JOIN_DENIED: &str = "access_check.identity_join_denied";
 pub const ACCESS_CHECK_IDENTITY_NOT_OPENED: &str = "access_check.identity_not_opened";

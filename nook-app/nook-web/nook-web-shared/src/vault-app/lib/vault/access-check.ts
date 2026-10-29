@@ -226,16 +226,6 @@ export type CheckedVaultRow = {
 export class CheckReports {
   constructor(readonly reports: readonly CredentialCheckReport[]) {}
 
-  /** Every identity the reports cover, in first-seen order. */
-  identities(): readonly IdentityCheck[] {
-    const identities: IdentityCheck[] = [];
-    for (const report of this.reports)
-      for (const identity of report.identities)
-        if (!identities.some((seen) => seen.identityId === identity.identityId))
-          identities.push(identity);
-    return identities;
-  }
-
   /** The short id of the first checked passkey that opened an identity, or
    * empty when none did. */
   identityOpenedBy(identityId: string): string {
