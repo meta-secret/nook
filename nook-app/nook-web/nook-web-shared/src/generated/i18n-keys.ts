@@ -1891,6 +1891,7 @@ export const I18N_KEYS = {
   ProviderIdentitiesPlanRow: 'provider_identities.plan_row',
   ProviderIdentitiesPlanTitle: 'provider_identities.plan_title',
   ProviderIdentitiesRecover: 'provider_identities.recover',
+  ProviderIdentitiesSetUpHere: 'provider_identities.set_up_here',
   ProviderPickerCapabilityPersonalOnly: 'provider_picker.capability_personal_only',
   ProviderPickerCapabilityPersonalShared: 'provider_picker.capability_personal_shared',
   ProviderPickerChooseProvider: 'provider_picker.choose_provider',

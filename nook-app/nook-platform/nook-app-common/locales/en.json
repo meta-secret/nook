@@ -2614,6 +2614,7 @@
     "target_required": "Create or connect the vault folder before authorizing accounts."
   },
   "provider_identities": {
+    "set_up_here": "{identity} is set up on this browser and synced.",
     "leave": "Leave as is",
     "add": "Add to this browser",
     "recover": "Recover it",

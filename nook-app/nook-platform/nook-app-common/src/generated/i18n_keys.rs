@@ -2245,6 +2245,7 @@ pub const PROVIDER_IDENTITIES_NEW_IDENTITY_DETAIL: &str = "provider_identities.n
 pub const PROVIDER_IDENTITIES_PLAN_ROW: &str = "provider_identities.plan_row";
 pub const PROVIDER_IDENTITIES_PLAN_TITLE: &str = "provider_identities.plan_title";
 pub const PROVIDER_IDENTITIES_RECOVER: &str = "provider_identities.recover";
+pub const PROVIDER_IDENTITIES_SET_UP_HERE: &str = "provider_identities.set_up_here";
 pub const PROVIDER_PICKER_CAPABILITY_PERSONAL_ONLY: &str =
     "provider_picker.capability_personal_only";
 pub const PROVIDER_PICKER_CAPABILITY_PERSONAL_SHARED: &str =

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { VaultState } from "$lib/vault.svelte";
@@ -64,10 +65,13 @@ export class IdentityPages {
 
   /** Save the provider just set up, then copy the identity's log to every
    * provider it is kept on; a fresh identity gets its log here, as it is
-   * now in use. With none being set up, only the copy runs. */
+   * now in use. Setup then ends on the identity's card, which lists what it
+   * opens, with a line saying it is set up and synced. With none being set
+   * up, only the copy runs. */
   async connectProvider(): Promise<void> {
     const vault = this.vault;
-    if (vault.loginSetup.kind === LoginSetupKind.Active) {
+    const adding = vault.loginSetup.kind === LoginSetupKind.Active;
+    if (adding) {
       const saved = await vault.ensureProviderSaved();
       if (saved.isErr()) {
         vault.errorMsg = vault.t(saved.error.translationKey);
@@ -79,7 +83,19 @@ export class IdentityPages {
       vault.errorMsg = vault.t(ensured.error.translationKey);
       return;
     }
-    await this.syncLog();
+    if (!(await this.synced()) || !adding) return;
+    this.show(WorkspaceSection.Identities);
+    const snapshot = vault.identityControl.snapshot;
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesSetUpHere,
+      replacements: {
+        identity:
+          snapshot === false || !snapshot.identityLabel
+            ? vault.t(I18N_KEYS.WorkspaceIdentityFallback)
+            : snapshot.identityLabel,
+      },
+    };
+    vault.showSuccess(vault.t(request));
   }
 
   async removeProvider(id: string): Promise<void> {
@@ -89,8 +105,15 @@ export class IdentityPages {
   }
 
   async syncLog(): Promise<void> {
+    await this.synced();
+  }
+
+  /** Copy the identity's log to its providers; a failure says why. */
+  private async synced(): Promise<boolean> {
     const vault = this.vault;
     const mounted = await vault.identityControl.syncWithMounts();
-    if (mounted.isErr()) vault.errorMsg = vault.t(mounted.error.translationKey);
+    if (mounted.isOk()) return true;
+    vault.errorMsg = vault.t(mounted.error.translationKey);
+    return false;
   }
 }

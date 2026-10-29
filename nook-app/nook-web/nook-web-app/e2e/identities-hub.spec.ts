@@ -17,6 +17,7 @@ import {
   createSyncTarget,
   installSyncRemote,
 } from './sync-provider'
+import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 
 const WORK_PIN = '246810'
 
@@ -299,15 +300,18 @@ test.describe('an identity without a vault', () => {
     await waitForGoogleOAuthSignedIn(page)
     await page.getByTestId('connect-provider-btn').click()
 
-    // Saved, and no vault opened for it.
-    const syncPage = page.locator(
-      '[data-testid="identity-page"][data-page="sync"]',
-    )
+    // Setup ends on the hub, saying the identity is set up and synced; no
+    // vault opened for it, and its overview lists Drive.
+    await expect(page.getByTestId('identities-hub')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
-      syncPage.getByTestId('settings-provider-oauth-file'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      page.getByText(
+        enLocale.provider_identities.set_up_here.replace('{identity}', 'Solo'),
+      ),
+    ).toBeVisible()
     await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
-    await page.getByTestId('identity-page-back').click()
+    await solo.getByTestId('identity-overview-toggle').click()
     await expect(
       overview.getByTestId('identity-panel-provider-oauth-file'),
     ).toBeVisible()

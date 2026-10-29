@@ -5,6 +5,7 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 import { IdentityPages } from '$lib/vault/identity-pages'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
@@ -117,6 +118,13 @@ describe('IdentityPages', () => {
 
     expect(order).toEqual(['save', 'log', 'sync'])
     expect(vault.errorMsg).toBe('')
+    // Setup ends on the identity's card, saying what changed.
+    expect(vault.identityPage).toBe(WorkspaceSection.Identities)
+    const done: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesSetUpHere,
+      replacements: { identity: vault.t(I18N_KEYS.WorkspaceIdentityFallback) },
+    }
+    expect(vault.successMsg).toBe(vault.t(done))
   })
 
   test('with nothing being set up, connecting only copies the identity log', async () => {
@@ -129,10 +137,14 @@ describe('IdentityPages', () => {
       .spyOn(vault.identityControl, 'syncWithMounts')
       .mockResolvedValue(ok(IdentityActionOutcome.Completed))
 
-    await new IdentityPages(vault).connectProvider()
+    const pages = new IdentityPages(vault)
+    pages.show(WorkspaceSection.Sync)
+    await pages.connectProvider()
 
     expect(save).not.toHaveBeenCalled()
     expect(sync).toHaveBeenCalledOnce()
+    expect(vault.identityPage).toBe(WorkspaceSection.Sync)
+    expect(vault.successMsg).toBe('')
   })
 
   test('a provider that cannot be saved stops before any copy and says why', async () => {
