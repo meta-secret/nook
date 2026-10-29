@@ -2353,6 +2353,7 @@ export const I18N_KEYS = {
   WorkspaceCardNoVaults: 'workspace.card_no_vaults',
   WorkspaceCardVaults: 'workspace.card_vaults',
   WorkspaceCardsLabel: 'workspace.cards_label',
+  WorkspaceFingerprintLabel: 'workspace.fingerprint_label',
   WorkspaceFingerprintTitle: 'workspace.fingerprint_title',
   WorkspaceFirstIdentityDescription: 'workspace.first_identity.description',
   WorkspaceFirstIdentityStatus: 'workspace.first_identity.status',

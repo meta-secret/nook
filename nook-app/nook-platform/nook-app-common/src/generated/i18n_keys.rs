@@ -2737,6 +2737,7 @@ pub const WORKSPACE_CARD_KEY_COUNT_SINGULAR: &str = "workspace.card_key_count_si
 pub const WORKSPACE_CARD_NO_VAULTS: &str = "workspace.card_no_vaults";
 pub const WORKSPACE_CARD_VAULTS: &str = "workspace.card_vaults";
 pub const WORKSPACE_CARDS_LABEL: &str = "workspace.cards_label";
+pub const WORKSPACE_FINGERPRINT_LABEL: &str = "workspace.fingerprint_label";
 pub const WORKSPACE_FINGERPRINT_TITLE: &str = "workspace.fingerprint_title";
 pub const WORKSPACE_FIRST_IDENTITY_DESCRIPTION: &str = "workspace.first_identity.description";
 pub const WORKSPACE_FIRST_IDENTITY_STATUS: &str = "workspace.first_identity.status";

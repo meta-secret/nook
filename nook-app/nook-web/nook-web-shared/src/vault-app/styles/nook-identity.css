@@ -566,6 +566,15 @@
     white-space: nowrap;
     color: color-mix(in oklch, var(--muted-foreground) 80%, transparent);
   }
+  /* Names the words as the keyring's ID: a small squared stamp before them. */
+  .nk-fingerprint-label {
+    flex: none;
+    padding: 0 0.3125rem;
+    border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+    font-size: 0.5625rem;
+    line-height: 0.875rem;
+    letter-spacing: 0.14em;
+  }
   .nk-vault-row {
     display: flex;
     align-items: center;

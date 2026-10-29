@@ -26,7 +26,6 @@ panel sits inside the card, which then spans the full row.
     ChevronRight,
     Fingerprint,
     FolderKey,
-    Hash,
     Lock,
     LayoutDashboard,
     LockOpen,
@@ -421,7 +420,8 @@ panel sits inside the card, which then spans the full row.
       ></span>
     {/if}
     <!-- Name and state on one line; the badge says how the identity unlocks
-         (its key count in its title), and the words tell identities apart. -->
+         (its key count in its title), and its ID, three words, tells keyrings
+         apart: every device of a keyring shows the same ones. -->
     <header class="relative flex items-center gap-3 px-4 py-3.5 sm:px-5">
       <span class="relative inline-flex flex-none" title={keysLine}>
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
@@ -466,11 +466,13 @@ panel sits inside the card, which then spans the full row.
         </div>
         {#if card.fingerprint.length > 0}
           <p
-            class="nk-fingerprint mt-1 flex items-center gap-1"
+            class="nk-fingerprint mt-1 flex items-center gap-1.5"
             title={vault.t(I18N_KEYS.WorkspaceFingerprintTitle)}
             data-testid="identity-card-words"
           >
-            <Hash class="size-3 flex-none" aria-hidden="true" />
+            <span class="nk-fingerprint-label"
+              >{vault.t(I18N_KEYS.WorkspaceFingerprintLabel)}</span
+            >
             <span class="truncate">{card.fingerprint.join('-')}</span>
           </p>
         {/if}
