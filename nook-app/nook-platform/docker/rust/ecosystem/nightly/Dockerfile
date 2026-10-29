@@ -30,6 +30,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
+# Dylint's example lints pin a nightly of their own, and their driver lints
+# the WASM crates too, so that nightly needs rustc-dev and the WASM target.
+ENV DYLINT_EXAMPLES_NIGHTLY=nightly-2026-08-20
+RUN rustup toolchain install "${DYLINT_EXAMPLES_NIGHTLY}" \
+      --component llvm-tools-preview,rustc-dev \
+    && rustup target add --toolchain "${DYLINT_EXAMPLES_NIGHTLY}" wasm32-unknown-unknown
 COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
 COPY nook-app/nook-platform/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
