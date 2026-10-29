@@ -161,8 +161,14 @@ describe('pairing the vaults an identity gained, on unlock', () => {
     ])
 
     expect(result).toEqual({ ok: true, paired: 2, awaitingGrant: 1 })
-    const [refresh, firstConnect, secondConnect, ...rest] = fixture.sent
+    const [refresh, firstConnect, secondConnect, resync, ...rest] = fixture.sent
     expect(rest).toHaveLength(0)
+    // The vault the extension already holds is read again through the
+    // keyring's provider, so it syncs without the web app open.
+    expect(resync?.payload).toMatchObject({
+      vaultStoreId: 'store_aaaaaaaaaaa',
+      source: { kind: 'mount', mountProviderId: 'github-family' },
+    })
     expect(refresh?.type).toBe(
       ExtensionSessionMessageType.RefreshIdentityVaults,
     )
@@ -178,7 +184,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
       vaultStoreId: 'store_nnnnnnnnnnn',
     })
     const [later] = fixture.imported
-    expect(fixture.imported).toHaveLength(2)
+    expect(fixture.imported).toHaveLength(3)
     // No credential travels: the session keeps the identity's provider.
     expect(later?.providers).toEqual([])
     expect(later?.syncProviderCount).toBe(1)

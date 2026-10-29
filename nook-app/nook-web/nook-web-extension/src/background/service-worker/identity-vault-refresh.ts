@@ -158,6 +158,23 @@ export class IdentityVaultRefresh {
         const imported = await pairing.pair(vault)
         if (!imported.ok) return imported
       }
+      // The keyring's other apps keep writing to the vaults the extension
+      // already holds: each unlock reads them again through the keyring's
+      // provider, so the extension syncs without the web app open.
+      for (const paired of grants) {
+        if (paired.deviceId !== deviceId) continue
+        if (reply.toPair.includes(paired.vaultStoreId)) continue
+        const vault: IdentityVaultPair = {
+          vaultStoreId: paired.vaultStoreId,
+          source: { kind: IdentityVaultSourceKind.Mount, mountProviderId },
+          template,
+          identityLabel,
+          providers: [],
+          syncProviderCount: reply.mountProviderIds.length,
+        }
+        const synced = await pairing.pair(vault)
+        if (!synced.ok) return synced
+      }
     }
     return {
       ok: true,

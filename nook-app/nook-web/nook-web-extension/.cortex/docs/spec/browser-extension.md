@@ -1511,10 +1511,15 @@ phone or computer is.
   with every sync provider that replicates it. It then pairs each vault the
   identity grants it and it holds no grant for. Rust
   plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
-  granted it yet are reported, not skipped. A failed refresh or vault shows an
-  error and pairs nothing further.
+  granted it yet are reported, not skipped. The same refresh reads every
+  vault the extension already holds again through the keyring's first
+  provider it can open, so changes from the keyring's other apps arrive
+  without the web app open. A failed refresh or vault shows an error and
+  pairs nothing further.
   - The refresh reply names provider ids only. The identity's provider stays
     saved in the session, so no credential travels to the service worker.
+  - A local folder belongs to the web app's origin, so the extension opens
+    no vault through one.
 - **One key per identity:** The identity directory binds one app key to one
   local identity, as on the web app. Rust decides which key connects the next
   identity (`IdentityDirectory::connection_key`):
