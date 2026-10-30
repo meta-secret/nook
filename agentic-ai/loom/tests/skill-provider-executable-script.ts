@@ -11,9 +11,9 @@ export class SkillProviderExecutableScriptScenario {
     private readonly request: ExecutableProviderReferenceInspection,
   ) {}
 
-  static executableScriptViolatesBoundary(
+  static async executableScriptViolatesBoundary(
     inspection: ExecutableScriptInspection,
-  ): boolean {
+  ): Promise<boolean> {
     if (SHELL_SOURCE.test(inspection.path)) {
       const referenceInspection: ExecutableProviderReferenceInspection = {
         path: inspection.path,
@@ -49,7 +49,7 @@ export class SkillProviderExecutableScriptScenario {
       sources: inspection.sources,
     };
     const packageBoundedSource =
-      SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
+      await SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
         specialization,
       );
     const localDataSpecialization = {
@@ -59,7 +59,7 @@ export class SkillProviderExecutableScriptScenario {
       sources: inspection.sources,
     };
     const localDataBoundedSource =
-      SkillProviderBoundedPackageLoaderScenario.specializeBoundedLocalDataLoaders(
+      await SkillProviderBoundedPackageLoaderScenario.specializeBoundedLocalDataLoaders(
         localDataSpecialization,
       );
     const artifactSpecialization = {
@@ -69,7 +69,7 @@ export class SkillProviderExecutableScriptScenario {
       sources: inspection.sources,
     };
     const boundedSource =
-      SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+      await SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
         artifactSpecialization,
       );
     const finiteNodeLoaderInspection = {
@@ -77,7 +77,7 @@ export class SkillProviderExecutableScriptScenario {
       source: boundedSource,
     };
     const finiteNodeLoaderSource =
-      SkillProviderFiniteNodeLoaderScenario.specializeClosedFiniteNodeLoaders(
+      await SkillProviderFiniteNodeLoaderScenario.specializeClosedFiniteNodeLoaders(
         finiteNodeLoaderInspection,
       );
     const runtimeSource = TYPESCRIPT_SOURCE.test(inspection.path)
@@ -91,7 +91,7 @@ export class SkillProviderExecutableScriptScenario {
           : inspection.path,
       source: runtimeSource,
     };
-    return SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+    return await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
       sourceInspection,
     );
   }

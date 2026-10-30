@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
+/* eslint-disable @typescript-eslint/no-restricted-types, nook-syntax/no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import { Schema } from "effect";
 import {
   GoogleLoginContinuationMessageType,

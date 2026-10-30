@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
 
 import { posix } from 'node:path';
 
@@ -99,7 +99,7 @@ export class TypeScriptCommandExpression {
     const [spread] = ts.isArrayLiteralExpression(args) ? args.elements : [];
     if (
       input === false ||
-      !ts.isParameter(input.declaration) ||
+      !ts.isParameterDeclaration(input.declaration) ||
       !ts.isMethodDeclaration(input.declaration.parent) ||
       !SkillProviderTypescriptRequireScenario.isRunCommandDeclaration(
         input.declaration.parent,
@@ -160,7 +160,10 @@ export class TypeScriptCommandExpression {
         member = binding.member;
       }
     }
-    if (parameter === false || !ts.isParameter(parameter.declaration))
+    if (
+      parameter === false ||
+      !ts.isParameterDeclaration(parameter.declaration)
+    )
       return false;
     return TypeScriptCommandExpression.parameterMemberCallValues([
       parameter,
@@ -179,7 +182,7 @@ export class TypeScriptCommandExpression {
     readonly StaticText[] | false {
     if (visited.has(parameter.declaration)) return false;
     const declaration = parameter.declaration;
-    if (!ts.isParameter(declaration)) return false;
+    if (!ts.isParameterDeclaration(declaration)) return false;
     const owner = declaration.parent;
     if (!ts.isFunctionDeclaration(owner) || !owner.name) return false;
     const ownerBinding = model.bindings.find(
@@ -211,7 +214,7 @@ export class TypeScriptCommandExpression {
         if (value === false) invalid = true;
         else values.push(...value);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(owner.getSourceFile());
     return invalid || values.length === 0 ? false : values;
@@ -253,7 +256,7 @@ export class TypeScriptCommandExpression {
       argument,
       resolved.text,
     ]);
-    return binding !== false && ts.isParameter(binding.declaration)
+    return binding !== false && ts.isParameterDeclaration(binding.declaration)
       ? TypeScriptCommandExpression.parameterMemberCallValues([
           binding,
           member,

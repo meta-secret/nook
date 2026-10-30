@@ -1,4 +1,7 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import { ExecutableSkillSource } from '../src/executable-skills/source-policy.ts';
 
@@ -7,21 +10,19 @@ export class CortexArticleAdapterBoundaryScenario {
     private readonly request: CortexArticleAdapterInspection,
   ) {}
 
-  static cortexArticleAdapterViolatesBoundary(
+  static async cortexArticleAdapterViolatesBoundary(
     inspection: CortexArticleAdapterInspection,
-  ): boolean {
+  ): Promise<boolean> {
     return new CortexArticleAdapterBoundaryScenario(inspection).execute();
   }
 
-  private execute(): boolean {
+  private async execute(): Promise<boolean> {
     const inspection = this.request;
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: inspection.path,
+      kind: TypeScriptSourceKind.TypeScript,
+      text: inspection.source,
+    });
     const retained = [...inspection.source];
     let invalid = false;
     const visit = (node: ts.Node): void => {
@@ -53,7 +54,7 @@ export class CortexArticleAdapterBoundaryScenario {
       ) {
         invalid = true;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     if (invalid) return true;
@@ -63,7 +64,7 @@ export class CortexArticleAdapterBoundaryScenario {
       source: retained.join(''),
     };
     try {
-      ExecutableSkillSource.analyze(analysisRequest);
+      await ExecutableSkillSource.analyze(analysisRequest);
       return false;
     } catch {
       return true;
@@ -79,7 +80,7 @@ export class CortexArticleAdapterBoundaryScenario {
     if (specifier === 'node:fs') {
       return (
         !clause.name &&
-        !clause.isTypeOnly &&
+        !TypeScriptSyntax.isTypeOnlyImportClause(clause) &&
         Boolean(
           clause.namedBindings &&
           ts.isNamedImports(clause.namedBindings) &&
@@ -91,16 +92,19 @@ export class CortexArticleAdapterBoundaryScenario {
         )
       );
     }
-    if (specifier === 'mdast') return clause.isTypeOnly;
+    if (specifier === 'mdast')
+      return TypeScriptSyntax.isTypeOnlyImportClause(clause);
     if (specifier === 'remark-gfm' || specifier === 'remark-parse') {
       return Boolean(
-        clause.name && !clause.namedBindings && !clause.isTypeOnly,
+        clause.name &&
+        !clause.namedBindings &&
+        !TypeScriptSyntax.isTypeOnlyImportClause(clause),
       );
     }
     if (specifier === 'unified') {
       return Boolean(
         !clause.name &&
-        !clause.isTypeOnly &&
+        !TypeScriptSyntax.isTypeOnlyImportClause(clause) &&
         clause.namedBindings &&
         ts.isNamedImports(clause.namedBindings) &&
         clause.namedBindings.elements.length === 1 &&
@@ -111,7 +115,8 @@ export class CortexArticleAdapterBoundaryScenario {
         ),
       );
     }
-    if (specifier === DOCUMENT_SOURCE_IMPORT) return clause.isTypeOnly;
+    if (specifier === DOCUMENT_SOURCE_IMPORT)
+      return TypeScriptSyntax.isTypeOnlyImportClause(clause);
     return (
       specifier === APPLICATION_IMPORT ||
       specifier === DOMAIN_IMPORT ||

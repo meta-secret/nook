@@ -1,6 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
-import * as ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import {
+  TypeScriptProgram,
+  TypeScriptSourceKind,
+} from '../lib/typescript/program.ts';
 
 export enum LoomSourcePolicyViolationKind {
   UnownedFunction = 'unowned-function',
@@ -32,21 +36,25 @@ export class LoomSourcePolicy {
   private readonly root: string;
   private readonly ownershipPaths: readonly string[];
 
-  static audit(request: AuditLoomSourcePolicyRequest): LoomSourcePolicyReport {
+  static async audit(
+    request: AuditLoomSourcePolicyRequest,
+  ): Promise<LoomSourcePolicyReport> {
     return new LoomSourcePolicy(request).execute();
   }
 
-  private execute(): LoomSourcePolicyReport {
+  private async execute(): Promise<LoomSourcePolicyReport> {
     const violations: LoomSourcePolicyViolation[] = [];
-    for (const path of this.sourceFiles()) {
-      const source = readFileSync(path, 'utf8');
-      const sourceFile = ts.createSourceFile(
-        path,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-        this.scriptKind(path),
-      );
+    const paths = this.sourceFiles();
+    const sourceFiles = await TypeScriptProgram.parse(
+      paths.map((path) => ({
+        fileName: path,
+        kind: this.sourceKind(path),
+        text: readFileSync(path, 'utf8'),
+      })),
+    );
+    for (const [index, path] of paths.entries()) {
+      const sourceFile = sourceFiles[index];
+      if (!sourceFile) throw new Error(`TypeScript did not parse ${path}.`);
       this.inspectNode({
         sourceFile,
         node: sourceFile,
@@ -92,16 +100,16 @@ export class LoomSourcePolicy {
     return this.ownershipPaths.includes(path);
   }
 
-  private scriptKind(path: string): ts.ScriptKind {
+  private sourceKind(path: string): TypeScriptSourceKind {
     switch (extname(path)) {
       case '.js':
-        return ts.ScriptKind.JS;
+        return TypeScriptSourceKind.JavaScript;
       case '.mjs':
-        return ts.ScriptKind.JS;
+        return TypeScriptSourceKind.JavaScript;
       case '.cjs':
-        return ts.ScriptKind.JS;
+        return TypeScriptSourceKind.JavaScript;
       default:
-        return ts.ScriptKind.TS;
+        return TypeScriptSourceKind.TypeScript;
     }
   }
 
@@ -109,7 +117,7 @@ export class LoomSourcePolicy {
     const { sourceFile, node, ancestors, violations } = request;
     if (request.ownershipEnabled && this.isUnownedFunction({ node, ancestors }))
       violations.push(this.unownedFunctionViolation({ sourceFile, node }));
-    ts.forEachChild(node, (child) =>
+    node.forEachChild((child) =>
       this.inspectNode({
         sourceFile,
         node: child,
@@ -180,7 +188,7 @@ type UnownedFunctionViolationRequest = Readonly<{
 class LoomSourcePolicyCommand {
   private constructor() {}
 
-  static execute(args: readonly string[]): void {
+  static async execute(args: readonly string[]): Promise<void> {
     const candidate = args[0];
     const root = resolve(
       typeof candidate === 'string' ? candidate : process.cwd(),
@@ -196,7 +204,7 @@ class LoomSourcePolicyCommand {
     const repositoryRoot = resolve(root, '..', '..');
     const preflightExitCode =
       LoomSourcePolicyCommand.runPreflightStateGate(repositoryRoot);
-    const report = LoomSourcePolicy.audit({
+    const report = await LoomSourcePolicy.audit({
       root,
       ownershipPaths: LoomSourcePolicyCommand.changedSourcePaths({
         repositoryRoot,
@@ -283,4 +291,5 @@ type ChangedSourcePathsRequest = Readonly<{
   readonly baseline: string;
 }>;
 
-if (import.meta.main) LoomSourcePolicyCommand.execute(process.argv.slice(2));
+if (import.meta.main)
+  await LoomSourcePolicyCommand.execute(process.argv.slice(2));

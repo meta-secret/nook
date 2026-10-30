@@ -47,16 +47,16 @@ export class SkillTaskLoopScenario {
       packageManager: 'bun@1.3.14',
       scripts: {
         check: 'tsc --noEmit',
-        lint: 'eslint .',
+        lint: 'oxlint',
         format:
-          'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+          'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
         'format:check':
-          'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+          'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
         test: 'bun test tests',
         verify:
           'bun run format:check && bun run lint && bun run check && bun test tests',
       },
-      devDependencies: { typescript: '6.0.3' },
+      devDependencies: { typescript: '7.0.2' },
     } as const;
     const manifest = {
       schemaVersion: 1,
@@ -68,12 +68,10 @@ export class SkillTaskLoopScenario {
       limits: { requestBytes: 1024, resultBytes: 1024 },
     } as const;
     const sharedConfigs = await Promise.all(
-      ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map(
-        async (name) => ({
-          name,
-          source: await readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
-        }),
-      ),
+      ['.prettierrc', 'tsconfig.json', '.oxlintrc.json'].map(async (name) => ({
+        name,
+        source: await readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
+      })),
     );
     await Promise.all([
       writeFile(
@@ -119,7 +117,7 @@ export class SkillTaskLoopScenario {
       workspaces[workspacePath] = {
         name: `@nook/${fixture.slug}-skill`,
         version: '0.1.0',
-        devDependencies: { typescript: '6.0.3' },
+        devDependencies: { typescript: '7.0.2' },
       };
     }
     const lock = {

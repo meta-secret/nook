@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import { posix } from 'node:path';
 
@@ -7,19 +9,19 @@ import { SkillProviderTypescriptRequireScenario } from './skill-provider-typescr
 export class SkillProviderGithubScriptExecScenario {
   private constructor(private readonly request: string) {}
 
-  static githubScriptExecCommands(source: string): readonly string[] {
+  static async githubScriptExecCommands(
+    source: string,
+  ): Promise<readonly string[]> {
     return new SkillProviderGithubScriptExecScenario(source).execute();
   }
 
-  private execute(): readonly string[] {
+  private async execute(): Promise<readonly string[]> {
     const source = this.request;
-    const file = ts.createSourceFile(
-      'github-script.ts',
-      source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const file = await TypeScriptTestSources.parse({
+      fileName: 'github-script.ts',
+      kind: TypeScriptSourceKind.TypeScript,
+      text: source,
+    });
     const bindings: ExecBinding[] = [];
     const collect = (node: ts.Node): void => {
       if (SkillProviderGithubScriptExecScenario.declaresExec(node)) {
@@ -28,7 +30,7 @@ export class SkillProviderGithubScriptExecScenario {
         };
         bindings.push(binding);
       }
-      ts.forEachChild(node, collect);
+      node.forEachChild(collect);
     };
     collect(file);
     const allowedOwners = new Set<ts.Identifier>();
@@ -69,7 +71,7 @@ export class SkillProviderGithubScriptExecScenario {
         !SkillProviderGithubScriptExecScenario.isBound([node, bindings])
       )
         throw new Error('Dynamic github-script exec client use is forbidden.');
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(file);
     return commands;
@@ -232,7 +234,7 @@ export class SkillProviderGithubScriptExecScenario {
 
   static declaresExec(node: ts.Node): boolean {
     if (
-      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
+      (ts.isVariableDeclaration(node) || ts.isParameterDeclaration(node)) &&
       SkillProviderGithubScriptExecScenario.bindingNameContainsExec(node.name)
     )
       return true;
@@ -252,13 +254,12 @@ export class SkillProviderGithubScriptExecScenario {
 
   static bindingNameContainsExec(name: ts.BindingName): boolean {
     if (ts.isIdentifier(name)) return name.text === 'exec';
-    return name.elements.some(
-      (element) =>
-        ts.isBindingElement(element) &&
-        SkillProviderGithubScriptExecScenario.bindingNameContainsExec(
-          element.name,
-        ),
-    );
+    return name.elements.some((element) => {
+      if (!ts.isBindingElement(element) || !element.name) return false;
+      return SkillProviderGithubScriptExecScenario.bindingNameContainsExec(
+        element.name,
+      );
+    });
   }
 
   static bindingScope(node: ts.Node): ts.Node {

@@ -6,6 +6,10 @@ import {
   untrustedInputAdapterRules,
 } from "./typed-api-rules.js";
 
+// The compile-contract gate for `.svelte` files: `eslint.config.js` lints
+// only Svelte, and `oxlint.compile-contracts.config.ts` plus
+// `named-success-contract-check.ts` apply the same contracts to TypeScript.
+
 const unrelatedWebLintRulesDisabled = webEslintConfig.map((configuration) => ({
   ...configuration,
   ...(configuration.rules

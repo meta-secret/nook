@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
 
 import { createHash } from 'node:crypto';
 
@@ -128,7 +128,7 @@ export class SkillProviderTypescriptBindingsScenario {
     for (;;) {
       if (
         ts.isBlock(node) ||
-        ts.isFunctionLike(node) ||
+        ts.isSignatureDeclaration(node) ||
         ts.isSourceFile(node)
       ) {
         const binding = request.model.bindings.find(
@@ -151,7 +151,7 @@ export class SkillProviderTypescriptBindingsScenario {
     for (;;) {
       if (
         (ts.isBlock(node) ||
-          ts.isFunctionLike(node) ||
+          ts.isSignatureDeclaration(node) ||
           ts.isSourceFile(node)) &&
         model.bindings.some(
           (candidate) => candidate.scope === node && candidate.name === name,
@@ -180,7 +180,7 @@ export class SkillProviderTypescriptBindingsScenario {
     ) {
       const declarationList = node.parent;
       for (const element of node.name.elements) {
-        if (!ts.isIdentifier(element.name)) continue;
+        if (!element.name || !ts.isIdentifier(element.name)) continue;
         const [defaulted1 = false] = [node.initializer];
         const [defaulted2 = element.name] = [element.propertyName];
         const [defaulted3 = element.name] = [element.propertyName];
@@ -218,7 +218,7 @@ export class SkillProviderTypescriptBindingsScenario {
       request.target.push(binding);
       return;
     }
-    if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
+    if (ts.isParameterDeclaration(node) && ts.isIdentifier(node.name)) {
       const binding: LexicalBinding = {
         capability: false,
         constant: false,

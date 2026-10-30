@@ -43,15 +43,15 @@ const EXECUTABLE_PACKAGE_PATH = new RegExp(
 const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
 const CONFIG_HASHES = {
   prettier: '5342eced2ab6be14cc6716a764019f8a037da054a5c10c5c69ed428a43f739cb',
-  eslint: '1c3f37f67a81962fce4aafbb0a3dd5c1bad59d20a3d24f75fb82fc3ba9ee6664',
+  oxlint: '760678d7e6ac460fc089dee3e8bf954f04f7089d7fc5aeb13857bd8d92ae572e',
   typescript:
     'f0d5319cc53de48b772e88245a5939b503289a965097d3dc5f37c385d7505aa8',
 } as const;
 
 const REQUIRED_PROJECT_FILES = [
   '.gitignore',
+  '.oxlintrc.json',
   '.prettierrc',
-  'eslint.config.js',
   'executable-skill.json',
   'package.json',
   'tsconfig.json',
@@ -59,11 +59,11 @@ const REQUIRED_PROJECT_FILES = [
 
 const PACKAGE_SCRIPTS = {
   check: 'tsc --noEmit',
-  lint: 'eslint .',
+  lint: 'oxlint',
   format:
-    'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+    'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
   'format:check':
-    'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+    'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
   test: 'bun test tests',
   verify:
     'bun run format:check && bun run lint && bun run check && bun test tests',
@@ -444,7 +444,7 @@ export class ExecutableSkillRepository {
       `${skillPackage.scriptsRoot}/package.json`,
       `${skillPackage.scriptsRoot}/executable-skill.json`,
       `${skillPackage.scriptsRoot}/tsconfig.json`,
-      `${skillPackage.scriptsRoot}/eslint.config.js`,
+      `${skillPackage.scriptsRoot}/.oxlintrc.json`,
       `${skillPackage.scriptsRoot}/.prettierrc`,
     ];
     const documentsAreSafe = documentPaths.every((required) => {
@@ -595,14 +595,14 @@ export class ExecutableSkillRepository {
       path.join(repoRoot, scriptsRoot, 'tsconfig.json'),
       'utf8',
     );
-    const eslint = readFileSync(
-      path.join(repoRoot, scriptsRoot, 'eslint.config.js'),
+    const oxlint = readFileSync(
+      path.join(repoRoot, scriptsRoot, '.oxlintrc.json'),
       'utf8',
     );
     for (const [configPath, source, expected] of [
       [`${scriptsRoot}/.prettierrc`, prettier, CONFIG_HASHES.prettier],
       [`${scriptsRoot}/tsconfig.json`, tsconfig, CONFIG_HASHES.typescript],
-      [`${scriptsRoot}/eslint.config.js`, eslint, CONFIG_HASHES.eslint],
+      [`${scriptsRoot}/.oxlintrc.json`, oxlint, CONFIG_HASHES.oxlint],
     ] as const) {
       const actual = new Bun.CryptoHasher('sha256')
         .update(source)
@@ -845,11 +845,7 @@ export class ExecutableSkillRepository {
       Object.values(value).every(
         (entry) =>
           typeof entry === 'string' &&
-          // An exact release, or an npm alias of one (TypeScript 7 as
-          // `@typescript/native`).
-          /^(?:npm:(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+@)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(
-            entry,
-          ),
+          /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(entry),
       )
     );
   }

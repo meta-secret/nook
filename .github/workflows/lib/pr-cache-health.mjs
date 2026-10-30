@@ -272,6 +272,8 @@ export class PrCacheHealth {
             fs.readFileSync(entryPath, "utf8"),
           );
           CacheTelemetry.validateTelemetryRecord(parsed);
+          // validateTelemetryRecord rejected every other shape above.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           telemetry.push(/** @type {CacheTelemetryRecord} */ (parsed));
         }
       }

@@ -8,17 +8,14 @@
     "zod": "4.6.7"
   },
   "scripts": {
-    "lint": "eslint .github infra eslint.config.mjs",
+    "lint": "oxlint .github infra",
     "check": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@types/bun": "1.4.4",
     "@types/node": "26.6.6",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "10.13.0",
-    "globals": "17.13.0",
-    "typescript": "6.0.3",
-    "typescript-eslint": "8.72.1"
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "typescript": "7.0.2"
   }
 }

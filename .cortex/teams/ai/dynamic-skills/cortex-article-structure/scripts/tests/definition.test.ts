@@ -61,11 +61,11 @@ test('keeps the independent package commands development-only', async () => {
   );
   const expectedScripts: Readonly<Record<string, string>> = {
     check: 'tsc --noEmit',
-    lint: 'eslint .',
+    lint: 'oxlint',
     format:
-      'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+      'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
     'format:check':
-      'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+      'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
     test: 'bun test tests',
     verify:
       'bun run format:check && bun run lint && bun run check && bun test tests',

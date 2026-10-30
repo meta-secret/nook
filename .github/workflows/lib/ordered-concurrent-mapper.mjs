@@ -12,7 +12,7 @@ export class OrderedConcurrentMapper {
    */
   async map(items, mapper) {
     /** @type {Output[]} */
-    const results = new Array(items.length);
+    const results = [];
     const entries = items.entries();
     const workerCount = Math.min(this.concurrency, items.length);
     await Promise.all(

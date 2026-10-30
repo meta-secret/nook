@@ -397,7 +397,8 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   Dylint, deterministic ecosystem tests, fuzz and Kani concurrently.
   Each target waits for its own Docker preparation stages.
 - Web static checks and unit tests derive from the same prepared source stage.
-  The five surfaces and ESLint run concurrently through Task; each surface
+  The five surfaces and the web lint (oxlint, the success-contract check, and
+  ESLint for Svelte) run concurrently through Task; each surface
   retains its complete TypeScript and Svelte checks. Vitest uses available CPU
   parallelism by default. The repository variable `VITEST_MAX_WORKERS` can set
   an explicit worker count, such as `8`, for the PR test target.

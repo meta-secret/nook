@@ -2,7 +2,13 @@ import { posix } from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import {
+  TypeScriptCheckerFacts,
+  TypeScriptNameMeaning,
+  type TypeScriptSymbolFact,
+} from '../src/lib/typescript/checker-facts.ts';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
 
 import {
   type DynamicEvaluatorInspection,
@@ -16,11 +22,11 @@ import {
 export class SkillProviderBoundaryScenario {
   private constructor(private readonly request: ts.Node) {}
 
-  static violatesSkillProviderBoundary(
+  static async violatesSkillProviderBoundary(
     inspection: SkillProviderImportInspection,
-  ): boolean {
+  ): Promise<boolean> {
     const context =
-      SkillProviderTypeContextScenario.createSkillProviderTypeContext(
+      await SkillProviderTypeContextScenario.createSkillProviderTypeContext(
         inspection,
       );
     let boundaryViolation = false;
@@ -94,7 +100,7 @@ export class SkillProviderBoundaryScenario {
         boundaryViolation = true;
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(context.sourceFile);
     return boundaryViolation;
@@ -171,7 +177,7 @@ export class SkillProviderBoundaryScenario {
   static isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
     const clause = node.importClause;
     if (!clause) return false;
-    if (clause.isTypeOnly) return true;
+    if (TypeScriptSyntax.isTypeOnlyImportClause(clause)) return true;
     if (clause.name || !clause.namedBindings) return false;
     return (
       ts.isNamedImports(clause.namedBindings) &&
@@ -202,7 +208,7 @@ export class SkillProviderBoundaryScenario {
   static literalModuleReference(
     expression: ts.Expression,
   ): RuntimeModuleReference {
-    return ts.isStringLiteralLike(expression)
+    return ts.isStringLiteralLikeNode(expression)
       ? { kind: RuntimeModuleReferenceKind.Literal, specifier: expression.text }
       : UNBOUNDED_RUNTIME_MODULE_REFERENCE;
   }
@@ -269,7 +275,7 @@ export class SkillProviderBoundaryScenario {
     );
     if (loaderRoot === false && !importMeta && !processRoot) return false;
     const key = node.argumentExpression;
-    if (!key || !ts.isStringLiteralLike(key)) return true;
+    if (!key || !ts.isStringLiteralLikeNode(key)) return true;
     if (processRoot) return AMBIENT_PROCESS_LOADER_MEMBERS.has(key.text);
     if (importMeta || loaderRoot === AmbientModuleLoaderRoot.Module) {
       return key.text === AmbientLoaderMember.Require;
@@ -309,7 +315,7 @@ export class SkillProviderBoundaryScenario {
     if (
       ts.isParenthesizedExpression(expression) ||
       ts.isAsExpression(expression) ||
-      ts.isTypeAssertionExpression(expression) ||
+      ts.isTypeAssertion(expression) ||
       ts.isNonNullExpression(expression) ||
       ts.isSatisfiesExpression(expression)
     ) {
@@ -370,7 +376,7 @@ export class SkillProviderBoundaryScenario {
     }
     const member = ts.isPropertyAccessExpression(root)
       ? root.name.text
-      : ts.isStringLiteralLike(root.argumentExpression)
+      : ts.isStringLiteralLikeNode(root.argumentExpression)
         ? root.argumentExpression.text
         : false;
     if (
@@ -419,7 +425,7 @@ export class SkillProviderBoundaryScenario {
       }
       const parent = node.parent;
       if (
-        ts.isPartOfTypeNode(node) ||
+        TypeScriptSyntax.isPartOfTypeNode(node) ||
         SkillProviderBoundaryScenario.isDeclarationName(node) ||
         SkillProviderBoundaryScenario.isNonComputedMemberDeclarationName(node)
       ) {
@@ -452,7 +458,7 @@ export class SkillProviderBoundaryScenario {
     if (
       (ts.isParenthesizedExpression(parent) ||
         ts.isAsExpression(parent) ||
-        ts.isTypeAssertionExpression(parent) ||
+        ts.isTypeAssertion(parent) ||
         ts.isNonNullExpression(parent) ||
         ts.isSatisfiesExpression(parent)) &&
       parent.expression === expression
@@ -490,9 +496,9 @@ export class SkillProviderBoundaryScenario {
     if (
       !ts.isPropertyAssignment(parent) &&
       !ts.isPropertyDeclaration(parent) &&
-      !ts.isPropertySignature(parent) &&
+      !ts.isPropertySignatureDeclaration(parent) &&
       !ts.isMethodDeclaration(parent) &&
-      !ts.isMethodSignature(parent) &&
+      !ts.isMethodSignatureDeclaration(parent) &&
       !ts.isGetAccessorDeclaration(parent) &&
       !ts.isSetAccessorDeclaration(parent)
     ) {
@@ -510,14 +516,12 @@ export class SkillProviderBoundaryScenario {
     const cached = cache.get(request.node);
     if (cached) return cached.value;
     const locationSymbol = request.checker.getSymbolAtLocation(request.node);
-    const resolvedSymbol = request.checker.resolveName(
-      request.node.text,
-      request.node,
-      ts.SymbolFlags.Value,
-      false,
-    );
+    const resolvedSymbol = request.checker.resolveName({
+      identifier: request.node,
+      meaning: TypeScriptNameMeaning.Value,
+    });
     const symbols = [locationSymbol, resolvedSymbol].filter(
-      (symbol): symbol is ts.Symbol => Boolean(symbol),
+      (symbol): symbol is TypeScriptSymbolFact => Boolean(symbol),
     );
     const hasResolvedLocal = symbols.some((symbol) =>
       symbol.declarations?.some(
@@ -554,7 +558,7 @@ export class SkillProviderBoundaryScenario {
         found = true;
         return;
       }
-      ts.forEachChild(candidate, visit);
+      candidate.forEachChild(visit);
     };
     visit(node.getSourceFile());
     return found;
@@ -578,7 +582,7 @@ export class SkillProviderBoundaryScenario {
   static isNamedGlobalThisDeclaration(node: ts.Node): boolean {
     return (
       (ts.isVariableDeclaration(node) ||
-        ts.isParameter(node) ||
+        ts.isParameterDeclaration(node) ||
         ts.isBindingElement(node) ||
         ts.isFunctionDeclaration(node) ||
         ts.isClassDeclaration(node)) &&
@@ -591,7 +595,7 @@ export class SkillProviderBoundaryScenario {
   }
 
   static runtimeDeclarationScope(declaration: ts.Node): ts.Node | false {
-    if (ts.isParameter(declaration)) return declaration.parent;
+    if (ts.isParameterDeclaration(declaration)) return declaration.parent;
     if (
       ts.isFunctionDeclaration(declaration) ||
       ts.isClassDeclaration(declaration)
@@ -603,12 +607,12 @@ export class SkillProviderBoundaryScenario {
     let variable = declaration;
     while (
       !ts.isVariableDeclaration(variable) &&
-      !ts.isParameter(variable) &&
+      !ts.isParameterDeclaration(variable) &&
       !ts.isSourceFile(variable)
     ) {
       variable = variable.parent;
     }
-    if (ts.isParameter(variable)) return variable.parent;
+    if (ts.isParameterDeclaration(variable)) return variable.parent;
     if (!ts.isVariableDeclaration(variable)) return false;
     const owner = variable.parent;
     if (ts.isCatchClause(owner)) return owner.block;
@@ -637,7 +641,7 @@ export class SkillProviderBoundaryScenario {
     while (
       !ts.isSourceFile(candidate) &&
       !ts.isModuleBlock(candidate) &&
-      !ts.isFunctionLike(candidate)
+      !ts.isSignatureDeclaration(candidate)
     ) {
       candidate = candidate.parent;
     }
@@ -660,18 +664,22 @@ export class SkillProviderBoundaryScenario {
   static isRuntimeValueDeclaration(declaration: ts.Node): boolean {
     if (SkillProviderBoundaryScenario.hasDeclareModifier(declaration))
       return false;
-    if (ts.isImportClause(declaration)) return !declaration.isTypeOnly;
+    if (ts.isImportClause(declaration))
+      return !TypeScriptSyntax.isTypeOnlyImportClause(declaration);
     if (ts.isImportSpecifier(declaration)) {
-      return !declaration.isTypeOnly && !declaration.parent.parent.isTypeOnly;
+      return (
+        !declaration.isTypeOnly &&
+        !TypeScriptSyntax.isTypeOnlyImportClause(declaration.parent.parent)
+      );
     }
     if (ts.isNamespaceImport(declaration))
-      return !declaration.parent.isTypeOnly;
+      return !TypeScriptSyntax.isTypeOnlyImportClause(declaration.parent);
     if (ts.isImportEqualsDeclaration(declaration))
       return !declaration.isTypeOnly;
     return (
       ts.isVariableDeclaration(declaration) ||
       ts.isBindingElement(declaration) ||
-      ts.isParameter(declaration) ||
+      ts.isParameterDeclaration(declaration) ||
       (ts.isFunctionDeclaration(declaration) && Boolean(declaration.body)) ||
       ts.isFunctionExpression(declaration) ||
       ts.isClassDeclaration(declaration) ||
@@ -685,7 +693,7 @@ export class SkillProviderBoundaryScenario {
     const parent = node.parent;
     return (
       ((ts.isVariableDeclaration(parent) ||
-        ts.isParameter(parent) ||
+        ts.isParameterDeclaration(parent) ||
         ts.isFunctionDeclaration(parent) ||
         ts.isClassDeclaration(parent) ||
         ts.isInterfaceDeclaration(parent) ||
@@ -725,7 +733,8 @@ export class SkillProviderBoundaryScenario {
   static isErasedRequireDeclarationName(node: ts.Identifier): boolean {
     const parent = node.parent;
     if (
-      (ts.isPropertySignature(parent) || ts.isMethodSignature(parent)) &&
+      (ts.isPropertySignatureDeclaration(parent) ||
+        ts.isMethodSignatureDeclaration(parent)) &&
       parent.name === node
     ) {
       return true;
@@ -759,10 +768,9 @@ export class SkillProviderBoundaryScenario {
     let candidate = node;
     while (!ts.isSourceFile(candidate)) {
       if (
-        ts.canHaveModifiers(candidate) &&
-        ts
-          .getModifiers(candidate)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
+        TypeScriptSyntax.modifiers(candidate).some(
+          (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword,
+        )
       ) {
         return true;
       }
@@ -844,17 +852,17 @@ export type RuntimeModuleReference =
 export type RuntimeModuleArguments = ts.NodeArray<ts.Expression>;
 
 export type BoundaryNodeInspection = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
 export type AmbientIdentifierInspection = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Identifier;
 };
 
 const AMBIENT_IDENTIFIER_RESULTS = new WeakMap<
-  ts.TypeChecker,
+  TypeScriptCheckerFacts,
   WeakMap<ts.Identifier, AmbientIdentifierCacheEntry>
 >();
 

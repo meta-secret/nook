@@ -132,18 +132,20 @@ describe('module expert audit', () => {
       }
 
       expect(
-        InternalApiConsumerScope.discoverInternalApiConsumerPaths(fixtureRoot),
+        await InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+          fixtureRoot,
+        ),
       ).toEqual(['nook-app/nook-web/example/src/Included.svelte']);
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('accepts the complete read-only project catalog', () => {
+  test('accepts the complete read-only project catalog', async () => {
     const auditArgs: AuditModuleExpertsArgs = {
       repoRoot: ModuleExpertsAuditFixture.REPO_ROOT,
     };
-    const report = ModuleExpertContract.auditModuleExperts(auditArgs);
+    const report = await ModuleExpertContract.auditModuleExperts(auditArgs);
 
     expect(report.findings).toEqual([]);
     expect(report.profileCount).toBe(9);
@@ -345,9 +347,9 @@ describe('module expert audit', () => {
     }
   });
 
-  test('rejects missing, broad, generated, or reordered internal API binding scope', () => {
+  test('rejects missing, broad, generated, or reordered internal API binding scope', async () => {
     const discoveredConsumerPaths =
-      InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+      await InternalApiConsumerScope.discoverInternalApiConsumerPaths(
         ModuleExpertsAuditFixture.REPO_ROOT,
       );
     expect(discoveredConsumerPaths).toEqual(
@@ -487,10 +489,10 @@ describe('module expert audit', () => {
       );
       const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
       const reportWithVendorProfile =
-        ModuleExpertContract.auditModuleExperts(auditArgs);
+        await ModuleExpertContract.auditModuleExperts(auditArgs);
       await rm(join(fixtureRoot, '.codex'), removeOptions);
       const reportWithoutVendorProfiles =
-        ModuleExpertContract.auditModuleExperts(auditArgs);
+        await ModuleExpertContract.auditModuleExperts(auditArgs);
 
       expect(reportWithVendorProfile).toEqual(reportWithoutVendorProfiles);
     } finally {

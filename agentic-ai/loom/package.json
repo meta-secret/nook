@@ -17,24 +17,22 @@
     "structural-experts": "bun run src/structural-experts/cli.ts",
     "precheck": "bun run source-policy && bun run cortex-audit",
     "check": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "oxlint",
     "source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from \"$LOOM_OWNERSHIP_FROM\"",
     "cortex-audit": "bun run src/cli.ts --default cortexAudit",
-    "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
-    "format:check": "prettier --config .prettierrc --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
+    "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc .oxlintrc.json",
+    "format:check": "prettier --config .prettierrc --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc .oxlintrc.json",
     "test": "bun test",
     "verify": "bun run format:check && bun run lint && bun run check && bun test"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@types/bun": "1.4.4",
     "@types/diff": "8.0.0",
     "@types/mdast": "4.0.4",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "10.13.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "prettier": "3.9.10",
-    "typescript": "6.0.3",
-    "typescript-eslint": "8.72.1"
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "@nats-io/nats-core": "^3.4.0",

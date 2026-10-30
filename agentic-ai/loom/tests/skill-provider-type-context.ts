@@ -1,20 +1,29 @@
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import ts from 'typescript';
+import type * as ts from 'typescript/unstable/ast';
+
+import { TypeScriptCheckerFacts } from '../src/lib/typescript/checker-facts.ts';
+import { TypeScriptIncludeScan } from '../src/lib/typescript/include-scan.ts';
+import {
+  TypeScriptProgram,
+  TypeScriptSourceKind,
+} from '../src/lib/typescript/program.ts';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
 
 export class SkillProviderTypeContextScenario {
   private constructor(
     private readonly request: SkillProviderSourceInspection,
   ) {}
 
-  static createSkillProviderTypeContext(
+  /**
+   * The checked view of one source. A context depends only on its path and
+   * text, and the scenarios inspect the same sources repeatedly, so each
+   * distinct snippet is compiled once per test process.
+   */
+  static async createSkillProviderTypeContext(
     inspection: SkillProviderSourceInspection,
-  ): SkillProviderTypeContext {
-    return new SkillProviderTypeContextScenario(inspection).execute();
-  }
-
-  private execute(): SkillProviderTypeContext {
-    const inspection = this.request;
+  ): Promise<SkillProviderTypeContext> {
     if (
       SkillProviderTypeContextScenario.isCurrentProductionSource(inspection)
     ) {
@@ -22,56 +31,54 @@ export class SkillProviderTypeContextScenario {
         inspection,
       );
     }
-    const sourceFile = ts.createSourceFile(
-      inspection.filePath,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
-    const compilerHost = ts.createCompilerHost(BOUNDARY_COMPILER_OPTIONS);
-    const hostFileExists = compilerHost.fileExists.bind(compilerHost);
-    const hostGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
-    const hostReadFile = compilerHost.readFile.bind(compilerHost);
-    const isCompilerLib = (fileName: string): boolean =>
-      dirname(fileName).startsWith(TYPESCRIPT_LIB_ROOT);
-    compilerHost.fileExists = (fileName) =>
-      fileName === inspection.filePath ||
-      (isCompilerLib(fileName) && hostFileExists(fileName));
-    compilerHost.getSourceFile = (fileName) => {
-      if (fileName === inspection.filePath) return sourceFile;
-      if (!isCompilerLib(fileName)) {
-        throw new Error(`Unexpected boundary type dependency: ${fileName}`);
+    const key = `${inspection.filePath}\0${inspection.source}`;
+    const cached = SNIPPET_CONTEXTS.get(key);
+    if (cached) return cached;
+    const context = new SkillProviderTypeContextScenario(inspection).execute();
+    SNIPPET_CONTEXTS.set(key, context);
+    return context;
+  }
+
+  private async execute(): Promise<SkillProviderTypeContext> {
+    const inspection = this.request;
+    // An isolated program: the inspected source and the default libraries,
+    // with no repository file, module, or type root reachable.
+    const program = await TypeScriptTestSources.open({
+      compilerOptions: BOUNDARY_COMPILER_OPTIONS,
+      sources: [
+        {
+          fileName: inspection.filePath,
+          kind: TypeScriptSourceKind.TypeScript,
+          text: inspection.source,
+        },
+      ],
+    });
+    try {
+      const [sourceFile] = await program.sourceFiles();
+      if (!sourceFile) {
+        throw new Error(
+          `Boundary source was not compiled: ${inspection.filePath}`,
+        );
       }
-      const cached = TYPESCRIPT_LIB_SOURCES.get(fileName);
-      if (cached) return cached;
-      const loaded = hostGetSourceFile(fileName, ts.ScriptTarget.ES2022);
-      if (loaded) TYPESCRIPT_LIB_SOURCES.set(fileName, loaded);
-      return loaded;
-    };
-    compilerHost.readFile = (fileName) =>
-      fileName === inspection.filePath
-        ? inspection.source
-        : isCompilerLib(fileName)
-          ? hostReadFile(fileName)
-          : '';
-    const rootNames = [inspection.filePath];
-    const program = ts.createProgram(
-      rootNames,
-      BOUNDARY_COMPILER_OPTIONS,
-      compilerHost,
-    );
-    return { checker: program.getTypeChecker(), sourceFile };
+      const checker = await TypeScriptCheckerFacts.collect({
+        checker: program.checker,
+        names: true,
+        sourceFile,
+        types: true,
+      });
+      return { checker, sourceFile };
+    } finally {
+      await program.close();
+    }
   }
 
   static isCurrentProductionSource(
     inspection: SkillProviderSourceInspection,
   ): boolean {
     if (!inspection.filePath.startsWith(PRODUCTION_LOOM_PREFIX)) return false;
-    const diskSource = ts.sys.readFile(
-      join(REPOSITORY_ROOT, inspection.filePath),
-    );
-    if (typeof diskSource !== 'string') return false;
+    const diskPath = join(REPOSITORY_ROOT, inspection.filePath);
+    if (!existsSync(diskPath)) return false;
+    const diskSource = readFileSync(diskPath, 'utf8');
     return (
       SkillProviderTypeContextScenario.normalizedSource(diskSource) ===
       SkillProviderTypeContextScenario.normalizedSource(inspection.source)
@@ -82,44 +89,73 @@ export class SkillProviderTypeContextScenario {
     return source.replace(/^#![^\n]*(?:\n|$)/u, '');
   }
 
-  static productionSourceContext(
+  static async productionSourceContext(
     inspection: SkillProviderSourceInspection,
-  ): SkillProviderTypeContext {
-    SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
-    if (productionBoundaryProgram === false)
-      throw new Error('Production boundary program was not initialized.');
+  ): Promise<SkillProviderTypeContext> {
+    const program =
+      await SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
     const absolutePath = join(REPOSITORY_ROOT, inspection.filePath);
-    const sourceFile = productionBoundaryProgram.getSourceFile(absolutePath);
-    const programSource = sourceFile
-      ? SkillProviderTypeContextScenario.normalizedSource(sourceFile.text)
-      : false;
-    if (
-      !sourceFile ||
-      programSource !==
-        SkillProviderTypeContextScenario.normalizedSource(inspection.source)
-    ) {
+    const cached = PRODUCTION_CONTEXTS.get(absolutePath);
+    if (cached) {
+      SkillProviderTypeContextScenario.assertCurrentProductionSource({
+        inspection,
+        sourceFile: cached.sourceFile,
+      });
+      return cached;
+    }
+    const sourceFile = await program.sourceFile(absolutePath);
+    if (!sourceFile) {
       throw new Error(
         `Production boundary source is stale: ${inspection.filePath}`,
       );
     }
-    return {
-      checker: productionBoundaryProgram.getTypeChecker(),
+    SkillProviderTypeContextScenario.assertCurrentProductionSource({
+      inspection,
       sourceFile,
-    };
+    });
+    const checker = await TypeScriptCheckerFacts.collect({
+      checker: program.checker,
+      names: true,
+      sourceFile,
+      types: true,
+    });
+    const context: SkillProviderTypeContext = { checker, sourceFile };
+    PRODUCTION_CONTEXTS.set(absolutePath, context);
+    return context;
   }
 
-  static warmProductionBoundaryProgram(): void {
-    if (productionBoundaryProgram !== false) return;
-    const rootNames = ts.sys.readDirectory(
-      join(LOOM_ROOT, 'src'),
-      PRODUCTION_SOURCE_EXTENSIONS,
-      PRODUCTION_SOURCE_EXCLUDES,
-      PRODUCTION_SOURCE_INCLUDES,
-    );
-    productionBoundaryProgram = ts.createProgram(
-      rootNames,
-      BOUNDARY_COMPILER_OPTIONS,
-    );
+  /** Opens, once per test process, the program over Loom's production sources. */
+  static async warmProductionBoundaryProgram(): Promise<TypeScriptProgram> {
+    if (productionBoundaryProgram === false) {
+      const rootFiles = TypeScriptIncludeScan.scan({
+        extensions: PRODUCTION_SOURCE_EXTENSIONS,
+        includes: PRODUCTION_SOURCE_INCLUDES,
+        root: join(LOOM_ROOT, 'src'),
+      });
+      productionBoundaryProgram = TypeScriptProgram.openDisk({
+        compilerOptions: BOUNDARY_COMPILER_OPTIONS,
+        rootFiles,
+      });
+    }
+    return productionBoundaryProgram;
+  }
+
+  private static assertCurrentProductionSource(request: {
+    readonly inspection: SkillProviderSourceInspection;
+    readonly sourceFile: ts.SourceFile;
+  }): void {
+    if (
+      SkillProviderTypeContextScenario.normalizedSource(
+        request.sourceFile.text,
+      ) !==
+      SkillProviderTypeContextScenario.normalizedSource(
+        request.inspection.source,
+      )
+    ) {
+      throw new Error(
+        `Production boundary source is stale: ${request.inspection.filePath}`,
+      );
+    }
   }
 }
 
@@ -130,7 +166,7 @@ export type SkillProviderSourceInspection = {
 };
 
 export type SkillProviderTypeContext = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly sourceFile: ts.SourceFile;
 };
 
@@ -140,22 +176,17 @@ const REPOSITORY_ROOT = join(LOOM_ROOT, '../..');
 
 const PRODUCTION_LOOM_PREFIX = 'agentic-ai/loom/src/';
 
-const BOUNDARY_COMPILER_OPTIONS: ts.CompilerOptions = {
+const BOUNDARY_COMPILER_OPTIONS = {
   allowJs: true,
   allowImportingTsExtensions: true,
-  module: ts.ModuleKind.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  module: 'esnext',
+  moduleResolution: 'bundler',
+  noEmit: true,
   strict: true,
-  target: ts.ScriptTarget.ES2022,
+  target: 'es2022',
   typeRoots: [join(LOOM_ROOT, 'node_modules/@types')],
   types: ['bun'],
-};
-
-const TYPESCRIPT_LIB_ROOT = dirname(
-  ts.getDefaultLibFilePath(BOUNDARY_COMPILER_OPTIONS),
-);
-
-const TYPESCRIPT_LIB_SOURCES = new Map<string, ts.SourceFile>();
+} as const;
 
 export const PRODUCTION_SOURCE_EXTENSIONS = [
   '.ts',
@@ -168,8 +199,10 @@ export const PRODUCTION_SOURCE_EXTENSIONS = [
   '.cjs',
 ] as const;
 
-const PRODUCTION_SOURCE_EXCLUDES: string[] = [];
-
 const PRODUCTION_SOURCE_INCLUDES = ['**/*'];
 
-let productionBoundaryProgram: ts.Program | false = false;
+const PRODUCTION_CONTEXTS = new Map<string, SkillProviderTypeContext>();
+
+const SNIPPET_CONTEXTS = new Map<string, Promise<SkillProviderTypeContext>>();
+
+let productionBoundaryProgram: Promise<TypeScriptProgram> | false = false;

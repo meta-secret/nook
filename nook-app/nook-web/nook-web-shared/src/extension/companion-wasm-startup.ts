@@ -1,4 +1,4 @@
-/* eslint-disable nook-typed-api/no-raw-object-arguments, no-restricted-syntax -- The startup decoder narrows imported WASM module and transport values at their boundary. */
+/* eslint-disable nook-typed-api/no-raw-object-arguments, nook-syntax/no-restricted-syntax -- The startup decoder narrows imported WASM module and transport values at their boundary. */
 export enum CompanionWasmStartupStage {
   Embedded = "embedded",
   ExtensionOrigin = "extension-origin",

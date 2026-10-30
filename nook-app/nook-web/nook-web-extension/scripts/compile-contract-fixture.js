@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Type-aware ESLint builds one TypeScript program per process and keeps it.
+// Oxlint and the TypeScript 7 success-contract check build a fresh program
+// per run. Type-aware ESLint, which lints the Svelte cases, builds one
+// TypeScript program per process and keeps it.
 // A file in a folder made after that program exists is found only if
 // typescript-eslint notices the new folder, which a loaded release container
 // sometimes misses ("not found in any of the provided project(s)"). These

@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
 export type AuthoredCommandDeclaration =
   ts.FunctionDeclaration | ts.MethodDeclaration;
 
@@ -34,7 +34,7 @@ export class SkillProviderTypescriptRequireScenario {
     while (
       parent.parent &&
       !ts.isBlock(parent) &&
-      !ts.isFunctionLike(parent) &&
+      !ts.isSignatureDeclaration(parent) &&
       !ts.isSourceFile(parent)
     )
       parent = parent.parent;

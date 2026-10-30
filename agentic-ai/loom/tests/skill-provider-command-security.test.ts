@@ -7,6 +7,7 @@ import { SkillProviderConfigBoundaryScenario } from './skill-provider-config-bou
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
+import { SettledRejection } from './settled-rejection.ts';
 
 export class SkillProviderCommandSecurityScenario {
   private constructor(private readonly request: string) {}
@@ -32,9 +33,9 @@ export class SkillProviderCommandSecurityScenario {
 
 const PROTECTED = '.agents/skills/example-skill/scripts/src/application.ts';
 
-test('allows only the exact audited source catalog', () => {
+test('allows only the exact audited source catalog', async () => {
   expect(
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+    await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
       SkillProviderCommandSecurityScenario.directGraph('. /etc/os-release'),
     ),
   ).toEqual([]);
@@ -44,11 +45,13 @@ test('allows only the exact audited source catalog', () => {
     '. "$DYNAMIC"',
     'source /etc/lsb-release',
   ])
-    expect(() =>
-      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-        SkillProviderCommandSecurityScenario.directGraph(command),
+    expect(
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+          SkillProviderCommandSecurityScenario.directGraph(command),
+        ),
       ),
-    ).toThrow();
+    ).not.toBe(false);
 });
 
 test('repository PATH cannot shadow the trusted Docker CLI', async () => {
@@ -69,9 +72,11 @@ test('repository PATH cannot shadow the trusted Docker CLI', async () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('Command-scoped PATH mutation');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('Command-scoped PATH mutation');
 });
 
 test('local web orchestration keeps every stage executable statically bounded', async () => {
@@ -94,9 +99,11 @@ test('local web orchestration keeps every stage executable statically bounded', 
     symlinkPaths: new Set(),
   };
 
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).not.toThrow();
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toBe(false);
 
   const dynamicGraph: ConfigurationScriptGraph = {
     ...graph,
@@ -105,20 +112,26 @@ test('local web orchestration keeps every stage executable statically bounded', 
       `${wrapperSource}\nstage_command=(task ci:pr:wasm)\n"\${stage_command[@]}"`,
     ),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(dynamicGraph),
-  ).toThrow('Unknown dynamic executable is forbidden');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        dynamicGraph,
+      ),
+    ),
+  ).toMatch('Unknown dynamic executable is forbidden');
 });
 
-test('bounds action manifests and package metadata before parsing', () => {
+test('bounds action manifests and package metadata before parsing', async () => {
   const manifest: ActionRuntimeGraph = {
     roots: ['action.yml'],
     sources: new Map([['action.yml', `#${'a'.repeat(65_537)}`]]),
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(manifest),
-  ).toThrow('UTF-8 byte bound');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(manifest),
+    ),
+  ).toMatch('UTF-8 byte bound');
   const inert = { inert: 'é'.repeat(32_768) };
   const action: ActionRuntimeGraph = {
     roots: ['action.yml'],
@@ -129,12 +142,14 @@ test('bounds action manifests and package metadata before parsing', () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(action),
-  ).toThrow('UTF-8 byte bound');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(action),
+    ),
+  ).toMatch('UTF-8 byte bound');
 });
 
-test('bounds growing configuration cycles', () => {
+test('bounds growing configuration cycles', async () => {
   const graph: ConfigurationScriptGraph = {
     executablePaths: new Set(),
     roots: ['Taskfile.yml'],
@@ -145,7 +160,9 @@ test('bounds growing configuration cycles', () => {
     ]),
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('graph exceeds its bound');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('graph exceeds its bound');
 });

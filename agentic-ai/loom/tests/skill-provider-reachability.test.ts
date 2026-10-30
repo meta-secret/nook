@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path';
 
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
 
 import { SkillProviderBoundaryScenario } from './skill-provider-boundary.test.ts';
 
@@ -20,6 +20,11 @@ import { SkillProviderSourcedSeamsScenario } from './skill-provider-sourced-seam
 import { stringMapFromHost } from './skill-provider-command-types.ts';
 
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
+// The whole-repository cases compile hundreds of sources through the
+// out-of-process TypeScript 7 API, and release and PR verification run every
+// gate in parallel in one container, where that can pass five seconds.
+setDefaultTimeout(60_000);
 
 export class SkillProviderReachabilityScenario {
   private constructor(private readonly request: string) {}
@@ -63,9 +68,9 @@ export class SkillProviderReachabilityScenario {
     return { executablePaths, paths, symlinkPaths };
   }
 
-  static runtimeDependencyViolations(
+  static async runtimeDependencyViolations(
     inspection: RuntimeDependencyGraphInspection,
-  ): readonly string[] {
+  ): Promise<readonly string[]> {
     const pending = [...inspection.roots];
     const visited = new Set<string>();
     const violations: string[] = [];
@@ -103,14 +108,14 @@ export class SkillProviderReachabilityScenario {
         });
       if (
         (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
-          ? CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
+          ? await CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
               adapterInspection,
             )
           : !auditedRuntimeSource &&
             path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
-            SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+            (await SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
               boundaryInspection,
-            )) ||
+            ))) ||
         (path.endsWith('.sh') &&
           SkillProviderExecutableScriptScenario.shellExecutableLaunchesUnprovenScript(
             sourceBody,
@@ -175,7 +180,7 @@ export class SkillProviderReachabilityScenario {
         sources: inspection.sources,
       };
       const entrypoints =
-        SkillProviderSubprocessScenario.repositorySubprocessEntrypoints(
+        await SkillProviderSubprocessScenario.repositorySubprocessEntrypoints(
           entrypointInspection,
         );
       for (const dependency of entrypoints.paths) {
@@ -447,7 +452,7 @@ const transpilerOptions: RuntimeTranspilerOptions = { loader: 'tsx' };
 
 const RUNTIME_IMPORT_SCANNER = new Bun.Transpiler(transpilerOptions);
 
-test('follows runtime facades without scanning unrelated provider references', () => {
+test('follows runtime facades without scanning unrelated provider references', async () => {
   const sources = new Map<string, string>([
     [
       'agentic-ai/loom/src/cli.ts',
@@ -472,11 +477,13 @@ test('follows runtime facades without scanning unrelated provider references', (
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      inspection,
+    ),
   ).toEqual(['agentic-ai/loom/src/unsafe.ts', 'agentic-ai/nested/index.ts']);
 });
 
-test('fails closed for repository-backed module aliases', () => {
+test('fails closed for repository-backed module aliases', async () => {
   expect(PRODUCTION_SOURCE_EXTENSIONS).toEqual([
     '.ts',
     '.tsx',
@@ -503,7 +510,9 @@ test('fails closed for repository-backed module aliases', () => {
       symlinkPaths: new Set<string>(),
     };
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        inspection,
+      ),
       specifier,
     ).toEqual(['agentic-ai/loom/src/cli.js']);
   }
@@ -565,7 +574,9 @@ test('production Loom reaches providers only through its semantic adapter', asyn
     ),
   ).toEqual([CONSISTENCY_APPLICATION, CONSISTENCY_DOMAIN]);
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      inspection,
+    ),
   ).toEqual([]);
 });
 
@@ -587,7 +598,7 @@ test.each([
   ).toThrow(`Audited runtime source has drifted: ${path}`);
 });
 
-test('rejects every alternate application consumer edge', () => {
+test('rejects every alternate application consumer edge', async () => {
   const canonical = new Map<string, string>([
     [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
     [
@@ -619,13 +630,15 @@ test('rejects every alternate application consumer edge', () => {
       symlinkPaths: new Set<string>(),
     };
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        inspection,
+      ),
       root,
     ).toContain(root);
   }
 });
 
-test('rejects a dangerous adapter on the canonical runtime chain', () => {
+test('rejects a dangerous adapter on the canonical runtime chain', async () => {
   const sources = new Map<string, string>([
     [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
     [
@@ -641,11 +654,13 @@ test('rejects a dangerous adapter on the canonical runtime chain', () => {
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      inspection,
+    ),
   ).toContain(LOOM_ARTICLE_ADAPTER);
 });
 
-test('rejects every reachable tracked symlink facade', () => {
+test('rejects every reachable tracked symlink facade', async () => {
   const inventory =
     SkillProviderReachabilityScenario.parseTrackedRepositoryInventory(
       [
@@ -671,14 +686,16 @@ test('rejects every reachable tracked symlink facade', () => {
     symlinkPaths: inventory.symlinkPaths,
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      inspection,
+    ),
   ).toEqual([
     'agentic-ai/loom/src/provider-facade',
     'agentic-ai/loom/src/provider-facade.ts',
   ]);
 });
 
-test('follows repository subprocess entrypoints and fails closed', () => {
+test('follows repository subprocess entrypoints and fails closed', async () => {
   for (const launch of [
     "Bun.spawn(['bun', './facade.ts']);",
     "Bun.spawnSync({ cmd: ['node', './facade.ts'] });",
@@ -703,7 +720,9 @@ test('follows repository subprocess entrypoints and fails closed', () => {
       symlinkPaths: new Set<string>(),
     };
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        inspection,
+      ),
       launch,
     ).toContain('agentic-ai/loom/src/facade.ts');
   }
@@ -728,7 +747,7 @@ test('follows repository subprocess entrypoints and fails closed', () => {
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       packageScriptInspection,
     ),
   ).toEqual([]);
@@ -786,7 +805,7 @@ runCommand(request);`,
       symlinkPaths: new Set<string>(),
     };
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
         failClosedInspection,
       ),
       launch,
@@ -804,7 +823,7 @@ runCommand(request);`,
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       extensionlessRuntimeInspection,
     ),
   ).toEqual(['runner']);
@@ -819,11 +838,13 @@ runCommand(request);`,
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      inspection,
+    ),
   ).toEqual(['agentic-ai/loom/src/cli.ts']);
 });
 
-test('checks external and extensionless subprocess scripts as executable sources', () => {
+test('checks external and extensionless subprocess scripts as executable sources', async () => {
   for (const facadeSource of [
     'eval(source);',
     'await import(modulePath);',
@@ -843,7 +864,9 @@ test('checks external and extensionless subprocess scripts as executable sources
       symlinkPaths: new Set<string>(),
     };
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(inspection),
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
+        inspection,
+      ),
       facadeSource,
     ).toContain('tools/facade.ts');
   }
@@ -862,7 +885,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       extensionlessInspection,
     ),
   ).toEqual(['tools/runner']);
@@ -874,7 +897,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       nonExecutableInspection,
     ),
   ).toEqual(['agentic-ai/loom/src/cli.ts']);
@@ -893,7 +916,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       shellInspection,
     ),
   ).toEqual([]);
@@ -903,7 +926,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     '#!/bin/sh\nbun .agents/skills/provider/src/audit.ts',
   );
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       shellInspection,
     ),
   ).toEqual(['tools/facade.sh']);
@@ -914,7 +937,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     "import './.agents/skills/provider/src/audit.ts';",
   );
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       shellInspection,
     ),
   ).toEqual(['tools/facade.sh']);
@@ -925,7 +948,7 @@ test('checks external and extensionless subprocess scripts as executable sources
     "import './.agents/skills/provider/src/audit.ts';",
   );
   expect(
-    SkillProviderReachabilityScenario.runtimeDependencyViolations(
+    await SkillProviderReachabilityScenario.runtimeDependencyViolations(
       shellInspection,
     ),
   ).toEqual(['tools/facade.sh']);
@@ -933,7 +956,7 @@ test('checks external and extensionless subprocess scripts as executable sources
   for (const launch of ['MODE=x bun ../runner', 'exec bun ../runner']) {
     shellSources.set('tools/facade.sh', `#!/bin/sh\n${launch}`);
     expect(
-      SkillProviderReachabilityScenario.runtimeDependencyViolations(
+      await SkillProviderReachabilityScenario.runtimeDependencyViolations(
         shellInspection,
       ),
       launch,

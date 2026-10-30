@@ -10,11 +10,11 @@ import {
 export class SkillProviderExecutableScriptFixture {
   private constructor(private readonly request: string) {}
 
-  static violatesBoundary(source: string): boolean {
+  static async violatesBoundary(source: string): Promise<boolean> {
     return new SkillProviderExecutableScriptFixture(source).execute();
   }
 
-  private execute(): boolean {
+  private async execute(): Promise<boolean> {
     const source = this.request;
     const inspection: ExecutableScriptInspection = {
       path: 'scripts/audit.ts',
@@ -23,52 +23,52 @@ export class SkillProviderExecutableScriptFixture {
       source,
       sources: new Map<string, string>(),
     };
-    return SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+    return await SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
       inspection,
     );
   }
 }
 
-test('distinguishes inert provider path text from runtime imports', () => {
+test('distinguishes inert provider path text from runtime imports', async () => {
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       "const documentationPath = '.agents/skills/example/SKILL.md';",
     ),
   ).toBe(false);
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       "await import('../../../.agents/skills/example/src/runner.ts');",
     ),
   ).toBe(true);
 });
 
-test('normalizes only inert document capability checks', () => {
+test('normalizes only inert document capability checks', async () => {
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       `if ('document' in globalThis) renderDocument();`,
     ),
   ).toBe(false);
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       `const runtime = globalThis; consume(runtime);`,
     ),
   ).toBe(true);
 });
 
-test('normalizes the exact async-dispose protocol member', () => {
+test('normalizes the exact async-dispose protocol member', async () => {
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       `await agent[Symbol.asyncDispose]();`,
     ),
   ).toBe(false);
   expect(
-    SkillProviderExecutableScriptFixture.violatesBoundary(
+    await SkillProviderExecutableScriptFixture.violatesBoundary(
       `await agent[member]();`,
     ),
   ).toBe(true);
 });
 
-test('distinguishes shell fixture paths from provider execution', () => {
+test('distinguishes shell fixture paths from provider execution', async () => {
   const inertInspection: ExecutableProviderReferenceInspection = {
     path: 'scripts/fixture.test.sh',
     source: `mkdir -p "$fixture_root/.agents/skills/demo/src"
@@ -90,7 +90,7 @@ printf '.agents/skills/*/src/**/*.ts' > expected.txt`,
   ).toBe(true);
 });
 
-test('normalizes exact CommonJS entrypoint and export contracts', () => {
+test('normalizes exact CommonJS entrypoint and export contracts', async () => {
   const inspection: ExecutableScriptInspection = {
     path: 'scripts/telemetry.cjs',
     roots: new Set<string>(),
@@ -103,7 +103,7 @@ module.exports = { fs };
     sources: new Map<string, string>(),
   };
   expect(
-    SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+    await SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
       inspection,
     ),
   ).toBe(false);

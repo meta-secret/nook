@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptCheckerFacts } from '../src/lib/typescript/checker-facts.ts';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
 
 import {
   type SkillProviderSourceInspection,
@@ -8,20 +10,20 @@ import {
 export class SkillProviderFiniteNodeLoaderScenario {
   private constructor(private readonly request: FiniteNodeLoaderInspection) {}
 
-  static specializeClosedFiniteNodeLoaders(
+  static async specializeClosedFiniteNodeLoaders(
     inspection: FiniteNodeLoaderInspection,
-  ): string {
+  ): Promise<string> {
     return new SkillProviderFiniteNodeLoaderScenario(inspection).execute();
   }
 
-  private execute(): string {
+  private async execute(): Promise<string> {
     const inspection = this.request;
     const contextInspection: SkillProviderSourceInspection = {
       filePath: inspection.path,
       source: inspection.source,
     };
     const context =
-      SkillProviderTypeContextScenario.createSkillProviderTypeContext(
+      await SkillProviderTypeContextScenario.createSkillProviderTypeContext(
         contextInspection,
       );
     const sourceFile = context.sourceFile;
@@ -87,7 +89,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
           }
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     const orderedReplacements =
@@ -114,9 +116,10 @@ export class SkillProviderFiniteNodeLoaderScenario {
         AMBIENT_EVALUATOR_BINDINGS.has(node.text)
       ) {
         const symbol = validation.checker.getSymbolAtLocation(node);
-        const [declarations = []] = [symbol?.declarations];
+        const declarationCount = symbol ? symbol.declarationCount : 0;
+        const declarations = symbol ? symbol.declarations : [];
         if (
-          declarations.length === 0 ||
+          declarationCount === 0 ||
           declarations.some(
             (declaration) =>
               declaration.getSourceFile() === validation.sourceFile,
@@ -127,7 +130,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
         }
         seen.add(node.text);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(validation.candidate.body);
     return ambient && seen.size === AMBIENT_EVALUATOR_BINDINGS.size;
@@ -165,7 +168,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
     inspection: NodeCapabilityImportInspection,
   ): SourceReplacement | false {
     if (
-      !ts.isStringLiteralLike(inspection.declaration.moduleSpecifier) ||
+      !ts.isStringLiteralLikeNode(inspection.declaration.moduleSpecifier) ||
       inspection.declaration.moduleSpecifier.text !== 'node:process'
     ) {
       return false;
@@ -247,7 +250,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
         };
         replacements.push(replacement);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(scope);
     if (!safe || replacements.length === 0) return false;
@@ -280,7 +283,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
   static nearestFunctionScope(node: ts.Node): ts.Node | false {
     let candidate = node.parent;
     while (!ts.isSourceFile(candidate)) {
-      if (ts.isFunctionLike(candidate)) return candidate;
+      if (ts.isSignatureDeclaration(candidate)) return candidate;
       candidate = candidate.parent;
     }
     return false;
@@ -336,10 +339,8 @@ export class SkillProviderFiniteNodeLoaderScenario {
   }
 
   static hasAsyncModifier(declaration: ts.FunctionDeclaration): boolean {
-    return Boolean(
-      ts
-        .getModifiers(declaration)
-        ?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword),
+    return TypeScriptSyntax.modifiers(declaration).some(
+      (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
     );
   }
 
@@ -426,8 +427,8 @@ export class SkillProviderFiniteNodeLoaderScenario {
     const [bodyArgument = false] = [initializer.arguments[1]];
     return parameterArgument !== false &&
       bodyArgument !== false &&
-      ts.isStringLiteralLike(parameterArgument) &&
-      ts.isStringLiteralLike(bodyArgument) &&
+      ts.isStringLiteralLikeNode(parameterArgument) &&
+      ts.isStringLiteralLikeNode(bodyArgument) &&
       parameterArgument.text === inspection.parameter.text &&
       bodyArgument.text === `return import(${inspection.parameter.text});`
       ? declaration.name
@@ -528,7 +529,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
     let candidate = expression;
     while (
       ts.isAsExpression(candidate) ||
-      ts.isTypeAssertionExpression(candidate) ||
+      ts.isTypeAssertion(candidate) ||
       ts.isParenthesizedExpression(candidate)
     ) {
       candidate = candidate.expression;
@@ -557,7 +558,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
         if (
           argument === false ||
           parent.arguments.length !== 1 ||
-          !ts.isStringLiteralLike(argument) ||
+          !ts.isStringLiteralLikeNode(argument) ||
           !ALLOWED_NODE_MODULES.has(argument.text)
         ) {
           safe = false;
@@ -568,7 +569,7 @@ export class SkillProviderFiniteNodeLoaderScenario {
         );
         if (module) modules.add(module);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(validation.sourceFile);
     return safe && modules.size > 0 ? [...modules].sort() : false;
@@ -610,7 +611,7 @@ type FiniteNodeLoaderCandidate = {
 
 type FiniteNodeLoaderValidation = {
   readonly candidate: FiniteNodeLoaderCandidate;
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly sourceFile: ts.SourceFile;
 };
 

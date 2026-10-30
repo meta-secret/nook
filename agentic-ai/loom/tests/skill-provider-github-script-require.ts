@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import {
   type BindingCollectionRequest,
@@ -11,24 +13,24 @@ import {
 export class SkillProviderGithubScriptRequireScenario {
   private constructor(private readonly request: string) {}
 
-  static githubScriptRequireSpecifiers(source: string): readonly string[] {
+  static async githubScriptRequireSpecifiers(
+    source: string,
+  ): Promise<readonly string[]> {
     return new SkillProviderGithubScriptRequireScenario(source).execute();
   }
 
-  private execute(): readonly string[] {
+  private async execute(): Promise<readonly string[]> {
     const source = this.request;
-    const file = ts.createSourceFile(
-      'github-script.ts',
-      source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const file = await TypeScriptTestSources.parse({
+      fileName: 'github-script.ts',
+      kind: TypeScriptSourceKind.TypeScript,
+      text: source,
+    });
     const bindings: LexicalBinding[] = [];
     const collect = (node: ts.Node): void => {
       const request: BindingCollectionRequest = { node, target: bindings };
       SkillProviderTypescriptBindingsScenario.collectBinding(request);
-      ts.forEachChild(node, collect);
+      node.forEachChild(collect);
     };
     collect(file);
     const model: LexicalModel = {
@@ -91,7 +93,7 @@ export class SkillProviderGithubScriptRequireScenario {
         throw new Error(
           'github-script require capability escape is forbidden.',
         );
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(file);
     return specifiers;
@@ -166,7 +168,7 @@ export class SkillProviderGithubScriptRequireScenario {
     const parent = node.parent;
     if (
       (ts.isVariableDeclaration(parent) ||
-        ts.isParameter(parent) ||
+        ts.isParameterDeclaration(parent) ||
         ts.isFunctionDeclaration(parent) ||
         ts.isClassDeclaration(parent)) &&
       parent.name === node

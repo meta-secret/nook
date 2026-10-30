@@ -126,13 +126,13 @@ and [typescript-named-args.md](../../../../../.meta-cortex/teams/dev-team/agents
   bags); field names come from field enums
 - reusable and public object contracts use semantic types or interfaces;
   clear one-use local literals and inline shapes are permitted
-- mechanically enforced by ESLint `max-params: 1` and
-  `no-restricted-types` in `agentic-ai/loom`
+- mechanically enforced by oxlint `max-params: 1` and
+  `no-restricted-types` in `agentic-ai/loom/.oxlintrc.json`
 - review enforces semantic reusable and public contracts plus generic-value
   containment while the existing debt is migrated
 
 Enforced by `task preflight:typescript-state` across the repository, plus
-`task loom:verify` (includes ESLint) for Loom-local rules.
+`task loom:verify` (includes type-aware oxlint) for Loom-local rules.
 
 ## Domain request rule
 

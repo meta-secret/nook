@@ -275,7 +275,7 @@ const EXPECTED_PROFILES = [
     allowedEvidenceFiles: [
       'Taskfile.yml',
       '.github/formatting/format.sh',
-      'agentic-ai/loom/eslint.config.js',
+      'agentic-ai/loom/.oxlintrc.json',
       'agentic-ai/loom/package.json',
     ],
     allowedEvidenceDescendantRoots: [

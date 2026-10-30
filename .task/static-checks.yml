@@ -56,7 +56,17 @@ tasks:
   web:static:lint:
     dir: "{{.ROOT_DIR}}/nook-app/nook-web"
     cmds:
-      - node --max-old-space-size=4096 nook-web-app/node_modules/.bin/eslint --config eslint.config.js .
+      # Oxlint (type-aware on TypeScript 7) owns .ts/.js files, the
+      # TypeScript 7 check runs the success-contract rule, and ESLint lints
+      # only .svelte files. Unit tests running beside this gate write and
+      # delete transient __compile-contracts-* fixtures; skip them.
+      - |
+        failed=0
+        fixtures='**/__compile-contracts-*/**'
+        nook-web-app/node_modules/.bin/oxlint -c oxlint.config.ts --ignore-pattern "$fixtures" . || failed=1
+        node named-success-contract-check.ts --ignore-pattern "$fixtures" || failed=1
+        node --max-old-space-size=4096 nook-web-app/node_modules/.bin/eslint --config eslint.config.js --ignore-pattern "$fixtures" . || failed=1
+        exit "$failed"
 
   web:static:app:
     cmds:

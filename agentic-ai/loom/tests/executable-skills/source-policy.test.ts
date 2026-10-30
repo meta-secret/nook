@@ -1,22 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ExecutableSkillSource } from '../../src/executable-skills/source-policy.ts';
+import { SettledRejection } from '../settled-rejection.ts';
 
 export class ExecutableSkillsSourcePolicyScenario {
   private constructor(private readonly request: AnalyzeFixtureRequest) {}
 
-  static analyzeFixture(request: AnalyzeFixtureRequest): readonly string[] {
+  static async analyzeFixture(
+    request: AnalyzeFixtureRequest,
+  ): Promise<readonly string[]> {
     return new ExecutableSkillsSourcePolicyScenario(request).execute();
   }
 
-  private execute(): readonly string[] {
+  private async execute(): Promise<readonly string[]> {
     const request = this.request;
     const analysisRequest = {
       ...request,
       relativePath:
         '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/runner.ts',
     };
-    return ExecutableSkillSource.analyze(analysisRequest).moduleSpecifiers;
+    return (await ExecutableSkillSource.analyze(analysisRequest))
+      .moduleSpecifiers;
   }
 }
 
@@ -25,7 +29,7 @@ type AnalyzeFixtureRequest = {
 };
 
 describe('executable skill source policy', () => {
-  test('accepts audited local modules and type-only external modules', () => {
+  test('accepts audited local modules and type-only external modules', async () => {
     const source = [
       "import type { Root } from 'mdast';",
       "import type { InspectOptions } from 'node:util';",
@@ -39,11 +43,11 @@ describe('executable skill source policy', () => {
       source,
     };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual(['./audit.ts']);
   });
 
-  test('distinguishes emitted local bindings from ambient capability names', () => {
+  test('distinguishes emitted local bindings from ambient capability names', async () => {
     const source = [
       'const process = { cwd: () => "/local" };',
       'const fetch = (input: string) => input;',
@@ -71,11 +75,11 @@ describe('executable skill source policy', () => {
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual([]);
   });
 
-  test('allows erased declarations only in declaration and type positions', () => {
+  test('allows erased declarations only in declaration and type positions', async () => {
     const source = [
       'declare const process: { cwd(): string };',
       "import type { Bun as BunShape } from 'bun-types';",
@@ -87,11 +91,11 @@ describe('executable skill source policy', () => {
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual([]);
   });
 
-  test('rejects erased declarations and type-only bindings used as values', () => {
+  test('rejects erased declarations and type-only bindings used as values', async () => {
     const sources = [
       'declare const capability: { run(): void }; capability.run();',
       'declare const process: { cwd(): string }; process.cwd();',
@@ -111,26 +115,30 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('erased declarations used as runtime values');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('erased declarations used as runtime values');
     }
   });
 
-  test('rejects type-only and empty Bun namespaces used as runtime values', () => {
+  test('rejects type-only and empty Bun namespaces used as runtime values', async () => {
     const sources = [
       'namespace Bun {}; Bun.file("unsafe");',
       'namespace Bun { export interface File {} }; Bun.spawn("unsafe");',
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('Bun APIs outside narrow standard I/O');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('Bun APIs outside narrow standard I/O');
     }
   });
 
-  test('accepts runtime-valued Bun namespace and local shadow capabilities', () => {
+  test('accepts runtime-valued Bun namespace and local shadow capabilities', async () => {
     const source = [
       'namespace Bun {',
       '  export const file = (path: string) => path;',
@@ -141,11 +149,11 @@ describe('executable skill source policy', () => {
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual([]);
   });
 
-  test('analyzes only the runtime-local side of export specifiers', () => {
+  test('analyzes only the runtime-local side of export specifiers', async () => {
     const accepted = [
       'const Bun = { stdout: 1 };',
       'const process = { cwd: () => "local" };',
@@ -158,7 +166,9 @@ describe('executable skill source policy', () => {
     ].join('\n');
     const acceptedRequest: AnalyzeFixtureRequest = { source: accepted };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(acceptedRequest),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(
+        acceptedRequest,
+      ),
     ).toEqual(['./types.ts']);
 
     const rejected = [
@@ -171,13 +181,15 @@ describe('executable skill source policy', () => {
     ];
     for (const source of rejected) {
       const rejectedRequest: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
-      ).toThrow('ambient global capabilities');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
+        ),
+      ).toMatch('ambient global capabilities');
     }
   });
 
-  test('rejects runtime external packages in every static form', () => {
+  test('rejects runtime external packages in every static form', async () => {
     const sources = [
       "import 'package-name';",
       "import value from '@scope/package/subpath';",
@@ -196,13 +208,15 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source,
       };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('external runtime package');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('external runtime package');
     }
   });
 
-  test('accepts only exact relative file module prefixes', () => {
+  test('accepts only exact relative file module prefixes', async () => {
     const request: AnalyzeFixtureRequest = {
       source: [
         "import descendant from './local.ts';",
@@ -212,24 +226,26 @@ describe('executable skill source policy', () => {
       ].join('\n'),
     };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual(['./local.ts', '../domain.ts']);
   });
 
-  test('rejects runtime imports that normalize outside the owning skill root', () => {
+  test('rejects runtime imports that normalize outside the owning skill root', async () => {
     const sources = [
       "import value from './safe.ts/../../../../outside.ts'; value;",
       "export { value } from '../../../../agentic-ai/loom/src/cli.ts';",
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('inside their owning skill root');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('inside their owning skill root');
     }
   });
 
-  test('rejects noncanonical source paths and invalid TypeScript syntax', () => {
+  test('rejects noncanonical source paths and invalid TypeScript syntax', async () => {
     const noncanonicalPaths = [
       '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/run.tsx',
       '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/../run.ts',
@@ -243,9 +259,9 @@ describe('executable skill source policy', () => {
         relativePath,
         source: "const view = <div>{fetch('https://example.com')}</div>;",
       };
-      expect(() => ExecutableSkillSource.analyze(request)).toThrow(
-        'canonical TypeScript source path',
-      );
+      expect(
+        await SettledRejection.message(ExecutableSkillSource.analyze(request)),
+      ).toMatch('canonical TypeScript source path');
     }
 
     const invalidSyntaxRequest = {
@@ -253,12 +269,14 @@ describe('executable skill source policy', () => {
         '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/run.ts',
       source: "const view = <div>{fetch('https://example.com')}</div>;",
     };
-    expect(() => ExecutableSkillSource.analyze(invalidSyntaxRequest)).toThrow(
-      'invalid TypeScript syntax',
-    );
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillSource.analyze(invalidSyntaxRequest),
+      ),
+    ).toMatch('invalid TypeScript syntax');
   });
 
-  test('rejects import attributes and non-TypeScript relative modules', () => {
+  test('rejects import attributes and non-TypeScript relative modules', async () => {
     const attributedSources = [
       "import secret from './secret.txt' with { type: 'text' };",
       "import data from './data.json' with { type: 'json' };",
@@ -266,9 +284,11 @@ describe('executable skill source policy', () => {
     ];
     for (const source of attributedSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('runtime import attributes');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('runtime import attributes');
     }
 
     const nonSourceModules = [
@@ -284,13 +304,15 @@ describe('executable skill source policy', () => {
     ];
     for (const source of nonSourceModules) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('relative TypeScript source imports');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('relative TypeScript source imports');
     }
   });
 
-  test('rejects forbidden ambient roots read through shorthand properties', () => {
+  test('rejects forbidden ambient roots read through shorthand properties', async () => {
     for (const capability of [
       'Bun',
       'Buffer',
@@ -305,22 +327,26 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source: `const holder = { ${capability} };`,
       };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('ambient global capabilities');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('ambient global capabilities');
     }
   });
 
-  test('rejects ambient Buffer allocation capabilities', () => {
+  test('rejects ambient Buffer allocation capabilities', async () => {
     const request: AnalyzeFixtureRequest = {
       source: 'const bytes = Buffer.allocUnsafe(1024);',
     };
-    expect(() =>
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-    ).toThrow('ambient global capabilities');
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ),
+    ).toMatch('ambient global capabilities');
   });
 
-  test('rejects ambient cross-context messaging capabilities', () => {
+  test('rejects ambient cross-context messaging capabilities', async () => {
     const ambientSources = [
       'postMessage("unsafe");',
       'new BroadcastChannel("unsafe");',
@@ -331,9 +357,11 @@ describe('executable skill source policy', () => {
     ];
     for (const source of ambientSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('ambient global capabilities');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('ambient global capabilities');
     }
 
     const erasedShadowSources = [
@@ -342,13 +370,15 @@ describe('executable skill source policy', () => {
     ];
     for (const source of erasedShadowSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('erased declarations used as runtime values');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('erased declarations used as runtime values');
     }
   });
 
-  test('keeps adjacent messaging vocabulary outside the ambient capability boundary', () => {
+  test('keeps adjacent messaging vocabulary outside the ambient capability boundary', async () => {
     const source = [
       'const holder = {',
       '  postMessage: (value: string) => value,',
@@ -374,27 +404,31 @@ describe('executable skill source policy', () => {
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
     ).toEqual([]);
   });
 
-  test('rejects source, path, and module-list inputs above their bounds', () => {
+  test('rejects source, path, and module-list inputs above their bounds', async () => {
     const oversizedSourceRequest: AnalyzeFixtureRequest = {
       source: 'a'.repeat(1024 * 1024 + 1),
     };
-    expect(() =>
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(
-        oversizedSourceRequest,
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(
+          oversizedSourceRequest,
+        ),
       ),
-    ).toThrow('source exceeds its byte bound');
+    ).toMatch('source exceeds its byte bound');
 
     const oversizedPathRequest = {
       relativePath: `./${'a'.repeat(4096)}`,
       source: 'export {};',
     };
-    expect(() => ExecutableSkillSource.analyze(oversizedPathRequest)).toThrow(
-      'source path exceeds its byte bound',
-    );
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillSource.analyze(oversizedPathRequest),
+      ),
+    ).toMatch('source path exceeds its byte bound');
 
     const importLines: string[] = [];
     for (let index = 0; index < 257; index += 1) {
@@ -403,12 +437,14 @@ describe('executable skill source policy', () => {
     const moduleListRequest: AnalyzeFixtureRequest = {
       source: importLines.join('\n'),
     };
-    expect(() =>
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(moduleListRequest),
-    ).toThrow('module specifiers exceed their bound');
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(moduleListRequest),
+      ),
+    ).toMatch('module specifiers exceed their bound');
   });
 
-  test('rejects every runtime node module form', () => {
+  test('rejects every runtime node module form', async () => {
     const sources = [
       "import { inspect } from 'node:util';",
       "export { strict } from 'node:assert';",
@@ -417,13 +453,15 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow('forbidden ambient module');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).toMatch('forbidden ambient module');
     }
   });
 
-  test('permits only direct nonnegative safe-integer literal element indexes', () => {
+  test('permits only direct nonnegative safe-integer literal element indexes', async () => {
     const acceptedRequest: AnalyzeFixtureRequest = {
       source: [
         'const values = [1, 2];',
@@ -434,7 +472,9 @@ describe('executable skill source policy', () => {
       ].join('\n'),
     };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(acceptedRequest),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(
+        acceptedRequest,
+      ),
     ).toEqual([]);
 
     const rejected = [
@@ -455,13 +495,15 @@ describe('executable skill source policy', () => {
     ];
     for (const source of rejected) {
       const rejectedRequest: AnalyzeFixtureRequest = { source };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
-      ).toThrow('nonnegative safe-integer numeric literal');
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
+        ),
+      ).toMatch('nonnegative safe-integer numeric literal');
     }
   });
 
-  test('rejects loader, network, process, evaluator, and worker capabilities', () => {
+  test('rejects loader, network, process, evaluator, and worker capabilities', async () => {
     const sources = [
       "import { spawn } from 'node:child_process';",
       "import http2 from 'node:http2';",
@@ -514,24 +556,28 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source,
       };
-      expect(() =>
-        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
-      ).toThrow();
+      expect(
+        await SettledRejection.message(
+          ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+        ),
+      ).not.toBe(false);
     }
   });
 
-  test('always applies capability audit at the production analyzer seam', () => {
+  test('always applies capability audit at the production analyzer seam', async () => {
     const localRequest: AnalyzeFixtureRequest = {
       source: "import { audit } from './audit.ts';",
     };
     expect(
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(localRequest),
+      await ExecutableSkillsSourcePolicyScenario.analyzeFixture(localRequest),
     ).toEqual(['./audit.ts']);
     const packageRequest: AnalyzeFixtureRequest = {
       source: "import value from 'package-name';",
     };
-    expect(() =>
-      ExecutableSkillsSourcePolicyScenario.analyzeFixture(packageRequest),
-    ).toThrow('external runtime package');
+    expect(
+      await SettledRejection.message(
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(packageRequest),
+      ),
+    ).toMatch('external runtime package');
   });
 });

@@ -32,23 +32,23 @@ ${fixture.calls}
 `;
   }
 
-  static specialize(source: string): string {
+  static async specialize(source: string): Promise<string> {
     const inspection: FiniteNodeLoaderInspection = {
       path: 'finite-node-loader.ts',
       source,
     };
-    return SkillProviderFiniteNodeLoaderScenario.specializeClosedFiniteNodeLoaders(
+    return await SkillProviderFiniteNodeLoaderScenario.specializeClosedFiniteNodeLoaders(
       inspection,
     );
   }
 
-  static violatesBoundary(source: string): boolean {
+  static async violatesBoundary(source: string): Promise<boolean> {
     const inspection = {
       allowUnprovenComputedDataAccess: true as const,
       filePath: 'finite-node-loader.ts',
       source,
     };
-    return SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+    return await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
       inspection,
     );
   }
@@ -68,21 +68,22 @@ const fileSystemModule = await importNodeModule<NodeFileSystem>('node:fs');`,
   fallbackTemplate: 'import(${JSON.stringify(specifier)})',
 };
 
-test('specializes the exact closed Node module adapter into literal imports', () => {
+test('specializes the exact closed Node module adapter into literal imports', async () => {
   const source =
     SkillProviderFiniteNodeLoaderFixture.adapterSource(closedFixture);
-  const specialized = SkillProviderFiniteNodeLoaderFixture.specialize(source);
+  const specialized =
+    await SkillProviderFiniteNodeLoaderFixture.specialize(source);
   expect(specialized).not.toBe(source);
   expect(specialized).not.toContain('new Function');
   expect(specialized).not.toContain('(0, eval)');
   expect(specialized).toContain("await import('node:path')");
   expect(specialized).toContain("await import('node:fs')");
   expect(
-    SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
+    await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
   ).toBe(false);
 });
 
-test('refuses computed, escaped, or non-Node adapter calls', () => {
+test('refuses computed, escaped, or non-Node adapter calls', async () => {
   const unsafeCalls = [
     `const specifier = 'node:path'; await importNodeModule(specifier);`,
     `await importNodeModule('../../../.agents/skills/provider/src/run.ts');`,
@@ -99,17 +100,18 @@ test('refuses computed, escaped, or non-Node adapter calls', () => {
   for (const calls of unsafeCalls) {
     const fixture: AdapterFixture = { ...closedFixture, calls };
     const source = SkillProviderFiniteNodeLoaderFixture.adapterSource(fixture);
-    expect(SkillProviderFiniteNodeLoaderFixture.specialize(source), calls).toBe(
-      source,
-    );
     expect(
-      SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
+      await SkillProviderFiniteNodeLoaderFixture.specialize(source),
+      calls,
+    ).toBe(source);
+    expect(
+      await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
       calls,
     ).toBe(true);
   }
 });
 
-test('refuses mutated evaluator adapter bodies', () => {
+test('refuses mutated evaluator adapter bodies', async () => {
   const mutations: readonly AdapterFixture[] = [
     {
       ...closedFixture,
@@ -126,16 +128,16 @@ test('refuses mutated evaluator adapter bodies', () => {
   ];
   for (const fixture of mutations) {
     const source = SkillProviderFiniteNodeLoaderFixture.adapterSource(fixture);
-    expect(SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
+    expect(await SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
       source,
     );
-    expect(SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source)).toBe(
-      true,
-    );
+    expect(
+      await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
+    ).toBe(true);
   }
 });
 
-test('refuses shadowed evaluator capability bindings', () => {
+test('refuses shadowed evaluator capability bindings', async () => {
   const adapter =
     SkillProviderFiniteNodeLoaderFixture.adapterSource(closedFixture);
   const ambientViolation = `globalThis.Function('return sourceText')();`;
@@ -153,16 +155,16 @@ test('refuses shadowed evaluator capability bindings', () => {
     );
   }
   for (const source of shadowed) {
-    expect(SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
+    expect(await SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
       source,
     );
-    expect(SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source)).toBe(
-      true,
-    );
+    expect(
+      await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
+    ).toBe(true);
   }
 });
 
-test('projects only closed process capability views used by the adapter', () => {
+test('projects only closed process capability views used by the adapter', async () => {
   const source = `
 function runtimeFacts(): readonly string[] {
   const nodeProcess = (
@@ -182,16 +184,17 @@ function runtimeFacts(): readonly string[] {
   return [nodeVersion, wasmPath, workingDirectory];
 }
 `;
-  const specialized = SkillProviderFiniteNodeLoaderFixture.specialize(source);
+  const specialized =
+    await SkillProviderFiniteNodeLoaderFixture.specialize(source);
   expect(specialized).not.toBe(source);
   expect(specialized).not.toContain('globalThis');
   expect(specialized).not.toContain('nodeProcess');
   expect(
-    SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
+    await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
   ).toBe(false);
 });
 
-test('orders nested process-view replacements without erasing evaluators', () => {
+test('orders nested process-view replacements without erasing evaluators', async () => {
   const source = `
 function inspectRuntime(): void {
   function readWorkingDirectory(): void {
@@ -204,14 +207,15 @@ function inspectRuntime(): void {
   readWorkingDirectory();
 }
 `;
-  const specialized = SkillProviderFiniteNodeLoaderFixture.specialize(source);
+  const specialized =
+    await SkillProviderFiniteNodeLoaderFixture.specialize(source);
   expect(specialized).toContain('eval(sourceText)');
   expect(
-    SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
+    await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
   ).toBe(true);
 });
 
-test('refuses process views that retain loader-capable authority', () => {
+test('refuses process views that retain loader-capable authority', async () => {
   const unsafeUses = [
     'return nodeProcess;',
     'return nodeProcess.mainModule;',
@@ -226,42 +230,44 @@ function unsafeProcessView(): runtime.Process {
   ${use}
 }
 `;
-    expect(SkillProviderFiniteNodeLoaderFixture.specialize(source), use).toBe(
-      source,
-    );
     expect(
-      SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
+      await SkillProviderFiniteNodeLoaderFixture.specialize(source),
+      use,
+    ).toBe(source);
+    expect(
+      await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
       use,
     ).toBe(true);
   }
 });
 
-test('projects only finite named Node process capabilities', () => {
+test('projects only finite named Node process capabilities', async () => {
   const source = `import { chdir as changeDirectory } from 'node:process';
 changeDirectory('/workspace');`;
-  const specialized = SkillProviderFiniteNodeLoaderFixture.specialize(source);
+  const specialized =
+    await SkillProviderFiniteNodeLoaderFixture.specialize(source);
   expect(specialized).not.toBe(source);
   expect(specialized).not.toContain("from 'node:process'");
   expect(specialized).toContain(
     'const changeDirectory = safeProcessChangeDirectory;',
   );
   expect(
-    SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
+    await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(specialized),
   ).toBe(false);
 });
 
-test('refuses loader-capable Node process imports', () => {
+test('refuses loader-capable Node process imports', async () => {
   for (const source of [
     `import process from 'node:process'; consume(process);`,
     `import * as processModule from 'node:process'; consume(processModule);`,
     `import { getBuiltinModule } from 'node:process'; getBuiltinModule('module');`,
     `import { chdir, getBuiltinModule } from 'node:process'; consume(chdir, getBuiltinModule);`,
   ]) {
-    expect(SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
+    expect(await SkillProviderFiniteNodeLoaderFixture.specialize(source)).toBe(
       source,
     );
-    expect(SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source)).toBe(
-      true,
-    );
+    expect(
+      await SkillProviderFiniteNodeLoaderFixture.violatesBoundary(source),
+    ).toBe(true);
   }
 });

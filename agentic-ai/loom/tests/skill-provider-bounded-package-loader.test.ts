@@ -20,7 +20,7 @@ test('leaves direct finite external package loaders unchanged', async () => {
     sources,
   };
   const specialized =
-    SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
+    await SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
       inspection,
     );
   expect(specialized).toBe(defaulted1);
@@ -30,7 +30,7 @@ test('leaves direct finite external package loaders unchanged', async () => {
     source: specialized,
   };
   expect(
-    SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+    await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
       sourceInspection,
     ),
   ).toBe(false);
@@ -51,7 +51,7 @@ test('specializes only closed tracked local data modules', async () => {
     sources,
   };
   const specialized =
-    SkillProviderBoundedPackageLoaderScenario.specializeBoundedLocalDataLoaders(
+    await SkillProviderBoundedPackageLoaderScenario.specializeBoundedLocalDataLoaders(
       inspection,
     );
   expect(specialized).toContain("await import('../src/landing/messages.js')");
@@ -61,13 +61,13 @@ test('specializes only closed tracked local data modules', async () => {
     source: specialized,
   };
   expect(
-    SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+    await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
       sourceInspection,
     ),
   ).toBe(false);
 });
 
-test('does not specialize escaped, computed, or repository-backed loaders', () => {
+test('does not specialize escaped, computed, or repository-backed loaders', async () => {
   const base = [
     "import { createRequire } from 'node:module';",
     "import { pathToFileURL } from 'node:url';",
@@ -94,7 +94,7 @@ test('does not specialize escaped, computed, or repository-backed loaders', () =
       sources,
     };
     expect(
-      SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
+      await SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
         inspection,
       ),
       tail,
@@ -128,7 +128,7 @@ test('specializes only exact source-closed generated artifacts', async () => {
   const [source = ''] = [sources.get(path)];
   const inspection = { path, roots, source, sources };
   const specialized =
-    SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+    await SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
       inspection,
     );
   expect(specialized).toContain(
@@ -141,7 +141,7 @@ test('specializes only exact source-closed generated artifacts', async () => {
   ]) {
     const unsafeInspection = { path, roots, source: unsafeSource, sources };
     expect(
-      SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+      await SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
         unsafeInspection,
       ),
     ).toBe(unsafeSource);
@@ -153,7 +153,7 @@ test('specializes only exact source-closed generated artifacts', async () => {
     sources,
   };
   expect(
-    SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
+    await SkillProviderBoundedPackageLoaderScenario.specializeProvenGeneratedArtifactLoader(
       unprovenInspection,
     ),
   ).toBe(source);

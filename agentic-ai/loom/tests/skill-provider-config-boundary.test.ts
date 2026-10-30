@@ -4,10 +4,11 @@ import {
   CONFIGURATION_SCRIPT_EXTENSION,
   EXECUTABLE_SOURCE_EXTENSION,
 } from './skill-provider-config-boundary.fixture.ts';
+import { SettledRejection } from './settled-rejection.ts';
 export { SkillProviderConfigBoundaryScenario } from './skill-provider-config-boundary.fixture.ts';
 import { join } from 'node:path';
 
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
 
 import { type ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 
@@ -29,6 +30,11 @@ import type {
   ActionLoaderFixture,
   ActionRuntimeGraph,
 } from './skill-provider-config-types.ts';
+
+// The whole-repository cases compile hundreds of sources through the
+// out-of-process TypeScript 7 API, and release and PR verification run every
+// gate in parallel in one container, where that can pass five seconds.
+setDefaultTimeout(60_000);
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
@@ -79,7 +85,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     symlinkPaths,
   };
   const reachableActionPaths =
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(actionGraph);
+    await SkillProviderConfigBoundaryScenario.actionRuntimePaths(actionGraph);
   const scriptGraph: ConfigurationScriptGraph = {
     executablePaths: new Set(
       tracked.value
@@ -120,7 +126,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   );
 }, 60_000);
 
-test('runnable configuration inventory includes Taskfiles and actions', () => {
+test('runnable configuration inventory includes Taskfiles and actions', async () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;
   const tracked = new ExecutableSkillCheckout(
     REPOSITORY_ROOT,
@@ -146,7 +152,7 @@ test('runnable configuration inventory includes Taskfiles and actions', () => {
   expect(discoveredActions).toEqual(expectedActions);
 });
 
-test('classifies every runnable configuration category at root and nested boundaries', () => {
+test('classifies every runnable configuration category at root and nested boundaries', async () => {
   const expected = [
     'package.json',
     'nested/package.json',
@@ -186,7 +192,7 @@ test('classifies every runnable configuration category at root and nested bounda
   ).toEqual(expected);
 });
 
-test('follows JavaScript action entrypoints and nested local actions', () => {
+test('follows JavaScript action entrypoints and nested local actions', async () => {
   const sources = new Map<string, string>([
     [
       '.github/actions/root/action.yml',
@@ -215,16 +221,16 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       '.github/actions/nested/main',
     ),
   ).toBe(true);
-  expect(SkillProviderConfigBoundaryScenario.actionRuntimePaths(graph)).toEqual(
-    [
-      '.github/actions/nested/action.yaml',
-      '.github/actions/nested/main',
-      '.github/actions/nested/neutral.js',
-      '.github/actions/nested/post.js',
-      '.github/actions/nested/pre.js',
-      '.github/actions/root/action.yml',
-    ],
-  );
+  expect(
+    await SkillProviderConfigBoundaryScenario.actionRuntimePaths(graph),
+  ).toEqual([
+    '.github/actions/nested/action.yaml',
+    '.github/actions/nested/main',
+    '.github/actions/nested/neutral.js',
+    '.github/actions/nested/post.js',
+    '.github/actions/nested/pre.js',
+    '.github/actions/root/action.yml',
+  ]);
 
   const providerSources = new Map(sources);
   providerSources.set(
@@ -236,9 +242,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: providerSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(providerGraph),
-  ).toThrow('runtime boundary');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(providerGraph),
+    ),
+  ).toMatch('runtime boundary');
 
   const adapterSources = new Map(sources);
   adapterSources.set(
@@ -251,9 +259,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: adapterSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(adapterGraph),
-  ).toThrow('Unauthorized application edge');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(adapterGraph),
+    ),
+  ).toMatch('Unauthorized application edge');
 
   const unresolvedSources = new Map(sources);
   unresolvedSources.delete('.github/actions/nested/main');
@@ -262,9 +272,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: unresolvedSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(unresolvedGraph),
-  ).toThrow('Action entrypoint is untracked');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(unresolvedGraph),
+    ),
+  ).toMatch('Action entrypoint is untracked');
 
   const unresolvedImportSources = new Map(sources);
   unresolvedImportSources.set(
@@ -276,11 +288,13 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: unresolvedImportSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(
-      unresolvedImportGraph,
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(
+        unresolvedImportGraph,
+      ),
     ),
-  ).toThrow('Action relative import is unresolved');
+  ).toMatch('Action relative import is unresolved');
 
   const dockerSources = new Map(sources);
   dockerSources.set(
@@ -292,9 +306,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: dockerSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(dockerGraph),
-  ).toThrow('Unsupported Docker action runtime');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(dockerGraph),
+    ),
+  ).toMatch('Unsupported Docker action runtime');
 
   const dockerStepSources = new Map(sources);
   dockerStepSources.set(
@@ -306,9 +322,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: dockerStepSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(dockerStepGraph),
-  ).toThrow('Unsupported Docker action step');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(dockerStepGraph),
+    ),
+  ).toMatch('Unsupported Docker action step');
 
   const packageSources = new Map(sources);
   packageSources.set(
@@ -324,9 +342,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: packageSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(packageGraph),
-  ).toThrow('repository package import is unsupported');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(packageGraph),
+    ),
+  ).toMatch('repository package import is unsupported');
 
   const aliasSources = new Map(sources);
   aliasSources.set('.github/actions/nested/main', "import '#provider';");
@@ -335,9 +355,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: aliasSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(aliasGraph),
-  ).toThrow('repository package import is unsupported');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(aliasGraph),
+    ),
+  ).toMatch('repository package import is unsupported');
 
   const loaderFixtures: readonly ActionLoaderFixture[] = [
     {
@@ -366,9 +388,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       symlinkPaths: new Set<string>(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.actionRuntimePaths(loaderGraph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.actionRuntimePaths(loaderGraph),
+      ),
       fixture.path,
-    ).toThrow(/(?:runtime boundary|Runnable script is untracked)/u);
+    ).toMatch(/(?:runtime boundary|Runnable script is untracked)/u);
   }
 
   for (const path of [
@@ -386,14 +410,15 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       symlinkPaths,
     };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.actionRuntimePaths(symlinkGraph),
+      ),
       path,
-    ).toThrow(/(?:Action path|Runnable script) is a tracked symlink/u);
+    ).toMatch(/(?:Action path|Runnable script) is a tracked symlink/u);
   }
 });
 
-test('follows scripts launched from every runnable configuration surface', () => {
+test('follows scripts launched from every runnable configuration surface', async () => {
   for (const [path, source] of [
     ['package.json', '{"scripts":{"audit":"bun scripts/facade.ts"}}'],
     ['package.json', `{"scripts":{"audit":"bun ${LOOM_ARTICLE_ADAPTER}"}}`],
@@ -437,9 +462,11 @@ test('follows scripts launched from every runnable configuration surface', () =>
       symlinkPaths: new Set<string>(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       path,
-    ).toThrow(/Unauthorized application edge|runtime boundary/u);
+    ).toMatch(/Unauthorized application edge|runtime boundary/u);
   }
   const sources = new Map<string, string>([
     ['package.json', '{"scripts":{"audit":"bun scripts/missing.ts"}}'],
@@ -450,9 +477,11 @@ test('follows scripts launched from every runnable configuration surface', () =>
     sources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('Runnable script is untracked');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('Runnable script is untracked');
 
   const inertCatalogSources = new Map<string, string>([
     ['package.json', '{"scripts":{"audit":"bun scripts/catalog.ts"}}'],
@@ -466,13 +495,13 @@ test('follows scripts launched from every runnable configuration surface', () =>
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+    await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
       inertCatalogGraph,
     ),
   ).toEqual(['scripts/catalog.ts']);
 });
 
-test('rejects a dangerous adapter from the canonical runnable graph', () => {
+test('rejects a dangerous adapter from the canonical runnable graph', async () => {
   const sources = new Map<string, string>([
     [
       'package.json',
@@ -491,12 +520,14 @@ test('rejects a dangerous adapter from the canonical runnable graph', () => {
     sources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('Article adapter violates boundary');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('Article adapter violates boundary');
 });
 
-test('checks external and extensionless configuration scripts as executable sources', () => {
+test('checks external and extensionless configuration scripts as executable sources', async () => {
   for (const externalSource of [
     "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
     "const root = '.cortex/teams/ai/' + 'dynamic-skills/cortex-article-structure/scripts'; await import(`${root}/src/audit.ts`);",
@@ -512,9 +543,11 @@ test('checks external and extensionless configuration scripts as executable sour
       symlinkPaths: new Set<string>(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       externalSource,
-    ).toThrow();
+    ).not.toBe(false);
   }
 
   const extensionlessSources = new Map<string, string>([
@@ -527,11 +560,13 @@ test('checks external and extensionless configuration scripts as executable sour
     sources: extensionlessSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      executableGraph,
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        executableGraph,
+      ),
     ),
-  ).toThrow('Runnable script violates runtime boundary');
+  ).toMatch('Runnable script violates runtime boundary');
   const nonExecutableGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
     roots: ['Taskfile.yml'],
@@ -539,7 +574,7 @@ test('checks external and extensionless configuration scripts as executable sour
     symlinkPaths: new Set<string>(),
   };
   expect(
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+    await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
       nonExecutableGraph,
     ),
   ).toEqual([]);

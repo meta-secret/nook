@@ -1,6 +1,8 @@
 import { posix } from 'node:path';
 
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptProgram } from '../src/lib/typescript/program.ts';
 
 import { itemAt } from './skill-provider-command-types.ts';
 import type { BoundedPackageLoaderInspection } from './skill-provider-bounded-package-loader.ts';
@@ -8,14 +10,13 @@ import type { BoundedPackageLoaderInspection } from './skill-provider-bounded-pa
 export class SkillProviderLocalDataLoaderScenario {
   constructor(private readonly inspection: BoundedPackageLoaderInspection) {}
 
-  specialize(): string {
+  async specialize(): Promise<string> {
     const inspection = this.inspection;
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: inspection.path,
+      kind: TypeScriptProgram.sourceKindOf(inspection.path),
+      text: inspection.source,
+    });
     const declarations = new Map<string, ts.VariableDeclaration>();
     const imports: ts.CallExpression[] = [];
     const visit = (node: ts.Node): void => {
@@ -28,7 +29,7 @@ export class SkillProviderLocalDataLoaderScenario {
       ) {
         imports.push(node);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     const replacements: SourceReplacement[] = [];
@@ -153,7 +154,12 @@ export class SkillProviderLocalDataLoaderScenario {
     ) {
       return false;
     }
-    const literals = initializer.arguments.filter(ts.isStringLiteralLike);
+    const literals = initializer.arguments.filter(
+      (
+        argument,
+      ): argument is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
+        ts.isStringLiteralLikeNode(argument),
+    );
     if (literals.length !== 1) return false;
     const path = posix.normalize(itemAt([literals, 0]).text);
     return inspection.sources.has(path) ? path : false;
@@ -162,7 +168,7 @@ export class SkillProviderLocalDataLoaderScenario {
   private nearestFunctionScope(node: ts.Node): ts.Node | false {
     let candidate = node.parent;
     while (!ts.isSourceFile(candidate)) {
-      if (ts.isFunctionLike(candidate)) return candidate;
+      if (ts.isSignatureDeclaration(candidate)) return candidate;
       candidate = candidate.parent;
     }
     return false;
@@ -206,7 +212,7 @@ export class SkillProviderLocalDataLoaderScenario {
         safe = false;
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(closure.scope);
     return safe;

@@ -54,13 +54,13 @@ export class SkillProviderConfigApplicationScenario {
     );
   }
 
-  static assertConfigurationSourceBoundary(
+  static async assertConfigurationSourceBoundary(
     request: ConfigurationSourceBoundaryRequest,
-  ): void {
+  ): Promise<void> {
     return new SkillProviderConfigApplicationScenario(request).execute();
   }
 
-  private execute(): void {
+  private async execute(): Promise<void> {
     const request = this.request;
     if (
       request.path === LOOM_ARTICLE_ADAPTER ||
@@ -75,7 +75,9 @@ export class SkillProviderConfigApplicationScenario {
       SkillProviderConfigApplicationScenario.mightUseRuntimeLoader(
         request.source,
       ) &&
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection)
+      (await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ))
     )
       throw new Error(
         `Runnable configuration root violates runtime boundary: ${request.path}`,
