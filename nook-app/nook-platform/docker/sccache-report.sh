@@ -36,6 +36,14 @@ baked_runtime_mode="${SCCACHE_S3_RW_MODE:-UNSET}"
 runtime_mode="$baked_runtime_mode"
 runtime_mode_source=environment
 client_side="${SCCACHE_CLIENT_SIDE:-0}"
+case "${SCCACHE_MULTILEVEL_CHAIN:-}" in
+  "") storage_mode=single_s3 ;;
+  disk,s3) storage_mode=disk_s3 ;;
+  *)
+    echo 'nook-sccache-report: unsupported compiler cache chain' >&2
+    exit 2
+    ;;
+esac
 case "$client_side" in
   0|1) ;;
   *)
@@ -76,14 +84,24 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
         --arg baked_runtime_mode "$baked_runtime_mode" \
         --arg runtime_mode "$runtime_mode" \
         --arg runtime_mode_source "$runtime_mode_source" \
+        --arg storage_mode "$storage_mode" \
         --arg client_side "$client_side" '
         def count_values: ([.counts[]?] | add) // 0;
         def scalar_or_counts: if type == "object" then count_values else (. // 0) end;
+        def measured_level($backend):
+          if (.stats.multi_level | type) == "array" and (.stats.multi_level | length) == 2 then
+            [.stats.multi_level[] | select(.name | endswith("(" + $backend + ")"))] |
+            if length == 1 then .[0] else error("missing configured storage level") end |
+            if all(.hits, .writes, .write_failures, .backfills_to;
+              type == "number" and . >= 0 and . <= 9007199254740991 and floor == .) then .
+            else error("invalid storage counter") end
+          else error("invalid configured storage levels") end;
         def level_count($backend; $counter):
-          ([.stats.multi_level[]? | select(.name | endswith("(" + $backend + ")")) |
-            .[$counter] | if type == "number" and . >= 0 and floor == . then . else error("invalid storage counter") end] | add) // 0;
+          measured_level($backend) | .[$counter] |
+          if type == "number" and . >= 0 and . <= 9007199254740991 and floor == . then .
+          else error("invalid storage counter") end;
         def storage_count($backend; $counter; $single):
-          if (.stats.multi_level | type) == "array" then level_count($backend; $counter) else $single end;
+          if $storage_mode == "disk_s3" then level_count($backend; $counter) else $single end;
         storage_count("disk"; "write_failures"; 0) as $local_write_errors |
         storage_count("s3"; "write_failures"; (.stats.cache_write_errors | scalar_or_counts)) as $remote_write_errors |
         storage_count("s3"; "writes"; (.stats.cache_writes // 0)) as $remote_writes |
@@ -122,6 +140,7 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
         NOOK_SCCACHE_BAKED_RUNTIME_MODE="$baked_runtime_mode" \
         NOOK_SCCACHE_RUNTIME_MODE="$runtime_mode" \
         NOOK_SCCACHE_RUNTIME_MODE_SOURCE="$runtime_mode_source" \
+        NOOK_SCCACHE_STORAGE_MODE="$storage_mode" \
         NOOK_SCCACHE_CLIENT_SIDE="$client_side" \
           "$json_runtime" -e '
             const stats = JSON.parse(process.env.NOOK_SCCACHE_STATS_JSON);
@@ -130,36 +149,81 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
               : Number(value || 0);
             const scalarOrCounts = (value) => value && typeof value === "object" ? count(value) : Number(value || 0);
             const cacheWrites = Number(stats.stats.cache_writes || 0);
-            const nativeLevels = stats.stats.multi_level;
-            const levels = [];
-            switch (Array.isArray(nativeLevels)) {
-              case true: levels.push(...nativeLevels); break;
-              case false: break;
-            }
-            const levelCount = ({ backend, counter }) => levels
-              .filter((level) => level.name.endsWith("(" + backend + ")"))
-              .reduce((total, level) => {
-                const value = level[counter];
-                switch (Number.isSafeInteger(value) && value >= 0) {
-                  case true: return total + value;
-                  case false: throw new Error("invalid storage counter");
+            /** @typedef {object} StorageStatisticsRequest
+             * @property {string} mode
+             * @property {unknown} nativeLevels
+             * @property {number} singleHits
+             * @property {number} singleWrites
+             * @property {number} singleWriteErrors
+             */
+            /** @typedef {object} StorageLevelRequest
+             * @property {"disk" | "s3"} backend
+             */
+            class NativeStorageStatistics {
+              /** @param {StorageStatisticsRequest} request */
+              constructor(request) {
+                this.request = request;
+              }
+              /** @param {StorageLevelRequest} request */
+              measuredLevel(request) {
+                const levels = this.request.nativeLevels;
+                switch (Array.isArray(levels) && levels.length === 2) {
+                  case true: break;
+                  case false: throw new Error("invalid configured storage levels");
                 }
-              }, 0);
-            let remoteHits = count(stats.stats.cache_hits);
-            let remoteWrites = cacheWrites;
-            let remoteWriteErrors = count(stats.stats.cache_write_errors);
-            switch (Array.isArray(nativeLevels)) {
-              case true:
-                remoteHits = levelCount({ backend: "s3", counter: "hits" });
-                remoteWrites = levelCount({ backend: "s3", counter: "writes" });
-                remoteWriteErrors = levelCount({ backend: "s3", counter: "write_failures" });
-                break;
-              case false: break;
+                const matches = levels.filter((level) => typeof level.name === "string" &&
+                  level.name.endsWith("(" + request.backend + ")"));
+                switch (matches.length) {
+                  case 1: break;
+                  default: throw new Error("missing configured storage level");
+                }
+                const level = matches[0];
+                for (const counter of ["hits", "writes", "write_failures", "backfills_to"]) {
+                  switch (Number.isSafeInteger(level[counter]) && level[counter] >= 0) {
+                    case true: break;
+                    case false: throw new Error("invalid storage counter");
+                  }
+                }
+                return level;
+              }
+              measure() {
+                switch (this.request.mode) {
+                  case "single_s3":
+                    return {
+                      local_hits: 0, remote_hits: this.request.singleHits,
+                      local_writes: 0, remote_writes: this.request.singleWrites,
+                      local_write_errors: 0, remote_write_errors: this.request.singleWriteErrors,
+                      local_backfills: 0,
+                    };
+                  case "disk_s3": break;
+                  default: throw new Error("unsupported compiler cache chain");
+                }
+                /** @type {StorageLevelRequest} */
+                const diskRequest = { backend: "disk" };
+                /** @type {StorageLevelRequest} */
+                const s3Request = { backend: "s3" };
+                const disk = this.measuredLevel(diskRequest);
+                const s3 = this.measuredLevel(s3Request);
+                return {
+                  local_hits: disk.hits, remote_hits: s3.hits,
+                  local_writes: disk.writes, remote_writes: s3.writes,
+                  local_write_errors: disk.write_failures, remote_write_errors: s3.write_failures,
+                  local_backfills: disk.backfills_to,
+                };
+              }
             }
-            const localWriteErrors = levelCount({ backend: "disk", counter: "write_failures" });
+            /** @type {StorageStatisticsRequest} */
+            const storageRequest = {
+              mode: process.env.NOOK_SCCACHE_STORAGE_MODE,
+              nativeLevels: stats.stats.multi_level,
+              singleHits: count(stats.stats.cache_hits),
+              singleWrites: cacheWrites,
+              singleWriteErrors: count(stats.stats.cache_write_errors),
+            };
+            const storage = new NativeStorageStatistics(storageRequest).measure();
             const PublicationStatus = Object.freeze({ Pending: "pending_verification", Observed: "counters_observed" });
             let publicationStatus = PublicationStatus.Observed;
-            switch (process.env.NOOK_SCCACHE_CLIENT_SIDE === "1" && remoteWrites === 0) {
+            switch (process.env.NOOK_SCCACHE_CLIENT_SIDE === "1" && storage.remote_writes === 0) {
               case true: publicationStatus = PublicationStatus.Pending; break;
               case false: break;
             }
@@ -176,15 +240,10 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
               cache_hits: count(stats.stats.cache_hits),
               cache_misses: count(stats.stats.cache_misses),
               cache_errors: count(stats.stats.cache_errors),
-              cache_write_errors: Math.max(count(stats.stats.cache_write_errors), localWriteErrors + remoteWriteErrors),
+              cache_write_errors: Math.max(count(stats.stats.cache_write_errors),
+                storage.local_write_errors + storage.remote_write_errors),
               cache_writes: cacheWrites,
-              local_hits: levelCount({ backend: "disk", counter: "hits" }),
-              remote_hits: remoteHits,
-              local_writes: levelCount({ backend: "disk", counter: "writes" }),
-              remote_writes: remoteWrites,
-              local_write_errors: localWriteErrors,
-              remote_write_errors: remoteWriteErrors,
-              local_backfills: levelCount({ backend: "disk", counter: "backfills_to" }),
+              ...storage,
               compile_failures: scalarOrCounts(stats.stats.compile_fails),
             };
             process.stdout.write(JSON.stringify(report));
@@ -266,8 +325,10 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
   fi
   if [ "$finish_cache" -eq 1 ]; then
     printf 'nook-sccache-report: invalid statistics for cache snapshot %s\n' "$stage" >&2
-    exit 1
+  else
+    printf 'nook-sccache-report: invalid statistics for %s\n' "$stage" >&2
   fi
+  exit 1
 fi
 
 printf 'nook-sccache-report: statistics unavailable for %s\n' "$stage" >&2
