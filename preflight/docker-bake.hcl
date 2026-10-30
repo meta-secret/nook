@@ -6,9 +6,9 @@
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
 // nook-app/docker-bake.hcl.
 //
-// Own scope so Native product exports do not need to rebuild preflight cooks on
+// Own scope so Native product exports do not rebuild preflight dependency warmup layers on
 // every PR head. Do not cache-from rust-base here: Bake restores it via contexts
-// rust-base = target:rust-base. A shorter rust-base importer orphans chef cooks
+// rust-base = target:rust-base. A shorter rust-base importer orphans dependency warmup layers
 // the same way nightly/policy were orphaned.
 
 preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
