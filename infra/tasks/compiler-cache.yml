@@ -1,0 +1,132 @@
+version: "3"
+
+# Real compiler evidence through the existing hosted BuildKit build/export API.
+tasks:
+  bake-cache:prove-compiler:
+    desc: Prove real Cargo disk/S3 snapshots and ordinary cache export/import on hosted BuildKit.
+    silent: true
+    preconditions:
+      - sh: test "${GITHUB_ACTIONS:-}" = true
+        msg: Run this proof through task remote TASK_NAME=infra:bake-cache:prove-compiler.
+      - sh: test "${NOOK_BUILDKIT_REMOTE:-}" = 1
+        msg: The proof requires the existing selected remote BuildKit service.
+    cmds:
+      - |
+        bash <<'COMPILER_PROOF'
+        set -euo pipefail
+        : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+        : "${KUBERNETES_NODE_NAME:?The selected ARC node must be reported}"
+        : "${NOOK_PR_BUILDX_BUILDER:?The hosted builder must already be selected}"
+        : "${SCCACHE_S3_ACCESS_KEY_FILE:?The S3 access-key file is required}"
+        : "${SCCACHE_S3_SECRET_KEY_FILE:?The S3 secret-key file is required}"
+        test -r "$SCCACHE_S3_ACCESS_KEY_FILE"
+        test -r "$SCCACHE_S3_SECRET_KEY_FILE"
+        test "${SCCACHE_S3_RW_MODE:-}" = READ_WRITE
+        repo_root="$(git rev-parse --show-toplevel)"
+        output="$RUNNER_TEMP/nook-compiler-cache-proof"
+        mkdir -p "$output/context/production" "$output/results"
+        cp -R "$repo_root/infra/sim/compiler-cache/." "$output/context/"
+        cp "$repo_root/nook-app/nook-platform/docker/rust/base/Dockerfile" \
+          "$output/context/production/rust-base.Dockerfile"
+        cp "$repo_root/nook-app/nook-platform/docker/rust/base/Dockerfile.dockerignore" \
+          "$output/context/production/rust-base.Dockerfile.dockerignore"
+        cp "$repo_root/nook-app/nook-platform/docker/sccache-wrapper.sh" \
+          "$repo_root/nook-app/nook-platform/docker/sccache-report.sh" \
+          "$output/context/production/"
+        cp "$repo_root/nook-app/docker-bake.hcl" "$output/context/production/shared.docker-bake.hcl"
+        cp "$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl" \
+          "$output/context/production/rust.docker-bake.hcl"
+        export COMPILER_PROOF_OUTPUT_DIR="$output"
+        jq -n \
+          --arg source_sha "$(git rev-parse HEAD)" \
+          --arg node "$KUBERNETES_NODE_NAME" \
+          '{source_sha: $source_sha, node: $node,
+            toolchain_cache: "may_be_reused", s3_cache: "existing_bucket_not_cleared",
+            import_scope: "same_persistent_worker", fresh_node_portability: "not_demonstrated",
+            shutdown: "ordinary_stop_no_complete_detached_backfill_drain_guarantee"}' \
+          > "$output/scope.json"
+        run_proof() {
+          local phase="$1"
+          local started
+          local elapsed
+          local history_ref
+          local -a pipeline_status
+          started="$(date +%s)"
+          set +e
+          docker buildx bake --progress=plain \
+            --metadata-file "$output/$phase.metadata.json" \
+            --allow="fs.read=$repo_root" \
+            --allow="fs.read=$SCCACHE_S3_ACCESS_KEY_FILE" \
+            --allow="fs.read=$SCCACHE_S3_SECRET_KEY_FILE" \
+            --allow="fs.write=$output" \
+            -f "$repo_root/nook-app/docker-bake.hcl" \
+            -f "$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl" \
+            -f "$repo_root/infra/sim/compiler-cache/docker-bake.hcl" \
+            "compiler-proof-$phase" 2>&1 | tee "$output/$phase.log"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          elapsed="$(( $(date +%s) - started ))"
+          jq -n --arg phase "$phase" --argjson seconds "$elapsed" \
+            --argjson build_status "${pipeline_status[0]}" \
+            --argjson logger_status "${pipeline_status[1]}" \
+            '{phase: $phase, elapsed_seconds: $seconds,
+              build_exit_status: $build_status, logger_exit_status: $logger_status}' \
+            > "$output/$phase.timing.json"
+          case "${pipeline_status[0]}:${pipeline_status[1]}" in
+            0:0) ;;
+            *) echo "Compiler cache proof failed in $phase; retained diagnostics: $output" >&2; return 1 ;;
+          esac
+          history_ref="$(jq -er --arg target "compiler-proof-$phase" \
+            '.[$target]["buildx.build.ref"] | select(type == "string" and length > 0)' \
+            "$output/$phase.metadata.json")"
+          # Read the exact solve's ordinary BuildKit history; never pin records.
+          docker buildx history logs "${history_ref##*/}" --progress rawjson \
+            > "$output/$phase.progress.jsonl" 2>&1
+          case "$phase" in
+            cold)
+              jq -se '[.[].vertexes[]? | select(.cached != true and (.completed | type) == "string" and (.name | contains("compiler-publisher")))] | length > 0' \
+                "$output/$phase.progress.jsonl"
+              ;;
+            warm)
+              jq -se '[.[].vertexes[]? | select(.cached == true and (.name | contains("compiler-warm-parent")))] | length > 0' \
+                "$output/$phase.progress.jsonl"
+              ;;
+            export)
+              jq -e '.schemaVersion == 2 and (.manifests | length) == 1' "$output/cache/index.json"
+              mkdir -p "$output/cache-descriptors"
+              cp "$output/cache/index.json" "$output/cache/oci-layout" "$output/cache-descriptors/"
+              manifest_digest="$(jq -er '.manifests[0].digest' "$output/cache/index.json")"
+              manifest_file="$output/cache/blobs/${manifest_digest%%:*}/${manifest_digest#*:}"
+              cp "$manifest_file" "$output/cache-descriptors/manifest.json"
+              config_digest="$(jq -er '.config.digest' "$manifest_file")"
+              cp "$output/cache/blobs/${config_digest%%:*}/${config_digest#*:}" \
+                "$output/cache-descriptors/config.json"
+              ;;
+            import)
+              jq -se '[.[].vertexes[]? | select(.name | contains("importing cache manifest"))] | length > 0' \
+                "$output/$phase.progress.jsonl"
+              ;;
+            probe)
+              for child in a b; do
+                jq -se --arg stage "compiler-child-$child-cache" \
+                  '[.[].vertexes[]? | select(.cached != true and (.completed | type) == "string" and (.name | contains($stage)))] | length > 0' \
+                  "$output/$phase.progress.jsonl"
+              done
+              ;;
+          esac
+          test -s "$output/results/$phase/proof/child-a-real-source"
+          test -s "$output/results/$phase/proof/child-b-real-source"
+          test -s "$output/results/$phase/proof/stale-ordinary-rlib-rejected"
+          test "$(cat "$output/results/$phase/proof/child-a-owner")" = child-a
+          test "$(cat "$output/results/$phase/proof/child-b-owner")" = child-b
+        }
+        for phase in cold warm export import probe; do
+          run_proof "$phase"
+        done
+        test -s "$output/cache/index.json"
+        jq -n --argjson allocated_kib "$(du -sk "$output/cache" | cut -f1)" \
+          '{scope: "proof_export_including_inherited_rust_toolchain", unit: "allocated_KiB", allocated: $allocated_kib}' \
+          > "$output/export-storage.json"
+        jq -s '.' "$output/"*.timing.json > "$output/timings.json"
+        printf 'Compiler cache proof artifacts: %s\n' "$output"
+        COMPILER_PROOF
