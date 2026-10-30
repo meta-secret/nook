@@ -52,12 +52,16 @@ COPY --from=repository-source / /meta-secret/nook
 # Remove the dummy workspace coverage outputs after both independent imports.
 # Preserve instrumented dependencies and the real build's ordinary artifacts.
 RUN RUSTC_WRAPPER= cargo clean --offline --locked --workspace --profile dev --target-dir /meta-secret/preflight-target/llvm-cov-target
+# Resolve the fixture's independent lockfile before its offline coverage build.
+RUN --network=default RUSTC_WRAPPER= cargo fetch --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
     && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" --no-fail-fast \
+    && compiler_fixture_floor="$(jq -er '.package_lines_percent["nook-compiler-cache-proof"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+    && CARGO_TARGET_DIR=/meta-secret/compiler-cache-target CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target cargo llvm-cov test --offline --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml -p nook-compiler-cache-proof --fail-under-lines "$compiler_fixture_floor" --no-fail-fast \
     && nook-sccache-report --finish preflight-test-and-coverage
 
 # Policy uses the same compiled preflight graph as product validation. Rust,
