@@ -668,7 +668,7 @@ Rust compilation has a second cache boundary below Docker layers: pinned
 source-sensitive compiler outputs whenever credentials are available.
 Same-repository Main, PR, Rust ecosystem, and Remote jobs mount those
 credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
-cache Cargo downloads or Docker layers. Native package test reuse preserves
+cache Cargo downloads or Docker layers. Portable native test reuse preserves
 [combined coverage enforcement](.cortex/teams/sre/docs/architecture/engineering-harness.md#native-rust-source-and-test-reuse).
 PR CI enforces package coverage floors inside the Docker/BuildKit solve and
 does not upload or comment on a redundant coverage report. The old exact-input

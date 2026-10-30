@@ -108,9 +108,10 @@ legacy registered `nook` runner is not used.
 
 ### Native Rust source and test reuse
 
-Native verification separates source assembly from test execution. Seven
-package source stages feed seven independent test leaves. A test leaf is never
-an ancestor of another package's source or test stage.
+The shared PR/Main route covers seven portable native packages. It separates
+source assembly from test execution. Seven package source stages feed seven
+independent test leaves. A test leaf is never an ancestor of another package's
+source or test stage.
 
 The source graph follows the portable crate dependencies:
 
@@ -155,9 +156,11 @@ coverage from that package's own tests alone.
 
 #### Consumers and measured limits
 
-`pr-rust-verify` shares this native `builder-debug` result. It retains the extra
-static checks for companion-WASM and composition targets. Focused runtime
-images keep their existing test, lint, and coverage command behavior.
+`pr-rust-verify` shares successful portable native verification and coverage
+from `builder-debug`, avoiding duplicate portable lint/build work. It retains
+the extra static checks for companion-WASM and composition targets. Focused
+runtime images keep their existing test, lint, and coverage command behavior.
+The proof does not cover specialized ecosystem, fuzz, Kani, or browser paths.
 
 The source-only graph can expose parallel work and isolate reusable test
 results. Cold branches may repeat compilation of shared dependencies. Runtime
