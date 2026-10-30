@@ -13,5 +13,5 @@ companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-co
 # cargo-llvm-cov rejects combining --no-clean with --no-report.
 cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-companion-wasm
 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor"
-nook-sccache-report wasm-companion-node-compiler
+nook-sccache-report --finish wasm-companion-node-compiler
 touch /opt/nook/wasm-companion-verified

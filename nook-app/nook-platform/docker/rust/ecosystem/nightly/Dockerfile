@@ -29,7 +29,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
-    && cargo dylint --version
+    && cargo dylint --version \
+    && nook-sccache-report --finish rust-dylint-toolchain-1
 # Dylint's example lints pin a nightly of their own, and their driver lints
 # the WASM crates too, so that nightly needs rustc-dev and the WASM target.
 ENV DYLINT_EXAMPLES_NIGHTLY=nightly-2026-08-20
@@ -98,7 +99,8 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 RUN cargo fetch --manifest-path dylint/nook-domain-api/Cargo.toml --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
+    cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
+    && nook-sccache-report --finish rust-dylint-deps-3
 
 FROM rust-dylint-deps AS rust-dylint-build
 
@@ -108,7 +110,9 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
+    find dylint/nook-domain-api -type f -name '*.rs' -exec touch {} + \
+    && cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
+    && nook-sccache-report --finish rust-dylint-build-1
 
 # Compile the product dependency graphs against manifest-only dummy crates.
 # Mutable product sources are copied only after these native and WASM layers,
@@ -119,11 +123,13 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --all-targets \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
-      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    && nook-sccache-report --finish rust-dylint-product-deps-2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --target wasm32-unknown-unknown --all-targets \
-      -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests
+      -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests \
+    && nook-sccache-report --finish rust-dylint-product-deps-3
 
 FROM rust-dylint-build AS rust-dylint-self-test
 ARG RUST_DYLINT_COVERAGE_FLOOR
@@ -141,7 +147,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo llvm-cov report -p nook_domain_api --manifest-path dylint/nook-domain-api/Cargo.toml \
       --locked --fail-under-lines "${RUST_DYLINT_COVERAGE_FLOOR:?}" \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
-    && nook-sccache-report rust-dylint-self-test
+    && nook-sccache-report --finish rust-dylint-self-test
 FROM rust-dylint-product-deps AS rust-dylint-native
 
 WORKDIR /meta-secret/nook
@@ -158,14 +164,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo dylint --all -- --locked --all-targets \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
-    && nook-sccache-report rust-dylint-native
+    && nook-sccache-report --finish rust-dylint-native
 FROM rust-dylint-native AS rust-dylint-wasm
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --target wasm32-unknown-unknown --all-targets \
       -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests \
-    && nook-sccache-report rust-dylint-wasm
+    && nook-sccache-report --finish rust-dylint-wasm
 FROM rust-dylint-native AS rust-dylint
 COPY --from=rust-dylint-self-test /meta-secret/nook/nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml /tmp/dylint-self-tested.toml
 COPY --from=rust-dylint-wasm /meta-secret/nook/nook-app/nook-platform/Cargo.toml /tmp/dylint-wasm-checked.toml
@@ -186,11 +192,13 @@ RUN RUSTC_WRAPPER= cargo fetch --manifest-path fuzz/Cargo.toml \
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy --manifest-path fuzz/Cargo.toml \
-      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings \
+    && nook-sccache-report --finish rust-fuzz-deps-3
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo fuzz build --fuzz-dir fuzz \
-      --target x86_64-unknown-linux-gnu wire-parsers
+      --target x86_64-unknown-linux-gnu wire-parsers \
+    && nook-sccache-report --finish rust-fuzz-deps-4
 
 FROM rust-fuzz-deps AS rust-fuzz-smoke
 
@@ -207,7 +215,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     find nook-app-common nook-authenticator-domain nook-auth2 fuzz \
       -type f -name '*.rs' -exec touch {} + \
     && cargo clippy --manifest-path fuzz/Cargo.toml \
-      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings \
+    && nook-sccache-report --finish rust-fuzz-smoke-1
 
 RUN cargo metadata --manifest-path fuzz/Cargo.toml \
       --locked --format-version 1 --no-deps >/dev/null
@@ -217,4 +226,4 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo fuzz run --fuzz-dir fuzz \
       --target x86_64-unknown-linux-gnu \
       wire-parsers -- -max_total_time="${FUZZ_SECONDS}" \
-    && nook-sccache-report rust-fuzz-smoke
+    && nook-sccache-report --finish rust-fuzz-smoke

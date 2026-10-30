@@ -33,7 +33,7 @@ case "${1:?verification phase required}" in
     cat "$inventory/manager" "$inventory/rest" | sort >"$inventory/union"
     cmp "$inventory/all" "$inventory/union"
     wc -l "$inventory/all" "$inventory/manager" "$inventory/rest"
-    nook-sccache-report wasm-node-compiler
+    nook-sccache-report --finish wasm-node-compiler
     ;;
   manager|rest)
     partition="$1"
