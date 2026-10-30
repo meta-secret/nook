@@ -106,6 +106,76 @@ legacy registered `nook` runner is not used.
 - Web verification and opt-in browser jobs download that producer's small run-stable artifact.
 - They do not rebuild Rust/WASM locally.
 
+### Native Rust source and test reuse
+
+The shared PR/Main route covers seven portable native packages. It separates
+source assembly from test execution. Seven package source stages feed seven
+independent test leaves. A test leaf is never an ancestor of another package's
+source or test stage.
+
+The source graph follows the portable crate dependencies:
+
+```mermaid
+flowchart LR
+    Common["nook-app-common source"] --> Auth2["nook-auth2 source"]
+    Authenticator["nook-authenticator-domain source"] --> Auth2
+    Auth2 --> EventLog["nook-event-log source"]
+    Replication["nook-replication source"] --> EventLog
+    EventLog --> Companion["nook-companion-core source"]
+    Companion --> Core["nook-core source"]
+```
+
+Each source stage has its own test leaf. The leaves run package Clippy, native
+builds, and instrumented nextest suites. Auth2 and companion leaves retain their
+doctests. BuildKit reuses successful test executions through their ordinary
+Dockerfile inputs and cached layers.
+
+- **Shared inputs:** Toolchain, workspace manifests, lockfile, Cargo config,
+  and test configuration remain conservative shared invalidation boundaries.
+- **Crate inputs:** Whole-crate copies retain Cargo-discovered tests,
+  `build.rs`, fixtures, and other admitted source inputs. The copies exclude
+  known non-input documentation, Docker build descriptions, and coverage policy.
+- **Source dependencies:** Each package receives its real dependency sources.
+  A package's test result does not become another package's build input.
+- **Coverage policy:** `coverage-floor.json` enters only the final coverage
+  gate. A threshold-only change leaves test inputs unchanged and reevaluates
+  the report against the selected thresholds.
+
+#### Combined coverage
+
+Each leaf retains its actual raw LLVM profiles, executable coverage maps, and
+nextest JUnit XML. All leaves compile under the same absolute workspace path
+with the same toolchain and instrumentation settings. The final `builder-debug`
+stage collects their profiles and namespaced executables before reporting.
+
+`cargo-llvm-cov` `0.8.7` merges every leaf's actual contributions. Coverage of a
+dependency includes execution by downstream package tests. The report then
+applies the unchanged 90% native floor independently to all seven packages.
+The gate uses the combined data for every package rather than substituting
+coverage from that package's own tests alone.
+
+#### Consumers and measured limits
+
+`pr-rust-verify` shares successful portable native verification and coverage
+from `builder-debug`, avoiding duplicate portable lint/build work. It retains
+the extra static checks for companion-WASM and composition targets. Focused
+runtime images keep their existing test, lint, and coverage command behavior.
+The proof does not cover specialized ecosystem, fuzz, Kani, or browser paths.
+
+The source-only graph can expose parallel work and isolate reusable test
+results. Cold branches may repeat compilation of shared dependencies. Runtime
+proof and measured costs remain separate from the graph's intended reuse.
+
+The normal coverage handoff stays small. Raw profiles and executable bundles
+remain inside the BuildKit test leaves and coverage join. The optional proof
+target exports combined coverage, JUnit XML, and `artifact-files.tsv`
+inventories. Proof uploads contain compact evidence, with no full Cargo target
+trees or copied source contexts. BuildKit remains the authority for cache
+validity and reuse.
+
+Observed execution and cache-proof status are recorded in
+[native test-reuse evidence](native-test-reuse-proof.md).
+
 ### PR Consumer Behavior
 
 - `Web verification` depends on the WASM build producer through `needs`.
