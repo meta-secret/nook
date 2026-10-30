@@ -21,5 +21,5 @@
 
 - [Identity and authorization](../../../nook-platform/nook-auth2/.cortex/docs/spec/index.md)
 - [Vault items](../../../nook-platform/nook-core/.cortex/docs/spec/index.md)
-- [Personal field autofill](../../../nook-platform/nook-companion-core/.cortex/docs/spec/index.md)
+- [Personal field autofill](../../../nook-platform/nook-companion-core/.cortex/docs/spec/index.md): Page policy and core-owned record reveal.
 - [Browser extension](../../../nook-web/nook-web-extension/.cortex/docs/spec/index.md)

@@ -51,6 +51,7 @@ tasks:
         current="$(cd "{{.PLATFORM_ROOT}}" && find "Cargo.toml" "Cargo.lock" \
           "nook-wasm/Cargo.toml" "nook-wasm/src" \
           "nook-companion-wasm/Cargo.toml" "nook-companion-wasm/src" \
+          "nook-page-policy/Cargo.toml" "nook-page-policy/src" \
           "nook-companion-core/Cargo.toml" "nook-companion-core/src" \
           "nook-app-common/Cargo.toml" "nook-app-common/src" "nook-app-common/locales" \
           "nook-core/Cargo.toml" "nook-core/src" \

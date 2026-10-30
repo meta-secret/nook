@@ -15,7 +15,7 @@ use crate::{
     LoginWebsiteHost, PasskeyOrigin, SecretListItem, SecretListItemData, WebsiteHost,
     WebsiteHostError,
 };
-use nook_companion_core::{
+use nook_companion_core::site_secret_listing::{
     SiteSecretAccount, SiteSecretItem, SiteSecretKind, SiteSecretMatches, SiteSecretSavedHost,
     SiteSecretTitle,
 };

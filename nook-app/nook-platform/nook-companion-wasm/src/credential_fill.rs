@@ -1,7 +1,7 @@
 //! WASM-owned objects for portable credential-fill planning.
 
 use crate::page_form_policy::NookPageInputFieldObservation;
-use nook_companion_core::credential_fill::{self, field};
+use nook_page_policy::credential_fill::{self, field};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 pub use credential_fill::FocusedCredentialOpportunity;
@@ -34,7 +34,7 @@ impl FocusedCredentialRecognition {
 #[wasm_bindgen]
 pub struct FocusedCredentialRevalidation {
     opportunity: FocusedCredentialOpportunity,
-    field: nook_companion_core::PageInputFieldObservation,
+    field: nook_page_policy::PageInputFieldObservation,
 }
 
 #[wasm_bindgen]
@@ -510,13 +510,13 @@ impl CredentialFillResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::PageSecondFactorRoute;
+    use nook_page_policy::PageSecondFactorRoute;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn focused_exports_borrow_fields_and_preserve_revalidation_role() {
         let field = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Password,
+            nook_page_policy::PageInputType::Password,
             false,
             false,
             vec!["current-password".to_owned()],
@@ -545,7 +545,7 @@ mod tests {
         );
         assert_eq!(
             field.as_core().input_type,
-            nook_companion_core::PageInputType::Password
+            nook_page_policy::PageInputType::Password
         );
     }
 
@@ -601,7 +601,7 @@ mod tests {
     -> Result<(), wasm_bindgen::JsError> {
         let field_index = CredentialFillFieldIndex::two();
         let page_field = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Password,
+            nook_page_policy::PageInputType::Password,
             false,
             true,
             vec!["current-password".to_owned()],
@@ -630,7 +630,7 @@ mod tests {
         assert_eq!(field_index.as_core(), field::Index::TWO);
         assert_eq!(
             page_field.as_core().input_type,
-            nook_companion_core::PageInputType::Password
+            nook_page_policy::PageInputType::Password
         );
         Ok(())
     }
@@ -640,7 +640,7 @@ mod tests {
     fn classifier_returns_typed_ignored_for_an_unrelated_input() {
         let field_index = CredentialFillFieldIndex::three();
         let page_field = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
+            nook_page_policy::PageInputType::Text,
             false,
             false,
             Vec::new(),

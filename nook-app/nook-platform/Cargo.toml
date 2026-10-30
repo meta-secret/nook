@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "nook-app-common",
+    "nook-page-policy",
     "nook-auth2",
     "nook-authenticator-domain",
     "nook-replication",

@@ -20,15 +20,15 @@
 #[cfg(test)]
 use nook_companion_core::ExtensionConnectScope;
 
-use nook_companion_core::AuthenticationOutcomeDecision;
+use nook_page_policy::AuthenticationOutcomeDecision;
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 
-use nook_companion_core::AuthenticationUsernameEvidence;
+use nook_page_policy::AuthenticationUsernameEvidence;
 #[cfg(test)]
 #[cfg(test)]
-use nook_companion_core::BackupCodeCandidatePresence;
-use nook_companion_core::BackupCodePageText;
+use nook_page_policy::BackupCodeCandidatePresence;
+use nook_page_policy::BackupCodePageText;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod authentication_action_projection;
@@ -113,7 +113,7 @@ pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
 )]
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
-) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
     let result = { (field.as_core()).authentication_username_evidence() };
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
@@ -125,8 +125,8 @@ pub fn authentication_username_evidence(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn strongest_authentication_username_evidence(
-    evidence: Vec<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>>,
-) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+    evidence: Vec<tsify::Ts<nook_page_policy::AuthenticationUsernameEvidence>>,
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
     let evidence = evidence
         .into_iter()
         .map(|value| value.to_rust())
@@ -144,10 +144,8 @@ pub fn strongest_authentication_username_evidence(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn authentication_username_evidence_by_strength() -> Result<
-    Vec<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>>,
-    wasm_bindgen::JsError,
-> {
+pub fn authentication_username_evidence_by_strength()
+-> Result<Vec<tsify::Ts<nook_page_policy::AuthenticationUsernameEvidence>>, wasm_bindgen::JsError> {
     AuthenticationUsernameEvidence::BY_STRENGTH
         .iter()
         .map(Tsify::into_ts)
@@ -161,8 +159,8 @@ pub fn authentication_username_evidence_by_strength() -> Result<
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome(
-    input: &tsify::Ts<nook_companion_core::AuthenticationOutcomeClassification>,
-) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    input: &tsify::Ts<nook_page_policy::AuthenticationOutcomeClassification>,
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
     let input = input
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
@@ -176,15 +174,15 @@ pub fn classify_companion_authentication_outcome(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome_with_default_timeout(
-    observation: &tsify::Ts<nook_companion_core::AuthenticationOutcomeObservation>,
-) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    observation: &tsify::Ts<nook_page_policy::AuthenticationOutcomeObservation>,
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
     let observation = observation
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
         AuthenticationOutcomeDecision::classify(
             observation,
-            nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
+            nook_page_policy::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
         )
     };
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
@@ -196,8 +194,8 @@ pub fn classify_companion_authentication_outcome_with_default_timeout(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn validate_companion_authentication_outcome_decision(
-    decision: &tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>,
-) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    decision: &tsify::Ts<nook_page_policy::AuthenticationOutcomeDecision>,
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
     let decision = decision
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
@@ -210,49 +208,49 @@ mod tests {
     use super::*;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationApprovalRequirement;
-    use nook_companion_core::AuthenticationOutcomeDecision;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationOutcomeObservation;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationOutcomeVerdict;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationPilotPresentationCapability;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationSavedLoginCapability;
-    use nook_companion_core::AuthenticationUsernameEvidence;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowAction;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowKind;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowStage;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_companion_core::BrowserOAuthProvider;
+    use nook_companion_core::{OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultHostPolicy};
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageInputType;
-    use nook_companion_core::PageSecondFactorRoute;
-    use nook_companion_core::{
+    use nook_page_policy::AuthenticationApprovalRequirement;
+    use nook_page_policy::AuthenticationOutcomeDecision;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationOutcomeObservation;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationOutcomeVerdict;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationPilotPresentationCapability;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationSavedLoginCapability;
+    use nook_page_policy::AuthenticationUsernameEvidence;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationWorkflowAction;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationWorkflowKind;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::AuthenticationWorkflowStage;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_page_policy::PageInputType;
+    use nook_page_policy::PageSecondFactorRoute;
+    use nook_page_policy::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
         AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch,
-        OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultHostPolicy,
     };
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {
-        let input = nook_companion_core::AuthenticationPageObservations {
-            observations: vec![nook_companion_core::AuthenticationPageObservation {
+        let input = nook_page_policy::AuthenticationPageObservations {
+            observations: vec![nook_page_policy::AuthenticationPageObservation {
                 one_time_code_field_count:
-                    (nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
+                    (nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
                 ..Default::default()
             }],
         };
@@ -266,11 +264,11 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn detailed_workflow_wasm_export_rejects_unbounded_handler_facts() {
-        let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
-            observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
-                ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+        let input = nook_page_policy::AuthenticationPageObservationFactsBatch {
+            observations: vec![nook_page_policy::AuthenticationPageObservationFacts {
+                ceremony: nook_page_policy::AuthenticationCeremonyObservationFacts {
                     one_time_code_handler_signal: "x"
-                        .repeat(nook_companion_core::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
+                        .repeat(nook_page_policy::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -353,7 +351,7 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn saved_login_capability_export_preserves_classifier_contract() {
-        let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
+        let valid = nook_page_policy::AuthenticationWorkflowSnapshot {
             kind: AuthenticationWorkflowKind::Login,
             stage: AuthenticationWorkflowStage::Credentials,
             action: AuthenticationWorkflowAction::ContinueWithNook,
@@ -369,7 +367,7 @@ mod tests {
         );
         assert!((valid).requires_login_match_availability());
         assert!(
-            (nook_companion_core::AuthenticationWorkflowSnapshot {
+            (nook_page_policy::AuthenticationWorkflowSnapshot {
                 action: AuthenticationWorkflowAction::UsePasskey,
                 ..valid
             })
@@ -380,7 +378,7 @@ mod tests {
             AuthenticationPilotPresentationCapability::ProposeAction
         );
         assert_eq!(
-            (nook_companion_core::AuthenticationWorkflowSnapshot {
+            (nook_page_policy::AuthenticationWorkflowSnapshot {
                 stage: AuthenticationWorkflowStage::Recovery,
                 ..valid
             })
@@ -388,7 +386,7 @@ mod tests {
             AuthenticationSavedLoginCapability::Unavailable
         );
         assert_eq!(
-            (nook_companion_core::AuthenticationWorkflowSnapshot {
+            (nook_page_policy::AuthenticationWorkflowSnapshot {
                 stage: AuthenticationWorkflowStage::Recovery,
                 ..valid
             })
@@ -442,8 +440,8 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn remaining_export_families_preserve_closed_policy_and_url_boundaries() -> Result<(), String> {
         let outcome = AuthenticationOutcomeDecision::classify(
-            (nook_companion_core::AuthenticationOutcomeClassification {
-                observation: nook_companion_core::AuthenticationOutcomeObservation {
+            (nook_page_policy::AuthenticationOutcomeClassification {
+                observation: nook_page_policy::AuthenticationOutcomeObservation {
                     success_marker_present: true,
                     error_marker_present: true,
                     ..Default::default()
@@ -451,8 +449,8 @@ mod tests {
                 timeout_ms: 1_000.into(),
             })
             .observation,
-            (nook_companion_core::AuthenticationOutcomeClassification {
-                observation: nook_companion_core::AuthenticationOutcomeObservation {
+            (nook_page_policy::AuthenticationOutcomeClassification {
+                observation: nook_page_policy::AuthenticationOutcomeObservation {
                     success_marker_present: true,
                     error_marker_present: true,
                     ..Default::default()
@@ -468,7 +466,7 @@ mod tests {
         assert_eq!(
             AuthenticationOutcomeDecision::classify(
                 AuthenticationOutcomeObservation::default(),
-                nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS
+                nook_page_policy::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS
             )
             .verdict,
             AuthenticationOutcomeVerdict::Insufficient
@@ -535,18 +533,19 @@ mod tests {
 mod wasm_tests {
     #[cfg(all(test, target_arch = "wasm32"))]
     #[cfg(all(test, target_arch = "wasm32"))]
-    use nook_companion_core::AuthenticationWorkflowSelectedFacts;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
     use nook_companion_core::ExtensionSessionStatusAvailability;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_page_policy::AuthenticationWorkflowSelectedFacts;
     use std::fmt;
     #[cfg(all(test, target_arch = "wasm32"))]
     use tsify::Ts;
     use wasm_bindgen::JsError;
 
-    use nook_companion_core::{
+    use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use nook_page_policy::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
-        BackupCodeCandidatePresence, ExtensionPersistenceArea, ExtensionPersistenceObservation,
+        BackupCodeCandidatePresence,
     };
     use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -608,7 +607,7 @@ mod wasm_tests {
     struct RuntimeResponseFixture {
         workflow: WorkflowFixture,
         login_matches: LoginMatchesFixture,
-        selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts,
+        selected_facts: nook_page_policy::AuthenticationWorkflowSelectedFacts,
     }
 
     #[derive(Deserialize)]
@@ -787,7 +786,7 @@ mod bridge_coverage;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod ingress_tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationOutcomeClassification, AuthenticationOutcomeObservation,
         AuthenticationOutcomeVerdict, AuthenticationUsernameEvidence, PageInputType,
         PageSecondFactorRoute,

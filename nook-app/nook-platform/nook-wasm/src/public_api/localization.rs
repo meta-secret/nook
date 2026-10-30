@@ -3,7 +3,6 @@ use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookIdentityHealth,
 };
-use nook_core::AuthenticationWorkflowMatch;
 use nook_core::SupportedAppLocale;
 use nook_core::{AppLocale, ProviderFailureCause, VaultRecoveryErrorKind};
 use nook_core::{IdentityHealth, IdentityHealthAssessment};
@@ -13,6 +12,7 @@ use nook_core::{
     TranslateWithReplacementsRequest, TranslationCatalog,
 };
 use nook_core::{TranslationCatalogSource, TranslationLookup};
+use nook_page_policy::AuthenticationWorkflowMatch;
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -122,7 +122,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 ) -> NookAuthenticationOutcomeVerdict {
     NookAuthenticationOutcomeVerdict::from_core(
         (observation.to_core())
-            .classify_authentication_outcome(nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            .classify_authentication_outcome(nook_page_policy::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
     )
 }
 

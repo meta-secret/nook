@@ -7,12 +7,12 @@ description = "Portable auth-companion heuristics and host policy without vault 
 repository.workspace = true
 
 [dependencies]
+nook-page-policy = { path = "../nook-page-policy" }
 derive_more = { version = "2.1.1", default-features = false, features = ["from"] }
 nook-authenticator-domain = { path = "../nook-authenticator-domain" }
 nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-event-log = { path = "../nook-event-log" }
-percent-encoding = "2.3.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
@@ -22,7 +22,6 @@ wasm-bindgen = "0.2.129"
 zeroize = "1.9.1"
 
 [dev-dependencies]
-proptest = "1.12.0"
 anyhow = "1.0.104"
 
 [lints]

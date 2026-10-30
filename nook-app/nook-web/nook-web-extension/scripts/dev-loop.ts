@@ -33,6 +33,7 @@ const wasmCrates = [
   'nook-wasm',
   'nook-companion-wasm',
   'nook-companion-core',
+  'nook-page-policy',
   'nook-app-common',
   'nook-core',
   'nook-authenticator-domain',

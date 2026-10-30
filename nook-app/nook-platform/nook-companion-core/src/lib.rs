@@ -1,7 +1,7 @@
-//! Portable auth-companion heuristics and vault host/OAuth origin policy.
+//! Portable extension pairing, session protocol, and vault host/OAuth origin policy.
 //!
-//! Kept free of vault crypto and sync so a tiny companion WASM package can link
-//! this crate without the full `nook-core` graph.
+//! Page observations and authentication workflows belong to `nook-page-policy`.
+//! Vault-key and signed-event semantics remain in their authentication/event owners.
 
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -21,24 +21,14 @@
 
 mod account_picker_authorization;
 mod authentication_outcome_response;
-mod authentication_workflow;
-mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
 mod authenticator_code_response;
 mod authenticator_enrollment_response;
 mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
-mod backup_code_candidates;
 mod browser_tab_target;
 mod companion_pairing;
-pub mod credential_fill;
-pub mod personal_field_classification;
-pub use personal_field_classification::{
-    ClassifiedPersonalField, PersonalFieldClassification, PersonalFieldEvidence,
-    PersonalFieldGroup, PersonalFieldKind, PersonalFillField, PersonalFillOpportunity,
-    PersonalFillPlan, PersonalFillScope, PersonalFillUnavailability,
-};
 mod domain_numbers;
 mod extension_consent;
 mod extension_pairing_state;
@@ -47,17 +37,12 @@ mod extension_session_protocol;
 mod extension_session_status_response;
 mod extension_vault_event;
 mod generated_password_response;
-mod login_save;
 mod oauth_origin_policy;
-mod outcome_evidence;
-pub use login_save::*;
-mod page_field_classification;
-mod site_secret_listing;
+pub mod site_secret_listing;
 mod vault_host_policy;
 mod website_login_options_response;
 mod website_login_save_offer_response;
 mod website_passkey_account_list;
-mod website_passkey_proposal;
 
 pub use nook_auth2::StoreId;
 
@@ -77,43 +62,6 @@ pub use account_picker_authorization::{
 pub use authentication_outcome_response::{
     AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
-};
-pub use authentication_workflow::{
-    AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
-    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupBatch,
-    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupCopy,
-    AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
-    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
-    AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
-    AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
-    AuthenticationDetailedAdvanceControlObservation,
-    AuthenticationDetailedPasskeyControlCandidateObservation,
-    AuthenticationDetailedPasskeyControlObservation, AuthenticationDisclosureControlDecision,
-    AuthenticationDisclosureObservationSchemaVersion, AuthenticationEnrollmentEvidence,
-    AuthenticationFieldObservationFacts, AuthenticationFormObservationPriority,
-    AuthenticationImplicitSubmitActuationObservation, AuthenticationManualCheckpoint,
-    AuthenticationObservationBindingError, AuthenticationObservationBindingToken,
-    AuthenticationOneTimeCodeProgressionEvidence, AuthenticationPageObservation,
-    AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
-    AuthenticationPageObservations, AuthenticationPasskeyAccountAvailability,
-    AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
-    AuthenticationPilotPresentationCapability, AuthenticationQrMediaObservation,
-    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
-    CurrentAuthenticationDisclosureControlRequest, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, VersionedAuthenticationDisclosureControlObservation,
-};
-pub use authentication_workflow_response::{
-    AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowRoutingResponseWire,
-    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
-    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSelectedFacts,
-    AuthenticationWorkflowSelectedFactsWire, AuthenticationWorkflowSnapshotResponse,
-    AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
-    AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowSnapshotWire,
-    WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
-    WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
-    WebsiteLoginMatchAvailabilityWithoutCountWire,
 };
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
@@ -157,14 +105,7 @@ pub use companion_pairing::{
     CompanionPairingWebsiteAuthorizationOutcome, CompanionWebsitePairingEndpoint,
     ConsumedCompanionPairingAuthority,
 };
-pub use domain_numbers::{
-    AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,
-    AuthenticationOutcomeTimeoutMilliseconds, AuthenticationPasskeyAccountCount,
-    AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
-    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
-    AuthenticationWorkflowTotalSteps, CompanionEpochMilliseconds, ExtensionEventCount,
-    ExtensionSyncProviderCount,
-};
+pub use domain_numbers::{ExtensionEventCount, ExtensionSyncProviderCount};
 pub use extension_consent::{
     ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentObservation,
     ExtensionConsentPhase, ExtensionConsentTransitionFailure, ExtensionConsentTransitionOutcome,
@@ -212,23 +153,6 @@ pub use oauth_origin_policy::{
     BrowserOAuthLocation, BrowserOAuthLocationEvidence, BrowserOAuthProvider, OAuthOriginSupport,
     OAuthOriginUnsupportedReason,
 };
-pub use outcome_evidence::{
-    AuthenticationOutcomeClassification, AuthenticationOutcomeDecision,
-    AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
-    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-};
-pub use page_field_classification::{
-    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-    AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
-};
-pub use page_field_classification::{
-    CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
-    LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals,
-    PageInputCharacterLimit, PageInputFieldObservation, PageInputMaxLength, PageInputMode,
-    PageInputPattern, PageInputType, PageSecondFactorRoute,
-};
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{
     WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
@@ -242,72 +166,15 @@ pub use website_passkey_account_list::{
     WebsitePasskeyAccount, WebsitePasskeyAccountList, WebsitePasskeyAccountListKind,
     WebsitePasskeyAccountListWire,
 };
-pub use website_passkey_proposal::{WebsitePasskeyEvidence, WebsitePasskeyProposal};
-
-pub use page_field_classification::AuthenticationContainerIdentity;
-pub use page_field_classification::AuthenticationControlText;
-
-pub use page_field_classification::{
-    AuthenticationRouteActuation, AuthenticationRouteEvidence, AutocompleteTokenQuery,
-    CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence,
-};
-
-pub use page_field_classification::PasskeyControlMarking;
-
-pub use authentication_workflow::{
-    AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
-};
-
-pub use backup_code_candidates::{
-    AuthenticationBackupCodeExtraction, AuthenticationBackupCodeExtractionRequest,
-    AuthenticationBackupCodeText, AuthenticationBackupCodeTextError, BackupCodePageText,
-};
 
 pub use vault_host_policy::{
     SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation, VaultHostPolicy,
 };
 
-pub use authentication_workflow::{
-    AuthenticationRecoveryCopyEvidence, AuthenticationRecoveryCopyRequest,
-    AuthenticationWorkflowSnapshotTransport, AuthenticationWorkflowTransportAdmission,
-    AuthenticationWorkflowTransportPayload, AuthenticationWorkflowTransportType,
-};
-
 mod passkey_session_material;
 pub use passkey_session_material::*;
 
-mod recovery_code_language;
-pub use recovery_code_language::BackupCodeCandidatePresence;
-
-pub use page_field_classification::{
-    AuthenticationRouteControlPresence, AuthenticationRoutePasswordPresence,
-    AuthenticationRouteScope, AuthenticationRouteUsernamePresence, PageLoginContext,
-};
-
-mod authentication_navigation_path;
-pub use authentication_navigation_path::{
-    AuthenticationNavigationPath, AuthenticationNavigationPathObservation,
-    AuthenticationNavigationPathProjection, AuthenticationNavigationPathRequest,
-    AuthenticationOutcomePathname, AuthenticationOutcomePathnameError,
-};
-pub use authentication_workflow::{
-    AuthenticationDisplayProgress, AuthenticationLoginChecklistActivity,
-    AuthenticationLoginChecklistMessageKey, AuthenticationLoginChecklistObservation,
-    AuthenticationLoginChecklistOutcomePolling, AuthenticationLoginChecklistPresentation,
-    AuthenticationLoginChecklistProjection, AuthenticationLoginChecklistResult,
-    AuthenticationLoginChecklistRow, AuthenticationLoginChecklistRowState,
-    AuthenticationLoginChecklistState, AuthenticationLoginChecklistStatus,
-    AuthenticationLoginChecklistStep, AuthenticationWorkflowActivity,
-    AuthenticationWorkflowProgress, AuthenticatorEnrollmentProgress,
-    PasswordWorkflowActivityEvidence, PasswordWorkflowActivityPresentation,
-};
-pub use authentication_workflow_response::SavedLoginActionPresentationRequest;
 pub use extension_pairing_state::ImportedExtensionEventLogError;
-pub use page_field_classification::AuthenticationControlTransportability;
 
 mod authenticator_session_response;
 pub use authenticator_session_response::*;
-
-pub use authentication_workflow::{
-    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
-};

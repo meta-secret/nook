@@ -69,7 +69,7 @@ pub enum PageControlSubmissionMethod {
 /// Classification keeps the report reusable; checked policy entry remains internal.
 ///
 /// ```
-/// use nook_companion_core::{AuthenticationAdvanceControlObservation,
+/// use nook_page_policy::{AuthenticationAdvanceControlObservation,
 ///     AuthenticationAdvanceControlDecision};
 /// let classify = |report: &AuthenticationAdvanceControlObservation| {
 ///     let first = report.classify();
@@ -82,14 +82,14 @@ pub enum PageControlSubmissionMethod {
 /// External callers cannot obtain the checked policy input.
 ///
 /// ```compile_fail,E0624
-/// use nook_companion_core::AuthenticationAdvanceControlObservation;
+/// use nook_page_policy::AuthenticationAdvanceControlObservation;
 /// let bypass = |report: &AuthenticationAdvanceControlObservation| report.check();
 /// ```
 ///
 /// A raw report cannot run policy with a caller-selected canonical path.
 ///
 /// ```compile_fail,E0599
-/// use nook_companion_core::AuthenticationAdvanceControlObservation;
+/// use nook_page_policy::AuthenticationAdvanceControlObservation;
 /// let bypass = |report: &AuthenticationAdvanceControlObservation| {
 ///     report.classify_canonical("/auth/login")
 /// };

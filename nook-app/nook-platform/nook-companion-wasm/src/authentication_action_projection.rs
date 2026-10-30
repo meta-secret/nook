@@ -1,5 +1,5 @@
 //! Typed action projections executed in the extension-owned WASM runtime.
-use nook_companion_core::{
+use nook_page_policy::{
     AuthenticationBackupCodeExtraction, AuthenticationBackupCodeExtractionRequest,
     AuthenticationNavigationPathProjection, AuthenticationNavigationPathRequest,
 };

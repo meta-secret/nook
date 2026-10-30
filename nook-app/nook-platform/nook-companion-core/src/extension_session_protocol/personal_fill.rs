@@ -8,7 +8,7 @@
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
 use super::queue::QueueDisposition;
-use crate::{PersonalFieldGroup, PersonalFieldKind};
+use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 

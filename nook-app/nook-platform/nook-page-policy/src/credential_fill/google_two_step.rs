@@ -366,8 +366,8 @@ impl GoogleTwoStepLoginContinuation {
     /// Consume this source-document selection before the fresh reveal and fill.
     /// No submission capability is produced.
     /// ```compile_fail,E0382
-    /// use nook_companion_core::credential_fill::GoogleTwoStepLoginContinuation;
-    /// use nook_companion_core::credential_fill::GoogleLoginPageObservation;
+    /// use nook_page_policy::credential_fill::GoogleTwoStepLoginContinuation;
+    /// use nook_page_policy::credential_fill::GoogleLoginPageObservation;
     /// fn reuse(owner: GoogleTwoStepLoginContinuation, observation: &GoogleLoginPageObservation) {
     ///     let _ = owner.admit_password(observation);
     ///     let _ = owner.admit_password(observation);

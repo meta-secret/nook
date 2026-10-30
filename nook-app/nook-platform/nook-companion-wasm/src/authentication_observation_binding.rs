@@ -1,4 +1,4 @@
-use nook_companion_core::AuthenticationObservationBindingToken;
+use nook_page_policy::AuthenticationObservationBindingToken;
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -11,11 +11,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn bind_authentication_page_observation_facts(
-    facts: &tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
-) -> Result<
-    tsify::Ts<nook_companion_core::AuthenticationObservationBindingToken>,
-    wasm_bindgen::JsError,
-> {
+    facts: &tsify::Ts<nook_page_policy::AuthenticationPageObservationFactsBatch>,
+) -> Result<tsify::Ts<nook_page_policy::AuthenticationObservationBindingToken>, wasm_bindgen::JsError>
+{
     let facts = facts
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
@@ -34,8 +32,8 @@ pub fn bind_authentication_page_observation_facts(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_page_observation_facts_match_binding(
-    binding: &tsify::Ts<nook_companion_core::AuthenticationObservationBindingToken>,
-    facts: &tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
+    binding: &tsify::Ts<nook_page_policy::AuthenticationObservationBindingToken>,
+    facts: &tsify::Ts<nook_page_policy::AuthenticationPageObservationFactsBatch>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let binding = binding
         .to_rust()
@@ -57,7 +55,7 @@ mod tests {
     use tsify::{Ts, Tsify};
     use wasm_bindgen::JsError;
 
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
         AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
         AuthenticationPageObservationFactsBatch, PageControlActionability,
@@ -101,7 +99,7 @@ mod tests {
         let approved = Ts::new_unchecked(approved_js);
         let binding = super::bind_authentication_page_observation_facts(&approved)?;
         let binding_js = binding.js_value();
-        let binding: Ts<nook_companion_core::AuthenticationObservationBindingToken> =
+        let binding: Ts<nook_page_policy::AuthenticationObservationBindingToken> =
             Ts::new_unchecked(binding_js);
 
         let unchanged_js =

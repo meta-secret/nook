@@ -30,8 +30,8 @@ pub struct WebsiteLoginSaveOffer {
     decision: WebsiteLoginSaveOfferDecision,
     vault_store_id: String,
     vault_name: String,
-    baseline: crate::LoginSaveCaptureBaseline,
-    selection: crate::LoginSaveCaptureSelection,
+    baseline: nook_page_policy::LoginSaveCaptureBaseline,
+    selection: nook_page_policy::LoginSaveCaptureSelection,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
@@ -166,15 +166,15 @@ impl WebsiteLoginSaveActionResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LoginCapturedFieldIndex;
-    use crate::LoginSaveCaptureSelection;
-    use crate::LoginSaveCaptureSource;
-    use crate::credential_fill::field::Index;
-    use crate::{
+    use anyhow::Error as AnyhowError;
+    use nook_page_policy::LoginCapturedFieldIndex;
+    use nook_page_policy::LoginSaveCaptureSelection;
+    use nook_page_policy::LoginSaveCaptureSource;
+    use nook_page_policy::credential_fill::field::Index;
+    use nook_page_policy::{
         AuthenticationWorkflowKind, LoginAuthFieldPresence, LoginSaveCaptureBaseline,
         LoginSubmissionPageUrl,
     };
-    use anyhow::Error as AnyhowError;
     struct Fixture;
     impl Fixture {
         fn offer(decision: WebsiteLoginSaveOfferDecision) -> anyhow::Result<WebsiteLoginSaveOffer> {
@@ -327,7 +327,7 @@ mod tests {
             LoginSaveCaptureSelection::SubmittedLogin {
                 username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
                 password_field_index: LoginCapturedFieldIndex::from(Index::from(
-                    crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+                    nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
                 )),
             },
         ] {

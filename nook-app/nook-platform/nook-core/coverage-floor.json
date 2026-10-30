@@ -4,6 +4,7 @@
   "enforced_packages": [
     "nook-app-common",
     "nook-authenticator-domain",
+    "nook-page-policy",
     "nook-auth2",
     "nook-replication",
     "nook-event-log",
@@ -17,6 +18,7 @@
   "package_lines_percent": {
     "nook-app-common": 90.0,
     "nook-authenticator-domain": 90.0,
+    "nook-page-policy": 90.0,
     "nook-auth2": 90.0,
     "nook-replication": 90.0,
     "nook-event-log": 90.0,

@@ -1,6 +1,6 @@
 //! Typed runtime response boundary for authentication outcome classification.
 
-use crate::AuthenticationOutcomeDecision;
+use nook_page_policy::AuthenticationOutcomeDecision;
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;

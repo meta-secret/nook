@@ -43,9 +43,19 @@ flowchart TD
     Extension --> Shared
 
     Shared -->|"consumes generated bindings"| Wasm["nook-wasm<br/>(browser I/O, session, wasm-bindgen)"]
+    Shared -->|"extension policy bindings"| CompanionWasm["nook-companion-wasm"]
 
     subgraph RustPlatform["Rust Platform Crates"]
         Wasm --> Core["nook-core<br/>(secrets, sessions, sync policy, crypto)"]
+        Wasm --> PagePolicy["nook-page-policy<br/>(page observations, workflow, fill/capture planning)"]
+        Wasm --> Companion["nook-companion-core<br/>(pairing and extension protocol)"]
+        CompanionWasm --> PagePolicy
+        CompanionWasm --> Companion
+        Core --> PagePolicy
+        Core --> Companion
+        Companion --> PagePolicy
+        Companion --> Auth2
+        Companion --> EventLog
         Core --> EventLog["nook-event-log<br/>(signed events, authorization, projection)"]
         Core --> Common["nook-app-common<br/>(shared leaf primitives and localization)"]
         EventLog --> Auth2["nook-auth2<br/>(identity and vault authorization)"]
@@ -56,8 +66,18 @@ flowchart TD
 
 ### Dependency Enforcements
 
-1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-app-common`, `nook-auth2`, `nook-replication`, `nook-event-log`, and `nook-core` compile on native and `wasm32-unknown-unknown`.
+- **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
+- **Independent page policy:** `nook-page-policy` has no dependencies on other Nook crates. Core and both bridges consume its policy values directly.
+- **Protocol ownership:** `nook-core` retains its companion dependency for typed site listings. Pairing and vault protocol stay in `nook-companion-core`.
+- **Platform Portability:** The portable crates compile on native and `wasm32-unknown-unknown`:
+  - `nook-app-common`
+  - `nook-authenticator-domain`
+  - `nook-page-policy`
+  - `nook-auth2`
+  - `nook-replication`
+  - `nook-event-log`
+  - `nook-companion-core`
+  - `nook-core`
 
 - No browser APIs in these crates.
 - Simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
@@ -140,9 +160,11 @@ Detailed package design, module breakdowns, and service boundaries live in
 ### Rust Platform Tier
 
 - **`nook-app-common` (Shared Leaf Primitives):** Owns localization catalogs, translation behavior, and leaf primitives shared across portable crates.
+- **`nook-page-policy` (Page Policy):** Owns page classification, authentication workflow, fill/capture planning, and their vocabulary without other Nook dependencies.
 - **`nook-auth2` (Identity & Authorization):** Owns logical identities, app-key derivation, passkey PRF wrapping, and per-vault DEK authorization envelopes.
 - **`nook-replication` (Replication Mechanics):** Owns causal DAG index calculations, topological event ordering, and provider-agnostic replica repair.
 - **`nook-event-log` (Signed Vault History):** Owns content-addressed event encoding, Ed25519 signatures, authorization graphs, and encrypted projection state.
+- **`nook-companion-core` (Extension Protocol):** Owns pairing, consent, typed site listings, and protected-origin policy.
 - **`nook-core` (Application Domain Core):** Owns vault application services, sync reconciliation, crypto operations, search indexing, and domain workflows.
 
 ### WebAssembly Bridge Tier
@@ -306,6 +328,8 @@ YAML payload sections:
 - **`nook-replication`**
   - **Tests:** `task rust:coverage:check`
 - **`nook-event-log`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-page-policy`**
   - **Tests:** `task rust:coverage:check`
 - **`nook-companion-core`**
   - **Tests:** `task rust:coverage:check`

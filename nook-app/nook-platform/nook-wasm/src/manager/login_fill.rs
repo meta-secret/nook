@@ -91,11 +91,11 @@ mod tests {
     use crate::types::NookFocusedLoginFillRequest;
     use nook_companion_core::{BrowserTabTarget, BrowserTabUrl, BrowserTabUrlObservation};
     use nook_core::{
-        AuthenticatorSecret, CredentialKind, FocusedLoginFillOrigin, LoginHostMatch, LoginSecret,
-        SecretId, SecretSearchCatalog, SecretType, SecretValue, SecureNoteSecret,
-        StoredRecordPayload, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret, VaultCrypto,
-        VaultKeys, WebsiteHost,
+        AuthenticatorSecret, FocusedLoginFillOrigin, LoginHostMatch, LoginSecret, SecretId,
+        SecretSearchCatalog, SecretType, SecretValue, SecureNoteSecret, StoredRecordPayload,
+        TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret, VaultCrypto, VaultKeys, WebsiteHost,
     };
+    use nook_page_policy::credential_fill::CredentialKind;
 
     /// Unlocked manager fixture whose catalog is reconciled from the inserted records.
     struct LoginFillVault {
@@ -570,7 +570,7 @@ mod browser_tests {
                 .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
                     secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
                     origin: origin.clone(),
-                    credential: nook_core::CredentialKind::Username,
+                    credential: nook_page_policy::credential_fill::CredentialKind::Username,
                 })
                 .is_err()
         );
@@ -579,7 +579,7 @@ mod browser_tests {
                 .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
                     secret_id: SecretId::from_vault_record("not-a-secret-id"),
                     origin,
-                    credential: nook_core::CredentialKind::CurrentPassword,
+                    credential: nook_page_policy::credential_fill::CredentialKind::CurrentPassword,
                 })
                 .is_err()
         );

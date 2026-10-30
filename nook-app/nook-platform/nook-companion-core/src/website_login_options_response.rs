@@ -6,7 +6,7 @@
 
 //! Typed runtime response boundary for website-login options.
 
-use crate::WebsiteLoginMatchAvailability;
+use nook_page_policy::WebsiteLoginMatchAvailability;
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;

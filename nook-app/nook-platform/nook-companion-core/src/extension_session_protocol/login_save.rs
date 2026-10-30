@@ -1,9 +1,9 @@
 //! Ephemeral login-save session ingress and generic write request.
 use super::queue::{MessageDefaultQueueDisposition, QueueDisposition};
 use super::request::SessionSecretText;
-use crate::LoginExplicitCandidatePresence;
-use crate::LoginSubmissionOrigin;
-use crate::LoginSubmissionPageUrl;
+use nook_page_policy::LoginExplicitCandidatePresence;
+use nook_page_policy::LoginSubmissionOrigin;
+use nook_page_policy::LoginSubmissionPageUrl;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -17,11 +17,11 @@ pub enum SubmittedLoginSaveTarget {
 #[derive(Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct SubmittedWebsiteLoginSaveRequest {
-    pub origin: crate::LoginSubmissionPageUrl,
+    pub origin: nook_page_policy::LoginSubmissionPageUrl,
     pub username: SessionSecretText,
     pub password: SessionSecretText,
     pub target: SubmittedLoginSaveTarget,
-    pub evidence: crate::LoginSaveOutcomeObservation,
+    pub evidence: nook_page_policy::LoginSaveOutcomeObservation,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
@@ -31,12 +31,12 @@ pub struct LoginSavePlanPayload {
     pub(super) device_id: String,
     pub(super) device_public_key: String,
     pub(super) device_signing_public_key: String,
-    pub(super) origin: crate::LoginSubmissionPageUrl,
+    pub(super) origin: nook_page_policy::LoginSubmissionPageUrl,
     pub(super) username: SessionSecretText,
     pub(super) password: SessionSecretText,
     pub(super) captured_values: Vec<SessionSecretText>,
-    pub(super) sender: crate::LoginSaveSenderContext,
-    pub(super) capture: Box<crate::LoginSubmissionCapture>,
+    pub(super) sender: nook_page_policy::LoginSaveSenderContext,
+    pub(super) capture: Box<nook_page_policy::LoginSubmissionCapture>,
     pub(super) queue: QueueDisposition,
 }
 
@@ -51,8 +51,8 @@ struct LoginSavePlanPayloadWire {
     username: SessionSecretText,
     password: SessionSecretText,
     captured_values: Vec<SessionSecretText>,
-    sender: crate::LoginSaveSenderContext,
-    capture: crate::LoginSubmissionCapture,
+    sender: nook_page_policy::LoginSaveSenderContext,
+    capture: nook_page_policy::LoginSubmissionCapture,
     queue: QueueDisposition,
 }
 
@@ -65,9 +65,9 @@ pub enum LoginSavePlanIngressError {
     #[error("login capture origin does not match sender origin")]
     OriginMismatch,
     #[error(transparent)]
-    InvalidCapture(#[from] crate::LoginCaptureError),
+    InvalidCapture(#[from] nook_page_policy::LoginCaptureError),
     #[error(transparent)]
-    InvalidOrigin(#[from] crate::LoginSaveContextError),
+    InvalidOrigin(#[from] nook_page_policy::LoginSaveContextError),
 }
 
 impl TryFrom<LoginSavePlanPayloadWire> for LoginSavePlanPayload {
@@ -77,7 +77,8 @@ impl TryFrom<LoginSavePlanPayloadWire> for LoginSavePlanPayload {
         match (wire.captured_values.len(), wire.capture.fields.len()) {
             (values, fields)
                 if values == fields
-                    && values <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize => {}
+                    && values
+                        <= nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize => {}
             _ => return Err(LoginSavePlanIngressError::MismatchedValues),
         }
         match (
@@ -121,7 +122,7 @@ impl TryFrom<LoginSavePlanPayloadWire> for LoginSavePlanPayload {
 #[serde(deny_unknown_fields)]
 pub struct OriginPayload {
     pub(super) origin: String,
-    pub(super) sender: crate::LoginSaveSenderContext,
+    pub(super) sender: nook_page_policy::LoginSaveSenderContext,
     pub(super) queue: QueueDisposition,
 }
 
@@ -134,8 +135,8 @@ pub struct GrantedLoginSaveActionPayload {
     pub(super) device_signing_public_key: String,
     pub(super) origin: String,
     pub(super) offer_id: String,
-    pub(super) sender: crate::LoginSaveSenderContext,
-    pub(super) evidence: crate::LoginSaveCommitEvidence,
+    pub(super) sender: nook_page_policy::LoginSaveSenderContext,
+    pub(super) evidence: nook_page_policy::LoginSaveCommitEvidence,
     pub(super) queue: QueueDisposition,
 }
 
@@ -144,36 +145,37 @@ pub struct GrantedLoginSaveActionPayload {
 pub struct DirectLoginSaveActionPayload {
     pub(super) origin: String,
     pub(super) offer_id: String,
-    pub(super) sender: crate::LoginSaveSenderContext,
+    pub(super) sender: nook_page_policy::LoginSaveSenderContext,
     pub(super) queue: MessageDefaultQueueDisposition,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AuthenticationPageObservationFacts;
-    use crate::AuthenticationWorkflowKind;
-    use crate::LoginCapturedFieldIndex;
-    use crate::LoginCapturedValueMatches;
-    use crate::LoginControlLabel;
-    use crate::LoginExplicitCandidatePresence;
-    use crate::LoginPasswordFieldHistory;
-    use crate::LoginSaveCaptureDecision;
-    use crate::LoginSaveCaptureSource;
-    use crate::LoginSubmissionEvent;
-    use crate::LoginSubmissionTarget;
-    use crate::LoginSubmissionTrust;
-    use crate::credential_fill::field::Index;
-    use crate::{
-        AuthenticationOutcomeObservation, ExtensionSessionRequest, LoginSaveCommitEvidence,
-        LoginSaveFrameId, LoginSaveSenderContext, LoginSaveTabId, LoginSubmissionPageUrl,
+    use crate::ExtensionSessionRequest;
+    use nook_page_policy::AuthenticationPageObservationFacts;
+    use nook_page_policy::AuthenticationWorkflowKind;
+    use nook_page_policy::LoginCapturedFieldIndex;
+    use nook_page_policy::LoginCapturedValueMatches;
+    use nook_page_policy::LoginControlLabel;
+    use nook_page_policy::LoginExplicitCandidatePresence;
+    use nook_page_policy::LoginPasswordFieldHistory;
+    use nook_page_policy::LoginSaveCaptureDecision;
+    use nook_page_policy::LoginSaveCaptureSource;
+    use nook_page_policy::LoginSubmissionEvent;
+    use nook_page_policy::LoginSubmissionTarget;
+    use nook_page_policy::LoginSubmissionTrust;
+    use nook_page_policy::credential_fill::field::Index;
+    use nook_page_policy::{
+        AuthenticationOutcomeObservation, LoginSaveCommitEvidence, LoginSaveFrameId,
+        LoginSaveSenderContext, LoginSaveTabId, LoginSubmissionPageUrl,
     };
     use serde_json::Value;
 
     struct Fixture;
     impl Fixture {
-        fn capture() -> anyhow::Result<crate::LoginSubmissionCapture> {
-            let field = crate::LoginSubmissionFieldMetadata {
+        fn capture() -> anyhow::Result<nook_page_policy::LoginSubmissionCapture> {
+            let field = nook_page_policy::LoginSubmissionFieldMetadata {
                 input_type: "text".to_owned(),
                 disabled: false,
                 read_only: false,
@@ -182,8 +184,8 @@ mod tests {
                 login_context: true,
                 password_history: LoginPasswordFieldHistory::Unobserved,
             };
-            Ok(crate::LoginSubmissionCapture {
-                intent: crate::LoginSubmissionIntent {
+            Ok(nook_page_policy::LoginSubmissionCapture {
+                intent: nook_page_policy::LoginSubmissionIntent {
                     event: LoginSubmissionEvent::FormSubmit,
                     trust: LoginSubmissionTrust::Trusted,
                     target: LoginSubmissionTarget::CredentialScope,
@@ -192,7 +194,7 @@ mod tests {
                 },
                 fields: vec![
                     field.clone(),
-                    crate::LoginSubmissionFieldMetadata {
+                    nook_page_policy::LoginSubmissionFieldMetadata {
                         input_type: "password".to_owned(),
                         autocomplete_tokens: vec!["current-password".to_owned()],
                         identity_text: "Password".to_owned(),
@@ -356,7 +358,7 @@ mod tests {
         }
         let mut oversized = Fixture::capture()?;
         oversized.fields.resize(
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1,
+            nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1,
             oversized
                 .fields
                 .first()
@@ -397,7 +399,7 @@ mod tests {
         };
         let mut wire = serde_json::to_value(&baseline)?;
         assert_eq!(
-            serde_json::from_value::<crate::LoginSaveCaptureBaseline>(wire.clone())?,
+            serde_json::from_value::<nook_page_policy::LoginSaveCaptureBaseline>(wire.clone())?,
             baseline
         );
         wire.as_object_mut()
@@ -406,12 +408,14 @@ mod tests {
                 "source".to_owned(),
                 serde_json::json!("ExplicitAuthentication"),
             );
-        assert!(serde_json::from_value::<crate::LoginSaveCaptureBaseline>(wire).is_err());
+        assert!(
+            serde_json::from_value::<nook_page_policy::LoginSaveCaptureBaseline>(wire).is_err()
+        );
         assert!(matches!(
             capture
                 .clone()
                 .classify(&LoginCapturedValueMatches::from_values(&["user"])),
-            Err(crate::LoginCaptureError::MismatchedValues)
+            Err(nook_page_policy::LoginCaptureError::MismatchedValues)
         ));
         capture.intent.trust = LoginSubmissionTrust::Untrusted;
         assert_eq!(
@@ -430,12 +434,12 @@ mod tests {
         };
         let wire = serde_json::to_value(&capture)?;
         assert_eq!(
-            serde_json::from_value::<crate::LoginSubmissionCapture>(wire.clone())?,
+            serde_json::from_value::<nook_page_policy::LoginSubmissionCapture>(wire.clone())?,
             capture
         );
         for target in [
             serde_json::json!({"kind":"CredentialField"}),
-            serde_json::json!({"kind":"CredentialField","field_index":{"value":crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT}}),
+            serde_json::json!({"kind":"CredentialField","field_index":{"value":nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT}}),
             serde_json::json!({"kind":"CredentialField","field_index":{"value":-1}}),
             serde_json::json!({"kind":"CredentialField","field_index":{"value":1},"role":"password"}),
         ] {
@@ -445,7 +449,10 @@ mod tests {
                 .and_then(Value::as_object_mut)
                 .ok_or_else(|| anyhow::anyhow!("intent fixture"))?
                 .insert("target".to_owned(), target);
-            assert!(serde_json::from_value::<crate::LoginSubmissionCapture>(invalid).is_err());
+            assert!(
+                serde_json::from_value::<nook_page_policy::LoginSubmissionCapture>(invalid)
+                    .is_err()
+            );
         }
         let mut missing = wire;
         missing
@@ -453,7 +460,9 @@ mod tests {
             .and_then(Value::as_object_mut)
             .ok_or_else(|| anyhow::anyhow!("intent fixture"))?
             .remove("target");
-        assert!(serde_json::from_value::<crate::LoginSubmissionCapture>(missing).is_err());
+        assert!(
+            serde_json::from_value::<nook_page_policy::LoginSubmissionCapture>(missing).is_err()
+        );
         Ok(())
     }
 }

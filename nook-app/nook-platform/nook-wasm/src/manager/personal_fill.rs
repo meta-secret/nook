@@ -58,9 +58,10 @@ mod tests {
     use crate::manager::VaultCryptoState;
     use crate::types::NookPersonalFillRequest;
     use nook_core::{
-        AddressFields, AddressSecret, CreditCardFields, CreditCardSecret, PersonalFieldGroup,
-        PersonalFieldKind, SecretId, SecretValue, StoredRecordPayload, VaultCrypto, VaultKeys,
+        AddressFields, AddressSecret, CreditCardFields, CreditCardSecret, SecretId, SecretValue,
+        StoredRecordPayload, VaultCrypto, VaultKeys,
     };
+    use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
 
     const ADDRESS_ID: &str = "secret_SMypl8K0w9a";
     const CARD_ID: &str = "secret_SMypl8K0w9b";

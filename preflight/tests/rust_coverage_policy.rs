@@ -80,7 +80,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
             "{package} has no hosted coverage command"
         );
     }
-    let portable = "nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core";
+    let portable = "nook-app-common nook-page-policy nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core";
     assert!(product.contains(&format!("for package in {portable}; do")));
     assert!(platform_tasks.contains(&format!("packages=\"{portable}\"")));
     assert!(product.contains(".package_lines_percent[$package]"));

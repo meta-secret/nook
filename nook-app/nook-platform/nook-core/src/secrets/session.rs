@@ -107,8 +107,8 @@ pub struct EncryptedSecretSession<'a> {
 /// ```
 /// The target remains exclusively borrowed until commit or drop:
 /// ```compile_fail,E0499
-/// use nook_core::{EncryptedSecretSession, ReplaceSecretInput, VaultCrypto, VaultMetaState, SessionResult};
-/// let invalid = |state: &mut VaultMetaState, crypto: &VaultCrypto, input: &ReplaceSecretInput<'_>| -> SessionResult<()> {
+/// use nook_core::{EncryptedSecretSession, ReplaceSecretInput, VaultCrypto, VaultMetaState, SessionError};
+/// let invalid = |state: &mut VaultMetaState, crypto: &VaultCrypto, input: &ReplaceSecretInput<'_>| -> Result<(), SessionError> {
 ///     let prepared = EncryptedSecretSession { state, crypto }.prepare(input)?;
 ///     state.secrets.clear();
 ///     prepared.commit();
@@ -117,8 +117,8 @@ pub struct EncryptedSecretSession<'a> {
 /// ```
 /// Ordinary admission followed by a single commit is valid:
 /// ```
-/// use nook_core::{EncryptedSecretSession, ReplaceSecretInput, VaultCrypto, VaultMetaState, SessionResult};
-/// let replace = |state: &mut VaultMetaState, crypto: &VaultCrypto, input: &ReplaceSecretInput<'_>| -> SessionResult<()> {
+/// use nook_core::{EncryptedSecretSession, ReplaceSecretInput, VaultCrypto, VaultMetaState, SessionError};
+/// let replace = |state: &mut VaultMetaState, crypto: &VaultCrypto, input: &ReplaceSecretInput<'_>| -> Result<(), SessionError> {
 ///     EncryptedSecretSession { state, crypto }.prepare(input)?.commit();
 ///     Ok(())
 /// };

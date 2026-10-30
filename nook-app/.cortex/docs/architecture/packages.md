@@ -52,10 +52,20 @@ Team owner: development core.
 - **No plaintext or provider I/O:** No plaintext secret models, key encryption, GitHub, Drive, iCloud, IndexedDB, OAuth, browser APIs, or network transport.
 - **Portability:** Depends only on `nook-auth2` wire/key-access types and `nook-replication` mechanics. Has no dependency on `nook-core`, `nook-wasm`, or `nook-web`.
 
+### Page Policy: `nook-page-policy`
+
+- **Portable page decisions:** Owns page observations, field classification, authentication workflow, fill planning, and login-capture planning.
+- **Shared vocabulary:** Owns credential kinds, personal field groups and kinds, workflow response values, navigation paths, and the numeric values used by those policies.
+- **Independent leaf:** Has no dependency on another Nook crate. Consumers import its values directly from their owning modules.
+- **Capture inputs:** Existing credential comparisons remain transient. The move preserves their zeroization behavior.
+- **Strict scope:** Vault authority, pairing protocol, storage, provider I/O, and browser APIs stay outside this crate.
+
 ### Extension Companion Domain: `nook-companion-core`
 
-- **Portable extension policy:** Owns authentication workflow, pairing records, host classification, and form-field classification.
-- **Shared domain inputs:** Depends on `nook-authenticator-domain`, `nook-event-log`, and the `nook-app-common` translation-key registry without importing browser APIs.
+- **Extension protocol:** Owns pairing, consent, persistence decisions, account-picker lifecycle, and extension vault-event records.
+- **Host boundaries:** Owns vault-host admission and OAuth-origin isolation. Page classification and workflow decisions live in `nook-page-policy`.
+- **Typed site listings:** Owns `site_secret_listing` contracts that use the canonical auth-owned `SecretId` and `StoreId` values.
+- **Shared domain inputs:** Consumes `nook-page-policy`, identity and event types, authenticator values, and the shared translation-key registry without importing browser APIs.
 - **Strict scope:** Chrome lifecycle, DOM observation, WASM adaptation, and presentation stay outside this crate.
 
 ### Application Domain Core: `nook-core`
@@ -72,7 +82,11 @@ Team owner: development core.
   - `nook-event-log::builder` / `vault_event_session`: mutation and event orchestration.
   - `vault_sync_session` / `vault_sync_store`: sync reconciliation.
 - **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs. Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`.
-- **Root exports:** `nook-core` keeps established `nook_core::...` type and function paths available and re-exports the event-log domain alongside core-owned application services.
+- **Policy inputs:** Fill projections import their credential and personal-field vocabulary directly from `nook-page-policy`. Typed site listings retain their real `nook-companion-core::site_secret_listing` owner.
+- **Root exports:** Core-owned application services and event-log APIs retain their established paths. Moved page-policy APIs are not forwarded through the core facade.
+
+The page-policy extraction changes Rust ownership only. Storage formats, wire
+schemas, public WASM names, and application behavior remain unchanged.
 
 ---
 
@@ -86,9 +100,9 @@ These crates and their generated consumer bindings are routed through
 
 ### Companion Bridge: `nook-companion-wasm`
 
-- **Size-sensitive bridge:** Exposes `nook-companion-core` policy to extension contexts through `wasm-bindgen`.
+- **Size-sensitive bridge:** Exposes page decisions from `nook-page-policy` and extension protocol from `nook-companion-core` through `wasm-bindgen`.
 - **Generated binding boundary:** Generated TypeScript and WASM artifacts live under `nook-web-shared/src/extension/nook-companion-wasm`.
-- **No duplicated policy:** Authentication, pairing, host, and form-field rules remain in `nook-companion-core`.
+- **No duplicated policy:** Classification, workflow, and fill/capture planning stay in `nook-page-policy`. Pairing and protected-origin rules stay in `nook-companion-core`.
 
 ### Bridge: `nook-wasm`
 
@@ -96,7 +110,8 @@ These crates and their generated consumer bindings are routed through
 - **Storage I/O:** Manages IndexedDB (`rexie`) and GitHub REST API (`reqwest`) network and database calls.
 - **Device protection:** Persists and migrates wrapped identities, builds WebAuthn PRF option payloads via `1Password/passkey-rs` `passkey-types`, and exposes typed setup/unlock values to the web layer.
 - **Exported methods:** Exposes `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect`, and search query APIs.
-- **No domain logic in WASM:** Validation, crypto, format conversions, and session decisions delegate directly to `nook-core`.
+- **Vault domain logic:** Vault validation, crypto, format conversions, and session decisions delegate directly to `nook-core`.
+- **Direct page-policy inputs:** Companion page and workflow wrappers consume `nook-page-policy` directly rather than importing forwarded core types.
 - **Runtime wrappers:** Runtime policy, secret forms, diagnostics, Sentinel session state, sync conflicts, and recovery issues are core-owned values exposed through typed wrappers.
 
 ---

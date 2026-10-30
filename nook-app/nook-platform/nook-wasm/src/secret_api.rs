@@ -93,14 +93,15 @@ impl NookSecretTypeFilter {
 /// records always pass the reveal.
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn personal_fill_record_filter(group: nook_core::PersonalFieldGroup) -> NookSecretTypeFilter {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn personal_fill_record_filter(group: nook_page_policy::PersonalFieldGroup) -> NookSecretTypeFilter {
     NookSecretTypeFilter::only(group.record_type())
 }
 
 #[cfg(test)]
 mod personal_fill_filter_tests {
     use super::personal_fill_record_filter;
-    use nook_core::{PersonalFieldGroup, SecretType};
+    use nook_core::SecretType;
+    use nook_page_policy::PersonalFieldGroup;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -495,10 +496,10 @@ mod wasm_tests {
         generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use nook_core::{
-        AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
-        CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
-        StorageProviderType,
+        AuthenticatorIssuerHosts, CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId,
+        SecretValue, StorageProviderType,
     };
+    use nook_page_policy::{AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict};
     use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -579,7 +580,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
         let excessive_field_count = NookAuthenticationPageObservation::new(
-            nook_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+            nook_page_policy::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
             1,
             0,
             0,
@@ -600,7 +601,7 @@ mod wasm_tests {
         let valid_login =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         let mut observations = NookAuthenticationPageObservations::new();
-        for _ in 0..=nook_core::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
+        for _ in 0..=nook_page_policy::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
             observations.add(&valid_login);
         }
         assert_eq!(

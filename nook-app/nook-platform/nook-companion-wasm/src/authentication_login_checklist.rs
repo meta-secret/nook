@@ -1,5 +1,5 @@
 //! Typed projection adapter for observed login checklist progress.
-use nook_companion_core::{
+use nook_page_policy::{
     AuthenticationLoginChecklistPresentation, AuthenticationLoginChecklistProjection,
 };
 use tsify::{Ts, Tsify};

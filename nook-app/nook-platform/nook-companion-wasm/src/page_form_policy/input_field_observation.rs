@@ -1,6 +1,6 @@
 //! Typed WASM binding for one browser-observed input field and its field policy exports.
 
-use nook_companion_core::{
+use nook_page_policy::{
     OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageInputType, PageSecondFactorRoute,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -8,11 +8,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookPageInputFieldObservation {
-    inner: nook_companion_core::PageInputFieldObservation,
+    inner: nook_page_policy::PageInputFieldObservation,
 }
 
 impl NookPageInputFieldObservation {
-    pub(crate) const fn as_core(&self) -> &nook_companion_core::PageInputFieldObservation {
+    pub(crate) const fn as_core(&self) -> &nook_page_policy::PageInputFieldObservation {
         &self.inner
     }
 }
@@ -43,7 +43,7 @@ impl NookPageInputFieldObservation {
         pattern: String,
     ) -> Self {
         Self {
-            inner: nook_companion_core::PageInputFieldObservation {
+            inner: nook_page_policy::PageInputFieldObservation {
                 input_type,
                 disabled,
                 read_only,
@@ -77,7 +77,7 @@ impl NookPageInputFieldObservation {
 mod tests {
     use super::super::{NookLoginContextObservation, second_factor_route};
     use super::*;
-    use nook_companion_core::{PageInputMaxLength, PageInputMode, PageInputPattern};
+    use nook_page_policy::{PageInputMaxLength, PageInputMode, PageInputPattern};
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]

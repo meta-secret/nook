@@ -916,14 +916,14 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     assert_eq!(
         warmup
             .matches(
-                "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass",
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass",
             )
             .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
     ));
     assert!(
         source_dockerfile
@@ -954,6 +954,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
         "\"Cargo.toml\" \"Cargo.lock\"",
         "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
         "\"nook-companion-wasm/Cargo.toml\" \"nook-companion-wasm/src\"",
+        "\"nook-page-policy/Cargo.toml\" \"nook-page-policy/src\"",
         "\"nook-companion-core/Cargo.toml\" \"nook-companion-core/src\"",
         "\"nook-app-common/Cargo.toml\" \"nook-app-common/src\" \"nook-app-common/locales\"",
         "\"nook-core/Cargo.toml\" \"nook-core/src\"",

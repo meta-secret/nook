@@ -5,13 +5,11 @@
 //! recognition and receives Rust-owned structural results.
 
 use crate::page_form_policy::NookPageInputFieldObservation;
-use nook_companion_core::{
-    PersonalFieldClassification, PersonalFillOpportunity, PersonalFillScope,
-};
+use nook_page_policy::{PersonalFieldClassification, PersonalFillOpportunity, PersonalFillScope};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-pub use nook_companion_core::{PersonalFieldGroup, PersonalFieldKind};
+pub use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
 
 #[wasm_bindgen]
 #[cfg_attr(
@@ -91,8 +89,8 @@ pub fn plan_companion_personal_fill(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::credential_fill::field;
-    use nook_companion_core::{
+    use nook_page_policy::credential_fill::field;
+    use nook_page_policy::{
         PageInputType, PageSecondFactorRoute, PersonalFillField, PersonalFillPlan,
         PersonalFillUnavailability,
     };
