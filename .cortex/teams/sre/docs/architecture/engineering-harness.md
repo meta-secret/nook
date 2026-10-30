@@ -163,11 +163,12 @@ The source-only graph can expose parallel work and isolate reusable test
 results. Cold branches may repeat compilation of shared dependencies. Runtime
 proof and measured costs remain separate from the graph's intended reuse.
 
-The normal coverage handoff stays small. Optional proof targets retain raw
-profiles and executables in the job workspace for inspection. Proof uploads
-contain compact evidence, with no full Cargo target trees or copied source
-contexts. Raw executable bundles stay in the job workspace. BuildKit remains
-the authority for cache validity and reuse.
+The normal coverage handoff stays small. Raw profiles and executable bundles
+remain inside the BuildKit test leaves and coverage join. The optional proof
+target exports combined coverage, JUnit XML, and `artifact-files.tsv`
+inventories. Proof uploads contain compact evidence, with no full Cargo target
+trees or copied source contexts. BuildKit remains the authority for cache
+validity and reuse.
 
 ### PR Consumer Behavior
 
