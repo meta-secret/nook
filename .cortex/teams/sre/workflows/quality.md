@@ -21,14 +21,16 @@ Use this workflow for quality, CI, and deployment changes.
    - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
    - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
-   - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
-   - Preflight uses the dedicated `nook-preflight-v1` Zot scope so chef cooks reuse across PR runs.
+   - `task preflight` Bakes `preflight-test` on the shared `rust-base` target.
+   - Plain Cargo warms its dependency, Clippy, test, and coverage graphs.
+   - Preflight uses the dedicated `nook-preflight-v1` Zot scope to reuse those layers across PR runs.
    - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
    - Do not also cache-from `rust-base` on the preflight target.
-   - That shorter parent importer orphans chef cook layers.
+   - That shorter parent importer orphans dependency compilation layers.
    - Never clear `cache-from` or `cache-to` with an empty Bake override.
    - Empty cache overrides are an architectural failure, not cache hygiene.
-   - Product Rust dependencies and source leaves live in `product.Dockerfile`.
+   - Product Rust dependencies and source leaves live in
+     `nook-app/nook-platform/docker/rust/base/Dockerfile`.
    - They use internal Dockerfile stages, not Bake-linked dependency contexts.
    - Standalone `*-restore` and `*-publish` targets own dependency cache I/O.
    - Keep expensive tools in the same Dockerfile as source-sensitive leaves.
@@ -39,7 +41,7 @@ Use this workflow for quality, CI, and deployment changes.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Cargo-deny, cargo-audit, cargo-fuzz, and Dylint live in sibling Dockerfiles under `nook-app/nook-platform/docker/rust/`.
-   - Proptest, Insta, and Loom use the internal `rust-platform` stage in `product.Dockerfile`.
+   - Proptest, Insta, and Loom use its internal `rust-platform` stage.
    - They run through `task docker:ecosystem:*`.
    - Precise stage tasks warm parents alone before leaves:
      - `task docker:rust-base` (read-only; never publishes Zot)
@@ -49,7 +51,8 @@ Use this workflow for quality, CI, and deployment changes.
    - `main.yml` owns all merged-head ecosystem execution.
    - `ci.yml` owns scheduled, manual, and labeled PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
-   - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
+   - Kani pins its specialized model-checking toolchain in
+     `nook-app/nook-platform/docker/rust/ecosystem/kani/Dockerfile`.
    - `task docker:ecosystem:kani` restores and publishes the complete
      toolchain-plus-proof graph through its own BuildKit scope.
 2. Public Taskfile commands must run project builds/checks inside Docker.
@@ -68,7 +71,12 @@ Use this workflow for quality, CI, and deployment changes.
    - Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs.
    - The Rust dep cache and warm `target/` are baked into normal image layers.
    - Workspace source is copied into the nook-web image (sealed image, no runtime mount).
-   - Authenticated SeaweedFS S3 `sccache` is a compiler-output optimization below Docker/cargo-chef and never a correctness input.
+   - Rust Docker stages use layered disk and authenticated SeaweedFS S3 `sccache`.
+   - This compiler-output cache remains an optimization below Docker and Cargo.
+   - Warm parents retain the disk cache in ordinary image layers.
+   - Parallel consumers inherit separate writable filesystem snapshots.
+   - Compiler steps report and stop their daemon with `nook-sccache-report --finish STAGE`.
+   - Preserve the [compiler cache health contract](../docs/architecture/engineering-harness.md#rust-compiler-cache-sccache).
    - See [System architecture §3](../../../shared/architecture/system.md#3-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
@@ -123,7 +131,7 @@ Use this workflow for quality, CI, and deployment changes.
    - `Rust ecosystem: Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
      `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
-     cooked `builder-core-deps`) so
+     warmed `builder-core-deps`) so
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
@@ -147,7 +155,7 @@ Use this workflow for quality, CI, and deployment changes.
    - `Rust ecosystem: Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses with a pinned specialized toolchain.
-     `task docker:ecosystem:kani` Bakes the `rust-kani` internal stage.
+     `task docker:ecosystem:kani` Bakes the `rust-kani` stage from that Kani Dockerfile.
      `nook-rust-ecosystem-kani-v2` caches both installation and proof
      compilation because Kani's compiler cannot use ordinary rustc sccache.
    - `Rust ecosystem: Dylint repository lints` —
@@ -197,14 +205,14 @@ Use this workflow for quality, CI, and deployment changes.
       - Rust toolchain
       - Rust ecosystem dylint leaf, fuzz leaf, policy-tools,
         deterministic, and Kani proof graph
-      - preflight chef/test
+      - preflight dependency/test
       - stable Rust dependencies
       - source-sensitive native/WASM snapshots
       - web dependencies
       - browser-free web
       - e2e web
     - Product native deps scopes must not import rust-base at all.
-    - Native source may import cooked native deps.
+    - Native source may import warmed native deps.
     - Native source must not import rust-base.
     - Ecosystem nightly/policy-tools and preflight scopes must not
       import rust-base at all.
@@ -215,7 +223,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Their mode=max exports already embed that parent chain.
     - WASM deps may import longer `nook-rust-wasm-source-v3` after own deps
       scopes miss.
-    - That longer source index restores cook layers when the fingerprinted deps
+    - That longer source index restores dependency layers when the fingerprinted deps
       scope is still empty.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Native deps and ecosystem leaves restore parents the same way.
@@ -227,7 +235,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
     - Clearing `cache-to` on a linked parent is banned.
     - Linked context parents declare no `cache-from` or `cache-to`.
-    - Product source leaves use internal stages in `product.Dockerfile`.
+    - Product source leaves use internal stages in the Rust base Dockerfile.
     - `*-publish` targets write `mode=max` under `write_cache_repository` plus
       `GHA_CACHE_SCOPE_SUFFIX`.
     - Main uses `nook/buildcache` with stable unsuffixed names.
@@ -271,7 +279,7 @@ Use this workflow for quality, CI, and deployment changes.
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Hosted and Main Native publishers stage
       `docker:ci:cache:publish:rust-base` before deps/source scopes so one Bake
-      cannot rewrite apt while cooking chef.
+      cannot rewrite apt while compiling dependencies.
     - ARC Native and ecosystem jobs do not export per-PR Rust target trees.
       Even `mode=min` can contain a result layer larger than 15 GiB.
     - ARC WASM publishers keep source state portable but never overwrite the
@@ -282,10 +290,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Main audits child manifest digest/size and every published blob's declared
       size and SHA-256 by streaming the blob completely.
     - One CI job writes each shared ecosystem registry ref.
-    - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
+    - The WASM dependency scope is fingerprinted from dependency-stage
       inputs only.
     - Those inputs are Cargo manifests/lockfiles, `.cargo`/`.config`,
-      `clippy.toml`, `product.Dockerfile` (+ dockerignore), and sccache scripts.
+      `clippy.toml`, the Rust base Dockerfile (+ dockerignore), and sccache scripts.
     - Bake cache-from wiring and Taskfiles must not rotate that fingerprint.
     - Hosted builds never attach Redis credentials.
     - There is no dedicated cache-reconstruction build.

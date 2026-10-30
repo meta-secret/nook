@@ -722,6 +722,10 @@ authenticator-domain to 90 percent.
 **SeaweedFS sccache:**
 
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
+- Rust Docker stages check their ordinary-layer disk cache before S3.
+  Parallel consumers inherit isolated writable snapshots of the warmed parent.
+  The [compiler cache contract](../docs/architecture/engineering-harness.md#rust-compiler-cache-sccache)
+  owns finalization and asynchronous backfill limits.
 - Compiler vertices receive the bucket-scoped build identity only through stable
   BuildKit secret IDs. Credentialed trusted Rust/WASM jobs fail closed before
   compilation when those credentials or the healthy remote sccache service are
@@ -730,12 +734,15 @@ authenticator-domain to 90 percent.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
-- A first cold trusted publish may miss while recording authoritative compiler
-  writes. A changed-head successor must report compiler hits; repeated
+- A first cold trusted publish may miss while recording authoritative S3 compiler
+  writes. Disk and S3 hits both count as compiler reuse.
+  A changed-head successor must report compiler hits; repeated
   changed-head zero-hit evidence is terminal cache failure.
 - Each workflow run and retry loads its sealed web and e2e results under run-scoped Docker image tags; concurrent jobs must never replace one another's runtime image between build and deploy.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
-- Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
+- Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`.
+  The wrapper bypasses sccache while retaining ordinary Cargo dependency stages.
+  Build correctness remains unchanged.
 
 **Deploy and release:**
 

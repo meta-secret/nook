@@ -582,8 +582,9 @@ change, update this README in the same change (see
 
 ### Docker dependency caches
 
-Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
-and independent **linux/amd64** Rust, web dependency, and browser lineages.
+Docker builds use plain Cargo to warm dependencies from manifest-only
+workspaces. They keep independent **linux/amd64** Rust, web dependency, and
+browser lineages.
 Trusted PR validation uses one ordinary ARC job Pod on `nook-k0s-container`.
 All steps use one checkout and the persistent rootless BuildKit shard on that
 Pod's node. Rust and web solves run in BuildKit; Playwright runs directly in the
@@ -663,12 +664,21 @@ Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 `task wasm:*` commands load a separate source-sealed Rust image on demand.
 
-Rust compilation has a second cache boundary below Docker layers: pinned
-`sccache` clients use authenticated SeaweedFS S3 to reuse compatible
-source-sensitive compiler outputs whenever credentials are available.
+Rust dependency parents retain Cargo downloads, compiled dependencies and
+Cargo metadata in ordinary image layers. Trusted Docker compilation uses
+`sccache` with a local disk cache at `/opt/nook/sccache`, followed by
+authenticated SeaweedFS S3. A compiler step reports its counters and stops
+its daemon before Docker snapshots the layer. Parallel child stages inherit
+separate writable snapshots of the warmed filesystem, so they never share a
+mutable local cache directory. Native, WASM and coverage modes retain their
+matching dependency warmups.
+
 Same-repository Main, PR, Rust ecosystem, and Remote jobs mount those
 credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
-cache Cargo downloads or Docker layers.
+cache Cargo downloads or Docker layers. Local compiler hits count as reuse;
+remote health and S3 publication have separate evidence. See the
+[compiler cache contract](.cortex/teams/sre/docs/architecture/engineering-harness.md#rust-compiler-cache-sccache)
+for shutdown and asynchronous backfill limits.
 PR CI enforces package coverage floors inside the Docker/BuildKit solve and
 does not upload or comment on a redundant coverage report. The old exact-input
 artifact-promotion and Main-baseline comparison workflows are removed:
