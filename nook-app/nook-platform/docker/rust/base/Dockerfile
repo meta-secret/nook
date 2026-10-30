@@ -778,6 +778,11 @@ FROM builder-wasm-node-deps AS builder-wasm-test-base
 # Join the real source and normal release-test artifacts only after every Node-specific dependency.
 COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/ /meta-secret/nook/nook-app/nook-platform/
 
+# Discard dummy workspace coverage outputs after the independent source join.
+# Keep instrumented dependencies and the copied normal release-test artifacts.
+RUN RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target \
+    && RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target --target wasm32-unknown-unknown
+
 COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
 COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
