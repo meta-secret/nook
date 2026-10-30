@@ -318,7 +318,7 @@ impl PrDeliveryScenario<'_> {
             "FROM deps AS build",
             "COPY preflight/Cargo.toml preflight/Cargo.lock ./",
             "cargo fetch --locked",
-            "cargo build --locked",
+            "cargo build --quiet --locked",
             "cargo clippy --quiet --locked --all-targets -- -D warnings",
             "cargo test --quiet --locked --test core_ownership --no-run",
             "--mount=type=secret,id=sccache_s3_access_key,required=false",

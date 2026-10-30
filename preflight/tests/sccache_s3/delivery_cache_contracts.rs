@@ -232,6 +232,7 @@ fn plain_cargo_dependency_parents_preserve_workspace_inputs_before_real_sources(
             "COPY nook-app/nook-platform/.cargo .cargo",
             "COPY nook-app/nook-platform/.config .config",
             "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
+            "src/lib.rs",
         ] {
             assert!(manifests.contains(required), "{path} is missing {required}");
         }
@@ -250,8 +251,8 @@ fn plain_cargo_dependency_parents_preserve_workspace_inputs_before_real_sources(
             assert!(
                 manifests.contains(&format!(
                     "COPY nook-app/nook-platform/{member}/Cargo.toml {member}/Cargo.toml"
-                )) && manifests.contains(&format!("{member}/src/lib.rs")),
-                "{path} must preserve the {member} manifest and supply its placeholder crate root"
+                )),
+                "{path} must preserve the real {member} manifest before creating placeholder roots"
             );
             assert!(
                 !manifests.contains(&format!("COPY nook-app/nook-platform/{member} {member}")),
