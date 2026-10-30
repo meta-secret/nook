@@ -147,7 +147,6 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
 #[test]
 fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyhow::Result<()> {
     assert_hosted_docker_builds_connect_scoped_compiler_cache();
-    assert_workflows_scope_cache_credentials()?;
     assert_rust_build_cache_boundary();
     Ok(())
 }
@@ -254,11 +253,12 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     assert!(!cache_action_main.contains("REDIS"));
 }
 
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one credential contract verifies every hosted workflow"
 )]
-fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
+fn workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for path in [
         ".github/workflows/e2e-pr.yml",
         ".github/workflows/release.yml",
@@ -303,7 +303,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         .split_once("      - name: Connect trusted host compiler cache")
         .and_then(|(_, tail)| tail.split_once("      - run: task tooling:static"))
         .map(|(trusted, _)| trusted)
-        .expect("repository policy host tooling must configure its compiler cache");
+        .context("repository policy host tooling must configure its compiler cache")?;
     for required in [
         "uses: ./.github/actions/nook-cache-connect",
         "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
@@ -320,7 +320,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         .split_once("      - name: Connect private ARC BuildKit")
         .and_then(|(_, tail)| tail.split_once("      - name: Setup secret-free hosted BuildKit"))
         .map(|(trusted, _)| trusted)
-        .expect("repository policy must keep trusted and untrusted setup branches");
+        .context("repository policy must keep trusted and untrusted setup branches")?;
     for credential in compiler_credentials {
         assert!(
             trusted_policy.contains(credential),
@@ -350,10 +350,13 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ] {
         let body = pr
             .split_once(&format!("  {job}:\n"))
-            .expect("non-compiler PR job must exist")
+            .with_context(|| format!("non-compiler PR job {job} must exist"))?
             .1;
         let boundary = format!("\n  {next}:\n");
-        let body = body.split(&boundary).next().expect("job body must exist");
+        let body = body
+            .split(&boundary)
+            .next()
+            .with_context(|| format!("non-compiler PR job {job} body must exist"))?;
         for credential in compiler_credentials {
             assert!(
                 !body.contains(credential),

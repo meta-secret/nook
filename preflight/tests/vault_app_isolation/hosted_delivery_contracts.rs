@@ -160,7 +160,7 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     WorkflowRuntimeContract {
         root: root.as_ref(),
     }
-    .assert_contract();
+    .assert_contract()?;
     assert_docker_setup_contract(&root);
     PrDeliveryScenario {
         root: root.as_ref(),
@@ -442,6 +442,12 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
 
 impl PrDeliveryScenario<'_> {
     fn assert_release_and_main_delivery_contract(&self) -> anyhow::Result<()> {
+        self.assert_release_source_contract()?;
+        self.assert_main_delivery_contract();
+        Ok(())
+    }
+
+    fn assert_release_source_contract(&self) -> anyhow::Result<()> {
         let root = self.root;
         let release = (root).read(".github/workflows/release.yml");
         let release_source = release
@@ -477,6 +483,11 @@ impl PrDeliveryScenario<'_> {
                 && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
             "historical release refs must use current workflow tooling against the immutable source root"
         );
+        Ok(())
+    }
+
+    fn assert_main_delivery_contract(&self) {
+        let root = self.root;
         let main = (root).read(".github/workflows/main.yml");
         for required in [
             "\n  rust:\n",
@@ -518,7 +529,7 @@ impl PrDeliveryScenario<'_> {
             "same-runner Main suite coordinator was replaced by multi-job consumers"
         );
         let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-        let web_ci = section(
+        let web_ci = super::section(
             &ci_tasks,
             "  ci:main:web-e2e:ci:\n",
             "\n  ci:main:web:artifacts:",
@@ -529,7 +540,7 @@ impl PrDeliveryScenario<'_> {
                 && !web_ci.contains("TASK: _ci:main:core"),
             "Main web e2e CI wrapper must run e2e-only without re-verifying the sealed build"
         );
-        let web_e2e_artifacts = section(
+        let web_e2e_artifacts = super::section(
             &ci_tasks,
             "  _ci:main:e2e:web:artifacts:host:\n",
             "\n  ci:main:e2e:extension:artifacts:",
@@ -548,7 +559,6 @@ impl PrDeliveryScenario<'_> {
             prune_script.contains("--filter until=168h"),
             "runner cleanup must preserve the recent delivery cache"
         );
-        Ok(())
     }
 }
 

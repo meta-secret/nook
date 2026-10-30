@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use anyhow::Context;
+
 use super::*;
 
 pub(super) struct WorkflowRuntimeContract<'a> {
@@ -7,7 +9,7 @@ pub(super) struct WorkflowRuntimeContract<'a> {
 }
 
 impl WorkflowRuntimeContract<'_> {
-    pub(super) fn assert_contract(&self) {
+    pub(super) fn assert_contract(&self) -> anyhow::Result<()> {
         let root = self.root;
         for workflow in [
             ".github/workflows/main.yml",
@@ -80,6 +82,15 @@ impl WorkflowRuntimeContract<'_> {
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
         );
+        self.assert_main_browser_workspace_contract()?;
+        self.assert_native_build_envelope();
+        self.assert_wasm_build_envelope()?;
+        self.assert_untrusted_boundaries();
+        Ok(())
+    }
+
+    fn assert_main_browser_workspace_contract(&self) -> anyhow::Result<()> {
+        let main = self.root.read(".github/workflows/main.yml");
         for (job, next_job, command) in [
             (
                 "  web-e2e:\n",
@@ -92,10 +103,12 @@ impl WorkflowRuntimeContract<'_> {
                 "task _extension:test:e2e",
             ),
         ] {
-            let job = main
+            let (_, remainder) = main
                 .split_once(job)
-                .and_then(|(_, remainder)| remainder.split_once(next_job).map(|(job, _)| job))
-                .expect("Main must retain its browser job boundaries");
+                .context("Main must retain its browser job start boundary")?;
+            let (job, _) = remainder
+                .split_once(next_job)
+                .context("Main must retain its browser job end boundary")?;
             assert!(
                 job.contains("cp -R /meta-secret/nook/.github \"$GITHUB_WORKSPACE/.github\"")
                     && job.contains("cd /meta-secret/nook")
@@ -104,9 +117,7 @@ impl WorkflowRuntimeContract<'_> {
                 "Main browser jobs must seed the runner workspace action tree before entering the prepared image source inside the script"
             );
         }
-        self.assert_native_build_envelope();
-        self.assert_wasm_build_envelope();
-        self.assert_untrusted_boundaries();
+        Ok(())
     }
 
     fn assert_native_build_envelope(&self) {
@@ -117,7 +128,7 @@ impl WorkflowRuntimeContract<'_> {
         assert!(pr.contains("timeout-minutes: 240"));
     }
 
-    fn assert_wasm_build_envelope(&self) {
+    fn assert_wasm_build_envelope(&self) -> anyhow::Result<()> {
         let root = self.root;
         for (workflow, end_marker, required_steps) in [(
             ".github/workflows/main.yml",
@@ -136,7 +147,7 @@ impl WorkflowRuntimeContract<'_> {
             let wasm_job = workflow_source
                 .split_once("  web:\n")
                 .and_then(|(_, remainder)| remainder.split_once(end_marker).map(|(job, _)| job))
-                .unwrap_or_else(|| panic!("{workflow} must define a bounded WASM producer job"));
+                .with_context(|| format!("{workflow} must define a bounded WASM producer job"))?;
             assert!(
                 wasm_job.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}"),
                 "{workflow} WASM producer must retain its bounded 15-minute combined execution envelope"
@@ -150,15 +161,15 @@ impl WorkflowRuntimeContract<'_> {
         }
 
         let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
-        let ecosystem_job = ecosystem_source
+        let (_, ecosystem_job) = ecosystem_source
             .split_once("  checks:\n")
-            .map(|(_, job)| job)
-            .unwrap_or_else(|| panic!("rust ecosystem workflow must define its aggregated job"));
+            .context("rust ecosystem workflow must define its aggregated job")?;
         assert!(
             ecosystem_job.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}")
                 && ecosystem_job.contains("task docker:ecosystem:check"),
             "concurrent ecosystem checks must retain their bounded fifteen-minute envelope"
         );
+        Ok(())
     }
 
     fn assert_untrusted_boundaries(&self) {
