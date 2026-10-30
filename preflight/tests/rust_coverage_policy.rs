@@ -185,7 +185,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let (compiler, browser) = compiler_and_browser
         .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
         .context("isolated Node compiler and secret-free browser validation stages")?;
-    assert!(!handoff.contains("RUSTC_WRAPPER="));
+    WasmCoverageHandoff { source: handoff }.require_compiler_wrapper()?;
     assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(nook.contains("wasm-pack test --node --release nook-wasm"));
     assert!(companion.contains("wasm-pack test --node --release nook-companion-wasm"));
@@ -426,6 +426,139 @@ impl Deref for DockerfileRunInstruction {
         &self.text
     }
 }
+
+struct WasmCoverageHandoff<'a> {
+    source: &'a str,
+}
+
+impl WasmCoverageHandoff<'_> {
+    const WORKSPACE_CLEANUP: &str = concat!(
+        "RUN RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target \\\n",
+        "&& RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target --target wasm32-unknown-unknown",
+    );
+
+    fn require_compiler_wrapper(&self) -> anyhow::Result<()> {
+        let mut cleanup_assignments = 0;
+        for run in DockerfileRunInstruction::parse_stage(self.source)
+            .into_iter()
+            .filter(|run| run.contains("RUSTC_WRAPPER="))
+        {
+            anyhow::ensure!(
+                run.text == Self::WORKSPACE_CLEANUP,
+                "only the exact mount-free host/WASM workspace cleanup RUN may disable the wrapper"
+            );
+            cleanup_assignments += run.matches("RUSTC_WRAPPER=").count();
+        }
+        anyhow::ensure!(
+            self.source.matches("RUSTC_WRAPPER=").count() == cleanup_assignments,
+            "wrapper assignments outside the approved cleanup RUN are prohibited"
+        );
+        Ok(())
+    }
+}
+
+#[test]
+fn coverage_handoff_allows_only_exact_metadata_cleanup() -> anyhow::Result<()> {
+    let source = format!(
+        "{}\nRUN cargo llvm-cov test --no-clean --release -p nook-wasm",
+        WasmCoverageHandoff::WORKSPACE_CLEANUP
+    );
+    WasmCoverageHandoff { source: &source }.require_compiler_wrapper()?;
+    WasmCoverageHandoff {
+        source: "RUN cargo clippy --release -- -D warnings",
+    }
+    .require_compiler_wrapper()?;
+    Ok(())
+}
+
+#[test]
+fn coverage_handoff_rejects_wrapper_bypass_and_cleanup_expansion() {
+    let cleanup = WasmCoverageHandoff::WORKSPACE_CLEANUP;
+    for source in [
+        cleanup.replace("clean --offline", "build --offline"),
+        cleanup.replace("clean --offline", "test --offline"),
+        cleanup.replace("clean --offline", "clippy --offline"),
+        cleanup.replace("--workspace", "-p nook-wasm"),
+        format!("{cleanup} \\\n&& cargo build --release"),
+        format!("{cleanup} \\\n&& cat /run/secrets/sccache_s3_access_key"),
+        cleanup.replacen(
+            "RUN ",
+            "RUN --mount=type=secret,id=sccache_s3_access_key ",
+            1,
+        ),
+        format!("ENV RUSTC_WRAPPER=\n{cleanup}"),
+        format!("{cleanup}\nRUN RUSTC_WRAPPER= cargo build --release"),
+    ] {
+        assert!(
+            WasmCoverageHandoff { source: &source }
+                .require_compiler_wrapper()
+                .is_err(),
+            "wrapper bypass must remain rejected: {source}"
+        );
+    }
+}
+
+struct WasmSourceOverlay<'a> {
+    declaration: &'a str,
+    packages: &'a [&'a str],
+    refresh: &'a str,
+}
+
+impl WasmSourceOverlay<'_> {
+    fn require_fresh_sources(&self, dockerfile: &str) -> anyhow::Result<()> {
+        let (_, tail) = dockerfile
+            .split_once(self.declaration)
+            .context("source overlay stage must exist")?;
+        let (stage, _) = tail
+            .split_once("\nFROM ")
+            .context("source overlay must end before the next stage")?;
+        let refresh = stage
+            .find(self.refresh)
+            .context("source overlay must refresh every Rust file in its copied packages")?;
+        for package in self.packages {
+            let copy = stage
+                .rfind(&format!("COPY nook-app/nook-platform/{package} {package}"))
+                .with_context(|| format!("source overlay must copy {package}"))?;
+            anyhow::ensure!(copy < refresh, "{package} must be copied before refreshing");
+        }
+        if let Some(compiler) = stage.find("cargo ") {
+            anyhow::ensure!(refresh < compiler, "source refresh must precede Cargo use");
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn wasm_source_overlays_refresh_all_rust_files_before_compilation() -> anyhow::Result<()> {
+    let root = repository_root()?;
+    let dockerfile = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    for overlay in [
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-deps AS builder-wasm-source-base",
+            packages: &["nook-app-common", "nook-authenticator-domain", "nook-core"],
+            refresh: "find nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-wasm-source\n",
+            packages: &["nook-companion-wasm", "nook-wasm"],
+            refresh: "find nook-companion-wasm nook-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-nook-wasm-source",
+            packages: &["nook-wasm"],
+            refresh: "find nook-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-companion-wasm-source",
+            packages: &["nook-companion-wasm"],
+            refresh: "find nook-companion-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+    ] {
+        overlay.require_fresh_sources(&dockerfile)?;
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct CoveragePolicy {
     lines_percent: f64,

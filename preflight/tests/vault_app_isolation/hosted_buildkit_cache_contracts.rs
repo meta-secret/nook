@@ -748,7 +748,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && nook_verification.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
-            && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")
+            && wasm_dockerfile.contains("find nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core -type f -name '*.rs' -exec touch {} +")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM source gates must remain siblings while Node tooling precedes the real-source join and release-profile tests"
     );
