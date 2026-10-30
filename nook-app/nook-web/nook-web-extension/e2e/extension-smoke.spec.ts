@@ -36,6 +36,7 @@ import {
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import {
+  approveExtensionConnect,
   createWebsiteIdentityForConnect,
   leaveFirstRunReady,
 } from './helpers/extension-approval'
@@ -572,7 +573,7 @@ test('keeps the extension in its keyring while the website locks it out and dele
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await createWebsiteIdentityForConnect(simplePage, 'Unpair test vault')
 
-    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await approveExtensionConnect(simplePage)
     await waitForExtensionPairingReady(
       simplePage,
       async () => {

@@ -137,3 +137,14 @@ export async function leaveFirstRunReady(vaultPage: Page): Promise<void> {
   )
   await expect(shell.or(openRow).first()).toBeVisible({ timeout: 30_000 })
 }
+
+/** The consent enables Approve only once its vault is ready, which takes a
+ * loaded CI runner longer than an action's default wait. */
+const APPROVE_READY_TIMEOUT_MS = 45_000
+
+/** Approve the extension's connect request once the consent can continue. */
+export async function approveExtensionConnect(vaultPage: Page): Promise<void> {
+  const approve = vaultPage.getByTestId('approve-extension-device-btn')
+  await expect(approve).toBeEnabled({ timeout: APPROVE_READY_TIMEOUT_MS })
+  await approve.click()
+}

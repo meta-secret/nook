@@ -1,4 +1,5 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
+import { approveExtensionConnect } from './helpers/extension-approval'
 import {
   PasskeyVaultDiscovery,
   WebsitePasskeyStateKind,
@@ -200,7 +201,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       ).not.toBe(extensionDeviceId)
     }
 
-    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await approveExtensionConnect(simplePage)
     await test.step('admit pairing grant', async () => {
       await waitForExtensionPairingReady(
         simplePage,
@@ -663,7 +664,7 @@ test('a locked extension leaves the approval visibly untaken', async ({
     const sessionWorker = await getServiceWorker(context)
     await sessionWorker.evaluate(() => chrome.offscreen.closeDocument())
 
-    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await approveExtensionConnect(simplePage)
     await expect(
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
@@ -731,7 +732,7 @@ test("approves the extension into an existing local vault's keyring without even
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
 
-    await connectPage.getByTestId('approve-extension-device-btn').click()
+    await approveExtensionConnect(connectPage)
     await waitForExtensionPairingReady(
       connectPage,
       async () => {
