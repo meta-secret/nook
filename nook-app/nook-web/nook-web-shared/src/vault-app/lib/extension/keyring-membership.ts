@@ -45,9 +45,13 @@ export class ExtensionKeyringMembership {
   /** Add the extension to the unlocked keyring and publish the change. */
   async add(): Promise<Result<ExtensionKeyringMember, VaultStorageFailure>> {
     const { vault, request, admitManager } = this.membership;
-    // Creates the keyring's log when this browser has none yet.
-    const refreshed = await vault.identityControl.refresh();
-    if (refreshed.isErr()) return err(refreshed.error);
+    // With a vault open, register it in the keyring's log first, so the
+    // extension is added with its DEK and the hand-over lists it. With none
+    // open, the log is created when this browser has none yet.
+    const prepared = vault.isAuthenticated
+      ? await vault.identityControl.followOpenVault()
+      : await vault.identityControl.refresh();
+    if (prepared.isErr()) return err(prepared.error);
     const added = await vault.enqueueStorage(async () => {
       const manager = admitManager();
       if (manager.isErr()) return err(manager.error);

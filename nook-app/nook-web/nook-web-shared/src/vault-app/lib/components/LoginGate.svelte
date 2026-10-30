@@ -70,7 +70,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
-  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import CardPasswordUnlock from '$lib/components/identities/CardPasswordUnlock.svelte'
   import CardPinUnlock from '$lib/components/identities/CardPinUnlock.svelte'
   import {
@@ -860,19 +860,21 @@
      unlocked it is approved right here, with no vault opened. -->
 {#snippet extensionRequest(card: IdentityCardView)}
   {#if extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested}
-    {#if vault.deviceProtectionReady}
-      <ExtensionConnectConsent
-        {vault}
-        request={extensionConnectRequest.request}
-        onClose={onFinishExtensionConnect}
-      />
-    {:else}
+    {#if !vault.deviceProtectionReady}
       <ExtensionRequestPanel
         {vault}
         request={extensionConnectRequest.request}
         {card}
         busy={isVerifying || isInitializing}
         onUnlock={() => void unlockIdentity()}
+      />
+    {:else if vault.firstRun === FirstRunStage.Off}
+      <!-- A keyring still being set up finishes first: its steps own the
+           page, and the approval follows once it exists. -->
+      <ExtensionConnectConsent
+        {vault}
+        request={extensionConnectRequest.request}
+        onClose={onFinishExtensionConnect}
       />
     {/if}
   {/if}

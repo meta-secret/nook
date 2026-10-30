@@ -562,30 +562,23 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn decoded_event_log_records_reach_the_session_whole() -> Result<(), JsError> {
-        let record = ResponseWireFixture::parse(&format!(
+        let wire = format!(
             r#"{{"eventId":"event-1","event":{{"schema_version":2,"store_id":"store_testtoken11","actor_id":"key_{actor}","actor_signing_public_key":"{signing}","parents":[],"created_at":"2026-08-10T00:00:00Z","key_epoch":"sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo","operations":[{{"type":"vault-cleared"}}],"signature":"ed25519:{signature}"}}}}"#,
             actor = "0".repeat(64),
             signing = "0".repeat(64),
             signature = "0".repeat(128),
-        ))?
-        .into_typed();
+        );
+        let expected: nook_companion_core::ExtensionEventLogRecord =
+            serde_json::from_str(&wire).map_err(js_error)?;
+        let record = ResponseWireFixture::parse(&wire)?.into_typed();
 
         let decoded = decode_extension_event_log_record(&record)?;
 
-        // The event flattens its body: carried as JSON it must keep every
-        // field, not arrive as the `{}` a `Map` becomes.
-        let carried: serde_json::Value =
+        // The event flattens its body: carried as JSON it must decode back to
+        // the same record, not lose its body to the `{}` a `Map` becomes.
+        let carried: nook_companion_core::ExtensionEventLogRecord =
             serde_json::from_str(&json_stringify(&decoded.js_value())).map_err(js_error)?;
-        assert_eq!(carried["eventId"], "event-1");
-        assert_eq!(carried["event"]["store_id"], "store_testtoken11");
-        assert_eq!(
-            carried["event"]["operations"],
-            serde_json::json!([{ "type": "vault-cleared" }])
-        );
-        assert_eq!(
-            carried["event"]["signature"],
-            format!("ed25519:{}", "0".repeat(128))
-        );
+        assert_eq!(carried, expected);
         Ok(())
     }
 

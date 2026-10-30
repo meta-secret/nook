@@ -147,7 +147,10 @@ class UnlockedKeyringFixture {
       'export_vault_event_log_records_js',
     ).mockImplementation(async (storeId) => {
       const handle = {
-        to_array: () => records.get(storeId) ?? [],
+        to_array: () => {
+          const held = records.get(storeId)
+          return held ? held : []
+        },
         free: () => {
           this.freed.push(storeId)
         },
@@ -231,6 +234,31 @@ describe('approving the extension into the keyring', () => {
     // Nothing in the approval is tied to one vault.
     expect(prepared._unsafeUnwrap()).toEqual(expected)
     expect(fixture.freed).toEqual(['store_personal0'])
+  })
+
+  test('registers the open vault in the keyring before adding the extension', async () => {
+    const fixture = new UnlockedKeyringFixture([
+      { storeId: 'store_personal0', records: personalRecords },
+    ])
+    fixture.vault.isAuthenticated = true
+    vi.spyOn(
+      fixture.vault.identityControl,
+      'followOpenVault',
+    ).mockImplementation(async () => {
+      fixture.steps.push('open vault registered')
+      return ok(IdentityActionOutcome.Completed)
+    })
+    const approval = new ExtensionKeyringApproval(fixture.vault, request)
+
+    expect((await approval.authorize()).isOk()).toBe(true)
+
+    // The extension is added with the open vault's DEK, and the hand-over
+    // lists that vault.
+    expect(fixture.steps).toEqual([
+      'open vault registered',
+      'extension added',
+      'keyring change published',
+    ])
   })
 
   test('hands over a keyring with no vault yet as an empty vault list', async () => {

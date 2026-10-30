@@ -19,7 +19,6 @@ import {
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
-  syntheticEventLogRecords,
   waitForExtensionPairingReady,
   writeExtensionStorage,
   type ExtensionPairingApprovedMessage,
@@ -480,9 +479,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         identityId: 'identity-e2e',
         identityLabel: 'Personal',
         identityEvents: ['synthetic-identity-event'],
-        vaults: [
-          { storeId: 'store-e2e', eventLogRecords: syntheticEventLogRecords },
-        ],
+        // No vault: the refusals below come from the keyring alone.
+        vaults: [],
         providers: { apps: [] },
       },
     }
