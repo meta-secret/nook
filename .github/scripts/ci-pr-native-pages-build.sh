@@ -23,8 +23,8 @@ esac
 # compiler path must retain the repository's real SeaweedFS sccache contract.
 # The --prepare mode is called before cargo installs wasm-pack so that the
 # tooling bootstrap itself cannot bypass the compiler cache.
-sccache_version="0.17.0"
-sccache_sha256="67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006"
+sccache_version="0.19.0"
+sccache_sha256="aa73c7270c997894038c0d8f0d297865f57569e1687883322bc431713d4bb9dd"
 sccache_root="${RUNNER_TEMP:-/tmp}/nook-sccache"
 sccache_report_dir="${RUNNER_TEMP:-/tmp}/nook-sccache-reports"
 sccache_binary="$sccache_root/sccache"
