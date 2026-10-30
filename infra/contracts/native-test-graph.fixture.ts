@@ -23,6 +23,9 @@ export class NativeTestGraphContract {
     expect(reportStart).toBeGreaterThan(testsStart);
     const sources = product.slice(sourceStart, testsStart);
     expect(sources).toContain(
+      "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
+    );
+    expect(sources).toContain(
       "CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace",
     );
     expect(sources).not.toMatch(/cargo (?:test|nextest|clippy|build)\b/);

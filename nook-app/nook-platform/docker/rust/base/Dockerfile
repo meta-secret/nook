@@ -304,8 +304,8 @@ COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 # Clean dummy workspace coverage before the independent source/test DAG.
 FROM builder-core-deps AS builder-native-source-base
+COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 RUN CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace
-
 FROM builder-native-source-base AS builder-native-common-source
 COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-app-common/ nook-app-common/
 RUN find nook-app-common -type f -name '*.rs' -exec touch {} +
