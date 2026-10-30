@@ -5,6 +5,8 @@ import {
   decode_extension_ready_setup_json,
   decode_stored_extension_pairing_grant_json,
   extension_pairing_grant_storage_key,
+  extension_keyring_storage_items,
+  extension_pairing_keyrings,
   extension_setup_after_pairing_grant_removal,
   first_extension_pairing_grant,
   ordered_extension_pairing_grants,
@@ -23,6 +25,7 @@ import type {
   ImportedExtensionEventLog,
   RefreshExtensionPairingGrantInput,
   SelectedExtensionPairingGrant,
+  StoredExtensionKeyring,
   StoredExtensionPairingGrant,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -32,7 +35,7 @@ export type ExtensionReadySetupState = ExtensionReadySetup
 export type ImportedEventLogState = ImportedExtensionEventLog
 export type PairingSetupAfterRemoval = ExtensionSetupAfterRemoval
 export type SelectedPairingGrant = SelectedExtensionPairingGrant
-export type { StoredExtensionPairingGrant }
+export type { StoredExtensionKeyring, StoredExtensionPairingGrant }
 export type ExtensionPairingItems = Record<
   string,
   ExtensionPairingState['entries'][number]['record']
@@ -241,6 +244,20 @@ function firstStoredPairingGrant(
   return first_extension_pairing_grant(stateFromItems(stored))
 }
 
+/** Storage items for a keyring the web app added the extension to. */
+function keyringStorageItems(
+  keyring: StoredExtensionKeyring,
+): ExtensionPairingItems {
+  return itemsFromState(extension_keyring_storage_items(keyring))
+}
+
+/** Every keyring the extension joined, the latest approval first. */
+function joinedKeyrings(
+  stored: ExtensionPairingItems,
+): StoredExtensionKeyring[] {
+  return extension_pairing_keyrings(stateFromItems(stored))
+}
+
 export type ExtensionPairingGrantPolicy = {
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   decodeStoredExtensionPairingGrant: typeof decodeStoredExtensionPairingGrant
@@ -252,6 +269,8 @@ export type ExtensionPairingGrantPolicy = {
   selectedPairingGrantFirst: typeof selectedPairingGrantFirst
   selectedPairingGrant: typeof selectedPairingGrant
   firstStoredPairingGrant: typeof firstStoredPairingGrant
+  keyringStorageItems: typeof keyringStorageItems
+  joinedKeyrings: typeof joinedKeyrings
 }
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
@@ -266,4 +285,6 @@ export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPoli
     selectedPairingGrantFirst,
     selectedPairingGrant,
     firstStoredPairingGrant,
+    keyringStorageItems,
+    joinedKeyrings,
   }))

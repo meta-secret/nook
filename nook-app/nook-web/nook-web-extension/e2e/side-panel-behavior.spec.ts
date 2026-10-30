@@ -606,6 +606,30 @@ test('a new identity sets up its own key in the panel and Cancel returns to the 
   expect(await panel.pairings()).toEqual([])
 })
 
+test('a keyring joined with no vault yet is connected, with an empty slot', async ({
+  page,
+}) => {
+  const panel = new SidePanelStubPage(page)
+  await panel.open({
+    ...unlockedScenario,
+    vaults: SidePanelStubVaults.KeyringWithoutVault,
+  })
+  // Connected: no Connect card, and no connect starts by itself.
+  await expect(page.getByTestId('side-panel-manage')).toBeVisible()
+  await expect(page.getByTestId('side-panel-connect-card')).toHaveCount(0)
+  expect(await panel.pairings()).toEqual([])
+  await page.getByTestId('side-panel-manage').click()
+  const card = page
+    .getByTestId('side-panel-all-connections')
+    .getByTestId('side-panel-identity-card')
+  await expect(card).toHaveCount(1)
+  await expect(card).toContainText('Alice Martin')
+  await expect(card.getByTestId('side-panel-vault')).toHaveCount(0)
+  await expect(card.getByTestId('side-panel-keyring-no-vaults')).toHaveText(
+    'No vaults in this keyring yet',
+  )
+})
+
 test('All connections lists identities in the panel and makes a vault the default', async ({
   page,
 }) => {

@@ -176,6 +176,14 @@ its own unlock. Back returns to This site.
                 </button>
               {/if}
             </li>
+          {:else}
+            <!-- Joined before the keyring had a vault: an empty slot. -->
+            <li
+              class="side-panel-vault-row is-empty"
+              data-testid="side-panel-keyring-no-vaults"
+            >
+              {translatePlain(I18N_KEYS.ExtensionCompanionKeyringNoVaults)}
+            </li>
           {/each}
         </ul>
       </div>

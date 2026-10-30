@@ -1,5 +1,4 @@
 import { pairedVaultsMessages } from '../src/lib/paired-vaults'
-import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -97,33 +96,22 @@ const routedVaultEvent = {
   signature: `ed25519:${'0'.repeat(128)}`,
 }
 
+/** The web app approved the extension into a keyring with no vault yet. */
 const externalPairingMessage = {
   type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
   payload: {
-    vaultType: routedGrant.vaultType,
-    vaultStoreId: routedGrant.vaultStoreId,
     deviceId: routedGrant.deviceId,
     devicePublicKey: routedGrant.devicePublicKey,
     deviceSigningPublicKey: routedGrant.deviceSigningPublicKey,
-    vaultName: routedGrant.vaultName,
     deviceLabel: routedGrant.deviceLabel,
     approvedAt: routedGrant.approvedAt,
     scopes: [...routedGrant.scopes],
-    providers: [],
-    keyring: {
-      kind: ExtensionKeyringGrantKind.Added,
-      identityId: 'identity-routed',
-      identityLabel: 'Personal',
-      identityEvents: ['identity-event-1'],
-      vaults: [],
-    },
+    identityId: 'identity-routed',
+    identityLabel: 'Personal',
+    identityEvents: ['identity-event-1'],
+    vaults: [],
+    providers: { apps: [{ appId: routedGrant.deviceId, providers: [] }] },
   },
-  eventLogRecords: [
-    {
-      eventId: 'event-1',
-      event: routedVaultEvent,
-    },
-  ],
 } satisfies ExternalCompanionMessage
 
 // Obtain the generated outcome variants from Rust rather than mirroring them.
@@ -239,7 +227,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   returnToConnectOrigin: mock(() => Promise.resolve()),
-  takeKeyringProviderShares: mock(() => Promise.resolve(true)),
+  takeKeyringProviderShares: mock(() => Promise.resolve(1)),
 }
 
 async function flushResponses(): Promise<void> {

@@ -672,17 +672,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing)
-      return ExtensionLifecycleRoutingResult.Unhandled
-    const preservedEventLogRecords =
-      SerializedWireValueAdapter.restoreEventLogRecords<
-        typeof pairingApproval.value.eventLogRecords
-      >(eventLogRecordsSnapshot.value)
-    const importMessage: typeof pairingApproval.value = {
-      ...pairingApproval.value,
-      eventLogRecords: preservedEventLogRecords,
-    }
-    void importPairingAfterCompanionReady(importMessage)
+    void importPairingAfterCompanionReady(pairingApproval.value)
       .then(async (response) => {
         if (response.ok) await refreshAuthenticationSurfaces()
         return response

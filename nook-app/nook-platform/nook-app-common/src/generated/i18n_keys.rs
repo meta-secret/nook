@@ -953,6 +953,7 @@ pub const EXTENSION_COMPANION_IDENTITY_SYNC_CHECKING: &str =
 pub const EXTENSION_COMPANION_IDENTITY_SYNC_FAILED: &str =
     "extension.companion.identity_sync_failed";
 pub const EXTENSION_COMPANION_ITEM_COUNT: &str = "extension.companion.item_count";
+pub const EXTENSION_COMPANION_KEYRING_NO_VAULTS: &str = "extension.companion.keyring_no_vaults";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT: &str = "extension.companion.make_default";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT_FAILED: &str = "extension.companion.make_default_failed";
 pub const EXTENSION_COMPANION_MANAGES_PASSKEYS: &str = "extension.companion.manages_passkeys";
@@ -1140,7 +1141,6 @@ pub const EXTENSION_POPUP_INITIALIZATION_SESSION_DEVICE_FAILED: &str =
     "extension.popup_initialization.session_device_failed";
 pub const EXTENSION_PROVIDERS_HANDOVER_FAILED: &str = "extension.providers_handover_failed";
 pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
-pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
 pub const EXTENSION_REQUEST_UNLOCK_IDENTITY: &str = "extension.request.unlock_identity";
 pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";

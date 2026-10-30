@@ -7,7 +7,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  ExtensionPairingApprovedGrantAdmission,
+  ExtensionKeyringApprovalAdmission,
   ExtensionPairingApprovedMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
@@ -20,10 +20,6 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
-import {
-  SerializedWireSnapshotKind,
-  SerializedWireValueAdapter,
-} from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
@@ -93,9 +89,7 @@ function pairingGrantDecodeFailureResponse(
   ) {
     return invalidPairingGrantResponse
   }
-  const admission = ExtensionPairingApprovedGrantAdmission.parse(
-    message.payload,
-  )
+  const admission = ExtensionKeyringApprovalAdmission.parse(message.payload)
   if (admission.isErr()) return { ok: false, reason: admission.error }
   return eventLogImportFailureResponse
 }
@@ -110,8 +104,6 @@ export class ExternalCompanionRouter {
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
-    const eventLogRecordsSnapshot =
-      SerializedWireValueAdapter.snapshotEventLogRecords(message)
     if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -167,19 +159,7 @@ export class ExternalCompanionRouter {
       sendResponse(pairingGrantDecodeFailureResponse(message))
       return false
     }
-    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
-      sendResponse(invalidPairingGrantResponse)
-      return false
-    }
-    const preservedEventLogRecords =
-      SerializedWireValueAdapter.restoreEventLogRecords<
-        typeof pairingApproval.value.eventLogRecords
-      >(eventLogRecordsSnapshot.value)
-    const importMessage: typeof pairingApproval.value = {
-      ...pairingApproval.value,
-      eventLogRecords: preservedEventLogRecords,
-    }
-    void importPairingAfterCompanionReady(importMessage)
+    void importPairingAfterCompanionReady(pairingApproval.value)
       .then(async (response) => {
         if (!response.ok) return response
         try {

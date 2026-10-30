@@ -10,12 +10,14 @@ mod approval_timestamp;
 mod authority;
 mod default_vault;
 mod imported_event_log;
+mod joined_keyring;
 mod value_types;
 
 pub use approval_timestamp::*;
 pub use authority::*;
 pub use default_vault::*;
 pub use imported_event_log::*;
+pub use joined_keyring::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 pub use value_types::*;
@@ -120,6 +122,7 @@ pub struct ExtensionReadySetup {
 pub enum ExtensionPairingRecord {
     Grant(StoredExtensionPairingGrant),
     Setup(ExtensionReadySetup),
+    Keyring(StoredExtensionKeyring),
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
@@ -159,6 +162,8 @@ pub enum ExtensionPairingStateError {
     InvalidGrant,
     #[error("extension pairing setup is incomplete or inconsistent")]
     InvalidSetup,
+    #[error("joined keyring record is incomplete or inconsistent")]
+    InvalidKeyring,
     #[error("imported event log does not match the approved vault")]
     ImportedVaultMismatch,
     #[error("imported event log does not grant this extension access")]
@@ -213,6 +218,7 @@ impl ExtensionPairingRecord {
                     return Err(ExtensionPairingStateError::InvalidSetup);
                 }
             }
+            Self::Keyring(keyring) => keyring.validate_for_key(key)?,
         }
         Ok(())
     }
@@ -256,7 +262,7 @@ impl ExtensionPairingState {
             .iter()
             .filter_map(|entry| match &entry.record {
                 ExtensionPairingRecord::Grant(grant) => Some(grant.clone()),
-                ExtensionPairingRecord::Setup(_) => None,
+                ExtensionPairingRecord::Setup(_) | ExtensionPairingRecord::Keyring(_) => None,
             })
             .collect();
         grants.sort_by(|left, right| {

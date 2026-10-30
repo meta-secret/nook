@@ -9,8 +9,8 @@ const grantPort = vi.hoisted(() => ({
   releaseAuthorization: vi.fn(),
 }))
 
-vi.mock('$lib/extension/vault-approval', () => ({
-  ExtensionVaultApproval: vi.fn(function GrantPortDouble() {
+vi.mock('$lib/extension/keyring-approval', () => ({
+  ExtensionKeyringApproval: vi.fn(function GrantPortDouble() {
     return grantPort
   }),
 }))
@@ -45,7 +45,8 @@ import {
   type ExtensionConnectRequest,
 } from '$lib/extension/connect'
 import { ExtensionPairingDeliveryKind } from '$lib/extension/extension-pairing-delivery'
-import { NookVaultManager } from '$app-wasm'
+import { DeviceProtectionStatus, NookVaultManager } from '$app-wasm'
+import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 /** A page port to the extension, recording what the page posts. */
@@ -317,7 +318,11 @@ class ConsentSteps {
   constructor() {
     const vault = VaultStateTestFixture.create()
     vault.openManager(new NookVaultManager())
-    vault.isAuthenticated = true
+    // Only the keyring has to be unlocked; no vault is open.
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    vi.spyOn(vault.identityControl, 'loadSnapshot').mockResolvedValue(
+      ok(IdentityActionOutcome.Completed),
+    )
     const request: ExtensionConnectRequest = {
       follow: { kind: ExtensionConnectFollowKind.Unnamed },
       deviceId: 'device-1',
@@ -345,7 +350,7 @@ class ConsentSteps {
 describe('connect page steps of the consent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    grantPort.authorize.mockResolvedValue(ok())
+    grantPort.authorize.mockResolvedValue(ok({ identityId: 'identity-1' }))
     grantPort.prepareAuthorizedGrant.mockResolvedValue(ok({}))
     grantPort.admitCompletion.mockReturnValue(ok())
     grantPort.releaseAuthorization.mockImplementation(() => {})
@@ -385,7 +390,7 @@ describe('connect page steps of the consent', () => {
     consentSteps.workflow.dispose()
   })
 
-  test('an authorization the vault refused reports an authorization failure', async () => {
+  test('an authorization the keyring refused reports an authorization failure', async () => {
     grantPort.authorize.mockResolvedValue(err(new Error('refused')))
     const consentSteps = new ConsentSteps()
     await consentSteps.approve()

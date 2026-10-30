@@ -133,6 +133,43 @@ pub fn refresh_extension_pairing_grant(
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
+/// The storage entries for a keyring the web app added the extension to.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_keyring_storage_items(
+    keyring: &tsify::Ts<nook_companion_core::StoredExtensionKeyring>,
+) -> Result<tsify::Ts<ExtensionPairingState>, JsError> {
+    let keyring = keyring
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let state = ExtensionPairingState::for_keyring(keyring)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    Tsify::into_ts(&state).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+}
+
+/// Every keyring the extension joined, the latest approval first.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_pairing_keyrings(
+    state: &tsify::Ts<ExtensionPairingState>,
+) -> Result<Vec<tsify::Ts<nook_companion_core::StoredExtensionKeyring>>, JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    state
+        .keyrings()
+        .iter()
+        .map(Tsify::into_ts)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+}
+
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
@@ -367,7 +404,7 @@ mod tests {
             .iter()
             .find_map(|entry| match &entry.record {
                 ExtensionPairingRecord::Setup(setup) => Some(setup.clone()),
-                ExtensionPairingRecord::Grant(_) => None,
+                ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Keyring(_) => None,
             })
             .ok_or_else(|| "created pairing state did not contain setup".to_owned())?;
         let setup_json = serde_json::to_string(&setup).map_err(|error| error.to_string())?;
@@ -453,7 +490,7 @@ mod tests {
             .iter()
             .find_map(|entry| match &entry.record {
                 ExtensionPairingRecord::Setup(setup) => Some(setup.clone()),
-                ExtensionPairingRecord::Grant(_) => None,
+                ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Keyring(_) => None,
             })
             .ok_or_else(|| JsError::new("created pairing state has no setup"))?;
         let setup_json = serde_json::to_string(&setup)?;

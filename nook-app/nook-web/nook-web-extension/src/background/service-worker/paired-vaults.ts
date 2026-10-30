@@ -3,11 +3,13 @@ import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import type {
   DefaultVaultSelectResponse,
   IdentityVaultsRefreshResponse,
+  PairedConnections,
+  PairedKeyringSummary,
   PairedVaultSummary,
   PairedVaultsResponse,
 } from '../../lib/paired-vaults'
 import { extensionPairingIdentity } from './pairing-identity'
-import { importIdentityVault } from './pairing-import'
+import { importKeyringVault } from './pairing-import'
 import {
   IdentityVaultRefresh,
   type IdentityVaultRefreshRequest,
@@ -64,13 +66,20 @@ function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
   )
 }
 
-async function pairedVaults(): Promise<PairedVaultSummary[]> {
+/** The keyrings the extension joined and the vaults it paired in them. */
+async function pairedConnections(): Promise<PairedConnections> {
   const policy = await extensionPairingGrantPolicyReady
   const stored = await extensionPairingIdentity.getPairingStorage()
+  const keyrings = policy
+    .joinedKeyrings(stored)
+    .map((keyring): PairedKeyringSummary => ({
+      identityLabel: keyring.identityLabel,
+      deviceId: keyring.deviceId,
+    }))
   const selected = policy.selectedPairingGrant(stored)
   const defaultStoreId =
     selected.kind === 'selected' ? selected.grant.vaultStoreId : ''
-  return policy.selectedPairingGrantFirst(stored).map((grant) => {
+  const vaults = policy.selectedPairingGrantFirst(stored).map((grant) => {
     const summary: PairedVaultSummary = {
       vaultStoreId: grant.vaultStoreId,
       vaultName: grant.vaultName,
@@ -86,6 +95,7 @@ async function pairedVaults(): Promise<PairedVaultSummary[]> {
     }
     return summary
   })
+  return { keyrings, vaults }
 }
 
 export function handlePairedVaultsQuery({
@@ -100,9 +110,9 @@ export function handlePairedVaultsQuery({
     sendResponse(forbidden)
     return false
   }
-  void pairedVaults()
-    .then((vaults) => {
-      const response: PairedVaultsResponse = { ok: true, vaults }
+  void pairedConnections()
+    .then(({ keyrings, vaults }) => {
+      const response: PairedVaultsResponse = { ok: true, keyrings, vaults }
       sendResponse(response)
     })
     .catch(() => {
@@ -122,11 +132,11 @@ async function refreshIdentityVaults(
   const stored = await extensionPairingIdentity.getPairingStorage()
   const refreshRequest: IdentityVaultRefreshRequest = {
     deviceId,
+    keyrings: policy.joinedKeyrings(stored),
     grants: policy.selectedPairingGrantFirst(stored),
-    importVault: importIdentityVault,
+    importVault: importKeyringVault,
     sendSessionMessage: (...request) =>
       extensionPairingIdentity.sendSessionMessage(...request),
-    now: () => Date.now(),
   }
   const refreshed = await new IdentityVaultRefresh(refreshRequest).refresh()
   if (!refreshed.ok) {

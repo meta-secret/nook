@@ -4,10 +4,13 @@ import initNookWasm, {
   configure_vault_application,
   VaultApplication,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { ExtensionEventLogRecord } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
-import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
+import type {
+  StoredExtensionKeyring,
+  StoredExtensionPairingGrant,
+} from '../src/background/pairing-grants'
 import {
   IdentityVaultRefresh,
   IdentityVaultRefreshFailure,
@@ -38,10 +41,12 @@ beforeAll(async () => {
   }
   await initNookWasm(wasm)
   configure_vault_application(VaultApplication.Extension)
+  // The session's vault replies carry records the companion runtime admits.
+  await companionWasmReady
 })
 
 const EXTENSION_DEVICE = 'device-family'
-const NOW = 1_792_100_000_000
+const KEYRING_APPROVED_AT = 1_792_050_000_000
 
 const record: ExtensionEventLogRecord = {
   eventId: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
@@ -58,6 +63,26 @@ const record: ExtensionEventLogRecord = {
   },
 }
 
+/** A keyring the extension joined under the app key `deviceId`. */
+function keyring(
+  deviceId: string,
+  identityLabel: string,
+): StoredExtensionKeyring {
+  return {
+    identityId: `identity-${identityLabel.toLowerCase()}`,
+    identityLabel,
+    deviceId,
+    devicePublicKey: `age1${deviceId}`,
+    deviceSigningPublicKey: `${deviceId}-signing`,
+    deviceLabel: 'Nook Extension - Chrome',
+    approvedAt: KEYRING_APPROVED_AT,
+    scopes: [
+      ExtensionConnectScope.VaultAccess,
+      ExtensionConnectScope.SyncProviderCredentials,
+    ],
+  }
+}
+
 function grant(
   vaultStoreId: string,
   deviceId: string,
@@ -72,10 +97,7 @@ function grant(
     vaultName: 'Approved vault',
     identityLabel: 'Family',
     approvedAt: 1_792_000_000_000,
-    scopes: [
-      ExtensionConnectScope.VaultAccess,
-      ExtensionConnectScope.SyncProviderCredentials,
-    ],
+    scopes: [ExtensionConnectScope.PasswordFilling],
     syncProviderCount: 1,
     eventCount: 4,
     eventLogHeads: [],
@@ -87,6 +109,11 @@ enum RefreshAnswer {
   Plan = 'plan',
   NothingToPair = 'nothing-to-pair',
   Refused = 'refused',
+}
+
+type RefreshState = {
+  readonly keyrings: StoredExtensionKeyring[]
+  readonly grants: StoredExtensionPairingGrant[]
 }
 
 /** The offscreen session and the import, as the refresh drives them. */
@@ -139,36 +166,33 @@ class RefreshFixture {
     return Promise.resolve({ ok: true as const, eventCount: 2 })
   }
 
-  refresh(grants: StoredExtensionPairingGrant[]) {
+  refresh({ keyrings, grants }: RefreshState) {
     const request: IdentityVaultRefreshRequest = {
       deviceId: EXTENSION_DEVICE,
+      keyrings,
       grants,
       importVault: this.importVault,
       sendSessionMessage: this.send,
-      now: () => NOW,
     }
     return new IdentityVaultRefresh(request).refresh()
   }
 }
 
-describe('pairing the vaults an identity gained, on unlock', () => {
-  test('pairs each vault the identity grants and the extension lacks', async () => {
+describe('pairing the vaults a keyring gained, on unlock', () => {
+  test('pairs each vault the keyring grants and the extension lacks', async () => {
     const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
 
-    const result = await fixture.refresh([
-      grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
-      grant('store_eeeeeeeeeee', 'device-work'),
-    ])
+    const result = await fixture.refresh({
+      keyrings: [keyring(EXTENSION_DEVICE, 'Family')],
+      grants: [
+        grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
+        grant('store_eeeeeeeeeee', 'device-work'),
+      ],
+    })
 
     expect(result).toEqual({ ok: true, paired: 2, awaitingGrant: 1 })
     const [refresh, firstConnect, secondConnect, resync, ...rest] = fixture.sent
     expect(rest).toHaveLength(0)
-    // The vault the extension already holds is read again through the
-    // keyring's provider, so it syncs without the web app open.
-    expect(resync?.payload).toMatchObject({
-      vaultStoreId: 'store_aaaaaaaaaaa',
-      source: { kind: 'mount', mountProviderId: 'github-family' },
-    })
     expect(refresh?.type).toBe(
       ExtensionSessionMessageType.RefreshIdentityVaults,
     )
@@ -183,42 +207,100 @@ describe('pairing the vaults an identity gained, on unlock', () => {
     expect(secondConnect?.payload).toMatchObject({
       vaultStoreId: 'store_nnnnnnnnnnn',
     })
-    const [later] = fixture.imported
+    // The vault the extension already holds is read again through the
+    // keyring's provider, so it syncs without the web app open.
+    expect(resync?.payload).toMatchObject({
+      vaultStoreId: 'store_aaaaaaaaaaa',
+      source: { kind: 'mount', mountProviderId: 'github-family' },
+    })
     expect(fixture.imported).toHaveLength(3)
-    // No credential travels: the session keeps the identity's provider.
-    expect(later?.providers).toEqual([])
-    expect(later?.syncProviderCount).toBe(1)
-    expect(later?.message.payload).toMatchObject({
+    const [later] = fixture.imported
+    // The vault pairs under the extension's app in the keyring: its key,
+    // its approval and its scopes, not those of a vault grant.
+    expect(later?.grant).toEqual({
+      vaultType: 'simple',
+      deviceId: EXTENSION_DEVICE,
+      devicePublicKey: `age1${EXTENSION_DEVICE}`,
+      deviceSigningPublicKey: `${EXTENSION_DEVICE}-signing`,
+      deviceLabel: 'Nook Extension - Chrome',
       vaultStoreId: 'store_lllllllllll',
       vaultName: 'Later vault',
       identityLabel: 'Family',
-      deviceId: EXTENSION_DEVICE,
-      approvedAt: NOW,
+      approvedAt: KEYRING_APPROVED_AT,
       scopes: [
         ExtensionConnectScope.VaultAccess,
         ExtensionConnectScope.SyncProviderCredentials,
       ],
-      keyring: { kind: ExtensionKeyringGrantKind.Member },
+      syncProviderCount: 1,
     })
+    expect(later?.eventLogRecords.map((each) => each.eventId)).toEqual([
+      record.eventId,
+    ])
   })
 
-  test('a key with no vault yet asks the session nothing', async () => {
+  test('a keyring joined with no vault pairs its vaults on unlock', async () => {
     const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
 
-    const result = await fixture.refresh([
-      grant('store_wwwwwwwwwww', 'device-work'),
+    const result = await fixture.refresh({
+      keyrings: [keyring(EXTENSION_DEVICE, 'Family')],
+      grants: [],
+    })
+
+    expect(result).toEqual({ ok: true, paired: 2, awaitingGrant: 1 })
+    const [refresh, ...connects] = fixture.sent
+    expect(refresh?.payload).toMatchObject({ pairedVaultStoreIds: [] })
+    expect(connects.map((message) => message.type)).toEqual([
+      ExtensionSessionMessageType.ConnectIdentityVault,
+      ExtensionSessionMessageType.ConnectIdentityVault,
     ])
+    expect(fixture.imported.map((each) => each.grant.vaultStoreId)).toEqual([
+      'store_lllllllllll',
+      'store_nnnnnnnnnnn',
+    ])
+  })
+
+  test('pairs under the keyring whose app key unlocked', async () => {
+    const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
+
+    await fixture.refresh({
+      keyrings: [
+        keyring('device-work', 'Acme'),
+        keyring(EXTENSION_DEVICE, 'Family'),
+      ],
+      grants: [],
+    })
+
+    expect(
+      fixture.imported.map((each) => [
+        each.grant.deviceId,
+        each.grant.identityLabel,
+      ]),
+    ).toEqual([
+      [EXTENSION_DEVICE, 'Family'],
+      [EXTENSION_DEVICE, 'Family'],
+    ])
+  })
+
+  test('a key that joined no keyring asks the session nothing', async () => {
+    const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
+
+    const result = await fixture.refresh({
+      keyrings: [keyring('device-work', 'Acme')],
+      grants: [grant('store_wwwwwwwwwww', EXTENSION_DEVICE)],
+    })
 
     expect(result).toEqual({ ok: true, paired: 0, awaitingGrant: 0 })
     expect(fixture.sent).toHaveLength(0)
+    expect(fixture.imported).toHaveLength(0)
   })
 
   test('reports vaults not shared with the extension yet', async () => {
     const fixture = new RefreshFixture(RefreshAnswer.NothingToPair, true)
 
-    const result = await fixture.refresh([
-      grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
-    ])
+    const result = await fixture.refresh({
+      keyrings: [keyring(EXTENSION_DEVICE, 'Family')],
+      grants: [grant('store_aaaaaaaaaaa', EXTENSION_DEVICE)],
+    })
 
     expect(result).toEqual({ ok: true, paired: 0, awaitingGrant: 1 })
     expect(fixture.imported).toHaveLength(0)
@@ -227,9 +309,10 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   test('a refresh the session cannot finish is reported', async () => {
     const fixture = new RefreshFixture(RefreshAnswer.Refused, true)
 
-    const result = await fixture.refresh([
-      grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
-    ])
+    const result = await fixture.refresh({
+      keyrings: [keyring(EXTENSION_DEVICE, 'Family')],
+      grants: [grant('store_aaaaaaaaaaa', EXTENSION_DEVICE)],
+    })
 
     expect(result).toEqual({
       ok: false,
@@ -241,9 +324,10 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   test('a vault that does not open stops the refresh with that failure', async () => {
     const fixture = new RefreshFixture(RefreshAnswer.Plan, false)
 
-    const result = await fixture.refresh([
-      grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
-    ])
+    const result = await fixture.refresh({
+      keyrings: [keyring(EXTENSION_DEVICE, 'Family')],
+      grants: [grant('store_aaaaaaaaaaa', EXTENSION_DEVICE)],
+    })
 
     expect(result).toEqual({
       ok: false,

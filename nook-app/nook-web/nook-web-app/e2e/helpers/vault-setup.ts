@@ -143,6 +143,39 @@ export async function nameFirstIdentityHere(
     .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
+/** First run keeps a new identity on this browser under `label` and skips
+ * its first vault; its unlocked card is returned. */
+export async function keepIdentityWithoutVault(
+  page: Page,
+  label: string,
+): Promise<Locator> {
+  await page.goto('/app/')
+  await startFirstRun(page)
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  const createChoice = page.getByTestId('device-protection-create-new-choice')
+  if (await createChoice.isVisible()) await createChoice.click()
+  await page.getByTestId('device-protection-setup-btn').click()
+  await nameFirstIdentityOnly(page, label)
+
+  // Kept on this browser, the identity asks about its first vault.
+  await expect(page.getByTestId('first-run-vault-step')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('first-run-vault-skip').click()
+
+  const card = page.getByTestId('identity-card').filter({
+    has: page.getByTestId('identity-card-label').getByText(label, {
+      exact: true,
+    }),
+  })
+  await expect(card).toHaveAttribute('data-status', 'unlocked', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  return card
+}
+
 /** Name the identity when first run reaches its sync provider step; a
  * browser that already had an identity goes straight to its vault. */
 async function nameFirstIdentityIfAsked(

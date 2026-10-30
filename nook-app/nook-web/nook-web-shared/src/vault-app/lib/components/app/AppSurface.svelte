@@ -163,6 +163,7 @@
         <VaultAccessGate
           {...accessGateProps}
           extensionConnectRequest={extensionConnectRequestState}
+          {onFinishExtensionConnect}
         />
       {:else if vault.isAuthenticated}
         <!-- A connecting extension is approved beside the identity's card. -->

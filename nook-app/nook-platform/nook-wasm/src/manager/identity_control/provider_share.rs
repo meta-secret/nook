@@ -95,17 +95,18 @@ impl NookVaultManager {
     }
 
     /// Take the copies sealed to an app key this installation holds; the
-    /// keyring's other apps' copies are not for it. Returns whether one was
-    /// taken.
+    /// keyring's other apps' copies are not for it. Returns how many
+    /// providers it took: none when no copy was for it, or when the keyring
+    /// has no remote provider left.
     #[wasm_bindgen]
     pub async fn take_keyring_provider_shares(
         &self,
         shares: &tsify::Ts<NookKeyringProviderSharesAdmission>,
-    ) -> Result<bool, JsError> {
+    ) -> Result<u32, JsError> {
         let mut shares = shares
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-        let mut taken = false;
+        let mut taken = 0_usize;
         for share in &mut shares.0.apps {
             let app_id = AppId::parse(&share.app_id)?;
             if matches!(
@@ -130,9 +131,9 @@ impl NookVaultManager {
                 .iter_mut()
                 .for_each(StorageProvider::zeroize_credentials);
             saved?;
-            taken = true;
+            taken += snapshot.providers.len();
         }
-        Ok(taken)
+        u32::try_from(taken).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }
 
@@ -265,11 +266,14 @@ mod browser_tests {
             ],
         };
 
-        assert!(js(manager
-            .take_keyring_provider_shares(&Tsify::into_ts(&NookKeyringProviderSharesAdmission(
-                handed
-            ))?)
-            .await)?);
+        assert_eq!(
+            js(manager
+                .take_keyring_provider_shares(&Tsify::into_ts(
+                    &NookKeyringProviderSharesAdmission(handed)
+                )?)
+                .await)?,
+            1
+        );
 
         let stored = AuthProviderDatabase::load_auth_providers(&held).await?;
         let ids: Vec<&str> = stored.providers.iter().map(|row| row.id.as_str()).collect();
@@ -292,11 +296,14 @@ mod browser_tests {
                 providers: Vec::new(),
             }],
         };
-        assert!(js(manager
-            .take_keyring_provider_shares(&Tsify::into_ts(&NookKeyringProviderSharesAdmission(
-                removed
-            ))?)
-            .await)?);
+        assert_eq!(
+            js(manager
+                .take_keyring_provider_shares(&Tsify::into_ts(
+                    &NookKeyringProviderSharesAdmission(removed)
+                )?)
+                .await)?,
+            0
+        );
         let stored = AuthProviderDatabase::load_auth_providers(&held).await?;
         let ids: Vec<&str> = stored.providers.iter().map(|row| row.id.as_str()).collect();
         assert_eq!(ids, vec!["local"]);

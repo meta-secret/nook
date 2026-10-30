@@ -135,31 +135,37 @@ administer vault items.
      the website's normal first run with the website's own passkey: the sync
      provider's identities, or a new identity named here. The consent then
      approves the extension, which selects that identity's first vault.
-   - A browser that already holds a vault shows its usual unlock. There the
-     person chooses the identity to connect.
+   - A browser that already holds a keyring shows its card with the request
+     beside it. Its one action unlocks the keyring; no vault opens. The
+     consent follows in place, whether or not the keyring has a vault yet.
    - The page reports its [connect steps](#connect-steps) to the side panel.
 
    There is no website-first enable screen, floating companion window, or
    toolbar popup.
 
-4. The user creates, imports, or unlocks the full Simple vault on the website
-   with the website's own app key and passkey. The website never asks the
-   extension for its key, and the extension never sends it.
+4. The user unlocks the keyring on the website with the website's own app key
+   and passkey, or creates one. No vault has to be open, or exist. The
+   website never asks the extension for its key, and the extension never
+   sends it.
 5. Simple Vault shows explicit consent. Approving adds the extension to the
-   vault's keyring as an app with its own key, through the Rust/WASM
-   authorization boundary: each vault's DEK is encrypted to that key. There is
-   no single-vault approval.
-6. Simple Vault sends the approved grant with the canonical encrypted, signed
-   event log, the keyring's control log, the records of the keyring's other
-   vaults this browser holds, and every sync provider of the keyring. The
+   keyring as an app with its own key, through the Rust/WASM authorization
+   boundary (`add_identity_member`): each vault's DEK is encrypted to that
+   key. Only the Simple app adds the extension; Sentinel never connects to it.
+   There is no vault-level approval.
+6. Simple Vault sends the keyring approval: the keyring's control log, the
+   records of every keyring vault this browser holds (none for a keyring with
+   no vault yet), and the keyring's providers sealed to the extension. The
    extension validates and imports them through Rust/WASM into
    extension-origin IndexedDB. It joins the keyring first, with its unlocked
    key; an extension that cannot join (locked, say) stores nothing, and the
    website shows the approval as not taken.
-7. The extension becomes “connected” only after the imported graph contains a
-   current, non-revoked approval and key envelope for its protected device.
-   A member extension's Connect starts another keyring with its own new key;
-   it never re-approves the keyring it already belongs to.
+7. The extension is connected to the keyring once it joined: it records the
+   keyring (`nook:extension-keyring:<identity id>`) with its app key there
+   and the approved access, and lists it in the side panel even with no
+   vault. Each vault it pairs carries a current, non-revoked approval and key
+   envelope for its protected device. A member extension's Connect starts
+   another keyring with its own new key; it never re-approves the keyring it
+   already belongs to.
 
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
@@ -1484,14 +1490,21 @@ phone or computer is.
   app id against the public key and encrypts every vault's DEK at its current
   epoch to it. The approval carries the keyring's control log; the offscreen
   session completes the join from it (`join_identity_from_log`), so the key's
-  local identity takes the keyring's id. It then opens each other vault from
-  the records the approval carried (`connect_identity_vault_from_records`)
-  through the same import as the approved vault. No sync provider is needed;
-  a keyring vault this browser does not hold arrives through the keyring's
-  providers.
-- **Providers:** The approval carries every sync provider of the keyring,
-  sealed to the extension's app key. The extension never sets up a provider
-  itself.
+  local identity takes the keyring's id. It then opens each vault from the
+  records the approval carried (`connect_identity_vault_from_records`) and
+  enrolls in it; no vault is paired first. No sync provider is needed; a
+  keyring vault this browser does not hold arrives through the keyring's
+  providers. The first vault the extension pairs becomes the one it fills
+  from; later ones join the list.
+- **Keyring record:** The extension stores the keyring it joined beside its
+  vault grants: the keyring's id and name, its app key there, and the approved
+  scopes. The side panel lists it, with an empty slot while it has no vault,
+  and the unlock refresh pairs the keyring's vaults under it.
+- **Providers:** The approval carries the keyring's remote providers, sealed
+  in Rust to each other app of the keyring (`keyring_provider_shares`); the
+  extension takes the copy sealed to its key (`take_keyring_provider_shares`).
+  A vault brings no providers of its own. The extension never sets up a
+  provider itself.
   - **Later changes:** After the web app saves its providers, Rust
     (`keyring_provider_shares`) seals its remote providers to each other app
     of the keyring, with each member's key from the keyring's log. The web
@@ -1507,7 +1520,8 @@ phone or computer is.
     error on the website. The website's save stands, and the next provider
     change sends the whole set again.
 - **Later vaults:** Each unlock in the side panel or the authentication tab
-  refreshes the unlocked identity. The extension unions the identity's log
+  refreshes the unlocked identity, under the keyring the extension joined;
+  a keyring joined with no vault pairs its first ones here. The extension unions the identity's log
   with every sync provider that replicates it. It then pairs each vault the
   identity grants it and it holds no grant for. Rust
   plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
@@ -1515,7 +1529,9 @@ phone or computer is.
   vault the extension already holds again through the keyring's first
   provider it can open, so changes from the keyring's other apps arrive
   without the web app open. A failed refresh or vault shows an error and
-  pairs nothing further.
+  pairs nothing further. A keyring with no sync provider has nothing to
+  refresh through: vaults created after the join reach the extension once
+  the keyring has one.
   - The refresh reply names provider ids only. The identity's provider stays
     saved in the session, so no credential travels to the service worker.
   - A local folder belongs to the web app's origin, so the extension opens

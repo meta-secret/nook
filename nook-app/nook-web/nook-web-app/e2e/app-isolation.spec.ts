@@ -162,9 +162,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  // The request sits beside the identity: it names the extension and
-  // lists the vaults that can answer; choosing one unlocks it, then the
-  // consent asks to connect.
+  // The request sits beside the identity: it names the extension, and its
+  // one action unlocks the keyring; the consent then asks to connect in
+  // place, with no vault opened.
   const request = page.getByTestId('extension-request-panel')
   await expect(request).toBeVisible()
   await expect(page.getByTestId('extension-request-title')).toContainText(
@@ -190,12 +190,11 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(
     page.getByTestId('extension-connect-consent').getByRole('alert'),
-  ).toContainText(
-    'The extension did not accept the Simple Vault pairing grant.',
-  )
+  ).toContainText('The extension did not accept the keyring.')
   await expect(page.getByTestId('extension-connect-approved')).toBeVisible()
-
-  await page.getByTestId('header-lock-vault-btn').click()
+  // Approval opened no vault: the keyring locks from its card.
+  await expect(page.getByTestId('authenticated-shell')).toHaveCount(0)
+  await page.getByTestId('identity-lock').click()
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 })
 

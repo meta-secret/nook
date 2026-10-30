@@ -291,6 +291,12 @@
   box-shadow: inset 2px 0 0 var(--success);
 }
 
+/* A keyring joined before it has a vault: an empty, dashed slot. */
+.side-panel-vault-row.is-empty {
+  border-style: dashed;
+  color: var(--muted-foreground);
+}
+
 .side-panel-vault-icon {
   display: grid;
   flex: none;

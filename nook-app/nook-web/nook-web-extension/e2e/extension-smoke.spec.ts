@@ -30,7 +30,6 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionKeyringGrantKind } from '../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
@@ -464,89 +463,63 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await sentinelPage.goto(sentinelUrl)
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 
-    const forgedGrant = {
+    // An approval adds the extension to a keyring: one without the
+    // keyring's log is refused before anything is stored.
+    const keyringApproval: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: 'sentinel',
-        deviceId: 'sentinel-device-e2e',
-        devicePublicKey: 'age1sentinel',
-        deviceSigningPublicKey: 'sentinel-signing-key',
-        deviceLabel: 'Forged Sentinel device',
-        vaultStoreId: 'sentinel-store-e2e',
-        vaultName: 'Sentinel safe',
-        approvedAt: 1_783_373_640_000,
-        scopes: [ExtensionConnectScope.VaultAccess],
-        providers: [],
-      },
-      eventLogRecords: syntheticEventLogRecords,
-    }
-    expect(
-      await sendExternalMessage(simplePage, extensionId, forgedGrant),
-    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-vault-type' })
-
-    const persistenceBeforeMalformedProvider =
-      await readExtensionPersistenceSnapshot(worker)
-    const malformedProviderGrant = {
-      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-      payload: {
-        vaultType: 'simple',
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',
         deviceLabel: 'Nook Extension - Chromium test profile',
-        vaultStoreId: 'store-e2e',
-        vaultName: 'Personal',
         approvedAt: 1_783_373_640_000,
         scopes: [
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.PasswordFilling,
         ],
-        providers: [{ githubPat: 'github_pat_malformed_e2e_secret' }],
+        identityId: 'identity-e2e',
+        identityLabel: 'Personal',
+        identityEvents: ['synthetic-identity-event'],
+        vaults: [
+          { storeId: 'store-e2e', eventLogRecords: syntheticEventLogRecords },
+        ],
+        providers: { apps: [] },
       },
-      eventLogRecords: syntheticEventLogRecords,
+    }
+    const persistenceBeforeRefusals =
+      await readExtensionPersistenceSnapshot(worker)
+    const withoutLog = {
+      ...keyringApproval,
+      payload: { ...keyringApproval.payload, identityEvents: [] },
     }
     expect(
-      await sendExternalMessage(
-        simplePage,
-        extensionId,
-        malformedProviderGrant,
+      await sendExternalMessage(simplePage, extensionId, withoutLog),
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-keyring' })
+    const withoutProviders = {
+      ...keyringApproval,
+      payload: Object.fromEntries(
+        Object.entries(keyringApproval.payload).filter(
+          ([field]) => field !== 'providers',
+        ),
       ),
+    }
+    expect(
+      await sendExternalMessage(simplePage, extensionId, withoutProviders),
     ).toEqual({ ok: false, reason: 'invalid-pairing-grant-providers' })
     expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
-      persistenceBeforeMalformedProvider,
+      persistenceBeforeRefusals,
     )
 
-    const approvedGrant: ExtensionPairingApprovedMessage = {
-      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-      payload: {
-        vaultType: 'simple',
-        deviceId: 'device-e2e',
-        devicePublicKey: 'age1extension',
-        deviceSigningPublicKey: 'extension-signing-key',
-        deviceLabel: 'Nook Extension - Chromium test profile',
-        vaultStoreId: 'store-e2e',
-        vaultName: 'Personal',
-        approvedAt: 1_783_373_640_000,
-        scopes: [
-          ExtensionConnectScope.VaultAccess,
-          ExtensionConnectScope.PasswordFilling,
-        ],
-        providers: [],
-        keyring: {
-          kind: ExtensionKeyringGrantKind.Added,
-          identityId: 'identity-e2e',
-          identityLabel: 'Personal',
-          identityEvents: ['synthetic-identity-event'],
-          vaults: [],
-        },
-      },
-      eventLogRecords: syntheticEventLogRecords,
-    }
+    // A keyring log that does not list this extension is not joined, and
+    // a join that fails stores nothing: no keyring, no vault.
     expect(
-      await sendExternalMessage(simplePage, extensionId, approvedGrant),
-    ).toEqual({ ok: false, reason: 'event-log-import-failed' })
+      await sendExternalMessage(simplePage, extensionId, keyringApproval),
+    ).toEqual({ ok: false, reason: 'identity-join-failed' })
 
     const storage = await readExtensionStorage(context)
+    expect(Object.hasOwn(storage, 'nook:extension-keyring:identity-e2e')).toBe(
+      false,
+    )
     expect(Object.hasOwn(storage, pairingGrantStorageKey)).toBe(false)
     expect(Object.hasOwn(storage, setupStorageKey)).toBe(false)
   } finally {

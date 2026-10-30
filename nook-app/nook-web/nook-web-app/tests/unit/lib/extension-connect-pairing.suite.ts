@@ -10,12 +10,14 @@ import {
 } from '$lib/extension/connect'
 import {
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
+  ExtensionPairingApprovedMessageAdmissionFailure,
   RuntimeMessageDecodeFailureKind,
   ExtensionPairingApprovedMessageType,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
+import { RuntimeMessageDecodeCauseKind } from '../../../../nook-web-shared/src/extension/runtime-message-decode-failure'
+import type { ExtensionKeyringVault } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
@@ -30,7 +32,7 @@ import {
 } from './extension-connect-test-support'
 
 describe('extension pairing approved message', () => {
-  const eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords'] = [
+  const eventLogRecords: ExtensionKeyringVault['eventLogRecords'] = [
     {
       eventId: 'event-1',
       event: {
@@ -47,6 +49,26 @@ describe('extension pairing approved message', () => {
     },
   ]
 
+  /** The web app added the extension to a keyring holding one vault here. */
+  function approvedMessage(): ExtensionPairingApprovedMessage {
+    return {
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+      payload: {
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        approvedAt: 1_783_373_640_000,
+        scopes: [ExtensionConnectScope.VaultAccess],
+        identityId: 'identity-1',
+        identityLabel: 'Personal',
+        identityEvents: ['identity-event-1'],
+        vaults: [{ storeId: 'store_abcdefghijk', eventLogRecords }],
+        providers: { apps: [] },
+      },
+    }
+  }
+
   function approvalDeliveryArgs(): Parameters<
     typeof extensionConnectionBrowser.deliverExtensionPairingApproval
   >[0] {
@@ -60,30 +82,19 @@ describe('extension pairing approved message', () => {
         deviceLabel: 'Nook Extension',
         scopes: [ExtensionConnectScope.VaultAccess],
       },
-      message: {
-        type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-        payload: {
-          vaultType: simplePairingVaultType,
-          deviceId: 'device-1',
-          devicePublicKey: 'age1device',
-          deviceSigningPublicKey: 'signing-key',
-          deviceLabel: 'Nook Extension',
-          vaultStoreId: 'store_abcdefghijk',
-          vaultName: 'Personal',
-          approvedAt: 1_783_373_640_000,
-          scopes: [ExtensionConnectScope.VaultAccess],
-          providers: [],
-          keyring: {
-            kind: ExtensionKeyringGrantKind.Added,
-            identityId: 'identity-1',
-            identityLabel: 'Personal',
-            identityEvents: ['identity-event-1'],
-            vaults: [],
-          },
-        },
-        eventLogRecords,
-      },
+      message: approvedMessage(),
     }
+  }
+
+  function admit(payload: unknown) {
+    return Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({
+          type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+          payload,
+        }),
+      ),
+    )
   }
 
   test('delivers an approved grant through the extension callback', async () => {
@@ -93,16 +104,20 @@ describe('extension pairing approved message', () => {
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
+    const delivery = approvalDeliveryArgs()
 
     await expect(
-      extensionConnectionBrowser.deliverExtensionPairingApproval(
-        approvalDeliveryArgs(),
-      ),
+      extensionConnectionBrowser.deliverExtensionPairingApproval(delivery),
     ).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.Delivered,
       eventCount: 1,
     })
     expect(sendMessage).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith(
+      delivery.request.extensionRuntimeId,
+      delivery.message,
+      expect.any(Function),
+    )
   })
 
   test('reports a callback that supplies no response argument once', async () => {
@@ -208,6 +223,27 @@ describe('extension pairing approved message', () => {
     })
   })
 
+  test('preserves the extension refusing the keyring it was handed', async () => {
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({
+          ok: false,
+          reason: ExtensionPairingRejectionReason.InvalidPairingGrantKeyring,
+        })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
+    ).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Rejected,
+      reason: ExtensionPairingRejectionReason.InvalidPairingGrantKeyring,
+    })
+  })
+
   test('rejects a malformed successful acknowledgement instead of trusting its ok flag', () => {
     const decoded = Effect.runSync(
       Effect.result(
@@ -251,255 +287,173 @@ describe('extension pairing approved message', () => {
     expect(decoded._tag).toBe('Failure')
   })
 
-  test('accepts complete approved grants', () => {
-    expect(
-      Effect.runSync(
-        Effect.result(
-          ExtensionPairingApprovedMessageSchema.decode({
-            type: 'nook:extension-pairing-approved',
-            payload: {
-              vaultType: simplePairingVaultType,
-              deviceId: 'device-1',
-              devicePublicKey: 'age1device',
-              deviceSigningPublicKey: 'signing-key',
-              deviceLabel: 'Nook Extension',
-              vaultStoreId: 'store_abcdefghijk',
-              vaultName: 'Personal',
-              approvedAt: 1_783_373_640_000,
-              scopes: [ExtensionConnectScope.VaultAccess],
-              providers: [],
-              keyring: {
-                kind: ExtensionKeyringGrantKind.Added,
-                identityId: 'identity-1',
-                identityLabel: 'Personal',
-                identityEvents: ['identity-event-1'],
-                vaults: [],
-              },
-            },
-            eventLogRecords,
-          }),
-        ),
-      )._tag,
-    ).toBe('Success')
-  })
+  test('admits the keyring approval the web app sends, with its log and held vaults', () => {
+    const message = approvedMessage()
 
-  test('carries the keyring the extension was added to, with its log and other vaults', () => {
-    const message = approvalDeliveryArgs().message
-    const keyring = {
-      kind: ExtensionKeyringGrantKind.Added,
-      identityId: 'identity-1',
-      identityLabel: 'Personal',
-      identityEvents: ['identity-event-1', 'identity-event-2'],
-      vaults: [{ storeId: 'store_bbbbbbbbbbb', eventLogRecords }],
-    }
     const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: { ...message.payload, keyring },
-        }),
-      ),
+      Effect.result(ExtensionPairingApprovedMessageSchema.decode(message)),
     )
+
     expect(admission._tag).toBe('Success')
     if (admission._tag === 'Failure') return
-    const admitted = admission.success.payload.keyring
-    expect(admitted.kind).toBe(ExtensionKeyringGrantKind.Added)
-    if (admitted.kind !== ExtensionKeyringGrantKind.Added) return
-    expect(admitted.identityId).toBe('identity-1')
-    expect(admitted.identityEvents).toEqual(keyring.identityEvents)
+    expect(admission.success.type).toBe(message.type)
+    // Every field but the vaults arrives as it was sent; the held vaults'
+    // records are decoded by the extension's Rust.
+    expect({ ...admission.success.payload, vaults: [] }).toEqual({
+      ...message.payload,
+      vaults: [],
+    })
     expect(
-      admitted.vaults.map((vault) => [
+      admission.success.payload.vaults.map((vault) => [
         vault.storeId,
         vault.eventLogRecords.map((record) => record.eventId),
       ]),
-    ).toEqual([
-      ['store_bbbbbbbbbbb', eventLogRecords.map((record) => record.eventId)],
-    ])
+    ).toEqual([['store_abcdefghijk', ['event-1']]])
   })
 
-  test('refuses an approval without the keyring, or with an empty keyring log', () => {
-    const message = approvalDeliveryArgs().message
-    const payload: Partial<typeof message.payload> = { ...message.payload }
-    delete payload.keyring
-    const withoutKeyring = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({ ...message, payload }),
-      ),
-    )
-    expect(withoutKeyring._tag).toBe('Failure')
-    const emptyLog = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: {
-            ...message.payload,
-            keyring: {
-              kind: ExtensionKeyringGrantKind.Added,
-              identityId: 'identity-1',
-              identityLabel: 'Personal',
-              identityEvents: [],
-              vaults: [],
-            },
-          },
-        }),
-      ),
-    )
-    expect(emptyLog._tag).toBe('Failure')
-  })
-
-  test('a web app never sends a member-only keyring', () => {
-    const message = approvalDeliveryArgs().message
-    const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: {
-            ...message.payload,
-            keyring: { kind: ExtensionKeyringGrantKind.Member },
-          },
-        }),
-      ),
-    )
-    expect(admission._tag).toBe('Failure')
-  })
-
-  test('rejects ISO approval timestamps at the new-grant browser boundary', () => {
-    const message = approvalDeliveryArgs().message
-    const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: {
-            ...message.payload,
-            approvedAt: '2026-07-07T00:00:00.000Z',
-          },
-        }),
-      ),
-    )
-    expect(admission._tag).toBe('Failure')
-  })
-
-  test('preserves complete provider payloads for extension import', () => {
-    const provider = {
-      id: 'github-1',
-      type: 'github',
-      label: 'Personal GitHub',
-      githubPat: {
-        state: 'token',
-        value: '-----BEGIN AGE ENCRYPTED FILE-----\\nfixture',
-      },
-      githubRepo: { state: 'defaultRepository' },
-      oauthFile: { state: 'notApplicable' },
-      localFolder: { state: 'notApplicable' },
-      storeId: { state: 'unscoped' },
-      syncCheckpoint: { state: 'neverSynced' },
-      createdAt: '2026-07-07T00:00:00.000Z',
-    }
-    const message = approvalDeliveryArgs().message
-    const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: { ...message.payload, providers: [provider] },
-        }),
-      ),
-    )
+  test('admits a keyring with no vault yet', () => {
+    const admission = admit({ ...approvedMessage().payload, vaults: [] })
 
     expect(admission._tag).toBe('Success')
     if (admission._tag === 'Failure') return
-    expect(admission.success.payload.providers).toEqual([provider])
+    expect(admission.success.payload.vaults).toEqual([])
+    expect(admission.success.payload.identityId).toBe('identity-1')
   })
 
-  test('rejects identity-only provider rows at pairing admission', () => {
-    const message = approvalDeliveryArgs().message
-    const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          payload: {
-            ...message.payload,
-            providers: [{ id: 'github-1', type: 'github' }],
-          },
-        }),
-      ),
-    )
-    expect(admission._tag).toBe('Failure')
-  })
-
-  test('classifies empty approved grant event records without payload values', () => {
-    const message = approvalDeliveryArgs().message
-    const admission = Effect.runSync(
-      Effect.result(
-        ExtensionPairingApprovedMessageSchema.decode({
-          ...message,
-          eventLogRecords: [],
-        }),
-      ),
-    )
-    expect(admission._tag).toBe('Failure')
-  })
-
-  test.each([
-    [false, RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage],
-    [
-      [{ event: { schema_version: 3 } }],
-      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-    ],
-    [
-      [{ eventId: 'one', event: { schema_version: 3 } }],
-      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-    ],
-    [
-      [{ eventId: 'one', event: false }],
-      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-    ],
-    [
-      [{ eventId: 'one', event: {} }],
-      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-    ],
-  ] as const)(
-    'classifies event record clause %#',
-    (eventLogRecords, expectedFailureKind) => {
-      const message = approvalDeliveryArgs().message
-      const admission = Effect.runSync(
-        Effect.result(
-          ExtensionPairingApprovedMessageSchema.decode({
-            ...message,
-            eventLogRecords,
-          }),
-        ),
-      )
-
-      if (admission._tag === 'Success') {
-        expect.fail('invalid event-log records must not be admitted')
-      }
-      expect(admission.failure.kind).toBe(expectedFailureKind)
-    },
-  )
-
-  test('rejects Sentinel grants before extension persistence', () => {
-    expect(
-      Effect.runSync(
-        Effect.result(
-          ExtensionPairingApprovedMessageSchema.decode({
-            type: 'nook:extension-pairing-approved',
-            payload: {
-              vaultType: 'sentinel',
-              deviceId: 'device-1',
-              devicePublicKey: 'age1device',
-              deviceSigningPublicKey: 'signing-key',
-              deviceLabel: 'Forged Sentinel device',
-              vaultStoreId: 'store_abcdefghijk',
-              vaultName: 'Sentinel',
-              approvedAt: 1_783_373_640_000,
-              scopes: [ExtensionConnectScope.VaultAccess],
-              providers: [],
+  test('passes the sealed providers through for the extension to take in Rust', () => {
+    const providers = {
+      apps: [
+        {
+          appId: 'app-extension',
+          providers: [
+            {
+              id: 'github-1',
+              type: 'github',
+              label: 'Personal GitHub',
+              githubPat: {
+                state: 'token',
+                value: '-----BEGIN AGE ENCRYPTED FILE-----\\nfixture',
+              },
+              githubRepo: { state: 'defaultRepository' },
+              oauthFile: { state: 'notApplicable' },
+              localFolder: { state: 'notApplicable' },
+              storeId: { state: 'unscoped' },
+              syncCheckpoint: { state: 'neverSynced' },
+              createdAt: '2026-07-07T00:00:00.000Z',
             },
-            eventLogRecords,
-          }),
-        ),
-      )._tag,
-    ).toBe('Failure')
+          ],
+        },
+      ],
+    }
+
+    const admission = admit({ ...approvedMessage().payload, providers })
+
+    expect(admission._tag).toBe('Success')
+    if (admission._tag === 'Failure') return
+    expect(admission.success.payload.providers).toEqual(providers)
+  })
+
+  type ApprovalPayload = ExtensionPairingApprovedMessage['payload']
+
+  function without(
+    payload: ApprovalPayload,
+    field: keyof ApprovalPayload,
+  ): Partial<ApprovalPayload> {
+    const partial: Partial<ApprovalPayload> = { ...payload }
+    delete partial[field]
+    return partial
+  }
+
+  test.each<{
+    readonly name: string
+    readonly payload: (approved: ApprovalPayload) => unknown
+    readonly cause: ExtensionPairingApprovedMessageAdmissionFailure
+  }>([
+    {
+      name: 'without the keyring it joins',
+      payload: (approved) => without(approved, 'identityId'),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'with a blank keyring id',
+      payload: (approved) => ({ ...approved, identityId: '  ' }),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'with an empty keyring log',
+      payload: (approved) => ({ ...approved, identityEvents: [] }),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'with a held vault that carries no records',
+      payload: (approved) => ({
+        ...approved,
+        vaults: [{ storeId: 'store_abcdefghijk', eventLogRecords: [] }],
+      }),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'with a held vault whose records are malformed',
+      payload: (approved) => ({
+        ...approved,
+        vaults: [
+          {
+            storeId: 'store_abcdefghijk',
+            eventLogRecords: [{ eventId: 'one', event: {} }],
+          },
+        ],
+      }),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'without providers',
+      payload: (approved) => without(approved, 'providers'),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Providers,
+    },
+    {
+      name: 'with an ISO approval timestamp',
+      payload: (approved) => ({
+        ...approved,
+        approvedAt: '2026-07-07T00:00:00.000Z',
+      }),
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
+    },
+    {
+      name: 'that is not an object',
+      payload: () => false,
+      cause: ExtensionPairingApprovedMessageAdmissionFailure.Payload,
+    },
+  ])('refuses an approval $name', ({ payload, cause }) => {
+    const admission = admit(payload(approvedMessage().payload))
+
+    if (admission._tag === 'Success') {
+      expect.fail('a refused approval must not be admitted')
+    }
+    expect(admission.failure.kind).toBe(
+      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
+    )
+    expect(admission.failure.cause).toEqual({
+      kind: RuntimeMessageDecodeCauseKind.ThrownValue,
+      detail: cause,
+    })
+  })
+
+  test('refuses a message that is not a pairing approval', () => {
+    const admission = Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({
+          type: 'nook:extension-local-event-log-updated',
+          payload: approvedMessage().payload,
+        }),
+      ),
+    )
+
+    if (admission._tag === 'Success') {
+      expect.fail('another message must not be admitted as an approval')
+    }
+    expect(admission.failure.kind).toBe(
+      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
+    )
   })
 
   test('accepts encrypted local event-log notifications and rejects empty snapshots', () => {

@@ -110,12 +110,19 @@ impl VaultApplication {
         if vault_type == VaultType::Sentinel {
             return Err(ValidationError::SentinelExtensionForbidden);
         }
+        self.validate_extension_keyring_approval()?;
+        self.validate_session_access(vault_type)
+    }
+
+    /// Only the Simple app, or the unified development harness, adds the
+    /// browser extension to a keyring: Sentinel never connects to it.
+    pub fn validate_extension_keyring_approval(self) -> ValidationResult<()> {
         if self != Self::Simple && self != Self::UnifiedDevelopment {
             return Err(ValidationError::ExtensionApprovalApplicationForbidden {
                 application: self.as_str().to_owned(),
             });
         }
-        self.validate_session_access(vault_type)
+        Ok(())
     }
 }
 
@@ -215,5 +222,26 @@ mod tests {
                 application: "extension".to_owned(),
             })
         );
+    }
+
+    #[test]
+    fn only_the_simple_app_adds_the_extension_to_a_keyring() {
+        for allowed in [
+            VaultApplication::Simple,
+            VaultApplication::UnifiedDevelopment,
+        ] {
+            assert!(allowed.validate_extension_keyring_approval().is_ok());
+        }
+        for (refused, name) in [
+            (VaultApplication::Sentinel, "sentinel"),
+            (VaultApplication::Extension, "extension"),
+        ] {
+            assert_eq!(
+                refused.validate_extension_keyring_approval(),
+                Err(ValidationError::ExtensionApprovalApplicationForbidden {
+                    application: name.to_owned(),
+                })
+            );
+        }
     }
 }

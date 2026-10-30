@@ -5,7 +5,6 @@ import {
   NookExtensionConsentPhaseState,
   NookExtensionConsentTransitionState,
   NookExtensionConsentVaultReadiness,
-  type NookExtensionDeviceApproval,
 } from "$app-wasm";
 import { err, type Result } from "neverthrow";
 import type { I18nKey } from "../../../generated/i18n-keys";
@@ -23,7 +22,8 @@ import {
   VaultStorageFailureKind,
 } from "../runtime/storage-failure";
 import type { VaultState } from "../vault.svelte";
-import { ExtensionVaultApproval } from "../extension/vault-approval";
+import { ExtensionKeyringApproval } from "../extension/keyring-approval";
+import type { ExtensionKeyringMember } from "../extension/keyring-membership";
 import { ExtensionConsentCloseOutcome } from "./extension-connect-consent-outcome";
 
 export enum ExtensionConsentWorkflowKind {
@@ -198,7 +198,7 @@ type ExtensionConsentAuthorizationOwner =
   | { readonly kind: ExtensionConsentAuthorizationOwnerKind.Empty }
   | {
       readonly kind: ExtensionConsentAuthorizationOwnerKind.Authorized;
-      readonly approval: ExtensionVaultApproval;
+      readonly approval: ExtensionKeyringApproval;
     };
 
 type ExtensionConnectConsentWorkflowRequest = {
@@ -212,7 +212,7 @@ export type ExtensionConsentApprovalRequest = {
 };
 
 type ExtensionConsentGrantDeliveryRequest = {
-  readonly approval: ExtensionVaultApproval;
+  readonly approval: ExtensionKeyringApproval;
   readonly approvedPhase: NookExtensionConsentPhase;
   readonly publish: (state: ExtensionConsentWorkflowState) => void;
 };
@@ -299,7 +299,7 @@ export class ExtensionConnectConsentWorkflow {
     state: ExtensionConsentWorkflowState,
   ): NookExtensionConsentApprovalAvailabilityState {
     const availability = state.phase.approval_availability(
-      this.vaultReadiness(),
+      this.keyringReadiness(),
     );
     try {
       return availability.state;
@@ -311,7 +311,7 @@ export class ExtensionConnectConsentWorkflow {
   canAuthorize(state: ExtensionConsentWorkflowState): boolean {
     if (!this.isReadyOwner(state.phase)) return false;
     const availability = state.phase.approval_availability(
-      this.vaultReadiness(),
+      this.keyringReadiness(),
     );
     try {
       return availability.can_approve();
@@ -326,7 +326,9 @@ export class ExtensionConnectConsentWorkflow {
       state.kind === ExtensionConsentWorkflowKind.Failed &&
       state.phase.state === NookExtensionConsentPhaseState.Approved
     ) {
-      return this.vaultReadiness() === NookExtensionConsentVaultReadiness.Ready;
+      return (
+        this.keyringReadiness() === NookExtensionConsentVaultReadiness.Ready
+      );
     }
     return this.canAuthorize(state);
   }
@@ -423,7 +425,7 @@ export class ExtensionConnectConsentWorkflow {
         }
       }
 
-      const approval = new ExtensionVaultApproval(this.vault, this.request);
+      const approval = new ExtensionKeyringApproval(this.vault, this.request);
       {
         const started = state.phase.transition(
           NookExtensionConsentEvent.AuthorizationStarted,
@@ -463,10 +465,7 @@ export class ExtensionConnectConsentWorkflow {
           return;
         }
 
-        let authorization: Result<
-          NookExtensionDeviceApproval,
-          VaultStorageFailure
-        >;
+        let authorization: Result<ExtensionKeyringMember, VaultStorageFailure>;
         try {
           authorization = await approval.authorize();
         } catch (failure) {
@@ -690,9 +689,12 @@ export class ExtensionConnectConsentWorkflow {
     if (!this.publish(refreshPublication)) {
       return;
     }
-    let devices: Awaited<ReturnType<VaultState["refreshDeviceState"]>>;
+    // The keyring now lists the extension among its apps.
+    let devices: Awaited<
+      ReturnType<VaultState["identityControl"]["loadSnapshot"]>
+    >;
     try {
-      devices = await this.vault.refreshDeviceState();
+      devices = await this.vault.identityControl.loadSnapshot();
     } catch (failure) {
       if (!this.isApproving()) return;
       const publication: ExtensionConsentStatePublication = {
@@ -830,10 +832,12 @@ export class ExtensionConnectConsentWorkflow {
     }
   }
 
-  private vaultReadiness(): NookExtensionConsentVaultReadiness {
+  /** The extension joins the keyring, so only the keyring has to be
+   * unlocked: no vault needs to be open, or exist. */
+  private keyringReadiness(): NookExtensionConsentVaultReadiness {
     if (!this.vault.hasManager)
       return NookExtensionConsentVaultReadiness.ManagerUnavailable;
-    if (!this.vault.isAuthenticated)
+    if (!this.vault.deviceProtectionReady)
       return NookExtensionConsentVaultReadiness.Locked;
     if (this.vault.isVerifying)
       return NookExtensionConsentVaultReadiness.Verifying;

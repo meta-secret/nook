@@ -101,7 +101,7 @@
 
   const groups = $derived(
     vaults.kind === PairedVaultsLoadKind.Ready
-      ? pairedVaultGroups(vaults.vaults)
+      ? pairedVaultGroups(vaults.connections)
       : [],
   )
 
@@ -147,7 +147,7 @@
   async function loadVaults(device: ExtensionSessionDeviceWire): Promise<void> {
     vaults = await pairedVaultsClient.list()
     if (vaults.kind !== PairedVaultsLoadKind.Ready) return
-    for (const vault of vaults.vaults) {
+    for (const vault of vaults.connections.vaults) {
       const countRequest: VaultCountRequest = { vault, device }
       void loadCount(countRequest)
     }
@@ -389,7 +389,7 @@
       {/if}
     </header>
 
-    {#if vaults.kind === PairedVaultsLoadKind.Ready && vaults.vaults.length > 0}
+    {#if groups.length > 0}
       <section
         class="vault-list-section"
         aria-labelledby="companion-vaults-title"
@@ -487,6 +487,14 @@
                     </button>
                   {/if}
                 </li>
+              {:else}
+                <!-- Joined before the keyring had a vault: an empty slot. -->
+                <li
+                  class="vault-row is-empty"
+                  data-testid="companion-keyring-no-vaults"
+                >
+                  {translatePlain(I18N_KEYS.ExtensionCompanionKeyringNoVaults)}
+                </li>
               {/each}
             </ul>
           </div>
@@ -504,8 +512,7 @@
     <div class="companion-actions">
       <button
         type="button"
-        class:secondary-button={vaults.kind === PairedVaultsLoadKind.Ready &&
-          vaults.vaults.length > 0 &&
+        class:secondary-button={groups.length > 0 &&
           launcherIntent !== OpenCompanionLauncherIntent.Pair}
         disabled={busy ||
           pairingCandidate.kind !== PairingCandidateKind.Selected}
@@ -518,8 +525,7 @@
         <Plus size={14} aria-hidden="true" />
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : vaults.kind === PairedVaultsLoadKind.Ready &&
-              vaults.vaults.length > 0
+          : groups.length > 0
             ? translatePlain(I18N_KEYS.ExtensionCompanionConnectAnother)
             : translatePlain(I18N_KEYS.ExtensionCompanionConnectVault)}
       </button>

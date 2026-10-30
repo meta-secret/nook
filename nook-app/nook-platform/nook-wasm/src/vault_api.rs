@@ -517,27 +517,6 @@ pub fn ensure_local_provider_row(
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
-/// Approve an extension join through a manager whose Rust-owned application
-/// capability permits extension approval.
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn approve_extension_device(
-    manager: &mut NookVaultManager,
-    join_device_id: String,
-    join_public_key: String,
-    join_signing_public_key: String,
-    label: String,
-) -> Result<crate::NookExtensionDeviceApproval, wasm_bindgen::JsError> {
-    manager
-        .approve_extension_device(
-            join_device_id,
-            join_public_key,
-            join_signing_public_key,
-            label,
-        )
-        .await?;
-    crate::NookExtensionDeviceApproval::for_manager(manager)
-}
-
 /// Compare local vs remote vault YAML and return a sync action label:
 /// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
 #[wasm_bindgen]

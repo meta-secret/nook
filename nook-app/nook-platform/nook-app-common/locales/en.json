@@ -1929,7 +1929,8 @@
       "item_count": "{count} items",
       "connect_another": "Connect another keyring",
       "no_vaults_title": "No keyring connected yet",
-      "no_vaults_body": "Connect Nook: it opens, you unlock one of your vaults there, and this browser joins that keyring with all of its vaults.",
+      "no_vaults_body": "Connect Nook: it opens, you unlock your keyring there, and this browser joins it with all of its vaults.",
+      "keyring_no_vaults": "No vaults in this keyring yet",
       "connect_vault": "Connect a keyring",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",
@@ -2165,9 +2166,9 @@
       "scope_password_filling": "Passwords",
       "scope_passkey_management": "Passkeys",
       "scope_sync_provider_credentials": "Sync sign-in",
-      "unlock_first": "Unlock Simple Vault first, then approve this extension device.",
+      "unlock_first": "Unlock this keyring first, then approve the extension.",
       "messaging_unavailable": "Browser extension messaging is unavailable.",
-      "grant_rejected": "The extension did not accept the Simple Vault pairing grant.",
+      "grant_rejected": "The extension did not accept the keyring.",
       "handoff_failed": "Extension approved, but the browser handoff failed.",
       "handoff_failed_detail": "Extension approved, but the browser handoff failed: {error}",
       "approved": "Extension device approved.",
@@ -2176,7 +2177,7 @@
       "approved_return": "Browser access approved. You can close this window or return to your vault.",
       "progress_step": "Step {step} of {total}",
       "progress_authorizing": "Authorizing the extension device…",
-      "progress_preparing": "Preparing the extension's vault access…",
+      "progress_preparing": "Preparing the keyring for the extension…",
       "progress_delivering": "Handing access to the extension…",
       "progress_finishing": "Updating this keyring's devices…",
       "approve": "Approve extension",
@@ -2209,8 +2210,7 @@
       "eyebrow": "Connection request",
       "title": "{label} wants to join a keyring",
       "unlock_identity": "Unlock {identity}",
-      "vault_action": "Then review what it can do",
-      "no_vaults": "This keyring has no vault yet. Create one, then connect it."
+      "vault_action": "Then review what it can do"
     }
   },
   "app": {

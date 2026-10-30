@@ -107,6 +107,24 @@ const pairedVaultSummarySchema = Schema.Struct(
   pairedVaultSummaryFields,
 ) satisfies Schema.Codec<PairedVaultSummary>
 
+/** A keyring the extension joined, listed even before it has a vault. */
+export type PairedKeyringSummary = {
+  readonly identityLabel: string
+  /** The extension's app key in the keyring. */
+  readonly deviceId: string
+}
+type PairedKeyringSummaryFields = {
+  readonly identityLabel: Schema.Codec<string>
+  readonly deviceId: Schema.Codec<string>
+}
+const pairedKeyringSummaryFields: PairedKeyringSummaryFields = {
+  identityLabel: Schema.String,
+  deviceId: Schema.String,
+}
+const pairedKeyringSummarySchema = Schema.Struct(
+  pairedKeyringSummaryFields,
+) satisfies Schema.Codec<PairedKeyringSummary>
+
 type Refusal = { readonly ok: false; readonly reason: string }
 type RefusalFields = {
   readonly ok: Schema.Codec<false>
@@ -122,14 +140,17 @@ const refusalSchema = Schema.Struct(
 
 type PairedVaultsListed = {
   readonly ok: true
+  readonly keyrings: readonly PairedKeyringSummary[]
   readonly vaults: readonly PairedVaultSummary[]
 }
 type PairedVaultsListedFields = {
   readonly ok: Schema.Codec<true>
+  readonly keyrings: Schema.Codec<readonly PairedKeyringSummary[]>
   readonly vaults: Schema.Codec<readonly PairedVaultSummary[]>
 }
 const pairedVaultsListedFields: PairedVaultsListedFields = {
   ok: Schema.Literal(true),
+  keyrings: Schema.Array(pairedKeyringSummarySchema),
   vaults: Schema.Array(pairedVaultSummarySchema),
 }
 export type PairedVaultsResponse = PairedVaultsListed | Refusal
@@ -178,14 +199,23 @@ export type PairedVaultGroup = {
   readonly vaults: readonly PairedVaultSummary[]
 }
 
+/** The keyrings the extension joined and the vaults it paired in them. */
+export type PairedConnections = {
+  readonly keyrings: readonly PairedKeyringSummary[]
+  readonly vaults: readonly PairedVaultSummary[]
+}
+
 /**
- * Group paired vaults by identity, keeping list order (so the default
- * vault's identity comes first). Vaults paired before the extension
- * recorded identities have none and come last.
+ * Group paired vaults by keyring, keeping list order (so the default
+ * vault's keyring comes first). A joined keyring with no vault yet is a
+ * group of its own with no vaults, after the ones that have vaults.
+ * Vaults paired before the extension recorded identities have none and
+ * come last.
  */
-export function pairedVaultGroups(
-  vaults: readonly PairedVaultSummary[],
-): PairedVaultGroup[] {
+export function pairedVaultGroups({
+  keyrings,
+  vaults,
+}: PairedConnections): PairedVaultGroup[] {
   type GrowingGroup = {
     identityLabel: string
     deviceId: string
@@ -209,6 +239,15 @@ export function pairedVaultGroups(
     }
     groups.push(started)
   }
+  for (const keyring of keyrings) {
+    if (groups.some((group) => group.deviceId === keyring.deviceId)) continue
+    const empty: GrowingGroup = {
+      identityLabel: keyring.identityLabel,
+      deviceId: keyring.deviceId,
+      vaults: [],
+    }
+    groups.push(empty)
+  }
   const named = groups.filter((group) => group.identityLabel !== '')
   const unnamed = groups.filter((group) => group.identityLabel === '')
   return [...named, ...unnamed]
@@ -222,7 +261,7 @@ export enum PairedVaultsLoadKind {
 export type PairedVaultsLoad =
   | {
       readonly kind: PairedVaultsLoadKind.Ready
-      readonly vaults: readonly PairedVaultSummary[]
+      readonly connections: PairedConnections
     }
   | { readonly kind: PairedVaultsLoadKind.Unavailable }
 
@@ -258,7 +297,10 @@ export class PairedVaultsClient {
           }
           const ready: PairedVaultsLoad = {
             kind: PairedVaultsLoadKind.Ready,
-            vaults: decoded.success.vaults,
+            connections: {
+              keyrings: decoded.success.keyrings,
+              vaults: decoded.success.vaults,
+            },
           }
           resolve(ready)
         },

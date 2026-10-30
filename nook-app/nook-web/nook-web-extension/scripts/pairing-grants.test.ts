@@ -8,13 +8,19 @@ import {
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  ExtensionPairingApprovedGrantAdmission,
+  ExtensionKeyringApprovalAdmission,
   ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionStorageProviderPayloadAdmission,
   RuntimeMessageDecodeFailureKind,
 } from '../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionEventLogRecord } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
+import type {
+  StoredExtensionKeyring,
+  StoredExtensionPairingGrant,
+} from '../src/background/pairing-grants'
 import {
   type DecodedExtensionSessionTransportDelivery,
   type ExtensionSessionTransportDelivery,
@@ -108,17 +114,207 @@ const storedGrant: StoredExtensionPairingGrant = {
   lastLocalSyncAt: '2026-08-10T00:00:00Z',
 }
 
-describe('extension pairing grant transport', () => {
-  test('rejects a non-string vault type at the browser wire boundary', () => {
-    const admission = ExtensionPairingApprovedGrantAdmission.parse({
-      vaultType: 7,
-    })
+const keyringRecord: ExtensionEventLogRecord = {
+  eventId: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+  event: {
+    schema_version: 2,
+    store_id: 'store_abcdefghijk',
+    actor_id: `key_${'0'.repeat(64)}`,
+    actor_signing_public_key: '0'.repeat(64),
+    parents: [],
+    created_at: '2026-10-16T00:00:00Z',
+    key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+    operations: [],
+    signature: `ed25519:${'0'.repeat(128)}`,
+  },
+}
 
-    expect(admission).toEqual(
-      err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType),
-    )
+/** A keyring approval as the web app sends it, but its scopes: no vault
+ * yet. */
+const keyringApprovalFields = {
+  deviceId: 'device',
+  devicePublicKey: 'public',
+  deviceSigningPublicKey: 'signing',
+  deviceLabel: 'Laptop',
+  approvedAt: 1_786_320_000_000,
+  identityId: 'identity-personal',
+  identityLabel: 'Personal',
+  identityEvents: ['identity-event-1'],
+  vaults: [],
+  providers: { apps: [{ appId: 'device', providers: [] }] },
+}
+const keyringApprovalWire = {
+  ...keyringApprovalFields,
+  scopes: ['vault-access', 'password-filling'],
+}
+
+const joinedKeyring: StoredExtensionKeyring = {
+  identityId: 'identity-personal',
+  identityLabel: 'Personal',
+  deviceId: 'device',
+  devicePublicKey: 'public',
+  deviceSigningPublicKey: 'signing',
+  deviceLabel: 'Laptop',
+  approvedAt: 1_786_320_000_000,
+  scopes: ['vault-access', 'password-filling'],
+}
+
+describe('keyring approval admission', () => {
+  test('admits a keyring with no vault, its providers left for Rust', async () => {
+    await companionWasmReady
+
+    const admission =
+      ExtensionKeyringApprovalAdmission.parse(keyringApprovalWire)
+
+    expect(admission.isOk()).toBe(true)
+    if (admission.isErr()) return
+    const { scopes, ...approved } = admission.value
+    expect(approved).toEqual(keyringApprovalFields)
+    expect(scopes).toEqual([
+      ExtensionConnectScope.VaultAccess,
+      ExtensionConnectScope.PasswordFilling,
+    ])
+    // The sealed provider copies pass through as sent; Rust decodes them.
+    expect(approved.providers).toBe(keyringApprovalFields.providers)
   })
 
+  test('admits the vaults this browser holds with their records', async () => {
+    await companionWasmReady
+
+    const admission = ExtensionKeyringApprovalAdmission.parse({
+      ...keyringApprovalWire,
+      vaults: [
+        { storeId: 'store_abcdefghijk', eventLogRecords: [keyringRecord] },
+      ],
+    })
+
+    expect(admission.isOk()).toBe(true)
+    if (admission.isErr()) return
+    expect(
+      admission.value.vaults.map((vault) => [
+        vault.storeId,
+        vault.eventLogRecords.map((each) => each.eventId),
+      ]),
+    ).toEqual([['store_abcdefghijk', [keyringRecord.eventId]]])
+  })
+
+  test.each([
+    {
+      name: 'a payload that is not an object',
+      payload: 'approved',
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Payload,
+    },
+    {
+      name: 'a missing app key',
+      payload: { ...keyringApprovalWire, deviceId: 7 },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.DeviceId,
+    },
+    {
+      name: 'an approval time that is not a number',
+      payload: { ...keyringApprovalWire, approvedAt: '2026-08-10' },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
+    },
+    {
+      name: 'an unknown scope',
+      payload: { ...keyringApprovalWire, scopes: ['vault-admin'] },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Scopes,
+    },
+    {
+      name: 'no providers',
+      payload: Object.fromEntries(
+        Object.entries(keyringApprovalWire).filter(
+          ([field]) => field !== 'providers',
+        ),
+      ),
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Providers,
+    },
+    {
+      name: 'a blank identity',
+      payload: { ...keyringApprovalWire, identityId: ' ' },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'an empty keyring log',
+      payload: { ...keyringApprovalWire, identityEvents: [] },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'a vault with no records',
+      payload: {
+        ...keyringApprovalWire,
+        vaults: [{ storeId: 'store_abcdefghijk', eventLogRecords: [] }],
+      },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+    {
+      name: 'a vault with a malformed record',
+      payload: {
+        ...keyringApprovalWire,
+        vaults: [
+          {
+            storeId: 'store_abcdefghijk',
+            eventLogRecords: [{ eventId: 'event-1', event: {} }],
+          },
+        ],
+      },
+      failure: ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
+    },
+  ])('refuses $name', async ({ payload, failure }) => {
+    await companionWasmReady
+
+    expect(ExtensionKeyringApprovalAdmission.parse(payload)).toEqual(
+      err(failure),
+    )
+  })
+})
+
+describe('joined keyring storage', () => {
+  test('a keyring with no vault is stored under its identity', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+
+    expect(policy.keyringStorageItems(joinedKeyring)).toEqual({
+      'nook:extension-keyring:identity-personal': joinedKeyring,
+    })
+  })
+
+  test('joined keyrings read back latest approval first, beside vault grants', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const later: StoredExtensionKeyring = {
+      ...joinedKeyring,
+      identityId: 'identity-work',
+      identityLabel: 'Work',
+      approvedAt: joinedKeyring.approvedAt + 60_000,
+    }
+    const stored = {
+      ...policy.keyringStorageItems(joinedKeyring),
+      [policy.pairingGrantStorageKey(storedGrant.vaultStoreId)]: storedGrant,
+      ...policy.keyringStorageItems(later),
+    }
+
+    expect(policy.joinedKeyrings(stored)).toEqual([later, joinedKeyring])
+    expect(policy.selectedPairingGrantFirst(stored)).toEqual([storedGrant])
+  })
+
+  test('no keyring is read back before the extension joins one', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+
+    expect(policy.joinedKeyrings({ [key]: storedGrant })).toEqual([])
+  })
+
+  test('refuses to store a keyring without its app key or scopes', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+
+    expect(() =>
+      policy.keyringStorageItems({ ...joinedKeyring, devicePublicKey: ' ' }),
+    ).toThrow()
+    expect(() =>
+      policy.keyringStorageItems({ ...joinedKeyring, scopes: [] }),
+    ).toThrow()
+  })
+})
+
+describe('extension pairing grant transport', () => {
   test('admits only provider identities from richer transport payloads', () => {
     const complete = {
       id: 'github',

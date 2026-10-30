@@ -321,17 +321,57 @@ describe('side panel vaults', () => {
     })
     const empty: PairedVaultsLoad = {
       kind: PairedVaultsLoadKind.Ready,
-      vaults: [],
+      connections: { keyrings: [], vaults: [] },
     }
     expect(SidePanelViews.vaults(empty)).toEqual({
       kind: SidePanelVaultsKind.NoVault,
     })
   })
 
+  test('a keyring joined with no vault yet is connected', () => {
+    const joinedOnly: PairedVaultsLoad = {
+      kind: PairedVaultsLoadKind.Ready,
+      connections: {
+        keyrings: [{ identityLabel: 'Me', deviceId: 'device-personal' }],
+        vaults: [],
+      },
+    }
+    const keyring: PairedVaultGroup = {
+      identityLabel: 'Me',
+      deviceId: 'device-personal',
+      vaults: [],
+    }
+    const vaults = SidePanelViews.vaults(joinedOnly)
+    expect(vaults).toEqual({
+      kind: SidePanelVaultsKind.Paired,
+      groups: [keyring],
+    })
+    // The connected keyring is the unlocked one, and All connections lists it.
+    const relation: Parameters<typeof SidePanelViews.identityRelation>[0] = {
+      group: keyring,
+      device: activeDevice,
+    }
+    expect(SidePanelViews.identityRelation(relation)).toBe(
+      SidePanelIdentityRelation.Current,
+    )
+    const view: SidePanelView = {
+      kind: SidePanelViewKind.Unlocked,
+      device: activeDevice,
+      vaults,
+      identitySync: { kind: IdentitySyncKind.Idle },
+    }
+    const connections = SidePanelPageKind.Connections
+    expect(SidePanelViews.page({ view, page: connections })).toBe(connections)
+  })
+
   test('paired vaults are grouped by identity in the order they arrive', () => {
     const ready: PairedVaultsLoad = {
       kind: PairedVaultsLoadKind.Ready,
-      vaults: [personalVault, workVault],
+      connections: {
+        // A keyring that has a paired vault is listed with it, once.
+        keyrings: [{ identityLabel: 'Acme', deviceId: 'device-work' }],
+        vaults: [personalVault, workVault],
+      },
     }
     const personal: PairedVaultGroup = {
       identityLabel: 'Me',

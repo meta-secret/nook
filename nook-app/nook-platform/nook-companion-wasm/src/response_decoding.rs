@@ -192,11 +192,14 @@ pub fn decode_extension_event_log_record(
     let record = record
         .to_rust()
         .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let result = {
-        let ExtensionEventLogRecordAdmission(record) = record;
-        record
-    };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+    let ExtensionEventLogRecordAdmission(record) = record;
+    // JSON-compatible: the event flattens its body, which the default
+    // serializer would hand over as a `Map`, and Chrome messaging carries a
+    // `Map` as `{}`. The record must reach the offscreen session intact.
+    let value =
+        serde::Serialize::serialize(&record, &serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    Ok(tsify::Ts::new_unchecked(value))
 }
 
 #[wasm_bindgen]
@@ -548,6 +551,42 @@ mod wasm_tests {
         fn into_json(self) -> Result<serde_json::Value, JsError> {
             serde_wasm_bindgen::from_value(self.value).map_err(js_error)
         }
+    }
+
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    extern "C" {
+        /// How Chrome messaging carries a value: JSON.
+        #[wasm_bindgen(js_namespace = JSON, js_name = stringify)]
+        fn json_stringify(value: &JsValue) -> String;
+    }
+
+    #[wasm_bindgen_test]
+    fn decoded_event_log_records_reach_the_session_whole() -> Result<(), JsError> {
+        let record = ResponseWireFixture::parse(&format!(
+            r#"{{"eventId":"event-1","event":{{"schema_version":2,"store_id":"store_testtoken11","actor_id":"key_{actor}","actor_signing_public_key":"{signing}","parents":[],"created_at":"2026-08-10T00:00:00Z","key_epoch":"sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo","operations":[{{"type":"vault-cleared"}}],"signature":"ed25519:{signature}"}}}}"#,
+            actor = "0".repeat(64),
+            signing = "0".repeat(64),
+            signature = "0".repeat(128),
+        ))?
+        .into_typed();
+
+        let decoded = decode_extension_event_log_record(&record)?;
+
+        // The event flattens its body: carried as JSON it must keep every
+        // field, not arrive as the `{}` a `Map` becomes.
+        let carried: serde_json::Value =
+            serde_json::from_str(&json_stringify(&decoded.js_value())).map_err(js_error)?;
+        assert_eq!(carried["eventId"], "event-1");
+        assert_eq!(carried["event"]["store_id"], "store_testtoken11");
+        assert_eq!(
+            carried["event"]["operations"],
+            serde_json::json!([{ "type": "vault-cleared" }])
+        );
+        assert_eq!(
+            carried["event"]["signature"],
+            format!("ed25519:{}", "0".repeat(128))
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]

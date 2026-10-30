@@ -2,9 +2,8 @@ use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
     AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
-    ConsumedCompanionPairingAuthority, ExtensionConnectScope, ExtensionPairingVaultType,
+    ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
-use nook_core::StoreId;
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use tsify::Tsify;
@@ -20,60 +19,6 @@ pub use activation::{
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {
     inner: CompanionExtensionPairingEndpoint,
-}
-
-/// Named result of the vault authorization effect used to prepare a pairing grant.
-#[wasm_bindgen]
-pub struct NookExtensionDeviceApproval {
-    store_id: nook_core::StoreId,
-    approved_at: nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
-    vault_type: ExtensionPairingVaultType,
-}
-
-impl NookExtensionDeviceApproval {
-    pub(crate) fn for_manager(manager: &NookVaultManager) -> Result<Self, JsError> {
-        Ok(Self {
-            store_id: StoreId::parse(&manager.vault.store_id)
-                .map_err(|error| JsError::new(&error.to_string()))?,
-            approved_at: serde_json::from_str(&js_sys::Date::now().to_string())
-                .map_err(|error| JsError::new(&error.to_string()))?,
-            vault_type: match manager.vault.architecture.vault_type {
-                VaultType::Simple => ExtensionPairingVaultType::Simple,
-                VaultType::Sentinel => {
-                    return Err(JsError::new(
-                        "Sentinel vaults cannot approve extension devices",
-                    ));
-                }
-            },
-        })
-    }
-}
-
-#[wasm_bindgen]
-impl NookExtensionDeviceApproval {
-    #[wasm_bindgen(getter, js_name = storeId)]
-    pub fn store_id(&self) -> crate::NookStoreId {
-        self.store_id.clone().into()
-    }
-
-    #[wasm_bindgen(getter, js_name = approvedAt)]
-    pub fn approved_at(
-        &self,
-    ) -> Result<
-        tsify::Ts<nook_companion_core::ExtensionPairingApprovalEpochMilliseconds>,
-        wasm_bindgen::JsError,
-    > {
-        let result = { self.approved_at };
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-    }
-
-    #[wasm_bindgen(getter, js_name = vaultType)]
-    pub fn vault_type(
-        &self,
-    ) -> Result<tsify::Ts<ExtensionPairingVaultType>, wasm_bindgen::JsError> {
-        let result = { self.vault_type };
-        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
-    }
 }
 
 #[wasm_bindgen]
@@ -220,12 +165,9 @@ pub struct NookPrevalidatedCompanionPairingApproval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_companion_core::ExtensionPairingApprovalEpochMilliseconds;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        CompanionPairingProviderManifestDigest,
+        CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
     };
     #[cfg(test)]
     #[cfg(test)]
@@ -379,24 +321,6 @@ mod tests {
             .take_authority()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         // Consuming the endpoint makes a second authority request unrepresentable.
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn extension_device_approval_owns_typed_grant_facts() -> Result<(), JsError> {
-        let mut manager = NookVaultManager::new();
-        manager.vault.store_id = StoreId::before_genesis_placeholder().into_inner();
-        manager.vault.architecture.vault_type = VaultType::Simple;
-
-        let approval = NookExtensionDeviceApproval::for_manager(&manager)?;
-
-        assert_eq!(approval.store_id().value(), manager.vault.store_id);
-        let vault_type: ExtensionPairingVaultType = approval.vault_type()?.to_rust()?;
-        assert_eq!(vault_type, ExtensionPairingVaultType::Simple);
-        assert!(approval.approved_at()?.to_rust()?.validate().is_ok());
-        assert!(
-            approval.approved_at()?.to_rust()? > ExtensionPairingApprovalEpochMilliseconds::MINIMUM
-        );
         Ok(())
     }
 
