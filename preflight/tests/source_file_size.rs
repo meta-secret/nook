@@ -24,6 +24,7 @@ struct SourceArchitectureScenario {
     root: RepositoryFixture,
 }
 
+#[derive(Clone, Copy)]
 enum PrPolicyTask {
     Policy,
     PolicyWithDeliveryHelpers,
