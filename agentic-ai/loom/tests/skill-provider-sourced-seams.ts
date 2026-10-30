@@ -146,7 +146,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/contracts/dockerized-rust-buildkit.test.ts',
-    '31e353e409e70f7e4b5fb046f360c715c258bd1cb9e4c420bfe64639e8ddd825',
+    '3fef583db656aa99309aab5500007d88e4629dce82d6c2142e0103f80671d461',
   ],
   [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
