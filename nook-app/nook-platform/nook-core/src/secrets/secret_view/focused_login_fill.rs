@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use zeroize::{Zeroize, Zeroizing};
 
-pub use nook_companion_core::credential_fill::CredentialKind;
+use nook_page_policy::credential_fill::CredentialKind;
 
 /// Parsed requesting URL; matching remains owned by the existing host policy.
 #[derive(Clone, Serialize, Deserialize)]

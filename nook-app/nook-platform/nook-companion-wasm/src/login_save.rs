@@ -1,6 +1,6 @@
 //! Typed browser edges for submitted-login capture and save eligibility.
 use crate::NookPageInputFieldObservation;
-use nook_companion_core::{
+use nook_page_policy::{
     LoginCapturedValueMatches, LoginPasswordFieldHistory, LoginSaveCaptureDecision,
     LoginSaveOutcomeDecision, LoginSaveOutcomeObservation, LoginSubmissionCapture,
     LoginSubmissionDecision, LoginSubmissionField, LoginSubmissionIntent,
@@ -109,7 +109,7 @@ pub fn classify_companion_login_save_capture(
 )]
 pub fn compare_login_save_sender_scope(
     request: &Ts<LoginSaveSenderScopeComparison>,
-) -> Result<Ts<nook_companion_core::LoginSaveScopeMatch>, JsError> {
+) -> Result<Ts<nook_page_policy::LoginSaveScopeMatch>, JsError> {
     let request = request.to_rust()?;
     Ok(request.expected.compare_scope(request.current).into_ts()?)
 }
@@ -117,19 +117,19 @@ pub fn compare_login_save_sender_scope(
 #[derive(serde::Serialize, serde::Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct LoginSaveSenderScopeComparison {
-    expected: nook_companion_core::LoginSaveSenderContext,
-    current: nook_companion_core::LoginSaveSenderContext,
+    expected: nook_page_policy::LoginSaveSenderContext,
+    current: nook_page_policy::LoginSaveSenderContext,
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use nook_companion_core::AuthenticationPageObservationFacts;
-    use nook_companion_core::LoginExplicitCandidatePresence;
-    use nook_companion_core::LoginSaveCaptureSource;
-    use nook_companion_core::LoginSubmissionPageUrl;
-    use nook_companion_core::PageSecondFactorRoute;
-    use nook_companion_core::{
+    use nook_page_policy::AuthenticationPageObservationFacts;
+    use nook_page_policy::LoginExplicitCandidatePresence;
+    use nook_page_policy::LoginSaveCaptureSource;
+    use nook_page_policy::LoginSubmissionPageUrl;
+    use nook_page_policy::PageSecondFactorRoute;
+    use nook_page_policy::{
         LoginControlLabel, LoginSubmissionEvent, LoginSubmissionTarget, LoginSubmissionTrust,
         PageInputType,
     };
@@ -188,7 +188,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn first_capture_bridge_derives_baseline_and_rejects_unbounded_metadata() -> Result<(), JsError>
     {
-        let username = nook_companion_core::LoginSubmissionFieldMetadata {
+        let username = nook_page_policy::LoginSubmissionFieldMetadata {
             input_type: "text".to_owned(),
             disabled: false,
             read_only: false,
@@ -207,7 +207,7 @@ mod tests {
             },
             fields: vec![
                 username.clone(),
-                nook_companion_core::LoginSubmissionFieldMetadata {
+                nook_page_policy::LoginSubmissionFieldMetadata {
                     input_type: "text".to_owned(),
                     autocomplete_tokens: vec!["current-password".to_owned()],
                     identity_text: "Password".to_owned(),

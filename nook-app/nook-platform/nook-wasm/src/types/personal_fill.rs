@@ -1,6 +1,7 @@
 //! Typed request and response for one explicit personal-data form fill.
 
-use nook_core::{PersonalFieldGroup, PersonalFieldKind, PersonalFillValues, SecretId};
+use nook_core::{PersonalFillValues, SecretId};
+use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
 use tsify::Tsify;
 use zeroize::Zeroize;
 
@@ -56,7 +57,8 @@ impl Zeroize for NookPersonalFillResponse {
 #[cfg(test)]
 mod tests {
     use super::{NookPersonalFillRequest, NookPersonalFillResponse};
-    use nook_core::{PersonalFieldGroup, PersonalFieldKind, SecretId};
+    use nook_core::SecretId;
+    use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
     use zeroize::Zeroize;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

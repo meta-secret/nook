@@ -3,8 +3,9 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
-use nook_companion_core::{LoginSaveEligibility, SubmittedLoginSaveTarget};
+use nook_companion_core::SubmittedLoginSaveTarget;
 use nook_core::{LoginHostMatch, LoginSecret, SecretFormFields, SecretId, SecretType, SecretValue};
+use nook_page_policy::LoginSaveEligibility;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -300,14 +301,14 @@ mod browser_tests {
     use super::*;
     use crate::manager::VaultCryptoState;
     use nook_auth2::DeviceIdentity;
-    use nook_companion_core::{
+    use nook_companion_core::SubmittedWebsiteLoginSaveRequest;
+    use nook_core::{
+        LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
+    };
+    use nook_page_policy::{
         AuthenticationOutcomeObservation, AuthenticationWorkflowKind, LoginAuthFieldPresence,
         LoginManualCheckpoint, LoginSaveOutcomeObservation, LoginSubmissionOrigin,
         LoginSubmissionPageUrl, LoginSubmissionPresence, LoginSubmissionTransition,
-        SubmittedWebsiteLoginSaveRequest,
-    };
-    use nook_core::{
-        LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
     };
     use tsify::Tsify;
     use wasm_bindgen_test::*;

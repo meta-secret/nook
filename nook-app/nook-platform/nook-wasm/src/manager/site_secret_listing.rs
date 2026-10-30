@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use nook_companion_core::SiteSecretMatches;
+use nook_companion_core::site_secret_listing::SiteSecretMatches;
 use nook_core::SiteSecretOrigin;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -42,7 +42,7 @@ mod tests {
     use super::NookVaultManager;
     use crate::NookError;
     use crate::manager::{SearchCatalogState, VaultCryptoState};
-    use nook_companion_core::SiteSecretKind;
+    use nook_companion_core::site_secret_listing::SiteSecretKind;
     use nook_core::{
         LoginSecret, SecretId, SecretSearchCatalog, SecretValue, StoredRecordPayload, VaultCrypto,
         VaultKeys,

@@ -9,10 +9,9 @@ use crate::{
     AddressSecret, CalendarDate, CreditCardSecret, PersonSecret, SecretRecord, SecretType,
     SecretValue,
 };
+use nook_page_policy::{PersonalFieldGroup, PersonalFieldKind};
 use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
-
-pub use nook_companion_core::{PersonalFieldGroup, PersonalFieldKind};
 
 /// The one secret type whose records fill a personal field group.
 ///

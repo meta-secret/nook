@@ -92,7 +92,7 @@ pub enum LoginSaveCaptureSelection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub(crate) enum LoginSaveSelectionError {
+pub enum LoginSaveSelectionError {
     #[error("login selection source differs from capture")]
     SourceMismatch,
     #[error("login selection indices are invalid")]
@@ -101,7 +101,8 @@ pub(crate) enum LoginSaveSelectionError {
 
 impl LoginSaveCaptureSelection {
     #[must_use = "consume selection validation"]
-    pub(crate) fn validate_baseline(
+    /// Validates the selected page fields against the captured submission source.
+    pub fn validate_baseline(
         self,
         baseline: &LoginSaveCaptureBaseline,
     ) -> Result<(), LoginSaveSelectionError> {

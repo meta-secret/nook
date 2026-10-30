@@ -1,5 +1,7 @@
 use super::wasm_bindgen;
-use nook_core::{AuthenticationWorkflowMatch, SecretId, WebsiteLoginSaveDecision};
+use nook_core::{SecretId, WebsiteLoginSaveDecision};
+use nook_page_policy::AuthenticationWorkflowMatch;
+use nook_page_policy::credential_fill::CredentialKind;
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 
@@ -12,7 +14,7 @@ pub struct NookFocusedLoginFillRequest {
     #[tsify(type = "string")]
     pub origin: nook_core::FocusedLoginFillOrigin,
     #[tsify(type = "keyof typeof CredentialKind")]
-    pub credential: nook_core::CredentialKind,
+    pub credential: CredentialKind,
 }
 
 /// Short-lived selected value; freeing this wrapper zeroizes its Rust owner.
@@ -41,7 +43,7 @@ pub struct NookLoginAccount {
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObservation);
+pub struct NookAuthenticationPageObservation(nook_page_policy::AuthenticationPageObservation);
 
 #[wasm_bindgen]
 impl NookAuthenticationPageObservation {
@@ -66,7 +68,7 @@ impl NookAuthenticationPageObservation {
         passkey_control_present: bool,
         matching_passkey_account_count: u32,
     ) -> Self {
-        Self(nook_core::AuthenticationPageObservation {
+        Self(nook_page_policy::AuthenticationPageObservation {
             username_field_count: username_field_count.into(),
             current_password_field_count: current_password_field_count.into(),
             new_password_field_count: new_password_field_count.into(),
@@ -82,7 +84,7 @@ impl NookAuthenticationPageObservation {
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationPageObservations(Vec<nook_core::AuthenticationPageObservation>);
+pub struct NookAuthenticationPageObservations(Vec<nook_page_policy::AuthenticationPageObservation>);
 
 #[wasm_bindgen]
 impl NookAuthenticationPageObservations {
@@ -98,19 +100,19 @@ impl NookAuthenticationPageObservations {
 }
 
 impl NookAuthenticationPageObservations {
-    pub(crate) fn as_core(&self) -> &[nook_core::AuthenticationPageObservation] {
+    pub(crate) fn as_core(&self) -> &[nook_page_policy::AuthenticationPageObservation] {
         &self.0
     }
 }
 
 impl NookAuthenticationPageObservation {
-    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationPageObservation {
+    pub(crate) const fn to_core(&self) -> nook_page_policy::AuthenticationPageObservation {
         self.0
     }
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationWorkflowSnapshot(nook_core::AuthenticationWorkflowSnapshot);
+pub struct NookAuthenticationWorkflowSnapshot(nook_page_policy::AuthenticationWorkflowSnapshot);
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,10 +123,10 @@ pub enum NookAuthenticationWorkflowMatchState {
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationWorkflowMatch(nook_core::AuthenticationWorkflowMatch);
+pub struct NookAuthenticationWorkflowMatch(nook_page_policy::AuthenticationWorkflowMatch);
 
 impl NookAuthenticationWorkflowMatch {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowMatch) -> Self {
+    pub(crate) const fn from_core(value: nook_page_policy::AuthenticationWorkflowMatch) -> Self {
         Self(value)
     }
 }
@@ -158,7 +160,7 @@ impl NookAuthenticationWorkflowMatch {
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationOutcomeObservation(nook_core::AuthenticationOutcomeObservation);
+pub struct NookAuthenticationOutcomeObservation(nook_page_policy::AuthenticationOutcomeObservation);
 
 #[wasm_bindgen]
 impl NookAuthenticationOutcomeObservation {
@@ -180,7 +182,7 @@ impl NookAuthenticationOutcomeObservation {
         in_iframe: bool,
         elapsed_ms: u32,
     ) -> Self {
-        Self(nook_core::AuthenticationOutcomeObservation {
+        Self(nook_page_policy::AuthenticationOutcomeObservation {
             navigated_away_from_auth_path,
             auth_fields_present,
             success_marker_present,
@@ -191,22 +193,22 @@ impl NookAuthenticationOutcomeObservation {
         })
     }
 
-    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationOutcomeObservation {
+    pub(crate) const fn to_core(&self) -> nook_page_policy::AuthenticationOutcomeObservation {
         self.0
     }
 }
 
 #[wasm_bindgen]
-pub struct NookAuthenticationOutcomeVerdict(nook_core::AuthenticationOutcomeVerdict);
+pub struct NookAuthenticationOutcomeVerdict(nook_page_policy::AuthenticationOutcomeVerdict);
 
 #[wasm_bindgen]
 impl NookAuthenticationOutcomeVerdict {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationOutcomeVerdict) -> Self {
+    pub(crate) const fn from_core(value: nook_page_policy::AuthenticationOutcomeVerdict) -> Self {
         Self(value)
     }
 
     #[wasm_bindgen(getter)]
-    pub fn verdict(&self) -> nook_core::AuthenticationOutcomeVerdict {
+    pub fn verdict(&self) -> nook_page_policy::AuthenticationOutcomeVerdict {
         self.0
     }
 
@@ -218,12 +220,12 @@ impl NookAuthenticationOutcomeVerdict {
 
 #[wasm_bindgen]
 impl NookAuthenticationWorkflowSnapshot {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowSnapshot) -> Self {
+    pub(crate) const fn from_core(value: nook_page_policy::AuthenticationWorkflowSnapshot) -> Self {
         Self(value)
     }
 
     #[wasm_bindgen(getter)]
-    pub fn kind(&self) -> nook_core::AuthenticationWorkflowKind {
+    pub fn kind(&self) -> nook_page_policy::AuthenticationWorkflowKind {
         self.0.kind
     }
 
@@ -233,7 +235,7 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn stage(&self) -> nook_core::AuthenticationWorkflowStage {
+    pub fn stage(&self) -> nook_page_policy::AuthenticationWorkflowStage {
         self.0.stage
     }
 
@@ -243,7 +245,7 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn action(&self) -> nook_core::AuthenticationWorkflowAction {
+    pub fn action(&self) -> nook_page_policy::AuthenticationWorkflowAction {
         self.0.action
     }
 
@@ -279,7 +281,7 @@ impl NookAuthenticationWorkflowSnapshot {
     #[wasm_bindgen(getter, js_name = approvalRequirement)]
     pub fn approval_requirement(
         &self,
-    ) -> Result<tsify::Ts<nook_core::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
+    ) -> Result<tsify::Ts<nook_page_policy::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
     {
         let result = { self.0.approval_requirement };
         Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
@@ -288,8 +290,10 @@ impl NookAuthenticationWorkflowSnapshot {
     #[wasm_bindgen(getter, js_name = savedLoginCapability)]
     pub fn saved_login_capability(
         &self,
-    ) -> Result<tsify::Ts<nook_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
-    {
+    ) -> Result<
+        tsify::Ts<nook_page_policy::AuthenticationSavedLoginCapability>,
+        wasm_bindgen::JsError,
+    > {
         let result = { self.0.saved_login_capability() };
         Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
@@ -434,7 +438,8 @@ impl NookWebsiteLoginSavePlan {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{CredentialKind, FocusedLoginFillOrigin};
+    use nook_core::FocusedLoginFillOrigin;
+    use nook_page_policy::credential_fill::CredentialKind;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -468,12 +473,13 @@ mod tests {
 mod browser_tests {
     use super::*;
     use nook_core::SecretId;
+    use nook_core::WebsiteHost;
     use nook_core::WebsiteLoginSaveDecision;
-    use nook_core::{
+    use nook_page_policy::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
         AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-        AuthenticationWorkflowStage, WebsiteHost,
+        AuthenticationWorkflowStage,
     };
     use wasm_bindgen_test::*;
 

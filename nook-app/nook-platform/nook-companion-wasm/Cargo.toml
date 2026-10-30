@@ -10,6 +10,7 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+nook-page-policy = { path = "../nook-page-policy" }
 nook-companion-core = { path = "../nook-companion-core" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"

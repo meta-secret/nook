@@ -1,5 +1,5 @@
 //! Unknown browser objects are decoded once at this actual JS ingress boundary.
-use nook_companion_core::{
+use nook_page_policy::{
     AuthenticationRecoveryCopyEvidence, AuthenticationRecoveryCopyRequest,
     AuthenticationWorkflowSnapshotTransport, AuthenticationWorkflowTransportAdmission,
 };
@@ -41,7 +41,7 @@ pub fn authentication_recovery_copy_evidence(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationPageObservationFacts, AuthenticationWorkflowSnapshotTransport,
         AuthenticationWorkflowTransportAdmission, AuthenticationWorkflowTransportPayload,
         AuthenticationWorkflowTransportType,

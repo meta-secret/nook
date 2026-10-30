@@ -7,7 +7,8 @@ mod submission;
 
 pub use capture::{
     LoginCaptureError, LoginExplicitCandidatePresence, LoginSaveCaptureDecision,
-    LoginSaveCaptureSelection, LoginSubmissionCapture, LoginSubmissionFieldMetadata,
+    LoginSaveCaptureSelection, LoginSaveSelectionError, LoginSubmissionCapture,
+    LoginSubmissionFieldMetadata,
 };
 pub use context::{
     LoginSaveCaptureBaseline, LoginSaveCaptureSource, LoginSaveCommitEvidence,

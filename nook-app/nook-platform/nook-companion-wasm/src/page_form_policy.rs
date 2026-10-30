@@ -1,6 +1,6 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
-use nook_companion_core::{PageInputType, PageSecondFactorRoute};
+use nook_page_policy::{PageInputType, PageSecondFactorRoute};
 mod input_field_observation;
 mod observation_priority;
 mod passkey_control;
@@ -19,11 +19,11 @@ pub use passkey_control::{
     looks_like_passkey_enrollment_or_management_label,
 };
 
-use nook_companion_core::AuthenticationAdvanceControlObservation;
-use nook_companion_core::AuthenticationContainerIdentity;
-use nook_companion_core::AuthenticationControlText;
-use nook_companion_core::AuthenticationRouteActuation;
-use nook_companion_core::AuthenticationRouteEvidence;
+use nook_page_policy::AuthenticationAdvanceControlObservation;
+use nook_page_policy::AuthenticationContainerIdentity;
+use nook_page_policy::AuthenticationControlText;
+use nook_page_policy::AuthenticationRouteActuation;
+use nook_page_policy::AuthenticationRouteEvidence;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -35,7 +35,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookLoginContextObservation {
-    inner: nook_companion_core::LoginContextObservation,
+    inner: nook_page_policy::LoginContextObservation,
 }
 
 #[wasm_bindgen]
@@ -49,7 +49,7 @@ impl NookLoginContextObservation {
         path_context: String,
     ) -> Self {
         Self {
-            inner: nook_companion_core::LoginContextObservation {
+            inner: nook_page_policy::LoginContextObservation {
                 form_identity,
                 ancestor_identities,
                 advance_control_label,
@@ -155,7 +155,7 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_page_policy::PageInputType {
     PageInputType::parse(value)
 }
 
@@ -164,47 +164,47 @@ mod tests {
     use super::*;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationAdvanceControlEvidence;
+    use nook_page_policy::AuthenticationAdvanceControlEvidence;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationDetailedAdvanceControlObservation;
+    use nook_page_policy::AuthenticationDetailedAdvanceControlObservation;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation;
+    use nook_page_policy::AuthenticationDetailedPasskeyControlCandidateObservation;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationDetailedPasskeyControlObservation;
+    use nook_page_policy::AuthenticationDetailedPasskeyControlObservation;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationPageObservationFacts;
+    use nook_page_policy::AuthenticationPageObservationFacts;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationUsernameEvidence;
+    use nook_page_policy::AuthenticationUsernameEvidence;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowAction;
+    use nook_page_policy::AuthenticationWorkflowAction;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowKind;
+    use nook_page_policy::AuthenticationWorkflowKind;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::AuthenticationWorkflowMatch;
+    use nook_page_policy::AuthenticationWorkflowMatch;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageControlActionability;
+    use nook_page_policy::PageControlActionability;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageControlOwnership;
+    use nook_page_policy::PageControlOwnership;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageControlSemantics;
+    use nook_page_policy::PageControlSemantics;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageControlSubmissionDestinationSource;
+    use nook_page_policy::PageControlSubmissionDestinationSource;
     #[cfg(test)]
     #[cfg(test)]
-    use nook_companion_core::PageControlSubmissionMethod;
-    use nook_companion_core::PageInputType;
+    use nook_page_policy::PageControlSubmissionMethod;
+    use nook_page_policy::PageInputType;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -324,7 +324,7 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn page_form_wasm_exports_match_observation_priority_policy() {
-        let login = nook_companion_core::AuthenticationPageObservation {
+        let login = nook_page_policy::AuthenticationPageObservation {
             current_password_field_count: 1.into(),
             ..Default::default()
         };
@@ -339,8 +339,8 @@ mod tests {
             ),
             1
         );
-        let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
-            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+        let login_facts = nook_page_policy::AuthenticationPageObservationFacts {
+            fields: nook_page_policy::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
                 current_password_field_count: 1.into(),
                 actionable_password_field_count: 1.into(),
@@ -360,8 +360,8 @@ mod tests {
     fn login_advance_observation(
         destination: &str,
         label: &str,
-    ) -> nook_companion_core::AuthenticationAdvanceControlObservation {
-        nook_companion_core::AuthenticationAdvanceControlObservation {
+    ) -> nook_page_policy::AuthenticationAdvanceControlObservation {
+        nook_page_policy::AuthenticationAdvanceControlObservation {
             actionability: PageControlActionability::Actionable,
             ownership: PageControlOwnership::OwnedForm,
             semantics: PageControlSemantics::SemanticSubmit,
@@ -557,8 +557,8 @@ mod tests {
         let mut initial = tesla.clone();
         initial.actionability = PageControlActionability::Inert;
         assert!(!(initial.clone()).authentication_advance_control_is_safe());
-        let planning_facts = nook_companion_core::AuthenticationPageObservationFacts {
-            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+        let planning_facts = nook_page_policy::AuthenticationPageObservationFacts {
+            fields: nook_page_policy::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
                 ..Default::default()
             },
@@ -568,7 +568,7 @@ mod tests {
             ..Default::default()
         };
         assert!(matches!(
-            nook_companion_core::AuthenticationPageObservationFactsBatch {
+            nook_page_policy::AuthenticationPageObservationFactsBatch {
                 observations: vec![planning_facts.clone()],
             }
             .classify(),
@@ -577,7 +577,7 @@ mod tests {
                     && snapshot.action
                         == AuthenticationWorkflowAction::ContinueWithNook
         ));
-        let wasm_workflow = (nook_companion_core::AuthenticationPageObservationFactsBatch {
+        let wasm_workflow = (nook_page_policy::AuthenticationPageObservationFactsBatch {
             observations: vec![planning_facts],
         })
         .classify();
@@ -644,14 +644,14 @@ mod tests {
         assert!((tesla.clone()).allows_tesla_password_disclosure_planning());
 
         for mutate in [
-            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+            |control: &mut nook_page_policy::AuthenticationAdvanceControlObservation| {
                 control.destination_identity =
                     "https://auth.tesla.com/oauth2/v1/authorize".to_owned();
             },
-            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+            |control: &mut nook_page_policy::AuthenticationAdvanceControlObservation| {
                 control.label = "Continue".to_owned();
             },
-            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+            |control: &mut nook_page_policy::AuthenticationAdvanceControlObservation| {
                 control.machine_identity = "primary".to_owned();
             },
         ] {
@@ -727,8 +727,8 @@ mod tests {
         netflix.form_identity.clear();
         netflix.submission_method = PageControlSubmissionMethod::Post;
         assert!((netflix.clone()).authentication_advance_control_is_safe());
-        let generic_password_facts = nook_companion_core::AuthenticationPageObservationFacts {
-            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+        let generic_password_facts = nook_page_policy::AuthenticationPageObservationFacts {
+            fields: nook_page_policy::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
                 current_password_field_count: 0.into(),
                 generic_password_field_count: 1.into(),
@@ -805,14 +805,14 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_facts_wasm_export_accepts_exact_login_mode_get() {
-        let facts = nook_companion_core::AuthenticationPageObservationFacts {
-            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+        let facts = nook_page_policy::AuthenticationPageObservationFacts {
+            fields: nook_page_policy::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
                 ..Default::default()
             },
-            ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+            ceremony: nook_page_policy::AuthenticationCeremonyObservationFacts {
                 authentication_context:
-                    nook_companion_core::AuthenticationCeremonyContextObservation {
+                    nook_page_policy::AuthenticationCeremonyContextObservation {
                         authentication_username: AuthenticationUsernameEvidence::Explicit,
                         source_origin: "https://x.com".to_owned(),
                         form_identity: String::new(),
@@ -825,7 +825,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let workflow = (nook_companion_core::AuthenticationPageObservationFactsBatch {
+        let workflow = (nook_page_policy::AuthenticationPageObservationFactsBatch {
             observations: vec![facts],
         })
         .classify();
@@ -835,28 +835,27 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn implicit_submit_actuation_wasm_export_preserves_exact_policy() {
-        let mut observation =
-            nook_companion_core::AuthenticationImplicitSubmitActuationObservation {
-                fields: nook_companion_core::AuthenticationFieldObservationFacts {
-                    username_field_count: 1.into(),
-                    ..Default::default()
-                },
-                ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
-                    authentication_context:
-                        nook_companion_core::AuthenticationCeremonyContextObservation {
-                            authentication_username: AuthenticationUsernameEvidence::Explicit,
-                            source_origin: "https://x.com".to_owned(),
-                            form_identity: String::new(),
-                            destination_identity: "https://x.com/i/jf/onboarding/web?mode=login"
-                                .to_owned(),
-                        },
-                    advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
-                    implicit_submission_method: PageControlSubmissionMethod::Get,
-                    ..Default::default()
-                },
-                control_label: String::new(),
-                control_machine_identity: String::new(),
-            };
+        let mut observation = nook_page_policy::AuthenticationImplicitSubmitActuationObservation {
+            fields: nook_page_policy::AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                ..Default::default()
+            },
+            ceremony: nook_page_policy::AuthenticationCeremonyObservationFacts {
+                authentication_context:
+                    nook_page_policy::AuthenticationCeremonyContextObservation {
+                        authentication_username: AuthenticationUsernameEvidence::Explicit,
+                        source_origin: "https://x.com".to_owned(),
+                        form_identity: String::new(),
+                        destination_identity: "https://x.com/i/jf/onboarding/web?mode=login"
+                            .to_owned(),
+                    },
+                advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                implicit_submission_method: PageControlSubmissionMethod::Get,
+                ..Default::default()
+            },
+            control_label: String::new(),
+            control_machine_identity: String::new(),
+        };
         assert!((observation.clone()).is_safe());
 
         observation.ceremony.authentication_context.form_identity = "signup".to_owned();

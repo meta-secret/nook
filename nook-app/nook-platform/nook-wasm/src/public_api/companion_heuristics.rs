@@ -1,19 +1,17 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
 use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
-use nook_companion_core::{
-    AuthenticationAdvanceControlObservation, BrowserOAuthLocation, BrowserOAuthLocationEvidence,
-};
-use nook_companion_core::{
-    OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageSecondFactorRoute,
-};
+use nook_companion_core::{BrowserOAuthLocation, BrowserOAuthLocationEvidence};
 use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
-use nook_core::AuthenticationControlText;
-use nook_core::AuthenticationPageObservation;
-use nook_core::BackupCodePageText;
 use nook_core::VaultHostObservation;
 use nook_core::VaultHostPolicy;
-use nook_core::{OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputType};
+use nook_core::{OAuthOriginSupport, OAuthOriginUnsupportedReason};
+use nook_page_policy::AuthenticationAdvanceControlObservation;
+use nook_page_policy::AuthenticationControlText;
+use nook_page_policy::AuthenticationPageObservation;
+use nook_page_policy::BackupCodePageText;
+use nook_page_policy::PageInputType;
+use nook_page_policy::{OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageSecondFactorRoute};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -32,7 +30,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookPageInputFieldObservation {
-    inner: nook_core::PageInputFieldObservation,
+    inner: nook_page_policy::PageInputFieldObservation,
 }
 
 /// Mirrors the `nook-companion-wasm` constructor; producers and consumers ship atomically and
@@ -49,7 +47,7 @@ impl NookPageInputFieldObservation {
         )
     )]
     pub fn new(
-        input_type: nook_core::PageInputType,
+        input_type: nook_page_policy::PageInputType,
         disabled: bool,
         read_only: bool,
         autocomplete_tokens: Vec<String>,
@@ -61,7 +59,7 @@ impl NookPageInputFieldObservation {
         pattern: String,
     ) -> Self {
         Self {
-            inner: nook_core::PageInputFieldObservation {
+            inner: nook_page_policy::PageInputFieldObservation {
                 input_type,
                 disabled,
                 read_only,
@@ -88,7 +86,7 @@ impl NookPageInputFieldObservation {
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookLoginContextObservation {
-    inner: nook_core::LoginContextObservation,
+    inner: nook_page_policy::LoginContextObservation,
 }
 
 #[wasm_bindgen]
@@ -102,7 +100,7 @@ impl NookLoginContextObservation {
         path_context: String,
     ) -> Self {
         Self {
-            inner: nook_core::LoginContextObservation {
+            inner: nook_page_policy::LoginContextObservation {
                 form_identity,
                 ancestor_identities,
                 advance_control_label,
@@ -183,7 +181,7 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_page_policy::PageInputType {
     PageInputType::parse(value)
 }
 

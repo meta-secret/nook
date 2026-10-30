@@ -8,10 +8,10 @@ use super::{
     SiteSecretEmptyHint, SiteSecretKind, SiteSecretListingSummary, SiteSecretMessageKey,
     SiteSecretPageOffer,
 };
-use crate::{
+use nook_app_common::i18n_keys;
+use nook_page_policy::{
     AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
 };
-use nook_app_common::i18n_keys;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The secret kinds the page's recognized authentication form needs.
@@ -146,7 +146,7 @@ impl SiteSecretKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthenticationFieldCount, AuthenticationPageObservation};
+    use nook_page_policy::{AuthenticationFieldCount, AuthenticationPageObservation};
 
     struct WorkflowCase {
         kind: AuthenticationWorkflowKind,
@@ -226,7 +226,7 @@ mod tests {
 #[cfg(test)]
 mod authenticator_setup_tests {
     use super::*;
-    use crate::{
+    use nook_page_policy::{
         AuthenticationEnrollmentObservation, AuthenticationFieldCount,
         AuthenticationPageObservation,
     };

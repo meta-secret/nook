@@ -127,11 +127,12 @@ impl LoginDomainHost {
 mod tests {
     use super::*;
     use crate::{
-        CredentialKind, FocusedLoginFillError, FocusedLoginFillOrigin, FocusedLoginFillProjection,
+        FocusedLoginFillError, FocusedLoginFillOrigin, FocusedLoginFillProjection,
         LoginHostMatchRequest, LoginSecret, SecretId, SecretRecord, SecretSearchCatalog,
         SecretType, SecretValue, StoredRecordPayload, VaultCrypto, VaultKeys,
         WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, WebsiteLoginSaveRequest,
     };
+    use nook_page_policy::credential_fill::CredentialKind;
     use std::collections::HashMap;
 
     struct LoginSiteCase {

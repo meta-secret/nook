@@ -1,5 +1,5 @@
 //! Thin generated class boundary for pre-consent, non-secret setup observations.
-use nook_companion_core::{
+use nook_page_policy::{
     AuthenticationAuthenticatorSetupBatch, AuthenticationAuthenticatorSetupEvidence,
     AuthenticationAuthenticatorSetupObservation,
 };
@@ -9,7 +9,7 @@ use wasm_bindgen::JsError;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-pub use nook_companion_core::AuthenticationQrMediaObservation;
+pub use nook_page_policy::AuthenticationQrMediaObservation;
 
 #[wasm_bindgen]
 pub struct AuthenticationAuthenticatorSetupRequest {
@@ -26,7 +26,7 @@ impl AuthenticationAuthenticatorSetupRequest {
         qr_media: AuthenticationQrMediaObservation,
     ) -> Result<Self, JsError> {
         let visible_context_copy = visible_context_copy.to_owned().try_into().map_err(
-            |error: nook_companion_core::AuthenticationAuthenticatorSetupCopyError| {
+            |error: nook_page_policy::AuthenticationAuthenticatorSetupCopyError| {
                 JsError::new(&error.to_string())
             },
         )?;

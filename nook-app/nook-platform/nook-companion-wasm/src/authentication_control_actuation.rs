@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_implicit_submit_actuation_is_safe(
-    observation: &tsify::Ts<nook_companion_core::AuthenticationImplicitSubmitActuationObservation>,
+    observation: &tsify::Ts<nook_page_policy::AuthenticationImplicitSubmitActuationObservation>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let observation = observation
         .to_rust()
@@ -26,7 +26,7 @@ pub fn authentication_implicit_submit_actuation_is_safe(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_advance_control_is_safe(
-    observation: &tsify::Ts<nook_companion_core::AuthenticationAdvanceControlObservation>,
+    observation: &tsify::Ts<nook_page_policy::AuthenticationAdvanceControlObservation>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let observation = observation
         .to_rust()
@@ -42,7 +42,7 @@ pub fn authentication_advance_control_is_safe(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_advance_control_allows_password_disclosure_planning(
-    observation: &tsify::Ts<nook_companion_core::AuthenticationAdvanceControlObservation>,
+    observation: &tsify::Ts<nook_page_policy::AuthenticationAdvanceControlObservation>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let observation = observation
         .to_rust()
@@ -54,7 +54,7 @@ pub fn authentication_advance_control_allows_password_disclosure_planning(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationAdvanceControlObservation, AuthenticationImplicitSubmitActuationObservation,
         AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
         PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,

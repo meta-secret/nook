@@ -1,9 +1,9 @@
 //! Typed exports of the Rust-owned "This site" page need and listing.
 
-use nook_companion_core::{
-    AuthenticationWorkflowMatch, SitePageNeed, SiteSecretListing, SiteSecretListingRequest,
-    SiteSecretVaults,
+use nook_companion_core::site_secret_listing::{
+    SitePageNeed, SiteSecretListing, SiteSecretListingRequest, SiteSecretVaults,
 };
+use nook_page_policy::AuthenticationWorkflowMatch;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -44,7 +44,7 @@ pub fn present_site_secret_listing(
 
 #[cfg(test)]
 mod tests {
-    use nook_companion_core::{
+    use nook_companion_core::site_secret_listing::{
         SiteSecretItem, SiteSecretListing, SiteSecretListingSummary, SiteSecretMatches,
         SiteSecretRow, SiteSecretSection, SiteSecretSectionContent, SiteSecretVault,
     };

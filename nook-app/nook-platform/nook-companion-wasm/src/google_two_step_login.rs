@@ -1,6 +1,6 @@
 //! Same-document Google continuation over generated structural observations.
 
-use nook_companion_core::credential_fill;
+use nook_page_policy::credential_fill;
 use tsify::Ts;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -56,7 +56,7 @@ pub fn begin_google_two_step_login(
 mod tests {
     use super::*;
     use credential_fill::CredentialKind;
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationAdvanceControlObservation, AuthenticationDetailedAdvanceControlObservation,
         AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
         AuthenticationPageObservationFactsBatch, AuthenticationUsernameEvidence,

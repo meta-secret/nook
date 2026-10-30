@@ -160,29 +160,10 @@ pub use nook_auth2::{
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
 pub use nook_companion_core::{
-    AuthenticationApprovalRequirement, AuthenticationOutcomeDecision,
-    AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeObservation,
-    AuthenticationOutcomeTimeoutMilliseconds, AuthenticationOutcomeVerdict,
-    AuthenticationPageObservation, AuthenticationPageObservations,
-    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
-    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowSnapshotResponse,
-    AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
-    AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowStage, BrowserOAuthProvider,
-    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-    OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType,
-    VaultHostPolicyError, WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
-    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyEvidence, WebsitePasskeyProposal,
+    BrowserOAuthProvider, DEFAULT_SIMPLE_VAULT_URL, OAuthOriginSupport,
+    OAuthOriginUnsupportedReason, VaultHostPolicyError,
 };
-pub use nook_companion_core::{
-    AuthenticationFieldCount, AuthenticationPasskeyAccountCount,
-    AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
-    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
-    AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
-};
+pub use nook_companion_core::{ExtensionEventCount, ExtensionSyncProviderCount};
 pub use onepassword_import::{
     OnePasswordExport, OnePasswordImportError, OnePasswordImportPlan,
     UnsupportedOnePasswordExportVersion,
@@ -213,12 +194,12 @@ pub use secret_view::{
     DomesticAccountSecretForm, DomesticAccountView, IdentityDocumentListItem,
     IdentityDocumentSecretForm, IdentityDocumentView, InternationalAccountListItem,
     InternationalAccountSecretForm, InternationalAccountView, PersonListItem, PersonSecretForm,
-    PersonView, PersonalDataView, PersonalFieldGroup, PersonalFieldKind, PersonalFillError,
-    PersonalFillProjection, PersonalFillRecordType, PersonalFillValue, PersonalFillValues,
+    PersonView, PersonalDataView, PersonalFillError, PersonalFillProjection,
+    PersonalFillRecordType, PersonalFillValue, PersonalFillValues,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
-    AuthenticatorSecretForm, CredentialKind, CreditCardSecretForm, FileAttachmentSecretForm,
+    AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm,
     FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
     FocusedLoginFillProjection, LoginHostMatch, LoginHostMatchRequest, LoginSecretForm,
     LoginWebsiteHost, PasskeyBackupStatus, PasskeyDetails, PasskeyDiscoverability,
@@ -590,21 +571,6 @@ pub use nook_app_common::{
     TranslationLookup,
 };
 
-pub use nook_companion_core::AuthenticationControlText;
-
-pub use nook_companion_core::{
-    AuthenticationRouteActuation, AuthenticationRouteEvidence, AutocompleteTokenQuery,
-    CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence,
-};
-
-pub use nook_companion_core::PasskeyControlMarking;
-
-pub use nook_companion_core::{
-    AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
-};
-
-pub use nook_companion_core::BackupCodePageText;
-
 pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
 
 pub use vault_client_policy::{
@@ -621,8 +587,6 @@ pub use sync_provider_store::{
 pub use sync_provider_store::{
     SharedGrantProviderOutcome, SharedGrantProviderRequest, SharedStorageTargetSelection,
 };
-
-pub use nook_companion_core::BackupCodeCandidatePresence;
 
 pub use vault_client_policy::{
     AddProviderPromptState, DeviceProtectionReadiness, EditBlockMessageRequest,

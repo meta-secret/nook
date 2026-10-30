@@ -16,8 +16,8 @@ use super::queue::{
 };
 use super::vault_event_log::ExportVaultEventLogPayload;
 use crate::ExtensionVaultEventPayload;
-use crate::credential_fill::CredentialKind;
 use nook_auth2::StoreId;
+use nook_page_policy::credential_fill::CredentialKind;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use tsify::Tsify;

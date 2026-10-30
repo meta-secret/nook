@@ -2056,8 +2056,7 @@ dependencies = [
  "nook-auth2",
  "nook-authenticator-domain",
  "nook-event-log",
- "percent-encoding",
- "proptest",
+ "nook-page-policy",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -2073,6 +2072,7 @@ version = "1.0.0"
 dependencies = [
  "getrandom 0.2.17",
  "nook-companion-core",
+ "nook-page-policy",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -2109,6 +2109,7 @@ dependencies = [
  "nook-authenticator-domain",
  "nook-companion-core",
  "nook-event-log",
+ "nook-page-policy",
  "p256 0.14.0",
  "pbkdf2 0.13.0",
  "percent-encoding",
@@ -2153,6 +2154,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-page-policy"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "derive_more",
+ "percent-encoding",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tsify",
+ "url",
+ "wasm-bindgen",
+ "zeroize",
+]
+
+[[package]]
 name = "nook-replication"
 version = "1.0.0"
 dependencies = [
@@ -2183,6 +2201,7 @@ dependencies = [
  "nook-auth2",
  "nook-companion-core",
  "nook-core",
+ "nook-page-policy",
  "passkey-types",
  "reqwest",
  "rexie",

@@ -1,6 +1,6 @@
 //! Typed boundary for portable passkey control admission.
 
-use nook_companion_core::AuthenticationAdvanceControlObservation;
+use nook_page_policy::AuthenticationAdvanceControlObservation;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 )]
 pub fn authentication_passkey_control_candidate_is_safe(
     candidate: &tsify::Ts<
-        nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
+        nook_page_policy::AuthenticationDetailedPasskeyControlCandidateObservation,
     >,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let candidate = candidate
@@ -29,7 +29,7 @@ pub fn authentication_passkey_control_candidate_is_safe(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_passkey_control_evidence_is_safe(
-    evidence: &tsify::Ts<nook_companion_core::AuthenticationDetailedPasskeyControlObservation>,
+    evidence: &tsify::Ts<nook_page_policy::AuthenticationDetailedPasskeyControlObservation>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let evidence = evidence
         .to_rust()
@@ -54,7 +54,7 @@ pub fn authentication_passkey_control_evidence_is_safe(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use nook_companion_core::{
+    use nook_page_policy::{
         AuthenticationDetailedPasskeyControlCandidateObservation,
         AuthenticationDetailedPasskeyControlObservation, AuthenticationUsernameEvidence,
         PageControlActionability, PageControlOwnership, PageControlSemantics,

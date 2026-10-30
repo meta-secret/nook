@@ -1,6 +1,6 @@
 //! Typed observation priority projections.
 
-use nook_companion_core::{AuthenticationPageObservation, AuthenticationPageObservationFacts};
+use nook_page_policy::{AuthenticationPageObservation, AuthenticationPageObservationFacts};
 use tsify::Ts;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
