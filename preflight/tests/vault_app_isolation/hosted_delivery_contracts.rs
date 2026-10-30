@@ -44,7 +44,7 @@ impl PrDeliveryScenario<'_> {
         assert!(pr.contains("require-sccache: \"true\""));
         assert!(!pr.contains("Preserve cache telemetry"));
         assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
-        assert_preflight_build_contract(self.root);
+        self.assert_preflight_build_contract();
         Ok(())
     }
 
@@ -308,71 +308,93 @@ fn assert_docker_setup_contract(root: &Path) {
     }
 }
 
-fn assert_preflight_build_contract(root: &Path) {
-    let preflight_dockerfile = (root).read("preflight/Dockerfile");
-    for required in [
-        "FROM rust-base AS chef",
-        "FROM rust-base AS deps",
-        "FROM deps AS coverage-deps",
-        "FROM deps AS build",
-        "cargo chef prepare --recipe-path recipe.json",
-        "cargo chef cook --recipe-path recipe.json",
-        "cargo clippy --quiet --locked --all-targets -- -D warnings",
-        "cargo test --quiet --locked --test core_ownership --no-run",
-        "--mount=type=secret,id=sccache_s3_access_key,required=false",
-        "nook-sccache-report preflight-chef",
-        "nook-sccache-report preflight-build",
-    ] {
+impl PrDeliveryScenario<'_> {
+    fn assert_preflight_build_contract(&self) {
+        let root = self.root;
+        let preflight_dockerfile = (root).read("preflight/Dockerfile");
+        for required in [
+            "FROM rust-base AS deps",
+            "FROM deps AS coverage-deps",
+            "FROM deps AS build",
+            "COPY preflight/Cargo.toml preflight/Cargo.lock ./",
+            "cargo fetch --locked",
+            "cargo build --quiet --locked",
+            "cargo clippy --quiet --locked --all-targets -- -D warnings",
+            "cargo test --quiet --locked --test core_ownership --no-run",
+            "--mount=type=secret,id=sccache_s3_access_key,required=false",
+            "nook-sccache-report --finish preflight-",
+            "nook-sccache-report --finish preflight-build",
+        ] {
+            assert!(
+                preflight_dockerfile.contains(required),
+                "preflight Docker cache topology is missing: {required}"
+            );
+        }
+        let dependency_source = super::section(
+            &preflight_dockerfile,
+            "FROM rust-base AS deps",
+            "FROM deps AS coverage-deps",
+        );
         assert!(
-            preflight_dockerfile.contains(required),
-            "preflight Docker cache topology is missing: {required}"
+            dependency_source.contains("src/lib.rs")
+                && dependency_source.contains("tests/core_ownership.rs")
+                && !dependency_source.contains("COPY preflight/src")
+                && !dependency_source.contains("COPY preflight/tests")
+                && !preflight_dockerfile.contains("cargo chef")
+                && !preflight_dockerfile.contains("recipe.json"),
+            "preflight dependency warmup must use the real manifest and dummy roots before source overlays"
+        );
+        let source_build = super::section(
+            &preflight_dockerfile,
+            "FROM deps AS build",
+            "FROM build AS test",
+        );
+        assert!(
+            source_build.contains("COPY preflight/src src")
+                && source_build.contains("COPY preflight/tests tests")
+                && source_build.contains("find src tests -type f -name '*.rs' -exec touch {} +")
+                && source_build.contains("cargo clippy")
+                && source_build.find("COPY preflight/tests tests")
+                    < source_build.find("find src tests")
+                && source_build.find("find src tests") < source_build.find("cargo clippy"),
+            "preflight source overlays must invalidate dummy compilation artifacts before the real build"
+        );
+        assert!(
+            !preflight_dockerfile.contains("FROM rust:")
+                && !preflight_dockerfile.contains("FROM rust@"),
+            "preflight must reuse rust-base instead of installing a floating Rust tag"
+        );
+        let preflight_bake = (root).read("preflight/docker-bake.hcl");
+        for required in [
+            "target \"preflight-test\"",
+            "rust-base = \"target:rust-base\"",
+            "inherits   = [\"_sccache\"]",
+            "dockerfile = \"preflight/Dockerfile\"",
+        ] {
+            assert!(
+                preflight_bake.contains(required),
+                "preflight Bake wiring is missing: {required}"
+            );
+        }
+        let preflight_tasks = (root).read("preflight/Taskfile.yml");
+        for required in [
+            "preflight-test",
+            "PREFLIGHT_BAKE_FILES",
+            "preflight/docker-bake.hcl",
+            "nook-app/nook-platform/docker/rust/docker-bake.hcl",
+            "SCCACHE_S3_BUILD_SECRETS",
+            "deps:\n      - sccache:ensure",
+        ] {
+            assert!(
+                preflight_tasks.contains(required),
+                "preflight Taskfile Bake/sccache wiring is missing: {required}"
+            );
+        }
+        assert!(
+            !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
+            "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
         );
     }
-    let recipe_normalizer = preflight_dockerfile
-        .split_once("RUN <<'EOF'\n")
-        .and_then(|(_, body)| body.split_once("\nEOF\n"))
-        .map_or("", |(body, _)| body);
-    assert!(
-        recipe_normalizer.contains("cargo chef prepare --recipe-path recipe.json")
-            && recipe_normalizer.contains(".skeleton.manifests")
-            && preflight_dockerfile.contains("recipe.normalized.json"),
-        "cargo-chef recipe normalization must remain inside one valid Docker heredoc RUN"
-    );
-    assert!(
-        !preflight_dockerfile.contains("FROM rust:")
-            && !preflight_dockerfile.contains("FROM rust@"),
-        "preflight must reuse rust-base instead of installing a floating Rust tag"
-    );
-    let preflight_bake = (root).read("preflight/docker-bake.hcl");
-    for required in [
-        "target \"preflight-test\"",
-        "rust-base = \"target:rust-base\"",
-        "inherits   = [\"_sccache\"]",
-        "dockerfile = \"preflight/Dockerfile\"",
-    ] {
-        assert!(
-            preflight_bake.contains(required),
-            "preflight Bake wiring is missing: {required}"
-        );
-    }
-    let preflight_tasks = (root).read("preflight/Taskfile.yml");
-    for required in [
-        "preflight-test",
-        "PREFLIGHT_BAKE_FILES",
-        "preflight/docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/docker-bake.hcl",
-        "SCCACHE_S3_BUILD_SECRETS",
-        "deps:\n      - sccache:ensure",
-    ] {
-        assert!(
-            preflight_tasks.contains(required),
-            "preflight Taskfile Bake/sccache wiring is missing: {required}"
-        );
-    }
-    assert!(
-        !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
-        "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
-    );
 }
 
 pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {

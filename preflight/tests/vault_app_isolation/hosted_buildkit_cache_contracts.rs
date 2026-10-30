@@ -584,23 +584,16 @@ impl MainProducerCacheContract<'_> {
         let base_dockerfile = (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
         assert!(
         base_dockerfile.contains("FROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base")
-            && base_dockerfile.contains("FROM rust-base AS chef-deps")
-            && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")
-            && base_dockerfile.contains(
-                "cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json",
-            )
-            && base_dockerfile.contains("ENV CARGO_CHEF_VERSION=")
-            && base_dockerfile.contains("ENV CARGO_CHEF_SHA256=")
-            && base_dockerfile.contains(
-                "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/",
-            )
-            && base_dockerfile.contains("/usr/local/cargo/bin/cargo-chef")
-            && !base_dockerfile.contains("AS chef-planner")
-            && !base_dockerfile.contains("COPY --from=chef-planner")
-            && !base_dockerfile.contains("lukemathwalker/cargo-chef")
-            && !base_dockerfile.contains("FROM ${CARGO_CHEF_IMAGE}")
+            && base_dockerfile.contains("FROM rust-base AS platform-manifests")
+            && base_dockerfile.contains("RUSTC_WRAPPER= cargo fetch --locked")
+            && base_dockerfile.contains("ENV SCCACHE_MULTILEVEL_CHAIN=disk,s3")
+            && base_dockerfile.contains("ENV SCCACHE_DIR=/opt/nook/sccache")
+            && base_dockerfile.contains("ENV SCCACHE_MULTILEVEL_WRITE_ERROR_POLICY=all")
+            && !base_dockerfile.contains("cargo-chef")
+            && !base_dockerfile.contains("cargo chef")
+            && !base_dockerfile.contains("recipe.json")
             && !base_dockerfile.contains("latest-rust-1."),
-        "Rust dependency stages must use a digest-pinned rust base and a single chef-deps prepare/cook stage"
+        "Rust dependencies must use the pinned toolchain and plain Cargo with a strict local/S3 cache in normal layers"
     );
         let web_dockerfile = (root).read("nook-app/nook-web/docker/web.Dockerfile");
         let rust_bake = (root).read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
@@ -841,7 +834,7 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
             && nook_compile.contains(
                 "cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm"
             )
-            && nook_compile.contains("nook-sccache-report wasm-build-nook-wasm")
+            && nook_compile.contains("nook-sccache-report --finish wasm-build-nook-wasm")
             && nook_packaging.contains("RUSTC_WRAPPER= wasm-pack build nook-wasm")
             && !nook_packaging.contains("mount=type=secret")
             && !nook_build.contains("nook-companion-wasm/.wasm-source-sha256")
@@ -865,7 +858,7 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
             && companion_compile.contains(
                 "cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm"
             )
-            && companion_compile.contains("nook-sccache-report wasm-build-companion-wasm")
+            && companion_compile.contains("nook-sccache-report --finish wasm-build-companion-wasm")
             && companion_packaging.contains("RUSTC_WRAPPER= wasm-pack build nook-companion-wasm")
             && !companion_packaging.contains("mount=type=secret")
             && !companion_build.contains("nook-wasm/.wasm-source-sha256")

@@ -117,12 +117,18 @@ impl<'a> PrProducerCacheContract<'a> {
         let product = self
             .root
             .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
-        let wasm_dependencies = product
-            .split_once("FROM chef-deps AS builder-wasm-deps")
-            .and_then(|(_, tail)| tail.split_once("FROM builder-wasm-deps AS builder-core-deps"))
-            .context("WASM build dependencies must be separate from native test dependencies")?
-            .0;
+        let (wasm_dependencies, _) = product
+            .split_once("FROM platform-manifests AS builder-wasm-deps")
+            .and_then(|(_, tail)| tail.split_once("FROM platform-manifests AS builder-core-deps"))
+            .context("WASM build dependencies must be separate from native test dependencies")?;
         assert!(!wasm_dependencies.contains("cargo build --tests"));
+        assert!(wasm_dependencies.contains(
+            "cargo build --locked --release --target wasm32-unknown-unknown --workspace"
+        ));
+        assert!(wasm_dependencies.contains(
+            "cargo clippy --locked --release --target wasm32-unknown-unknown --workspace"
+        ));
+        assert!(product.contains("FROM platform-manifests AS pr-rust-dependencies"));
         let proof = self.root.read("infra/tasks/pr-cache.yml");
         assert!(proof.contains("bake-cache:prove-pr:"));
         assert!(proof.contains("for temperature in cold warm"));
