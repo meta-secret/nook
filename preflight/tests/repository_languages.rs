@@ -243,9 +243,10 @@ impl RepositoryLanguagePolicy {
     }
 
     fn classify(&self, source: &str) -> ContentPolicyDecision {
-        match self.patterns.is_match(source) {
-            true => ContentPolicyDecision::Prohibited,
-            false => ContentPolicyDecision::Allowed,
+        if self.patterns.is_match(source) {
+            ContentPolicyDecision::Prohibited
+        } else {
+            ContentPolicyDecision::Allowed
         }
     }
 }
