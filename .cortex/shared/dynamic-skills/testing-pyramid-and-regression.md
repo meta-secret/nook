@@ -64,9 +64,10 @@ instead of building another harness for the same boundary.
 ### 90% Rust line coverage floor
 
 The portable Rust crates (`nook-app-common`, `nook-authenticator-domain`,
-`nook-companion-core`, `nook-core`, `nook-auth2`, `nook-replication`, and
-`nook-event-log`) are measured together. They are checked against a committed
-90% floor in `nook-app/nook-platform/nook-core/coverage-floor.json`:
+`nook-page-policy`, `nook-companion-core`, `nook-core`, `nook-auth2`,
+`nook-replication`, and `nook-event-log`) are measured together. They are
+checked against a committed 90% floor in
+`nook-app/nook-platform/nook-core/coverage-floor.json`:
 
 - Coverage below 90% fails the CI gate (`task rust:coverage:check`).
 - When under 90%, add Rust tests in the same task.
