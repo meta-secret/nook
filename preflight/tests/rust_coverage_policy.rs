@@ -269,10 +269,22 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run"
     ));
     assert!(!preflight_coverage_deps.contains("COPY --from=repository-source"));
+    let (preflight_deps, _) = preflight
+        .split_once("\nFROM rust-base AS deps\n")
+        .and_then(|(_, tail)| tail.split_once("\nFROM deps AS coverage-deps\n"))
+        .context("coverage and build stages must inherit the same preflight dependency stage")?;
+    assert!(
+        preflight_deps
+            .lines()
+            .any(|line| line == "ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+    );
     let target_envs = preflight
-        .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+        .lines()
+        .filter(|line| *line == "ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
         .count();
-    assert_eq!(target_envs, 2);
+    assert_eq!(target_envs, 1);
+    assert!(preflight.contains("\nFROM deps AS build\n"));
+    assert!(preflight.contains("\nFROM build AS test\n"));
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
