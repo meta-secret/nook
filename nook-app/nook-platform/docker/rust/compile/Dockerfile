@@ -22,6 +22,7 @@ COPY nook-app/nook-platform/.cargo .cargo
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
+COPY nook-app/nook-platform/nook-page-policy/Cargo.toml nook-page-policy/Cargo.toml
 COPY nook-app/nook-platform/nook-authenticator-domain/Cargo.toml nook-authenticator-domain/Cargo.toml
 COPY nook-app/nook-platform/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-platform/nook-replication/Cargo.toml nook-replication/Cargo.toml
@@ -33,6 +34,7 @@ COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm-composition-tests/Cargo.toml nook-wasm-composition-tests/Cargo.toml
 RUN mkdir -p \
       nook-app-common/src \
+      nook-page-policy/src \
       nook-authenticator-domain/src \
       nook-auth2/src \
       nook-replication/src \
@@ -44,6 +46,7 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src \
     && touch \
       nook-app-common/src/lib.rs \
+      nook-page-policy/src/lib.rs \
       nook-authenticator-domain/src/lib.rs \
       nook-auth2/src/lib.rs \
       nook-replication/src/lib.rs \
@@ -66,7 +69,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked \
-      -p nook-app-common \
+      -p nook-app-common -p nook-page-policy \
       -p nook-authenticator-domain \
       -p nook-auth2 \
       -p nook-replication \
@@ -99,12 +102,13 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
 FROM compile-native-dependencies AS compile-native-source
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    find nook-app-common nook-page-policy -type f -name '*.rs' -exec touch {} + \
     && \
-    cargo build --locked -p nook-app-common
+    cargo build --locked -p nook-app-common -p nook-page-policy
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
@@ -154,10 +158,11 @@ FROM compile-wasm-dependencies AS compile-wasm-source
 ARG WASM_BUILD_MODE=dev
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    find nook-app-common nook-page-policy -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm

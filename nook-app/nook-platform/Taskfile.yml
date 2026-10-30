@@ -108,14 +108,14 @@ tasks:
     internal: true
     desc: Run portable Rust crate tests via cargo-nextest (ci profile, no coverage gate).
     cmds:
-      - cd "{{.PLATFORM_ROOT}}" && cargo nextest run -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-companion-wasm -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-wasm-composition-tests --profile ci
-      - cd "{{.PLATFORM_ROOT}}" && cargo test --locked -p nook-companion-core --doc
+      - cd "{{.PLATFORM_ROOT}}" && cargo nextest run -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-companion-core -p nook-companion-wasm -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-wasm-composition-tests --profile ci
+      - cd "{{.PLATFORM_ROOT}}" && cargo test --locked -p nook-companion-core -p nook-page-policy --doc
       - cd "{{.PLATFORM_ROOT}}" && cargo test --locked -p nook-auth2 --doc
 
   _rust:coverage:
     desc: Print portable Rust crate line coverage summary (no floor enforcement).
     cmds:
-      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only
+      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only
 
   _rust:coverage:check:
     desc: Run portable Rust crate coverage once, then enforce the line floor independently per package.
@@ -123,9 +123,9 @@ tasks:
       - |-
         set -e
         cd "{{.PLATFORM_ROOT}}"
-        packages="nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core"
+        packages="nook-app-common nook-page-policy nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core"
         cargo llvm-cov nextest --no-clean --profile ci \
-          -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+          -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 \
           -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
           --summary-only
         coverage_status=0
@@ -139,7 +139,7 @@ tasks:
     desc: Print aggregate portable Rust coverage JSON for diagnostics, not a complete policy update.
     cmds:
       # Policy updates require independent hosted results for every registry package.
-      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only
+      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only
 
   _rust:format:
     desc: Format Rust projects, then print a host-applicable git diff (sealed image).
@@ -156,7 +156,7 @@ tasks:
   _rust:build:
     desc: Build the native Rust crates (wasm is built via _wasm:build).
     cmds:
-      - cd "{{.PLATFORM_ROOT}}" && cargo build -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log
+      - cd "{{.PLATFORM_ROOT}}" && cargo build -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log
 
   _rust:test:
     desc: Test portable Rust crates (wasm is covered by web e2e).
@@ -166,7 +166,7 @@ tasks:
   _rust:lint:
     desc: Lint portable Rust crates on host and nook-wasm for wasm32.
     cmds:
-      - cd "{{.PLATFORM_ROOT}}" && cargo clippy -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings
+      - cd "{{.PLATFORM_ROOT}}" && cargo clippy -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings
       - cd "{{.PLATFORM_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm -- -D warnings
 
   sccache:ensure:

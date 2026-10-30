@@ -136,6 +136,7 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
+COPY nook-app/nook-platform/nook-page-policy/Cargo.toml nook-page-policy/Cargo.toml
 COPY nook-app/nook-platform/nook-authenticator-domain/Cargo.toml nook-authenticator-domain/Cargo.toml
 COPY nook-app/nook-platform/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-platform/nook-replication/Cargo.toml nook-replication/Cargo.toml
@@ -147,6 +148,7 @@ COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm-composition-tests/Cargo.toml nook-wasm-composition-tests/Cargo.toml
 RUN mkdir -p \
       nook-app-common/src \
+      nook-page-policy/src \
       nook-authenticator-domain/src \
       nook-auth2/src \
       nook-replication/src \
@@ -158,6 +160,7 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src \
     && touch \
       nook-app-common/src/lib.rs \
+      nook-page-policy/src/lib.rs \
       nook-authenticator-domain/src/lib.rs \
       nook-auth2/src/lib.rs \
       nook-replication/src/lib.rs \
@@ -184,7 +187,7 @@ FROM builder-wasm-deps AS builder-core-deps
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo nextest run --no-run -p nook-app-common --profile ci \
+    cargo nextest run --no-run -p nook-app-common -p nook-page-policy --profile ci \
     && nook-sccache-report native-app-common-nextest-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -221,7 +224,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-composition-nextest-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    cargo clippy -p nook-app-common -p nook-page-policy --all-targets -- -D warnings \
     && nook-sccache-report native-app-common-clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -245,7 +248,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-core-clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
+    cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
 FROM builder-wasm-deps AS wasm-coverage-toolchain
@@ -314,14 +317,15 @@ COPY nook-app/nook-platform/clippy.toml clippy.toml
 # Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
 # can reuse the common/auth clippy and coverage-test layers; a nook-wasm-only change can reuse both.
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    touch nook-app-common/src/i18n.rs nook-page-policy/src/lib.rs \
+    && cargo clippy -p nook-app-common -p nook-page-policy --all-targets -- -D warnings \
     && nook-sccache-report native-app-common-clippy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common \
+    cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-page-policy \
     && nook-sccache-report native-app-common-coverage
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -367,7 +371,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
-    && cargo test --locked -p nook-companion-core --doc \
+    && cargo test --locked -p nook-companion-core -p nook-page-policy --doc \
     && nook-sccache-report native-companion-core-coverage
 
 COPY nook-app/nook-platform/nook-core nook-core
@@ -389,13 +393,13 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
     && coverage_status=0 \
-    && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
+    && for package in nook-app-common nook-page-policy nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
          floor="$(jq -r --arg package "$package" '.package_lines_percent[$package]' nook-core/coverage-floor.json)"; cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1; \
        done \
     && test "$coverage_status" -eq 0 \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage \
     && rm -rf target/llvm-cov-target
@@ -424,10 +428,11 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo nextest run -p nook-app-common --profile ci --no-run \
+    touch nook-app-common/src/i18n.rs nook-page-policy/src/lib.rs \
+    && cargo nextest run -p nook-app-common -p nook-page-policy --profile ci --no-run \
     && nook-sccache-report focused-native-test-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -494,10 +499,11 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    touch nook-app-common/src/i18n.rs nook-page-policy/src/lib.rs \
+    && cargo clippy -p nook-app-common -p nook-page-policy --all-targets -- -D warnings \
     && nook-sccache-report focused-rust-lint-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -570,10 +576,11 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common --summary-only \
+    touch nook-app-common/src/i18n.rs nook-page-policy/src/lib.rs \
+    && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-page-policy --summary-only \
     && nook-sccache-report focused-rust-coverage-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -641,6 +648,7 @@ COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 COPY nook-app/nook-platform/nook-replication nook-replication
@@ -658,14 +666,15 @@ FROM builder-wasm-source-base AS builder-nook-wasm-source
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
+    touch nook-app-common/src/i18n.rs nook-page-policy/src/lib.rs \
     && cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-source-nook-wasm
 FROM builder-wasm-source-base AS builder-companion-wasm-source
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
+    touch nook-page-policy/src/lib.rs \
+    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
     && nook-sccache-report wasm-source-companion-wasm
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
@@ -675,7 +684,8 @@ FROM builder-wasm-source AS builder-wasm-clippy
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy --release --target wasm32-unknown-unknown \
+    touch nook-page-policy/src/lib.rs \
+    && cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm -p nook-companion-wasm \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
@@ -700,6 +710,7 @@ RUN case "$WASM_BUILD_MODE" in \
          --out-name nook_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
            nook-wasm/Cargo.toml nook-wasm/src \
+           nook-page-policy/Cargo.toml nook-page-policy/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
            nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
            nook-core/Cargo.toml nook-core/src \
@@ -737,6 +748,7 @@ RUN case "$WASM_BUILD_MODE" in \
          --out-name nook_companion_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
            nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
+           nook-page-policy/Cargo.toml nook-page-policy/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
            \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
          | LC_ALL=C sort -z \
@@ -761,7 +773,8 @@ FROM builder-wasm-source AS builder-wasm-tests
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
+    touch nook-page-policy/src/lib.rs \
+    && CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
 FROM builder-wasm-node-deps AS builder-wasm-test-base
@@ -840,11 +853,11 @@ FROM chef-deps AS pr-rust-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy --quiet --offline --locked --all-targets \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
       -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
     && cargo build --quiet --offline --locked \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
     && nook-sccache-report pr-rust-dependencies
 
@@ -857,11 +870,12 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-page-policy nook-page-policy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-app-common
+    find nook-app-common nook-page-policy -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -p nook-page-policy -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-app-common -p nook-page-policy
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
