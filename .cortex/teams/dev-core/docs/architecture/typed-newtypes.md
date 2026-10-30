@@ -116,7 +116,19 @@ Do not duplicate validation in TypeScript.
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, `nook-event-log`, and `nook-core` are activated.
+The following crates are activated:
+
+- `nook-app-common`
+- `nook-authenticator-domain`
+- `nook-page-policy`
+- `nook-companion-core`
+- `nook-companion-wasm`
+- `nook-wasm`
+- `nook-replication`
+- `nook-auth2`
+- `nook-event-log`
+- `nook-core`
+
 Later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 

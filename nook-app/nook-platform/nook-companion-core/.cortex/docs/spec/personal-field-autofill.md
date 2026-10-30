@@ -8,6 +8,12 @@ fields of the form receive values. The extension reports structural page facts,
 renders the offer, and assigns the returned values. Records are specified in
 [personal data items](../../../../nook-core/.cortex/docs/spec/personal-data-items.md).
 
+`nook-page-policy` owns field classification, fill planning, and their shared
+vocabulary. Companion protocol retains paired site-listing contracts.
+`nook-core` owns record reveal and value projection. Both WASM bridges import
+page-policy values directly. This ownership split preserves wire schemas,
+storage formats, and public WASM behavior.
+
 ## Field groups and kinds
 
 `PersonalFieldGroup` has three members: `Person`, `Address`, and `Card`.
@@ -100,10 +106,10 @@ password, or one-time-code field.
 
 ## Executable scenarios
 
-- Companion-core Rust tests cover the autocomplete grammar and identity-text
+- `nook-page-policy` Rust tests cover the autocomplete grammar and identity-text
   rules. They also cover credential exclusions, unchanged credential
   recognition, and plans for sign-up, address, and card forms.
-- Companion-core plan tests cover once-only identity-text kinds and
+- `nook-page-policy` plan tests cover once-only identity-text kinds and
   fail-closed scopes.
 - `nook-core` projection tests cover derivations, the phone order, group and
   kind rejection, invalid stored dates, redacted `Debug`, and zeroization.

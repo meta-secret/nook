@@ -1,5 +1,5 @@
 # nook-companion-core Specifications
 
 - **[personal-field-autofill.md](personal-field-autofill.md)**
-  - Description: Personal field classification, fill planning, and explicit record reveal for extension form fill
+  - Description: Page-policy field classification and fill planning with core-owned record reveal
   - Status: Active
