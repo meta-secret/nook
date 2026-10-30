@@ -8,8 +8,6 @@ use std::{
 
 use anyhow::Context;
 
-use super::dockerfile_run_instructions;
-
 struct RepositoryFixture {
     path: PathBuf,
 }
@@ -195,7 +193,7 @@ fn rust_compiler_snapshots_keep_local_cache_writes_in_private_image_layers() {
             !source.contains("--mount=type=cache"),
             "{path} must snapshot local compiler objects through ordinary private image layers"
         );
-        let runs = dockerfile_run_instructions(&source);
+        let runs = super::dockerfile_run_instructions(&source);
         let reports = runs
             .iter()
             .filter(|run| run.contains("nook-sccache-report ") && !run.contains("--replay"))

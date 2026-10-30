@@ -330,7 +330,7 @@ impl PrDeliveryScenario<'_> {
                 "preflight Docker cache topology is missing: {required}"
             );
         }
-        let dependency_source = section(
+        let dependency_source = super::section(
             &preflight_dockerfile,
             "FROM rust-base AS deps",
             "FROM deps AS coverage-deps",
@@ -344,7 +344,7 @@ impl PrDeliveryScenario<'_> {
                 && !preflight_dockerfile.contains("recipe.json"),
             "preflight dependency warmup must use the real manifest and dummy roots before source overlays"
         );
-        let source_build = section(
+        let source_build = super::section(
             &preflight_dockerfile,
             "FROM deps AS build",
             "FROM build AS test",
