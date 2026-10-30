@@ -1,6 +1,7 @@
 {
   "name": "@nook/web-surfaces",
   "private": true,
+  "type": "module",
   "description": "Knip project root: knip 6 analyzes only files under its root, and every web surface shares code from here.",
   "devDependencies": {
     "svelte": "5.57.3",
