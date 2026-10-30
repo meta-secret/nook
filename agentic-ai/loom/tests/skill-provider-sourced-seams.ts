@@ -133,11 +133,11 @@ const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
-    'a74a8e8f2571709c36efe485b19c51cc5c20d7d0d894e2efceff586064b2aac6',
+    'cae11f61781cf443634026808abc4b13db09d9190b070978cb66f466c252f34d',
   ],
   [
     '.github/workflows/remote.yml:"$jq_root/jq"',
-    'a74a8e8f2571709c36efe485b19c51cc5c20d7d0d894e2efceff586064b2aac6',
+    'cae11f61781cf443634026808abc4b13db09d9190b070978cb66f466c252f34d',
   ],
 ]);
 
@@ -146,7 +146,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/contracts/dockerized-rust-buildkit.test.ts',
-    '31e353e409e70f7e4b5fb046f360c715c258bd1cb9e4c420bfe64639e8ddd825',
+    '6fd632324471ec8cf73f6dd7e64f81ae38b2894d4dbc749472127675ca27f5b5',
   ],
   [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
@@ -226,7 +226,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/ci-pr-native-pages-build.sh',
-    'e6731f208ba0e58d59b221aa70f800ac67f8fc29299a1010deb2cd44782769c2',
+    'e185da1ccd37db36a4c1fa58e7bc755c3515cae659fafb2507ed54358e3de0ee',
   ],
   [
     'infra/operator-ssh.ts',
