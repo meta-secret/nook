@@ -58,6 +58,7 @@ tasks:
             --allow="fs.read=$repo_root" \
             --allow="fs.read=$SCCACHE_S3_ACCESS_KEY_FILE" \
             --allow="fs.read=$SCCACHE_S3_SECRET_KEY_FILE" \
+            --allow="fs.read=$output" \
             --allow="fs.write=$output" \
             -f "$repo_root/nook-app/docker-bake.hcl" \
             -f "$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl" \
