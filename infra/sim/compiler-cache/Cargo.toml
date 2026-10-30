@@ -1,0 +1,29 @@
+[package]
+name = "nook-compiler-cache-proof"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+resolver = "3"
+
+[dependencies]
+hex = "=0.4.3"
+
+[lints.rust]
+warnings = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+absolute_paths = "deny"
+fn_params_excessive_bools = "deny"
+struct_excessive_bools = "deny"
+let_underscore_must_use = "deny"
+let_underscore_future = "deny"
+return_self_not_must_use = "deny"
+result_unit_err = "deny"
+wildcard_enum_match_arm = "deny"
+too_many_arguments = "deny"
+excessive_nesting = "deny"
