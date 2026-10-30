@@ -180,6 +180,11 @@ jobs:
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
           echo "Build-only two-phase route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST Phase-A-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
+      - name: Setup Bun for native test reuse evidence
+        if: (inputs.tasks || inputs.task) == 'rust:native-test-evidence'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
       - name: Run task batch
         shell: bash
         env:
