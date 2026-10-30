@@ -100,6 +100,14 @@ target "coverage-export" {
   cache-to   = rust_native_source_cache_to
 }
 
+// Optional actual-build proof artifact, rooted in the same successful tests and
+// combined floor gate. It carries the raw profiles and executable coverage maps.
+target "native-test-evidence" {
+  inherits = ["coverage-export"]
+  target   = "native-test-evidence"
+  output   = ["type=cacheonly"]
+}
+
 // Narrow source-sealed runtime for focused native tests. It deliberately branches before
 // builder-debug so a remote `rust:test` does not pay for coverage, clippy, or any WASM stage.
 target "_nook-rust-test-common" {

@@ -176,6 +176,21 @@ tasks:
         ci-rust
       - task: registry-cache:publish:native
 
+  docker:ci:rust:native-test-evidence:
+    desc: Export actual native test profiles, executable maps, JUnit and combined coverage.
+    deps: [sccache:ensure, registry-cache:ensure]
+    requires:
+      vars: [NATIVE_TEST_EVIDENCE_DIR]
+    env:
+      GHA_CACHE_WRITE_ENABLED: ""
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}}
+        -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl'
+        --allow='fs.write={{.NATIVE_TEST_EVIDENCE_DIR}}'
+        --set 'native-test-evidence.output=type=local,dest={{.NATIVE_TEST_EVIDENCE_DIR}}'
+        native-test-evidence pr-rust-verify
+
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
     deps: [sccache:ensure, registry-cache:ensure]
