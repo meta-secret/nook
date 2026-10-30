@@ -108,9 +108,10 @@ legacy registered `nook` runner is not used.
 - Their Cargo commands retain the target, features, and profile of each consumer.
 - Coverage dependencies retain their separate instrumented target trees.
 - Normal source overlays refresh Rust source timestamps before Cargo runs.
-  At the independent WASM coverage join, Cargo removes host and WASM workspace
-  artifacts from `target/llvm-cov-target`.
-  Third-party instrumented dependencies, real normal-release outputs, and
+  At independent WASM and preflight coverage joins, Cargo removes inherited
+  workspace artifacts from each graph's instrumented target directory.
+  Cleanup follows that graph's own target and profile settings.
+  Third-party instrumented dependencies, ordinary real build outputs, and
   disk/S3 caches are preserved.
 - Native verification uses nextest, Clippy, and coverage warmups.
 - Trusted same-repository PR CI runs native coverage independently on ARC.
