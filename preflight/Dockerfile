@@ -57,7 +57,7 @@ ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
-    && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" \
+    && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" --no-fail-fast \
     && nook-sccache-report --finish preflight-test-and-coverage
 
 # Policy uses the same compiled preflight graph as product validation. Rust,
