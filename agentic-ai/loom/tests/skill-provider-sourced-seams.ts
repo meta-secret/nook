@@ -218,7 +218,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'eb0719f3f0974d2a31564b55c4008438e0af81afbddc2dcc263904978e06f2ac',
+    '1592e522c8faf066f4fff3cec3070a5b21f2f2cd7962a34e382f6ccddab9e6c6',
   ],
   [
     '.github/scripts/type-check-report.sh',
