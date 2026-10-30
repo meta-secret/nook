@@ -99,6 +99,13 @@ impl NookVaultManager {
     /// providers it took: none when no copy was for it, or when the keyring
     /// has no remote provider left.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the count of providers taken as a JavaScript Number scalar"
+        )
+    )]
     pub async fn take_keyring_provider_shares(
         &self,
         shares: &tsify::Ts<NookKeyringProviderSharesAdmission>,
