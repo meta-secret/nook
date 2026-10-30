@@ -25,6 +25,9 @@ export class NativeTestGraphContract {
     expect(sources).toContain(
       "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
     );
+    expect(sources).toContain("COPY nook-app/nook-platform/.cargo .cargo");
+    expect(sources).toContain("COPY nook-app/nook-platform/.config .config");
+    expect(sources).toContain("COPY nook-app/nook-platform/clippy.toml clippy.toml");
     expect(sources).toContain(
       "CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace",
     );
