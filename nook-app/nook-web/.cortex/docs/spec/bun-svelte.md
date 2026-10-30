@@ -13,11 +13,13 @@
 - The `typescript` package stays at 6 only as the JavaScript API that
   typescript-eslint, svelte-check, and Loom load; TypeScript 7 ships no stable
   JavaScript API. Nothing type-checks with it.
-- `svelte-check --tsgo` hands Svelte type checking to TypeScript 7. It checks
-  only Svelte files inside its workspace and its tsconfig's folder, so each
-  surface runs it from `nook-app/nook-web` with
-  `tsconfig.svelte.<surface>.json`, which extends that surface's tsconfig.
-  `--config` names the surface's `svelte.config.js`.
+- `svelte-check --tsgo-experimental-api` hands Svelte type checking to
+  TypeScript 7 through its API, in memory. Each surface keeps its own workspace
+  and tsconfig, and parallel runs share no output folder; `--tsgo` instead
+  writes one `.svelte-check` folder per workspace and checks only Svelte files
+  under the tsconfig's folder, which misses the shared components.
+- svelte-check's TypeScript 7 API client needs Node; under Bun alone it fails
+  to start.
 
 ## 2. Dev Server and Build
 

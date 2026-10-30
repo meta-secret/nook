@@ -11,7 +11,7 @@
     "preview": "bun run prepare:toolchain && vite preview",
     "check": "bun run prepare:toolchain && bun run lint && bun run typecheck",
     "lint": "cd .. && node_modules/.bin/eslint --config eslint.config.js nook-vault-simple",
-    "typecheck": "svelte-check --tsgo --workspace .. --config ./nook-vault-simple/svelte.config.js --tsconfig ./tsconfig.svelte.nook-vault-simple.json && tsc -p tsconfig.json --noEmit"
+    "typecheck": "svelte-check --tsgo-experimental-api --tsconfig ./tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.4",

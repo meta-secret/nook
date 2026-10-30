@@ -101,14 +101,11 @@ tasks:
           esac
           nook-web-app/node_modules/.bin/tsc --noEmit -p "$config" || failed=1
         done
-        # TypeScript 7 (--tsgo) checks only Svelte files inside the workspace
-        # and its tsconfig's folder, so both are nook-web, which holds the
-        # shared components; each surface's tsconfig.svelte.*.json extends its own.
-        case "$directory" in
-          nook-web-extension) svelte_config=nook-web-app/svelte.config.js ;;
-          *) svelte_config="$directory/svelte.config.js" ;;
-        esac
-        nook-web-app/node_modules/.bin/svelte-check --tsgo --workspace . --config "$svelte_config" --tsconfig "tsconfig.svelte.$directory.json" || failed=1
+        config="$directory/tsconfig.json"
+        if [ "$directory" = nook-web-app ]; then config="$directory/tsconfig.app.json"; fi
+        # TypeScript 7 checks the Svelte files through its API, in memory, so
+        # the surfaces share no output folder and run in parallel.
+        nook-web-app/node_modules/.bin/svelte-check --tsgo-experimental-api --workspace "$directory" --tsconfig "${config#*/}" || failed=1
         exit "$failed"
 
   static:check:

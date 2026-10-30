@@ -1,3 +1,0 @@
-{
-  "extends": "./nook-web-app/tsconfig.app.json"
-}

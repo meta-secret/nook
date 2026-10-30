@@ -36,7 +36,6 @@ export default [
       "**/dist/**",
       "**/dist-prod/**",
       "**/node_modules/**",
-      "**/.svelte-check/**",
       "nook-web-shared/src/vault-app/lib/nook-wasm*/**",
       "nook-web-shared/src/extension/nook-companion-wasm/**",
     ],
