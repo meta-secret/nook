@@ -232,44 +232,68 @@ payloads are typed YAML encrypted with [age](https://age-encryption.org/).
 
 App code lives under `nook-app/`. Dependencies flow one way:
 
-```text
-nook-vault-simple / nook-vault-sentinel / nook-web-extension
-  ├─> nook-wasm              browser I/O + full vault session bridge
-  │    ├─> nook-core         vault application services, secrets, sync policy
-  │    │    ├─> nook-authenticator-domain
-  │    │    ├─> nook-event-log
-  │    │    │    ├─> nook-auth2
-  │    │    │    └─> nook-replication
-  │    │    └─> nook-app-common
-  │    └─> nook-companion-core
-  │         ├─> nook-authenticator-domain
-  │         └─> nook-event-log
-  └─> nook-companion-wasm   size-sensitive extension policy bridge
-       └─> nook-companion-core
-
-nook-auth2 ─┬─> nook-authenticator-domain
-            └─> nook-app-common
+```mermaid
+flowchart TD
+    Presentation["nook-vault-simple / nook-vault-sentinel / nook-web-extension"] --> Wasm["nook-wasm"]
+    Presentation --> CompanionWasm["nook-companion-wasm"]
+    Wasm --> Core["nook-core"]
+    Wasm --> Companion["nook-companion-core"]
+    Wasm --> PagePolicy["nook-page-policy"]
+    Wasm --> Auth2["nook-auth2"]
+    CompanionWasm --> Companion
+    CompanionWasm --> PagePolicy
+    Core --> PagePolicy
+    Core --> Companion
+    Core --> Auth2
+    Core --> Authenticator["nook-authenticator-domain"]
+    Core --> EventLog["nook-event-log"]
+    Core --> Common["nook-app-common"]
+    Companion --> PagePolicy
+    Companion --> Auth2
+    Companion --> Authenticator
+    Companion --> EventLog
+    Companion --> Common
+    EventLog --> Auth2
+    EventLog --> Replication["nook-replication"]
+    Auth2 --> Authenticator
+    Auth2 --> Common
 ```
 
 `nook-app-common` is a leaf dependency used directly by both `nook-auth2` and
-`nook-core`; it does not sit between the event-log and replication layers.
+`nook-core`. `nook-page-policy` has no dependencies on other Nook crates.
+Core and both bridges import page-policy values directly. Core retains its
+companion dependency for protocol-owned typed site listings.
 
-| Package                     | Role                                                                                                                                                              |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-app-common`           | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry                                   |
-| `nook-authenticator-domain` | Dependency-light closed values for passkey protection, TOTP metadata, and backup-code update policy shared across authentication, vault, and extension boundaries |
-| `nook-auth2`                | Portable identity and key access: identity directories, local keyring invariants, app keys, age envelopes, and recovery helpers                                  |
-| `nook-replication`          | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning                                                                   |
-| `nook-event-log`            | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs                                                        |
-| `nook-core`                 | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy                                                 |
-| `nook-companion-core`       | Portable extension policy: authentication workflow, pairing records and migration, host and field classification                                                  |
-| `nook-companion-wasm`       | Small `wasm-bindgen` bridge exposing companion policy to extension contexts                                                                                       |
-| `nook-wasm`                 | Full `wasm-bindgen` bridge, IndexedDB keyring/provider persistence, remote-provider I/O, and identity-scoped session manager                                      |
-| `nook-vault-simple`         | Independent Svelte 5 Simple Vault application                                                                                                                     |
-| `nook-vault-sentinel`       | Independent Svelte 5 Sentinel Vault application                                                                                                                   |
-| `nook-web-app`              | Public site and unified local e2e harness                                                                                                                         |
-| `nook-web-extension`        | Simple-only Manifest V3 companion (Nook Pilot: login HUD, credential fill, takeover)                                                                              |
-| `nook-web-shared`           | Presentation/browser glue safe to share between vault apps                                                                                                        |
+- **`nook-app-common`:** Shared Rust primitives, locale catalogs, translation
+  behavior, and the generated Rust i18n key registry.
+- **`nook-authenticator-domain`:** Closed passkey-protection, TOTP-metadata,
+  and backup-code policy values shared across portable domains.
+- **`nook-page-policy`:** Page observations, classification, authentication
+  workflow, fill planning, and login-capture planning.
+- **`nook-auth2`:** Identity directories, local keyring invariants, app keys,
+  age envelopes, and recovery helpers.
+- **`nook-replication`:** Causal DAG indexing, append-only replica sets,
+  outbox, and repair planning.
+- **`nook-event-log`:** Canonical signed events, actor authorization,
+  deterministic projection, and key epochs.
+- **`nook-core`:** Typed plaintext secrets, encryption workflows,
+  provider-neutral sync, and vault session policy.
+- **`nook-companion-core`:** Pairing, consent, extension vault protocol,
+  typed site listings, and protected-origin policy.
+- **`nook-companion-wasm`:** Small `wasm-bindgen` bridge exposing page policy
+  and companion protocol to extension contexts.
+- **`nook-wasm`:** Full vault bridge, IndexedDB keyring/provider persistence,
+  remote-provider I/O, and identity-scoped session manager.
+- **`nook-vault-simple`:** Independent Svelte 5 Simple Vault application.
+- **`nook-vault-sentinel`:** Independent Svelte 5 Sentinel Vault application.
+- **`nook-web-app`:** Public site and unified local e2e harness.
+- **`nook-web-extension`:** Simple-only Manifest V3 companion for the Nook
+  Pilot login HUD, credential fill, and takeover.
+- **`nook-web-shared`:** Presentation and browser glue shared by vault apps.
+
+The page-policy split preserves existing storage formats, wire schemas, and
+public WASM behavior. Capture planning retains its transient credential
+comparisons and zeroization behavior.
 
 Inside `nook-web-shared/src/vault-app/lib`, browser-owned modules are grouped by
 capability (`app`, `auth`, `content`, `enrollment`, `extension`, `runtime`, and
@@ -573,7 +597,8 @@ Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 
 Architecture changes belong in the lowest appropriate layer: shared
 dependency-light application primitives in `nook-app-common`, key access in
-`nook-auth2`, provider-neutral causal replication mechanics in
+`nook-auth2`, independent page and fill/capture policy in `nook-page-policy`,
+provider-neutral causal replication mechanics in
 `nook-replication`, signed vault history and projection in `nook-event-log`,
 vault application services in `nook-core`, browser I/O in `nook-wasm`, and UI
 in `nook-web-*`. When package boundaries, sync model, or public Task commands

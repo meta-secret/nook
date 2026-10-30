@@ -21,6 +21,9 @@
 - **[vault-session-and-lock.md](vault-session-and-lock.md)**
   - Description: Lock session, vault vs sync providers, multi-vault model
   - Status: Active; compatibility storage examples are explicitly non-authoritative
+- **[companion-page-policy-compile-measurements.md](companion-page-policy-compile-measurements.md)**
+  - Description: Reproducible before/after compiler measurements for the independent page-policy extraction
+  - Status: Measured; mixed results on the local Apple ARM host
 
 ## Crate architecture
 
