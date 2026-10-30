@@ -103,11 +103,13 @@ legacy registered `nook` runner is not used.
 - It retains `.cargo`, `.config`, and `clippy.toml` beside placeholder crate roots.
 - `cargo fetch --locked` downloads sources before dependency compilation.
 - Native, WASM, and PR verification warmups branch independently from that stage.
+- The compile-only graph retains native-to-WASM dependency ancestry for its
+  single rooted portable export.
 - Their Cargo commands retain the target, features, and profile of each consumer.
 - Coverage dependencies retain their separate instrumented target trees.
 - Source overlays refresh Rust source timestamps before Cargo runs.
   This prevents Cargo from reusing placeholder artifacts as real product code.
-- Native verification extends it with nextest, clippy, and coverage profiles.
+- Native verification uses nextest, Clippy, and coverage warmups.
 - Trusted same-repository PR CI runs native coverage independently on ARC.
 - Fork PR native coverage remains GitHub-hosted and secret-free.
 - It verifies WASM once on a dedicated producer.
@@ -332,6 +334,9 @@ legacy registered `nook` runner is not used.
   Per-level S3 writes supply remote-publication evidence.
   The existing remote backend probe remains independent of local reuse.
   Reports omit backend locations and credential values.
+- The collector emits a local/remote breakdown only when every included report
+  measured the complete counter set.
+  An absent breakdown means unmeasured, never a numeric zero.
 - Credentialed trusted Rust/WASM jobs require the healthy remote compiler cache
   before compilation and fail closed when credentials or sccache are
   unavailable. A first cold publisher may miss while recording authoritative

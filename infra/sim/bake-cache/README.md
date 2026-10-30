@@ -9,8 +9,9 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
    browser-artifact export) is requested.
 3. Repeating those solves on the same builder reuses Docker layers without any
    registry cache import/export or intermediate image publication.
-4. The Dylint product-dependency and manifest-only Cargo Chef WASM release-cook
-   vertices remain cached on a warm rebuild. The Dylint stand-in uses the same
+4. The Dylint product-dependency and manifest-only WASM release-dependency
+   stand-ins remain cached on a warm rebuild. The `cargo-deps` fixture models
+   the manifest-only dependency root. The Dylint stand-in uses the same
    immutable dependency-before-source layer architecture and named image output as
    production; it fails if verification falls back to a cache-only output.
 5. The simulator uses small text inputs instead of downloading real
@@ -24,8 +25,12 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
 The proof starts a disposable Docker-container builder, retains local result
 files, per-phase logs and BuildKit metadata, and removes only its own builder.
 Run it on a local Docker host, not inside ARC. The dependency install uses a
-small text fingerprint rather than downloading real crates, while preserving
+small text input rather than downloading real crates, while preserving
 the production ordering: immutable versions first, source-sensitive inputs afterward.
+
+This fixture proves BuildKit lineage and phase barriers with synthetic inputs.
+Real Rust compilation and disk/S3 compiler reuse require separate cold, warm,
+cache-import, and cache-export builds with native cache-health statistics.
 
 `task infra:bake-cache:prove` includes this proof before the existing portable
 Zot scenarios. Those scenarios still cover Main/remote registry-cache behavior;
