@@ -304,42 +304,36 @@ COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 # Clean dummy workspace coverage before the independent source/test DAG.
 FROM builder-core-deps AS builder-native-source-base
-RUN cargo llvm-cov clean --workspace
+RUN CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace
 
 FROM builder-native-source-base AS builder-native-common-source
-COPY nook-app/nook-platform/nook-app-common/src nook-app-common/src
-COPY nook-app/nook-platform/nook-app-common/locales nook-app-common/locales
-RUN find nook-app-common/src -type f -name '*.rs' -exec touch {} +
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-app-common/ nook-app-common/
+RUN find nook-app-common -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-source-base AS builder-native-authenticator-source
-COPY nook-app/nook-platform/nook-authenticator-domain/src nook-authenticator-domain/src
-RUN find nook-authenticator-domain/src -type f -name '*.rs' -exec touch {} +
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+RUN find nook-authenticator-domain -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-source-base AS builder-native-replication-source
-COPY nook-app/nook-platform/nook-replication/src nook-replication/src
-RUN find nook-replication/src -type f -name '*.rs' -exec touch {} +
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-replication/ nook-replication/
+RUN find nook-replication -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-common-source AS builder-native-auth2-source
-COPY --from=builder-native-authenticator-source /meta-secret/nook/nook-app/nook-platform/nook-authenticator-domain/src nook-authenticator-domain/src
-COPY nook-app/nook-platform/nook-auth2/src nook-auth2/src
-COPY nook-app/nook-platform/nook-auth2/tests nook-auth2/tests
-RUN find nook-authenticator-domain/src nook-auth2 -type f -name '*.rs' -exec touch {} +
+COPY --from=builder-native-authenticator-source /meta-secret/nook/nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-auth2/ nook-auth2/
+RUN find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-auth2-source AS builder-native-event-log-source
-COPY --from=builder-native-replication-source /meta-secret/nook/nook-app/nook-platform/nook-replication/src nook-replication/src
-COPY nook-app/nook-platform/nook-event-log/src nook-event-log/src
-RUN find nook-replication/src nook-event-log/src -type f -name '*.rs' -exec touch {} +
+COPY --from=builder-native-replication-source /meta-secret/nook/nook-app/nook-platform/nook-replication/ nook-replication/
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-event-log/ nook-event-log/
+RUN find nook-replication nook-event-log -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-event-log-source AS builder-native-companion-source
-COPY nook-app/nook-platform/nook-companion-core/src nook-companion-core/src
-RUN find nook-companion-core/src -type f -name '*.rs' -exec touch {} +
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-companion-core/ nook-companion-core/
+RUN find nook-companion-core -type f -name '*.rs' -exec touch {} +
 
 FROM builder-native-companion-source AS builder-native-core-source
-COPY nook-app/nook-platform/nook-core/src nook-core/src
-COPY nook-app/nook-platform/nook-core/tests nook-core/tests
-COPY nook-app/nook-platform/nook-core/examples nook-core/examples
-COPY nook-app/nook-platform/nook-core/data nook-core/data
-COPY nook-app/nook-platform/nook-core/fixtures nook-core/fixtures
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-core/ nook-core/
 RUN find nook-core -type f -name '*.rs' -exec touch {} +
 
 # Test results retain unique raw profiles, JUnit and executable coverage maps.
@@ -354,7 +348,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-app-common-*.profraw /opt/nook/native-test-artifacts/nook-app-common/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-app-common/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-app-common/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-app-common/objects -type f -perm /111 -name 'nook_app_common-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-app-common/objects -type f -perm /111 -name 'nook_app_common-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-app-common/profiles /opt/nook/native-test-artifacts/nook-app-common/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-app-common/artifact-files.tsv
 
 FROM builder-native-authenticator-source AS builder-native-authenticator-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -367,7 +362,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-authenticator-domain-*.profraw /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-authenticator-domain/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-authenticator-domain/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -perm /111 -name 'nook_authenticator_domain-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -perm /111 -name 'nook_authenticator_domain-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-authenticator-domain/artifact-files.tsv
 
 FROM builder-native-replication-source AS builder-native-replication-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -380,7 +376,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-replication-*.profraw /opt/nook/native-test-artifacts/nook-replication/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-replication/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-replication/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-replication/objects -type f -perm /111 -name 'nook_replication-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-replication/objects -type f -perm /111 -name 'nook_replication-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-replication/artifact-files.tsv
 
 FROM builder-native-auth2-source AS builder-native-auth2-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -394,7 +391,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-auth2-*.profraw /opt/nook/native-test-artifacts/nook-auth2/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-auth2/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-auth2/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-auth2/objects -type f -perm /111 -name 'nook_auth2-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-auth2/objects -type f -perm /111 -name 'nook_auth2-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-auth2/profiles /opt/nook/native-test-artifacts/nook-auth2/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-auth2/artifact-files.tsv
 
 FROM builder-native-event-log-source AS builder-native-event-log-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -407,7 +405,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-event-log-*.profraw /opt/nook/native-test-artifacts/nook-event-log/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-event-log/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-event-log/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-event-log/objects -type f -perm /111 -name 'nook_event_log-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-event-log/objects -type f -perm /111 -name 'nook_event_log-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-event-log/profiles /opt/nook/native-test-artifacts/nook-event-log/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-event-log/artifact-files.tsv
 
 FROM builder-native-companion-source AS builder-native-companion-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -421,7 +420,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-companion-core-*.profraw /opt/nook/native-test-artifacts/nook-companion-core/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-companion-core/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-companion-core/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -perm /111 -name 'nook_companion_core-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -perm /111 -name 'nook_companion_core-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-companion-core/profiles /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-companion-core/artifact-files.tsv
 
 FROM builder-native-core-source AS builder-native-core-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -434,7 +434,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cp target/llvm-cov-target/nook-core-*.profraw /opt/nook/native-test-artifacts/nook-core/profiles/ \
     && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-core/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-core/objects/ {} + \
-    && test -n "$(find /opt/nook/native-test-artifacts/nook-core/objects -type f -perm /111 -name 'nook_core-*' -print -quit)"
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-core/objects -type f -perm /111 -name 'nook_core-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-core/profiles /opt/nook/native-test-artifacts/nook-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-core/artifact-files.tsv
 
 # LLVM merges every leaf's real profiles and namespaced executable maps using
 # the same absolute sources/toolchain/flags, including downstream contributions.
@@ -475,19 +476,18 @@ COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-te
 # Retain only the small, already-computed coverage payload as a BuildKit target.
 # PR verification uses it cache-only and never materializes a report artifact.
 FROM scratch AS coverage-export
-
 COPY --from=builder-debug /opt/nook/coverage/nook-core/ /
 
-# Optional real LLVM inputs; PR/Main keep the small coverage-export output.
+# Optional compact proof: JUnit and measured paths/sizes of real LLVM inputs.
 FROM scratch AS native-test-evidence
 COPY --from=builder-debug /opt/nook/coverage /coverage
-COPY --from=builder-native-common-test /opt/nook/native-test-artifacts/nook-app-common /native-tests/nook-app-common
-COPY --from=builder-native-authenticator-test /opt/nook/native-test-artifacts/nook-authenticator-domain /native-tests/nook-authenticator-domain
-COPY --from=builder-native-replication-test /opt/nook/native-test-artifacts/nook-replication /native-tests/nook-replication
-COPY --from=builder-native-auth2-test /opt/nook/native-test-artifacts/nook-auth2 /native-tests/nook-auth2
-COPY --from=builder-native-event-log-test /opt/nook/native-test-artifacts/nook-event-log /native-tests/nook-event-log
-COPY --from=builder-native-companion-test /opt/nook/native-test-artifacts/nook-companion-core /native-tests/nook-companion-core
-COPY --from=builder-native-core-test /opt/nook/native-test-artifacts/nook-core /native-tests/nook-core
+COPY --from=builder-native-common-test --parents /opt/nook/native-test-artifacts/./nook-app-common/junit.xml /opt/nook/native-test-artifacts/./nook-app-common/artifact-files.tsv /native-tests/
+COPY --from=builder-native-authenticator-test --parents /opt/nook/native-test-artifacts/./nook-authenticator-domain/junit.xml /opt/nook/native-test-artifacts/./nook-authenticator-domain/artifact-files.tsv /native-tests/
+COPY --from=builder-native-replication-test --parents /opt/nook/native-test-artifacts/./nook-replication/junit.xml /opt/nook/native-test-artifacts/./nook-replication/artifact-files.tsv /native-tests/
+COPY --from=builder-native-auth2-test --parents /opt/nook/native-test-artifacts/./nook-auth2/junit.xml /opt/nook/native-test-artifacts/./nook-auth2/artifact-files.tsv /native-tests/
+COPY --from=builder-native-event-log-test --parents /opt/nook/native-test-artifacts/./nook-event-log/junit.xml /opt/nook/native-test-artifacts/./nook-event-log/artifact-files.tsv /native-tests/
+COPY --from=builder-native-companion-test --parents /opt/nook/native-test-artifacts/./nook-companion-core/junit.xml /opt/nook/native-test-artifacts/./nook-companion-core/artifact-files.tsv /native-tests/
+COPY --from=builder-native-core-test --parents /opt/nook/native-test-artifacts/./nook-core/junit.xml /opt/nook/native-test-artifacts/./nook-core/artifact-files.tsv /native-tests/
 
 # -----------------------------------------------------------------------------
 

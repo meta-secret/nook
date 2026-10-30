@@ -22,22 +22,14 @@ export class NativeTestGraphContract {
     expect(testsStart).toBeGreaterThan(sourceStart);
     expect(reportStart).toBeGreaterThan(testsStart);
     const sources = product.slice(sourceStart, testsStart);
-    expect(sources).toContain("RUN cargo llvm-cov clean --workspace");
+    expect(sources).toContain(
+      "CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace",
+    );
     expect(sources).not.toMatch(/cargo (?:test|nextest|clippy|build)\b/);
-    expect(sources).not.toContain("coverage-floor.json");
+    expect(sources).toContain("--exclude=coverage-floor.json");
+    expect(sources).toContain("--exclude=.cortex");
+    expect(sources).toContain("--exclude=README*");
     expect(sources).not.toMatch(/(?:FROM|COPY --from=).*?-test\b/);
-    for (const input of [
-      "nook-app-common/locales",
-      "nook-auth2/tests",
-      "nook-core/tests",
-      "nook-core/examples",
-      "nook-core/data",
-      "nook-core/fixtures",
-    ]) {
-      expect(sources).toContain(
-        `COPY nook-app/nook-platform/${input} ${input}`,
-      );
-    }
     const report = product.slice(
       reportStart,
       product.indexOf("FROM scratch AS coverage-export"),
@@ -58,6 +50,9 @@ export class NativeTestGraphContract {
       { stage: "companion", package: "nook-companion-core" },
       { stage: "core", package: "nook-core" },
     ]) {
+      expect(sources).toContain(
+        `nook-app/nook-platform/${leaf.package}/ ${leaf.package}/`,
+      );
       const start = product.indexOf(
         `FROM builder-native-${leaf.stage}-source AS builder-native-${leaf.stage}-test`,
       );
