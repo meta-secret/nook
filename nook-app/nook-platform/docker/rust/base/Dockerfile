@@ -305,19 +305,19 @@ COPY nook-app/nook-platform/ nook-app/nook-platform/
 # Clean dummy workspace coverage before the independent source/test DAG.
 FROM builder-core-deps AS builder-native-source-base
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
+COPY nook-app/nook-platform/.cargo .cargo
+COPY nook-app/nook-platform/.config .config
+COPY nook-app/nook-platform/clippy.toml clippy.toml
 RUN CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace
 FROM builder-native-source-base AS builder-native-common-source
 COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-app-common/ nook-app-common/
 RUN find nook-app-common -type f -name '*.rs' -exec touch {} +
-
 FROM builder-native-source-base AS builder-native-authenticator-source
 COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
 RUN find nook-authenticator-domain -type f -name '*.rs' -exec touch {} +
-
 FROM builder-native-source-base AS builder-native-replication-source
 COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-replication/ nook-replication/
 RUN find nook-replication -type f -name '*.rs' -exec touch {} +
-
 FROM builder-native-common-source AS builder-native-auth2-source
 COPY --from=builder-native-authenticator-source /meta-secret/nook/nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
 COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-auth2/ nook-auth2/
