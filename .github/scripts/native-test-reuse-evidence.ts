@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { CacheTelemetry } from "../workflows/lib/cache-telemetry.mjs";
 
 enum NativeStepState {
@@ -113,9 +114,8 @@ class NativeBuildLog {
   private readonly text: string;
 
   constructor(private readonly directory: string) {
-    this.text = readFileSync(join(directory, "build.log"), "utf8").replace(
-      /\u001b\[[0-9;]*m/g,
-      "",
+    this.text = stripVTControlCharacters(
+      readFileSync(join(directory, "build.log"), "utf8"),
     );
   }
 
