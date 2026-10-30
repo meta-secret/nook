@@ -1,4 +1,5 @@
 import { chromium, expect, test } from '@playwright/test'
+import { approveExtensionConnect } from './helpers/extension-approval'
 import {
   EXTENSION_UNLOCK_TIMEOUT_MS,
   extensionDir,
@@ -112,7 +113,7 @@ test('the extension joins the keyring from the approval without reaching its pro
       consent.getByTestId('extension-connect-diagram-keyring'),
     ).toBeVisible()
 
-    await connectPage.getByTestId('approve-extension-device-btn').click()
+    await approveExtensionConnect(connectPage)
 
     // The approved vault is paired, and the keyring join did not fail.
     await expect
