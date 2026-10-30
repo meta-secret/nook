@@ -2,8 +2,9 @@
 
 The dependency-aligned native graph has one observed successful execution of
 all seven test leaves. That run passed 1,897 nextest tests and the unchanged
-combined coverage floors. The broader cache-reuse matrix is still running.
-Its results are not recorded as passing here.
+combined coverage floors. The partial cache-reuse matrix demonstrated test
+reuse and failure boundaries. Registry export/import verification remains
+incomplete, so the overall proof is not recorded as passing here.
 
 The [engineering harness](engineering-harness.md#native-rust-source-and-test-reuse)
 owns the source-input, test-result, and coverage-merge architecture.
@@ -46,23 +47,25 @@ retained its existing 90% floor:
 - **`nook-companion-core`:** 518 tests passed, 96.01% line coverage.
 - **`nook-core`:** 982 tests passed, 94.31% line coverage.
 
-## Cache matrix in progress
+## Cache matrix pending final verification
 
 [Run 41029968770](https://github.com/meta-secret/nook/actions/runs/41029968770)
-targets source `171af1b72919cb0f2730639cbf07db451d84d30b`.
-Its configured sequence contains eight real BuildKit solves:
+used source `171af1b72919cb0f2730639cbf07db451d84d30b`.
+It failed at registry-publication verification. Its downloaded artifact records
+these actual observations:
 
-1. Cold test-result stages with the reusable toolchain and dependency foundation.
-2. An unchanged warm replay.
-3. An excluded documentation-only change.
-4. A source change in `nook-replication`.
-5. A `nook-core` floor-only change to 100%, with failure expected.
-6. A real failing Cargo-discovered replication integration test.
-7. Restored source exported to its ordinary exact branch cache ref.
-8. Registry import through the existing persistent BuildKit worker.
+- **Cold test results:** All seven test leaves executed and reported `DONE`. The toolchain and dependency foundation remained reusable.
+- **Unchanged warm replay:** All seven test leaves were `CACHED`.
+- **Excluded documentation edit:** All seven test leaves were `CACHED`.
+- **Replication source edit:** Common, authenticator, and auth2 test leaves were `CACHED`. Replication, event-log, companion, and core test leaves executed and reported `DONE`.
+- **Core floor raised to 100%:** All seven test leaves were `CACHED`. The final combined coverage gate failed as expected.
+- **New Cargo-discovered failing test:** The replication integration test failed at runtime. Dependent work was canceled.
+- **Restored-source export attempt:** All seven test leaves were `CACHED` and local result export succeeded. No registry-cache export vertex was emitted, and the expected cache manifest was absent.
+- **Registry import:** Not run after the publication check failed.
 
-These are case definitions, not successful outcomes. Final cache-state,
-failure-boundary, export, and import observations remain pending.
+The final corrected export/import run remains pending. The partial artifact has
+116 files: 3,115,175 compressed bytes and 27,968,797 uncompressed bytes.
+Its contents retain compact logs, metadata, coverage, JUnit, and file inventories.
 
 ## Evidence boundary and limits
 
