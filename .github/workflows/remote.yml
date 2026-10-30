@@ -186,6 +186,7 @@ jobs:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
           TYPE_CHECK_REPORT_DIR: ${{ runner.temp }}/nook-type-check-report
           TYPE_CHECK_ARTIFACT_NAME: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
+          NATIVE_TEST_PROOF_DIR: ${{ runner.temp }}/nook-native-test-reuse
           DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && inputs.deployment_tag || '' }}
           HEAD_SHA: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && (inputs.source_sha || github.sha) || '' }}
           CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_PAGES_TOKEN || '' }}
@@ -210,6 +211,14 @@ jobs:
         with:
           name: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/nook-type-check-report
+          if-no-files-found: warn
+          retention-days: 15
+      - name: Preserve native test reuse evidence
+        if: always() && (inputs.tasks || inputs.task) == 'rust:native-test-evidence'
+        uses: actions/upload-artifact@v7
+        with:
+          name: remote-native-test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-native-test-reuse/evidence
           if-no-files-found: warn
           retention-days: 15
 
