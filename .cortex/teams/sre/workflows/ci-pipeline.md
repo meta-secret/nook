@@ -436,6 +436,9 @@ for pool ceilings, queue behavior, retained caches, and rollout constraints.
   or transfer registry cache.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
   verification/test failures at the joined publication boundary.
+- `task remote TASK_NAME=infra:bake-cache:prove-compiler` requests the
+  [real Rust/S3 compiler-cache proof](../../../../infra/sim/bake-cache/README.md#real-rust-compiler-cache-proof).
+  Its same-shard cache import does not prove fresh-node portability.
 - Compare hosted run timings before claiming a measured improvement.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its

@@ -298,15 +298,16 @@ legacy registered `nook` runner is not used.
   verification runs both phases with no registry exporter while retaining
   sccache access. No manual version suffix or custom dependency fingerprint
   selects this cache; BuildKit invalidates from the real Docker inputs.
-- Cache telemetry schema version 2 records registry-export bytes as a closed
+- Cache telemetry schema version 3 requires complete measured local/S3 counters.
+  It records registry-export bytes as a closed
   measurement state. A byte count is `measured` only when BuildKit emits a
   structured status or plain-progress transfer count, including an observed
   zero. A completed export without either counter is `unavailable` with reason
   `buildkit_did_not_emit_byte_count`; it is never reported as numeric zero.
   Export completion and manifest evidence remain authoritative independently
-  of byte-count availability. Version 1 artifacts are rejected rather than
-  migrated because telemetry artifacts are per-run observations, not durable
-  state.
+  of byte-count availability. Version 2 and older artifacts are rejected rather
+  than migrated because telemetry artifacts are per-run observations, not
+  durable state.
 - Delivery CI persists the toolchain in `nook-rust-base-v2`.
 - Native dependencies use `nook-rust-deps-v4`.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.
@@ -334,9 +335,10 @@ legacy registered `nook` runner is not used.
   Per-level S3 writes supply remote-publication evidence.
   The existing remote backend probe remains independent of local reuse.
   Reports omit backend locations and credential values.
-- The collector emits a local/remote breakdown only when every included report
-  measured the complete counter set.
-  An absent breakdown means unmeasured, never a numeric zero.
+- Every supported reporter measures the complete local/remote counter set.
+  Schema 3 requires that breakdown in each per-run artifact.
+- A summary with `report_count=0` has `counter_reliability=unavailable`.
+  Its zero observed totals do not establish any cache hits or writes.
 - Credentialed trusted Rust/WASM jobs require the healthy remote compiler cache
   before compilation and fail closed when credentials or sccache are
   unavailable. A first cold publisher may miss while recording authoritative
@@ -353,6 +355,8 @@ The retained Cargo target artifacts remain usable even when a disk backfill is
 absent. Actual post-snapshot hit measurements establish practical cache warming.
 Cold, warm, cache-import, and cache-export builds remain required evidence.
 They must retain real contexts, build arguments, outputs, and statistics.
+The [real compiler cache proof](../../../../../infra/sim/bake-cache/README.md#real-rust-compiler-cache-proof)
+defines the Rust/S3 checks and their portability limit.
 
 ### Main Cache Visibility
 

@@ -315,6 +315,12 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_wasm_fingerprint_closed_allowlist`
     - `theorem_wasm_and_native_publish_staging`
 
+    Request the real compiler-cache proof with
+    `task remote TASK_NAME=infra:bake-cache:prove-compiler`.
+    Its [Rust/S3 checks and retained artifacts](../../../../infra/sim/bake-cache/README.md#real-rust-compiler-cache-proof)
+    complement the synthetic lineage scenarios below.
+    Same-shard import results do not establish fresh-node portability.
+
     Runtime publication proof for WASM dependencies remains Main
     `verify-wasm-gha-cache.sh`. It publishes through the selected persistent
     ARC BuildKit shard, then reads every exported Zot manifest and blob to

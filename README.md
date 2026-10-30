@@ -633,6 +633,12 @@ Logs and BuildKit metadata remain in the printed temporary output directory.
 The existing `task infra:bake-cache:prove` runs this local-cache proof before
 its registry-portability scenarios. No custom cache-validity model is used.
 
+`task remote TASK_NAME=infra:bake-cache:prove-compiler` requests the real Rust
+disk/S3 cache proof on the selected persistent BuildKit shard. Its
+[checks and retained artifacts](infra/sim/bake-cache/README.md#real-rust-compiler-cache-proof)
+cover compiler reuse, source replacement, sibling isolation, and actual cache
+export/import. A same-shard import does not prove fresh-node portability.
+
 Before enabling the new PR path, publish the source-free runner through the
 trusted remote ARC workflow with `task remote TASK_NAME=ci:pr:runner:publish`.
 The workflow uses package-write only for this publication; PR jobs receive

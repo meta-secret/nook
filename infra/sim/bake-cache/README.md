@@ -1,5 +1,7 @@
 # Docker-backed cache proofs
 
+## Synthetic PR lineage proof
+
 `task infra:bake-cache:prove-pr` models the consolidated PR lifecycle with real
 BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
 
@@ -38,6 +40,8 @@ they are not part of the PR validation path. The separate Kubernetes simulator
 continues to cover node-local routing, storage persistence and cross-node cache
 portability.
 
+### Warm-rebuild evidence
+
 The proof fails if a warm rebuild executes the dependency marker instead of
 reporting that exact BuildKit vertex as `CACHED`.
 
@@ -47,3 +51,30 @@ with the preceding run on the same ARC node. A warm run must show cached
 BuildKit vertices without Cargo dependency downloads or Rust dependency
 compilation. Runner placement is part of the evidence: results from different
 nodes do not prove or disprove reuse of a node-local BuildKit cache.
+
+## Real Rust compiler cache proof
+
+Request `infra:bake-cache:prove-compiler` through the existing remote workflow:
+
+```sh
+task remote TASK_NAME=infra:bake-cache:prove-compiler
+```
+
+The task uses real Rust crates on the selected persistent BuildKit shard with
+the existing S3 credentials. It needs no Docker runtime or runner changes.
+Its fixture checks these observable outcomes:
+
+- Strict S3 writes and subsequent S3 compiler hits.
+- Local compiler hits after inheriting a parent snapshot without Cargo outputs.
+- Real source behavior after replacing placeholder crate roots.
+- Independent writable caches in sibling child stages.
+- Cold and warm builds, followed by actual local-cache export and import.
+
+Logs, BuildKit metadata, outputs, and cache-health statistics remain under
+`RUNNER_TEMP/nook-compiler-cache-proof`. The remote workflow uploads that
+directory when the proof produced it.
+
+An import on the same shard demonstrates reuse on that shard. It does not
+establish fresh-node portability. Record actual results and timings before
+claiming a speed or storage improvement. The synthetic PR lineage proof above
+does not supply this Rust/compiler-cache evidence.
