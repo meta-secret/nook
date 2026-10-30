@@ -79,7 +79,7 @@ interface NativeProofCases {
   readonly documentation: readonly NativeStep[];
   readonly replication: readonly NativeStep[];
   readonly floor_failure: MeasuredFloorFailure;
-  readonly actual_test_failure: NativeStep;
+  readonly actual_test_failure: readonly NativeStep[];
   readonly cold_sccache: NativeSccacheSummary;
   readonly changed_source_sccache: NativeSccacheSummary;
   readonly measured_llvm_artifacts: readonly NativeArtifactMeasurement[];
@@ -119,28 +119,25 @@ class NativeBuildLog {
     );
   }
 
-  step(stage: NativeStage): NativeStep {
+  steps(stage: NativeStage): NativeStep[] {
     const headers = this.text.matchAll(
       new RegExp(`^(#[0-9]+) \\[[^\\]]*\\b${stage}\\s+[0-9]+/[0-9]+\\] RUN\\b`, "gm"),
     );
     const vertices = new Set(
       Array.from(headers).flatMap((match) => match.slice(1, 2)),
     );
-    assert.equal(vertices.size, 1, `expected one actual RUN for ${stage}`);
-    for (const vertex of vertices) {
-      return { stage, vertex, state: this.terminal(vertex) };
-    }
-    throw new Error(`actual BuildKit vertex missing for ${stage}`);
+    assert(vertices.size > 0, `actual BuildKit RUN missing for ${stage}`);
+    return Array.from(vertices, (vertex) => ({ stage, vertex, state: this.terminal(vertex) }));
   }
 
   private terminal(vertex: string): NativeStepState {
     const terminals = this.text.matchAll(
       new RegExp(`^${vertex} (CACHED|DONE|ERROR)\\b`, "gm"),
     );
-    for (const token of Array.from(terminals).flatMap((match) => match.slice(1, 2))) {
-      const states = Object.values(NativeStepState).filter((state) => String(state) === token);
-      for (const state of states) return state;
-    }
+    const tokens = new Set(Array.from(terminals).flatMap((match) => match.slice(1, 2)));
+    assert.equal(tokens.size, 1, `actual terminal BuildKit statuses must agree for ${vertex}`);
+    const states = Object.values(NativeStepState).filter((state) => tokens.has(String(state)));
+    for (const state of states) return state;
     throw new Error(`actual terminal BuildKit status missing for ${vertex}`);
   }
 
@@ -150,21 +147,23 @@ class NativeBuildLog {
     return status;
   }
 
-  assertActualTestFailure(): NativeStep {
+  assertActualTestFailure(): NativeStep[] {
     assert.notEqual(this.exitStatus(), 0);
     assert.match(
       this.text,
       /(?:FAIL|FAILED)[^\n]*native_test_reuse_expected_failure|native_test_reuse_expected_failure[^\n]*(?:FAIL|FAILED)/,
       "the negative case must fail an executed Rust test, not compilation or Clippy",
     );
-    const step = this.step(NativeStage.Replication);
-    assert.equal(step.state, NativeStepState.Failed);
-    return step;
+    const steps = this.steps(NativeStage.Replication);
+    for (const step of steps) assert.equal(step.state, NativeStepState.Failed);
+    return steps;
   }
 
   measuredFloorFailure(tests: readonly NativeStep[]): MeasuredFloorFailure {
     assert.notEqual(this.exitStatus(), 0);
-    assert.equal(this.step(NativeStage.Coverage).state, NativeStepState.Failed);
+    for (const step of this.steps(NativeStage.Coverage)) {
+      assert.equal(step.state, NativeStepState.Failed);
+    }
     // Read the actual final LLVM package table; do not combine percentages.
     const totals = Array.from(this.text.matchAll(/^#[0-9]+\s+[0-9.]+\s+TOTAL\b[^\n]*/gm));
     assert.equal(totals.length, 7, "all seven actual package floor reports must complete");
@@ -217,7 +216,7 @@ class NativeTestReuseEvidence {
     assert.equal(log.exitStatus(), 0, `${name} must be an actual successful solve`);
     assert(statSync(join(this.directory, name, "build-metadata.json")).size > 0);
     assert(statSync(join(this.directory, name, "result/coverage/nook-core/summary.json")).size > 0);
-    return this.leaves.map((leaf) => log.step(leaf.stage));
+    return this.leaves.flatMap((leaf) => log.steps(leaf.stage));
   }
 
   private assertCached(steps: readonly NativeStep[]): void {
@@ -281,7 +280,7 @@ class NativeTestReuseEvidence {
     const changedSccache = new NativeBuildLog(join(this.directory, NativeProofCase.Replication)).sccache();
     assert(changedSccache.cache_hits > 0, "changed-source zero-hit compiler reuse is terminal");
     const floor = new NativeBuildLog(join(this.directory, NativeProofCase.FloorFailure));
-    const floorTests = this.leaves.map((leaf) => floor.step(leaf.stage));
+    const floorTests = this.leaves.flatMap((leaf) => floor.steps(leaf.stage));
     this.assertCached(floorTests);
     const floorFailure = floor.measuredFloorFailure(floorTests);
     const testFailure = new NativeBuildLog(join(this.directory, NativeProofCase.TestFailure)).assertActualTestFailure();
