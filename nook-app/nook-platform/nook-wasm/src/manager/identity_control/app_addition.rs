@@ -42,6 +42,8 @@ impl NookVaultManager {
         signing_public_key: String,
         label: String,
     ) -> Result<bool, JsError> {
+        // Only the Simple app adds the extension; Sentinel never connects to it.
+        self.application.validate_extension_keyring_approval()?;
         let app_id = AppId::parse(&app_id)?;
         let encryption_public_key = DevicePublicKey::parse(&encryption_public_key)?;
         if encryption_public_key.try_app_id()? != app_id {

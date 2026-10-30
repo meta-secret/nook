@@ -160,7 +160,7 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.meta-co
 - reusable and public object contracts use semantic types or interfaces;
   clear one-use local literals and inline shapes are permitted
 
-Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
+Enforced by `task preflight:typescript-state`, Loom oxlint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.
 
 Decode errors include `explanation.unifiedDiff` from the `diff` (jsdiff)

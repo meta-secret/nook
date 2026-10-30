@@ -3,7 +3,10 @@ import { join, posix } from 'node:path';
 
 import { expect, setDefaultTimeout, test } from 'bun:test';
 
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import {
   type AnalyzeExecutableSkillSourceRequest,
@@ -16,6 +19,7 @@ import {
   ExecutableSkillCheckout,
   ExecutableTrackedPackages,
 } from '../src/executable-skills/repository.ts';
+import { SettledRejection } from './settled-rejection.ts';
 
 // Each case parses or ranks a large fixture; release and PR verification run
 // every gate in parallel in one container, where that can pass five seconds.
@@ -26,20 +30,20 @@ export class SkillApplicationSourceBoundaryScenario {
     private readonly request: AnalyzeExecutableSkillSourceRequest,
   ) {}
 
-  static analyzeSkillHostSource(request: AnalyzeExecutableSkillSourceRequest) {
+  static async analyzeSkillHostSource(
+    request: AnalyzeExecutableSkillSourceRequest,
+  ) {
     return new SkillApplicationSourceBoundaryScenario(request).execute();
   }
 
-  private execute() {
+  private async execute() {
     const request = this.request;
     const { relativePath, source } = request;
-    const sourceFile = ts.createSourceFile(
-      relativePath,
-      source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: relativePath,
+      kind: TypeScriptSourceKind.TypeScript,
+      text: source,
+    });
     const retained = source.split('');
     const processUses: string[] = [];
     const erase = (node: ts.Node): string[] =>
@@ -133,7 +137,7 @@ export class SkillApplicationSourceBoundaryScenario {
         processUses.push(use);
         retained.splice(node.getStart(), node.getWidth(), ...'allowed');
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     if (
@@ -149,20 +153,18 @@ export class SkillApplicationSourceBoundaryScenario {
         .replace(/\bObject\.entries\b/gu, 'Object.values')
         .replace(/\binstanceof Object\b/gu, 'instanceof SafeObject'),
     };
-    return ExecutableSkillSource.analyze(analysisRequest);
+    return await ExecutableSkillSource.analyze(analysisRequest);
   }
 
-  static analyzeDocumentMapSource(
+  static async analyzeDocumentMapSource(
     request: AnalyzeExecutableSkillSourceRequest,
   ) {
     const { relativePath, source } = request;
-    const sourceFile = ts.createSourceFile(
-      relativePath,
-      source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: relativePath,
+      kind: TypeScriptSourceKind.TypeScript,
+      text: source,
+    });
     const retained = source.split('');
     const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
       if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
@@ -188,19 +190,19 @@ export class SkillApplicationSourceBoundaryScenario {
         return (
           clause.name?.text === 'path' &&
           !clause.namedBindings &&
-          !clause.isTypeOnly
+          !TypeScriptSyntax.isTypeOnlyImportClause(clause)
         );
       if (specifier === 'github-slugger')
         return (
           clause.name?.text === 'GithubSlugger' &&
           !clause.namedBindings &&
-          !clause.isTypeOnly
+          !TypeScriptSyntax.isTypeOnlyImportClause(clause)
         );
       if (specifier === 'mdast-util-from-markdown') {
         const bindings = clause.namedBindings;
         return Boolean(
           !clause.name &&
-          !clause.isTypeOnly &&
+          !TypeScriptSyntax.isTypeOnlyImportClause(clause) &&
           bindings &&
           ts.isNamedImports(bindings) &&
           bindings.elements.length === 1 &&
@@ -208,7 +210,11 @@ export class SkillApplicationSourceBoundaryScenario {
           !bindings.elements[0].propertyName,
         );
       }
-      if (specifier !== 'mdast' || !clause.isTypeOnly || clause.name)
+      if (
+        specifier !== 'mdast' ||
+        !TypeScriptSyntax.isTypeOnlyImportClause(clause) ||
+        clause.name
+      )
         return false;
       const bindings = clause.namedBindings;
       const allowedTypes = new Set(
@@ -235,11 +241,11 @@ export class SkillApplicationSourceBoundaryScenario {
         retained.fill(' ', node.getFullStart(), node.getEnd());
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     try {
-      return ExecutableSkillSource.analyze({
+      return await ExecutableSkillSource.analyze({
         relativePath,
         source: retained.join('').replace(/\bpath\b/gu, 'safePath'),
       });
@@ -372,7 +378,7 @@ test('all tracked executable application sources pass the AST capability gate', 
     if (profile === false) throw new Error(`Missing source profile: ${path}`);
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
     const analysisRequest = { relativePath: path, source };
-    const analysis = profile(analysisRequest);
+    const analysis = await profile(analysisRequest);
     for (const specifier of analysis.moduleSpecifiers) {
       const dependency = posix.normalize(
         posix.join(posix.dirname(path), specifier),
@@ -422,10 +428,11 @@ test('rejects dangerous capabilities from every host layer', async () => {
   for (const [path, source] of fixtures) {
     const request = { relativePath: path, source };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillApplicationSourceBoundaryScenario.analyzeSkillHostSource(request),
+      ),
       path,
-    ).toThrow();
+    ).not.toBe(false);
   }
 });
 

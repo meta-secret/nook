@@ -34,20 +34,20 @@ import type { AuditProjectContextsRequest } from '../project-context/audit.ts';
 export class ModuleExpertContract {
   private constructor(private readonly request: AuditModuleExpertsArgs) {}
 
-  static auditModuleExperts(
+  static async auditModuleExperts(
     args: AuditModuleExpertsArgs,
-  ): ModuleExpertAuditReport {
+  ): Promise<ModuleExpertAuditReport> {
     return new ModuleExpertContract(args).execute();
   }
 
-  private execute(): ModuleExpertAuditReport {
+  private async execute(): Promise<ModuleExpertAuditReport> {
     const args = this.request;
     const findings: ModuleExpertAuditFinding[] = [];
     const context: ModuleExpertValidationContext = {
       findings,
       repoRoot: args.repoRoot,
     };
-    ModuleExpertContract.validateProfiles(context);
+    await ModuleExpertContract.validateProfiles(context);
     const liveRoots = ModuleExpertContract.liveProductionModuleRoots(context);
     const coverageArgs: ValidateProductionCoverageArgs = {
       context,
@@ -97,9 +97,9 @@ export class ModuleExpertContract {
     return findings;
   }
 
-  private static validateProfiles(
+  private static async validateProfiles(
     context: ModuleExpertValidationContext,
-  ): void {
+  ): Promise<void> {
     const names = new Set<string>();
     const moduleOwners = new Map<string, string>();
     for (const profile of MODULE_EXPERT_CATALOG) {
@@ -135,7 +135,7 @@ export class ModuleExpertContract {
     context.findings.push(
       ...ModuleExpertSnapshotScope.audit(snapshotScopeArgs),
     );
-    ModuleExpertContract.validateInternalApiProfile(context);
+    await ModuleExpertContract.validateInternalApiProfile(context);
   }
 
   private static validateProfilePaths(args: ValidateProfilePathsArgs): void {
@@ -290,9 +290,9 @@ export class ModuleExpertContract {
     }
   }
 
-  private static validateInternalApiProfile(
+  private static async validateInternalApiProfile(
     context: ModuleExpertValidationContext,
-  ): void {
+  ): Promise<void> {
     const profile = MODULE_EXPERT_CATALOG.find(
       (candidate) => candidate.name === 'internal_api_expert',
     );
@@ -306,7 +306,7 @@ export class ModuleExpertContract {
     }
     const consumerScopeArgs: AuditInternalApiExpertConsumerScopeArgs = {
       discoveredConsumerPaths:
-        InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+        await InternalApiConsumerScope.discoverInternalApiConsumerPaths(
           context.repoRoot,
         ),
       profile,

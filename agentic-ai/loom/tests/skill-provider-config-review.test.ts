@@ -4,11 +4,12 @@ import { SkillProviderConfigRuntimeScenario } from './skill-provider-config-runt
 import { SkillProviderConfigTestHelpersScenario } from './skill-provider-config-test-helpers.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
+import { SettledRejection } from './settled-rejection.ts';
 
 const PROVIDER =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts';
 
-test('static Node eval cannot erase repository execution', () => {
+test('static Node eval cannot erase repository execution', async () => {
   expect(() =>
     SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
       `node -e "import('./scripts/facade.mjs')"`,
@@ -29,7 +30,7 @@ test('static Node eval cannot erase repository execution', () => {
   }
 });
 
-test('configuration roots receive the executable loader boundary', () => {
+test('configuration roots receive the executable loader boundary', async () => {
   const sources = new Map([
     [
       'vite.config.ts',
@@ -44,12 +45,14 @@ test('configuration roots receive the executable loader boundary', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('root violates runtime boundary');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('root violates runtime boundary');
 });
 
-test('configuration roots cannot recover ambient loader aliases', () => {
+test('configuration roots cannot recover ambient loader aliases', async () => {
   for (const source of [
     "const get = process['getBuiltinModule']; const {createRequire}=get('node:module'); createRequire(import.meta.url)('./scripts/facade.cjs');",
     "const target='./scripts/facade.cjs'; require(target);",
@@ -63,13 +66,15 @@ test('configuration roots cannot recover ambient loader aliases', () => {
       symlinkPaths: new Set(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       source,
-    ).toThrow('root violates runtime boundary');
+    ).toMatch('root violates runtime boundary');
   }
 });
 
-test('configuration roots reject computed dynamic imports', () => {
+test('configuration roots reject computed dynamic imports', async () => {
   const sources = new Map([
     [
       'vite.config.ts',
@@ -84,9 +89,11 @@ test('configuration roots reject computed dynamic imports', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('root violates runtime boundary');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('root violates runtime boundary');
 });
 
 test('production hydration loads every statically reached shell target', async () => {
@@ -128,7 +135,7 @@ test('production hydration loads every statically reached shell target', async (
   expect(unreadPaths).toEqual(new Set());
 });
 
-test('Node action subprocesses join the runnable configuration graph', () => {
+test('Node action subprocesses join the runnable configuration graph', async () => {
   const sources = new Map([
     [
       '.github/actions/example/action.yml',
@@ -146,14 +153,16 @@ test('Node action subprocesses join the runnable configuration graph', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(graph),
-  ).toThrow(
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(graph),
+    ),
+  ).toMatch(
     /(?:Unauthorized application edge|reaches provider|runtime boundary)/u,
   );
 });
 
-test('shell runtimes audit tracked scripts regardless of suffix', () => {
+test('shell runtimes audit tracked scripts regardless of suffix', async () => {
   const sources = new Map([
     ['package.json', '{"scripts":{"audit":"bash scripts/facade.bash"}}'],
     ['scripts/facade.bash', `bun ${PROVIDER}`],
@@ -165,12 +174,14 @@ test('shell runtimes audit tracked scripts regardless of suffix', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow(/(?:reaches provider|runtime boundary)/u);
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch(/(?:reaches provider|runtime boundary)/u);
 });
 
-test('find command-executing predicates fail closed', () => {
+test('find command-executing predicates fail closed', async () => {
   for (const [runtime, predicate] of [
     ['find', '-exec'],
     ['/usr/bin/find', '-execdir'],
@@ -190,13 +201,15 @@ test('find command-executing predicates fail closed', () => {
       symlinkPaths: new Set(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       runtime,
-    ).toThrow('Find command-executing predicate is forbidden');
+    ).toMatch('Find command-executing predicate is forbidden');
   }
 });
 
-test('scalar Task preconditions join the runnable graph', () => {
+test('scalar Task preconditions join the runnable graph', async () => {
   const sources = new Map([
     [
       'Taskfile.yml',
@@ -211,12 +224,14 @@ test('scalar Task preconditions join the runnable graph', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow(/(?:reaches provider|runtime boundary)/u);
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch(/(?:reaches provider|runtime boundary)/u);
 });
 
-test('nested Vite and Svelte roots preserve their runtime cwd', () => {
+test('nested Vite and Svelte roots preserve their runtime cwd', async () => {
   for (const root of ['nested/vite.config.ts', 'nested/svelte.config.js']) {
     const sources = new Map([
       [
@@ -234,13 +249,15 @@ test('nested Vite and Svelte roots preserve their runtime cwd', () => {
       symlinkPaths: new Set(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       root,
-    ).toThrow(/(?:reaches provider|runtime boundary)/u);
+    ).toMatch(/(?:reaches provider|runtime boundary)/u);
   }
 });
 
-test('github-script module loads and subprocesses join the graph', () => {
+test('github-script module loads and subprocesses join the graph', async () => {
   for (const script of [
     'require(`${process.env.GITHUB_WORKSPACE}/scripts/facade.cjs`)',
     "const {execFileSync}=require('node:child_process'); execFileSync('bun',['scripts/facade.cjs']);",
@@ -258,13 +275,15 @@ test('github-script module loads and subprocesses join the graph', () => {
       symlinkPaths: new Set(),
     };
     expect(
-      () => SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+      ),
       script,
-    ).toThrow(/(?:reaches provider|runtime boundary)/u);
+    ).toMatch(/(?:reaches provider|runtime boundary)/u);
   }
 });
 
-test('github-script rejects dynamic module loading', () => {
+test('github-script rejects dynamic module loading', async () => {
   const workflow = `jobs:\n  audit:\n    steps:\n      - uses: actions/github-script@v9\n        with:\n          script: require(modulePath)`;
   const sources = new Map([['.github/workflows/audit.yml', workflow]]);
   const graph: ConfigurationScriptGraph = {
@@ -273,7 +292,9 @@ test('github-script rejects dynamic module loading', () => {
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('Dynamic github-script module load is forbidden');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
+    ),
+  ).toMatch('Dynamic github-script module load is forbidden');
 });

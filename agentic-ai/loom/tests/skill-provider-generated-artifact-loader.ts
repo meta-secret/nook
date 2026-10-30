@@ -1,19 +1,20 @@
 import { posix } from 'node:path';
 
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptProgram } from '../src/lib/typescript/program.ts';
 
 import type { BoundedPackageLoaderInspection } from './skill-provider-bounded-package-loader.ts';
 
 export class SkillProviderGeneratedArtifactLoaderScenario {
   constructor(private readonly inspection: BoundedPackageLoaderInspection) {}
 
-  specialize(): string {
-    const sourceFile = ts.createSourceFile(
-      this.inspection.path,
-      this.inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
+  async specialize(): Promise<string> {
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: this.inspection.path,
+      kind: TypeScriptProgram.sourceKindOf(this.inspection.path),
+      text: this.inspection.source,
+    });
     const declarations = new Map<string, ts.VariableDeclaration>();
     const imports: ts.CallExpression[] = [];
     const visit = (node: ts.Node): void => {
@@ -26,7 +27,7 @@ export class SkillProviderGeneratedArtifactLoaderScenario {
       ) {
         imports.push(node);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     if (imports.length !== 1) return this.inspection.source;
@@ -105,7 +106,7 @@ export class SkillProviderGeneratedArtifactLoaderScenario {
       !root ||
       !ts.isIdentifier(root) ||
       !artifact ||
-      !ts.isStringLiteralLike(artifact)
+      !ts.isStringLiteralLikeNode(artifact)
     ) {
       return false;
     }
@@ -126,7 +127,7 @@ export class SkillProviderGeneratedArtifactLoaderScenario {
       !ts.isIdentifier(initializer.expression) ||
       initializer.expression.text !== 'join' ||
       !outputArgument ||
-      !ts.isStringLiteralLike(outputArgument)
+      !ts.isStringLiteralLikeNode(outputArgument)
     )
       return false;
     return posix.normalize(outputArgument.text.replace(/^[^/]+\//u, ''));
@@ -136,7 +137,7 @@ export class SkillProviderGeneratedArtifactLoaderScenario {
     let count = 0;
     const visit = (node: ts.Node): void => {
       if (ts.isIdentifier(node) && node.text === inspection.name) count += 1;
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(inspection.sourceFile);
     return count;

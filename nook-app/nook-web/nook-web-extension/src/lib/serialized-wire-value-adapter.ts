@@ -17,12 +17,6 @@ export class SerializedWireValueAdapter {
     if (!value || typeof value !== 'object') {
       return { kind: SerializedWireSnapshotKind.Missing }
     }
-    if ('eventLogRecords' in value) {
-      const snapshot = JSON.stringify(value.eventLogRecords)
-      return typeof snapshot === 'string'
-        ? { kind: SerializedWireSnapshotKind.Available, value: snapshot }
-        : { kind: SerializedWireSnapshotKind.Missing }
-    }
     if (!('payload' in value)) {
       return { kind: SerializedWireSnapshotKind.Missing }
     }

@@ -6,6 +6,7 @@ import ts from "typescript-eslint";
 import { noEmptySuccessContractRule } from "./no-empty-success-contract-rule.js";
 import {
   concreteObjectTypeRules,
+  lintIgnorePatterns,
   typedApiRules,
   typedApiSourceFiles,
   untrustedInputAdapterFiles,
@@ -13,8 +14,12 @@ import {
 } from "./typed-api-rules.js";
 import { noRawObjectArgumentsRule } from "./no-raw-object-arguments-rule.js";
 
-export { noEmptySuccessContractRule, noRawObjectArgumentsRule };
-
+// ESLint lints only `.svelte` components: oxlint (`oxlint.config.ts`) owns
+// every .ts/.js/.mjs/.cjs file. Oxlint cannot parse Svelte templates, and the
+// Svelte parser needs the TypeScript 6 program from typescript-eslint, so the
+// template rules (including the `svelte/no-at-html-tags` XSS guard), the
+// type-aware rules on `<script>` blocks, and the Nook rules stay here.
+//
 // Security contract vocabulary retained for repository policy verification:
 // '@typescript-eslint/await-thenable': 'error'
 // '@typescript-eslint/no-floating-promises': 'error'
@@ -32,13 +37,7 @@ const nookTypedApiPlugin = {
 
 export default [
   {
-    ignores: [
-      "**/dist/**",
-      "**/dist-prod/**",
-      "**/node_modules/**",
-      "nook-web-shared/src/vault-app/lib/nook-wasm*/**",
-      "nook-web-shared/src/extension/nook-companion-wasm/**",
-    ],
+    ignores: [...lintIgnorePatterns, "**/*.{js,mjs,cjs,ts,mts,cts}"],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
@@ -50,51 +49,11 @@ export default [
     },
   },
   {
-    files: ["nook-web-extension/src/**/*.{ts,svelte}", "src/**/*.{ts,svelte}"],
+    files: ["nook-web-extension/src/**/*.svelte", "src/**/*.svelte"],
     languageOptions: {
       globals: {
         ...globals.webextensions,
         chrome: "readonly",
-      },
-    },
-  },
-  {
-    files: [
-      "eslint.config.js",
-      "**/eslint.config.js",
-      "**/svelte.config.js",
-      "*.js",
-      "**/scripts/**/*.{js,mjs,cjs}",
-      "**/e2e/**/*.{js,mjs,cjs}",
-    ],
-    languageOptions: {
-      globals: globals.node,
-    },
-  },
-  {
-    files: ["**/*.{ts,js,mjs,cjs}"],
-    rules: {
-      "no-restricted-syntax": typedApiRules["no-restricted-syntax"],
-      "@typescript-eslint/no-unsafe-assignment": "error",
-      "@typescript-eslint/no-unsafe-argument": "error",
-      "@typescript-eslint/no-unsafe-call": "error",
-      "@typescript-eslint/no-unsafe-member-access": "error",
-      "@typescript-eslint/no-unsafe-return": "error",
-      "@typescript-eslint/no-unsafe-type-assertion": "error",
-      "@typescript-eslint/no-non-null-assertion": "error",
-      "@typescript-eslint/await-thenable": "error",
-      "@typescript-eslint/no-floating-promises": "error",
-      "@typescript-eslint/no-misused-promises": "error",
-      "@typescript-eslint/switch-exhaustiveness-check": [
-        "error",
-        { considerDefaultExhaustiveForUnions: false },
-      ],
-    },
-    languageOptions: {
-      parser: ts.parser,
-      parserOptions: {
-        project: "./tsconfig.eslint.json",
-        tsconfigRootDir: import.meta.dirname,
       },
     },
   },
@@ -116,6 +75,7 @@ export default [
         "error",
         { considerDefaultExhaustiveForUnions: false },
       ],
+      ...concreteObjectTypeRules,
     },
     languageOptions: {
       parserOptions: {
@@ -128,10 +88,6 @@ export default [
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
-  {
-    files: ["**/*.{ts,svelte}"],
-    rules: concreteObjectTypeRules,
   },
   {
     files: typedApiSourceFiles,

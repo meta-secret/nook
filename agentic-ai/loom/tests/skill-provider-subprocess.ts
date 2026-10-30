@@ -1,6 +1,12 @@
 import { posix } from 'node:path';
 
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import {
+  TypeScriptCheckerFacts,
+  type TypeScriptSymbolFact,
+} from '../src/lib/typescript/checker-facts.ts';
+import { TypeScriptProgram } from '../src/lib/typescript/program.ts';
 
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
@@ -11,11 +17,13 @@ export class SkillProviderSubprocessScenario {
     private readonly request: RepositorySubprocessInspection,
   ) {}
 
-  static repositorySubprocessEntrypoints(
+  static async repositorySubprocessEntrypoints(
     inspection: RepositorySubprocessInspection,
-  ): RepositorySubprocessDiscovery {
+  ): Promise<RepositorySubprocessDiscovery> {
     const context =
-      SkillProviderSubprocessScenario.createSubprocessTypeContext(inspection);
+      await SkillProviderSubprocessScenario.createSubprocessTypeContext(
+        inspection,
+      );
     const sourceFile = context.sourceFile;
     const initializerInspection: InitializerInspection = {
       checker: context.checker,
@@ -60,7 +68,7 @@ export class SkillProviderSubprocessScenario {
           discoveries.push(resolution);
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
 
@@ -115,29 +123,52 @@ export class SkillProviderSubprocessScenario {
     return { paths: [...paths], unresolved };
   }
 
-  static createSubprocessTypeContext(
+  /** Compiled once per distinct importer and source in a test process. */
+  static async createSubprocessTypeContext(
     inspection: RepositorySubprocessInspection,
-  ): SubprocessTypeContext {
-    return new SkillProviderSubprocessScenario(inspection).execute();
+  ): Promise<SubprocessTypeContext> {
+    const key = `${inspection.importer}\0${inspection.source}`;
+    const cached = SUBPROCESS_CONTEXTS.get(key);
+    if (cached) return cached;
+    const context = new SkillProviderSubprocessScenario(inspection).execute();
+    SUBPROCESS_CONTEXTS.set(key, context);
+    return context;
   }
 
-  private execute(): SubprocessTypeContext {
+  private async execute(): Promise<SubprocessTypeContext> {
     const inspection = this.request;
-    const options: ts.CompilerOptions = { noLib: true, noResolve: true };
-    const sourceFile = ts.createSourceFile(
-      inspection.importer,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
-    const host = ts.createCompilerHost(options);
-    host.fileExists = (path) => path === inspection.importer;
-    host.getSourceFile = (path) =>
-      path === inspection.importer ? sourceFile : void 0;
-    host.readFile = (path) =>
-      path === inspection.importer ? inspection.source : '';
-    const program = ts.createProgram([inspection.importer], options, host);
-    return { checker: program.getTypeChecker(), sourceFile };
+    const source = {
+      fileName: inspection.importer,
+      kind: TypeScriptProgram.sourceKindOf(inspection.importer),
+      text: inspection.source,
+    };
+    // Without allowJs a JavaScript or extensionless importer is no program
+    // root, so its identifiers resolve to no symbol.
+    if (!TYPESCRIPT_ROOT_EXTENSION.test(inspection.importer)) {
+      return {
+        checker: TypeScriptCheckerFacts.outsideProgram(),
+        sourceFile: await TypeScriptTestSources.parse(source),
+      };
+    }
+    return TypeScriptTestSources.useSource({
+      compilerOptions: SUBPROCESS_COMPILER_OPTIONS,
+      source,
+      use: async (program) => {
+        const [sourceFile] = await program.sourceFiles();
+        if (!sourceFile) {
+          throw new Error(
+            `Subprocess source was not compiled: ${inspection.importer}`,
+          );
+        }
+        const checker = await TypeScriptCheckerFacts.collect({
+          checker: program.checker,
+          names: TypeScriptCheckerFacts.NO_NAMES,
+          sourceFile,
+          types: TypeScriptCheckerFacts.NO_TYPES,
+        });
+        return { checker, sourceFile };
+      },
+    });
   }
 
   static subprocessApi(
@@ -196,7 +227,7 @@ export class SkillProviderSubprocessScenario {
     const visit = (node: ts.Node): void => {
       if (
         ts.isImportDeclaration(node) &&
-        ts.isStringLiteralLike(node.moduleSpecifier) &&
+        ts.isStringLiteralLikeNode(node.moduleSpecifier) &&
         CHILD_PROCESS_SPECIFIERS.has(node.moduleSpecifier.text)
       ) {
         const bindings = node.importClause?.namedBindings;
@@ -228,7 +259,7 @@ export class SkillProviderSubprocessScenario {
       ) {
         collection.bindings.namespaceIdentifiers.add(node.name.text);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(collection.sourceFile);
   }
@@ -247,7 +278,7 @@ export class SkillProviderSubprocessScenario {
           bindingInspection,
         );
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(collection.sourceFile);
   }
@@ -284,7 +315,7 @@ export class SkillProviderSubprocessScenario {
     )
       return;
     for (const element of inspection.name.elements) {
-      if (!ts.isIdentifier(element.name)) continue;
+      if (!element.name || !ts.isIdentifier(element.name)) continue;
       const imported =
         element.propertyName && ts.isIdentifier(element.propertyName)
           ? element.propertyName.text
@@ -330,7 +361,8 @@ export class SkillProviderSubprocessScenario {
 
   static isChildProcessSpecifier(node: ts.Expression): boolean {
     return (
-      ts.isStringLiteralLike(node) && CHILD_PROCESS_SPECIFIERS.has(node.text)
+      ts.isStringLiteralLikeNode(node) &&
+      CHILD_PROCESS_SPECIFIERS.has(node.text)
     );
   }
 
@@ -355,7 +387,7 @@ export class SkillProviderSubprocessScenario {
   static collectInitializers(
     inspection: InitializerInspection,
   ): InitializerCollection {
-    const initializers = new Map<ts.Symbol, ts.Expression>();
+    const initializers = new Map<TypeScriptSymbolFact, ts.Expression>();
     const mutableSymbols =
       SkillProviderSubprocessScenario.collectMutableSymbols(inspection);
     const visit = (node: ts.Node): void => {
@@ -371,7 +403,7 @@ export class SkillProviderSubprocessScenario {
           initializers.set(symbol, node.initializer);
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(inspection.sourceFile);
     return { initializers, mutableSymbols };
@@ -379,9 +411,9 @@ export class SkillProviderSubprocessScenario {
 
   static collectMutableSymbols(
     inspection: InitializerInspection,
-  ): ReadonlySet<ts.Symbol> {
-    const mutableSymbols = new Set<ts.Symbol>();
-    const aliasSources = new Map<ts.Symbol, ts.Symbol>();
+  ): ReadonlySet<TypeScriptSymbolFact> {
+    const mutableSymbols = new Set<TypeScriptSymbolFact>();
+    const aliasSources = new Map<TypeScriptSymbolFact, TypeScriptSymbolFact>();
     const recordMutation = (expression: ts.Expression): void => {
       const root =
         SkillProviderSubprocessScenario.mutationRootIdentifier(expression);
@@ -429,7 +461,7 @@ export class SkillProviderSubprocessScenario {
       ) {
         recordMutation(node.expression.expression);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(inspection.sourceFile);
     let priorSize = -1;
@@ -460,7 +492,7 @@ export class SkillProviderSubprocessScenario {
   static collectLiterals(collection: LiteralCollection): void {
     if (collection.seenNodes.has(collection.node)) return;
     collection.seenNodes.add(collection.node);
-    if (ts.isStringLiteralLike(collection.node)) {
+    if (ts.isStringLiteralLikeNode(collection.node)) {
       collection.values.push(collection.node.text);
       return;
     }
@@ -797,7 +829,7 @@ export class SkillProviderSubprocessScenario {
     if (
       ts.isParenthesizedExpression(expression) ||
       ts.isAsExpression(expression) ||
-      ts.isTypeAssertionExpression(expression) ||
+      ts.isTypeAssertion(expression) ||
       ts.isNonNullExpression(expression) ||
       ts.isSatisfiesExpression(expression)
     ) {
@@ -852,9 +884,9 @@ type SubprocessCallResolution = {
 };
 
 type LiteralCollection = {
-  readonly checker: ts.TypeChecker;
-  readonly initializers: ReadonlyMap<ts.Symbol, ts.Expression>;
-  readonly mutableSymbols: ReadonlySet<ts.Symbol>;
+  readonly checker: TypeScriptCheckerFacts;
+  readonly initializers: ReadonlyMap<TypeScriptSymbolFact, ts.Expression>;
+  readonly mutableSymbols: ReadonlySet<TypeScriptSymbolFact>;
   readonly node: ts.Node;
   readonly seenNodes: Set<ts.Node>;
   readonly values: string[];
@@ -889,7 +921,7 @@ const MUTATING_COLLECTION_METHODS = new Set([
 ]);
 
 type SubprocessTypeContext = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly sourceFile: ts.SourceFile;
 };
 
@@ -905,13 +937,13 @@ type VariableBindingInspection = {
 };
 
 type InitializerInspection = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly sourceFile: ts.SourceFile;
 };
 
 type InitializerCollection = {
-  readonly initializers: ReadonlyMap<ts.Symbol, ts.Expression>;
-  readonly mutableSymbols: ReadonlySet<ts.Symbol>;
+  readonly initializers: ReadonlyMap<TypeScriptSymbolFact, ts.Expression>;
+  readonly mutableSymbols: ReadonlySet<TypeScriptSymbolFact>;
 };
 
 type NestedLiteralCollection = {
@@ -952,3 +984,13 @@ type RepositoryScriptResolution = {
   readonly inspection: RepositorySubprocessInspection;
   readonly literal: string;
 };
+
+const TYPESCRIPT_ROOT_EXTENSION = /\.(?:[cm]?ts|tsx)$/u;
+
+const SUBPROCESS_COMPILER_OPTIONS = {
+  noEmit: true,
+  noLib: true,
+  noResolve: true,
+} as const;
+
+const SUBPROCESS_CONTEXTS = new Map<string, Promise<SubprocessTypeContext>>();

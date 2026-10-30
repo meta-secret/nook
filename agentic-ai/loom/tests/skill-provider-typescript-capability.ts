@@ -20,7 +20,8 @@ export type {
   UnsupportedCallArgumentRequest,
 } from './skill-provider-typescript-capability-contracts.ts';
 export { SubprocessCallKind } from './skill-provider-typescript-capability-contracts.ts';
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
 
 export class SkillProviderTypescriptCapabilityScenario {
   private constructor(private readonly request: ts.Expression) {}
@@ -233,7 +234,7 @@ export class SkillProviderTypescriptCapabilityScenario {
         if (ts.isPropertyAssignment(property))
           nested.push(property.initializer);
         if (ts.isShorthandPropertyAssignment(property))
-          nested.push(property.name);
+          nested.push(TypeScriptSyntax.shorthandName(property));
         if (ts.isSpreadAssignment(property)) nested.push(property.expression);
         if (
           (ts.isGetAccessorDeclaration(property) ||
@@ -241,7 +242,7 @@ export class SkillProviderTypescriptCapabilityScenario {
             ts.isMethodDeclaration(property)) &&
           property.body
         )
-          ts.forEachChild(property.body, (node) =>
+          property.body.forEachChild((node) =>
             SkillProviderTypescriptCapabilityScenario.inspectDeferredAggregateNode(
               [request, nextVisited, node],
             ),
@@ -265,7 +266,7 @@ export class SkillProviderTypescriptCapabilityScenario {
         { ...request, expression: node },
         visited,
       ]);
-    ts.forEachChild(node, (child) =>
+    node.forEachChild((child) =>
       SkillProviderTypescriptCapabilityScenario.inspectDeferredAggregateNode([
         request,
         visited,
@@ -295,17 +296,20 @@ export class SkillProviderTypescriptCapabilityScenario {
     ts.ObjectLiteralExpression,
     string,
   ]): ts.Expression | false {
-    const matches = object.properties.filter(
-      (candidate) =>
-        candidate.name &&
-        (ts.isIdentifier(candidate.name) ||
-          ts.isStringLiteral(candidate.name)) &&
-        candidate.name.text === name,
-    );
+    const matches = object.properties.filter((candidate) => {
+      const propertyName = TypeScriptSyntax.objectElementName(candidate);
+      return (
+        propertyName !== false &&
+        (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) &&
+        propertyName.text === name
+      );
+    });
     const match = matches[0];
     if (matches.length !== 1 || !match) return false;
     if (ts.isPropertyAssignment(match)) return match.initializer;
-    return ts.isShorthandPropertyAssignment(match) ? match.name : false;
+    return ts.isShorthandPropertyAssignment(match)
+      ? TypeScriptSyntax.shorthandName(match)
+      : false;
   }
 
   static isStaticWorkerThreadsRequire(expression: ts.Expression): boolean {
@@ -425,9 +429,12 @@ export class SkillProviderTypescriptCapabilityScenario {
     ts.ObjectLiteralExpression,
   ]): void {
     if (
-      object.properties.some(
-        (property) => property.name && ts.isComputedPropertyName(property.name),
-      )
+      object.properties.some((property) => {
+        const propertyName = TypeScriptSyntax.objectElementName(property);
+        return (
+          propertyName !== false && ts.isComputedPropertyName(propertyName)
+        );
+      })
     )
       throw new Error(
         'Dynamic TypeScript subprocess environment is forbidden.',
@@ -437,12 +444,14 @@ export class SkillProviderTypescriptCapabilityScenario {
         object,
         'env',
       ]);
-    const environmentProperties = object.properties.filter(
-      (property) =>
-        property.name &&
-        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-        property.name.text === 'env',
-    );
+    const environmentProperties = object.properties.filter((property) => {
+      const propertyName = TypeScriptSyntax.objectElementName(property);
+      return (
+        propertyName !== false &&
+        (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) &&
+        propertyName.text === 'env'
+      );
+    });
     if (environment === false && environmentProperties.length > 0)
       throw new Error(
         'Dynamic TypeScript subprocess environment is forbidden.',
@@ -512,12 +521,14 @@ export class SkillProviderTypescriptCapabilityScenario {
     const shell = SkillProviderTypescriptCapabilityScenario.exactObjectProperty(
       [object, 'shell'],
     );
-    const shellProperties = object.properties.filter(
-      (property) =>
-        property.name &&
-        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-        property.name.text === 'shell',
-    );
+    const shellProperties = object.properties.filter((property) => {
+      const propertyName = TypeScriptSyntax.objectElementName(property);
+      return (
+        propertyName !== false &&
+        (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) &&
+        propertyName.text === 'shell'
+      );
+    });
     if (
       shellProperties.length > 0 &&
       (shell === false || shell.kind !== ts.SyntaxKind.FalseKeyword)
@@ -531,12 +542,14 @@ export class SkillProviderTypescriptCapabilityScenario {
         object,
         'execArgv',
       ]);
-    const execArgvProperties = object.properties.filter(
-      (property) =>
-        property.name &&
-        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-        property.name.text === 'execArgv',
-    );
+    const execArgvProperties = object.properties.filter((property) => {
+      const propertyName = TypeScriptSyntax.objectElementName(property);
+      return (
+        propertyName !== false &&
+        (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) &&
+        propertyName.text === 'execArgv'
+      );
+    });
     if (
       execArgvProperties.length > 0 &&
       (execArgv === false ||
@@ -551,12 +564,14 @@ export class SkillProviderTypescriptCapabilityScenario {
         object,
         'eval',
       ]);
-    const evaluateProperties = object.properties.filter(
-      (property) =>
-        property.name &&
-        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-        property.name.text === 'eval',
-    );
+    const evaluateProperties = object.properties.filter((property) => {
+      const propertyName = TypeScriptSyntax.objectElementName(property);
+      return (
+        propertyName !== false &&
+        (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) &&
+        propertyName.text === 'eval'
+      );
+    });
     if (
       evaluateProperties.length > 0 &&
       (evaluate === false || evaluate.kind !== ts.SyntaxKind.FalseKeyword)

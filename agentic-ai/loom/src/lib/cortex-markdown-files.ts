@@ -43,8 +43,8 @@ export class CortexMarkdownInventory {
 
   private static readonly EXECUTABLE_SKILL_PROJECT_FILES = [
     '.gitignore',
+    '.oxlintrc.json',
     '.prettierrc',
-    'eslint.config.js',
     'executable-skill.json',
     'package.json',
     'tsconfig.json',

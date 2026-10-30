@@ -65,7 +65,7 @@ const COMMON_CONTEXT = [
 const CODE_REFACTORING_FILES = [
   'Taskfile.yml',
   '.github/formatting/format.sh',
-  'agentic-ai/loom/eslint.config.js',
+  'agentic-ai/loom/.oxlintrc.json',
   'agentic-ai/loom/package.json',
 ] as const;
 

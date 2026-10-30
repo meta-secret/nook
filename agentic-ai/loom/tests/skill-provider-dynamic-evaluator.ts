@@ -1,4 +1,11 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import {
+  TypeScriptCheckerFacts,
+  type TypeScriptSymbolFact,
+  type TypeScriptTypeFact,
+} from '../src/lib/typescript/checker-facts.ts';
+import { TypeFlags } from 'typescript/unstable/async';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
 
 export class SkillProviderDynamicEvaluatorScenario {
   private constructor(private readonly request: DynamicEvaluatorInspection) {}
@@ -19,7 +26,7 @@ export class SkillProviderDynamicEvaluatorScenario {
       const resolution: RuntimeReceiverResolution = {
         checker: inspection.checker,
         expression: node,
-        seen: new Set<ts.Symbol>(),
+        seen: new Set<TypeScriptSymbolFact>(),
       };
       const recovered =
         SkillProviderDynamicEvaluatorScenario.runtimeReceiverExpression(
@@ -175,7 +182,7 @@ export class SkillProviderDynamicEvaluatorScenario {
       const resolution: StaticStringResolution = {
         checker: inspection.checker,
         expression: inspection.node.argumentExpression,
-        seen: new Set<ts.Symbol>(),
+        seen: new Set<TypeScriptSymbolFact>(),
       };
       return SkillProviderDynamicEvaluatorScenario.staticString(resolution);
     }
@@ -278,7 +285,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     const runtimeResolution: RuntimeReceiverResolution = {
       checker: inspection.checker,
       expression: inspection.node.expression,
-      seen: new Set<ts.Symbol>(),
+      seen: new Set<TypeScriptSymbolFact>(),
     };
     const runtimeReceiver =
       SkillProviderDynamicEvaluatorScenario.runtimeReceiverExpression(
@@ -295,7 +302,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     const hasUnprovenComputedType =
       inspection.allowUnprovenComputedDataAccess &&
       [receiverType, runtimeReceiverType, resultType].some((type) =>
-        Boolean(type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)),
+        Boolean(type.flags & (TypeFlags.Any | TypeFlags.Unknown)),
       );
     if (
       hasUnprovenComputedType &&
@@ -321,7 +328,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     while (
       (ts.isParenthesizedExpression(runtimeExpression.parent) ||
         ts.isAsExpression(runtimeExpression.parent) ||
-        ts.isTypeAssertionExpression(runtimeExpression.parent) ||
+        ts.isTypeAssertion(runtimeExpression.parent) ||
         ts.isNonNullExpression(runtimeExpression.parent) ||
         ts.isSatisfiesExpression(runtimeExpression.parent)) &&
       runtimeExpression.parent.expression === runtimeExpression
@@ -399,6 +406,9 @@ export class SkillProviderDynamicEvaluatorScenario {
       SkillProviderDynamicEvaluatorScenario.callableBindingDefault(resolution);
     if (defaultInitializer !== false) return defaultInitializer;
     const pattern = resolution.binding.parent;
+    if (!ts.isBindingPattern(pattern)) {
+      throw new Error('A binding element must belong to a binding pattern.');
+    }
     const patternResolution: BindingPatternInitializerResolution = {
       checker: resolution.checker,
       pattern,
@@ -452,9 +462,9 @@ export class SkillProviderDynamicEvaluatorScenario {
       }
       if (
         ts.isShorthandPropertyAssignment(property) &&
-        property.name.text === propertyName
+        TypeScriptSyntax.shorthandName(property).text === propertyName
       ) {
-        return property.name;
+        return TypeScriptSyntax.shorthandName(property);
       }
     }
     return false;
@@ -487,7 +497,7 @@ export class SkillProviderDynamicEvaluatorScenario {
   ): ts.Expression | false {
     const parent = resolution.pattern.parent;
     if (
-      (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) &&
+      (ts.isVariableDeclaration(parent) || ts.isParameterDeclaration(parent)) &&
       parent.name === resolution.pattern
     ) {
       const [defaulted2 = false] = [parent.initializer];
@@ -513,33 +523,32 @@ export class SkillProviderDynamicEvaluatorScenario {
       return SkillProviderDynamicEvaluatorScenario.propertyNameText(
         binding.propertyName,
       );
-    return ts.isIdentifier(binding.name) ? binding.name.text : false;
+    return binding.name && ts.isIdentifier(binding.name)
+      ? binding.name.text
+      : false;
   }
 
   static propertyNameText(name: ts.PropertyName): string | false {
     return ts.isIdentifier(name) ||
-      ts.isStringLiteralLike(name) ||
+      ts.isStringLiteralLikeNode(name) ||
       ts.isNumericLiteral(name)
       ? name.text
       : false;
   }
 
-  static typeCanExposeEvaluator(type: ts.Type): boolean {
+  static typeCanExposeEvaluator(type: TypeScriptTypeFact): boolean {
     if (
       type.flags &
-      (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)
+      (TypeFlags.Any | TypeFlags.Unknown | TypeFlags.TypeParameter)
     ) {
       return true;
     }
-    if (type.isUnionOrIntersection()) {
-      return type.types.some(
+    if (type.constituents.length > 0) {
+      return type.constituents.some(
         SkillProviderDynamicEvaluatorScenario.typeCanExposeEvaluator,
       );
     }
-    return (
-      type.getCallSignatures().length > 0 ||
-      type.getConstructSignatures().length > 0
-    );
+    return type.callSignatureCount > 0 || type.constructSignatureCount > 0;
   }
 
   static isConstructorBinding(
@@ -557,7 +566,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     ) {
       return true;
     }
-    if (ts.isStringLiteralLike(inspection.node.propertyName)) {
+    if (ts.isStringLiteralLikeNode(inspection.node.propertyName)) {
       return (
         inspection.node.propertyName.text === DynamicEvaluatorMember.Constructor
       );
@@ -566,7 +575,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     const resolution: StaticStringResolution = {
       checker: inspection.checker,
       expression: inspection.node.propertyName.expression,
-      seen: new Set<ts.Symbol>(),
+      seen: new Set<TypeScriptSymbolFact>(),
     };
     return (
       SkillProviderDynamicEvaluatorScenario.staticString(resolution) ===
@@ -578,7 +587,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     const expression = SkillProviderDynamicEvaluatorScenario.unwrapExpression(
       resolution.expression,
     );
-    if (ts.isStringLiteralLike(expression)) return expression.text;
+    if (ts.isStringLiteralLikeNode(expression)) return expression.text;
     if (!resolution.checker || !ts.isIdentifier(expression)) return false;
     const symbol = resolution.checker.getSymbolAtLocation(expression);
     if (!symbol || resolution.seen.has(symbol)) return false;
@@ -601,7 +610,7 @@ export class SkillProviderDynamicEvaluatorScenario {
     if (
       ts.isParenthesizedExpression(expression) ||
       ts.isAsExpression(expression) ||
-      ts.isTypeAssertionExpression(expression) ||
+      ts.isTypeAssertion(expression) ||
       ts.isNonNullExpression(expression) ||
       ts.isSatisfiesExpression(expression)
     ) {
@@ -614,10 +623,10 @@ export class SkillProviderDynamicEvaluatorScenario {
 
   static isNonRuntimeIdentifierPosition(node: ts.Identifier): boolean {
     const parent = node.parent;
-    if (ts.isPartOfTypeNode(node)) return true;
+    if (TypeScriptSyntax.isPartOfTypeNode(node)) return true;
     if (
       ((ts.isVariableDeclaration(parent) ||
-        ts.isParameter(parent) ||
+        ts.isParameterDeclaration(parent) ||
         ts.isFunctionDeclaration(parent) ||
         ts.isClassDeclaration(parent) ||
         ts.isInterfaceDeclaration(parent) ||
@@ -637,9 +646,9 @@ export class SkillProviderDynamicEvaluatorScenario {
     if (
       ((ts.isPropertyAssignment(parent) ||
         ts.isPropertyDeclaration(parent) ||
-        ts.isPropertySignature(parent) ||
+        ts.isPropertySignatureDeclaration(parent) ||
         ts.isMethodDeclaration(parent) ||
-        ts.isMethodSignature(parent) ||
+        ts.isMethodSignatureDeclaration(parent) ||
         ts.isGetAccessorDeclaration(parent) ||
         ts.isSetAccessorDeclaration(parent)) &&
         parent.name === node) ||
@@ -654,7 +663,7 @@ export class SkillProviderDynamicEvaluatorScenario {
 
 export type DynamicEvaluatorInspection = {
   readonly allowUnprovenComputedDataAccess: boolean;
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly isAmbientGlobalRoot: (node: ts.Node) => boolean;
   readonly isAmbientIdentifier: (node: ts.Identifier) => boolean;
   readonly node: ts.Node;
@@ -699,7 +708,7 @@ type AmbientRecoveryInspection = {
 };
 
 type DynamicEvaluatorMemberInspection = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
@@ -711,41 +720,41 @@ type AmbientNamedRootInspection = {
 
 type ComputedElementInspection = {
   readonly allowUnprovenComputedDataAccess: boolean;
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
 type RuntimeReceiverResolution = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly expression: ts.Expression;
-  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly seen: ReadonlySet<TypeScriptSymbolFact>;
 };
 
 type RuntimeReceiverInitializerResolution = {
-  readonly checker: ts.TypeChecker;
-  readonly seen: ReadonlySet<ts.Symbol>;
-  readonly symbol: ts.Symbol;
+  readonly checker: TypeScriptCheckerFacts;
+  readonly seen: ReadonlySet<TypeScriptSymbolFact>;
+  readonly symbol: TypeScriptSymbolFact;
 };
 
 type BindingElementInitializerResolution = {
   readonly binding: ts.BindingElement;
-  readonly checker: ts.TypeChecker;
-  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly checker: TypeScriptCheckerFacts;
+  readonly seen: ReadonlySet<TypeScriptSymbolFact>;
 };
 
 type BindingPatternInitializerResolution = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly pattern: ts.BindingPattern;
-  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly seen: ReadonlySet<TypeScriptSymbolFact>;
 };
 
 type ConstructorBindingInspection = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
 type StaticStringResolution = {
-  readonly checker: ts.TypeChecker | false;
+  readonly checker: TypeScriptCheckerFacts | false;
   readonly expression: ts.Expression;
-  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly seen: ReadonlySet<TypeScriptSymbolFact>;
 };

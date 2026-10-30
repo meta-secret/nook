@@ -101,7 +101,9 @@ export class CacheTelemetryValidator {
       throw new Error(
         `telemetry compile phase ${name}.input_refs_access_verified is invalid`,
       );
+    // Every field was validated above; the JSDoc cast is the decoder boundary.
     return /** @type {import("./cache-telemetry-contracts.mjs").CompileFoundationPhase} */ (
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       candidate
     );
   }

@@ -10,10 +10,12 @@ const approvalPort = vi.hoisted(() => ({
   releaseAuthorization: vi.fn(),
 }))
 
-vi.mock('$lib/extension/vault-approval', () => ({
-  ExtensionVaultApproval: vi.fn(function ExtensionVaultApprovalTestDouble() {
-    return approvalPort
-  }),
+vi.mock('$lib/extension/keyring-approval', () => ({
+  ExtensionKeyringApproval: vi.fn(
+    function ExtensionKeyringApprovalTestDouble() {
+      return approvalPort
+    },
+  ),
 }))
 
 import {
@@ -38,12 +40,14 @@ import {
   ExtensionPairingRejectionReason,
 } from '$lib/extension/extension-pairing-delivery'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { ExtensionKeyringGrantKind } from '$web-shared/extension/keyring-grant-wire'
+import { ExtensionKeyringApproval } from '$lib/extension/keyring-approval'
+import type { ExtensionKeyringMember } from '$lib/extension/keyring-membership'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import {
+  DeviceProtectionStatus,
   NookExtensionConsentApprovalAvailabilityState,
   NookExtensionConsentPhaseState,
   NookExtensionConsentVaultReadiness,
@@ -54,42 +58,41 @@ import type { VaultState } from '$lib/vault.svelte'
 import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
 import { ExtensionPairingApprovedMessageType } from '$web-shared/extension/runtime-messages'
 import type { NookExtensionConsentPhase } from '$app-wasm'
-import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
-import type { VaultSynchronizationResult } from '$lib/vault/sync.svelte'
+import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 
 type ExtensionConsentWorkflowFixtureConstruction = {
   readonly vault: VaultState
   readonly request: ExtensionConnectRequest
 }
 
+const member: ExtensionKeyringMember = { identityId: 'identity-1' }
+
 const approvedMessage = {
   type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
   payload: {
-    vaultType: 'simple',
     deviceId: 'device-1',
     devicePublicKey: 'device-key',
     deviceSigningPublicKey: 'signing-key',
     deviceLabel: 'Nook Extension',
-    vaultStoreId: 'store-1',
-    vaultName: 'Nook Vault',
     approvedAt: 1,
     scopes: [ExtensionConnectScope.VaultAccess],
-    providers: [],
-    keyring: {
-      kind: ExtensionKeyringGrantKind.Added,
-      identityId: 'identity-1',
-      identityLabel: 'Personal',
-      identityEvents: ['identity-event-1'],
-      vaults: [],
-    },
+    identityId: 'identity-1',
+    identityLabel: 'Personal',
+    identityEvents: ['identity-event-1'],
+    vaults: [],
+    providers: { apps: [] },
   },
-  eventLogRecords: [],
 } satisfies ExtensionPairingApprovedMessage
 
+/** The keyring unlocked on this browser, with no vault open. */
 function createHarness() {
   const vault = VaultStateTestFixture.create()
   vault.openManager(new NookVaultManager())
-  vault.isAuthenticated = true
+  vault.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+  // After delivery the keyring lists the extension among its apps.
+  const loadSnapshot = vi
+    .spyOn(vault.identityControl, 'loadSnapshot')
+    .mockResolvedValue(ok(IdentityActionOutcome.Completed))
   const request: ExtensionConnectRequest = {
     follow: { kind: ExtensionConnectFollowKind.Unnamed },
     deviceId: 'device-1',
@@ -104,7 +107,7 @@ function createHarness() {
     request,
   }
   const workflow = new ExtensionConnectConsentWorkflow(workflowConstruction)
-  return { vault, workflow }
+  return { vault, workflow, request, loadSnapshot }
 }
 
 class DeferredWorkflowStage<T> {
@@ -140,7 +143,7 @@ async function approve(harness: ReturnType<typeof createHarness>) {
 beforeEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
-  approvalPort.authorize.mockResolvedValue(ok())
+  approvalPort.authorize.mockResolvedValue(ok(member))
   approvalPort.prepareAuthorizedGrant.mockResolvedValue(ok(approvedMessage))
   approvalPort.deliver.mockResolvedValue(
     ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }),
@@ -165,7 +168,8 @@ describe('extension consent web workflow', () => {
       {
         readiness: NookExtensionConsentVaultReadiness.Locked,
         availability: NookExtensionConsentApprovalAvailabilityState.VaultLocked,
-        arrange: (vault) => (vault.isAuthenticated = false),
+        arrange: (vault) =>
+          (vault.deviceProtectionStatus = DeviceProtectionStatus.Passkey),
       },
       {
         readiness: NookExtensionConsentVaultReadiness.Verifying,
@@ -211,6 +215,101 @@ describe('extension consent web workflow', () => {
     await harness.workflow.approve(approvalRequest)
 
     expect(approvalPort.authorize).not.toHaveBeenCalled()
+    harness.workflow.dispose()
+  })
+
+  test('approves into the unlocked keyring with no vault open', async () => {
+    const harness = createHarness()
+    expect(harness.vault.isAuthenticated).toBe(false)
+    expect(harness.vault.hasActiveVaultStore).toBe(false)
+    const initial = harness.workflow.initialState()
+    expect(harness.workflow.approvalAvailability(initial)).toBe(
+      NookExtensionConsentApprovalAvailabilityState.Available,
+    )
+    expect(harness.workflow.canAuthorize(initial)).toBe(true)
+
+    let state: ExtensionConsentWorkflowState = initial
+    const approvalRequest: ExtensionConsentApprovalRequest = {
+      state,
+      publish: (next) => {
+        state = next
+      },
+    }
+    await harness.workflow.approve(approvalRequest)
+
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
+    expect(ExtensionKeyringApproval).toHaveBeenCalledWith(
+      harness.vault,
+      harness.request,
+    )
+    expect(approvalPort.authorize).toHaveBeenCalledOnce()
+    expect(harness.loadSnapshot).toHaveBeenCalledOnce()
+    harness.workflow.dispose()
+  })
+
+  test('a locked keyring asks to be unlocked and approves nothing', async () => {
+    const harness = createHarness()
+    harness.vault.deviceProtectionStatus = DeviceProtectionStatus.Passkey
+    const initial = harness.workflow.initialState()
+    const availability = harness.workflow.approvalAvailability(initial)
+    const noticeRequest: ExtensionConsentNoticeRequest = {
+      state: initial,
+      availability,
+    }
+
+    expect(availability).toBe(
+      NookExtensionConsentApprovalAvailabilityState.VaultLocked,
+    )
+    expect(
+      new ExtensionConsentWorkflowPresentation().notice(noticeRequest),
+    ).toEqual({
+      kind: ExtensionConsentWorkflowNoticeKind.Message,
+      translationKey: I18N_KEYS.ExtensionConsentUnlockFirst,
+    })
+    expect(harness.workflow.canAuthorize(initial)).toBe(false)
+    const publish = vi.fn<(state: ExtensionConsentWorkflowState) => void>()
+    const approvalRequest: ExtensionConsentApprovalRequest = {
+      state: initial,
+      publish,
+    }
+    await harness.workflow.approve(approvalRequest)
+
+    expect(ExtensionKeyringApproval).not.toHaveBeenCalled()
+    expect(approvalPort.authorize).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
+    harness.workflow.dispose()
+  })
+
+  test('a keyring that changed during the approval reports the approval failed', async () => {
+    const harness = createHarness()
+    approvalPort.prepareAuthorizedGrant.mockResolvedValue(
+      err(
+        new VaultStorageFailure(
+          VaultStorageFailureKind.ExtensionApprovalContextChanged,
+        ),
+      ),
+    )
+
+    const state = await approve(harness)
+    const noticeRequest: ExtensionConsentNoticeRequest = {
+      state,
+      availability: harness.workflow.approvalAvailability(state),
+    }
+
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('the changed keyring must fail the approval')
+    expect(state.failure.kind).toBe(
+      ExtensionConsentWorkflowFailureKind.GrantPreparation,
+    )
+    expect(
+      new ExtensionConsentWorkflowPresentation().notice(noticeRequest),
+    ).toEqual({
+      kind: ExtensionConsentWorkflowNoticeKind.Message,
+      translationKey: I18N_KEYS.ExtensionConsentApprovalFailed,
+    })
+    expect(approvalPort.deliver).not.toHaveBeenCalled()
+    expect(harness.loadSnapshot).not.toHaveBeenCalled()
     harness.workflow.dispose()
   })
 
@@ -271,11 +370,7 @@ describe('extension consent web workflow', () => {
     'keeps $name retryable after Rust approval',
     async ({ delivery, outcome, notice: expectedNotice }) => {
       const harness = createHarness()
-      const refreshDeviceState = vi.fn(
-        async (): Promise<VaultSynchronizationResult> =>
-          ok(ProviderSyncOutcome.Synced),
-      )
-      harness.vault.refreshDeviceState = refreshDeviceState
+      const refreshKeyring = harness.loadSnapshot
       approvalPort.deliver.mockResolvedValueOnce(ok(delivery))
 
       const retryableState = await approve(harness)
@@ -313,7 +408,7 @@ describe('extension consent web workflow', () => {
       )
       expect(notice).toEqual(expectedNotice)
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
-      expect(refreshDeviceState).not.toHaveBeenCalled()
+      expect(refreshKeyring).not.toHaveBeenCalled()
       expect(approvalPort.admitCompletion).not.toHaveBeenCalled()
 
       let state = retryableState
@@ -334,7 +429,7 @@ describe('extension consent web workflow', () => {
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
       expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
       expect(approvalPort.deliver).toHaveBeenCalledTimes(2)
-      expect(refreshDeviceState).toHaveBeenCalledTimes(1)
+      expect(refreshKeyring).toHaveBeenCalledTimes(1)
       expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(1)
       harness.workflow.dispose()
     },
@@ -482,7 +577,7 @@ describe('extension consent web workflow', () => {
     const failure = new VaultStorageFailure(
       VaultStorageFailureKind.OperationFailed,
     )
-    harness.vault.refreshDeviceState = vi.fn(async () => err(failure))
+    harness.loadSnapshot.mockResolvedValue(err(failure))
 
     const state = await approve(harness)
 
@@ -496,9 +591,6 @@ describe('extension consent web workflow', () => {
 
     approvalPort.admitCompletion.mockReturnValue(err(failure))
     const completionHarness = createHarness()
-    completionHarness.vault.refreshDeviceState = vi.fn(async () =>
-      ok(ProviderSyncOutcome.Synced),
-    )
     const completionState = await approve(completionHarness)
     expect(completionState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
     if (completionState.kind !== ExtensionConsentWorkflowKind.Failed)
@@ -556,11 +648,7 @@ describe('extension consent web workflow', () => {
       const failure = new VaultStorageFailure(
         VaultStorageFailureKind.OperationFailed,
       )
-      const refreshDeviceState = vi.fn(
-        async (): Promise<VaultSynchronizationResult> =>
-          ok(ProviderSyncOutcome.Synced),
-      )
-      harness.vault.refreshDeviceState = refreshDeviceState
+      const refreshKeyring = harness.loadSnapshot
 
       switch (kind) {
         case ExtensionConsentWorkflowFailureKind.GrantPreparation:
@@ -577,7 +665,7 @@ describe('extension consent web workflow', () => {
           approvalPort.deliver.mockResolvedValueOnce(err(failure))
           break
         case ExtensionConsentWorkflowFailureKind.DeviceRefresh:
-          refreshDeviceState.mockResolvedValueOnce(err(failure))
+          refreshKeyring.mockResolvedValueOnce(err(failure))
           break
         case ExtensionConsentWorkflowFailureKind.CompletionAdmission:
           approvalPort.admitCompletion.mockReturnValueOnce(err(failure))
@@ -626,7 +714,7 @@ describe('extension consent web workflow', () => {
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
       expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
       expect(approvalPort.deliver).toHaveBeenCalledTimes(deliveryCalls)
-      expect(refreshDeviceState).toHaveBeenCalledTimes(refreshCalls)
+      expect(refreshKeyring).toHaveBeenCalledTimes(refreshCalls)
       expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(
         completionCalls,
       )

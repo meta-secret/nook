@@ -34,6 +34,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookIdentityHealth } from '$app-wasm'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 
   const APP_KIND = configured_vault_application()
 
@@ -68,6 +69,7 @@
     onDismissPasskey,
     identityHealth,
     extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
+    onFinishExtensionConnect = () => {},
   }: {
     vault: VaultState
     showAccessGate: boolean
@@ -94,8 +96,10 @@
     /** How the identity is protected; its unlocked card offers the
      * checklist here too, before any vault is open. */
     identityHealth?: NookIdentityHealth
-    /** A browser extension asking to connect while this browser is locked. */
+    /** A browser extension asking to connect while no vault is open. */
     extensionConnectRequest?: ExtensionConnectIntent
+    /** The connection was approved or declined from the keyring's card. */
+    onFinishExtensionConnect?: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
   const appVersion = '0.1.0'
@@ -186,6 +190,7 @@
         {onSentinelUnlocked}
         {onCreateDeviceVault}
         {extensionConnectRequest}
+        {onFinishExtensionConnect}
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}

@@ -215,8 +215,8 @@ test('excludes workspace dependencies and canonical executable package scripts',
     );
     for (const name of [
       '.gitignore',
+      '.oxlintrc.json',
       '.prettierrc',
-      'eslint.config.js',
       'executable-skill.json',
       'package.json',
       'tsconfig.json',

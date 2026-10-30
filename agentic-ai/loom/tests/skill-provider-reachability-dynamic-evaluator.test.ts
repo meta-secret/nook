@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 
 import { SkillProviderBoundaryScenario } from './skill-provider-boundary.test.ts';
 
-test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
+test('rejects ambient dynamic-code evaluators and constructor recovery', async () => {
   const sources = [
     'const run = eval; run(source);',
     'new Function(source)();',
@@ -46,7 +46,9 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
   for (const source of [
@@ -68,7 +70,7 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
   ]) {
     const localInspection = { filePath: 'local-evaluator.ts', source };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
         localInspection,
       ),
       source,

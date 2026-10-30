@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import * as ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptIncludeScan } from '../lib/typescript/include-scan.ts';
+import {
+  TypeScriptProgram,
+  TypeScriptSourceKind,
+  type TypeScriptSourceText,
+} from '../lib/typescript/program.ts';
 import { INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 
@@ -59,7 +65,9 @@ export class InternalApiConsumerScope {
     ];
   }
 
-  static discoverInternalApiConsumerPaths(repoRoot: string): readonly string[] {
+  static async discoverInternalApiConsumerPaths(
+    repoRoot: string,
+  ): Promise<readonly string[]> {
     const webRoot = join(repoRoot, InternalApiConsumerScope.WEB_ROOT);
     const includes = [
       '**/src/**/*.ts',
@@ -74,17 +82,43 @@ export class InternalApiConsumerScope {
       '**/tsconfig.app.json',
       'tsconfig.eslint.json',
     ];
-    return ts.sys
-      .readDirectory(webRoot, ['.json', '.svelte', '.ts'], [], includes)
-      .filter((path) => {
-        const repoPath = relative(repoRoot, path).replaceAll('\\', '/');
-        return (
-          InternalApiConsumerScope.productionConsumerScopePath(repoPath) &&
-          InternalApiConsumerScope.referencesGeneratedBinding(path)
-        );
-      })
-      .map((path) => relative(repoRoot, path).replaceAll('\\', '/'))
-      .sort();
+    const candidates = TypeScriptIncludeScan.scan({
+      extensions: ['.json', '.svelte', '.ts'],
+      includes,
+      root: webRoot,
+    }).filter((path) =>
+      InternalApiConsumerScope.productionConsumerScopePath(
+        relative(repoRoot, path).replaceAll('\\', '/'),
+      ),
+    );
+    const inspections = candidates.map((path) =>
+      InternalApiConsumerScope.bindingSourceInspection(path),
+    );
+    const sourceFiles = await TypeScriptProgram.parse(
+      inspections.flatMap((inspection) => inspection.sources),
+    );
+    let cursor = 0;
+    const consumers: string[] = [];
+    for (const [index, path] of candidates.entries()) {
+      const inspection = inspections[index];
+      if (!inspection) throw new Error(`Missing binding inspection: ${path}`);
+      const parsed = sourceFiles.slice(
+        cursor,
+        cursor + inspection.sources.length,
+      );
+      cursor += inspection.sources.length;
+      if (
+        parsed.some((sourceFile) =>
+          InternalApiConsumerScope.sourceFileReferencesGeneratedBinding({
+            bindingReferences: inspection.bindingReferences,
+            sourceFile,
+          }),
+        )
+      ) {
+        consumers.push(relative(repoRoot, path).replaceAll('\\', '/'));
+      }
+    }
+    return consumers.sort();
   }
 
   private static productionConsumerScopePath(repoPath: string): boolean {
@@ -101,42 +135,34 @@ export class InternalApiConsumerScope {
     );
   }
 
-  private static referencesGeneratedBinding(sourcePath: string): boolean {
+  private static bindingSourceInspection(
+    sourcePath: string,
+  ): BindingSourceInspection {
     const source = readFileSync(sourcePath, 'utf8');
     if (sourcePath.endsWith('.json')) {
-      const inspection: GeneratedBindingSourceInspection = {
+      return {
         bindingReferences:
           InternalApiConsumerScope.JSON_GENERATED_BINDING_REFERENCES,
-        sourceFile: ts.parseJsonText('module-expert-consumer.json', source),
+        sources: [
+          {
+            fileName: 'module-expert-consumer.json',
+            kind: TypeScriptSourceKind.Json,
+            text: source,
+          },
+        ],
       };
-      return InternalApiConsumerScope.sourceFileReferencesGeneratedBinding(
-        inspection,
-      );
     }
     const typeScriptSources = sourcePath.endsWith('.svelte')
       ? InternalApiConsumerScope.extractSvelteTypeScriptSources(source)
       : [source];
-    return typeScriptSources.some(
-      InternalApiConsumerScope.typeScriptSourceReferencesGeneratedBinding,
-    );
-  }
-
-  private static typeScriptSourceReferencesGeneratedBinding(
-    source: string,
-  ): boolean {
-    const sourceFile = ts.createSourceFile(
-      'module-expert-consumer.ts',
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const inspection: GeneratedBindingSourceInspection = {
+    return {
       bindingReferences: InternalApiConsumerScope.GENERATED_BINDING_REFERENCES,
-      sourceFile,
+      sources: typeScriptSources.map((text) => ({
+        fileName: 'module-expert-consumer.ts',
+        kind: TypeScriptSourceKind.TypeScript,
+        text,
+      })),
     };
-    return InternalApiConsumerScope.sourceFileReferencesGeneratedBinding(
-      inspection,
-    );
   }
 
   private static sourceFileReferencesGeneratedBinding(
@@ -145,7 +171,7 @@ export class InternalApiConsumerScope {
     let found = false;
     const visit = (node: ts.Node): void => {
       if (
-        ts.isStringLiteralLike(node) &&
+        ts.isStringLiteralLikeNode(node) &&
         inspection.bindingReferences.some((binding) =>
           node.text.includes(binding),
         )
@@ -153,7 +179,7 @@ export class InternalApiConsumerScope {
         found = true;
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(inspection.sourceFile);
     return found;
@@ -193,6 +219,11 @@ export type InternalApiConsumerScopeFinding = {
 export type AuditInternalApiExpertConsumerScopeArgs = {
   readonly discoveredConsumerPaths: readonly string[];
   readonly profile: ModuleExpertProfile;
+};
+
+type BindingSourceInspection = {
+  readonly bindingReferences: readonly string[];
+  readonly sources: readonly TypeScriptSourceText[];
 };
 
 type GeneratedBindingSourceInspection = {

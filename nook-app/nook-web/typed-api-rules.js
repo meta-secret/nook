@@ -1,3 +1,12 @@
+// Generated WebAssembly bindings and build output are never authored lint input.
+export const lintIgnorePatterns = [
+  "**/dist/**",
+  "**/dist-prod/**",
+  "**/node_modules/**",
+  "nook-web-shared/src/vault-app/lib/nook-wasm*/**",
+  "nook-web-shared/src/extension/nook-companion-wasm/**",
+];
+
 export const typedApiSourceFiles = [
   "nook-web-extension/src/**/*.{ts,svelte}",
   "nook-web-shared/src/**/*.{ts,svelte}",
@@ -218,3 +227,34 @@ export const untrustedInputAdapterRules = {
     },
   ],
 };
+
+/** @typedef {typeof concreteObjectTypeRules | typeof typedApiRules | typeof untrustedInputAdapterRules | Pick<typeof typedApiRules, "no-restricted-syntax" | "@typescript-eslint/no-restricted-types">} EslintRuleSet */
+
+/**
+ * Oxlint names the ESLint core rules `eslint/*` and the typescript-eslint
+ * rules `typescript/*`; `no-restricted-syntax` runs through the
+ * `nook-syntax` JS plugin. The type-aware success-contract rule runs in
+ * `named-success-contract-check.ts` on TypeScript 7 instead.
+ *
+ * @param {EslintRuleSet} eslintRules
+ */
+export function oxlintRules(eslintRules) {
+  return Object.fromEntries(
+    Object.entries(eslintRules).flatMap(([ruleName, setting]) => {
+      if (ruleName === "nook-typed-api/no-empty-success-contract") return [];
+      if (ruleName === "no-restricted-syntax") {
+        return [["nook-syntax/no-restricted-syntax", setting]];
+      }
+      if (ruleName.startsWith("@typescript-eslint/")) {
+        return [
+          [
+            `typescript/${ruleName.slice("@typescript-eslint/".length)}`,
+            setting,
+          ],
+        ];
+      }
+      if (ruleName.includes("/")) return [[ruleName, setting]];
+      return [[`eslint/${ruleName}`, setting]];
+    }),
+  );
+}

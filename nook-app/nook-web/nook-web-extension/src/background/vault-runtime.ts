@@ -244,10 +244,10 @@ class BackgroundVaultRuntime {
 
   /** Take the keyring's providers the web app handed over: Rust admits
    * them and keeps the copy sealed to a key this extension holds, locked or
-   * not. Answers whether one was taken. */
+   * not. Answers how many providers it took. */
   async takeKeyringProviderShares(
     shares: NookKeyringProviderSharesAdmission,
-  ): Promise<boolean> {
+  ): Promise<number> {
     await this.ensureExtensionWasm()
     const manager = new NookVaultManager()
     try {

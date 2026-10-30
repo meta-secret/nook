@@ -10,7 +10,7 @@
     "build": "bun run prepare:toolchain && vite build",
     "preview": "bun run prepare:toolchain && vite preview",
     "check": "bun run prepare:toolchain && bun run lint && bun run typecheck",
-    "lint": "cd .. && node_modules/.bin/eslint --config eslint.config.js nook-vault-simple",
+    "lint": "node ../named-success-contract-check.ts . && cd .. && node_modules/.bin/oxlint -c oxlint.config.ts nook-vault-simple && node_modules/.bin/eslint --config eslint.config.js --no-error-on-unmatched-pattern nook-vault-simple",
     "typecheck": "svelte-check --tsgo-experimental-api --tsconfig ./tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

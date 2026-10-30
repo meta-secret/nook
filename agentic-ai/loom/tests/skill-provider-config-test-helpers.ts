@@ -24,7 +24,7 @@ export class SkillProviderConfigTestHelpersScenario {
   private async execute(): Promise<readonly string[]> {
     const request = this.request;
     for (let pass = 0; pass <= MAX_REACHABLE_SOURCE_PASSES; pass += 1) {
-      const reachablePaths = request.discover(request.graph);
+      const reachablePaths = await request.discover(request.graph);
       const unreadReachablePaths = reachablePaths.filter((path) =>
         request.unreadPaths.has(path),
       );
@@ -84,7 +84,7 @@ const MAX_REACHABLE_SOURCE_PASSES = 32;
 
 type ConfigurationDiscovery = (
   graph: ConfigurationScriptGraph,
-) => readonly string[];
+) => Promise<readonly string[]>;
 
 type ConfigurationSourceReader = (path: string) => Promise<string>;
 

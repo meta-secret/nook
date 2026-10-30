@@ -26,6 +26,8 @@
   import type { VaultState } from '$lib/vault.svelte'
   import IdentitiesHub from '$lib/components/identities/IdentitiesHub.svelte'
   import ExtensionRequestPanel from '$lib/components/identities/ExtensionRequestPanel.svelte'
+  import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
   import type { IdentityCardView } from '$lib/components/identities/identity-card-model'
   import {
     ExtensionConnectIntentKind,
@@ -68,7 +70,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
-  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunStage, NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import CardPasswordUnlock from '$lib/components/identities/CardPasswordUnlock.svelte'
   import CardPinUnlock from '$lib/components/identities/CardPinUnlock.svelte'
   import {
@@ -135,6 +137,7 @@
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
+    onFinishExtensionConnect = () => {},
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
@@ -176,9 +179,11 @@
     sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
-    /** A browser extension asking to connect: its request sits beside the
-     * current identity, with the vaults that can answer it. */
+    /** A browser extension asking to join a keyring: its request sits
+     * beside the current identity's card. */
     extensionConnectRequest?: ExtensionConnectIntent
+    /** The connection was approved or declined from the card. */
+    onFinishExtensionConnect?: (outcome: ExtensionConsentCloseOutcome) => void
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
     ) => void | Promise<void>
@@ -851,16 +856,27 @@
   </section>
 {/snippet}
 
+<!-- The extension joins the keyring, not a vault: once the keyring is
+     unlocked it is approved right here, with no vault opened. -->
 {#snippet extensionRequest(card: IdentityCardView)}
   {#if extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested}
-    <ExtensionRequestPanel
-      {vault}
-      request={extensionConnectRequest.request}
-      {card}
-      selectedStoreId={selectedCardStoreId}
-      busy={isVerifying || isInitializing}
-      onConnect={unlockVault}
-    />
+    {#if !vault.deviceProtectionReady}
+      <ExtensionRequestPanel
+        {vault}
+        request={extensionConnectRequest.request}
+        {card}
+        busy={isVerifying || isInitializing}
+        onUnlock={() => void unlockIdentity()}
+      />
+    {:else if vault.firstRun === FirstRunStage.Off}
+      <!-- A keyring still being set up finishes first: its steps own the
+           page, and the approval follows once it exists. -->
+      <ExtensionConnectConsent
+        {vault}
+        request={extensionConnectRequest.request}
+        onClose={onFinishExtensionConnect}
+      />
+    {/if}
   {/if}
 {/snippet}
 

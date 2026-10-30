@@ -55,7 +55,7 @@ pub use manager::{
     NookCompanionPairingApprovalAuthority, NookCompanionPairingCandidateFailure,
     NookCompanionPairingCandidateOutcome, NookCompanionPairingCandidateOutcomeState,
     NookCompanionPairingExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
-    NookExtensionDeviceApproval, NookExtensionEventLogImportStatus, NookExternalEventLogRecords,
+    NookExtensionEventLogImportStatus, NookExternalEventLogRecords,
     NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
     NookSentinelStoredDeliveriesRequest, NookStoredCompanionPairingActivationCandidate,
     NookVaultManager, NookVaultNameState,

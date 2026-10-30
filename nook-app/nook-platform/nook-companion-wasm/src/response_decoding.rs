@@ -19,6 +19,7 @@ use nook_companion_core::GeneratedPasswordResponseKind;
 #[cfg(all(test, target_arch = "wasm32"))]
 use nook_companion_core::WebsitePasskeyAccountListKind;
 mod authenticator_mutation;
+mod event_log_record;
 mod vault_event_log;
 pub use authenticator_mutation::{
     AuthenticatorBackupAttachAdmission, AuthenticatorEnrollmentConfirmAdmission,
@@ -26,6 +27,7 @@ pub use authenticator_mutation::{
     decode_authenticator_enrollment_confirm_response,
     decode_authenticator_enrollment_stage_response,
 };
+pub use event_log_record::*;
 pub use vault_event_log::*;
 
 use nook_companion_core::AuthenticatorCodeSessionResponse;
@@ -108,11 +110,6 @@ pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSession
 #[tsify(type = "unknown")]
 pub struct ExtensionSessionRequestAdmission(nook_companion_core::ExtensionSessionRequestWire);
 
-#[derive(Deserialize, Tsify)]
-#[serde(transparent)]
-#[tsify(type = "unknown")]
-pub struct ExtensionEventLogRecordAdmission(nook_companion_core::ExtensionEventLogRecord);
-
 #[cfg(test)]
 mod session_request_admission_tests {
     use super::*;
@@ -176,25 +173,6 @@ pub fn decode_extension_session_request(
     let result = {
         let ExtensionSessionRequestAdmission(request) = request;
         request.decoded()
-    };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn decode_extension_event_log_record(
-    record: &tsify::Ts<ExtensionEventLogRecordAdmission>,
-) -> Result<tsify::Ts<nook_companion_core::ExtensionEventLogRecord>, wasm_bindgen::JsError> {
-    let record = record
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let result = {
-        let ExtensionEventLogRecordAdmission(record) = record;
-        record
     };
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
@@ -423,8 +401,6 @@ pub fn decode_authenticator_preview_response(
 #[cfg(test)]
 mod admission_tests {
     use super::*;
-    #[cfg(test)]
-    use nook_companion_core::ExtensionEventLogRecord;
 
     #[test]
     fn runtime_response_admissions_declare_unknown_chrome_inputs() {
@@ -465,37 +441,6 @@ mod admission_tests {
         assert!(serde_json::from_str::<AuthenticatorOptionsAdmission>("null").is_err());
         assert!(serde_json::from_str::<AuthenticatorPreviewAdmission>("null").is_err());
         assert!(serde_json::from_str::<ExtensionSessionStatusAdmission>("null").is_err());
-    }
-
-    #[test]
-    fn event_log_record_admission_decodes_the_complete_vault_event() -> Result<(), serde_json::Error>
-    {
-        assert!(ExtensionEventLogRecordAdmission::DECL.ends_with(" = unknown;"));
-        assert!(ExtensionEventLogRecord::DECL.contains("eventId"));
-        let valid = serde_json::json!({
-            "eventId": "event-1",
-            "event": {
-                "schema_version": 2,
-                "store_id": "store_testtoken11",
-                "actor_id": format!("key_{}", "0".repeat(64)),
-                "actor_signing_public_key": "0".repeat(64),
-                "parents": [],
-                "created_at": "2026-08-10T00:00:00Z",
-                "key_epoch": "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
-                "operations": [{"type":"vault-cleared"}],
-                "signature": format!("ed25519:{}", "0".repeat(128))
-            }
-        });
-        let admission: ExtensionEventLogRecordAdmission = serde_json::from_value(valid)?;
-        let decoded = admission.0;
-        assert_eq!(decoded.event_id, "event-1");
-        assert!(
-            serde_json::from_str::<ExtensionEventLogRecordAdmission>(
-                r#"{"eventId":"event-1","event":{"schema_version":2}}"#
-            )
-            .is_err()
-        );
-        Ok(())
     }
 }
 
@@ -549,7 +494,6 @@ mod wasm_tests {
             serde_wasm_bindgen::from_value(self.value).map_err(js_error)
         }
     }
-
     #[wasm_bindgen_test]
     fn session_request_and_status_decoders_preserve_typed_states() -> Result<(), JsError> {
         let request = ResponseWireFixture::parse(

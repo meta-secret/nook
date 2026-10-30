@@ -463,14 +463,13 @@ export class SidePanelViews {
       case PairedVaultsLoadKind.Ready:
         break
     }
-    switch (load.vaults.length) {
+    // A keyring joined with no vault yet is connected all the same.
+    const groups = pairedVaultGroups(load.connections)
+    switch (groups.length) {
       case 0:
         return { kind: SidePanelVaultsKind.NoVault }
       default:
-        return {
-          kind: SidePanelVaultsKind.Paired,
-          groups: pairedVaultGroups(load.vaults),
-        }
+        return { kind: SidePanelVaultsKind.Paired, groups }
     }
   }
 

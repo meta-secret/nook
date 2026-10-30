@@ -1,0 +1,263 @@
+{
+  "plugins": ["eslint", "typescript"],
+  "categories": {
+    "correctness": "off"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "ignorePatterns": ["node_modules/**"],
+  "rules": {
+    "eslint/constructor-super": "error",
+    "eslint/for-direction": "error",
+    "eslint/getter-return": [
+      "error",
+      {
+        "allowImplicit": false
+      }
+    ],
+    "eslint/no-async-promise-executor": "error",
+    "eslint/no-case-declarations": "error",
+    "eslint/no-class-assign": "error",
+    "eslint/no-compare-neg-zero": "error",
+    "eslint/no-cond-assign": ["error", "except-parens"],
+    "eslint/no-const-assign": "error",
+    "eslint/no-constant-binary-expression": [
+      "error",
+      {
+        "checkRelationalComparisons": false
+      }
+    ],
+    "eslint/no-constant-condition": [
+      "error",
+      {
+        "checkLoops": "allExceptWhileTrue"
+      }
+    ],
+    "eslint/no-control-regex": "error",
+    "eslint/no-debugger": "error",
+    "eslint/no-delete-var": "error",
+    "eslint/no-dupe-class-members": "error",
+    "eslint/no-dupe-else-if": "error",
+    "eslint/no-dupe-keys": "error",
+    "eslint/no-duplicate-case": "error",
+    "eslint/no-empty": [
+      "error",
+      {
+        "allowEmptyCatch": false
+      }
+    ],
+    "eslint/no-empty-character-class": "error",
+    "eslint/no-empty-pattern": [
+      "error",
+      {
+        "allowObjectPatternsAsParameters": false
+      }
+    ],
+    "eslint/no-empty-static-block": "error",
+    "eslint/no-ex-assign": "error",
+    "eslint/no-extra-boolean-cast": "error",
+    "eslint/no-fallthrough": [
+      "error",
+      {
+        "allowEmptyCase": false,
+        "reportUnusedFallthroughComment": false
+      }
+    ],
+    "eslint/no-func-assign": "error",
+    "eslint/no-global-assign": [
+      "error",
+      {
+        "exceptions": []
+      }
+    ],
+    "eslint/no-import-assign": "error",
+    "eslint/no-invalid-regexp": "error",
+    "eslint/no-irregular-whitespace": [
+      "error",
+      {
+        "skipComments": false,
+        "skipJSXText": false,
+        "skipRegExps": false,
+        "skipStrings": true,
+        "skipTemplates": false
+      }
+    ],
+    "eslint/no-loss-of-precision": "error",
+    "eslint/no-misleading-character-class": [
+      "error",
+      {
+        "allowEscape": false
+      }
+    ],
+    "eslint/no-new-native-nonconstructor": "error",
+    "eslint/no-nonoctal-decimal-escape": "error",
+    "eslint/no-obj-calls": "error",
+    "eslint/no-prototype-builtins": "error",
+    "eslint/no-redeclare": [
+      "error",
+      {
+        "builtinGlobals": true
+      }
+    ],
+    "eslint/no-regex-spaces": "error",
+    "eslint/no-self-assign": [
+      "error",
+      {
+        "props": true
+      }
+    ],
+    "eslint/no-setter-return": "error",
+    "eslint/no-shadow-restricted-names": [
+      "error",
+      {
+        "reportGlobalThis": true
+      }
+    ],
+    "eslint/no-sparse-arrays": "error",
+    "eslint/no-this-before-super": "error",
+    "eslint/no-unassigned-vars": "error",
+    "eslint/no-unexpected-multiline": "error",
+    "eslint/no-unreachable": "error",
+    "eslint/no-unsafe-finally": "error",
+    "eslint/no-unsafe-negation": [
+      "error",
+      {
+        "enforceForOrderingRelations": false
+      }
+    ],
+    "eslint/no-unsafe-optional-chaining": [
+      "error",
+      {
+        "disallowArithmeticOperators": false
+      }
+    ],
+    "eslint/no-unused-labels": "error",
+    "eslint/no-unused-private-class-members": "error",
+    "eslint/no-useless-assignment": "error",
+    "eslint/no-useless-backreference": "error",
+    "eslint/no-useless-catch": "error",
+    "eslint/no-useless-escape": [
+      "error",
+      {
+        "allowRegexCharacters": []
+      }
+    ],
+    "eslint/no-with": "error",
+    "eslint/preserve-caught-error": [
+      "error",
+      {
+        "requireCatchParameter": false
+      }
+    ],
+    "eslint/require-yield": "error",
+    "eslint/use-isnan": [
+      "error",
+      {
+        "enforceForIndexOf": false,
+        "enforceForSwitchCase": true
+      }
+    ],
+    "eslint/valid-typeof": [
+      "error",
+      {
+        "requireStringLiterals": false
+      }
+    ],
+    "eslint/max-params": [
+      "error",
+      {
+        "max": 1
+      }
+    ],
+    "typescript/no-restricted-types": [
+      "error",
+      {
+        "types": {
+          "unknown": {
+            "message": "Loom forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input codec and must be narrowed immediately."
+          },
+          "object": {
+            "message": "Loom forbids the generic object type. Model a concrete domain value or discriminated union."
+          },
+          "Object": {
+            "message": "Loom forbids the Object type. Model a concrete domain value or discriminated union."
+          },
+          "{}": {
+            "message": "Loom forbids the empty object type. Model every valid branch explicitly."
+          },
+          "ExternalValue": {
+            "message": "Loom forbids generic external values. Model a concrete domain value."
+          },
+          "ExternalObject": {
+            "message": "Loom forbids generic external objects. Model a concrete domain object."
+          },
+          "JsonValue": {
+            "message": "Loom forbids generic JSON values. Model a concrete domain value."
+          },
+          "GenericValue": {
+            "message": "Loom forbids generic value bags. Model a concrete domain value."
+          }
+        }
+      }
+    ],
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-unsafe-type-assertion": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-empty-object-type": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/lib/guards.ts",
+        "src/codec/yaml.ts",
+        "src/codec/external.ts",
+        "src/agent-workflow/structural-result-codec.ts",
+        "src/agent-workflow/structured-result-codec.ts",
+        "src/agent-workflow/structural-evidence-codec.ts",
+        "src/structural-experts/request-codec.ts",
+        "src/module-delivery/codec.ts",
+        "src/module-delivery/codec-fields.ts",
+        "src/module-delivery/cortex-authoring-codec.ts"
+      ],
+      "rules": {
+        "typescript/no-restricted-types": [
+          "error",
+          {
+            "types": {
+              "object": {
+                "message": "Loom forbids the generic object type. Model a concrete domain value or discriminated union."
+              },
+              "Object": {
+                "message": "Loom forbids the Object type. Model a concrete domain value or discriminated union."
+              },
+              "{}": {
+                "message": "Loom forbids the empty object type. Model every valid branch explicitly."
+              },
+              "ExternalValue": {
+                "message": "Loom forbids generic external values. Model a concrete domain value."
+              },
+              "ExternalObject": {
+                "message": "Loom forbids generic external objects. Model a concrete domain object."
+              },
+              "JsonValue": {
+                "message": "Loom forbids generic JSON values. Model a concrete domain value."
+              },
+              "GenericValue": {
+                "message": "Loom forbids generic value bags. Model a concrete domain value."
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

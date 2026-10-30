@@ -62,13 +62,13 @@ import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 export class SkillProviderConfigBoundaryScenario {
   private constructor(private readonly request: ConfigurationScriptGraph) {}
 
-  static configurationScriptPaths(
+  static async configurationScriptPaths(
     graph: ConfigurationScriptGraph,
-  ): readonly string[] {
+  ): Promise<readonly string[]> {
     return new SkillProviderConfigBoundaryScenario(graph).execute();
   }
 
-  private execute(): readonly string[] {
+  private async execute(): Promise<readonly string[]> {
     const graph = this.request;
     const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
       importer,
@@ -111,7 +111,7 @@ export class SkillProviderConfigBoundaryScenario {
           sourceBoundaryRequest,
         );
       if (graph.roots.includes(importer) && !auditedRuntimeSource)
-        SkillProviderConfigApplicationScenario.assertConfigurationSourceBoundary(
+        await SkillProviderConfigApplicationScenario.assertConfigurationSourceBoundary(
           sourceBoundaryRequest,
         );
       if (importer.startsWith(PROVIDER_ROOT)) {
@@ -143,7 +143,7 @@ export class SkillProviderConfigBoundaryScenario {
         sources: graph.sources,
         workingDirectory: next.workingDirectory,
       };
-      for (const reference of SkillProviderConfigBoundaryScenario.configurationScriptReferences(
+      for (const reference of await SkillProviderConfigBoundaryScenario.configurationScriptReferences(
         configurationRequest,
       )) {
         const specifier = reference.specifier;
@@ -224,9 +224,9 @@ export class SkillProviderConfigBoundaryScenario {
           };
           if (
             dependency === LOOM_ARTICLE_ADAPTER &&
-            CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
+            (await CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
               adapterInspection,
-            )
+            ))
           ) {
             throw new Error(`Article adapter violates boundary: ${dependency}`);
           }
@@ -247,9 +247,9 @@ export class SkillProviderConfigBoundaryScenario {
             !SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(
               runtimeSourceRequest,
             ) &&
-            SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
+            (await SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
               boundaryInspection,
-            )
+            ))
           ) {
             throw new Error(
               `Runnable script violates runtime boundary: ${dependency}`,
@@ -273,7 +273,9 @@ export class SkillProviderConfigBoundaryScenario {
     return [...scripts].sort();
   }
 
-  static configurationScriptReferences(request: ConfigurationReferenceRequest) {
+  static async configurationScriptReferences(
+    request: ConfigurationReferenceRequest,
+  ) {
     const inspection = request.inspection;
     const extensionlessModule =
       posix.extname(inspection.importer).length === 0 &&
@@ -371,9 +373,9 @@ export class SkillProviderConfigBoundaryScenario {
         workingDirectory: request.workingDirectory,
       };
       references.push(
-        ...SkillProviderGithubScriptScenario.githubScriptConfigurationReferences(
+        ...(await SkillProviderGithubScriptScenario.githubScriptConfigurationReferences(
           githubScriptRequest,
-        ),
+        )),
       );
       return references;
     }
@@ -411,7 +413,7 @@ export class SkillProviderConfigBoundaryScenario {
         runtimeSourceRequest,
       )
         ? []
-        : SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
+        : await SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
             subprocessInspection,
           );
     } catch (error) {
@@ -448,7 +450,9 @@ export class SkillProviderConfigBoundaryScenario {
     return [...imports, ...launches];
   }
 
-  static actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
+  static async actionRuntimePaths(
+    graph: ActionRuntimeGraph,
+  ): Promise<readonly string[]> {
     const pending = [...graph.roots];
     const pendingSources: string[] = [];
     const visited = new Set<string>();
@@ -558,7 +562,7 @@ export class SkillProviderConfigBoundaryScenario {
       symlinkPaths: graph.symlinkPaths,
     };
     const actionConfigurationPaths =
-      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+      await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
         actionConfigurationGraph,
       );
     const visitedSources = new Set<string>();
@@ -579,9 +583,9 @@ export class SkillProviderConfigBoundaryScenario {
           path: importer,
           source,
         }) &&
-        SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        (await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
           boundaryInspection,
-        )
+        ))
       ) {
         throw new Error(`Action source violates runtime boundary: ${importer}`);
       }

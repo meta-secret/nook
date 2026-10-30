@@ -1,80 +1,83 @@
-import { describe, expect, test } from 'bun:test'
-import { TSESLint } from '@typescript-eslint/utils'
-import ts from 'typescript-eslint'
-import { noRawObjectArgumentsRule } from '../../eslint.config.js'
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { noRawObjectArgumentsRule } from '../../no-raw-object-arguments-rule.js'
+import { OxlintHarness, SvelteEslintHarness } from './lint-contract-harness.js'
 
-/** @type {'problem'} */
-const problemRuleType = 'problem'
-/** @type {'error'} */
-const errorSeverity = 'error'
-const typedNoRawObjectArgumentsRule = {
-  ...noRawObjectArgumentsRule,
-  meta: { ...noRawObjectArgumentsRule.meta, type: problemRuleType },
+// Oxlint runs the rule for TypeScript; each case is one oxlint run on Node.
+setDefaultTimeout(60_000)
+
+const oxlint = new OxlintHarness(noRawObjectArgumentsRule.meta.messages)
+afterAll(() => oxlint.remove())
+
+const ruleId = 'nook-typed-api/no-raw-object-arguments'
+const svelteFixturePath = new URL(
+  '../src/popup/ConnectChain.svelte',
+  import.meta.url,
+).pathname
+const svelteEslint = new SvelteEslintHarness('eslint.config.js')
+
+/** @param {string} source @param {boolean} enforceNamedParameterContracts */
+function lintWithOptions(source, enforceNamedParameterContracts) {
+  return oxlint.lintRules({
+    source,
+    extension: '.ts',
+    rules: { [ruleId]: ['error', { enforceNamedParameterContracts }] },
+  })
 }
 
-/** @type {import('@typescript-eslint/utils').TSESLint.FlatConfig.Config} */
-const config = {
-  languageOptions: {
-    parser: ts.parser,
-    parserOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-    },
-  },
-  plugins: {
-    'nook-typed-api': {
-      rules: {
-        'no-raw-object-arguments': typedNoRawObjectArgumentsRule,
-      },
-    },
-  },
-  rules: {
-    'nook-typed-api/no-raw-object-arguments': errorSeverity,
-  },
+/** @param {string} source */
+function lintAll(source) {
+  return lintWithOptions(source, true)
 }
 
 /** @param {string} source */
 function lint(source) {
-  return new TSESLint.Linter()
-    .verify(source, config)
-    .filter(
-      (message) =>
-        typeof message.messageId !== 'string' ||
-        ![
-          'namedParameterDefault',
-          'namedParameterType',
-          'semanticParameterType',
-        ].includes(message.messageId),
-    )
+  return lintAll(source).filter(
+    (message) =>
+      ![
+        'namedParameterDefault',
+        'namedParameterType',
+        'semanticParameterType',
+      ].includes(message.messageId),
+  )
 }
 
 /** @param {string} source */
 function lintParameterTypes(source) {
-  return new TSESLint.Linter()
-    .verify(source, config)
-    .filter(
-      (message) =>
-        typeof message.messageId === 'string' &&
-        ['namedParameterType', 'semanticParameterType'].includes(
-          message.messageId,
-        ),
-    )
+  return lintAll(source).filter((message) =>
+    ['namedParameterType', 'semanticParameterType'].includes(message.messageId),
+  )
 }
 
 /** @param {string} source */
 function lintWithoutParameterContractEnforcement(source) {
-  /** @type {import('@typescript-eslint/utils').TSESLint.FlatConfig.Config} */
-  const migrationConfig = {
-    ...config,
-    rules: {
-      'nook-typed-api/no-raw-object-arguments': [
-        'error',
-        { enforceNamedParameterContracts: false },
-      ],
-    },
-  }
-  return new TSESLint.Linter().verify(source, migrationConfig)
+  return lintWithOptions(source, false)
 }
+
+describe('typed API rule wiring', () => {
+  test('oxlint reports the rule under its plugin name', () => {
+    const messages = lintAll(`
+      declare function consume(value: { name: string }): void
+      consume({ name: 'Nook' })
+    `)
+    expect(messages.map((message) => message.ruleId)).toContain(ruleId)
+  })
+
+  test('ESLint keeps the rule for Svelte components', async () => {
+    const messages = await svelteEslint.lint({
+      source: `
+        <script lang="ts">
+          declare function consume(value: { name: string }): void
+          consume({ name: 'Nook' })
+        </script>
+      `,
+      filePath: svelteFixturePath,
+    })
+    expect(messages.map((message) => message.messageId)).toContain(
+      'namedArgument',
+    )
+  })
+})
+
 describe('typed API named arguments', () => {
   test('rejects a named object literal without an explicit type', () => {
     const messages = lint(`
@@ -556,17 +559,14 @@ describe('typed API named arguments', () => {
   })
 
   test('rejects inferred object parameter defaults at the declaration', () => {
-    const messages = new TSESLint.Linter()
-      .verify(
-        `
+    const messages = lintAll(
+      `
           function direct(args = { name: 'Nook' }): void { void args }
           function destructured({ args = { name: 'Nook' } }): void {
             void args
           }
         `,
-        config,
-      )
-      .filter((message) => message.messageId === 'namedParameterDefault')
+    ).filter((message) => message.messageId === 'namedParameterDefault')
 
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedParameterDefault',
@@ -575,9 +575,8 @@ describe('typed API named arguments', () => {
   })
 
   test('rejects object defaults under a named parameter contract', () => {
-    const messages = new TSESLint.Linter()
-      .verify(
-        `
+    const messages = lintAll(
+      `
           type DirectConsumeRequest = { name?: string }
           type ForwardConsumeRequest = { args?: { name: string } }
           function direct(args: DirectConsumeRequest = {}): void {
@@ -598,9 +597,7 @@ describe('typed API named arguments', () => {
           const runtime = { defaults }
           function member(args = runtime.defaults): void { void args }
         `,
-        config,
-      )
-      .filter((message) => message.messageId === 'namedParameterDefault')
+    ).filter((message) => message.messageId === 'namedParameterDefault')
 
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedParameterDefault',

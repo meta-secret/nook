@@ -10,9 +10,36 @@
 
 - TypeScript 7 is the compiler. Each package installs it as
   `@typescript/native` (`npm:typescript@7`), which owns `tsc`.
-- The `typescript` package stays at 6 only as the JavaScript API that
-  typescript-eslint, svelte-check, and Loom load; TypeScript 7 ships no stable
-  JavaScript API. Nothing type-checks with it.
+- The web lint splits by file type. Every caller runs oxlint, then the
+  success-contract check, then ESLint, from `nook-app/nook-web`.
+  - **Oxlint** (`oxlint.config.ts`) lints every `.ts`, `.js`, `.mjs`, and
+    `.cjs` file. `oxlint-tsgolint` runs its type-aware rules on TypeScript 7.
+  - Oxlint gives each file the program of the nearest `tsconfig.json` that
+    includes it, as the TypeScript language server does. `jsconfig.json` routes
+    every other file to `tsconfig.eslint.json`; build tools read only
+    `tsconfig.json`, so they ignore it.
+  - ESLint-plugin rules that oxlint lacks run as oxlint JS plugins:
+    `no-unsanitized`, the `eslint-plugin-svelte` rules for `.svelte.ts` and
+    other modules, `nook-typed-api/no-raw-object-arguments`, and the
+    `no-restricted-syntax` selectors as `nook-syntax/no-restricted-syntax`.
+  - Oxlint honors `eslint-disable` comments and reads `@typescript-eslint/*`
+    rule names as `typescript/*`. A selector exemption names
+    `nook-syntax/no-restricted-syntax`.
+  - **`named-success-contract-check.ts`** runs
+    `nook-typed-api/no-empty-success-contract` on the TypeScript 7 API for the
+    same `.ts` files, because oxlint JS plugins get no type information. Run it
+    with `node`: the TypeScript 7 synchronous API needs Node's stdio pipes and
+    fails under Bun.
+  - **ESLint** (`eslint.config.js`) lints only `.svelte` components: the
+    template rules, including the `svelte/no-at-html-tags` XSS guard, the
+    type-aware rules on `<script>` blocks, and the Nook rules.
+  - `oxlint.compile-contracts.config.ts`, the success-contract check, and
+    `eslint.compile-contracts.config.js` run the typed-API compile contracts
+    in the compile image.
+- In `nook-web`, the `typescript` package stays at 6 only as the JavaScript
+  API that the Svelte tooling loads: svelte-check, and typescript-eslint with
+  `eslint-plugin-svelte` for `.svelte` linting. Oxlint and the
+  success-contract check never load it. Nothing type-checks with it.
 - `svelte-check --tsgo-experimental-api` hands Svelte type checking to
   TypeScript 7 through its API, in memory. Each surface keeps its own workspace
   and tsconfig, and parallel runs share no output folder; `--tsgo` instead
@@ -66,10 +93,10 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - **Research graph:** Run its workspace-scoped Knip 6 graph through package
   `bun run check` and the research-only workflow with the correct `$lib` mapping.
 - **Class members:** Knip 6 removed `classMembers` in both graphs.
-  - Use TypeScript and ESLint for unused declarations plus manual caller audit
-    for exported class members.
-- **TypeScript and ESLint:** Reject unused locals and parameters in `.ts`,
-  `.svelte.ts`, and `.svelte`.
+  - Use TypeScript, oxlint, and ESLint for unused declarations plus manual
+    caller audit for exported class members.
+- **TypeScript, oxlint, and ESLint:** Reject unused locals and parameters:
+  oxlint in `.ts` and `.svelte.ts`, ESLint in `.svelte`.
   - The extension `check` script also lints build scripts, Playwright config,
     and E2E specs.
   - Treat each finding as a call-graph result and delete confirmed dead members.

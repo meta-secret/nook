@@ -1,6 +1,7 @@
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
-import type { ExtensionPairingApprovedGrant } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
+import type {
+  StoredExtensionKeyring,
+  StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
@@ -29,11 +30,12 @@ export type IdentityVaultRefreshResult =
 export type IdentityVaultRefreshRequest = {
   /** The unlocked extension device (its app id). */
   readonly deviceId: string
+  /** Every keyring the extension joined. */
+  readonly keyrings: readonly StoredExtensionKeyring[]
   /** Every vault grant the extension holds. */
   readonly grants: readonly StoredExtensionPairingGrant[]
   readonly importVault: PairedVaultImport
   readonly sendSessionMessage: IdentitySessionSend
-  readonly now: () => number
 }
 
 enum RefreshReplyKind {
@@ -94,21 +96,22 @@ function decodeRefreshReply(response: unknown): RefreshReply {
 }
 
 /**
- * When the extension unlocks, it brings its identity's log up to date and
- * pairs every vault of the identity it holds no grant for, the vaults other
- * members created since it joined. Each arrives under an existing grant's
- * device, scopes and identity, beside the paired vaults. A refresh or a
- * vault that fails ends with that failure.
+ * When the extension unlocks, it brings its keyring's log up to date and
+ * pairs every vault of the keyring it holds no grant for: the vaults other
+ * apps created since it joined, the first ones included when it joined a
+ * keyring with no vault. Each pairs under the extension's app in that
+ * keyring, beside the paired vaults. A refresh or a vault that fails ends
+ * with that failure.
  */
 export class IdentityVaultRefresh {
   constructor(private readonly request: IdentityVaultRefreshRequest) {}
 
   async refresh(): Promise<IdentityVaultRefreshResult> {
-    const { deviceId, grants, importVault, sendSessionMessage, now } =
+    const { deviceId, keyrings, grants, importVault, sendSessionMessage } =
       this.request
-    const own = grants.find((grant) => grant.deviceId === deviceId)
-    // An extension key with no vault yet has joined no identity.
-    if (!own) return { ok: true, paired: 0, awaitingGrant: 0 }
+    const keyring = keyrings.find((joined) => joined.deviceId === deviceId)
+    // An extension key that joined no keyring has nothing to refresh.
+    if (!keyring) return { ok: true, paired: 0, awaitingGrant: 0 }
     const refreshMessage: Parameters<IdentitySessionSend>[0] = {
       type: ExtensionSessionMessageType.RefreshIdentityVaults,
       payload: {
@@ -122,40 +125,22 @@ export class IdentityVaultRefresh {
       : rejectedRefresh
     if (reply.kind === RefreshReplyKind.Rejected)
       return { ok: false, reason: IdentityVaultRefreshFailure.RefreshFailed }
-    // Grants stored before identities were recorded read back without one.
-    const identityLabel = ((v) => (v ? v : ''))(own.identityLabel)
-    const template: ExtensionPairingApprovedGrant = {
-      vaultType: own.vaultType,
-      deviceId: own.deviceId,
-      devicePublicKey: own.devicePublicKey,
-      deviceSigningPublicKey: own.deviceSigningPublicKey,
-      deviceLabel: own.deviceLabel,
-      vaultStoreId: own.vaultStoreId,
-      vaultName: own.vaultName,
-      identityLabel,
-      approvedAt: now(),
-      scopes: own.scopes,
-      providers: [],
-      keyring: { kind: ExtensionKeyringGrantKind.Member },
-    }
     const pairingRequest: IdentityVaultPairingRequest = {
       importVault,
       sendSessionMessage,
     }
     const pairing = new IdentityVaultPairing(pairingRequest)
-    // The identity's first sync provider opens the vaults; it stays saved
+    // The keyring's first sync provider opens the vaults; it stays saved
     // in the session, so no credential travels here.
     for (const mountProviderId of reply.mountProviderIds.slice(0, 1)) {
+      const fromMount = (vaultStoreId: string): IdentityVaultPair => ({
+        vaultStoreId,
+        source: { kind: IdentityVaultSourceKind.Mount, mountProviderId },
+        keyring,
+        syncProviderCount: reply.mountProviderIds.length,
+      })
       for (const vaultStoreId of reply.toPair) {
-        const vault: IdentityVaultPair = {
-          vaultStoreId,
-          source: { kind: IdentityVaultSourceKind.Mount, mountProviderId },
-          template,
-          identityLabel,
-          providers: [],
-          syncProviderCount: reply.mountProviderIds.length,
-        }
-        const imported = await pairing.pair(vault)
+        const imported = await pairing.pair(fromMount(vaultStoreId))
         if (!imported.ok) return imported
       }
       // The keyring's other apps keep writing to the vaults the extension
@@ -164,15 +149,7 @@ export class IdentityVaultRefresh {
       for (const paired of grants) {
         if (paired.deviceId !== deviceId) continue
         if (reply.toPair.includes(paired.vaultStoreId)) continue
-        const vault: IdentityVaultPair = {
-          vaultStoreId: paired.vaultStoreId,
-          source: { kind: IdentityVaultSourceKind.Mount, mountProviderId },
-          template,
-          identityLabel,
-          providers: [],
-          syncProviderCount: reply.mountProviderIds.length,
-        }
-        const synced = await pairing.pair(vault)
+        const synced = await pairing.pair(fromMount(paired.vaultStoreId))
         if (!synced.ok) return synced
       }
     }

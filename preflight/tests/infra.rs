@@ -66,7 +66,9 @@ fn web_static_container_entrypoint_is_top_level_reachable() {
         "the selector launched as a top-level container command must be public"
     );
     assert!(
-        container_entrypoint.contains("nook-web-app/node_modules/.bin/eslint")
+        container_entrypoint.contains("nook-web-app/node_modules/.bin/oxlint -c oxlint.config.ts")
+            && container_entrypoint.contains("node named-success-contract-check.ts")
+            && container_entrypoint.contains("nook-web-app/node_modules/.bin/eslint")
             && container_entrypoint.contains("nook-web-app/node_modules/.bin/svelte-check"),
         "the container entrypoint must retain the complete web static-check body"
     );

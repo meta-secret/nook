@@ -1,0 +1,13 @@
+// Routes oxlint's TypeScript 7 type-aware rules (tsgolint), which pick each
+// file's program the way the TypeScript language server does: the nearest
+// tsconfig.json or jsconfig.json that includes it, then the projects it
+// references, then ancestor configs. Files that no surface tsconfig includes
+// (nook-web-shared, scripts, e2e, root config) resolve here to the lint
+// program. Without it they fall into an inferred program that cannot resolve
+// the path aliases. It is a jsconfig.json, not a tsconfig.json, so Vite's
+// transformer and the other build tools that read only tsconfig.json keep
+// their current configuration.
+{
+  "files": [],
+  "references": [{ "path": "./tsconfig.eslint.json" }]
+}

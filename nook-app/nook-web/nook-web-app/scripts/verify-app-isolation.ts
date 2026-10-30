@@ -311,7 +311,7 @@ const sharedBindings = await readFile(
 for (const requiredExport of [
   'configure_vault_application',
   'configured_vault_application',
-  'approve_extension_device',
+  'add_identity_member',
 ]) {
   if (!sharedBindings.includes(requiredExport)) {
     throw new Error(`Shared WASM is missing ${requiredExport}.`)

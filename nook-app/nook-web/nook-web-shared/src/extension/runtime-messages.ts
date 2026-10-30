@@ -5,21 +5,16 @@ import { Effect, Schema } from "effect";
 import {
   decode_extension_pairing_storage_provider,
   type ExtensionPairingStorageProviderPayload as RustExtensionPairingStorageProviderPayload,
+  type NookKeyringProviderSharesAdmission,
 } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import type {
   ExtensionStorageProviderIdentity,
-  ExtensionPairingGrantApproval,
   ExtensionStorageProviderType as RustExtensionStorageProviderType,
   ExtensionVaultEventLogRequestMessage,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
-import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
-import {
-  ExtensionKeyringGrantKind,
-  type ExtensionKeyringGrant,
-  type ExtensionKeyringVault,
-} from "./keyring-grant-wire";
+import type { ExtensionKeyringVault } from "./keyring-grant-wire";
 import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeFailureKind,
@@ -108,15 +103,6 @@ export type GeneratePasswordRequest = {
   readonly payload: { origin: string };
 };
 
-/** Structural browser wire value; validation requires no instance methods or runtime state. */
-export type ExtensionPairingApprovedGrant = Omit<
-  ExtensionPairingGrantApproval,
-  "syncProviderCount"
-> & {
-  providers: ExtensionPairingStorageProviderPayload[];
-  /** The keyring the extension is an app of, beyond this vault. */
-  keyring: ExtensionKeyringGrant;
-};
 export type ExtensionPairingStorageProviderPayload =
   RustExtensionPairingStorageProviderPayload;
 export class ExtensionPairingStorageProviderPayloadDecoder {
@@ -144,52 +130,76 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
   }
 }
 
+/**
+ * Structural browser wire value: the web app added the extension to a
+ * keyring as an app with its own key, so every vault's DEK is encrypted to
+ * that key. Nothing in it is tied to one vault, and a keyring with no vault
+ * yet is approved the same way.
+ */
+export type ExtensionKeyringApproval = {
+  readonly deviceId: string;
+  readonly devicePublicKey: string;
+  readonly deviceSigningPublicKey: string;
+  readonly deviceLabel: string;
+  readonly approvedAt: number;
+  readonly scopes: ExtensionConnectScope[];
+  readonly identityId: string;
+  readonly identityLabel: string;
+  /** The keyring's control log, each event's stored text. */
+  readonly identityEvents: string[];
+  /** Every vault of the keyring this browser holds, with its records; the
+   * rest reach the extension through the keyring's sync providers. */
+  readonly vaults: ExtensionKeyringVault[];
+  /** The keyring's remote providers, one copy sealed in Rust to each other
+   * app of the keyring; the extension's Rust takes the copy sealed to it. */
+  readonly providers: NookKeyringProviderSharesAdmission;
+};
+
 const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
   concurrency: "unbounded",
 };
 
-export class ExtensionPairingApprovedGrantAdmission {
+type ExtensionKeyringHandOverFields = Pick<
+  ExtensionKeyringApproval,
+  "identityId" | "identityLabel" | "identityEvents" | "vaults"
+>;
+
+export class ExtensionKeyringApprovalAdmission {
   private constructor() {}
 
-  /** The keyring the web app added the extension to, with its log and the
-   * records of its other vaults. A web app always sends one. */
+  /** The keyring's log and the vaults this browser holds, with records. */
   private static keyring(
     payload: unknown,
   ): Result<
-    ExtensionKeyringGrant,
+    ExtensionKeyringHandOverFields,
     ExtensionPairingApprovedMessageAdmissionFailure
   > {
     const refused = err(
       ExtensionPairingApprovedMessageAdmissionFailure.Keyring,
     );
-    if (!payload || typeof payload !== "object" || !("keyring" in payload))
-      return refused;
-    const keyring = payload.keyring;
     if (
-      !keyring ||
-      typeof keyring !== "object" ||
-      !("kind" in keyring) ||
-      keyring.kind !== ExtensionKeyringGrantKind.Added ||
-      !("identityId" in keyring) ||
-      typeof keyring.identityId !== "string" ||
-      !keyring.identityId.trim() ||
-      !("identityLabel" in keyring) ||
-      typeof keyring.identityLabel !== "string" ||
-      !("identityEvents" in keyring) ||
-      !Array.isArray(keyring.identityEvents) ||
-      !("vaults" in keyring) ||
-      !Array.isArray(keyring.vaults)
+      !payload ||
+      typeof payload !== "object" ||
+      !("identityId" in payload) ||
+      typeof payload.identityId !== "string" ||
+      !payload.identityId.trim() ||
+      !("identityLabel" in payload) ||
+      typeof payload.identityLabel !== "string" ||
+      !("identityEvents" in payload) ||
+      !Array.isArray(payload.identityEvents) ||
+      !("vaults" in payload) ||
+      !Array.isArray(payload.vaults)
     )
       return refused;
     const identityEvents: string[] = [];
-    for (const candidate of keyring.identityEvents) {
+    for (const candidate of payload.identityEvents) {
       const event: unknown = candidate;
       if (typeof event !== "string" || !event) return refused;
       identityEvents.push(event);
     }
     if (identityEvents.length === 0) return refused;
     const vaults: ExtensionKeyringVault[] = [];
-    for (const candidate of keyring.vaults) {
+    for (const candidate of payload.vaults) {
       const vault: unknown = candidate;
       if (
         !vault ||
@@ -198,7 +208,8 @@ export class ExtensionPairingApprovedGrantAdmission {
         typeof vault.storeId !== "string" ||
         !vault.storeId.trim() ||
         !("eventLogRecords" in vault) ||
-        !Array.isArray(vault.eventLogRecords)
+        !Array.isArray(vault.eventLogRecords) ||
+        vault.eventLogRecords.length === 0
       )
         return refused;
       const records = Effect.runSync(
@@ -216,32 +227,24 @@ export class ExtensionPairingApprovedGrantAdmission {
       };
       vaults.push(admitted);
     }
-    const added: ExtensionKeyringGrant = {
-      kind: ExtensionKeyringGrantKind.Added,
-      identityId: keyring.identityId,
-      identityLabel: keyring.identityLabel,
+    const keyring: ExtensionKeyringHandOverFields = {
+      identityId: payload.identityId,
+      identityLabel: payload.identityLabel,
       identityEvents,
       vaults,
     };
-    return ok(added);
+    return ok(keyring);
   }
 
   static parse(
     value: unknown,
   ): Result<
-    ExtensionPairingApprovedGrant,
+    ExtensionKeyringApproval,
     ExtensionPairingApprovedMessageAdmissionFailure
   > {
     if (!value || typeof value !== "object")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
     const payload = value;
-    if (!("vaultType" in payload))
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
-    if (typeof payload.vaultType !== "string")
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
-    const vaultType = extensionPairingVaultType.admit(payload.vaultType);
-    if (vaultType.isErr())
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
     if (!("deviceId" in payload) || typeof payload.deviceId !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceId);
     if (
@@ -260,13 +263,6 @@ export class ExtensionPairingApprovedGrantAdmission {
       );
     if (!("deviceLabel" in payload) || typeof payload.deviceLabel !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceLabel);
-    if (
-      !("vaultStoreId" in payload) ||
-      typeof payload.vaultStoreId !== "string"
-    )
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId);
-    if (!("vaultName" in payload) || typeof payload.vaultName !== "string")
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultName);
     if (!("approvedAt" in payload) || typeof payload.approvedAt !== "number")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
     if (!("scopes" in payload) || !Array.isArray(payload.scopes))
@@ -280,52 +276,22 @@ export class ExtensionPairingApprovedGrantAdmission {
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
       scopes.push(admitted.success);
     }
-    if (!("providers" in payload) || !Array.isArray(payload.providers))
+    // Rust decodes the sealed providers when the extension takes them.
+    if (!("providers" in payload))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-    const providers: ExtensionPairingStorageProviderPayload[] = [];
-    for (const candidate of payload.providers) {
-      const decoded = Effect.runSync(
-        Effect.result(
-          ExtensionPairingStorageProviderPayloadDecoder.decode(candidate),
-        ),
-      );
-      if (decoded._tag === "Failure")
-        return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-      providers.push(decoded.success);
-    }
-    const keyring = ExtensionPairingApprovedGrantAdmission.keyring(payload);
+    const keyring = ExtensionKeyringApprovalAdmission.keyring(payload);
     if (keyring.isErr()) return err(keyring.error);
-    const grant: ExtensionPairingApprovedGrant = {
-      vaultType: vaultType.value,
+    const approval: ExtensionKeyringApproval = {
       deviceId: payload.deviceId,
       devicePublicKey: payload.devicePublicKey,
       deviceSigningPublicKey: payload.deviceSigningPublicKey,
       deviceLabel: payload.deviceLabel,
-      vaultStoreId: payload.vaultStoreId,
-      vaultName: payload.vaultName,
-      // Approvals from a web app that predates identities carry none.
-      identityLabel:
-        "identityLabel" in payload && typeof payload.identityLabel === "string"
-          ? payload.identityLabel
-          : "",
       approvedAt: payload.approvedAt,
       scopes,
-      providers,
-      keyring: keyring.value,
+      ...keyring.value,
+      providers: payload.providers,
     };
-    return ok(grant);
-  }
-  static decode(
-    value: unknown,
-  ): Effect.Effect<ExtensionPairingApprovedGrant, RuntimeMessageDecodeFailure> {
-    const admissionRequest: RuntimeMessageAdmissionRequest<
-      ExtensionPairingApprovedGrant,
-      ExtensionPairingApprovedMessageAdmissionFailure
-    > = {
-      result: ExtensionPairingApprovedGrantAdmission.parse(value),
-      kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
-    };
-    return decodeAdmissionResult(admissionRequest);
+    return ok(approval);
   }
 }
 
@@ -382,19 +348,14 @@ export enum ExtensionPairingApprovedMessageType {
 const extensionPairingApprovedTypeSchema = Schema.Literal(
   ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
 );
-const extensionPairingApprovedEventLogRecordsSchema = Schema.Array(
-  Schema.Unknown,
-).pipe(Schema.check(Schema.isMinLength(1)));
 type ExtensionPairingApprovedMessageFields = {
   readonly type: typeof extensionPairingApprovedTypeSchema;
   readonly payload: typeof Schema.Unknown;
-  readonly eventLogRecords: typeof extensionPairingApprovedEventLogRecordsSchema;
 };
 const extensionPairingApprovedMessageFields: ExtensionPairingApprovedMessageFields =
   {
     type: extensionPairingApprovedTypeSchema,
     payload: Schema.Unknown,
-    eventLogRecords: extensionPairingApprovedEventLogRecordsSchema,
   };
 const extensionPairingApprovedMessageSchema = Schema.Struct(
   extensionPairingApprovedMessageFields,
@@ -404,8 +365,7 @@ const extensionPairingApprovedMessageSchema = Schema.Struct(
 export class ExtensionPairingApprovedMessage {
   private constructor() {}
   declare readonly type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved;
-  declare readonly payload: ExtensionPairingApprovedGrant;
-  declare readonly eventLogRecords: ExtensionEventLogRecord[];
+  declare readonly payload: ExtensionKeyringApproval;
   static decode(
     message: unknown,
   ): Effect.Effect<
@@ -424,22 +384,18 @@ export class ExtensionPairingApprovedMessage {
       kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
     };
     return decodeRuntimeMessage(request).pipe(
-      Effect.flatMap(({ type, payload, eventLogRecords }) =>
-        Effect.all(
-          eventLogRecords.map(ExtensionEventLogRecordSchema.decode),
-          eventLogRecordDecodeOptions,
-        ).pipe(
-          Effect.flatMap((decodedRecords) =>
-            ExtensionPairingApprovedGrantAdmission.decode(payload).pipe(
-              Effect.map((decodedPayload) => ({
-                type,
-                payload: decodedPayload,
-                eventLogRecords: decodedRecords,
-              })),
-            ),
-          ),
-        ),
-      ),
+      Effect.flatMap(({ type, payload }) => {
+        const admissionRequest: RuntimeMessageAdmissionRequest<
+          ExtensionKeyringApproval,
+          ExtensionPairingApprovedMessageAdmissionFailure
+        > = {
+          result: ExtensionKeyringApprovalAdmission.parse(payload),
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
+        };
+        return decodeAdmissionResult(admissionRequest).pipe(
+          Effect.map((approval) => ({ type, payload: approval })),
+        );
+      }),
     );
   }
 }
@@ -456,6 +412,3 @@ export type RuntimeMessage =
 
 export const ExtensionStorageProviderPayload =
   ExtensionStorageProviderPayloadAdmission;
-
-export const ExtensionPairingApprovedGrant =
-  ExtensionPairingApprovedGrantAdmission;

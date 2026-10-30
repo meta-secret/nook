@@ -1,5 +1,8 @@
 import { TypeScriptCommandExpression } from './skill-provider-typescript-command-expression.ts';
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSyntax } from '../src/lib/typescript/syntax.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import { SkillProviderTypescriptRequireScenario } from './skill-provider-typescript-require.ts';
 
@@ -25,25 +28,25 @@ export class SkillProviderTypescriptSubprocessScenario {
     private readonly request: TypeScriptSubprocessInspection,
   ) {}
 
-  static typescriptSubprocessCommands(
+  static async typescriptSubprocessCommands(
     inspection: TypeScriptSubprocessInspection,
-  ): readonly string[] {
+  ): Promise<readonly string[]> {
     return new SkillProviderTypescriptSubprocessScenario(inspection).execute();
   }
 
-  private execute(): readonly string[] {
+  private async execute(): Promise<readonly string[]> {
     const inspection = this.request;
     if (encoder.encode(inspection.source).byteLength > MAX_BYTES)
       throw new Error(
         'TypeScript subprocess source exceeds its UTF-8 byte bound.',
       );
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-      inspection.path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: inspection.path,
+      kind: inspection.path.endsWith('.tsx')
+        ? TypeScriptSourceKind.Tsx
+        : TypeScriptSourceKind.TypeScript,
+      text: inspection.source,
+    });
     let nodeCount = 0;
     const bindings: LexicalBinding[] = [];
     const collect = (node: ts.Node): void => {
@@ -54,7 +57,7 @@ export class SkillProviderTypescriptSubprocessScenario {
         target: bindings,
       };
       SkillProviderTypescriptBindingsScenario.collectBinding(collectionRequest);
-      ts.forEachChild(node, collect);
+      node.forEachChild(collect);
     };
     collect(sourceFile);
     const exemptionRequest = { path: inspection.path, sourceFile };
@@ -191,7 +194,7 @@ export class SkillProviderTypescriptSubprocessScenario {
           );
         if (command !== false) commands.push(command);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     return commands;
@@ -520,7 +523,7 @@ export class SkillProviderTypescriptSubprocessScenario {
       let expression: ts.Expression | false = false;
       if (ts.isPropertyAssignment(property)) expression = property.initializer;
       if (ts.isShorthandPropertyAssignment(property))
-        expression = property.name;
+        expression = TypeScriptSyntax.shorthandName(property);
       if (expression === false) return false;
       const propertyRequest: CapabilityResolutionRequest = {
         expression,

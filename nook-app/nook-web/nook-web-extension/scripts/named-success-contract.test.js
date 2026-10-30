@@ -4,71 +4,52 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { Linter } from 'eslint'
-import namedSuccessEslintConfig from '../../eslint.named-success.config.js'
 import { namedSuccessContractBaseline } from '../../named-success-contract-baseline.js'
 import { CompileContractFixture } from './compile-contract-fixture.js'
+import {
+  SuccessContractHarness,
+  SvelteEslintHarness,
+} from './lint-contract-harness.js'
 
-// Every case initializes type-aware ESLint services. Parallel PR phases can
-// briefly push one otherwise-fast fixture beyond Bun's 5-second default.
-// Each case builds a TypeScript program; release verification runs every
-// static, lint, and unit gate in parallel in one container, where that can
-// take well over fifteen seconds.
+// TypeScript cases run the TypeScript 7 check on Node; Svelte cases build a
+// TypeScript 6 program through typescript-eslint. Release verification runs
+// every static, lint, and unit gate in parallel in one container, where that
+// can take well over fifteen seconds.
 setDefaultTimeout(60_000)
-// These contracts write fixture files and lint them in one long-lived
-// process. With CI=true typescript-eslint infers a single run and builds its
-// program once, before the fixtures exist; keep the per-file programs.
-process.env.TSESTREE_SINGLE_RUN = 'false'
 afterAll(() => CompileContractFixture.remove())
 
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const svelteFixturePath = fileURLToPath(
   new URL('../src/popup/PopupApp.svelte', import.meta.url),
 )
+const ruleId = 'nook-typed-api/no-empty-success-contract'
+const svelteEslint = new SvelteEslintHarness('eslint.named-success.config.js')
 
-/** @typedef {import('eslint').Linter.LintMessage} LintMessage */
+/** @typedef {{ messageId?: string | undefined }} ReportedMessage */
 
 class NamedSuccessContractTestHarness {
   /** @param {string} source */
   static lint(source) {
     const filePath = CompileContractFixture.path('.ts')
     writeFileSync(filePath, source)
-    const messages = new Linter({ cwd: webRoot }).verify(
-      source,
-      /** @type {import('eslint').Linter.Config[]} */ (
-        namedSuccessEslintConfig
-      ),
-      filePath,
-    )
-    return messages.filter(
-      (message) =>
-        message.ruleId === 'nook-typed-api/no-empty-success-contract',
-    )
+    return SuccessContractHarness.check(filePath)
   }
 }
 
 class SvelteNamedSuccessContractTestHarness {
   /** @param {string} source */
-  static lint(source) {
-    return this.lintAll(source).filter(
-      (message) =>
-        message.ruleId === 'nook-typed-api/no-empty-success-contract',
-    )
+  static async lint(source) {
+    const messages = await this.lintAll(source)
+    return messages.filter((message) => message.ruleId === ruleId)
   }
 
   /** @param {string} source */
   static lintAll(source) {
-    return new Linter({ cwd: webRoot }).verify(
-      source,
-      /** @type {import('eslint').Linter.Config[]} */ (
-        namedSuccessEslintConfig
-      ),
-      svelteFixturePath,
-    )
+    return svelteEslint.lint({ source, filePath: svelteFixturePath })
   }
 }
 
-/** @param {LintMessage[]} messages @param {string} messageId */
+/** @param {ReportedMessage[]} messages @param {string} messageId */
 function expectMessage(messages, messageId) {
   expect(messages.map((message) => message.messageId)).toContain(messageId)
 }
@@ -85,7 +66,8 @@ function gitBlobSha1(source) {
 // cold, contended runner. Keep that initialization in module setup so the test
 // measures the contract assertions, while the overall suite still fails if
 // parser setup or linting fails.
-const typeAwareSvelteMessages = SvelteNamedSuccessContractTestHarness.lint(`
+const typeAwareSvelteMessages =
+  await SvelteNamedSuccessContractTestHarness.lint(`
   <script lang="ts">
     import { ok as succeed, type Result } from 'neverthrow'
     type StorageFailure = { readonly kind: 'storage' }
@@ -129,7 +111,21 @@ describe('nook-typed-api/no-empty-success-contract', () => {
       export type EmptySuccess = NeverthrowOk<void, StorageFailure>
     `)
 
+    expect(messages.map((message) => message.line)).toEqual([4, 5])
     expectMessage(messages, 'emptySuccessType')
+  })
+
+  test('reports only the outermost empty contract and skips inline property payloads', () => {
+    const messages = NamedSuccessContractTestHarness.lint(`
+      import type { Result } from 'neverthrow'
+      type StorageFailure = { readonly kind: 'storage' }
+      export type Outer = Promise<Promise<Result<void, StorageFailure>>>
+      export type Payload = { readonly inner: Result<void, StorageFailure> }
+    `)
+
+    expect(
+      messages.map((message) => `${message.line}:${message.messageId}`),
+    ).toEqual(['4:emptySuccessType'])
   })
 
   test('checks function, arrow, and method return contracts', () => {
@@ -151,7 +147,7 @@ describe('nook-typed-api/no-empty-success-contract', () => {
 
     expect(
       messages.filter((message) => message.messageId === 'emptySuccessType'),
-    ).not.toHaveLength(0)
+    ).toHaveLength(3)
   })
 
   test('accepts named concrete success values and the vault approval completion shape', () => {
@@ -223,8 +219,8 @@ describe('nook-typed-api/no-empty-success-contract', () => {
     expectMessage(typeAwareSvelteMessages, 'emptySuccessType')
   })
 
-  test('dedicated config enables only the named-success gate', () => {
-    const messages = SvelteNamedSuccessContractTestHarness.lintAll(`
+  test('dedicated config enables only the named-success gate', async () => {
+    const messages = await SvelteNamedSuccessContractTestHarness.lintAll(`
       <script lang="ts">
         import { ok } from 'neverthrow'
         function tooManyParameters(first: string, second: string): void {
@@ -236,9 +232,7 @@ describe('nook-typed-api/no-empty-success-contract', () => {
       </script>
     `)
 
-    expect(messages.map((message) => message.ruleId)).toEqual([
-      'nook-typed-api/no-empty-success-contract',
-    ])
+    expect(messages.map((message) => message.ruleId)).toEqual([ruleId])
   })
 
   test('legacy baseline contains only exact current source snapshots', () => {
@@ -248,5 +242,15 @@ describe('nook-typed-api/no-empty-success-contract', () => {
     })
 
     expect(staleEntries).toEqual([])
+  })
+
+  test('the TypeScript 7 check suppresses each exact baseline snapshot', () => {
+    // A baseline entry without findings is reported as stale, so an empty
+    // result proves the snapshot still has findings and they are suppressed.
+    for (const entry of namedSuccessContractBaseline) {
+      expect(SuccessContractHarness.check(join(webRoot, entry.file))).toEqual(
+        [],
+      )
+    }
   })
 })

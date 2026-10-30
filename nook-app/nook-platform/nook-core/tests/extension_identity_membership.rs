@@ -292,7 +292,7 @@ impl Extension {
 #[test]
 fn the_web_app_adds_the_extension_and_it_joins_from_the_keyring_log() -> anyhow::Result<()> {
     let mut family = WebIdentity::found()?;
-    let approved = family.create_vault('A')?;
+    let first = family.create_vault('A')?;
     let other = family.create_vault('B')?;
     let mut extension = Extension::new();
     let key = extension.protect()?;
@@ -310,17 +310,19 @@ fn the_web_app_adds_the_extension_and_it_joins_from_the_keyring_log() -> anyhow:
         ReplicatedIdentityStanding::of(&state, key.app.app_id()),
         ReplicatedIdentityStanding::ActiveMember
     );
-    assert!(extension.opens(&key, &approved));
+    assert!(extension.opens(&key, &first));
     assert!(extension.opens(&key, &other));
-    // The approval imported one vault; the keyring's other vault is paired
-    // from the records the approval carried, right after the join.
+    // The approval is for the keyring, not one vault: every vault pairs from
+    // the records it carried, right after the join.
     let plan = IdentityVaultPairingRequest {
         snapshot: &family.snapshot_for(&key)?,
-        paired_store_ids: &[approved.to_string()],
+        paired_store_ids: &[],
     }
     .plan();
     assert_eq!(plan.standing, IdentityControlStanding::Member);
-    assert_eq!(plan.to_pair, vec![other.to_string()]);
+    assert_eq!(plan.to_pair.len(), 2);
+    assert!(plan.to_pair.contains(&first.to_string()));
+    assert!(plan.to_pair.contains(&other.to_string()));
     Ok(())
 }
 
@@ -375,6 +377,47 @@ fn a_vault_created_after_the_join_is_paired_on_the_next_sync() -> anyhow::Result
     }
     .plan();
     assert_eq!(plan.to_pair, vec![later.to_string()]);
+    assert!(plan.awaiting_grant.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_keyring_with_no_vault_is_joined_and_pairs_its_first_vault_on_the_next_sync()
+-> anyhow::Result<()> {
+    let mut family = WebIdentity::found()?;
+    let mut extension = Extension::new();
+    let key = extension.protect()?;
+    let local_log = key.local_log(&[&family]);
+
+    // The web app adds the extension to a keyring with no vault yet: the
+    // join needs none.
+    family.add(&key)?;
+    extension.join(&key, &family, local_log)?;
+
+    assert_eq!(
+        ReplicatedIdentityStanding::of(&family.state()?, key.app.app_id()),
+        ReplicatedIdentityStanding::ActiveMember
+    );
+    let joined = IdentityVaultPairingRequest {
+        snapshot: &family.snapshot_for(&key)?,
+        paired_store_ids: &[],
+    }
+    .plan();
+    assert_eq!(joined.standing, IdentityControlStanding::Member);
+    assert!(joined.to_pair.is_empty());
+    assert!(joined.awaiting_grant.is_empty());
+
+    // The keyring's first vault is encrypted to the extension too.
+    let first = family.create_vault('F')?;
+    extension.sync(&key, &family)?;
+
+    assert!(extension.opens(&key, &first));
+    let plan = IdentityVaultPairingRequest {
+        snapshot: &family.snapshot_for(&key)?,
+        paired_store_ids: &[],
+    }
+    .plan();
+    assert_eq!(plan.to_pair, vec![first.to_string()]);
     assert!(plan.awaiting_grant.is_empty());
     Ok(())
 }

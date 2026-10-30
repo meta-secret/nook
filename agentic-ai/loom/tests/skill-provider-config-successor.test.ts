@@ -13,6 +13,7 @@ import { SkillProviderConfigRuntimeScenario } from './skill-provider-config-runt
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
+import { SettledRejection } from './settled-rejection.ts';
 
 export class SkillProviderConfigSuccessorScenario {
   private constructor(private readonly request: GraphRequest) {}
@@ -31,9 +32,13 @@ export class SkillProviderConfigSuccessorScenario {
     };
   }
 
-  static expectProviderReachable(candidate: ConfigurationScriptGraph): void {
+  static async expectProviderReachable(
+    candidate: ConfigurationScriptGraph,
+  ): Promise<void> {
     expect(
-      SkillProviderConfigBoundaryScenario.configurationScriptPaths(candidate),
+      await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        candidate,
+      ),
     ).toContain(PROVIDER_CLI);
   }
 }
@@ -47,7 +52,7 @@ type GraphRequest = {
   readonly sources: ReadonlyMap<string, string>;
 };
 
-test('nested package scripts resolve relative to their package first', () => {
+test('nested package scripts resolve relative to their package first', async () => {
   const sources = new Map([
     ['nested/package.json', '{"scripts":{"audit":"bun scripts/a.ts"}}'],
     ['scripts/a.ts', 'export {};'],
@@ -55,12 +60,12 @@ test('nested package scripts resolve relative to their package first', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('Vite configs are runnable roots', () => {
+test('Vite configs are runnable roots', async () => {
   expect(
     SkillProviderConfigRuntimeScenario.isRunnableConfiguration(
       'nested/vite.config.ts',
@@ -77,12 +82,12 @@ test('Vite configs are runnable roots', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: [vite], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('global Task vars and env shell values remain executable', () => {
+test('global Task vars and env shell values remain executable', async () => {
   const source = `
 vars:
   GENERATED: {sh: bun ${PROVIDER_CLI}}
@@ -116,7 +121,7 @@ tasks:
   ]);
 });
 
-test('argv-driven TypeScript loaders are checked fail-closed', () => {
+test('argv-driven TypeScript loaders are checked fail-closed', async () => {
   const sources = new Map([
     [
       'Taskfile.yml',
@@ -126,12 +131,12 @@ test('argv-driven TypeScript loaders are checked fail-closed', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['Taskfile.yml'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('Task includes with arbitrary filenames join the runnable graph', () => {
+test('Task includes with arbitrary filenames join the runnable graph', async () => {
   const included = 'infra/tasks/custom.yml';
   const sources = new Map([
     ['infra/Taskfile.yml', `includes: {custom: {taskfile: tasks/custom.yml}}`],
@@ -139,12 +144,12 @@ test('Task includes with arbitrary filenames join the runnable graph', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['infra/Taskfile.yml'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('explicit Taskfile selections join the runnable graph', () => {
+test('explicit Taskfile selections join the runnable graph', async () => {
   for (const command of [
     'task -t scripts/commands.yml audit',
     'task --taskfile scripts/commands.yml audit',
@@ -162,13 +167,13 @@ test('explicit Taskfile selections join the runnable graph', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('env options preserve wrapped configuration command discovery', () => {
+test('env options preserve wrapped configuration command discovery', async () => {
   for (const command of [
     'env -i task --taskfile scripts/commands.yml audit',
     '/usr/bin/env task --taskfile scripts/commands.yml audit',
@@ -183,13 +188,13 @@ test('env options preserve wrapped configuration command discovery', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('Task dotenv authority fails closed at root and task scope', () => {
+test('Task dotenv authority fails closed at root and task scope', async () => {
   for (const source of [
     'dotenv: [audit.env]\ntasks: {audit: {cmds: [node scripts/main.cjs]}}',
     'tasks: {audit: {dotenv: [audit.env], cmds: [node scripts/main.cjs]}}',
@@ -201,16 +206,17 @@ test('Task dotenv authority fails closed at root and task scope', () => {
     ]);
     const request = { roots: ['Taskfile.yml'], sources };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.configurationScriptPaths(
           SkillProviderConfigSuccessorScenario.graph(request),
         ),
+      ),
       source,
-    ).toThrow('Task dotenv configuration is forbidden');
+    ).toMatch('Task dotenv configuration is forbidden');
   }
 });
 
-test('absolute env wrappers preserve direct runtime launches', () => {
+test('absolute env wrappers preserve direct runtime launches', async () => {
   const sources = new Map([
     [
       'package.json',
@@ -220,12 +226,12 @@ test('absolute env wrappers preserve direct runtime launches', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('runnable TypeScript imports resolve nearest tsconfig aliases', () => {
+test('runnable TypeScript imports resolve nearest tsconfig aliases', async () => {
   const sources = new Map([
     [
       'tsconfig.json',
@@ -241,12 +247,12 @@ test('runnable TypeScript imports resolve nearest tsconfig aliases', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/vite.config.ts'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('runnable TypeScript imports resolve inherited tsconfig aliases', () => {
+test('runnable TypeScript imports resolve inherited tsconfig aliases', async () => {
   const sources = new Map([
     [
       'tsconfig.base.json',
@@ -258,12 +264,12 @@ test('runnable TypeScript imports resolve inherited tsconfig aliases', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/vite.config.ts'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('tsconfig extends chains fail closed on drift cycles and path bounds', () => {
+test('tsconfig extends chains fail closed on drift cycles and path bounds', async () => {
   const cases = [
     new Map([
       ['nested/tsconfig.json', '{"extends":"./base.json"}'],
@@ -284,11 +290,13 @@ test('tsconfig extends chains fail closed on drift cycles and path bounds', () =
       ? 'vite.config.ts'
       : 'nested/vite.config.ts';
     const request = { roots: [root], sources };
-    expect(() =>
-      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-        SkillProviderConfigSuccessorScenario.graph(request),
+    expect(
+      await SettledRejection.message(
+        SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+          SkillProviderConfigSuccessorScenario.graph(request),
+        ),
       ),
-    ).toThrow(/(?:cycle|untracked|escapes repository)/u);
+    ).toMatch(/(?:cycle|untracked|escapes repository)/u);
   }
 
   const boundedSources = new Map<string, string>([
@@ -303,14 +311,16 @@ test('tsconfig extends chains fail closed on drift cycles and path bounds', () =
     roots: ['nested/vite.config.ts'],
     sources: boundedSources,
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(boundedRequest),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(boundedRequest),
+      ),
     ),
-  ).toThrow('tsconfig extends chain exceeds its bound');
+  ).toMatch('tsconfig extends chain exceeds its bound');
 });
 
-test('external tsconfig presets do not become repository inheritance edges', () => {
+test('external tsconfig presets do not become repository inheritance edges', async () => {
   const sources = new Map([
     [
       'nested/tsconfig.json',
@@ -320,13 +330,13 @@ test('external tsconfig presets do not become repository inheritance edges', () 
   ]);
   const request = { roots: ['nested/vite.config.ts'], sources };
   expect(
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+    await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
       SkillProviderConfigSuccessorScenario.graph(request),
     ),
   ).toEqual([]);
 });
 
-test('Bun preload configuration fails closed', () => {
+test('Bun preload configuration fails closed', async () => {
   expect(
     SkillProviderConfigRuntimeScenario.isRunnableConfiguration(
       'nested/bunfig.toml',
@@ -345,12 +355,13 @@ test('Bun preload configuration fails closed', () => {
       sources,
     };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.configurationScriptPaths(
           SkillProviderConfigSuccessorScenario.graph(request),
         ),
+      ),
       key,
-    ).toThrow('Bun preload configuration is forbidden');
+    ).toMatch('Bun preload configuration is forbidden');
   }
   const invalidInspection = { path: 'bunfig.toml', source: 'preload = [' };
   expect(() =>
@@ -360,7 +371,7 @@ test('Bun preload configuration fails closed', () => {
   ).toThrow('Bun configuration is invalid');
 });
 
-test('env options preserve wrapped Playwright configuration discovery', () => {
+test('env options preserve wrapped Playwright configuration discovery', async () => {
   const sources = new Map([
     [
       'nested/package.json',
@@ -370,12 +381,12 @@ test('env options preserve wrapped Playwright configuration discovery', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('bunx options preserve wrapped configuration tool discovery', () => {
+test('bunx options preserve wrapped configuration tool discovery', async () => {
   for (const [command, config] of [
     ['bunx --bun playwright test', 'playwright.config.ts'],
     ['bunx --package eslint eslint src', 'eslint.config.ts'],
@@ -389,7 +400,7 @@ test('bunx options preserve wrapped configuration tool discovery', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['nested/package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
@@ -397,14 +408,16 @@ test('bunx options preserve wrapped configuration tool discovery', () => {
     ['package.json', '{"scripts":{"audit":"bunx --future playwright test"}}'],
   ]);
   const request = { roots: ['package.json'], sources };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(request),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(request),
+      ),
     ),
-  ).toThrow('Unsupported bunx wrapper option');
+  ).toMatch('Unsupported bunx wrapper option');
 });
 
-test('Node environment-file authority fails closed', () => {
+test('Node environment-file authority fails closed', async () => {
   for (const option of [
     '--env-file=a.env',
     '--env-file a.env',
@@ -420,16 +433,17 @@ test('Node environment-file authority fails closed', () => {
     ]);
     const request = { roots: ['package.json'], sources };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.configurationScriptPaths(
           SkillProviderConfigSuccessorScenario.graph(request),
         ),
+      ),
       option,
-    ).toThrow('Executable node runtime option is forbidden');
+    ).toMatch('Executable node runtime option is forbidden');
   }
 });
 
-test('dynamic and malformed env options fail closed', () => {
+test('dynamic and malformed env options fail closed', async () => {
   for (const command of [
     'env -u "$NAME" task --taskfile scripts/commands.yml audit',
     'env --unsupported task --taskfile scripts/commands.yml audit',
@@ -439,16 +453,17 @@ test('dynamic and malformed env options fail closed', () => {
     ]);
     const request = { roots: ['package.json'], sources };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.configurationScriptPaths(
           SkillProviderConfigSuccessorScenario.graph(request),
         ),
+      ),
       command,
-    ).toThrow();
+    ).not.toBe(false);
   }
 });
 
-test('repository explicit Taskfile selection preserves relative cwd', () => {
+test('repository explicit Taskfile selection preserves relative cwd', async () => {
   const repositorySelectionRequest = {
     commands: ['task --taskfile nook-app/Taskfile.yml format'],
     importer: '.task/agentic-ai.yml',
@@ -482,12 +497,12 @@ test('repository explicit Taskfile selection preserves relative cwd', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const collisionRequest = { roots: ['package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(collisionRequest),
   );
 });
 
-test('dynamic and malformed Taskfile selections fail closed', () => {
+test('dynamic and malformed Taskfile selections fail closed', async () => {
   for (const command of [
     'task --taskfile "$TASKFILE" audit',
     'task "$OPTION" scripts/commands.yml audit',
@@ -504,16 +519,17 @@ test('dynamic and malformed Taskfile selections fail closed', () => {
     ]);
     const request = { roots: ['package.json'], sources };
     expect(
-      () =>
+      await SettledRejection.message(
         SkillProviderConfigBoundaryScenario.configurationScriptPaths(
           SkillProviderConfigSuccessorScenario.graph(request),
         ),
+      ),
       command,
-    ).toThrow();
+    ).not.toBe(false);
   }
 });
 
-test('module-flavor imports resolve to tracked TypeScript sources', () => {
+test('module-flavor imports resolve to tracked TypeScript sources', async () => {
   for (const [specifier, dependency] of [
     ['./facade.mjs', 'scripts/facade.mts'],
     ['./facade.cjs', 'scripts/facade.cts'],
@@ -524,13 +540,13 @@ test('module-flavor imports resolve to tracked TypeScript sources', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['scripts/vite.config.ts'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('tracked local actions are roots outside the conventional directory', () => {
+test('tracked local actions are roots outside the conventional directory', async () => {
   const manifest = 'scripts/audit-action/action.yml';
   const entrypoint = 'scripts/audit-action/index.js';
   const sources = new Map([
@@ -552,26 +568,30 @@ test('tracked local actions are roots outside the conventional directory', () =>
     symlinkPaths: new Set(),
   };
   expect(
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(actionGraph),
+    await SkillProviderConfigBoundaryScenario.actionRuntimePaths(actionGraph),
   ).toContain(PROVIDER_CLI);
 
   const symlinkGraph: ActionRuntimeGraph = {
     ...actionGraph,
     symlinkPaths: new Set([manifest]),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(symlinkGraph),
-  ).toThrow('tracked symlink');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(symlinkGraph),
+    ),
+  ).toMatch('tracked symlink');
   const untrackedGraph: ActionRuntimeGraph = {
     ...actionGraph,
     sources: new Map([[manifest, 'runs: {using: node24, main: missing.js}']]),
   };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.actionRuntimePaths(untrackedGraph),
-  ).toThrow('entrypoint is untracked');
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.actionRuntimePaths(untrackedGraph),
+    ),
+  ).toMatch('entrypoint is untracked');
 });
 
-test('workflow env precedence is propagated into run analysis', () => {
+test('workflow env precedence is propagated into run analysis', async () => {
   const workflow = '.github/workflows/audit.yml';
   const sources = new Map([
     [
@@ -581,12 +601,12 @@ test('workflow env precedence is propagated into run analysis', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: [workflow], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('extensionless TypeScript imports are resolved before optional pruning', () => {
+test('extensionless TypeScript imports are resolved before optional pruning', async () => {
   for (const [specifier, dependency] of [
     ['./nested', 'scripts/nested.ts'],
     ['./directory', 'scripts/directory/index.js'],
@@ -599,13 +619,13 @@ test('extensionless TypeScript imports are resolved before optional pruning', ()
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('runtime-launched extensionless files do not require execute mode', () => {
+test('runtime-launched extensionless files do not require execute mode', async () => {
   for (const runtime of ['bun', 'node']) {
     const sources = new Map([
       ['package.json', `{"scripts":{"audit":"${runtime} scripts/loader"}}`],
@@ -613,13 +633,13 @@ test('runtime-launched extensionless files do not require execute mode', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('workflow and composite custom shells fail closed', () => {
+test('workflow and composite custom shells fail closed', async () => {
   for (const [path, source] of [
     [
       '.github/workflows/default.yml',
@@ -643,7 +663,7 @@ test('workflow and composite custom shells fail closed', () => {
   }
 });
 
-test('nested package commands select the nearest implicit ESLint config', () => {
+test('nested package commands select the nearest implicit ESLint config', async () => {
   const sources = new Map([
     ['nested/package.json', '{"scripts":{"lint":"eslint src"}}'],
     ['eslint.config.js', 'export const rootDecoy = true;'],
@@ -651,12 +671,12 @@ test('nested package commands select the nearest implicit ESLint config', () => 
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('explicit ESLint config selection follows package-command cd', () => {
+test('explicit ESLint config selection follows package-command cd', async () => {
   const sources = new Map([
     [
       'nested/package.json',
@@ -667,12 +687,12 @@ test('explicit ESLint config selection follows package-command cd', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('ESLint no-config-lookup suppresses implicit config execution', () => {
+test('ESLint no-config-lookup suppresses implicit config execution', async () => {
   const sources = new Map([
     [
       'nested/package.json',
@@ -683,13 +703,13 @@ test('ESLint no-config-lookup suppresses implicit config execution', () => {
   ]);
   const request = { roots: ['nested/package.json'], sources };
   expect(
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+    await SkillProviderConfigBoundaryScenario.configurationScriptPaths(
       SkillProviderConfigSuccessorScenario.graph(request),
     ),
   ).not.toContain(PROVIDER_CLI);
 });
 
-test('dynamic ESLint config selection fails closed', () => {
+test('dynamic ESLint config selection fails closed', async () => {
   const sources = new Map([
     [
       'package.json',
@@ -697,14 +717,16 @@ test('dynamic ESLint config selection fails closed', () => {
     ],
   ]);
   const request = { roots: ['package.json'], sources };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(request),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(request),
+      ),
     ),
-  ).toThrow('Dynamic ESLint configuration selection');
+  ).toMatch('Dynamic ESLint configuration selection');
 });
 
-test('wrapped Playwright commands select the nearest implicit config', () => {
+test('wrapped Playwright commands select the nearest implicit config', async () => {
   const sources = new Map([
     ['nested/package.json', '{"scripts":{"test:e2e":"npx playwright test"}}'],
     ['playwright.config.ts', 'export const rootDecoy = true;'],
@@ -712,12 +734,12 @@ test('wrapped Playwright commands select the nearest implicit config', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('explicit Playwright config forms follow package-command cd', () => {
+test('explicit Playwright config forms follow package-command cd', async () => {
   for (const command of [
     'cd .. && bunx playwright test --config config/playwright.cjs',
     'cd .. && npx playwright test --config=config/playwright.cjs',
@@ -730,13 +752,13 @@ test('explicit Playwright config forms follow package-command cd', () => {
       [PROVIDER_CLI, 'export {};'],
     ]);
     const request = { roots: ['nested/package.json'], sources };
-    SkillProviderConfigSuccessorScenario.expectProviderReachable(
+    await SkillProviderConfigSuccessorScenario.expectProviderReachable(
       SkillProviderConfigSuccessorScenario.graph(request),
     );
   }
 });
 
-test('dynamic Playwright config selection fails closed', () => {
+test('dynamic Playwright config selection fails closed', async () => {
   const sources = new Map([
     [
       'package.json',
@@ -744,14 +766,16 @@ test('dynamic Playwright config selection fails closed', () => {
     ],
   ]);
   const request = { roots: ['package.json'], sources };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(request),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(request),
+      ),
     ),
-  ).toThrow('Dynamic Playwright configuration selection');
+  ).toMatch('Dynamic Playwright configuration selection');
 });
 
-test('ESLint no-config-lookup does not suppress Playwright config lookup', () => {
+test('ESLint no-config-lookup does not suppress Playwright config lookup', async () => {
   const sources = new Map([
     [
       'nested/package.json',
@@ -761,12 +785,12 @@ test('ESLint no-config-lookup does not suppress Playwright config lookup', () =>
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('complex Task templates cannot hide executable entrypoints', () => {
+test('complex Task templates cannot hide executable entrypoints', async () => {
   const sources = new Map([
     [
       'Taskfile.yml',
@@ -781,16 +805,18 @@ tasks:
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['Taskfile.yml'], sources };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(request),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(request),
+      ),
     ),
-  ).toThrow(
+  ).toMatch(
     /(?:Dynamic bun executable construction|Shell expansion in an executable)/u,
   );
 });
 
-test('supported static Task templates reach executable providers', () => {
+test('supported static Task templates reach executable providers', async () => {
   const sources = new Map([
     [
       'Taskfile.yml',
@@ -801,12 +827,12 @@ tasks: {audit: {cmds: ['bun {{.TARGET}}']}}`,
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['Taskfile.yml'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('Task shell variables substitute only complete parameter names', () => {
+test('Task shell variables substitute only complete parameter names', async () => {
   const source = `vars: {FOO: safe}
 env: {FOOBAR: bun scripts/facade.ts}
 tasks: {audit: {cmds: ['$FOOBAR', 'bun \${FOO}.ts']}}`;
@@ -819,7 +845,7 @@ tasks: {audit: {cmds: ['$FOOBAR', 'bun \${FOO}.ts']}}`;
   ]);
 });
 
-test('unresolved Task arguments do not hide a known executable entrypoint', () => {
+test('unresolved Task arguments do not hide a known executable entrypoint', async () => {
   const sources = new Map([
     [
       'Taskfile.yml',
@@ -829,12 +855,12 @@ test('unresolved Task arguments do not hide a known executable entrypoint', () =
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['Taskfile.yml'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('repository-backed bare package imports fail closed', () => {
+test('repository-backed bare package imports fail closed', async () => {
   const sources = new Map([
     ['package.json', '{"scripts":{"audit":"bun scripts/config.ts"}}'],
     ['scripts/config.ts', "import 'workspace-helper';"],
@@ -843,14 +869,16 @@ test('repository-backed bare package imports fail closed', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['package.json'], sources };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(
-      SkillProviderConfigSuccessorScenario.graph(request),
+  expect(
+    await SettledRejection.message(
+      SkillProviderConfigBoundaryScenario.configurationScriptPaths(
+        SkillProviderConfigSuccessorScenario.graph(request),
+      ),
     ),
-  ).toThrow('Runnable repository package import is unsupported');
+  ).toMatch('Runnable repository package import is unsupported');
 });
 
-test('AGENT_EOF shell payloads fail closed', () => {
+test('AGENT_EOF shell payloads fail closed', async () => {
   const source = 'delim="AGENT_EOF_123"; payload="safe"';
   expect(() =>
     SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
@@ -860,7 +888,7 @@ test('AGENT_EOF shell payloads fail closed', () => {
   ).toThrow('Unaudited AGENT_EOF shell exemption');
 });
 
-test('successor launches preserve package cwd through child-process cd', () => {
+test('successor launches preserve package cwd through child-process cd', async () => {
   const sources = new Map([
     ['nested/package.json', '{"scripts":{"audit":"bun config/loader.ts"}}'],
     [
@@ -882,12 +910,12 @@ test('successor launches preserve package cwd through child-process cd', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['nested/package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });
 
-test('CommonJS helpers contribute subprocess successors', () => {
+test('CommonJS helpers contribute subprocess successors', async () => {
   const sources = new Map([
     ['package.json', '{"scripts":{"audit":"bun scripts/loader.cjs"}}'],
     [
@@ -898,7 +926,7 @@ test('CommonJS helpers contribute subprocess successors', () => {
     [PROVIDER_CLI, 'export {};'],
   ]);
   const request = { roots: ['package.json'], sources };
-  SkillProviderConfigSuccessorScenario.expectProviderReachable(
+  await SkillProviderConfigSuccessorScenario.expectProviderReachable(
     SkillProviderConfigSuccessorScenario.graph(request),
   );
 });

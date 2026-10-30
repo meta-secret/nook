@@ -7,17 +7,17 @@ import {
   LoomSourcePolicyViolationKind,
 } from '../src/commands/loom-source-policy.ts';
 
-test('accepts the complete Loom source and test inventory', () => {
-  const report = LoomSourcePolicy.audit({
+test('accepts the complete Loom source and test inventory', async () => {
+  const report = await LoomSourcePolicy.audit({
     root: join(import.meta.dir, '..'),
     ownershipPaths: [],
   });
   expect(report.violations).toEqual([]);
 });
 
-test('accepts structural result schema factories with their semantic owner', () => {
+test('accepts structural result schema factories with their semantic owner', async () => {
   const root = join(import.meta.dir, '..');
-  const report = LoomSourcePolicy.audit({
+  const report = await LoomSourcePolicy.audit({
     root,
     ownershipPaths: [
       join(root, 'src', 'agent-workflow', 'structural-result-values.ts'),
@@ -42,7 +42,7 @@ test('rejects reusable unowned functions in a reviewed source file', async () =>
         '}',
       ].join('\n'),
     );
-    const report = LoomSourcePolicy.audit({
+    const report = await LoomSourcePolicy.audit({
       root,
       ownershipPaths: [join(root, 'src', 'invalid.ts')],
     });
@@ -58,9 +58,9 @@ test('rejects reusable unowned functions in a reviewed source file', async () =>
   }
 });
 
-test('allows class methods and immediately invoked callbacks', () => {
+test('allows class methods and immediately invoked callbacks', async () => {
   const root = join(import.meta.dir, '..');
-  const report = LoomSourcePolicy.audit({
+  const report = await LoomSourcePolicy.audit({
     root,
     ownershipPaths: [join(root, 'tests', 'loom-source-policy.test.ts')],
   });

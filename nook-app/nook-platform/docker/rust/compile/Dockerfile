@@ -310,14 +310,23 @@ RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
     && rm -rf /tmp/nook-wasm-handoff
 
+# Typed-API compile contracts: oxlint and the TypeScript 7 success-contract
+# check for TypeScript, then ESLint for Svelte components.
 RUN cd nook-app/nook-web \
+    && node_modules/.bin/oxlint -c oxlint.compile-contracts.config.ts \
+      nook-web-extension/src nook-web-shared/src nook-web-app/src \
+      nook-web-research/src nook-vault-simple nook-vault-sentinel \
+    && node named-success-contract-check.ts \
+      nook-web-extension/src nook-web-shared/src nook-web-app/src \
+      nook-web-research/src nook-vault-simple nook-vault-sentinel \
     && node_modules/.bin/eslint --config eslint.compile-contracts.config.js \
-      "nook-web-extension/src/**/*.{ts,svelte}" \
-      "nook-web-shared/src/**/*.{ts,svelte}" \
-      "nook-web-app/src/**/*.{ts,svelte}" \
-      "nook-web-research/src/**/*.{ts,svelte}" \
-      "nook-vault-simple/**/*.{ts,svelte}" \
-      "nook-vault-sentinel/**/*.{ts,svelte}"
+      --no-error-on-unmatched-pattern \
+      "nook-web-extension/src/**/*.svelte" \
+      "nook-web-shared/src/**/*.svelte" \
+      "nook-web-app/src/**/*.svelte" \
+      "nook-web-research/src/**/*.svelte" \
+      "nook-vault-simple/**/*.svelte" \
+      "nook-vault-sentinel/**/*.svelte"
 
 RUN cd nook-app/nook-web/nook-web-app \
     && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
@@ -390,7 +399,7 @@ RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 FROM web-base AS compile-repository-tooling
 
 WORKDIR /meta-secret/nook
-COPY package.json bun.lock tsconfig.json tsconfig.compile.json eslint.config.mjs ./
+COPY package.json bun.lock tsconfig.json tsconfig.compile.json ./
 COPY .github .github
 COPY infra infra
 RUN bun install --frozen-lockfile --ignore-scripts \

@@ -1,6 +1,5 @@
-import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionKeyringGrantKind } from '../../../../nook-web-shared/src/extension/keyring-grant-wire'
-import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { ExtensionKeyringApproval } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { StoredExtensionKeyring } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
@@ -22,15 +21,22 @@ export type {
 
 export enum PairingIdentityConnectionFailure {
   JoinFailed = 'identity-join-failed',
+  ProvidersNotTaken = 'keyring-providers-not-taken',
+  KeyringNotRecorded = 'keyring-not-recorded',
 }
 
 export type PairingIdentityConnectionRequest = {
-  /** The approval the extension just imported for one vault. */
-  readonly message: ExtensionPairingApprovedMessage
-  /** The approval's providers, staged; cleared by the caller. */
-  readonly providers: StorageProvider[]
+  /** The keyring the web app just added the extension to. */
+  readonly approval: ExtensionKeyringApproval
   readonly importVault: PairedVaultImport
   readonly sendSessionMessage: IdentitySessionSend
+  /** Rust takes the keyring's providers sealed to this extension; answers
+   * how many it took. */
+  readonly takeKeyringProviders: (
+    shares: ExtensionKeyringApproval['providers'],
+  ) => Promise<number>
+  /** Store the keyring the extension joined. */
+  readonly recordKeyring: (keyring: StoredExtensionKeyring) => Promise<void>
 }
 
 enum JoinReplyKind {
@@ -75,47 +81,40 @@ function decodeJoinReply(response: unknown): JoinReply {
   return decoded
 }
 
-/** The keyring joined: the vaults its log lists for this extension. */
-export type JoinedKeyring = { readonly storeIds: readonly string[] }
+/** The keyring joined: the vaults its log lists for this extension, the
+ * extension's app in it, and the providers it took. */
+export type JoinedKeyring = {
+  readonly storeIds: readonly string[]
+  readonly keyring: StoredExtensionKeyring
+  readonly syncProviderCount: number
+}
 
 export type PairingIdentityJoin =
   | { readonly ok: true; readonly joined: JoinedKeyring }
   | { readonly ok: false; readonly reason: PairingIdentityConnectionFailure }
 
-/** The other vaults to pair once the approved one is imported. */
-export type OtherVaultsPairing = {
-  readonly approvedEventCount: number
-  readonly joined: JoinedKeyring
-}
-
 /**
  * After the web app approves the extension, the extension is an app of the
- * vault's keyring with its own key: the web app already added it, with
- * every vault's DEK encrypted to that key. The extension first joins from
- * the keyring's log the approval carries, before anything is stored, then
- * pairs each other vault from its records through the same import as the
- * approved one; nothing is read from a sync provider. A join or a vault
- * that fails ends the import with that failure, so it is never reported as
- * connected, and a join that fails leaves nothing behind.
+ * keyring with its own key: the web app already added it, with every
+ * vault's DEK encrypted to that key. The extension joins from the keyring's
+ * log the approval carries, before anything is stored, takes the keyring's
+ * providers and records the keyring: it is connected now, even to a
+ * keyring with no vault yet. Then it pairs each vault the web app handed
+ * over from its records; the keyring's other vaults pair on the next unlock
+ * through its providers. A join or a vault that fails ends the import with
+ * that failure, and a join that fails leaves nothing behind.
  */
 export class PairingIdentityConnection {
   constructor(private readonly request: PairingIdentityConnectionRequest) {}
 
-  /** Join the keyring; one the extension already belongs to has nothing to
-   * join and nothing else to pair. */
   async join(): Promise<PairingIdentityJoin> {
-    const { message, sendSessionMessage } = this.request
-    const keyring = message.payload.keyring
-    if (keyring.kind !== ExtensionKeyringGrantKind.Added) {
-      const member: PairingIdentityJoin = { ok: true, joined: { storeIds: [] } }
-      return member
-    }
+    const { approval, sendSessionMessage } = this.request
     const joinMessage: Parameters<IdentitySessionSend>[0] = {
       type: ExtensionSessionMessageType.JoinIdentity,
       payload: {
-        identityId: keyring.identityId,
-        memberLabel: message.payload.deviceLabel,
-        identityEvents: keyring.identityEvents,
+        identityId: approval.identityId,
+        memberLabel: approval.deviceLabel,
+        identityEvents: approval.identityEvents,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
@@ -123,53 +122,67 @@ export class PairingIdentityConnection {
     const join = joined.isOk() ? decodeJoinReply(joined.value) : rejectedJoin
     if (join.kind === JoinReplyKind.Rejected) {
       console.warn('Extension could not join the identity', join.reason)
-      const failure: PairingIdentityJoin = {
+      return { ok: false, reason: PairingIdentityConnectionFailure.JoinFailed }
+    }
+    let syncProviderCount: number
+    try {
+      syncProviderCount = await this.request.takeKeyringProviders(
+        approval.providers,
+      )
+    } catch {
+      return {
         ok: false,
-        reason: PairingIdentityConnectionFailure.JoinFailed,
+        reason: PairingIdentityConnectionFailure.ProvidersNotTaken,
       }
-      return failure
+    }
+    const keyring: StoredExtensionKeyring = {
+      identityId: approval.identityId,
+      identityLabel: approval.identityLabel,
+      deviceId: approval.deviceId,
+      devicePublicKey: approval.devicePublicKey,
+      deviceSigningPublicKey: approval.deviceSigningPublicKey,
+      deviceLabel: approval.deviceLabel,
+      approvedAt: approval.approvedAt,
+      scopes: approval.scopes,
+    }
+    try {
+      await this.request.recordKeyring(keyring)
+    } catch {
+      return {
+        ok: false,
+        reason: PairingIdentityConnectionFailure.KeyringNotRecorded,
+      }
     }
     const keyringJoined: PairingIdentityJoin = {
       ok: true,
-      joined: { storeIds: join.storeIds },
+      joined: { storeIds: join.storeIds, keyring, syncProviderCount },
     }
     return keyringJoined
   }
 
-  /** Pair each vault the joined keyring lists besides the approved one. */
-  async pairOthers({
-    approvedEventCount,
-    joined,
-  }: OtherVaultsPairing): Promise<PairingIdentityImportResult> {
-    const { message, providers, importVault, sendSessionMessage } = this.request
-    const keyring = message.payload.keyring
-    const approved: PairingIdentityImportResult = {
-      ok: true,
-      eventCount: approvedEventCount,
-    }
-    if (keyring.kind !== ExtensionKeyringGrantKind.Added) return approved
+  /** Pair each vault the web app handed over that the joined keyring
+   * lists; a keyring with no vault has none, and is connected all the same. */
+  async pairVaults(
+    joined: JoinedKeyring,
+  ): Promise<PairingIdentityImportResult> {
+    const { approval, importVault, sendSessionMessage } = this.request
     const pairingRequest: IdentityVaultPairingRequest = {
       importVault,
       sendSessionMessage,
     }
     const pairing = new IdentityVaultPairing(pairingRequest)
-    let eventCount = approvedEventCount
-    for (const keyringVault of keyring.vaults) {
-      if (keyringVault.storeId === message.payload.vaultStoreId) continue
+    let eventCount = 0
+    for (const keyringVault of approval.vaults) {
       // A vault the keyring no longer lists is not paired.
       if (!joined.storeIds.includes(keyringVault.storeId)) continue
-      // The vault arrives as an approved one would: under the same keyring,
-      // scopes and extension app, with its own event log.
       const vault: IdentityVaultPair = {
         vaultStoreId: keyringVault.storeId,
         source: {
           kind: IdentityVaultSourceKind.Records,
           eventLogRecords: keyringVault.eventLogRecords,
         },
-        template: message.payload,
-        identityLabel: keyring.identityLabel,
-        providers,
-        syncProviderCount: providers.length,
+        keyring: joined.keyring,
+        syncProviderCount: joined.syncProviderCount,
       }
       const imported = await pairing.pair(vault)
       if (!imported.ok) return imported

@@ -36,8 +36,8 @@ export class ExecutableSkillsRepositoryScenario {
       '.cortex/package.json',
       `${ROOT}/SKILL.md`,
       `${SCRIPTS}/.gitignore`,
+      `${SCRIPTS}/.oxlintrc.json`,
       `${SCRIPTS}/.prettierrc`,
-      `${SCRIPTS}/eslint.config.js`,
       `${SCRIPTS}/executable-skill.json`,
       `${SCRIPTS}/package.json`,
       `${SCRIPTS}/tsconfig.json`,
@@ -76,8 +76,8 @@ export class ExecutableSkillsRepositoryScenario {
         packages: {},
       },
     ] = [selected.lock];
-    const [prettier, tsconfig, eslint] = await Promise.all(
-      ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map((name) =>
+    const [prettier, tsconfig, oxlint] = await Promise.all(
+      ['.prettierrc', 'tsconfig.json', '.oxlintrc.json'].map((name) =>
         readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
       ),
     );
@@ -86,7 +86,7 @@ export class ExecutableSkillsRepositoryScenario {
     const [defaulted3 = MANIFEST] = [selected.manifest];
     const [defaulted4 = ''] = [prettier];
     const [defaulted5 = ''] = [tsconfig];
-    const [defaulted6 = ''] = [eslint];
+    const [defaulted6 = ''] = [oxlint];
     await Promise.all([
       writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
       writeFile(
@@ -109,7 +109,7 @@ export class ExecutableSkillsRepositoryScenario {
       ),
       writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), defaulted4),
       writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), defaulted5),
-      writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), defaulted6),
+      writeFile(join(repoRoot, SCRIPTS, '.oxlintrc.json'), defaulted6),
     ]);
     return repoRoot;
   }
@@ -153,16 +153,16 @@ const PACKAGE_DOCUMENT = {
   packageManager: 'bun@1.3.14',
   scripts: {
     check: 'tsc --noEmit',
-    lint: 'eslint .',
+    lint: 'oxlint',
     format:
-      'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+      'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
     'format:check':
-      'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+      'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" .oxlintrc.json .prettierrc',
     test: 'bun test tests',
     verify:
       'bun run format:check && bun run lint && bun run check && bun test tests',
   },
-  devDependencies: { typescript: '6.0.3' },
+  devDependencies: { typescript: '7.0.2' },
 } as const;
 
 const MANIFEST = {
@@ -357,7 +357,7 @@ test('rejects every nested skill-card mirror under scripts', async () => {
 test('rejects project configs that weaken canonical source coverage', async () => {
   for (const [name, replacement] of [
     ['tsconfig.json', '"include": ["src/**/*.ts"]'],
-    ['eslint.config.js', "files: ['src/**/*.ts']"],
+    ['.oxlintrc.json', '"typeAware": false'],
     ['.prettierrc', '"printWidth": 120'],
   ] as const) {
     const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
@@ -371,7 +371,7 @@ test('rejects project configs that weaken canonical source coverage', async () =
             '"include": ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]',
             replacement,
           )
-          .replace("files: ['**/*.{ts,js,mjs,cjs}']", replacement)
+          .replace('"typeAware": true', replacement)
           .replace('"printWidth": 80', replacement),
       );
       expect(

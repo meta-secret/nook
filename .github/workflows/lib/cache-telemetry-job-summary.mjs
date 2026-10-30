@@ -21,7 +21,7 @@ export class CacheTelemetryJobSummary {
     }
   }
 
-  /** @param {string | undefined} [filename] @returns {void} */
+  /** @param {string} [filename] @returns {void} */
   append(filename = process.env.GITHUB_STEP_SUMMARY) {
     if (!filename) return;
     const { record } = this;

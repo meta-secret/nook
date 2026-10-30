@@ -90,7 +90,8 @@ TypeScript package under its co-located `scripts/` directory. Each package must
 include:
 
 - a package manifest registered by the `.cortex` Bun workspace;
-- TypeScript and ESLint configuration; and
+- the canonical TypeScript 7 `tsconfig.json` and type-aware oxlint
+  `.oxlintrc.json` configuration; and
 - focused `src/` and `tests/` within the 1,000-line source limit.
 
 The `.cortex` workspace owns one frozen lockfile and one hoisted dependency

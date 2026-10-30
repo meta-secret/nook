@@ -58,6 +58,7 @@ const formlessTypeButtonSelector =
 
 /** Discovers bounded unowned authentication scopes and manual checkpoints. */
 export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationInputSurface {
+  // eslint-disable-next-line max-params -- Declares the label lookup that password-form-fields.ts implements under its max-params exemption.
   protected abstract cachedLabel(
     kind: CompanionWasmLabelKind,
     copy: string,

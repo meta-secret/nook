@@ -1,27 +1,15 @@
 /** @type {typeof import('node:assert/strict')} */
-const assert = /** @type {typeof import('node:assert/strict')} */ (
-  process.getBuiltinModule('node:assert/strict')
-)
+const assert = process.getBuiltinModule('node:assert/strict')
 /** @type {typeof import('node:fs')} */
-const fs = /** @type {typeof import('node:fs')} */ (
-  process.getBuiltinModule('node:fs')
-)
+const fs = process.getBuiltinModule('node:fs')
 /** @type {typeof import('node:os')} */
-const os = /** @type {typeof import('node:os')} */ (
-  process.getBuiltinModule('node:os')
-)
+const os = process.getBuiltinModule('node:os')
 /** @type {typeof import('node:path')} */
-const path = /** @type {typeof import('node:path')} */ (
-  process.getBuiltinModule('node:path')
-)
+const path = process.getBuiltinModule('node:path')
 /** @type {typeof import('node:child_process')} */
-const childProcess = /** @type {typeof import('node:child_process')} */ (
-  process.getBuiltinModule('node:child_process')
-)
+const childProcess = process.getBuiltinModule('node:child_process')
 /** @type {typeof import('node:test')} */
-const test = /** @type {typeof import('node:test')} */ (
-  process.getBuiltinModule('node:test')
-)
+const test = process.getBuiltinModule('node:test')
 
 const WorkbenchRemoteShaOverrideKind = Object.freeze({
   NotConfigured: 'not-configured',

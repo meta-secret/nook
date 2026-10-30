@@ -4,7 +4,10 @@ import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
+import type {
+  ExternalCompanionMessage,
+  ExternalCompanionRoutingDependencies,
+} from '../src/background/service-worker/external-companion-routing'
 import { ExtensionKeyringProvidersMessageType } from '../../nook-web-shared/src/extension/keyring-providers-message'
 import {
   externalDependencies,
@@ -45,7 +48,7 @@ describe('external companion routing', () => {
     }
 
     test('reach Rust from Simple Vault and are acknowledged', async () => {
-      const take = mock(() => Promise.resolve(true))
+      const take = mock(() => Promise.resolve(1))
       const { accepted, sendResponse } = await route(
         take,
         'https://simple.example.test/',
@@ -56,7 +59,7 @@ describe('external companion routing', () => {
     })
 
     test('from another origin are refused before Rust sees them', async () => {
-      const take = mock(() => Promise.resolve(true))
+      const take = mock(() => Promise.resolve(1))
       const { accepted, sendResponse } = await route(
         take,
         'https://foreign.example/',
@@ -237,23 +240,41 @@ describe('external companion routing', () => {
     expect(importPairingAfterCompanionReady).not.toHaveBeenCalled()
   })
 
-  test.each([
+  type PairingRejection = {
+    readonly name: string
+    readonly payload: ExternalCompanionMessage
+    readonly reason: string
+  }
+  const pairingRejections: PairingRejection[] = [
     {
-      name: 'vault type',
-      payload: { ...externalPairingMessage.payload, vaultType: 'sentinel' },
-      reason: 'invalid-pairing-grant-vault-type',
+      name: 'scope',
+      payload: { ...externalPairingMessage.payload, scopes: ['vault-admin'] },
+      reason: 'invalid-pairing-grant-scopes',
     },
     {
-      name: 'provider payload',
-      payload: {
-        ...externalPairingMessage.payload,
-        providers: [{ githubPat: 'malformed-secret' }] as {
-          githubPat: string
-        }[],
-      },
+      name: 'provider hand-off',
+      payload: Object.fromEntries(
+        Object.entries(externalPairingMessage.payload).filter(
+          ([field]) => field !== 'providers',
+        ),
+      ),
       reason: 'invalid-pairing-grant-providers',
     },
-  ])(
+    {
+      name: 'keyring log',
+      payload: { ...externalPairingMessage.payload, identityEvents: [] },
+      reason: 'invalid-pairing-grant-keyring',
+    },
+    {
+      name: 'keyring vault',
+      payload: {
+        ...externalPairingMessage.payload,
+        vaults: [{ storeId: 'store_abcdefghijk', eventLogRecords: [] }],
+      },
+      reason: 'invalid-pairing-grant-keyring',
+    },
+  ]
+  test.each(pairingRejections)(
     'preserves the specific pairing rejection for an invalid $name',
     async ({ payload, reason }) => {
       const { ExternalCompanionRouter } =
@@ -275,29 +296,6 @@ describe('external companion routing', () => {
       expect(sendResponse).toHaveBeenCalledWith({ ok: false, reason })
     },
   )
-
-  test('reports event-log import failure for a valid grant with invalid event records', async () => {
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-    const message = { ...externalPairingMessage, eventLogRecords: [] }
-
-    expect(
-      await new ExternalCompanionRouter({
-        dependencies: externalDependencies,
-        message,
-        sender: {
-          id: 'simple-vault',
-          url: 'https://simple.example.test/',
-        },
-        sendResponse,
-      }).route(),
-    ).toBe(false)
-    expect(sendResponse).toHaveBeenCalledWith({
-      ok: false,
-      reason: 'event-log-import-failed',
-    })
-  })
 
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
@@ -358,6 +356,10 @@ describe('external companion routing', () => {
     await flushResponses()
     await flushResponses()
 
+    // The admitted keyring approval reaches the import as it arrived.
+    expect(importPairingAfterCompanionReady).toHaveBeenCalledWith(
+      externalPairingMessage,
+    )
     expect(refresh).toHaveBeenCalledTimes(1)
     // The tab whose widget started the connect regains focus after approval.
     expect(returnToConnectOrigin).toHaveBeenCalledTimes(1)

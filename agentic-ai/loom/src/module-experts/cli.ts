@@ -21,7 +21,7 @@ export class ModuleExpertCommandParser {
     const auditArgs: AuditModuleExpertsArgs = {
       repoRoot: commandLine.workingDirectory,
     };
-    const report = ModuleExpertContract.auditModuleExperts(auditArgs);
+    const report = await ModuleExpertContract.auditModuleExperts(auditArgs);
     console.log(JSON.stringify(report));
     return report.auditOk ? 0 : 1;
   }

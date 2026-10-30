@@ -28,8 +28,7 @@
     "infra/**/*.ts",
     "infra/**/*.js",
     "infra/**/*.mjs",
-    "infra/**/*.cjs",
-    "eslint.config.mjs"
+    "infra/**/*.cjs"
   ],
   "exclude": [
     "**/node_modules/**",

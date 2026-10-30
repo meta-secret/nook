@@ -1,0 +1,100 @@
+{
+  "plugins": ["eslint", "typescript"],
+  "categories": {
+    "correctness": "off"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "ignorePatterns": ["node_modules/**"],
+  "rules": {
+    "eslint/max-params": [
+      "error",
+      {
+        "max": 1
+      }
+    ],
+    "typescript/no-restricted-types": [
+      "error",
+      {
+        "types": {
+          "ExternalValue": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "ExternalObject": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "JsonValue": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "GenericValue": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "unknown": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "object": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "Object": {
+            "message": "Executable skills require concrete domain values."
+          },
+          "{}": {
+            "message": "Executable skills require concrete domain values."
+          }
+        }
+      }
+    ],
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-unsafe-type-assertion": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-empty-object-type": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/codec.ts",
+        "src/result-codec.ts",
+        "src/skill-yaml-codec.ts"
+      ],
+      "rules": {
+        "typescript/no-restricted-types": [
+          "error",
+          {
+            "types": {
+              "ExternalValue": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "ExternalObject": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "JsonValue": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "GenericValue": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "object": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "Object": {
+                "message": "Executable skills require concrete domain values."
+              },
+              "{}": {
+                "message": "Executable skills require concrete domain values."
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

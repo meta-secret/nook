@@ -172,15 +172,16 @@ pub use extension_consent::{
 };
 pub use extension_pairing_state::{
     ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
-    EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
-    ExtensionConnectScope, ExtensionDefaultVaultSelectionInput, ExtensionGrantAuthority,
-    ExtensionGrantAuthorityRequest, ExtensionPairingApprovalEpochMilliseconds,
-    ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
-    ExtensionPairingRecord, ExtensionPairingState, ExtensionPairingStateError,
-    ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
-    ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
-    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
-    RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
+    EXTENSION_GRANT_KEY_PREFIX, EXTENSION_KEYRING_KEY_PREFIX, EXTENSION_SETUP_KEY,
+    ExtensionActiveVaultScope, ExtensionConnectScope, ExtensionDefaultVaultSelectionInput,
+    ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
+    ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingEntry,
+    ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput, ExtensionPairingRecord,
+    ExtensionPairingState, ExtensionPairingStateError, ExtensionPairingVaultType,
+    ExtensionReadySetup, ExtensionReadySetupStatus, ExtensionSetupAfterRemoval,
+    GrantAuthorityResponseError, GrantAuthorityResponseJson, ImportedExtensionEventLog,
+    PairingStorageJson, PairingVaultId, RefreshExtensionPairingGrantInput,
+    SelectedExtensionPairingGrant, StoredExtensionKeyring, StoredExtensionPairingGrant,
     UnknownExtensionConnectScope, UnknownExtensionPairingVaultType,
 };
 pub use extension_persistence::{

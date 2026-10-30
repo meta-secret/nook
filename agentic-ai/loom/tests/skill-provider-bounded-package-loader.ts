@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptProgram } from '../src/lib/typescript/program.ts';
 
 import { itemAt } from './skill-provider-command-types.ts';
 
@@ -11,15 +13,14 @@ import { SkillProviderLocalDataLoaderScenario } from './skill-provider-local-dat
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
 export class SkillProviderBoundedPackageLoaderScenario {
-  static specializeBoundedPackageLoaders(
+  static async specializeBoundedPackageLoaders(
     inspection: BoundedPackageLoaderInspection,
-  ): string {
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
+  ): Promise<string> {
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: inspection.path,
+      kind: TypeScriptProgram.sourceKindOf(inspection.path),
+      text: inspection.source,
+    });
     const candidates =
       SkillProviderBoundedPackageLoaderScenario.boundedLoaderCandidates(
         sourceFile,
@@ -69,17 +70,17 @@ export class SkillProviderBoundedPackageLoaderScenario {
     return specialized;
   }
 
-  static specializeProvenGeneratedArtifactLoader(
+  static async specializeProvenGeneratedArtifactLoader(
     inspection: BoundedPackageLoaderInspection,
-  ): string {
+  ): Promise<string> {
     return new SkillProviderGeneratedArtifactLoaderScenario(
       inspection,
     ).specialize();
   }
 
-  static specializeBoundedLocalDataLoaders(
+  static async specializeBoundedLocalDataLoaders(
     inspection: BoundedPackageLoaderInspection,
-  ): string {
+  ): Promise<string> {
     return new SkillProviderLocalDataLoaderScenario(inspection).specialize();
   }
 
@@ -93,7 +94,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const visit = (node: ts.Node): void => {
       if (
         ts.isImportDeclaration(node) &&
-        ts.isStringLiteralLike(node.moduleSpecifier) &&
+        ts.isStringLiteralLikeNode(node.moduleSpecifier) &&
         (node.moduleSpecifier.text === 'node:module' ||
           node.moduleSpecifier.text === 'module') &&
         node.importClause?.namedBindings &&
@@ -110,7 +111,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       }
       if (
         ts.isImportDeclaration(node) &&
-        ts.isStringLiteralLike(node.moduleSpecifier) &&
+        ts.isStringLiteralLikeNode(node.moduleSpecifier) &&
         node.moduleSpecifier.text === 'node:url' &&
         node.importClause?.namedBindings &&
         ts.isNamedImports(node.importClause.namedBindings)
@@ -128,7 +129,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
         functionDeclarations.push(node);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
 
@@ -252,7 +253,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       ) {
         imports.push(node);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(search.body);
     return imports.length === 1 ? itemAt([imports, 0]) : false;
@@ -327,7 +328,10 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const { call, owner } = inspection;
     let candidate = call.parent;
     while (candidate !== owner && !ts.isSourceFile(candidate)) {
-      if (ts.isFunctionLike(candidate) && !ts.isArrowFunction(candidate)) {
+      if (
+        ts.isSignatureDeclaration(candidate) &&
+        !ts.isArrowFunction(candidate)
+      ) {
         return ts.isMethodDeclaration(candidate) && candidate.parent === owner;
       }
       candidate = candidate.parent;
@@ -384,7 +388,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         safe = false;
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(expression.body);
     return safe;
@@ -429,7 +433,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       ) {
         declaredFunctionNames.add(node.name.text);
       }
-      ts.forEachChild(node, collectFunctionNames);
+      node.forEachChild(collectFunctionNames);
     };
     collectFunctionNames(validation.sourceFile);
     let safe = true;
@@ -450,7 +454,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         }
         const argument = parent.arguments[0];
         const packageInspection: RepositoryPackageInspection | false =
-          argument && ts.isStringLiteralLike(argument)
+          argument && ts.isStringLiteralLikeNode(argument)
             ? {
                 sources: validation.inspection.sources,
                 specifier: argument.text,
@@ -470,7 +474,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         if (
           !hasValidValidationArgument ||
           !argument ||
-          !ts.isStringLiteralLike(argument) ||
+          !ts.isStringLiteralLikeNode(argument) ||
           !SAFE_PACKAGE_SPECIFIER.test(argument.text) ||
           (packageInspection !== false &&
             SkillProviderBoundedPackageLoaderScenario.isRepositoryBackedPackage(
@@ -548,7 +552,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         safe = false;
         return;
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(validation.sourceFile);
     return (

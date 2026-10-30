@@ -384,4 +384,4 @@ legacy registered `nook` runner is not used.
 
 - **Native linking:** Uses `mold` linker for `x86_64-unknown-linux-gnu` in `rust-base`.
 - **Wasm compilation:** `builder-wasm` compiles `nook-wasm` and `nook-companion-wasm` via `wasm-pack`. `WASM_BUILD_MODE=dev` is default; `prod` runs for release.
-- **Verification execution:** Product verification (clippy, nextest, coverage, svelte-check, eslint, vitest, e2e) runs on GitHub Actions ephemeral runners.
+- **Verification execution:** Product verification (clippy, nextest, coverage, svelte-check, oxlint, eslint, vitest, e2e) runs on GitHub Actions ephemeral runners.

@@ -6,20 +6,18 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "check": "tsc --noEmit",
-    "lint": "eslint .",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" executable-skill.json \"*.{json,md}\" eslint.config.js .prettierrc",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" executable-skill.json \"*.{json,md}\" eslint.config.js .prettierrc",
+    "lint": "oxlint",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" executable-skill.json \"*.{json,md}\" .oxlintrc.json .prettierrc",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" executable-skill.json \"*.{json,md}\" .oxlintrc.json .prettierrc",
     "test": "bun test tests",
     "verify": "bun run format:check && bun run lint && bun run check && bun test tests"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@types/bun": "1.4.4",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "10.13.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "prettier": "3.9.10",
-    "typescript": "6.0.3",
-    "typescript-eslint": "8.72.1"
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "neverthrow": "8.2.0"

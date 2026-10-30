@@ -17,11 +17,11 @@ type LoomSourceScanOptions = {
 
 const LOOM_ROOT = join(import.meta.dir, '..');
 
-SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
+await SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
 
 export const LOOM_EXECUTABLE_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 
-test('recognizes static and dynamic skill-provider runtime imports', () => {
+test('recognizes static and dynamic skill-provider runtime imports', async () => {
   const runtimeImports = [
     "import provider from '../../../.agents/skills/provider/src/runner.ts';",
     "import '../../../.agents/skills/provider/src/runner.ts';",
@@ -48,7 +48,9 @@ test('recognizes static and dynamic skill-provider runtime imports', () => {
       source: runtimeImport,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
   for (const inertSource of [
@@ -65,12 +67,14 @@ test('recognizes static and dynamic skill-provider runtime imports', () => {
       source: inertSource,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(false);
   }
 });
 
-test('rejects every runtime reference to Node evaluator modules', () => {
+test('rejects every runtime reference to Node evaluator modules', async () => {
   for (const source of [
     "import { runInThisContext } from 'node:vm';",
     "import vm from 'vm';",
@@ -84,7 +88,9 @@ test('rejects every runtime reference to Node evaluator modules', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
   for (const source of [
@@ -96,12 +102,14 @@ test('rejects every runtime reference to Node evaluator modules', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(false);
   }
 });
 
-test('rejects every unbounded ambient module loader route', () => {
+test('rejects every unbounded ambient module loader route', async () => {
   const unboundedLoaders = [
     'await import();',
     'await import(modulePath);',
@@ -157,7 +165,9 @@ test('rejects every unbounded ambient module loader route', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
   for (const source of [
@@ -185,12 +195,14 @@ test('rejects every unbounded ambient module loader route', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(false);
   }
 });
 
-test('distinguishes emitted loader shadows from erased ambient declarations', () => {
+test('distinguishes emitted loader shadows from erased ambient declarations', async () => {
   for (const source of [
     'declare const process: Process; process.getBuiltinModule(moduleName);',
     'declare const globalThis: Global; globalThis.require(modulePath);',
@@ -208,7 +220,9 @@ test('distinguishes emitted loader shadows from erased ambient declarations', ()
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
   const localInspection: SkillProviderImportInspection = {
@@ -217,13 +231,13 @@ test('distinguishes emitted loader shadows from erased ambient declarations', ()
       'const process = { getBuiltinModule: () => false }; const holder = { process };',
   };
   expect(
-    SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+    await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
       localInspection,
     ),
   ).toBe(false);
 });
 
-test('treats ambient-root member names as declarations, not runtime uses', () => {
+test('treats ambient-root member names as declarations, not runtime uses', async () => {
   for (const root of ['process', 'module', 'global', 'globalThis']) {
     for (const source of [
       `class Safe { ${root} = 'label' }`,
@@ -239,7 +253,9 @@ test('treats ambient-root member names as declarations, not runtime uses', () =>
         source,
       };
       expect(
-        SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+        await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+          inspection,
+        ),
       ).toBe(false);
     }
     for (const source of [
@@ -252,13 +268,15 @@ test('treats ambient-root member names as declarations, not runtime uses', () =>
         source,
       };
       expect(
-        SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+        await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+          inspection,
+        ),
       ).toBe(true);
     }
   }
 });
 
-test('resolves globalThis bindings in their exact lexical scopes', () => {
+test('resolves globalThis bindings in their exact lexical scopes', async () => {
   for (const source of [
     'for (let globalThis of values) { globalThis.require(path); }',
     'try {} catch (globalThis) { globalThis.require(path); }',
@@ -274,7 +292,9 @@ test('resolves globalThis bindings in their exact lexical scopes', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(false);
   }
   for (const source of [
@@ -290,7 +310,9 @@ test('resolves globalThis bindings in their exact lexical scopes', () => {
       source,
     };
     expect(
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection),
+      await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        inspection,
+      ),
     ).toBe(true);
   }
 });
@@ -314,9 +336,9 @@ test('production Loom limits provider imports to the semantic adapter', async ()
           filePath: `agentic-ai/loom/${relativePath}`,
           source,
         };
-        return SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+        return (await SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
           inspection,
-        )
+        ))
           ? relativePath
           : '';
       }),

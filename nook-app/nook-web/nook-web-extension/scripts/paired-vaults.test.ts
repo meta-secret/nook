@@ -4,12 +4,14 @@ import {
   extensionPairingGrantPolicyReady,
   setupStorageKey,
   type ExtensionPairingItems,
+  type StoredExtensionKeyring,
   type StoredExtensionPairingGrant,
 } from '../src/background/pairing-grants'
 import {
   PairedVaultsMessageType,
   pairedVaultGroups,
   pairedVaultsMessages,
+  type PairedKeyringSummary,
   type PairedVaultSummary,
 } from '../src/lib/paired-vaults'
 import {
@@ -161,7 +163,7 @@ describe('paired vaults', () => {
       summary('Clients', 'Acme'),
     ]
 
-    const groups = pairedVaultGroups(vaults).map((group) => [
+    const groups = pairedVaultGroups({ keyrings: [], vaults }).map((group) => [
       group.identityLabel,
       group.vaults.map((vault) => vault.vaultName),
     ])
@@ -187,11 +189,14 @@ describe('paired vaults', () => {
       managesPasskeys: false,
     })
 
-    const groups = pairedVaultGroups([
-      summary('Home', 'device-first'),
-      summary('Parents', 'device-second'),
-      summary('Kids', 'device-first'),
-    ]).map((group) => [
+    const groups = pairedVaultGroups({
+      keyrings: [],
+      vaults: [
+        summary('Home', 'device-first'),
+        summary('Parents', 'device-second'),
+        summary('Kids', 'device-first'),
+      ],
+    }).map((group) => [
       group.deviceId,
       group.vaults.map((vault) => vault.vaultName),
     ])
@@ -201,6 +206,83 @@ describe('paired vaults', () => {
       ['device-first', ['Home', 'Kids']],
       ['device-second', ['Parents']],
     ])
+  })
+
+  test('lists a joined keyring with no vault after the keyrings with vaults', () => {
+    const summary = (
+      vaultName: string,
+      identityLabel: string,
+      deviceId: string,
+    ): PairedVaultSummary => ({
+      vaultStoreId: `store_${vaultName}`,
+      vaultName,
+      identityLabel,
+      deviceId,
+      isDefault: false,
+      fillsPasswords: true,
+      managesPasskeys: false,
+    })
+    const keyrings: PairedKeyringSummary[] = [
+      { identityLabel: 'Family', deviceId: 'device-family' },
+      // A keyring that has a paired vault is listed once, with it.
+      { identityLabel: 'Acme', deviceId: 'device-acme' },
+    ]
+
+    const groups = pairedVaultGroups({
+      keyrings,
+      vaults: [
+        summary('Old', '', 'device-old'),
+        summary('Work', 'Acme', 'device-acme'),
+      ],
+    }).map((group) => [
+      group.identityLabel,
+      group.deviceId,
+      group.vaults.map((vault) => vault.vaultName),
+    ])
+
+    expect(groups).toEqual([
+      ['Acme', 'device-acme', ['Work']],
+      ['Family', 'device-family', []],
+      ['', 'device-old', ['Old']],
+    ])
+  })
+
+  test('a keyring joined with no vault is a group of its own', () => {
+    const keyrings: PairedKeyringSummary[] = [
+      { identityLabel: 'Family', deviceId: 'device-family' },
+    ]
+
+    expect(pairedVaultGroups({ keyrings, vaults: [] })).toEqual([
+      { identityLabel: 'Family', deviceId: 'device-family', vaults: [] },
+    ])
+  })
+
+  test('a joined keyring is read back beside the paired vaults', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const family: StoredExtensionKeyring = {
+      identityId: 'identity-family',
+      identityLabel: 'Family',
+      deviceId: 'device-family',
+      devicePublicKey: 'family-public',
+      deviceSigningPublicKey: 'family-signing',
+      deviceLabel: 'Laptop',
+      approvedAt: 1_786_500_000_000,
+      scopes: ['vault-access'],
+    }
+    const stored: ExtensionPairingItems = {
+      ...(await twoVaultStorage()),
+      ...policy.keyringStorageItems(family),
+    }
+
+    expect(policy.joinedKeyrings(stored)).toEqual([family])
+    // The keyring record leaves the vault list and its default unchanged.
+    expect(
+      policy.selectedPairingGrantFirst(stored).map((grant) => grant.vaultName),
+    ).toEqual(['Personal', 'Work'])
+    const selected = policy.selectedPairingGrant(stored)
+    expect(selected.kind === 'selected' && selected.grant.vaultName).toBe(
+      'Personal',
+    )
   })
 
   test('answers the popup in a toolbar or a tab, never a content script', () => {

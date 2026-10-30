@@ -63,7 +63,7 @@ test('grants shared formatter and Loom lint tooling through exact files', () => 
     profile.allowedEvidenceFiles.some((path) => path.startsWith('.agents/')),
   ).toBe(false);
   expect(profile.allowedEvidenceFiles).toContain(
-    'agentic-ai/loom/eslint.config.js',
+    'agentic-ai/loom/.oxlintrc.json',
   );
   expect(profile.allowedEvidenceFiles).toContain(
     '.github/formatting/format.sh',

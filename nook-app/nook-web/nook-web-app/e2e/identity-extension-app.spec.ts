@@ -3,8 +3,10 @@ import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { Effect } from 'effect'
 import { ManualPasskeyScenario } from './identity-spec-helpers'
 import {
+  answerPasskeyPromptBeforeJoin,
   authorizeDeviceProtection,
   connectLocalVault,
+  keepIdentityWithoutVault,
   UI_TIMEOUT_MS,
   openKeysPage,
 } from './helpers'
@@ -45,10 +47,22 @@ class BrowserInventoryDevice {
   }
 }
 
+/** How the keyring the extension joins is set up on this browser. */
+enum KeyringSetup {
+  /** With its first vault, which is open before the extension connects. */
+  WithVault = 'with-vault',
+  /** With no vault at all: the extension joins the keyring all the same. */
+  WithoutVault = 'without-vault',
+}
+
 interface VaultAppsInventoryScenarioRequest {
   readonly page: Page
   readonly browser: Browser
+  readonly keyring: KeyringSetup
 }
+
+/** The vaults the stubbed delivery saw, on the document's root. */
+const DELIVERED_VAULTS_ATTRIBUTE = 'data-delivered-vaults'
 
 class VaultAppsInventoryScenario {
   constructor(private readonly request: VaultAppsInventoryScenarioRequest) {}
@@ -70,8 +84,9 @@ class VaultAppsInventoryScenario {
 
   private acknowledgeChromeDelivery(): Effect.Effect<void> {
     return Effect.promise(() =>
-      this.request.page.evaluate(() => {
-        // Stub only Chrome's delivery acknowledgement; vault approval stays real.
+      this.request.page.evaluate((attribute) => {
+        // Stub only Chrome's delivery acknowledgement; the keyring approval
+        // stays real.
         Object.defineProperty(globalThis, 'chrome', {
           configurable: true,
           value: {
@@ -84,22 +99,82 @@ class VaultAppsInventoryScenario {
                   readonly eventCount: number
                 }) => void,
               ): void {
+                const { vaults } = message.payload
+                document.documentElement.setAttribute(
+                  attribute,
+                  String(vaults.length),
+                )
                 callback({
                   ok: true,
-                  eventCount: message.eventLogRecords.length,
+                  eventCount: vaults.reduce(
+                    (count, vault) => count + vault.eventLogRecords.length,
+                    0,
+                  ),
                 })
               },
             },
           },
         })
-      }),
+      }, DELIVERED_VAULTS_ATTRIBUTE),
     )
   }
 
+  private prepareKeyring(): Effect.Effect<void> {
+    const { page, keyring } = this.request
+    switch (keyring) {
+      case KeyringSetup.WithVault:
+        return Effect.promise(() => connectLocalVault(page))
+      case KeyringSetup.WithoutVault:
+        return Effect.promise(async () => {
+          await keepIdentityWithoutVault(page, 'Solo')
+        })
+    }
+  }
+
+  /** Unlock the keyring for the request beside its card. A keyring with a
+   * vault may open it on the way; one without opens none. */
+  private unlockForRequest(): Effect.Effect<void> {
+    const { page, keyring } = this.request
+    switch (keyring) {
+      case KeyringSetup.WithVault:
+        return Effect.promise(() => authorizeDeviceProtection(page))
+      case KeyringSetup.WithoutVault:
+        return Effect.promise(async () => {
+          const consent = page.getByTestId('extension-connect-consent')
+          await expect(page.getByTestId('extension-request-panel')).toBeVisible(
+            { timeout: UI_TIMEOUT_MS },
+          )
+          await page.getByTestId('extension-request-unlock').click()
+          await answerPasskeyPromptBeforeJoin(page, consent)
+        })
+    }
+  }
+
+  /** Unlock the keyring again after a reload. */
+  private unlockAfterReload(): Effect.Effect<void> {
+    const { page, keyring } = this.request
+    switch (keyring) {
+      case KeyringSetup.WithVault:
+        return Effect.promise(() => authorizeDeviceProtection(page))
+      case KeyringSetup.WithoutVault:
+        return Effect.promise(async () => {
+          const current = page.getByTestId('identity-card').first()
+          await current.getByTestId('identity-unlock').click()
+          await answerPasskeyPromptBeforeJoin(
+            page,
+            current.and(page.locator('[data-status="unlocked"]')),
+          )
+          await expect(current).toHaveAttribute('data-status', 'unlocked', {
+            timeout: UI_TIMEOUT_MS,
+          })
+        })
+    }
+  }
+
   run = Effect.fnUntraced(function* (this: VaultAppsInventoryScenario) {
-    const { page, browser } = this.request
+    const { page, browser, keyring } = this.request
     yield* Effect.promise(() => new ManualPasskeyScenario(page).prepare())
-    yield* Effect.promise(() => connectLocalVault(page))
+    yield* this.prepareKeyring()
     const extensionDevice = yield* Effect.acquireUseRelease(
       Effect.promise(() => browser.newContext()),
       (context) => this.readPeer(context),
@@ -116,22 +191,36 @@ class VaultAppsInventoryScenario {
     yield* Effect.promise(() =>
       page.goto(`/extension-connect?${query.toString()}`),
     )
-    yield* Effect.promise(() => authorizeDeviceProtection(page))
+    yield* this.unlockForRequest()
     yield* Effect.promise(() =>
       expect(page.getByTestId('extension-connect-consent')).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       }),
     )
     yield* this.acknowledgeChromeDelivery()
-    yield* Effect.promise(() =>
-      page.getByTestId('approve-extension-device-btn').click(),
-    )
+    yield* Effect.promise(() => approveWhenReady(page))
     yield* Effect.promise(() =>
       expect(page).toHaveURL(/\/identities\/?$/, { timeout: UI_TIMEOUT_MS }),
     )
     yield* Effect.promise(() =>
       expect(page.getByTestId('identities-hub')).toBeVisible(),
     )
+    switch (keyring) {
+      case KeyringSetup.WithVault:
+        break
+      case KeyringSetup.WithoutVault:
+        // The keyring was approved with no vault open, and none to hand over.
+        yield* Effect.promise(() =>
+          expect(page.getByTestId('authenticated-shell')).toHaveCount(0),
+        )
+        yield* Effect.promise(() =>
+          expect(page.locator('html')).toHaveAttribute(
+            DELIVERED_VAULTS_ATTRIBUTE,
+            '0',
+          ),
+        )
+        break
+    }
     yield* Effect.promise(() => openKeysPage(page))
     const keys = page.getByTestId('identity-keys')
     yield* Effect.promise(() =>
@@ -146,7 +235,7 @@ class VaultAppsInventoryScenario {
         timeout: UI_TIMEOUT_MS,
       }),
     )
-    yield* Effect.promise(() => authorizeDeviceProtection(page))
+    yield* this.unlockAfterReload()
     yield* Effect.promise(() => openKeysPage(page))
     yield* Effect.promise(() =>
       expect(keys).toContainText('Nook in this browser'),
@@ -155,8 +244,33 @@ class VaultAppsInventoryScenario {
   })
 }
 
+/** Approve once the consent can continue; a loaded runner takes a while. */
+async function approveWhenReady(page: Page): Promise<void> {
+  const approve = page.getByTestId('approve-extension-device-btn')
+  await expect(approve).toBeEnabled({ timeout: UI_TIMEOUT_MS * 3 })
+  await approve.click()
+}
+
 test('lists the browser and enrolled extension after reload without a sync provider', ({
   page,
   browser,
 }) =>
-  Effect.runPromise(new VaultAppsInventoryScenario({ page, browser }).run()))
+  Effect.runPromise(
+    new VaultAppsInventoryScenario({
+      page,
+      browser,
+      keyring: KeyringSetup.WithVault,
+    }).run(),
+  ))
+
+test('connects the extension to a keyring that has no vault yet', ({
+  page,
+  browser,
+}) =>
+  Effect.runPromise(
+    new VaultAppsInventoryScenario({
+      page,
+      browser,
+      keyring: KeyringSetup.WithoutVault,
+    }).run(),
+  ))

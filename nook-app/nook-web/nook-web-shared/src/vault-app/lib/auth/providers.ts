@@ -28,7 +28,6 @@ import {
   provider_default_label,
   provider_default_label_without_detail,
   provider_storage_detail,
-  seal_auth_providers_for_device_public_key,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -84,10 +83,7 @@ export type {
   ProviderVaultScope,
 } from "$app-wasm";
 
-export {
-  bind_google_drive_shared_folder,
-  seal_auth_providers_for_device_public_key,
-};
+export { bind_google_drive_shared_folder };
 
 export type { DuplicateSyncProvider } from "$app-wasm";
 export { oauth_access_token, missing_oauth_access_token };

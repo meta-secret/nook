@@ -82,9 +82,11 @@ Use this workflow for quality, CI, and deployment changes.
      The standalone `preflight` Clippy pass is also enforced with `-D warnings`.
    - Rust coverage uses independent hosted native, WASM, Dylint, and preflight gates.
    - `svelte-check`
-   - `eslint` — the web-family lint command uses a dedicated project that
-     includes every linted TypeScript and Svelte source, enables
-     promise/exhaustiveness type-aware rules, and rejects unsanitized DOM HTML
+   - web lint — oxlint lints TypeScript and JavaScript with TypeScript 7
+     type-aware rules, `named-success-contract-check.ts` runs the typed
+     success-contract rule, and ESLint lints Svelte components. Together they
+     cover every linted TypeScript and Svelte source, enable
+     promise/exhaustiveness type-aware rules, and reject unsanitized DOM HTML
      sinks outside test and e2e fixtures
    - `bun audit --prod --audit-level=high` — every independently installed web
      package runs the audit in its CI check path and rejects high-severity
@@ -551,7 +553,7 @@ reported problems in the same task** and leave the gate green.
 - **jscpd (`bun run duplicates`)**
   - **Typical findings:** copy/paste clones over threshold
   - **Correct fix:** extract a shared helper/module; do not duplicate again
-- **fmt / prettier / eslint / svelte-check / clippy / tsc**
+- **fmt / prettier / oxlint / eslint / svelte-check / clippy / tsc**
   - **Typical findings:** style, type, lint defects
   - **Correct fix:** correct the code
 - **vitest / Rust tests / coverage / e2e / preflight**

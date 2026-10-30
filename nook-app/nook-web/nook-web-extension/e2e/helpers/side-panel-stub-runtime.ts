@@ -36,6 +36,8 @@ export enum SidePanelStubVaults {
   PairedWithNew = 'paired-with-new',
   /** Paired, plus a second identity of this extension with its own key. */
   TwoIdentities = 'two-identities',
+  /** A keyring joined before it had a vault: connected, with no vault. */
+  KeyringWithoutVault = 'keyring-without-vault',
   None = 'none',
   Unavailable = 'unavailable',
 }
@@ -175,6 +177,7 @@ const sidePanelStubProtocol = {
   paired: SidePanelStubVaults.Paired,
   pairedWithNew: SidePanelStubVaults.PairedWithNew,
   twoIdentities: SidePanelStubVaults.TwoIdentities,
+  keyringWithoutVault: SidePanelStubVaults.KeyringWithoutVault,
   selectDefault: PairedVaultsMessageType.SelectDefault,
   activateIdentity: ExtensionSessionMessageType.ActivateIdentity,
   none: SidePanelStubVaults.None,
@@ -252,6 +255,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
     fillsPasswords: true,
     managesPasskeys: true,
   }
+  const keyring = { identityLabel: 'Alice Martin', deviceId: device.deviceId }
+  const otherKeyring = {
+    identityLabel: 'Alice at Work',
+    deviceId: 'side-panel-stub-other-device',
+  }
   const withDefault = <Vault extends { readonly vaultStoreId: string }>(
     vaults: Vault[],
   ) =>
@@ -262,15 +270,23 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
   const vaultList = () => {
     switch (state.vaults) {
       case protocol.paired:
-        return { ok: true, vaults: withDefault(pairedVaults) }
+        return {
+          ok: true,
+          keyrings: [keyring],
+          vaults: withDefault(pairedVaults),
+        }
       case protocol.twoIdentities:
         return {
           ok: true,
+          keyrings: [keyring, otherKeyring],
           vaults: withDefault([...pairedVaults, otherIdentityVault]),
         }
+      case protocol.keyringWithoutVault:
+        return { ok: true, keyrings: [keyring], vaults: [] }
       case protocol.pairedWithNew:
         return {
           ok: true,
+          keyrings: [keyring],
           vaults: [
             ...pairedVaults,
             {
@@ -282,7 +298,7 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
           ],
         }
       case protocol.none:
-        return { ok: true, vaults: [] }
+        return { ok: true, keyrings: [], vaults: [] }
       case protocol.unavailable:
         return { ok: false, reason: 'paired-vaults-read-failed' }
     }

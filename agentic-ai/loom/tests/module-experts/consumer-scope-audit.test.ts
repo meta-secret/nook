@@ -13,9 +13,9 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
-test('discovers exact production JSON binding resolver configurations', () => {
+test('discovers exact production JSON binding resolver configurations', async () => {
   const discovered =
-    InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
+    await InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
   expect(discovered.filter((path) => path.endsWith('.json'))).toEqual([
     ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
   ]);
@@ -52,7 +52,9 @@ test('parses bounded JSON and JSONC configs without broad JSON discovery', async
       await writeFile(absolutePath, source, 'utf8');
     }
     expect(
-      InternalApiConsumerScope.discoverInternalApiConsumerPaths(fixtureRoot),
+      await InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+        fixtureRoot,
+      ),
     ).toEqual([
       'nook-app/nook-web/example/knip.json',
       'nook-app/nook-web/example/tsconfig.json',
@@ -62,13 +64,13 @@ test('parses bounded JSON and JSONC configs without broad JSON discovery', async
   }
 });
 
-test('rejects missing and overbroad JSON resolver scope', () => {
+test('rejects missing and overbroad JSON resolver scope', async () => {
   const profile = MODULE_EXPERT_CATALOG.find(
     (candidate) => candidate.name === 'internal_api_expert',
   );
   if (!profile) throw new Error('internal_api_expert fixture is missing.');
   const discovered =
-    InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
+    await InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
   const missingJsonProfile = {
     ...profile,
     scopePaths: profile.scopePaths.filter(

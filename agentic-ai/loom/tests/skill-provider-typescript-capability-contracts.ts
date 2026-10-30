@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
 export enum SubprocessCallKind {
   Bun = 'bun',
   BunNamespace = 'bunNamespace',

@@ -1,4 +1,6 @@
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
+import { TypeScriptTestSources } from './typescript-test-sources.ts';
+import { TypeScriptSourceKind } from '../src/lib/typescript/program.ts';
 
 import { posix } from 'node:path';
 
@@ -23,9 +25,9 @@ import { SkillProviderGithubScriptRequireScenario } from './skill-provider-githu
 export class SkillProviderGithubScriptScenario {
   private constructor(private readonly request: string) {}
 
-  static githubScriptConfigurationReferences(
+  static async githubScriptConfigurationReferences(
     request: GithubScriptReferenceRequest,
-  ): readonly ConfigurationReference[] {
+  ): Promise<readonly ConfigurationReference[]> {
     if (
       !/^\.github\/(?:workflows\/[^/]+|actions\/(?:[^/]+\/)*action)\.ya?ml$/u.test(
         request.importer,
@@ -39,12 +41,13 @@ export class SkillProviderGithubScriptScenario {
       action: /(^|\/)action\.ya?ml$/u.test(request.importer),
       document,
     };
-    return SkillProviderWorkflowCommandsScenario.workflowGithubScriptSources(
+    const references: ConfigurationReference[] = [];
+    for (const source of SkillProviderWorkflowCommandsScenario.workflowGithubScriptSources(
       sourceRequest,
-    ).flatMap((source) => {
+    )) {
       const normalized =
         SkillProviderGithubScriptScenario.normalizeGithubScriptSource(source);
-      SkillProviderGithubScriptScenario.assertStaticGithubScriptLoaders(
+      await SkillProviderGithubScriptScenario.assertStaticGithubScriptLoaders(
         normalized,
       );
       const moduleRequest: GithubScriptModuleRequest = {
@@ -53,7 +56,7 @@ export class SkillProviderGithubScriptScenario {
         workingDirectory: request.workingDirectory,
       };
       const modules =
-        SkillProviderGithubScriptScenario.githubScriptModuleReferences(
+        await SkillProviderGithubScriptScenario.githubScriptModuleReferences(
           moduleRequest,
         );
       const subprocessInspection = {
@@ -61,12 +64,12 @@ export class SkillProviderGithubScriptScenario {
         source: normalized,
       };
       const subprocesses = [
-        ...SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
+        ...(await SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
           subprocessInspection,
-        ),
-        ...SkillProviderGithubScriptExecScenario.githubScriptExecCommands(
+        )),
+        ...(await SkillProviderGithubScriptExecScenario.githubScriptExecCommands(
           normalized,
-        ),
+        )),
       ];
       const launches = subprocesses.flatMap((command) => {
         const shellInspection = {
@@ -78,7 +81,7 @@ export class SkillProviderGithubScriptScenario {
           shellInspection,
         ).launches;
       });
-      return [
+      references.push(
         ...modules,
         ...launches.map((launch) => ({
           importerRelative: false,
@@ -94,8 +97,9 @@ export class SkillProviderGithubScriptScenario {
             )
             .replace(/^\.$/u, ''),
         })),
-      ];
-    });
+      );
+    }
+    return references;
   }
 
   static normalizeGithubScriptSource(source: string): string {
@@ -109,16 +113,16 @@ export class SkillProviderGithubScriptScenario {
       .replaceAll('/meta-secret/nook/', './');
   }
 
-  static githubScriptModuleReferences(
+  static async githubScriptModuleReferences(
     request: GithubScriptModuleRequest,
-  ): readonly ConfigurationReference[] {
+  ): Promise<readonly ConfigurationReference[]> {
     const specifiers = new Set([
       ...GITHUB_SCRIPT_TRANSPILER.scanImports(request.source).map(
         (entry) => entry.path,
       ),
-      ...SkillProviderGithubScriptRequireScenario.githubScriptRequireSpecifiers(
+      ...(await SkillProviderGithubScriptRequireScenario.githubScriptRequireSpecifiers(
         request.source,
-      ),
+      )),
     ]);
     return [...specifiers].map((specifier) => ({
       importerRelative: false,
@@ -132,14 +136,12 @@ export class SkillProviderGithubScriptScenario {
     }));
   }
 
-  static assertStaticGithubScriptLoaders(source: string): void {
-    const sourceFile = ts.createSourceFile(
-      'github-script.ts',
-      source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
+  static async assertStaticGithubScriptLoaders(source: string): Promise<void> {
+    const sourceFile = await TypeScriptTestSources.parse({
+      fileName: 'github-script.ts',
+      kind: TypeScriptSourceKind.TypeScript,
+      text: source,
+    });
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
@@ -153,7 +155,7 @@ export class SkillProviderGithubScriptScenario {
         )
           throw new Error('Dynamic github-script module load is forbidden.');
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
   }

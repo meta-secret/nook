@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "types": ["svelte", "chrome", "bun", "node"],
     "paths": {
       "$lib": ["../nook-web-shared/src/vault-app/lib"],

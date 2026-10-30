@@ -3,23 +3,18 @@ import {
   decode_extension_grant_authority_response,
   NookPairingVaultId,
   type ExtensionGrantAuthority,
+  type StoredExtensionKeyring,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   type ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type RuntimeMessageDecodeFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { ProviderCredentialBuffer } from '../../lib/provider-credential-staging'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
-import {
-  SerializedWireSnapshotKind,
-  SerializedWireValueAdapter,
-} from '../../lib/serialized-wire-value-adapter'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -40,7 +35,6 @@ import type {
 import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
-  AdmissionFailed = 'pairing-grant-admission-failed',
   RuntimeUnavailable = 'extension-runtime-unavailable',
 }
 
@@ -53,7 +47,6 @@ type PairingIngressAdmission =
   | {
       readonly kind: PairingIngressAdmissionKind.Admitted
       readonly message: ExtensionPairingApprovedMessage
-      readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
     }
   | {
       readonly kind: PairingIngressAdmissionKind.Rejected
@@ -72,8 +65,6 @@ export class ExtensionPairingIngress {
         reason: PairingIngressFailure.RuntimeUnavailable,
       }
     }
-    const eventLogRecordsSnapshot =
-      SerializedWireValueAdapter.snapshotEventLogRecords(message)
     const admission = runConcreteDecoder(
       ExtensionPairingApprovedMessageSchema.decode,
       message,
@@ -84,20 +75,9 @@ export class ExtensionPairingIngress {
         reason: admission.failure,
       }
     }
-    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
-      return {
-        kind: PairingIngressAdmissionKind.Rejected,
-        reason: PairingIngressFailure.AdmissionFailed,
-      }
-    }
-    const preservedEventLogRecords =
-      SerializedWireValueAdapter.restoreEventLogRecords<
-        ExtensionPairingApprovedMessage['eventLogRecords']
-      >(eventLogRecordsSnapshot.value)
     return {
       kind: PairingIngressAdmissionKind.Admitted,
       message: admission.value,
-      sessionEventLogRecords: preservedEventLogRecords,
     }
   }
 }
@@ -109,11 +89,7 @@ export async function importPairingAfterCompanionReady(message: unknown) {
   if (admission.kind === PairingIngressAdmissionKind.Rejected) {
     return { ok: false, reason: admission.reason }
   }
-  const lifecycleArgs: PairingCredentialImportLifecycleArgs = {
-    message: admission.message,
-    sessionEventLogRecords: admission.sessionEventLogRecords,
-  }
-  return new PairingCredentialImportLifecycle(lifecycleArgs).import()
+  return new PairingCredentialImportLifecycle(admission.message).import()
 }
 
 type ReconcilePairingStorageArgs = {
@@ -150,283 +126,167 @@ async function restorePairingStorage(
   await reconcilePairingStorage(reconcileArgs)
 }
 
-enum PairingImportSelection {
-  /** The imported vault becomes the one the extension fills from. */
-  Select = 'select',
-  /** The vault joins the paired list; the selected vault stays as it is. */
-  Keep = 'keep',
-}
-
-type ImportDecodedApprovedPairingArgs = {
-  message: ExtensionPairingApprovedMessage
-  sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
-  providers: StorageProvider[]
-  /** Sync providers the vault replicates through, recorded on its grant. */
-  syncProviderCount: number
-  selection: PairingImportSelection
-}
-
 export type PairingImportResult =
   { ok: true; eventCount: number } | { ok: false; reason: string }
 
-async function importDecodedApprovedPairing(
-  args: ImportDecodedApprovedPairingArgs,
-): Promise<PairingImportResult> {
-  const { message, providers, sessionEventLogRecords } = args
+/**
+ * Import one vault of a keyring the extension joined, with the records the
+ * session read once it opened and enrolled in it. The first vault the
+ * extension pairs becomes the one it fills from; later ones join the list
+ * and the selected vault stays as it is.
+ */
+export async function importKeyringVault({
+  grant,
+  eventLogRecords,
+}: PairedVaultImportRequest): Promise<PairingIdentityImportResult> {
   const pairingPolicy = await extensionPairingGrantPolicyReady
-  const grantApproval: ExtensionPairingGrantApproval = {
-    vaultType: message.payload.vaultType,
-    deviceId: message.payload.deviceId,
-    devicePublicKey: message.payload.devicePublicKey,
-    deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
-    deviceLabel: message.payload.deviceLabel,
-    vaultStoreId: message.payload.vaultStoreId,
-    vaultName: message.payload.vaultName,
-    identityLabel: ((v) => (v ? v : ''))(message.payload.identityLabel),
-    approvedAt: message.payload.approvedAt,
-    scopes: message.payload.scopes,
-    syncProviderCount: args.syncProviderCount,
+  const importArgs: Parameters<
+    typeof backgroundVaultRuntime.importExtensionEventLog
+  >[0] = { grant, records: eventLogRecords }
+  const imported =
+    await backgroundVaultRuntime.importExtensionEventLog(importArgs)
+  if (!imported.accessGranted) {
+    return { ok: false, reason: 'event-log-access-not-granted' }
+  }
+  const openedSession =
+    await extensionSessionLifecycle.ensureExtensionSessionDocument()
+  if (openedSession.isErr()) return openedSession.error.response
+  const previousPairingState =
+    await extensionPairingIdentity.getPairingStorage()
+  const pairingItemsArgs: Parameters<
+    typeof pairingPolicy.extensionPairingGrantStorageItems
+  >[0] = { grant, imported }
+  const createdItems =
+    pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
+  const selectsVault =
+    pairingPolicy.selectedPairingGrant(previousPairingState).kind ===
+    'not-selected'
+  const pairingItems: ExtensionPairingItems = selectsVault
+    ? createdItems
+    : Object.fromEntries(
+        Object.entries(createdItems).filter(([key]) => key !== setupStorageKey),
+      )
+  await extensionPairingIdentity.setPairingStorage(pairingItems)
+  const restoreArgs: RestorePairingStorageArgs = {
+    previous: previousPairingState,
+    written: pairingItems,
   }
   try {
-    const nookTypedArgs0_0: Parameters<
-      typeof backgroundVaultRuntime.importExtensionEventLog
+    const migrationMessage: Parameters<
+      typeof extensionPairingIdentity.sendSessionMessage
     >[0] = {
-      grant: message.payload,
-      records: message.eventLogRecords,
+      type: ExtensionSessionMessageType.MigrateAuthProviders,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const imported =
-      await backgroundVaultRuntime.importExtensionEventLog(nookTypedArgs0_0)
-    if (!imported.accessGranted) {
-      return { ok: false, reason: 'event-log-access-not-granted' }
-    }
-    const openedSession =
-      await extensionSessionLifecycle.ensureExtensionSessionDocument()
-    if (openedSession.isErr()) return openedSession.error.response
-    const pairingItemsArgs: Parameters<
-      typeof pairingPolicy.extensionPairingGrantStorageItems
-    >[0] = { grant: grantApproval, imported }
-    const createdItems =
-      pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
-    // A vault that only joins the list keeps the selected vault's setup.
-    const pairingItems: ExtensionPairingItems =
-      args.selection === PairingImportSelection.Select
-        ? createdItems
-        : Object.fromEntries(
-            Object.entries(createdItems).filter(
-              ([key]) => key !== setupStorageKey,
-            ),
-          )
-    const previousPairingState =
-      await extensionPairingIdentity.getPairingStorage()
-    await extensionPairingIdentity.setPairingStorage(pairingItems)
-    try {
-      const nookTypedArgs0_1: Parameters<
-        typeof extensionPairingIdentity.sendSessionMessage
-      >[0] = {
-        type: ExtensionSessionMessageType.MigrateAuthProviders,
-        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
-      }
-      const migration =
-        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
-      if (migration.isErr()) {
-        type ImportDecodedApprovedPairingRestorePairingStorageRequest =
-          RestorePairingStorageArgs
-        const importDecodedApprovedPairingRestorePairingStorageRequest: ImportDecodedApprovedPairingRestorePairingStorageRequest =
-          {
-            previous: previousPairingState,
-            written: pairingItems,
-          }
-        await restorePairingStorage(
-          importDecodedApprovedPairingRestorePairingStorageRequest,
-        )
-        return migration.error.response
-      }
-      const nookTypedArgs0_2: Parameters<
-        typeof extensionPairingIdentity.sendSessionMessage
-      >[0] = {
-        type: ExtensionSessionMessageType.Reset,
-        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
-      }
-      const reset =
-        await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
-      if (reset.isErr()) {
-        type ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
-          RestorePairingStorageArgs
-        const importDecodedApprovedPairingRestorePairingStorageRequest2: ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
-          {
-            previous: previousPairingState,
-            written: pairingItems,
-          }
-        await restorePairingStorage(
-          importDecodedApprovedPairingRestorePairingStorageRequest2,
-        )
-        return reset.error.response
-      }
-      // Snapshot before scrubbing so lazy extension IPC cannot observe
-      // emptied credential fields mid-handoff.
-      const importMessage: {
-        type: typeof ExtensionSessionMessageType.ImportVault
-        payload: {
-          vaultStoreId: string
-          deviceId: string
-          devicePublicKey: string
-          deviceSigningPublicKey: string
-          eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
-          providers: StorageProvider[]
-          queue: ExtensionSessionQueue
-        }
-      } = {
-        type: ExtensionSessionMessageType.ImportVault,
-        payload: {
-          vaultStoreId: grantApproval.vaultStoreId,
-          deviceId: grantApproval.deviceId,
-          devicePublicKey: grantApproval.devicePublicKey,
-          deviceSigningPublicKey: grantApproval.deviceSigningPublicKey,
-          eventLogRecords: sessionEventLogRecords,
-          providers: structuredClone(providers),
-          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-        },
-      }
-      new ProviderCredentialBuffer(providers).clear()
-      const importDelivery = await new ProviderCredentialBuffer(
-        importMessage.payload.providers,
-      ).runWithCleanup(() =>
-        extensionPairingIdentity.sendSessionMessage(importMessage),
-      )
-      if (importDelivery.isErr()) {
-        type ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
-          RestorePairingStorageArgs
-        const importDecodedApprovedPairingRestorePairingStorageRequest3: ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
-          {
-            previous: previousPairingState,
-            written: pairingItems,
-          }
-        await restorePairingStorage(
-          importDecodedApprovedPairingRestorePairingStorageRequest3,
-        )
-        return importDelivery.error.response
-      }
-      const sessionImport = importDelivery.value
-      if (
-        !sessionImport ||
-        typeof sessionImport !== 'object' ||
-        !('ok' in sessionImport) ||
-        sessionImport.ok !== true
-      ) {
-        const reason =
-          sessionImport &&
-          typeof sessionImport === 'object' &&
-          'error' in sessionImport &&
-          typeof sessionImport.error === 'string' &&
-          sessionImport.error.length > 0
-            ? sessionImport.error
-            : 'extension-vault-import-failed'
-        const restoreArgs: Parameters<typeof restorePairingStorage>[0] = {
-          previous: previousPairingState,
-          written: pairingItems,
-        }
-        await restorePairingStorage(restoreArgs)
-        return { ok: false, reason }
-      }
-    } catch (error) {
-      const restoreArgs: Parameters<typeof restorePairingStorage>[0] = {
-        previous: previousPairingState,
-        written: pairingItems,
-      }
+    const migration =
+      await extensionPairingIdentity.sendSessionMessage(migrationMessage)
+    if (migration.isErr()) {
       await restorePairingStorage(restoreArgs)
-      throw error
+      return migration.error.response
     }
-    return { ok: true, eventCount: imported.eventCount }
-  } finally {
-    new ProviderCredentialBuffer(providers).clear()
+    const resetMessage: Parameters<
+      typeof extensionPairingIdentity.sendSessionMessage
+    >[0] = {
+      type: ExtensionSessionMessageType.Reset,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    }
+    const reset =
+      await extensionPairingIdentity.sendSessionMessage(resetMessage)
+    if (reset.isErr()) {
+      await restorePairingStorage(restoreArgs)
+      return reset.error.response
+    }
+    const importMessage: {
+      type: typeof ExtensionSessionMessageType.ImportVault
+      payload: {
+        vaultStoreId: string
+        deviceId: string
+        devicePublicKey: string
+        deviceSigningPublicKey: string
+        eventLogRecords: PairedVaultImportRequest['eventLogRecords']
+        providers: StorageProvider[]
+        queue: ExtensionSessionQueue
+      }
+    } = {
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        vaultStoreId: grant.vaultStoreId,
+        deviceId: grant.deviceId,
+        devicePublicKey: grant.devicePublicKey,
+        deviceSigningPublicKey: grant.deviceSigningPublicKey,
+        eventLogRecords,
+        // The keyring's providers reach the extension once, sealed to it;
+        // a vault brings none of its own.
+        providers: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    }
+    const importDelivery =
+      await extensionPairingIdentity.sendSessionMessage(importMessage)
+    if (importDelivery.isErr()) {
+      await restorePairingStorage(restoreArgs)
+      return importDelivery.error.response
+    }
+    const sessionImport = importDelivery.value
+    if (
+      !sessionImport ||
+      typeof sessionImport !== 'object' ||
+      !('ok' in sessionImport) ||
+      sessionImport.ok !== true
+    ) {
+      const reason =
+        sessionImport &&
+        typeof sessionImport === 'object' &&
+        'error' in sessionImport &&
+        typeof sessionImport.error === 'string' &&
+        sessionImport.error.length > 0
+          ? sessionImport.error
+          : 'extension-vault-import-failed'
+      await restorePairingStorage(restoreArgs)
+      return { ok: false, reason }
+    }
+  } catch (error) {
+    await restorePairingStorage(restoreArgs)
+    throw error
   }
+  return { ok: true, eventCount: imported.eventCount }
 }
 
-/** Import one more vault of the extension's identity beside the paired
- * ones; the vault the extension fills from stays as it is. */
-export function importIdentityVault({
-  message,
-  providers,
-  syncProviderCount,
-}: PairedVaultImportRequest): Promise<PairingIdentityImportResult> {
-  const vaultArgs: ImportDecodedApprovedPairingArgs = {
-    message,
-    sessionEventLogRecords: message.eventLogRecords,
-    providers,
-    syncProviderCount,
-    selection: PairingImportSelection.Keep,
-  }
-  return importDecodedApprovedPairing(vaultArgs)
+/** Store the keyring the extension joined, beside its vault grants. */
+async function recordKeyring(keyring: StoredExtensionKeyring): Promise<void> {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  await extensionPairingIdentity.setPairingStorage(
+    pairingPolicy.keyringStorageItems(keyring),
+  )
 }
 
-type PairingCredentialImportLifecycleArgs = {
-  readonly message: ExtensionPairingApprovedMessage
-  readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
-}
-
+/**
+ * The web app added the extension to a keyring: join it, take its
+ * providers, record it, and pair the vaults the web app handed over. A
+ * keyring with no vault yet is connected the same way.
+ */
 export class PairingCredentialImportLifecycle {
-  private readonly message: ExtensionPairingApprovedMessage
-  private readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
-
-  constructor(args: PairingCredentialImportLifecycleArgs) {
-    this.message = args.message
-    this.sessionEventLogRecords = args.sessionEventLogRecords
-  }
+  constructor(private readonly message: ExtensionPairingApprovedMessage) {}
 
   async import(): Promise<PairingImportResult> {
     try {
-      const sourceProviders = this.message.payload.providers
-      const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
-        decode: backgroundVaultRuntime.decodeExtensionStorageProviders.bind(
-          backgroundVaultRuntime,
-        ),
+      const connectionRequest: ConstructorParameters<
+        typeof PairingIdentityConnection
+      >[0] = {
+        approval: this.message.payload,
+        importVault: importKeyringVault,
+        sendSessionMessage: (...request) =>
+          extensionPairingIdentity.sendSessionMessage(...request),
+        takeKeyringProviders: (shares) =>
+          backgroundVaultRuntime.takeKeyringProviderShares(shares),
+        recordKeyring,
       }
-      const stagingOperation = new ProviderCredentialBuffer(
-        sourceProviders,
-      ).stage(stagingArgs)
-      new ProviderCredentialBuffer(sourceProviders).clear()
-      this.message.payload.providers = []
-      const staging = await stagingOperation
-      if (staging.isErr()) {
-        return { ok: false, reason: 'invalid-provider-payload' }
-      }
-      const stagedProviders = staging.value
-      // Kept for the identity's other vaults: the first import clears its own.
-      const identityProviders = structuredClone(stagedProviders)
-      try {
-        const connectionRequest: ConstructorParameters<
-          typeof PairingIdentityConnection
-        >[0] = {
-          message: this.message,
-          providers: identityProviders,
-          // The vault the person approved from stays the default.
-          importVault: importIdentityVault,
-          sendSessionMessage: (...request) =>
-            extensionPairingIdentity.sendSessionMessage(...request),
-        }
-        const connection = new PairingIdentityConnection(connectionRequest)
-        // Join first: a join that cannot run (a locked extension) stores
-        // nothing, rather than an approved vault of a keyring not joined.
-        const keyring = await connection.join()
-        if (!keyring.ok) return keyring
-        const args: ImportDecodedApprovedPairingArgs = {
-          message: this.message,
-          sessionEventLogRecords: this.sessionEventLogRecords,
-          providers: stagedProviders,
-          syncProviderCount: stagedProviders.length,
-          selection: PairingImportSelection.Select,
-        }
-        const approved = await importDecodedApprovedPairing(args)
-        if (!approved.ok) return approved
-        const others: Parameters<typeof connection.pairOthers>[0] = {
-          approvedEventCount: approved.eventCount,
-          joined: keyring.joined,
-        }
-        return await connection.pairOthers(others)
-      } finally {
-        new ProviderCredentialBuffer(stagedProviders).clear()
-        new ProviderCredentialBuffer(identityProviders).clear()
-      }
+      const connection = new PairingIdentityConnection(connectionRequest)
+      // Join first: a join that cannot run (a locked extension) stores
+      // nothing.
+      const keyring = await connection.join()
+      if (!keyring.ok) return keyring
+      return await connection.pairVaults(keyring.joined)
     } catch {
       return { ok: false, reason: 'event-log-import-failed' }
     }

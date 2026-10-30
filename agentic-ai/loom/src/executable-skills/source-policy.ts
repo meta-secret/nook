@@ -17,8 +17,18 @@ import {
   MAXIMUM_EXECUTABLE_SKILL_MODULE_SPECIFIER_BYTES,
   MAXIMUM_EXECUTABLE_SKILL_MODULE_SPECIFIERS,
 } from './source-policy-vocabulary.ts';
-import ts from 'typescript';
+import * as ts from 'typescript/unstable/ast';
 import { posix } from 'node:path';
+import {
+  TypeScriptCheckerFacts,
+  TypeScriptNameMeaning,
+  type TypeScriptSymbolFact,
+} from '../lib/typescript/checker-facts.ts';
+import {
+  TypeScriptProgram,
+  TypeScriptSourceKind,
+} from '../lib/typescript/program.ts';
+import { TypeScriptSyntax } from '../lib/typescript/syntax.ts';
 
 export type AnalyzeExecutableSkillSourceRequest = {
   readonly relativePath: string;
@@ -30,7 +40,7 @@ export type ExecutableSkillSourceAnalysis = {
 };
 
 type ExecutableSkillSourceContext = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly sourceFile: ts.SourceFile;
 };
 
@@ -48,32 +58,32 @@ const EXECUTABLE_SKILL_SOURCE_PATH =
   /^(\.cortex\/(?:shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(src|tests)\/.+\.ts$/u;
 
 type AssertNoForbiddenCapabilityRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
 type DynamicModuleLoadRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.CallExpression;
 };
 
 type IdentifierCapabilityRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Identifier;
 };
 
 type AmbientPropertyAccessRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.PropertyAccessExpression;
 };
 
 type AmbientNetworkCallRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.CallExpression | ts.NewExpression;
 };
 
 type BunOutputWriteRequest = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TypeScriptCheckerFacts;
   readonly node: ts.Node;
 };
 
@@ -82,7 +92,7 @@ type AmbientRootPropertyRequest = AmbientPropertyAccessRequest & {
 };
 
 type ResolveSourceLocalSymbolRequest = IdentifierCapabilityRequest & {
-  readonly meaning: ts.SymbolFlags;
+  readonly meaning: TypeScriptNameMeaning;
 };
 
 type IsNumericElementIndexRequest = {
@@ -91,23 +101,24 @@ type IsNumericElementIndexRequest = {
 
 /** A bounded source tree and its compiler-backed capability policy. */
 export class ExecutableSkillSource {
-  private readonly context: ExecutableSkillSourceContext;
   private readonly moduleSpecifiers: string[] = [];
   private constructor(
     private readonly request: AnalyzeExecutableSkillSourceRequest,
   ) {
     this.assertExecutableSkillSourceBounds(request);
     this.assertCanonicalExecutableSkillSourcePath(request.relativePath);
-    this.context = this.createExecutableSkillSourceContext(request);
   }
-  static analyze(
+  static async analyze(
     request: AnalyzeExecutableSkillSourceRequest,
-  ): ExecutableSkillSourceAnalysis {
-    return new ExecutableSkillSource(request).analyze();
+  ): Promise<ExecutableSkillSourceAnalysis> {
+    const source = new ExecutableSkillSource(request);
+    const context = await source.createExecutableSkillSourceContext(request);
+    return source.analyzeContext(context);
   }
-  private analyze(): ExecutableSkillSourceAnalysis {
+  private analyzeContext(
+    context: ExecutableSkillSourceContext,
+  ): ExecutableSkillSourceAnalysis {
     const request = this.request;
-    const context = this.context;
     const sourceFile = context.sourceFile;
     const moduleSpecifiers = this.moduleSpecifiers;
     const visit = (node: ts.Node): void => {
@@ -163,7 +174,7 @@ export class ExecutableSkillSource {
         };
         this.appendModuleSpecifier(appendRequest);
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(sourceFile);
     if (
@@ -445,7 +456,7 @@ export class ExecutableSkillSource {
     while (
       ((ts.isParenthesizedExpression(target.parent) ||
         ts.isAsExpression(target.parent) ||
-        ts.isTypeAssertionExpression(target.parent) ||
+        ts.isTypeAssertion(target.parent) ||
         ts.isNonNullExpression(target.parent) ||
         ts.isSatisfiesExpression(target.parent)) &&
         target.parent.expression === target) ||
@@ -490,7 +501,7 @@ export class ExecutableSkillSource {
   ): boolean {
     const node = request.node;
     if (
-      ts.isPartOfTypeNode(node) ||
+      TypeScriptSyntax.isPartOfTypeNode(node) ||
       this.isInsideQualifiedTypeReference(node) ||
       this.isInsideTypeQuery(node)
     )
@@ -520,8 +531,9 @@ export class ExecutableSkillSource {
       return false;
     }
     const symbol = request.checker.getSymbolAtLocation(node);
-    return !symbol?.declarations?.some(
-      (declaration) => declaration === node.parent,
+    return !(
+      symbol &&
+      symbol.declarations.some((declaration) => declaration === node.parent)
     );
   }
 
@@ -597,11 +609,11 @@ export class ExecutableSkillSource {
   ): boolean {
     const valueRequest: ResolveSourceLocalSymbolRequest = {
       ...request,
-      meaning: ts.SymbolFlags.Value,
+      meaning: TypeScriptNameMeaning.Value,
     };
     const typeRequest: ResolveSourceLocalSymbolRequest = {
       ...request,
-      meaning: ts.SymbolFlags.Type,
+      meaning: TypeScriptNameMeaning.Type,
     };
     const valueSymbols = this.resolveSourceLocalSymbols(valueRequest);
     const typeSymbols = this.resolveSourceLocalSymbols(typeRequest);
@@ -626,7 +638,7 @@ export class ExecutableSkillSource {
   ): boolean {
     const resolveRequest: ResolveSourceLocalSymbolRequest = {
       ...request,
-      meaning: ts.SymbolFlags.Value,
+      meaning: TypeScriptNameMeaning.Value,
     };
     const symbols = this.resolveSourceLocalSymbols(resolveRequest);
     return !symbols.some((symbol) =>
@@ -638,13 +650,11 @@ export class ExecutableSkillSource {
 
   private resolveSourceLocalSymbols(
     request: ResolveSourceLocalSymbolRequest,
-  ): readonly ts.Symbol[] {
-    const symbol = request.checker.resolveName(
-      request.node.text,
-      request.node,
-      request.meaning,
-      false,
-    );
+  ): readonly TypeScriptSymbolFact[] {
+    const symbol = request.checker.resolveName({
+      identifier: request.node,
+      meaning: request.meaning,
+    });
     if (!symbol) return [];
     return symbol.declarations?.some(
       (declaration) =>
@@ -656,18 +666,21 @@ export class ExecutableSkillSource {
 
   private isRuntimeValueDeclaration(declaration: ts.Node): boolean {
     if (this.hasDeclareModifier(declaration)) return false;
-    if (ts.isImportClause(declaration)) return !declaration.isTypeOnly;
+    if (ts.isImportClause(declaration))
+      return !this.isTypeOnlyClause(declaration);
     if (ts.isImportSpecifier(declaration)) {
       const importClause = declaration.parent.parent;
       return (
         ts.isImportClause(importClause) &&
-        !importClause.isTypeOnly &&
+        !this.isTypeOnlyClause(importClause) &&
         !declaration.isTypeOnly
       );
     }
     if (ts.isNamespaceImport(declaration)) {
       const importClause = declaration.parent;
-      return ts.isImportClause(importClause) && !importClause.isTypeOnly;
+      return (
+        ts.isImportClause(importClause) && !this.isTypeOnlyClause(importClause)
+      );
     }
     if (ts.isImportEqualsDeclaration(declaration)) {
       return !declaration.isTypeOnly;
@@ -675,15 +688,15 @@ export class ExecutableSkillSource {
     return (
       ts.isVariableDeclaration(declaration) ||
       ts.isBindingElement(declaration) ||
-      ts.isParameter(declaration) ||
+      ts.isParameterDeclaration(declaration) ||
       (ts.isFunctionDeclaration(declaration) && Boolean(declaration.body)) ||
       ts.isFunctionExpression(declaration) ||
       ts.isClassDeclaration(declaration) ||
       ts.isClassExpression(declaration) ||
       (ts.isEnumDeclaration(declaration) &&
-        !ts
-          .getModifiers(declaration)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.ConstKeyword)) ||
+        !TypeScriptSyntax.modifiers(declaration).some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ConstKeyword,
+        )) ||
       ts.isModuleDeclaration(declaration)
     );
   }
@@ -692,10 +705,9 @@ export class ExecutableSkillSource {
     let candidate: ts.Node = declaration;
     while (!ts.isSourceFile(candidate)) {
       if (
-        ts.canHaveModifiers(candidate) &&
-        ts
-          .getModifiers(candidate)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
+        TypeScriptSyntax.modifiers(candidate).some(
+          (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword,
+        )
       ) {
         return true;
       }
@@ -760,7 +772,10 @@ export class ExecutableSkillSource {
     const propertyName = node.propertyName;
     if (propertyName && ts.isComputedPropertyName(propertyName)) return true;
     const [candidate = node.name] = [propertyName];
-    if (ts.isIdentifier(candidate) || ts.isStringLiteral(candidate)) {
+    if (
+      candidate &&
+      (ts.isIdentifier(candidate) || ts.isStringLiteral(candidate))
+    ) {
       return FORBIDDEN_EVALUATOR_MEMBERS.has(candidate.text);
     }
     return false;
@@ -782,7 +797,7 @@ export class ExecutableSkillSource {
       ts.isArrayLiteralExpression(target.parent) ||
       ts.isParenthesizedExpression(target.parent) ||
       ts.isAsExpression(target.parent) ||
-      ts.isTypeAssertionExpression(target.parent) ||
+      ts.isTypeAssertion(target.parent) ||
       ts.isNonNullExpression(target.parent) ||
       ts.isSatisfiesExpression(target.parent) ||
       ts.isSpreadAssignment(target.parent) ||
@@ -806,45 +821,44 @@ export class ExecutableSkillSource {
     return Number.isSafeInteger(value) && value >= 0;
   }
 
-  private createExecutableSkillSourceContext(
+  private async createExecutableSkillSourceContext(
     request: AnalyzeExecutableSkillSourceRequest,
-  ): ExecutableSkillSourceContext {
-    const compilerOptions: ts.CompilerOptions = {
-      module: ts.ModuleKind.ESNext,
-      noLib: true,
-      strict: true,
-      target: ts.ScriptTarget.ES2022,
-    };
-    const sourceFile = ts.createSourceFile(
-      request.relativePath,
-      request.source,
-      ts.ScriptTarget.ES2022,
-      true,
-      ts.ScriptKind.TS,
-    );
-    const missingSources = new Map<string, ts.SourceFile>();
-    const missingText = new Map<string, string>();
-    const compilerHost = ts.createCompilerHost(compilerOptions);
-    compilerHost.fileExists = (fileName) => fileName === request.relativePath;
-    compilerHost.getSourceFile = (fileName) =>
-      fileName === request.relativePath
-        ? sourceFile
-        : missingSources.get(fileName);
-    compilerHost.readFile = (fileName) =>
-      fileName === request.relativePath
-        ? request.source
-        : missingText.get(fileName);
-    const rootNames = [request.relativePath];
-    const program = ts.createProgram(rootNames, compilerOptions, compilerHost);
-    if (program.getSyntacticDiagnostics(sourceFile).length > 0) {
-      throw new Error(
-        'Executable skill source contains invalid TypeScript syntax.',
-      );
+  ): Promise<ExecutableSkillSourceContext> {
+    const program = await TypeScriptProgram.open({
+      compilerOptions: EXECUTABLE_SKILL_COMPILER_OPTIONS,
+      sources: [
+        {
+          fileName: request.relativePath,
+          kind: TypeScriptSourceKind.TypeScript,
+          text: request.source,
+        },
+      ],
+    });
+    try {
+      const [sourceFile] = await program.sourceFiles();
+      if (!sourceFile) {
+        throw new Error('Executable skill source was not compiled.');
+      }
+      if ((await program.syntacticDiagnosticCount(sourceFile)) > 0) {
+        throw new Error(
+          'Executable skill source contains invalid TypeScript syntax.',
+        );
+      }
+      const checker = await TypeScriptCheckerFacts.collect({
+        checker: program.checker,
+        names: TypeScriptCheckerFacts.ALL_NAMES,
+        sourceFile,
+        types: TypeScriptCheckerFacts.NO_TYPES,
+      });
+      return { checker, sourceFile };
+    } finally {
+      await program.close();
     }
-    return {
-      checker: program.getTypeChecker(),
-      sourceFile,
-    };
+  }
+
+  /** An `import type` clause; TypeScript 7 records it as a phase modifier. */
+  private isTypeOnlyClause(clause: ts.ImportClause): boolean {
+    return clause.phaseModifier === ts.SyntaxKind.TypeKeyword;
   }
 
   private isBunOutputWrite(request: BunOutputWriteRequest): boolean {
@@ -910,7 +924,7 @@ export class ExecutableSkillSource {
   private isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
     const clause = node.importClause;
     if (!clause) return false;
-    if (clause.isTypeOnly) return true;
+    if (this.isTypeOnlyClause(clause)) return true;
     if (clause.name || !clause.namedBindings) return false;
     return (
       ts.isNamedImports(clause.namedBindings) &&
@@ -932,3 +946,13 @@ export class ExecutableSkillSource {
 }
 
 const EXECUTABLE_SKILL_PURE_RUNTIME_PACKAGES = new Set(['neverthrow', 'zod']);
+
+/** One source file, no libraries, no resolvable imports, strict checking. */
+const EXECUTABLE_SKILL_COMPILER_OPTIONS = {
+  module: 'esnext',
+  noEmit: true,
+  noLib: true,
+  strict: true,
+  target: 'es2022',
+  types: [],
+} as const;

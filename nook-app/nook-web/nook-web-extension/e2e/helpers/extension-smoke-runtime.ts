@@ -13,7 +13,6 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
-import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { attachNookLogsForTest } from '../../../nook-web-app/e2e/helpers'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
 import {
@@ -132,22 +131,6 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
 )
 export const setupStorageKey = 'nook:extension-setup'
 export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
-export const syntheticEventLogRecords: ExtensionEventLogRecord[] = [
-  {
-    eventId: 'event-e2e',
-    event: {
-      schema_version: 2,
-      store_id: 'store-e2e',
-      actor_id: `key_${'0'.repeat(64)}`,
-      actor_signing_public_key: '0'.repeat(64),
-      parents: [],
-      created_at: '2026-07-07T00:00:00.000Z',
-      key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
-      operations: [{ type: 'vault-cleared' }],
-      signature: `ed25519:${'0'.repeat(128)}`,
-    },
-  },
-]
 export const connectedSetupState = {
   status: 'ready',
   deviceLabel: 'Nook Extension - Chromium test profile',
