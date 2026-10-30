@@ -138,11 +138,8 @@ class NativeBuildLog {
       new RegExp(`^${vertex} (CACHED|DONE|ERROR)\\b`, "gm"),
     );
     for (const token of Array.from(terminals).flatMap((match) => match.slice(1, 2))) {
-      switch (token) {
-        case NativeStepState.Cached: return NativeStepState.Cached;
-        case NativeStepState.Executed: return NativeStepState.Executed;
-        case NativeStepState.Failed: return NativeStepState.Failed;
-      }
+      const states = Object.values(NativeStepState).filter((state) => String(state) === token);
+      for (const state of states) return state;
     }
     throw new Error(`actual terminal BuildKit status missing for ${vertex}`);
   }
@@ -326,12 +323,15 @@ class NativeTestReuseEvidence {
   static main(): void {
     assert.equal(process.argv.length, 4, "expected evidence directory and verify/report operation");
     const directory = process.argv.slice(2, 3).join("");
-    const operation = process.argv.slice(3, 4).join("");
+    const rawOperation = process.argv.slice(3, 4).join("");
+    const operations = Object.values(EvidenceOperation).filter((operation) => String(operation) === rawOperation);
+    assert.equal(operations.length, 1, `unknown evidence operation: ${rawOperation}`);
     const evidence = new NativeTestReuseEvidence(directory);
-    switch (operation) {
-      case EvidenceOperation.Verify: evidence.verifyCases(); break;
-      case EvidenceOperation.Report: evidence.report(); break;
-      default: throw new Error(`unknown evidence operation: ${operation}`);
+    for (const operation of operations) {
+      switch (operation) {
+        case EvidenceOperation.Verify: evidence.verifyCases(); break;
+        case EvidenceOperation.Report: evidence.report(); break;
+      }
     }
   }
 }
