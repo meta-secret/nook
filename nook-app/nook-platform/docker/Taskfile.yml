@@ -177,7 +177,7 @@ tasks:
       - task: registry-cache:publish:native
 
   docker:ci:rust:native-test-evidence:
-    desc: Export actual native test profiles, executable maps, JUnit and combined coverage.
+    desc: Export actual native JUnit, LLVM artifact sizes and combined coverage.
     deps: [sccache:ensure, registry-cache:ensure]
     requires:
       vars: [NATIVE_TEST_EVIDENCE_DIR]
@@ -190,6 +190,122 @@ tasks:
         --allow='fs.write={{.NATIVE_TEST_EVIDENCE_DIR}}'
         --set 'native-test-evidence.output=type=local,dest={{.NATIVE_TEST_EVIDENCE_DIR}}'
         native-test-evidence pr-rust-verify
+
+  docker:ci:rust:native-test-reuse:solve:
+    requires:
+      vars: [NATIVE_TEST_CONTEXT, NATIVE_TEST_CASE_DIR, NATIVE_TEST_TARGET, NATIVE_TEST_VERIFY_TARGET]
+    env:
+      GHA_CACHE_WRITE_ENABLED: '{{default "" .NATIVE_TEST_CACHE_WRITE}}'
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p '{{.NATIVE_TEST_CASE_DIR}}/result'
+        status=0
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+          -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
+          -f '{{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/native-test-proof.docker-bake.hcl' \
+          --progress=plain \
+          --metadata-file '{{.NATIVE_TEST_CASE_DIR}}/build-metadata.json' \
+          --allow='fs.read={{.NATIVE_TEST_CONTEXT}}' \
+          --allow='fs.write={{.NATIVE_TEST_CASE_DIR}}/result' \
+          --set '*.context={{.NATIVE_TEST_CONTEXT}}' \
+          --set '{{.NATIVE_TEST_TARGET}}.output=type=local,dest={{.NATIVE_TEST_CASE_DIR}}/result' \
+          '{{.NATIVE_TEST_TARGET}}' '{{.NATIVE_TEST_VERIFY_TARGET}}' \
+          2>&1 | tee '{{.NATIVE_TEST_CASE_DIR}}/build.log' || status=$?
+        printf '%s\n' "$status" > '{{.NATIVE_TEST_CASE_DIR}}/exit-status'
+        exit "$status"
+
+  docker:ci:rust:native-test-reuse:prove:
+    desc: Prove native test reuse and terminal failures with real BuildKit solves.
+    deps: [sccache:ensure, registry-cache:ensure]
+    requires:
+      vars: [NATIVE_TEST_PROOF_DIR]
+    cmds:
+      - |
+        set -euo pipefail
+        proof_dir='{{.NATIVE_TEST_PROOF_DIR}}'
+        evidence="$proof_dir/evidence"
+        rm -rf -- "$evidence"
+        mkdir -p "$evidence"
+        context="$(mktemp -d "$proof_dir/context.XXXXXX")"
+        trap 'rm -rf -- "$context"' EXIT
+        # This ordinary checkout context is only mutated for actual solves.
+        # BuildKit receives every real file and remains the only cache authority.
+        git -C '{{.REPO_ROOT}}' archive HEAD | tar -x -C "$context"
+        source_sha="$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
+        printf '%s\n' "$source_sha" > "$evidence/source-sha"
+        case "${GHA_CACHE_SCOPE_SUFFIX:-}" in
+          "-git-$source_sha") ;;
+          *) echo 'Native proof requires the normal exact branch cache scope' >&2; exit 2 ;;
+        esac
+        registry_ref="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/remote-buildcache/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+        printf '%s\n' "$registry_ref" > "$evidence/cache-ref"
+        platform="$context/nook-app/nook-platform"
+        replication="$platform/nook-replication/src/lib.rs"
+        floor="$platform/nook-core/coverage-floor.json"
+        cp "$replication" "$proof_dir/replication-original.rs"
+        cp "$floor" "$proof_dir/coverage-floor-original.json"
+        export NATIVE_TEST_CONTEXT="$context"
+        export NATIVE_TEST_TARGET=native-test-evidence
+        export NATIVE_TEST_VERIFY_TARGET=pr-rust-verify
+        task docker:ci:rust:native-test-reuse:solve \
+          NATIVE_TEST_CASE_DIR="$evidence/cold" \
+          NATIVE_TEST_TARGET=native-test-cold NATIVE_TEST_VERIFY_TARGET=pr-native-test-cold
+        task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/warm"
+        doc="$platform/nook-app-common/.cortex/native-test-reuse-proof.md"
+        mkdir -p "$(dirname "$doc")"
+        printf 'Actual excluded documentation input proof.\n' > "$doc"
+        task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/documentation"
+        rm "$doc"
+        printf '\n// Actual native test reuse source-change proof.\n' >> "$replication"
+        git diff --no-index "$proof_dir/replication-original.rs" "$replication" \
+          > "$evidence/replication-change.patch" || test "$?" -eq 1
+        task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/replication"
+        cp "$proof_dir/replication-original.rs" "$replication"
+        # A real uncovered core line makes its package's 100% floor impossible.
+        jq -e '.data[].files[] | select(.filename | contains("/nook-core/")) | select(.summary.lines.count > 0 and .summary.lines.percent < 100)' \
+          "$evidence/warm/result/coverage/nook-core/summary.json" > "$evidence/uncovered-core-files.json"
+        jq '.package_lines_percent["nook-core"] = 100' "$floor" > "$floor.tmp"
+        mv "$floor.tmp" "$floor"
+        cp "$floor" "$evidence/floor-100.json"
+        if task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/floor-failure"; then
+          echo 'Actual 100% coverage floor unexpectedly passed' >&2; exit 1
+        fi
+        cp "$proof_dir/coverage-floor-original.json" "$floor"
+        failure_directory="$platform/nook-replication/tests"
+        created_failure_directory=0
+        if [ ! -d "$failure_directory" ]; then
+          mkdir "$failure_directory"
+          created_failure_directory=1
+        fi
+        failure_input="$failure_directory/native_test_reuse_failure.rs"
+        cat > "$failure_input" <<'RUST_FAILURE'
+        use std::hint::black_box;
+
+        #[test]
+        fn native_test_reuse_expected_failure() {
+            let observed = black_box(true);
+            assert!(!observed, "native-test-reuse expected test failure");
+        }
+        RUST_FAILURE
+        git diff --no-index /dev/null "$failure_input" \
+          > "$evidence/test-failure.patch" || test "$?" -eq 1
+        if task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/test-failure"; then
+          echo 'Actual failing native test unexpectedly passed' >&2; exit 1
+        fi
+        rm "$failure_input"
+        if [ "$created_failure_directory" = 1 ]; then rmdir "$failure_directory"; fi
+        # Only the restored source may publish its normal exact branch ref.
+        cmp "$proof_dir/replication-original.rs" "$replication"
+        cmp "$proof_dir/coverage-floor-original.json" "$floor"
+        bun '{{.REPO_ROOT}}/.github/scripts/native-test-reuse-evidence.ts' "$evidence" verify
+        GHA_CACHE_EXPORT_MODE=max task docker:ci:rust:native-test-reuse:solve \
+          NATIVE_TEST_CASE_DIR="$evidence/registry-export" NATIVE_TEST_CACHE_WRITE=1
+        {{.DOCKER}} buildx imagetools inspect --raw "$registry_ref" > "$evidence/cache-manifest.json"
+        task docker:ci:rust:native-test-reuse:solve \
+          NATIVE_TEST_CASE_DIR="$evidence/registry-import" \
+          NATIVE_TEST_TARGET=native-test-import NATIVE_TEST_VERIFY_TARGET=pr-native-test-import
+        bun '{{.REPO_ROOT}}/.github/scripts/native-test-reuse-evidence.ts' "$evidence" report
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
