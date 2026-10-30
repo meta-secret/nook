@@ -70,7 +70,7 @@ export class NativeTestGraphContract {
       expect(body).toContain(
         `LLVM_PROFILE_FILE_NAME='${leaf.package}-%p-%m.profraw'`,
       );
-      expect(body).toContain("target/llvm-cov-target/nextest/ci/junit.xml");
+      expect(body).toContain("cp target/nextest/ci/junit.xml");
       expect(body).toContain("-exec cp --parents -t");
       expect(body).not.toContain("--no-tests=pass");
       expect(report).toContain(

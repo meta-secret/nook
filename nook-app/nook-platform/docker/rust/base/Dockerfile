@@ -346,7 +346,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-app-common-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-app-common/profiles /opt/nook/native-test-artifacts/nook-app-common/objects \
     && cp target/llvm-cov-target/nook-app-common-*.profraw /opt/nook/native-test-artifacts/nook-app-common/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-app-common/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-app-common/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-app-common/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-app-common/objects -type f -perm /111 -name 'nook_app_common-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-app-common/profiles /opt/nook/native-test-artifacts/nook-app-common/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-app-common/artifact-files.tsv
@@ -360,7 +360,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-authenticator-domain-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles /opt/nook/native-test-artifacts/nook-authenticator-domain/objects \
     && cp target/llvm-cov-target/nook-authenticator-domain-*.profraw /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-authenticator-domain/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-authenticator-domain/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-authenticator-domain/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -perm /111 -name 'nook_authenticator_domain-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-authenticator-domain/artifact-files.tsv
@@ -374,7 +374,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-replication-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects \
     && cp target/llvm-cov-target/nook-replication-*.profraw /opt/nook/native-test-artifacts/nook-replication/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-replication/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-replication/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-replication/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-replication/objects -type f -perm /111 -name 'nook_replication-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-replication/artifact-files.tsv
@@ -389,7 +389,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-auth2-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-auth2/profiles /opt/nook/native-test-artifacts/nook-auth2/objects \
     && cp target/llvm-cov-target/nook-auth2-*.profraw /opt/nook/native-test-artifacts/nook-auth2/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-auth2/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-auth2/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-auth2/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-auth2/objects -type f -perm /111 -name 'nook_auth2-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-auth2/profiles /opt/nook/native-test-artifacts/nook-auth2/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-auth2/artifact-files.tsv
@@ -403,7 +403,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-event-log-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-event-log/profiles /opt/nook/native-test-artifacts/nook-event-log/objects \
     && cp target/llvm-cov-target/nook-event-log-*.profraw /opt/nook/native-test-artifacts/nook-event-log/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-event-log/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-event-log/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-event-log/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-event-log/objects -type f -perm /111 -name 'nook_event_log-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-event-log/profiles /opt/nook/native-test-artifacts/nook-event-log/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-event-log/artifact-files.tsv
@@ -418,7 +418,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-companion-core-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-companion-core/profiles /opt/nook/native-test-artifacts/nook-companion-core/objects \
     && cp target/llvm-cov-target/nook-companion-core-*.profraw /opt/nook/native-test-artifacts/nook-companion-core/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-companion-core/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-companion-core/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-companion-core/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -perm /111 -name 'nook_companion_core-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-companion-core/profiles /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-companion-core/artifact-files.tsv
@@ -432,7 +432,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-core-coverage \
     && mkdir -p /opt/nook/native-test-artifacts/nook-core/profiles /opt/nook/native-test-artifacts/nook-core/objects \
     && cp target/llvm-cov-target/nook-core-*.profraw /opt/nook/native-test-artifacts/nook-core/profiles/ \
-    && cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-core/junit.xml \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-core/junit.xml \
     && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-core/objects/ {} + \
     && test -n "$(find /opt/nook/native-test-artifacts/nook-core/objects -type f -perm /111 -name 'nook_core-*' -print -quit)" \
     && find /opt/nook/native-test-artifacts/nook-core/profiles /opt/nook/native-test-artifacts/nook-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-core/artifact-files.tsv
