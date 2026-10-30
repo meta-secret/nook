@@ -14,8 +14,12 @@ impl<'a> PrProducerCacheContract<'a> {
     }
 
     pub(super) fn assert_contract(&self) -> anyhow::Result<()> {
+        self.assert_workflow_fanout()?;
+        self.assert_producer_graph()
+    }
+
+    fn assert_workflow_fanout(&self) -> anyhow::Result<()> {
         let pr = self.root.read(".github/workflows/pr.yml");
-        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
         let tasks = self.root.read("nook-app/ci/pr.yml");
         assert_eq!(pr.matches("    runs-on:").count(), 5);
         assert_eq!(pr.matches("Connect trusted persistent BuildKit").count(), 2);
@@ -69,6 +73,12 @@ impl<'a> PrProducerCacheContract<'a> {
             .find("uses: ./.github/actions/nook-pr-preview")
             .context("missing preview")?;
         assert!(validation < publish);
+        Ok(())
+    }
+
+    fn assert_producer_graph(&self) -> anyhow::Result<()> {
+        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
+        let tasks = self.root.read("nook-app/ci/pr.yml");
         let join = tasks
             .split_once("  ci:pr:validate:\n")
             .and_then(|(_, rest)| rest.split_once("\n  ci:pr:checks:"))

@@ -2,7 +2,9 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::Lines;
 
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
@@ -138,15 +140,18 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_node_deps.contains(
         "test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run"
     ));
-    let compiler_runs = dockerfile_run_instructions(wasm_node_deps)
+    let compiler_runs = DockerfileRunInstruction::parse_stage(wasm_node_deps)
         .into_iter()
         .filter(|run| run.contains("--no-run"))
         .collect::<Vec<_>>();
     assert_eq!(compiler_runs.len(), 2);
-    assert!(compiler_runs[0].contains("llvm-cov show-env --sh"));
-    assert!(!compiler_runs[0].contains("--target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("--target wasm32-unknown-unknown"));
+    let [native_run, wasm_run] = compiler_runs.as_slice() else {
+        bail!("WASM Node dependency warming must have exactly two compiler RUNs");
+    };
+    assert!(native_run.contains("llvm-cov show-env --sh"));
+    assert!(!native_run.contains("--target wasm32-unknown-unknown"));
+    assert!(wasm_run.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
+    assert!(wasm_run.contains("--target wasm32-unknown-unknown"));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
@@ -336,7 +341,7 @@ fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> any
         .and_then(|(_, tail)| tail.split_once("FROM scratch AS coverage-export"))
         .map(|(stage, _)| stage)
         .context("native coverage stage must exist")?;
-    let runs = dockerfile_run_instructions(native);
+    let runs = DockerfileRunInstruction::parse_stage(native);
     let terminal = runs
         .last()
         .context("native coverage must have a terminal RUN")?;
@@ -377,36 +382,49 @@ fn repository_root() -> anyhow::Result<PathBuf> {
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
-fn dockerfile_run_instructions(stage: &str) -> Vec<String> {
-    let mut runs = Vec::new();
-    let mut current: Option<String> = None;
-    for line in stage.lines() {
-        let trimmed = line.trim();
-        if let Some(run) = current.as_mut() {
-            run.push('\n');
-            run.push_str(trimmed);
-            if !trimmed.ends_with('\\') {
-                runs.push(current.take().expect("RUN instruction must be present"));
+struct DockerfileRunInstruction {
+    text: String,
+}
+
+impl DockerfileRunInstruction {
+    fn parse_stage(stage: &str) -> Vec<Self> {
+        let mut runs = Vec::new();
+        let mut lines = stage.lines();
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+            match trimmed.split_whitespace().next() {
+                Some("RUN") => (),
+                Some(_) | None => continue,
             }
-            continue;
+            runs.push(
+                Self {
+                    text: trimmed.to_owned(),
+                }
+                .complete(&mut lines),
+            );
         }
-        let Some(rest) = trimmed.strip_prefix("RUN") else {
-            continue;
-        };
-        if !rest.is_empty() && !rest.chars().next().is_some_and(char::is_whitespace) {
-            continue;
-        }
-        let instruction = trimmed.to_owned();
-        if trimmed.ends_with('\\') {
-            current = Some(instruction);
-        } else {
-            runs.push(instruction);
-        }
+        runs
     }
-    if let Some(run) = current {
-        runs.push(run);
+
+    #[must_use]
+    fn complete(mut self, lines: &mut Lines<'_>) -> Self {
+        while let Some('\\') = self.text.chars().last() {
+            let Some(line) = lines.next() else {
+                break;
+            };
+            self.text.push('\n');
+            self.text.push_str(line.trim());
+        }
+        self
     }
-    runs
+}
+
+impl Deref for DockerfileRunInstruction {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
 }
 #[derive(Deserialize)]
 struct CoveragePolicy {

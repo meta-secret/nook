@@ -24,6 +24,11 @@ struct SourceArchitectureScenario {
     root: RepositoryFixture,
 }
 
+enum PrPolicyTask {
+    Policy,
+    PolicyWithDeliveryHelpers,
+}
+
 impl SourceArchitectureScenario {
     fn repository() -> Self {
         Self {
@@ -31,25 +36,23 @@ impl SourceArchitectureScenario {
         }
     }
 
-    fn task_body<'a>(
-        &self,
-        taskfile: &'a str,
-        task: &str,
-        next_task: &str,
-    ) -> anyhow::Result<&'a str> {
-        let start_marker = format!("  {task}:\n");
-        let end_marker = format!("  {next_task}:\n");
-        let start = taskfile
-            .find(&start_marker)
-            .ok_or_else(|| anyhow::anyhow!("missing task {task}"))?;
-        let body = taskfile
-            .get(start..)
-            .ok_or_else(|| anyhow::anyhow!("task {task} begins outside a UTF-8 boundary"))?;
-        let end = body
-            .find(&end_marker)
-            .ok_or_else(|| anyhow::anyhow!("missing following task {next_task}"))?;
-        body.get(..end)
-            .ok_or_else(|| anyhow::anyhow!("task {task} ends outside a UTF-8 boundary"))
+    fn pr_policy_task_body(&self, task: PrPolicyTask) -> anyhow::Result<String> {
+        let taskfile = fs::read_to_string(self.root.join("nook-app/ci/pr.yml"))?;
+        let body = match task {
+            PrPolicyTask::Policy => {
+                taskfile
+                    .split_once("  ci:pr:tests:policy:\n")
+                    .and_then(|(_, tail)| {
+                        tail.split_once("  ci:pr:tests:policy-with-delivery-helpers:\n")
+                    })
+            }
+            PrPolicyTask::PolicyWithDeliveryHelpers => taskfile
+                .split_once("  ci:pr:tests:policy-with-delivery-helpers:\n")
+                .and_then(|(_, tail)| tail.split_once("  ci:pr:delivery-helpers:\n")),
+        }
+        .map(|(body, _)| body)
+        .ok_or_else(|| anyhow::anyhow!("PR policy tasks must retain their section boundaries"))?;
+        Ok(body.to_owned())
     }
 
     fn assert_source_architecture_gate(&self) -> anyhow::Result<()> {
@@ -105,22 +108,12 @@ impl SourceArchitectureScenario {
                 && pr_taskfile.contains("ci:pr:tests:policy:"),
             "every consolidated PR route must execute repository policy in both product and policy-only paths"
         );
-        let policy_only = self.task_body(
-            &pr_taskfile,
-            "ci:pr:tests:policy-with-delivery-helpers",
-            "ci:pr:delivery-helpers",
-        )?;
+        let policy_only = self.pr_policy_task_body(PrPolicyTask::PolicyWithDeliveryHelpers)?;
         assert!(
             policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
-                && self
-                    .task_body(
-                        &pr_taskfile,
-                        "ci:pr:tests:policy",
-                        "ci:pr:tests:policy-with-delivery-helpers",
-                    )?
-                    .contains(
-                        "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
-                    ),
+                && self.pr_policy_task_body(PrPolicyTask::Policy)?.contains(
+                    "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+                ),
             "policy-only PR tests must delegate to the policy dependency and delivery helpers"
         );
         assert!(workflow.contains("workflow_call:"));
@@ -137,7 +130,7 @@ impl SourceArchitectureScenario {
                 && workflow_taskfile.contains("task: preflight:repository-policy-untrusted"),
             "repository policy must route untrusted PR source architecture through Taskfile"
         );
-        self.assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
+        self.assert_dockerized_preflight_tools()?;
         assert!(
             preflight_dockerfile.contains("--test source_file_size"),
             "preflight:source-architecture must run the source_file_size test"
@@ -145,19 +138,25 @@ impl SourceArchitectureScenario {
         Ok(())
     }
 
-    fn assert_dockerized_preflight_tools(&self, workflow: &str, name: &str) -> anyhow::Result<()> {
+    fn assert_dockerized_preflight_tools(&self) -> anyhow::Result<()> {
+        let workflow =
+            fs::read_to_string(self.root.join(".github/workflows/repository-policy.yml"))?;
         assert!(workflow.contains("uses: ./.github/actions/nook-docker-setup"));
         let buildkit = workflow
             .find("uses: docker/setup-buildx-action")
-            .ok_or_else(|| anyhow::anyhow!("{name} must configure secret-free BuildKit"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("repository-policy must configure secret-free BuildKit")
+            })?;
         let task = workflow
             .find("run: task ci:repository-policy:untrusted")
-            .ok_or_else(|| anyhow::anyhow!("{name} must run the untrusted policy Task"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("repository-policy must run the untrusted policy Task")
+            })?;
         assert!(buildkit < task);
         for forbidden in ["dtolnay/rust-toolchain", "Swatinem/rust-cache"] {
             assert!(
                 !workflow.contains(forbidden),
-                "{name} must use Docker-owned Rust tooling"
+                "repository-policy must use Docker-owned Rust tooling"
             );
         }
         Ok(())

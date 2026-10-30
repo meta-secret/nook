@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::Context;
+
 #[path = "infra/kubernetes_cache_sim.rs"]
 mod kubernetes_cache_sim;
 #[path = "infra/migration_contracts.rs"]
@@ -333,7 +335,7 @@ fn arc_mesh_reconciliation_fails_closed() {
     clippy::too_many_lines,
     reason = "one infrastructure contract verifies runner placement as a unit"
 )]
-fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
+fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() -> anyhow::Result<()> {
     let values = RepositoryFixture::repository_root()
         .read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let buildkit =
@@ -391,8 +393,11 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         }
         let (_, spread) = execution
             .split_once("topologySpreadConstraints:")
-            .expect("execution spread must exist");
-        let spread = spread.split("affinity:").next().expect("spread section");
+            .context("execution spread must exist")?;
+        let spread = spread
+            .split("affinity:")
+            .next()
+            .context("execution spread section must exist")?;
         assert!(
             spread.contains(&format!("values: {groups}")),
             "execution spread must count its intended groups: {groups}"
@@ -561,4 +566,5 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         .find("kubectl taint node \"${tier_nodes[@]}\"")
         .unwrap_or_else(|| panic!("ARC activation must expose each tier as one group"));
     assert!(primary < grouped);
+    Ok(())
 }
