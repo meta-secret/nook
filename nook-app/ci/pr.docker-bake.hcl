@@ -6,6 +6,7 @@ variable "VITEST_MAX_WORKERS" {
 target "pr-rust-verify" {
   inherits = ["rust-base"]
   target = "pr-rust-verify"
+  cache-from = rust_native_source_cache_from
   output = ["type=cacheonly"]
 }
 

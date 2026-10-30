@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 import { TrustedBuildkitSetupContract } from "./trusted-buildkit-setup.fixture";
+import { NativeTestGraphContract } from "./native-test-graph.fixture";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -203,9 +204,6 @@ class DockerizedRustBuildKitContract {
     const tasks = this.read("nook-app/ci/pr.yml");
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
-    const product = this.read(
-      "nook-app/nook-platform/docker/rust/base/Dockerfile",
-    );
     expect(workflow).toContain("Connect trusted persistent BuildKit");
     expect(rootWorkflow).toContain(
       "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
@@ -296,47 +294,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain(
       'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:repository-policy',
     );
-    const rustDependencyStage = product.indexOf(
-      "FROM chef-deps AS pr-rust-dependencies",
-    );
-    const rustSourceStage = product.indexOf(
-      "FROM pr-rust-dependencies AS pr-rust-verify",
-    );
-    expect(rustDependencyStage).toBeGreaterThanOrEqual(0);
-    expect(rustSourceStage).toBeGreaterThan(rustDependencyStage);
-    expect(product.slice(rustDependencyStage, rustSourceStage)).not.toContain(
-      "COPY nook-app/nook-platform/ ./",
-    );
-    const rustVerification = product.slice(
-      rustSourceStage,
-      product.indexOf("FROM scratch AS pr-wasm-artifacts"),
-    );
-    expect(rustVerification).toContain(
-      "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
-    );
-    expect(rustVerification).not.toContain("COPY nook-app/nook-platform/ ./");
-    for (const crate of [
-      "nook-app-common",
-      "nook-authenticator-domain",
-      "nook-replication",
-      "nook-auth2",
-      "nook-event-log",
-      "nook-companion-core",
-      "nook-core",
-      "nook-companion-wasm",
-      "nook-wasm",
-      "nook-wasm-composition-tests",
-    ]) {
-      expect(rustVerification).toContain(
-        `COPY nook-app/nook-platform/${crate} ${crate}`,
-      );
-    }
-    expect(
-      rustVerification.match(/cargo clippy --quiet --offline/g)?.length,
-    ).toBe(9);
-    expect(
-      rustVerification.match(/cargo build --quiet --offline/g)?.length,
-    ).toBe(7);
+    new NativeTestGraphContract(this.root).assert();
     expect(rustDockerTasks).toContain(
       'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy',
     );
@@ -405,6 +363,7 @@ class DockerizedRustBuildKitContract {
       "bash .github/scripts/jscpd-summary.sh",
     );
   }
+
 
   dylintDependencyCacheAndSccacheMode(): void {
     const nightly = this.read(

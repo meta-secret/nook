@@ -73,7 +73,7 @@ target "builder-wasm-deps-input-publish" {
   inherits = ["builder-wasm-deps-restore"]
 }
 
-// Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
+// Dependency-aligned native tests and the combined coverage gate. Parallel with builder-wasm.
 // Persist this source-sensitive boundary separately from manifest-only dependencies so hosted
 // runners do not repeat unchanged coverage builds after a non-Rust PR push.
 target "builder-debug" {
@@ -98,6 +98,14 @@ target "coverage-export" {
   // separate post-verification step without a second reconstruction job.
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
+}
+
+// Compact actual-build evidence: combined coverage, JUnit and measured LLVM
+// artifact paths/sizes. The raw profiles and executable maps stay in test stages.
+target "native-test-evidence" {
+  inherits = ["coverage-export"]
+  target   = "native-test-evidence"
+  output   = ["type=cacheonly"]
 }
 
 // Narrow source-sealed runtime for focused native tests. It deliberately branches before
