@@ -363,7 +363,7 @@ class DockerizedRustContract {
       "false) INSTA_UPDATE=no cargo test --locked -p nook-replication ;;",
     );
     expect(product).toContain(
-      "INSTA_UPDATE=no cargo llvm-cov nextest --no-clean --profile ci -p nook-replication",
+      "INSTA_UPDATE=no LLVM_PROFILE_FILE_NAME='nook-replication-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-replication",
     );
     expect(product).toContain(
       "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
