@@ -9,6 +9,7 @@ import {
   TypeScriptProgram,
   TypeScriptSourceKind,
 } from '../src/lib/typescript/program.ts';
+import { SkillProviderCheckerQuestions } from './skill-provider-checker-questions.ts';
 import { TypeScriptTestSources } from './typescript-test-sources.ts';
 
 export class SkillProviderTypeContextScenario {
@@ -43,33 +44,29 @@ export class SkillProviderTypeContextScenario {
     const inspection = this.request;
     // An isolated program: the inspected source and the default libraries,
     // with no repository file, module, or type root reachable.
-    const program = await TypeScriptTestSources.open({
+    return TypeScriptTestSources.useSource({
       compilerOptions: BOUNDARY_COMPILER_OPTIONS,
-      sources: [
-        {
-          fileName: inspection.filePath,
-          kind: TypeScriptSourceKind.TypeScript,
-          text: inspection.source,
-        },
-      ],
+      source: {
+        fileName: inspection.filePath,
+        kind: TypeScriptSourceKind.TypeScript,
+        text: inspection.source,
+      },
+      use: async (program) => {
+        const [sourceFile] = await program.sourceFiles();
+        if (!sourceFile) {
+          throw new Error(
+            `Boundary source was not compiled: ${inspection.filePath}`,
+          );
+        }
+        const checker = await TypeScriptCheckerFacts.collect({
+          checker: program.checker,
+          names: SkillProviderCheckerQuestions.NAMES,
+          sourceFile,
+          types: SkillProviderCheckerQuestions.types(sourceFile),
+        });
+        return { checker, sourceFile };
+      },
     });
-    try {
-      const [sourceFile] = await program.sourceFiles();
-      if (!sourceFile) {
-        throw new Error(
-          `Boundary source was not compiled: ${inspection.filePath}`,
-        );
-      }
-      const checker = await TypeScriptCheckerFacts.collect({
-        checker: program.checker,
-        names: true,
-        sourceFile,
-        types: true,
-      });
-      return { checker, sourceFile };
-    } finally {
-      await program.close();
-    }
   }
 
   static isCurrentProductionSource(
@@ -115,9 +112,9 @@ export class SkillProviderTypeContextScenario {
     });
     const checker = await TypeScriptCheckerFacts.collect({
       checker: program.checker,
-      names: true,
+      names: SkillProviderCheckerQuestions.NAMES,
       sourceFile,
-      types: true,
+      types: SkillProviderCheckerQuestions.types(sourceFile),
     });
     const context: SkillProviderTypeContext = { checker, sourceFile };
     PRODUCTION_CONTEXTS.set(absolutePath, context);

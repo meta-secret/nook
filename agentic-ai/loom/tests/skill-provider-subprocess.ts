@@ -150,27 +150,25 @@ export class SkillProviderSubprocessScenario {
         sourceFile: await TypeScriptTestSources.parse(source),
       };
     }
-    const program = await TypeScriptTestSources.open({
+    return TypeScriptTestSources.useSource({
       compilerOptions: SUBPROCESS_COMPILER_OPTIONS,
-      sources: [source],
+      source,
+      use: async (program) => {
+        const [sourceFile] = await program.sourceFiles();
+        if (!sourceFile) {
+          throw new Error(
+            `Subprocess source was not compiled: ${inspection.importer}`,
+          );
+        }
+        const checker = await TypeScriptCheckerFacts.collect({
+          checker: program.checker,
+          names: TypeScriptCheckerFacts.NO_NAMES,
+          sourceFile,
+          types: TypeScriptCheckerFacts.NO_TYPES,
+        });
+        return { checker, sourceFile };
+      },
     });
-    try {
-      const [sourceFile] = await program.sourceFiles();
-      if (!sourceFile) {
-        throw new Error(
-          `Subprocess source was not compiled: ${inspection.importer}`,
-        );
-      }
-      const checker = await TypeScriptCheckerFacts.collect({
-        checker: program.checker,
-        names: false,
-        sourceFile,
-        types: false,
-      });
-      return { checker, sourceFile };
-    } finally {
-      await program.close();
-    }
   }
 
   static subprocessApi(

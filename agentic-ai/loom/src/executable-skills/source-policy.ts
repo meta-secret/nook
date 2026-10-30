@@ -846,9 +846,9 @@ export class ExecutableSkillSource {
       }
       const checker = await TypeScriptCheckerFacts.collect({
         checker: program.checker,
-        names: true,
+        names: TypeScriptCheckerFacts.ALL_NAMES,
         sourceFile,
-        types: false,
+        types: TypeScriptCheckerFacts.NO_TYPES,
       });
       return { checker, sourceFile };
     } finally {

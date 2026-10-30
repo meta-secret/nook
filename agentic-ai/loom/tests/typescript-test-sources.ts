@@ -5,6 +5,7 @@ import {
   type TypeScriptProgram,
   TypeScriptSession,
   type TypeScriptSourceText,
+  type UseTypeScriptSourceRequest,
 } from '../src/lib/typescript/program.ts';
 
 /**
@@ -26,6 +27,11 @@ export class TypeScriptTestSources {
     const parsed = SESSION.parseOne(source);
     PARSED_SOURCES.set(key, parsed);
     return parsed;
+  }
+
+  /** Work on an isolated program over one in-memory source. */
+  static useSource<T>(request: UseTypeScriptSourceRequest<T>): Promise<T> {
+    return SESSION.useSource(request);
   }
 
   /** An isolated program over in-memory sources in the shared compiler. */

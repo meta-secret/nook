@@ -37,13 +37,30 @@ export type TypeScriptTypeFact = {
   readonly flags: TypeFlags;
 };
 
+/**
+ * The identifiers whose own name a policy resolves, and as which meanings.
+ * Every name lookup is a separate compiler request, so a policy asks only
+ * about the identifiers it can query; any other lookup fails closed.
+ */
+export type TypeScriptNameQuestions = {
+  readonly identifiers: (identifier: ts.Identifier) => boolean;
+  readonly meanings: readonly TypeScriptNameMeaning[];
+};
+
+/**
+ * The expressions whose type a policy inspects. Describing a type takes
+ * several compiler requests, so a policy asks only about the expressions it
+ * can query; any other type question fails closed.
+ */
+export type TypeScriptTypeQuestions = {
+  readonly expressions: (expression: ts.Expression) => boolean;
+};
+
 export type CollectTypeScriptCheckerFactsRequest = {
   readonly checker: Checker;
-  /** Resolve every identifier's own name as a value and as a type. */
-  readonly names: boolean;
+  readonly names: TypeScriptNameQuestions;
   readonly sourceFile: ts.SourceFile;
-  /** Resolve the type of every expression. */
-  readonly types: boolean;
+  readonly types: TypeScriptTypeQuestions;
 };
 
 export type ResolveTypeScriptNameRequest = {
@@ -59,9 +76,10 @@ type MutableTypeFact = {
 };
 
 type CheckerFactTables = {
+  /** Each asked identifier's resolution per meaning, `false` for none. */
   readonly names: ReadonlyMap<
     TypeScriptNameMeaning,
-    ReadonlyMap<ts.Identifier, TypeScriptSymbolFact>
+    ReadonlyMap<ts.Identifier, TypeScriptSymbolFact | false>
   >;
   readonly symbols: ReadonlyMap<ts.Identifier, TypeScriptSymbolFact>;
   readonly types: ReadonlyMap<ts.Node, TypeScriptTypeFact>;
@@ -86,6 +104,23 @@ type CollectExpressionTypesRequest = {
  */
 export class TypeScriptCheckerFacts {
   private constructor(private readonly tables: CheckerFactTables) {}
+
+  /** No name lookups. */
+  static readonly NO_NAMES: TypeScriptNameQuestions = {
+    identifiers: () => false,
+    meanings: [],
+  };
+
+  /** Every identifier's own name, as a value and as a type. */
+  static readonly ALL_NAMES: TypeScriptNameQuestions = {
+    identifiers: () => true,
+    meanings: [TypeScriptNameMeaning.Value, TypeScriptNameMeaning.Type],
+  };
+
+  /** No type questions. */
+  static readonly NO_TYPES: TypeScriptTypeQuestions = {
+    expressions: () => false,
+  };
 
   static async collect(
     request: CollectTypeScriptCheckerFactsRequest,
@@ -121,7 +156,7 @@ export class TypeScriptCheckerFacts {
     request: ResolveTypeScriptNameRequest,
   ): TypeScriptSymbolFact | false {
     const names = this.tables.names.get(request.meaning);
-    if (!names) {
+    if (!names || !names.has(request.identifier)) {
       throw new Error('TypeScript name resolution was not collected.');
     }
     const symbol = names.get(request.identifier);
@@ -181,53 +216,51 @@ class TypeScriptCheckerFactCollector {
     }
     const names = new Map<
       TypeScriptNameMeaning,
-      ReadonlyMap<ts.Identifier, TypeScriptSymbolFact>
+      ReadonlyMap<ts.Identifier, TypeScriptSymbolFact | false>
     >();
-    if (this.request.names) {
-      for (const [meaning, flags] of [
-        [TypeScriptNameMeaning.Value, SymbolFlags.Value],
-        [TypeScriptNameMeaning.Type, SymbolFlags.Type],
-      ] as const) {
-        const resolved = new Map<ts.Identifier, TypeScriptSymbolFact>();
-        for (
-          let offset = 0;
-          offset < identifiers.length;
-          offset += CONCURRENT_REQUESTS
-        ) {
-          const batch = identifiers.slice(offset, offset + CONCURRENT_REQUESTS);
-          const facts = await Promise.all(
-            batch.map(async (identifier) => {
-              const symbol = await checker.resolveName(
-                identifier.text,
-                flags,
-                identifier,
-                false,
-              );
-              return symbol ? this.symbolFact(symbol) : false;
-            }),
-          );
-          for (const [index, identifier] of batch.entries()) {
-            const fact = facts.at(index);
-            if (fact) resolved.set(identifier, fact);
-          }
+    const named = identifiers.filter(this.request.names.identifiers);
+    for (const meaning of this.request.names.meanings) {
+      const flags =
+        meaning === TypeScriptNameMeaning.Value
+          ? SymbolFlags.Value
+          : SymbolFlags.Type;
+      const resolved = new Map<ts.Identifier, TypeScriptSymbolFact | false>();
+      for (
+        let offset = 0;
+        offset < named.length;
+        offset += CONCURRENT_REQUESTS
+      ) {
+        const batch = named.slice(offset, offset + CONCURRENT_REQUESTS);
+        const facts = await Promise.all(
+          batch.map(async (identifier) => {
+            const symbol = await checker.resolveName(
+              identifier.text,
+              flags,
+              identifier,
+              false,
+            );
+            return symbol ? this.symbolFact(symbol) : false;
+          }),
+        );
+        for (const [index, identifier] of batch.entries()) {
+          const [fact = false] = [facts.at(index)];
+          resolved.set(identifier, fact);
         }
-        names.set(meaning, resolved);
       }
+      names.set(meaning, resolved);
     }
     const types = new Map<ts.Node, TypeScriptTypeFact>();
     const undescribedTypes = new Set<ts.Node>();
-    if (this.request.types) {
-      await this.collectExpressionTypes({
-        expressions,
-        types,
-        undescribedTypes,
-      });
-    }
+    await this.collectExpressionTypes({
+      expressions: expressions.filter(this.request.types.expressions),
+      types,
+      undescribedTypes,
+    });
     return { names, symbols, types, undescribedTypes };
   }
 
   /**
-   * Asks for every expression type in one request. The TypeScript 7 API
+   * Asks for every asked expression type in one request. The TypeScript 7 API
    * panics while serializing some types (an empty `as const` array literal
    * is one), failing the whole request; the batch is then split until each
    * such expression is isolated and recorded as undescribed, so a policy

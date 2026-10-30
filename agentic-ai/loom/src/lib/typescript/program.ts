@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import type * as ts from 'typescript/unstable/ast';
-import { API, type Checker, type Project } from 'typescript/unstable/async';
+import {
+  API,
+  type Checker,
+  type Project,
+  type Snapshot,
+} from 'typescript/unstable/async';
 import {
   createVirtualFileSystem,
   type FileSystem,
@@ -63,10 +68,37 @@ type LayoutTypeScriptProgramRequest = {
   readonly root: string;
 };
 
+/** A program over one source, with the work `use` does on it. */
+export type UseTypeScriptSourceRequest<T> = {
+  readonly compilerOptions: TypeScriptCompilerOptions;
+  readonly source: TypeScriptSourceText;
+  readonly use: (program: TypeScriptProgram) => Promise<T>;
+};
+
+/** One reusable project over a single source file of one file kind. */
+type TypeScriptSourceSlot = {
+  readonly configPath: string;
+  /**
+   * The snapshot of the slot's last use. It stays open until the next use
+   * has its own: the compiler reports a snapshot's changed files against the
+   * previous live one, and the client keeps every unreported file.
+   */
+  snapshot: Snapshot | false;
+  readonly sourcePath: string;
+  /** Settles once the slot's current use is done with its source. */
+  tail: Promise<void>;
+};
+
+type UseTypeScriptSourceSlotRequest<T> = {
+  readonly request: UseTypeScriptSourceRequest<T>;
+  readonly slot: TypeScriptSourceSlot;
+};
+
 type TypeScriptSessionParts = {
   readonly api: API;
   readonly programs: { count: number };
   readonly removeFile: NonNullable<FileSystem['removeFile']>;
+  readonly slots: Map<string, TypeScriptSourceSlot>;
   readonly writeFile: NonNullable<FileSystem['writeFile']>;
 };
 
@@ -90,6 +122,25 @@ const SOURCE_EXTENSIONS: Readonly<
   [TypeScriptSourceKind.Jsx]: ['.jsx'],
   [TypeScriptSourceKind.Json]: ['.json'],
 };
+
+/**
+ * File-name endings that change how the compiler reads a source, longest
+ * first, so a reused source file keeps the kind its requested name implies.
+ */
+const SOURCE_FILE_SUFFIXES = [
+  '.d.mts',
+  '.d.cts',
+  '.d.ts',
+  '.mts',
+  '.cts',
+  '.tsx',
+  '.ts',
+  '.mjs',
+  '.cjs',
+  '.jsx',
+  '.js',
+  '.json',
+] as const;
 
 /** Parse-only options: no libraries, no module resolution, no type roots. */
 const PARSE_OPTIONS: TypeScriptCompilerOptions = {
@@ -324,8 +375,28 @@ export class TypeScriptSession {
       api: new API({ cwd: '/', fs: fileSystem }),
       programs: { count: 0 },
       removeFile,
+      slots: new Map(),
       writeFile,
     });
+  }
+
+  /**
+   * Runs `use` on a program over `request.source` alone, as `open` would.
+   *
+   * Opening a project costs the compiler its default libraries again, and a
+   * source's checker facts are read before the next source is needed. So
+   * programs with the same options and file kind share one project whose
+   * single source file is rewritten for each use, which keeps the libraries
+   * bound; uses of one project run one at a time.
+   */
+  useSource<T>(request: UseTypeScriptSourceRequest<T>): Promise<T> {
+    const slot = this.slot(request);
+    const result = slot.tail.then(() => this.useSlot({ request, slot }));
+    slot.tail = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
   }
 
   async open(
@@ -366,18 +437,89 @@ export class TypeScriptSession {
   }
 
   /** Parses one source without libraries or module resolution. */
-  async parseOne(source: TypeScriptSourceText): Promise<ts.SourceFile> {
-    const program = await this.open({
+  parseOne(source: TypeScriptSourceText): Promise<ts.SourceFile> {
+    return this.useSource({
       compilerOptions: PARSE_OPTIONS,
-      sources: [source],
+      source,
+      use: async (program) => {
+        const [sourceFile] = await program.sourceFiles();
+        if (!sourceFile) {
+          throw new Error('TypeScript did not parse the source.');
+        }
+        return sourceFile;
+      },
     });
-    try {
-      const [sourceFile] = await program.sourceFiles();
-      if (!sourceFile) throw new Error('TypeScript did not parse the source.');
-      return sourceFile;
-    } finally {
-      await program.close();
+  }
+
+  private slot<T>(
+    request: UseTypeScriptSourceRequest<T>,
+  ): TypeScriptSourceSlot {
+    const { programs, slots, writeFile } = this.parts;
+    const sourcePath = TypeScriptProgram.layout({
+      keepAbsolutePaths: false,
+      program: {
+        compilerOptions: request.compilerOptions,
+        sources: [request.source],
+      },
+      root: VIRTUAL_ROOT,
+    }).sourcePaths.join('');
+    const [suffix = ''] = SOURCE_FILE_SUFFIXES.filter((candidate) =>
+      sourcePath.endsWith(candidate),
+    );
+    const key = `${JSON.stringify(request.compilerOptions)}\0${suffix}`;
+    const existing = slots.get(key);
+    if (existing) return existing;
+    const root = posix.join(VIRTUAL_ROOT, 'slot', String(programs.count));
+    programs.count += 1;
+    const slot: TypeScriptSourceSlot = {
+      configPath: posix.join(root, PROGRAM_CONFIG),
+      snapshot: false,
+      sourcePath: posix.join(root, `source${suffix}`),
+      tail: Promise.resolve(),
+    };
+    writeFile(
+      slot.configPath,
+      JSON.stringify({
+        compilerOptions: request.compilerOptions,
+        files: [slot.sourcePath],
+      }),
+    );
+    slots.set(key, slot);
+    return slot;
+  }
+
+  private async useSlot<T>(
+    request: UseTypeScriptSourceSlotRequest<T>,
+  ): Promise<T> {
+    const { api, writeFile } = this.parts;
+    const { slot } = request;
+    writeFile(slot.sourcePath, request.request.source.text);
+    const previous = slot.snapshot;
+    const snapshot = previous
+      ? await api.updateSnapshot({
+          fileChanges: { changed: [slot.sourcePath] },
+        })
+      : await api.updateSnapshot({
+          fileChanges: { created: [slot.configPath, slot.sourcePath] },
+          openProjects: [slot.configPath],
+        });
+    slot.snapshot = snapshot;
+    if (previous) await previous.dispose();
+    const project = snapshot.getProject(slot.configPath);
+    if (!project) {
+      throw new Error(`TypeScript did not open ${slot.configPath}.`);
     }
+    const sourceFile = await project.program.getSourceFile(slot.sourcePath);
+    if (!sourceFile || sourceFile.text !== request.request.source.text) {
+      throw new Error(`TypeScript did not load the new ${slot.sourcePath}.`);
+    }
+    const program = TypeScriptProgram.fromSessionProject({
+      project,
+      // The slot keeps its project for the next source.
+      release: async () => {},
+      sourcePaths: [slot.sourcePath],
+    });
+    return request.request.use(program);
   }
 
   async close(): Promise<void> {
