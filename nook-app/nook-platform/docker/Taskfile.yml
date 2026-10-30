@@ -256,7 +256,10 @@ tasks:
         printf 'Actual excluded documentation input proof.\n' > "$doc"
         task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/documentation"
         rm "$doc"
-        printf '\n// Actual native test reuse source-change proof.\n' >> "$replication"
+        # Each invocation edits a distinct real source variant on persistent workers.
+        source_change_invocation="$(bun -e 'console.log(crypto.randomUUID())')"
+        printf '\n// Actual native test reuse source-change proof: %s %s.\n' \
+          "$source_sha" "$source_change_invocation" >> "$replication"
         git diff --no-index "$proof_dir/replication-original.rs" "$replication" \
           > "$evidence/replication-change.patch" || test "$?" -eq 1
         task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/replication"
