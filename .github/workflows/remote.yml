@@ -201,7 +201,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: compiler-cache-proof-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-compiler-cache-proof
+          path: |
+            ${{ runner.temp }}/nook-compiler-cache-proof
+            !${{ runner.temp }}/nook-compiler-cache-proof/cache/blobs/**
           retention-days: 7
           compression-level: 0
           if-no-files-found: warn

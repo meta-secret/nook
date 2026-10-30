@@ -32,7 +32,32 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
     && cargo build --locked --lib \
     && nook-sccache-report --require --finish compiler-warm-parent \
     && jq -e '.remote_hits > 0 and .local_hits == 0' reports/compiler-warm-parent.json \
-    && cp reports/compiler-warm-parent.json /proof/warm-parent.json
+    && cp reports/compiler-warm-parent.json /proof/warm-parent.json \
+    && jq -n --argjson cargo_target "$(du -sk "$CARGO_TARGET_DIR" | cut -f1)" \
+      --argjson local_sccache "$(du -sk "$SCCACHE_DIR" | cut -f1)" \
+      '{scope: "fixture_parent_snapshot_directories", unit: "allocated_KiB", cargo_target: $cargo_target, local_sccache: $local_sccache}' \
+      > /proof/warm-parent-storage.json
+
+# Negative control: real source is present but the actual ordinary library is
+# deliberately still the compiled placeholder. Link the same probe used below
+# directly to that existing rlib; never rebuild the library inside the probe.
+FROM compiler-warm-parent AS compiler-negative-control
+COPY src/lib.rs src/lib.rs
+COPY tests/ordinary.rs tests/ordinary.rs
+RUN <<'STALE_PROBE'
+set -eu
+rustc --edition 2024 --test -D warnings tests/ordinary.rs \
+  --extern nook_compiler_cache_proof="$CARGO_TARGET_DIR/debug/libnook_compiler_cache_proof.rlib" \
+  -L "dependency=$CARGO_TARGET_DIR/debug/deps" -o "$CARGO_TARGET_DIR/ordinary-probe"
+set +e
+"$CARGO_TARGET_DIR/ordinary-probe" > /proof/stale-ordinary-rlib.log 2>&1
+probe_status="$?"
+set -e
+test "$probe_status" -eq 101
+grep -F 'CompiledValue("706c616365686f6c646572")' /proof/stale-ordinary-rlib.log
+grep -F 'CompiledValue("7265616c20736f75726365")' /proof/stale-ordinary-rlib.log
+printf 'ordinary rlib probe rejected the compiled placeholder\n' > /proof/stale-ordinary-rlib-rejected
+STALE_PROBE
 
 # Both siblings inherit ordinary filesystem snapshots. Each first verifies
 # Cargo freshness, then rebuilds missing fixture outputs against inherited disk
@@ -53,17 +78,27 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
 
 FROM compiler-child-a-cache AS compiler-child-a-real
 COPY src/lib.rs src/lib.rs
+COPY tests/ordinary.rs tests/ordinary.rs
 RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=true \
     touch src/lib.rs \
     && cargo fmt --all --check \
     && cargo build --locked --lib \
+    && rustc --edition 2024 --test -D warnings tests/ordinary.rs \
+      --extern nook_compiler_cache_proof="$CARGO_TARGET_DIR/debug/libnook_compiler_cache_proof.rlib" \
+      -L "dependency=$CARGO_TARGET_DIR/debug/deps" -o "$CARGO_TARGET_DIR/ordinary-probe" \
+    && "$CARGO_TARGET_DIR/ordinary-probe" > /proof/child-a-ordinary-rlib.log 2>&1 \
+    && cat /proof/child-a-ordinary-rlib.log \
     && cargo check --locked --workspace --all-targets \
     && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && cargo test --locked --lib \
     && nook-sccache-report --require --finish compiler-child-a-real \
     && cp reports/compiler-child-a-real.json /proof/child-a-real.json \
-    && printf 'real source unit test passed\n' > /proof/child-a-real-source
+    && jq -n --argjson cargo_target "$(du -sk "$CARGO_TARGET_DIR" | cut -f1)" \
+      --argjson local_sccache "$(du -sk "$SCCACHE_DIR" | cut -f1)" \
+      '{scope: "fixture_child_snapshot_directories", unit: "allocated_KiB", cargo_target: $cargo_target, local_sccache: $local_sccache}' \
+      > /proof/child-a-storage.json \
+    && printf 'ordinary rlib contains real source\n' > /proof/child-a-real-source
 
 FROM compiler-warm-parent AS compiler-child-b-cache
 RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
@@ -81,18 +116,30 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
 
 FROM compiler-child-b-cache AS compiler-child-b-real
 COPY src/lib.rs src/lib.rs
+COPY tests/ordinary.rs tests/ordinary.rs
 RUN --mount=type=secret,id=sccache_s3_access_key,required=true \
     --mount=type=secret,id=sccache_s3_secret_key,required=true \
     touch src/lib.rs \
     && cargo fmt --all --check \
     && cargo build --locked --lib \
+    && rustc --edition 2024 --test -D warnings tests/ordinary.rs \
+      --extern nook_compiler_cache_proof="$CARGO_TARGET_DIR/debug/libnook_compiler_cache_proof.rlib" \
+      -L "dependency=$CARGO_TARGET_DIR/debug/deps" -o "$CARGO_TARGET_DIR/ordinary-probe" \
+    && "$CARGO_TARGET_DIR/ordinary-probe" > /proof/child-b-ordinary-rlib.log 2>&1 \
+    && cat /proof/child-b-ordinary-rlib.log \
     && cargo check --locked --workspace --all-targets \
     && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && cargo test --locked --lib \
     && nook-sccache-report --require --finish compiler-child-b-real \
     && cp reports/compiler-child-b-real.json /proof/child-b-real.json \
-    && printf 'real source unit test passed\n' > /proof/child-b-real-source
+    && jq -n --argjson cargo_target "$(du -sk "$CARGO_TARGET_DIR" | cut -f1)" \
+      --argjson local_sccache "$(du -sk "$SCCACHE_DIR" | cut -f1)" \
+      '{scope: "fixture_child_snapshot_directories", unit: "allocated_KiB", cargo_target: $cargo_target, local_sccache: $local_sccache}' \
+      > /proof/child-b-storage.json \
+    && printf 'ordinary rlib contains real source\n' > /proof/child-b-real-source
 
 FROM scratch AS compiler-result
 COPY --from=compiler-child-a-real /proof/ /proof/
 COPY --from=compiler-child-b-real /proof/ /proof/
+COPY --from=compiler-negative-control /proof/stale-ordinary-rlib.log /proof/stale-ordinary-rlib.log
+COPY --from=compiler-negative-control /proof/stale-ordinary-rlib-rejected /proof/stale-ordinary-rlib-rejected

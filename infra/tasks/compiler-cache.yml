@@ -92,7 +92,15 @@ tasks:
                 "$output/$phase.progress.jsonl"
               ;;
             export)
-              jq -e '.schemaVersion == 2 and (.manifests | length) > 0' "$output/cache/index.json"
+              jq -e '.schemaVersion == 2 and (.manifests | length) == 1' "$output/cache/index.json"
+              mkdir -p "$output/cache-descriptors"
+              cp "$output/cache/index.json" "$output/cache/oci-layout" "$output/cache-descriptors/"
+              manifest_digest="$(jq -er '.manifests[0].digest' "$output/cache/index.json")"
+              manifest_file="$output/cache/blobs/${manifest_digest%%:*}/${manifest_digest#*:}"
+              cp "$manifest_file" "$output/cache-descriptors/manifest.json"
+              config_digest="$(jq -er '.config.digest' "$manifest_file")"
+              cp "$output/cache/blobs/${config_digest%%:*}/${config_digest#*:}" \
+                "$output/cache-descriptors/config.json"
               ;;
             import)
               jq -se '[.[].vertexes[]? | select(.name | contains("importing cache manifest"))] | length > 0' \
@@ -108,6 +116,7 @@ tasks:
           esac
           test -s "$output/results/$phase/proof/child-a-real-source"
           test -s "$output/results/$phase/proof/child-b-real-source"
+          test -s "$output/results/$phase/proof/stale-ordinary-rlib-rejected"
           test "$(cat "$output/results/$phase/proof/child-a-owner")" = child-a
           test "$(cat "$output/results/$phase/proof/child-b-owner")" = child-b
         }
@@ -115,6 +124,9 @@ tasks:
           run_proof "$phase"
         done
         test -s "$output/cache/index.json"
+        jq -n --argjson allocated_kib "$(du -sk "$output/cache" | cut -f1)" \
+          '{scope: "proof_export_including_inherited_rust_toolchain", unit: "allocated_KiB", allocated: $allocated_kib}' \
+          > "$output/export-storage.json"
         jq -s '.' "$output/"*.timing.json > "$output/timings.json"
         printf 'Compiler cache proof artifacts: %s\n' "$output"
         COMPILER_PROOF
