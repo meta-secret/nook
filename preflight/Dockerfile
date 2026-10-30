@@ -49,6 +49,9 @@ FROM build AS test
 # Test-only dependency warming must not be reachable from PR verification.
 COPY --from=coverage-deps /meta-secret/preflight-target/llvm-cov-target /meta-secret/preflight-target/llvm-cov-target
 COPY --from=repository-source / /meta-secret/nook
+# Remove the dummy workspace coverage outputs after both independent imports.
+# Preserve instrumented dependencies and the real build's ordinary artifacts.
+RUN RUSTC_WRAPPER= cargo clean --offline --locked --workspace --profile dev --target-dir /meta-secret/preflight-target/llvm-cov-target
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
