@@ -513,7 +513,7 @@ struct WasmCoverageHandoff<'a> {
 }
 
 impl WasmCoverageHandoff<'_> {
-    const WORKSPACE_CLEANUP: &str = concat!(
+    const WORKSPACE_CLEANUP: &'static str = concat!(
         "RUN RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target \\\n",
         "&& RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target --target wasm32-unknown-unknown",
     );
