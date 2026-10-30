@@ -133,11 +133,11 @@ const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
-    'cae11f61781cf443634026808abc4b13db09d9190b070978cb66f466c252f34d',
+    '82d43e1255a9540ae1193d569b3ebf41c38bf35f627c189781c7f910cfea182f',
   ],
   [
     '.github/workflows/remote.yml:"$jq_root/jq"',
-    'cae11f61781cf443634026808abc4b13db09d9190b070978cb66f466c252f34d',
+    '82d43e1255a9540ae1193d569b3ebf41c38bf35f627c189781c7f910cfea182f',
   ],
 ]);
 
@@ -146,7 +146,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/contracts/dockerized-rust-buildkit.test.ts',
-    '6fd632324471ec8cf73f6dd7e64f81ae38b2894d4dbc749472127675ca27f5b5',
+    '895fda502d55f69d91dae6f4782909bf862d4acd4957f6b2404232909a5b825d',
   ],
   [
     'infra/contracts/trusted-buildkit-setup.fixture.ts',
@@ -182,7 +182,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'e963ef19dc919504e0e8d1b38ae7b976843ef70b849b68fe636f9307cfb52a3c',
+    'b194ad452d7ca5527198a0615a640f76c43284f3b4f76bacc8309d0c3bcebf8d',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',
@@ -218,7 +218,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'eb0719f3f0974d2a31564b55c4008438e0af81afbddc2dcc263904978e06f2ac',
+    '1592e522c8faf066f4fff3cec3070a5b21f2f2cd7962a34e382f6ccddab9e6c6',
   ],
   [
     '.github/scripts/type-check-report.sh',

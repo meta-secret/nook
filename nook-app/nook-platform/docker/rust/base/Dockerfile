@@ -285,107 +285,171 @@ RUN find nook-app/nook-platform/nook-* -type f -name '*.rs' -exec touch {} +
 
 # -----------------------------------------------------------------------------
 
-# Native source verification extends the self-contained dependency stages above.
-FROM builder-core-deps AS builder-debug
-
-WORKDIR /meta-secret/nook/nook-app/nook-platform
-
+# Clean dummy workspace coverage before the independent source/test DAG.
+FROM builder-core-deps AS builder-native-source-base
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
+COPY nook-app/nook-platform/.cargo .cargo
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
+RUN RUSTC_WRAPPER= CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace
+FROM builder-native-source-base AS builder-native-common-source
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-app-common/ nook-app-common/
+RUN find nook-app-common -type f -name '*.rs' -exec touch {} +
+FROM builder-native-source-base AS builder-native-authenticator-source
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+RUN find nook-authenticator-domain -type f -name '*.rs' -exec touch {} +
+FROM builder-native-source-base AS builder-native-replication-source
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-replication/ nook-replication/
+RUN find nook-replication -type f -name '*.rs' -exec touch {} +
+FROM builder-native-common-source AS builder-native-auth2-source
+COPY --from=builder-native-authenticator-source /meta-secret/nook/nook-app/nook-platform/nook-authenticator-domain/ nook-authenticator-domain/
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-auth2/ nook-auth2/
+RUN find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} +
 
-# Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
-# can reuse the common/auth clippy and coverage-test layers; a nook-wasm-only change can reuse both.
-COPY nook-app/nook-platform/nook-app-common nook-app-common
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-app-common-clippy
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common \
-    && nook-sccache-report --finish native-app-common-coverage
+FROM builder-native-auth2-source AS builder-native-event-log-source
+COPY --from=builder-native-replication-source /meta-secret/nook/nook-app/nook-platform/nook-replication/ nook-replication/
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-event-log/ nook-event-log/
+RUN find nook-replication nook-event-log -type f -name '*.rs' -exec touch {} +
 
-COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
-COPY nook-app/nook-platform/nook-auth2 nook-auth2
+FROM builder-native-event-log-source AS builder-native-companion-source
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-companion-core/ nook-companion-core/
+RUN find nook-companion-core -type f -name '*.rs' -exec touch {} +
+
+FROM builder-native-companion-source AS builder-native-core-source
+COPY --exclude=.cortex --exclude=docs --exclude=README* --exclude=docker-bake.hcl --exclude=Dockerfile* --exclude=coverage-floor.json nook-app/nook-platform/nook-core/ nook-core/
+RUN find nook-core -type f -name '*.rs' -exec touch {} +
+
+# Test results retain unique raw profiles, JUnit and executable coverage maps.
+FROM builder-native-common-source AS builder-native-common-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-authenticator-domain -p nook-auth2 --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-auth-clippy
-# --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
-# not allow --no-clean with --no-report, so this first source-level run emits its interim report;
-# the nook-core run below then extends the same coverage session and enforces the combined floor.
+    cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-app-common \
+    && LLVM_PROFILE_FILE_NAME='nook-app-common-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-app-common \
+    && nook-sccache-report --finish native-app-common-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-app-common/profiles /opt/nook/native-test-artifacts/nook-app-common/objects \
+    && cp target/llvm-cov-target/nook-app-common-*.profraw /opt/nook/native-test-artifacts/nook-app-common/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-app-common/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-app-common/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-app-common/objects -type f -perm /111 -name 'nook_app_common-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-app-common/profiles /opt/nook/native-test-artifacts/nook-app-common/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-app-common/artifact-files.tsv
+
+FROM builder-native-authenticator-source AS builder-native-authenticator-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2 \
+    cargo clippy --quiet --offline --locked --all-targets -p nook-authenticator-domain -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-authenticator-domain \
+    && LLVM_PROFILE_FILE_NAME='nook-authenticator-domain-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-authenticator-domain \
+    && nook-sccache-report --finish native-authenticator-domain-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles /opt/nook/native-test-artifacts/nook-authenticator-domain/objects \
+    && cp target/llvm-cov-target/nook-authenticator-domain-*.profraw /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-authenticator-domain/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-authenticator-domain/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -perm /111 -name 'nook_authenticator_domain-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles /opt/nook/native-test-artifacts/nook-authenticator-domain/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-authenticator-domain/artifact-files.tsv
+
+FROM builder-native-replication-source AS builder-native-replication-test
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --quiet --offline --locked --all-targets -p nook-replication -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-replication \
+    && INSTA_UPDATE=no LLVM_PROFILE_FILE_NAME='nook-replication-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-replication \
+    && nook-sccache-report --finish native-replication-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects \
+    && cp target/llvm-cov-target/nook-replication-*.profraw /opt/nook/native-test-artifacts/nook-replication/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-replication/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-replication/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-replication/objects -type f -perm /111 -name 'nook_replication-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-replication/profiles /opt/nook/native-test-artifacts/nook-replication/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-replication/artifact-files.tsv
+
+FROM builder-native-auth2-source AS builder-native-auth2-test
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --quiet --offline --locked --all-targets -p nook-auth2 -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-auth2 \
+    && LLVM_PROFILE_FILE_NAME='nook-auth2-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-auth2 \
     && cargo test --locked -p nook-auth2 --doc \
-    && nook-sccache-report --finish native-auth-coverage
+    && nook-sccache-report --finish native-auth2-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-auth2/profiles /opt/nook/native-test-artifacts/nook-auth2/objects \
+    && cp target/llvm-cov-target/nook-auth2-*.profraw /opt/nook/native-test-artifacts/nook-auth2/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-auth2/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-auth2/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-auth2/objects -type f -perm /111 -name 'nook_auth2-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-auth2/profiles /opt/nook/native-test-artifacts/nook-auth2/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-auth2/artifact-files.tsv
 
-COPY nook-app/nook-platform/nook-replication nook-replication
+FROM builder-native-event-log-source AS builder-native-event-log-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-replication -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-replication --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-replication-clippy
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    INSTA_UPDATE=no cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
-    && nook-sccache-report --finish native-replication-coverage
+    cargo clippy --quiet --offline --locked --all-targets -p nook-event-log -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-event-log \
+    && LLVM_PROFILE_FILE_NAME='nook-event-log-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-event-log \
+    && nook-sccache-report --finish native-event-log-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-event-log/profiles /opt/nook/native-test-artifacts/nook-event-log/objects \
+    && cp target/llvm-cov-target/nook-event-log-*.profraw /opt/nook/native-test-artifacts/nook-event-log/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-event-log/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-event-log/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-event-log/objects -type f -perm /111 -name 'nook_event_log-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-event-log/profiles /opt/nook/native-test-artifacts/nook-event-log/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-event-log/artifact-files.tsv
 
-COPY nook-app/nook-platform/nook-event-log nook-event-log
+FROM builder-native-companion-source AS builder-native-companion-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-event-log -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-event-log --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-event-log-clippy
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
-    && nook-sccache-report --finish native-event-log-coverage
-
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-companion-core --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-companion-core-clippy
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
+    cargo clippy --quiet --offline --locked --all-targets -p nook-companion-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-companion-core \
+    && LLVM_PROFILE_FILE_NAME='nook-companion-core-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-companion-core \
     && cargo test --locked -p nook-companion-core --doc \
-    && nook-sccache-report --finish native-companion-core-coverage
+    && nook-sccache-report --finish native-companion-core-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-companion-core/profiles /opt/nook/native-test-artifacts/nook-companion-core/objects \
+    && cp target/llvm-cov-target/nook-companion-core-*.profraw /opt/nook/native-test-artifacts/nook-companion-core/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-companion-core/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-companion-core/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -perm /111 -name 'nook_companion_core-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-companion-core/profiles /opt/nook/native-test-artifacts/nook-companion-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-companion-core/artifact-files.tsv
 
-COPY nook-app/nook-platform/nook-core nook-core
+FROM builder-native-core-source AS builder-native-core-test
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-core -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy -p nook-core --all-targets -- -D warnings \
-    && nook-sccache-report --finish native-core-clippy
-# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs
-# nook-app-common, nook-authenticator-domain, nook-auth2, nook-replication,
-# nook-event-log, and nook-companion-core above,
-# then runs nook-core with --no-clean
-# so the final report combines all portable crates while preserving cacheable dependency coverage.
-# The same run also bakes structured coverage evidence for BuildKit cache-only
-# consumers; no PR-side transport or report step reruns the Rust tests.
-# Remove terminal instrumented intermediates only after every report and health check.
-# Earlier dependency/coverage snapshots remain reachable in the mode=max cache.
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    mkdir -p /opt/nook/coverage/nook-core \
-    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
+    cargo clippy --quiet --offline --locked --all-targets -p nook-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-core \
+    && LLVM_PROFILE_FILE_NAME='nook-core-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p nook-core \
+    && nook-sccache-report --finish native-core-coverage \
+    && mkdir -p /opt/nook/native-test-artifacts/nook-core/profiles /opt/nook/native-test-artifacts/nook-core/objects \
+    && cp target/llvm-cov-target/nook-core-*.profraw /opt/nook/native-test-artifacts/nook-core/profiles/ \
+    && cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/nook-core/junit.xml \
+    && find target/llvm-cov-target/debug -type f -perm /111 -exec cp --parents -t /opt/nook/native-test-artifacts/nook-core/objects/ {} + \
+    && test -n "$(find /opt/nook/native-test-artifacts/nook-core/objects -type f -perm /111 -name 'nook_core-*' -print -quit)" \
+    && find /opt/nook/native-test-artifacts/nook-core/profiles /opt/nook/native-test-artifacts/nook-core/objects -type f -printf '%p\t%s\n' > /opt/nook/native-test-artifacts/nook-core/artifact-files.tsv
+
+# LLVM merges every leaf's real profiles and namespaced executable maps using
+# the same absolute sources/toolchain/flags, including downstream contributions.
+FROM builder-native-core-source AS builder-debug
+COPY --from=builder-native-common-test /opt/nook/native-test-artifacts/nook-app-common/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-common-test /opt/nook/native-test-artifacts/nook-app-common/objects/ target/llvm-cov-target/debug/native-tests/nook-app-common/
+COPY --from=builder-native-authenticator-test /opt/nook/native-test-artifacts/nook-authenticator-domain/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-authenticator-test /opt/nook/native-test-artifacts/nook-authenticator-domain/objects/ target/llvm-cov-target/debug/native-tests/nook-authenticator-domain/
+COPY --from=builder-native-replication-test /opt/nook/native-test-artifacts/nook-replication/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-replication-test /opt/nook/native-test-artifacts/nook-replication/objects/ target/llvm-cov-target/debug/native-tests/nook-replication/
+COPY --from=builder-native-auth2-test /opt/nook/native-test-artifacts/nook-auth2/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-auth2-test /opt/nook/native-test-artifacts/nook-auth2/objects/ target/llvm-cov-target/debug/native-tests/nook-auth2/
+COPY --from=builder-native-event-log-test /opt/nook/native-test-artifacts/nook-event-log/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-event-log-test /opt/nook/native-test-artifacts/nook-event-log/objects/ target/llvm-cov-target/debug/native-tests/nook-event-log/
+COPY --from=builder-native-companion-test /opt/nook/native-test-artifacts/nook-companion-core/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-companion-test /opt/nook/native-test-artifacts/nook-companion-core/objects/ target/llvm-cov-target/debug/native-tests/nook-companion-core/
+COPY --from=builder-native-core-test /opt/nook/native-test-artifacts/nook-core/profiles/*.profraw target/llvm-cov-target/
+COPY --from=builder-native-core-test /opt/nook/native-test-artifacts/nook-core/objects/ target/llvm-cov-target/debug/native-tests/nook-core/
+# Threshold-only edits reach this gate without invalidating any test result.
+COPY nook-app/nook-platform/nook-core/coverage-floor.json nook-core/coverage-floor.json
+RUN mkdir -p /opt/nook/coverage/nook-core \
     && coverage_status=0 \
     && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
-         floor="$(jq -r --arg package "$package" '.package_lines_percent[$package]' nook-core/coverage-floor.json)"; cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1; \
+         floor="$(jq -er --arg package "$package" '.package_lines_percent[$package] | numbers' nook-core/coverage-floor.json)" \
+           && cargo llvm-cov report --failure-mode any -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1; \
        done \
     && test "$coverage_status" -eq 0 \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report --failure-mode any -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report --failure-mode any -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report --failure-mode any -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
-    && nook-sccache-report --finish native-core-coverage \
     && rm -rf target/llvm-cov-target
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
@@ -395,8 +459,18 @@ COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-te
 # Retain only the small, already-computed coverage payload as a BuildKit target.
 # PR verification uses it cache-only and never materializes a report artifact.
 FROM scratch AS coverage-export
-
 COPY --from=builder-debug /opt/nook/coverage/nook-core/ /
+
+# Optional compact proof: JUnit and measured paths/sizes of real LLVM inputs.
+FROM scratch AS native-test-evidence
+COPY --from=builder-debug /opt/nook/coverage /coverage
+COPY --from=builder-native-common-test --parents /opt/nook/native-test-artifacts/./nook-app-common/junit.xml /opt/nook/native-test-artifacts/./nook-app-common/artifact-files.tsv /native-tests/
+COPY --from=builder-native-authenticator-test --parents /opt/nook/native-test-artifacts/./nook-authenticator-domain/junit.xml /opt/nook/native-test-artifacts/./nook-authenticator-domain/artifact-files.tsv /native-tests/
+COPY --from=builder-native-replication-test --parents /opt/nook/native-test-artifacts/./nook-replication/junit.xml /opt/nook/native-test-artifacts/./nook-replication/artifact-files.tsv /native-tests/
+COPY --from=builder-native-auth2-test --parents /opt/nook/native-test-artifacts/./nook-auth2/junit.xml /opt/nook/native-test-artifacts/./nook-auth2/artifact-files.tsv /native-tests/
+COPY --from=builder-native-event-log-test --parents /opt/nook/native-test-artifacts/./nook-event-log/junit.xml /opt/nook/native-test-artifacts/./nook-event-log/artifact-files.tsv /native-tests/
+COPY --from=builder-native-companion-test --parents /opt/nook/native-test-artifacts/./nook-companion-core/junit.xml /opt/nook/native-test-artifacts/./nook-companion-core/artifact-files.tsv /native-tests/
+COPY --from=builder-native-core-test --parents /opt/nook/native-test-artifacts/./nook-core/junit.xml /opt/nook/native-test-artifacts/./nook-core/artifact-files.tsv /native-tests/
 
 # -----------------------------------------------------------------------------
 
@@ -848,97 +922,12 @@ WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/ ./
 RUN cargo fmt --all -- --check
 
-# Prepare the exact PR verification dependency graph before mutable sources are
-# copied. Clippy checks dummy test roots but does not codegen/link test binaries.
-FROM platform-manifests AS pr-rust-dependencies
+# Native PR targets share portable tests; retain extra composition checks.
+FROM builder-debug AS pr-rust-verify
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy --quiet --offline --locked --all-targets \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
-      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
-      -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
-    && cargo build --quiet --offline --locked \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
-      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
-    && nook-sccache-report --finish pr-rust-dependencies
-
-# PR verification never inherits builder-core-deps: that graph precompiles test
-# binaries. Only the source-free dependency stage above precedes mutable code.
-FROM pr-rust-dependencies AS pr-rust-verify
-
-COPY nook-app/nook-platform/.cargo .cargo
-COPY nook-app/nook-platform/.config .config
-COPY nook-app/nook-platform/clippy.toml clippy.toml
-COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
-COPY nook-app/nook-platform/nook-app-common nook-app-common
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-app-common -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-app-common \
-    && nook-sccache-report --finish pr-rust-verify-1
-
-COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-authenticator-domain -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-authenticator-domain -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-authenticator-domain \
-    && nook-sccache-report --finish pr-rust-verify-2
-
-COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-replication -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-replication -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-replication \
-    && nook-sccache-report --finish pr-rust-verify-3
-
-COPY nook-app/nook-platform/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-auth2 -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-auth2 -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-auth2 \
-    && nook-sccache-report --finish pr-rust-verify-4
-
-COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-event-log -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-event-log -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-event-log \
-    && nook-sccache-report --finish pr-rust-verify-5
-
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-core -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-companion-core \
-    && nook-sccache-report --finish pr-rust-verify-6
-
-COPY nook-app/nook-platform/nook-core nook-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-core -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-core -- -D warnings \
-    && cargo build --quiet --offline --locked -p nook-core \
-    && nook-sccache-report --finish pr-rust-verify-7
-
-COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-wasm -- -D warnings \
-    && nook-sccache-report --finish pr-rust-verify-8
-
-COPY nook-app/nook-platform/nook-wasm nook-wasm
-COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find nook-wasm nook-wasm-composition-tests -type f -name '*.rs' -exec touch {} + \
-    && cargo clippy --quiet --offline --locked --all-targets -p nook-wasm-composition-tests -- -D warnings \
+    find nook-companion-wasm nook-wasm nook-wasm-composition-tests -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
     && nook-sccache-report --finish pr-rust-verification
 FROM scratch AS pr-wasm-artifacts
 COPY --from=builder-wasm-build /opt/nook/wasm-handoff /nook-wasm

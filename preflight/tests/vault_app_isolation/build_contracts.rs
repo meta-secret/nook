@@ -925,28 +925,29 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     assert!(warmup.contains(
         "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
     ));
-    assert!(
-        source_dockerfile
-            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common")
+    let native_tests = section(
+        source_dockerfile,
+        "FROM builder-native-common-source AS builder-native-common-test",
+        "FROM builder-native-core-source AS builder-debug",
     );
-    assert!(source_dockerfile.contains(
-        "cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2"
-    ));
-    assert!(
-        source_dockerfile
-            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
-    );
-    assert!(
-        source_dockerfile
-            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log")
-    );
-    assert!(
-        source_dockerfile
-            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core")
-    );
-    assert!(
-        source_dockerfile
-            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
+    for package in [
+        "nook-app-common",
+        "nook-authenticator-domain",
+        "nook-auth2",
+        "nook-replication",
+        "nook-event-log",
+        "nook-companion-core",
+        "nook-core",
+    ] {
+        let command =
+            format!("cargo llvm-cov nextest --locked --no-report --profile ci -p {package}");
+        assert!(native_tests.contains(&command));
+    }
+    assert_eq!(
+        native_tests
+            .matches("cargo llvm-cov nextest --locked --no-report")
+            .count(),
+        7
     );
 
     let wasm_task = root.read("nook-app/nook-platform/nook-wasm/Taskfile.yml");

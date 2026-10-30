@@ -684,7 +684,8 @@ credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
 cache Cargo downloads or Docker layers. Local compiler hits count as reuse;
 remote health and S3 publication have separate evidence. See the
 [compiler cache contract](.cortex/teams/sre/docs/architecture/engineering-harness.md#rust-compiler-cache-sccache)
-for shutdown and asynchronous backfill limits.
+for shutdown and asynchronous backfill limits. Portable native test reuse preserves
+[combined coverage enforcement](.cortex/teams/sre/docs/architecture/engineering-harness.md#native-rust-source-and-test-reuse).
 PR CI enforces package coverage floors inside the Docker/BuildKit solve and
 does not upload or comment on a redundant coverage report. The old exact-input
 artifact-promotion and Main-baseline comparison workflows are removed:

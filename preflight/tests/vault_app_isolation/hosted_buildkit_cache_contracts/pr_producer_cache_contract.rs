@@ -138,7 +138,7 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(wasm_dependencies.contains(
             "cargo clippy --locked --release --target wasm32-unknown-unknown --workspace"
         ));
-        assert!(product.contains("FROM platform-manifests AS pr-rust-dependencies"));
+        assert!(product.contains("FROM builder-debug AS pr-rust-verify"));
         let proof = self.root.read("infra/tasks/pr-cache.yml");
         assert!(proof.contains("bake-cache:prove-pr:"));
         assert!(proof.contains("for temperature in cold warm"));

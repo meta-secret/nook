@@ -346,11 +346,63 @@ fn wasm_browser_partitions_preserve_the_complete_instrumented_coverage_join() ->
 }
 
 #[test]
+fn native_coverage_leaves_declare_profiles_objects_and_junit() -> anyhow::Result<()> {
+    let root = repository_root()?;
+    let product = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    let (sources, leaves) = product
+        .split_once("FROM builder-core-deps AS builder-native-source-base")
+        .and_then(|(_, tail)| {
+            tail.split_once("FROM builder-native-common-source AS builder-native-common-test")
+        })
+        .context("native tests must branch after the source-only stages")?;
+    let leaves = leaves
+        .split_once("FROM builder-native-core-source AS builder-debug")
+        .map(|(stages, _)| stages)
+        .context("native test leaves must join the report-only stage")?;
+    DockerfileRunInstruction::require_native_source_cleanup(sources)?;
+    assert!(!sources.contains("llvm-cov nextest"));
+    assert!(!sources.contains("/opt/nook/native-test-artifacts"));
+    assert_eq!(
+        leaves
+            .matches("cargo llvm-cov nextest --locked --no-report")
+            .count(),
+        7
+    );
+    for package in [
+        "nook-app-common",
+        "nook-authenticator-domain",
+        "nook-auth2",
+        "nook-replication",
+        "nook-event-log",
+        "nook-companion-core",
+        "nook-core",
+    ] {
+        // Pinned llvm-cov makes --no-report retain inputs; explicit --no-clean conflicts.
+        let command = format!(
+            "LLVM_PROFILE_FILE_NAME='{package}-%p-%m.profraw' cargo llvm-cov nextest --locked --no-report --profile ci -p {package}"
+        );
+        assert!(leaves.contains(&command));
+        for output in [
+            format!(
+                "cp target/llvm-cov-target/{package}-*.profraw /opt/nook/native-test-artifacts/{package}/profiles/"
+            ),
+            format!(
+                "cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/{package}/junit.xml"
+            ),
+            format!("cp --parents -t /opt/nook/native-test-artifacts/{package}/objects/"),
+        ] {
+            assert!(leaves.contains(&output));
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> anyhow::Result<()> {
     let root = repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
     let native = product
-        .split_once("FROM builder-core-deps AS builder-debug")
+        .split_once("FROM builder-native-core-source AS builder-debug")
         .and_then(|(_, tail)| tail.split_once("FROM scratch AS coverage-export"))
         .map(|(stage, _)| stage)
         .context("native coverage stage must exist")?;
@@ -363,18 +415,56 @@ fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> any
     assert!(terminal.ends_with(cleanup));
     assert_eq!(
         terminal.lines().rev().nth(1),
-        Some("&& nook-sccache-report --finish native-core-coverage \\")
+        Some(
+            "&& cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \\"
+        )
     );
     for required in [
-        "&& cargo llvm-cov nextest --no-clean --profile ci -p nook-core",
+        "cargo llvm-cov report --failure-mode any -p \"$package\" --summary-only --fail-under-lines \"$floor\" || coverage_status=1;",
+        ".package_lines_percent[$package] | numbers",
         "&& test \"$coverage_status\" -eq 0",
         "/opt/nook/coverage/nook-core/summary.txt",
         "/opt/nook/coverage/nook-core/summary.json",
         "/opt/nook/coverage/nook-core/lcov.info",
-        "&& cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json",
+        "&& cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \\",
     ] {
         let position = terminal.find(required).context(required.to_owned())?;
         assert!(position < terminal.find(cleanup).context("cleanup must exist")?);
+    }
+    assert_eq!(
+        runs.len(),
+        1,
+        "the native join must only report existing profiles"
+    );
+    assert!(!native.contains("llvm-cov nextest") && !native.contains("cargo test"));
+    for stage in [
+        "common",
+        "authenticator",
+        "auth2",
+        "replication",
+        "event-log",
+        "companion",
+        "core",
+    ] {
+        let declaration =
+            format!("FROM builder-native-{stage}-source AS builder-native-{stage}-test");
+        assert!(product.contains(&declaration));
+        let from = format!("COPY --from=builder-native-{stage}-test ");
+        let copies = native
+            .lines()
+            .filter(|line| line.starts_with(&from))
+            .collect::<Vec<_>>();
+        assert_eq!(copies.len(), 2);
+        assert!(
+            copies
+                .iter()
+                .any(|line| line.contains("/profiles/*.profraw target/llvm-cov-target/"))
+        );
+        assert!(
+            copies
+                .iter()
+                .any(|line| line.contains("/objects/ target/llvm-cov-target/debug/native-tests/"))
+        );
     }
     assert_eq!(native.matches("rm -rf").count(), 1);
     for handoff in [
@@ -417,6 +507,21 @@ impl DockerfileRunInstruction {
             );
         }
         runs
+    }
+
+    fn require_native_source_cleanup(source: &str) -> anyhow::Result<()> {
+        let runs = Self::parse_stage(source);
+        let cleanup = runs.first().context("native source cleanup must exist")?;
+        anyhow::ensure!(
+            cleanup.text
+                == "RUN RUSTC_WRAPPER= CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace",
+            "native source cleanup must be exact and mount-free"
+        );
+        anyhow::ensure!(
+            source.matches("RUSTC_WRAPPER=").count() == 1,
+            "wrapper bypass outside the single native metadata cleanup is prohibited"
+        );
+        Ok(())
     }
 
     fn preflight_fixture_coverage(dockerfile: &str) -> anyhow::Result<Self> {
@@ -505,6 +610,27 @@ impl Deref for DockerfileRunInstruction {
 
     fn deref(&self) -> &Self::Target {
         &self.text
+    }
+}
+
+#[test]
+fn native_source_cleanup_rejects_compiler_and_wrapper_expansion() {
+    let approved =
+        "RUN RUSTC_WRAPPER= CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace";
+    for source in [
+        approved.replace("llvm-cov clean", "build"),
+        format!("{approved} \\\n&& cargo build"),
+        approved.replacen(
+            "RUN ",
+            "RUN --mount=type=secret,id=sccache_s3_access_key ",
+            1,
+        ),
+        format!("ENV RUSTC_WRAPPER=\n{approved}"),
+    ] {
+        assert!(
+            DockerfileRunInstruction::require_native_source_cleanup(&source).is_err(),
+            "native cleanup expansion must remain rejected: {source}"
+        );
     }
 }
 

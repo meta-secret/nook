@@ -9,6 +9,7 @@ task_timeout_minutes() {
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci) echo 20 ;;
+    rust:native-test-evidence) echo 60 ;;
     web:verify) echo 10 ;;
     web:build) echo 25 ;;
     web:e2e|web:e2e:debug|extension:e2e) echo 180 ;;
@@ -67,6 +68,7 @@ run_task() {
       fi
       ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
+    rust:native-test-evidence) run_with_timeout "$timeout_minutes" task docker:ci:rust:native-test-reuse:prove ;;
     loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
