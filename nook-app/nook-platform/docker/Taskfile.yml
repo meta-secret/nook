@@ -257,7 +257,7 @@ tasks:
         task docker:ci:rust:native-test-reuse:solve NATIVE_TEST_CASE_DIR="$evidence/documentation"
         rm "$doc"
         # Each invocation edits a distinct real source variant on persistent workers.
-        source_change_invocation="$(bun -e 'console.log(crypto.randomUUID())')"
+        source_change_invocation="${context##*/}"
         printf '\n// Actual native test reuse source-change proof: %s %s.\n' \
           "$source_sha" "$source_change_invocation" >> "$replication"
         git diff --no-index "$proof_dir/replication-original.rs" "$replication" \
