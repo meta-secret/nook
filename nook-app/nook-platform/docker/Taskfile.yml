@@ -194,13 +194,12 @@ tasks:
   docker:ci:rust:native-test-reuse:solve:
     requires:
       vars: [NATIVE_TEST_CONTEXT, NATIVE_TEST_CASE_DIR, NATIVE_TEST_TARGET, NATIVE_TEST_VERIFY_TARGET]
-    env:
-      GHA_CACHE_WRITE_ENABLED: '{{default "" .NATIVE_TEST_CACHE_WRITE}}'
     cmds:
       - |
         set -euo pipefail
         mkdir -p '{{.NATIVE_TEST_CASE_DIR}}/result'
         status=0
+        GHA_CACHE_WRITE_ENABLED='{{default "" .NATIVE_TEST_CACHE_WRITE}}' \
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           -f '{{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/native-test-proof.docker-bake.hcl' \
