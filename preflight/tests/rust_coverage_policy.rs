@@ -253,6 +253,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
+    PreflightCoverageDecision {
+        dockerfile: &preflight,
+    }
+    .require_fixture_floor()?;
     assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
     let preflight_coverage_deps = preflight
         .split_once("FROM deps AS coverage-deps")
@@ -457,6 +461,81 @@ impl WasmCoverageHandoff<'_> {
     }
 }
 
+struct PreflightCoverageDecision<'a> {
+    dockerfile: &'a str,
+}
+
+impl PreflightCoverageDecision<'_> {
+    const COVERAGE_RUN: &str = r#"RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+--mount=type=secret,id=sccache_s3_secret_key,required=false \
+floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+&& cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" --no-fail-fast \
+&& compiler_fixture_floor="$(jq -er '.package_lines_percent["nook-compiler-cache-proof"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+&& CARGO_TARGET_DIR=/meta-secret/compiler-cache-target CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target cargo llvm-cov test --offline --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml -p nook-compiler-cache-proof --fail-under-lines "$compiler_fixture_floor" --no-fail-fast \
+&& nook-sccache-report --finish preflight-test-and-coverage"#;
+
+    fn require_fixture_floor(&self) -> anyhow::Result<()> {
+        let (_, after_test) = self
+            .dockerfile
+            .split_once("\nFROM build AS test\n")
+            .context("preflight must retain its actual test stage")?;
+        let (test_stage, _) = after_test
+            .split_once("\nFROM ")
+            .context("preflight test stage must end before its policy siblings")?;
+        anyhow::ensure!(
+            DockerfileRunInstruction::parse_stage(test_stage)
+                .iter()
+                .any(|run| run.text == Self::COVERAGE_RUN),
+            "the actual preflight test RUN must enforce both package floors with isolated fixture targets and direct failure propagation"
+        );
+        Ok(())
+    }
+}
+
+#[test]
+fn fixture_coverage_decision_rejects_unbound_or_unreachable_commands() {
+    let run = PreflightCoverageDecision::COVERAGE_RUN;
+    let dockerfile = format!("\nFROM build AS test\n{run}\nFROM deps AS policy-tools\n");
+    let commented_run = run
+        .lines()
+        .map(|line| format!("# {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for rejected in [
+        dockerfile.replace(
+            ".package_lines_percent[\"nook-compiler-cache-proof\"]",
+            ".package_lines_percent[\"nook-preflight\"]",
+        ),
+        dockerfile.replace("\"$compiler_fixture_floor\"", "\"$floor\""),
+        dockerfile.replace(
+            "--manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml",
+            "--manifest-path /meta-secret/nook/preflight/Cargo.toml",
+        ),
+        dockerfile.replace("-p nook-compiler-cache-proof", "-p nook-preflight"),
+        dockerfile.replace(
+            "CARGO_TARGET_DIR=/meta-secret/compiler-cache-target",
+            "CARGO_TARGET_DIR=/meta-secret/preflight-target",
+        ),
+        dockerfile.replace(
+            "CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target",
+            "CARGO_LLVM_COV_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target",
+        ),
+        dockerfile.replace("&& CARGO_TARGET_DIR=", "; CARGO_TARGET_DIR="),
+        dockerfile.replace("&& nook-sccache-report", "; nook-sccache-report"),
+        dockerfile.replace("FROM build AS test", "FROM build AS unused-tests"),
+        dockerfile.replace(run, &commented_run),
+    ] {
+        assert!(
+            PreflightCoverageDecision {
+                dockerfile: &rejected
+            }
+            .require_fixture_floor()
+            .is_err(),
+            "fixture floor must stay bound to the actual failing test RUN: {rejected}"
+        );
+    }
+}
+
 #[test]
 fn coverage_handoff_allows_only_exact_metadata_cleanup() -> anyhow::Result<()> {
     let source = format!(
@@ -535,7 +614,15 @@ fn wasm_source_overlays_refresh_all_rust_files_before_compilation() -> anyhow::R
     for overlay in [
         WasmSourceOverlay {
             declaration: "FROM builder-wasm-deps AS builder-wasm-source-base",
-            packages: &["nook-app-common", "nook-authenticator-domain", "nook-core"],
+            packages: &[
+                "nook-app-common",
+                "nook-authenticator-domain",
+                "nook-auth2",
+                "nook-replication",
+                "nook-event-log",
+                "nook-companion-core",
+                "nook-core",
+            ],
             refresh: "find nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core -type f -name '*.rs' -exec touch {} +",
         },
         WasmSourceOverlay {
