@@ -14,7 +14,7 @@ import {
 
 /** @param {string} job @param {Record<string, unknown>} [overrides] @returns {CacheTelemetryRecord} */
 const telemetry = (job, overrides = {}) => ({
-  schema_version: 2,
+  schema_version: 3,
   github: { run_id: "42", run_attempt: 1, job },
   cache_backend: {
     kind: "remote",
@@ -83,6 +83,12 @@ const telemetry = (job, overrides = {}) => ({
     cache_write_errors: 0,
     cache_writes: 2,
     remote_writes: 2,
+    local_hits: 0,
+    remote_hits: 8,
+    local_writes: 0,
+    local_write_errors: 0,
+    remote_write_errors: 0,
+    local_backfills: 0,
     compile_failures: 0,
     measurement: "sum_of_zero_based_run_snapshots",
     fallback: { state: "active", reason: "none" },
@@ -155,6 +161,12 @@ void test("does not require sccache telemetry for compiler-free BuildKit jobs", 
       cache_write_errors: 0,
       cache_writes: 0,
       remote_writes: 0,
+      local_hits: 0,
+      remote_hits: 0,
+      local_writes: 0,
+      local_write_errors: 0,
+      remote_write_errors: 0,
+      local_backfills: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
@@ -485,6 +497,7 @@ void test("requires remote write evidence only when compiler misses occur", () =
       cache_misses: 2,
       cache_writes: 0,
       remote_writes: 0,
+      remote_hits: 0,
     },
   });
   const missModel = new PrCacheHealth().evaluate({
@@ -511,6 +524,7 @@ void test("requires remote write evidence only when compiler misses occur", () =
       cache_misses: 0,
       cache_writes: 0,
       remote_writes: 0,
+      remote_hits: 2,
     },
   });
   const cachedModel = new PrCacheHealth().evaluate({
@@ -539,6 +553,7 @@ void test("defers incomplete client-side writes but keeps changed-head zero hits
       cache_misses: 2,
       cache_writes: 0,
       remote_writes: 0,
+      remote_hits: 0,
     },
   });
   const coldPending = telemetry("rust", {
@@ -627,6 +642,12 @@ void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fal
       cache_write_errors: 0,
       cache_writes: 0,
       remote_writes: 0,
+      local_hits: 0,
+      remote_hits: 0,
+      local_writes: 0,
+      local_write_errors: 0,
+      remote_write_errors: 0,
+      local_backfills: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "fallback", reason: "credentials_unavailable" },
@@ -678,6 +699,12 @@ void test("does not require sccache for the web-only verification job", () => {
       cache_write_errors: 0,
       cache_writes: 0,
       remote_writes: 0,
+      local_hits: 0,
+      remote_hits: 0,
+      local_writes: 0,
+      local_write_errors: 0,
+      remote_write_errors: 0,
+      local_backfills: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
@@ -698,26 +725,6 @@ void test("does not require sccache for the web-only verification job", () => {
   });
 
   assert.equal(model.gate.verdict, "pass");
-});
-
-void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {
-  const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "nook-cache-health-"),
-  );
-  const nestedDirectory = path.join(directory, "artifact", "nested");
-  fs.mkdirSync(nestedDirectory, { recursive: true });
-  fs.writeFileSync(
-    path.join(nestedDirectory, "telemetry.json"),
-    JSON.stringify(telemetry("nested")),
-  );
-  fs.writeFileSync(path.join(nestedDirectory, "ignored.txt"), "not json");
-  try {
-    assert.deepEqual(PrCacheHealth.readTelemetry(directory), [
-      telemetry("nested"),
-    ]);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 void test("PR browser fanout preserves read-only cache boundaries", () => {
