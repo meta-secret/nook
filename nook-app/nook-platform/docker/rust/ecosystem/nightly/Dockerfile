@@ -52,6 +52,7 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
+COPY nook-app/nook-platform/nook-page-policy/Cargo.toml nook-page-policy/Cargo.toml
 COPY nook-app/nook-platform/nook-authenticator-domain/Cargo.toml nook-authenticator-domain/Cargo.toml
 COPY nook-app/nook-platform/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-platform/nook-replication/Cargo.toml nook-replication/Cargo.toml
@@ -63,6 +64,7 @@ COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm-composition-tests/Cargo.toml nook-wasm-composition-tests/Cargo.toml
 RUN mkdir -p \
       nook-app-common/src \
+      nook-page-policy/src \
       nook-authenticator-domain/src \
       nook-auth2/src \
       nook-replication/src \
@@ -74,6 +76,7 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src \
     && touch \
       nook-app-common/src/lib.rs \
+      nook-page-policy/src/lib.rs \
       nook-authenticator-domain/src/lib.rs \
       nook-auth2/src/lib.rs \
       nook-replication/src/lib.rs \
@@ -118,7 +121,7 @@ RUN rustup target add wasm32-unknown-unknown
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --all-targets \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -149,14 +152,14 @@ COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 RUN find \
-      nook-app-common nook-authenticator-domain nook-auth2 nook-replication \
+      nook-app-common nook-page-policy nook-authenticator-domain nook-auth2 nook-replication \
       nook-event-log nook-companion-core nook-core nook-companion-wasm \
       nook-wasm nook-wasm-composition-tests \
       -type f -name '*.rs' -exec touch {} +
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --all-targets \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-app-common -p nook-page-policy -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
     && nook-sccache-report rust-dylint-native
 FROM rust-dylint-native AS rust-dylint-wasm

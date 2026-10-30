@@ -317,6 +317,7 @@ class DockerizedRustBuildKitContract {
     expect(rustVerification).not.toContain("COPY nook-app/nook-platform/ ./");
     for (const crate of [
       "nook-app-common",
+      "nook-page-policy",
       "nook-authenticator-domain",
       "nook-replication",
       "nook-auth2",
