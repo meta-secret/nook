@@ -64,20 +64,15 @@ export {
 
 export type {
   AuthenticatorBackupAttachResponse,
-  AuthenticatorCodeResponse,
   AuthenticatorEnrollmentConfirmResponse,
   AuthenticatorEnrollmentStageResponse,
   AuthenticatorOptionsResponse,
-  AuthenticatorPickerOpenResponse,
   AuthenticatorPreviewResponse,
   DecodedRuntimeMessageArgs,
   RuntimeMessageDelivery,
-  RuntimeMessageResponseDecoder,
 } from './runtime-message-adapter'
 
 export { authenticationWorkflowUi } from './authentication-workflow-ui-state'
-
-export type { PasskeyWidgetAction } from './login-passkey-action-types'
 
 type PreparedPasskeyActuation = () => RevalidatedAuthenticationActResultKind
 

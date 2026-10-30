@@ -8,6 +8,7 @@
     "**/dist/**",
     "**/target/**",
     "**/coverage/**",
+    "**/.svelte-check/**",
     "**/nook-web-shared/src/vault-app/lib/nook-wasm/**",
     "**/nook-web-shared/src/vault-app/lib/nook_wasm/**"
   ]

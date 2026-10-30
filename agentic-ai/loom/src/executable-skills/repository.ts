@@ -8,6 +8,10 @@ import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
 import {
+  NpmInstalledPackage,
+  type NpmManifestDependency,
+} from '../lib/dependency-popularity/installed-package.ts';
+import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
   UntrustedYamlBoundary,
@@ -547,8 +551,10 @@ export class ExecutableSkillRepository {
     for (const field of ['dependencies', 'devDependencies']) {
       const dependencies = this.property(packageDocument)(field);
       if (UntrustedYamlBoundary.isRecord(dependencies)) {
-        for (const name of Object.keys(dependencies)) {
-          if (!name.startsWith('@types/')) npmPackages.add(name);
+        for (const [key, spec] of Object.entries(dependencies)) {
+          if (key.startsWith('@types/') || typeof spec !== 'string') continue;
+          const dependency: NpmManifestDependency = { key, spec };
+          npmPackages.add(NpmInstalledPackage.name(dependency));
         }
       }
     }
@@ -839,7 +845,11 @@ export class ExecutableSkillRepository {
       Object.values(value).every(
         (entry) =>
           typeof entry === 'string' &&
-          /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(entry),
+          // An exact release, or an npm alias of one (TypeScript 7 as
+          // `@typescript/native`).
+          /^(?:npm:(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+@)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(
+            entry,
+          ),
       )
     );
   }

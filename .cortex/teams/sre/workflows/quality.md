@@ -89,9 +89,10 @@ Use this workflow for quality, CI, and deployment changes.
    - `bun audit --prod --audit-level=high` — every independently installed web
      package runs the audit in its CI check path and rejects high-severity
      production dependency advisories
-   - `knip` (`bun run unused`) — unused/unreachable files, exports, class
-     members, and dependencies in `nook-web-app` / `nook-web-research` (and any
-     package that runs Knip in its check/lint path)
+   - `knip` (`bun run unused`) — unused/unreachable files, exports, types, and
+     enum and namespace members for every web surface from the `nook-app/nook-web`
+     root, and in `nook-web-research` (and any package that runs Knip in its
+     check/lint path)
    - `jscpd` (`bun run duplicates`) — copy/paste clone detection across authored
      `nook-app` and `preflight` sources; the checked-in threshold in
      [`.jscpd.json`](../../../../.jscpd.json) is a no-regression ceiling, not a budget

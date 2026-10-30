@@ -6,6 +6,10 @@ import path from 'node:path';
 import { DependencyPopularityPolicy } from '../src/lib/dependency-popularity/evaluate.ts';
 import { RepositoryDependencyInventory } from '../src/lib/dependency-popularity/scan.ts';
 import {
+  NpmInstalledPackage,
+  type NpmManifestDependency,
+} from '../src/lib/dependency-popularity/installed-package.ts';
+import {
   DependencyEcosystem,
   GitHubStarsPresence,
   PopularityVerdict,
@@ -41,6 +45,8 @@ describe('scanRepositoryNpmPackages', () => {
     const names = inventory.value;
     expect(names).toContain('diff');
     expect(names).toContain('typescript');
+    // TypeScript 7's `@typescript/native` alias is audited as `typescript`.
+    expect(names).not.toContain('@typescript/native');
     expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
     const packageSnapshots = parse.mock.calls.filter(([source]) =>
       String(source).includes('@nook/cortex-article-structure-skill'),
@@ -130,5 +136,23 @@ describe('evaluatePopularity', () => {
       findingArgs.thresholds,
     ).evaluate(findingArgs.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
+  });
+});
+
+describe('NpmInstalledPackage', () => {
+  test('audits an npm alias as the package it installs', () => {
+    const aliased: NpmManifestDependency = {
+      key: '@typescript/native',
+      spec: 'npm:typescript@7.0.2',
+    };
+    const scoped: NpmManifestDependency = {
+      key: 'compat',
+      spec: 'npm:@typescript/typescript6@6.0.2',
+    };
+    const plain: NpmManifestDependency = { key: 'diff', spec: '9.0.0' };
+
+    expect(NpmInstalledPackage.name(aliased)).toBe('typescript');
+    expect(NpmInstalledPackage.name(scoped)).toBe('@typescript/typescript6');
+    expect(NpmInstalledPackage.name(plain)).toBe('diff');
   });
 });

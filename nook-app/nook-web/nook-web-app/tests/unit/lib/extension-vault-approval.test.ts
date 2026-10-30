@@ -25,7 +25,6 @@ vi.mock('$lib/auth/providers', async (importOriginal) => {
   return {
     ...original,
     activeVaultScope: vi.fn(original.activeVaultScope),
-    providerBelongsToVault: vi.fn(),
     seal_auth_providers_for_device_public_key: vi.fn(),
   }
 })

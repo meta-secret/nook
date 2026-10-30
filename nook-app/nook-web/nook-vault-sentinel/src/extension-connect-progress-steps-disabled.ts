@@ -1,3 +1,4 @@
+/** @public Sentinel's Vite alias serves this file in place of `$lib/components/extension-connect-progress-steps`. */
 export type { ExtensionConnectPageView } from "../../nook-web-shared/src/vault-app/lib/components/extension-connect-progress-steps";
 import type { ExtensionConnectPageView } from "../../nook-web-shared/src/vault-app/lib/components/extension-connect-progress-steps";
 
@@ -15,6 +16,7 @@ export type ExtensionConnectPageReport =
     };
 
 /** Sentinel has no connect route, so its shell never reports a step. */
+/** @public Sentinel's Vite alias serves this file in place of `$lib/components/extension-connect-progress-steps`. */
 export class ExtensionConnectPageSteps {
   private constructor() {}
 

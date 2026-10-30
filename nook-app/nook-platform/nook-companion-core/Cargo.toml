@@ -13,16 +13,16 @@ nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-event-log = { path = "../nook-event-log" }
 percent-encoding = "2.3.2"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.151"
-thiserror = "2.0.18"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
 url = "2.5.8"
-wasm-bindgen = "0.2.127"
-zeroize = "1.9.0"
+wasm-bindgen = "0.2.129"
+zeroize = "1.9.1"
 
 [dev-dependencies]
-proptest = "1.7.0"
+proptest = "1.12.0"
 anyhow = "1.0.104"
 
 [lints]

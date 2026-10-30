@@ -20,11 +20,6 @@ export enum ManagerSessionKind {
 export type ManagerSession =
   | { kind: ManagerSessionKind.Unavailable }
   | { kind: ManagerSessionKind.Available; manager: NookVaultManager };
-
-export type VaultDeviceIdentity = {
-  readonly deviceId: string;
-  readonly devicePublicKey: string;
-};
 export enum PasswordEntrySelectionKind {
   NotSelected = "not-selected",
   Selected = "selected",

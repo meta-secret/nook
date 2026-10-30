@@ -16,38 +16,38 @@ nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-authenticator-domain = { path = "../nook-authenticator-domain" }
 nook-event-log = { path = "../nook-event-log" }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 age = { version = "0.12.1", features = ["armor"] }
-serde_json = "1.0.150"
+serde_json = "1.0.154"
 serde_yaml = "0.9.34"
-csv = "1.3.1"
+csv = "1.4.0"
 hex = "0.4.3"
-sha2 = "0.11.0"
+sha2 = "0.11.1"
 sha1 = "0.11.0"
-bip39 = "2.2.2"
+bip39 = "3.0.0"
 getrandom = "0.4.3"
 base64 = "0.23.1"
 prost = "0.14.4"
-thiserror = "2.0.18"
-aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
-aes = "0.9.1"
-cbc = { version = "0.2.0", features = ["alloc"] }
+thiserror = "2.0.21"
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc"] }
+aes = "0.9.3"
+cbc = { version = "0.2.1", features = ["alloc"] }
 hmac = "0.13.0"
-argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "zeroize"] }
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "zeroize"] }
 hkdf = "0.13.0"
 pbkdf2 = { version = "0.13.0", features = ["sha2"] }
-tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
-zeroize = "1.9.0"
-wasm-bindgen = "0.2.127"
+tracing = { version = "0.1.44", default-features = false, features = ["std", "attributes"] }
+zeroize = "1.9.1"
+wasm-bindgen = "0.2.129"
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
 percent-encoding = "2.3.2"
-flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
-zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+zip = { version = "9.1.3", default-features = false, features = ["deflate-flate2"] }
 p256 = { version = "0.14.0", features = ["ecdsa", "pkcs8"] }
 ciborium = "0.2.2"
 coset = "0.4.2"
 url = "2.5.8"
-psl = "2.1.189"
+psl = "2.1.245"
 time = { version = "0.3.55", default-features = false, features = ["parsing"] }
 
 [dev-dependencies]
@@ -58,7 +58,7 @@ rand_core = "0.10.1"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
 # age's localization assets must be embedded because browser WASM has no filesystem.
-rust-embed = { version = "8.12.0", default-features = false, features = ["debug-embed"] }
+rust-embed = { version = "8.13.0", default-features = false, features = ["debug-embed"] }
 
 [lints]
 workspace = true

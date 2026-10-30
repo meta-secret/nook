@@ -9,8 +9,6 @@ import {
   first_compatible_provider_id,
   first_compatible_provider_id_preferred,
   NookProviderSelectionState,
-  provider_oauth_preset_for_config,
-  provider_oauth_preset_for_provider,
   provider_replication_capability,
   provider_supports_replication,
   provider_onboarding_type,
@@ -24,10 +22,7 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 
-export type {
-  NookProviderReplicationCapability as ProviderReplicationCapability,
-  NookVaultArchitecture as VaultArchitecture,
-} from "$app-wasm";
+export type { NookVaultArchitecture as VaultArchitecture } from "$app-wasm";
 
 export {
   DeviceMode,
@@ -38,8 +33,6 @@ export {
   default_vault_architecture,
   vault_architecture_onboarding_type,
   provider_onboarding_type,
-  provider_oauth_preset_for_config,
-  provider_oauth_preset_for_provider,
   provider_replication_capability,
   provider_supports_replication,
   validate_provider_replication,
@@ -55,12 +48,6 @@ export type VaultArchitectureDraft = {
     ready_participants: number;
   };
 };
-
-export type VaultArchitectureSelection = Pick<
-  VaultArchitectureDraft,
-  "device_mode" | "vault_type" | "replication_type"
->;
-
 export function validateVaultArchitecture(
   architecture: VaultArchitectureDraft,
 ): NookVaultArchitecture {

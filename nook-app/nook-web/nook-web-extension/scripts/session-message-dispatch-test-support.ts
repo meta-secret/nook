@@ -12,7 +12,6 @@ import {
   type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 import initNookWasm, {
-  type NookVaultManager,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -138,10 +137,4 @@ export {
   vaultImportRequest,
 }
 
-export type {
-  CompanionWasmSessionMessage,
-  ExtensionSessionQueue,
-  NookVaultManager,
-  ParsedExtensionSessionTransportRequest,
-  StorageProvider,
-}
+export type { CompanionWasmSessionMessage, StorageProvider }

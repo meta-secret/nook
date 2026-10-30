@@ -1,7 +1,5 @@
 import { I18N_KEYS } from "../../nook-web-shared/src/generated/i18n-keys";
 
-export const EXTENSION_CONNECT_PATH = "/extension-connect";
-
 import type { ExtensionConnectRequestFor } from "$web-shared/extension/extension-connect-types";
 import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
@@ -9,10 +7,10 @@ import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-
 import type { ExtensionVaultEventLogChannel } from "$lib/extension/vault-event-log";
 import type { KeyringProvidersDelivery } from "$web-shared/extension/keyring-providers-message";
 
+/** @public Sentinel's Vite alias serves this file in place of `$lib/extension/connect`. */
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
-  type ExtensionPairingDelivery,
 } from "$lib/extension/extension-pairing-delivery";
 
 export type ExtensionConnectScope = ProtocolExtensionConnectScope;
@@ -79,6 +77,7 @@ type ExtensionPairingApprovalDelivery = {
   readonly message: ExtensionPairingApprovedMessage;
 };
 
+/** @public Sentinel's Vite alias serves this file in place of `$lib/extension/connect`. */
 export const extensionConnectionBrowser = {
   isExtensionConnectPath,
   extensionConnectRequestFromLocation,

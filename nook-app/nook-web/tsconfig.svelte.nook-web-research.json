@@ -1,0 +1,3 @@
+{
+  "extends": "./nook-web-research/tsconfig.json"
+}

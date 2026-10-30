@@ -29,4 +29,5 @@ class SentinelExtensionConnectProgress {
   end(): void {}
 }
 
+/** @public Sentinel's Vite alias serves this file in place of `$lib/extension/connect-progress`. */
 export const extensionConnectProgress = new SentinelExtensionConnectProgress();

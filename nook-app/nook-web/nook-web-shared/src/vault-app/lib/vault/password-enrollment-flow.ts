@@ -17,11 +17,6 @@ import {
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 
-export {
-  findSharedGrantProvider,
-  SharedStorageTargetKind,
-  type SharedStorageTarget,
-} from "$lib/vault/password-enrollment";
 import {
   JoinEnrollmentState,
   OnboardingType,

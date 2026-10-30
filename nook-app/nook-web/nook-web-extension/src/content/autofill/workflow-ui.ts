@@ -5,8 +5,6 @@ import {
 
 import { CompactProgressState } from '../../lib/auth-widget-policy'
 
-import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
-
 import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import { extensionPairingStateLoader } from '../../lib/pairing-state'
@@ -27,8 +25,6 @@ export const DRAG_THRESHOLD_PX = 4
 export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
-
-export type { WebsiteLoginFillResponse as LoginFillResponse }
 
 type WorkflowCopyProjection = {
   readonly titleKey: BrowserMessageKey

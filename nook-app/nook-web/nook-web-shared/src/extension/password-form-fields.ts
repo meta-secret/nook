@@ -131,22 +131,6 @@ const usernameCandidateSelector = [
   'input[type="tel"]',
 ].join(",");
 
-export const oneTimeCodeFieldSelectors = [
-  'input[autocomplete~="one-time-code" i]',
-  'input[name*="totp" i]',
-  'input[id*="totp" i]',
-  'input[name*="otp" i]',
-  'input[id*="otp" i]',
-  'input[name*="2fa" i]',
-  'input[id*="2fa" i]',
-  'input[name*="mfa" i]',
-  'input[id*="mfa" i]',
-  'input[name*="auth-code" i]',
-  'input[id*="auth-code" i]',
-  'input[name*="verification-code" i]',
-  'input[id*="verification-code" i]',
-] as const;
-
 const oneTimeCodeCandidateSelector = [
   "input:not([type])",
   'input[type="text"]',

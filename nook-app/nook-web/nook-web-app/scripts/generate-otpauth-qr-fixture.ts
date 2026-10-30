@@ -72,7 +72,6 @@ async function fixtureSection(fixture: QrFixture): Promise<string> {
     rows.push(Array.from(modules, moduleGlyph).join(''))
   }
   return (
-    `export const ${fixture.name}_TEXT =\n  '${fixture.text}'\n\n` +
     `export const ${fixture.name}_MODULES: QrModuleRows = [\n` +
     rows.map((row) => `  '${row}',\n`).join('') +
     `]\n`

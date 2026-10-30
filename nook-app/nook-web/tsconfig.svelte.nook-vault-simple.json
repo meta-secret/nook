@@ -1,0 +1,3 @@
+{
+  "extends": "./nook-vault-simple/tsconfig.json"
+}

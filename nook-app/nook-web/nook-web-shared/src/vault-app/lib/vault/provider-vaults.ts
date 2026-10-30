@@ -1,10 +1,5 @@
 import type { LocalVaultOccupancy, StoreId } from "$app-wasm";
-import { err, ok, type Result } from "neverthrow";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
-import {
-  NativeVaultStorageFailure,
-  type VaultStorageFailure,
-} from "$lib/runtime/storage-failure";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 
@@ -111,53 +106,5 @@ export class ProviderVaultActions {
     );
     if (deleted.isOk())
       vault.showSuccess(vault.t(I18N_KEYS.ProviderVaultsReplaced));
-  }
-}
-
-export enum ProviderVaultAccessRequest {
-  /** The join request is in the vault's subfolder. */
-  Saved = "saved",
-}
-
-/** One vault of the signed-in Google account's Nook folder. */
-export interface GoogleDriveVaultTarget {
-  readonly accessToken: string;
-  readonly storeId: StoreId;
-}
-
-/**
- * Owns asking the members of a Nook-folder vault another identity holds for
- * access. Rust writes the request; this routes the call through the storage
- * queue and reports the outcome.
- */
-export class ProviderVaultAccessActions {
-  constructor(private readonly vault: VaultState) {}
-
-  /** Write this device's join request into the vault's subfolder. */
-  async requestAccess({
-    accessToken,
-    storeId,
-  }: GoogleDriveVaultTarget): Promise<
-    Result<ProviderVaultAccessRequest, VaultStorageFailure>
-  > {
-    const vault = this.vault;
-    vault.errorMsg = "";
-    vault.dismissSuccess();
-    const requested = await vault.enqueueStorage(async () => {
-      const manager = vault.admitManager();
-      if (manager.isErr()) return err(manager.error);
-      try {
-        await manager.value.request_google_drive_vault_access(
-          accessToken,
-          storeId,
-        );
-        return ok(ProviderVaultAccessRequest.Saved);
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
-    });
-    if (requested.isErr()) return err(requested.error);
-    vault.showSuccess(vault.t(I18N_KEYS.ProviderVaultsAccessRequestedToast));
-    return ok(ProviderVaultAccessRequest.Saved);
   }
 }

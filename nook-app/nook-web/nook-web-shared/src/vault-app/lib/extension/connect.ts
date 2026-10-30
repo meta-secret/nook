@@ -52,7 +52,6 @@ export { ExtensionConnectScope };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
-  type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
 export {
   companionResponseDecoder,

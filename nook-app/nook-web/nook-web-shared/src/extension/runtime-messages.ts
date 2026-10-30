@@ -22,26 +22,20 @@ import {
 } from "./keyring-grant-wire";
 import {
   RuntimeMessageDecodeFailure,
-  RuntimeMessageDecodeCauseKind,
   RuntimeMessageDecodeFailureKind,
 } from "./runtime-message-decode-failure";
 import {
   OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
   type OpenCompanionLauncherMessage,
 } from "./companion-launcher-message";
 
 import { OpenCompanionLauncherMessage as OpenCompanionLauncherMessageSchema } from "./companion-launcher-message";
 
-import {
-  BeginExtensionPairingMessageType,
-  ExtensionLocalEventLogUpdatedMessageType,
-  OpenSimpleVaultMessageType,
-  type BeginExtensionPairingMessage,
-  type ExtensionEventLogRecord,
-  type ExtensionLocalEventLogUpdatedMessage,
-  type OpenSimpleVaultMessage,
-  RuntimeMessageEnvelope,
+import type {
+  BeginExtensionPairingMessage,
+  ExtensionEventLogRecord,
+  ExtensionLocalEventLogUpdatedMessage,
+  OpenSimpleVaultMessage,
 } from "./lifecycle-runtime-messages";
 
 import {
@@ -94,12 +88,7 @@ function decodeAdmissionResult<AdmissionValue, AdmissionFailure>(
 }
 
 export {
-  BeginExtensionPairingMessageType,
-  ExtensionLocalEventLogUpdatedMessageType,
   OpenCompanionLauncherIntent,
-  OpenCompanionLauncherMessageType,
-  OpenSimpleVaultMessageType,
-  RuntimeMessageEnvelope,
   BeginExtensionPairingMessageSchema as BeginExtensionPairingMessage,
   type ExtensionEventLogRecord,
   ExtensionLocalEventLogUpdatedMessageSchema as ExtensionLocalEventLogUpdatedMessage,
@@ -108,14 +97,7 @@ export {
 };
 
 export { ExtensionPairingApprovedMessageAdmissionFailure };
-export {
-  RuntimeMessageDecodeFailure,
-  RuntimeMessageDecodeFailureKind,
-  RuntimeMessageDecodeCauseKind,
-};
-export type { RuntimeMessageDecodeCause } from "./runtime-message-decode-failure";
-
-export type { ExtensionPairingVaultType } from "./nook-companion-wasm/nook_companion_wasm.js";
+export { RuntimeMessageDecodeFailure, RuntimeMessageDecodeFailureKind };
 
 export enum GeneratePasswordRequestType {
   NookWebsiteGeneratePassword = "nook:website-generate-password",

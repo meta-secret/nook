@@ -11,18 +11,20 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 nook-companion-core = { path = "../nook-companion-core" }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
-wasm-bindgen = "0.2.127"
+wasm-bindgen = "0.2.129"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+# age 0.12 (via p256 0.13 and rand_core 0.6) still pulls getrandom 0.2, which
+# builds for the browser only with its `js` feature; Nook's own crates use 0.4.
 getrandom-legacy = { package = "getrandom", version = "0.2.17", features = ["js"] }
 
 [dev-dependencies]
-serde_json = "1.0.151"
-wasm-bindgen-test = "0.3.77"
-zeroize = "1.9.0"
+serde_json = "1.0.154"
+wasm-bindgen-test = "0.3.79"
+zeroize = "1.9.1"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]

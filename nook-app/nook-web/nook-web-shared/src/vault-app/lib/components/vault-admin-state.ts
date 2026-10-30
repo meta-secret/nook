@@ -17,16 +17,6 @@ export enum VaultRenameOperationKind {
 export type VaultRenameOperation =
   | { kind: VaultRenameOperationKind.Idle }
   | { kind: VaultRenameOperationKind.Renaming; storeId: StoreId };
-
-export enum VaultSwitchOperationKind {
-  Idle = "idle",
-  Switching = "switching",
-}
-
-export type VaultSwitchOperation =
-  | { kind: VaultSwitchOperationKind.Idle }
-  | { kind: VaultSwitchOperationKind.Switching; storeId: StoreId };
-
 export enum ImportProviderSectionKind {
   Closed = "closed",
   Open = "open",

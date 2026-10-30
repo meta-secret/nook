@@ -154,6 +154,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
   'nook-app/nook-web/nook-vault-simple/src/main.ts',
   'nook-app/nook-web/nook-vault-simple/vite.config.ts',
+  'nook-app/nook-web/knip.ts',
   'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
   'nook-app/nook-web/nook-web-app/src/main.ts',
   'nook-app/nook-web/nook-web-app/vite.config.ts',
@@ -452,7 +453,6 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
 export const INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-vault-sentinel/tsconfig.json',
   'nook-app/nook-web/nook-vault-simple/tsconfig.json',
-  'nook-app/nook-web/nook-web-app/knip.json',
   'nook-app/nook-web/nook-web-app/tsconfig.app.json',
   'nook-app/nook-web/nook-web-app/tsconfig.json',
   'nook-app/nook-web/nook-web-extension/tsconfig.json',

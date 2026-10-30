@@ -1,4 +1,4 @@
-import init, { generate_totp_code, verify_totp_code } from 'nook-wasm'
+import init, { verify_totp_code } from 'nook-wasm'
 enum WasmStartupKind {
   NotStarted = 'not-started',
   Initializing = 'initializing',
@@ -20,15 +20,7 @@ async function ensureWasm(): Promise<void> {
   await wasmStartup.completion
 }
 
-/** Thin wrapper over nook-core TOTP via WASM — no hand-rolled crypto. */
-export async function generateTotpCode(
-  base32Secret: string,
-  nowMs = Date.now(),
-): Promise<string> {
-  await ensureWasm()
-  return generate_totp_code(base32Secret, BigInt(Math.floor(nowMs / 1000)))
-}
-
+/** Verifies TOTP codes through nook-core via WASM — no hand-rolled crypto. */
 export async function verifyTotpCode(
   base32Secret: string,
   code: string,

@@ -11,10 +11,6 @@ import {
   authentication_page_observation_facts_match_binding,
   bind_authentication_page_observation_facts,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-
-export type AuthenticationPageObservationView =
-  AuthenticationPageObservationFacts
-
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
 export enum AuthenticationWorkflowApprovalDisposition {

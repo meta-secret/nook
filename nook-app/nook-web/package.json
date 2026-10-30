@@ -1,0 +1,13 @@
+{
+  "name": "@nook/web-surfaces",
+  "private": true,
+  "description": "Knip project root: knip 6 analyzes only files under its root, and every web surface shares code from here.",
+  "devDependencies": {
+    "svelte": "5.57.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "@playwright/test": "^1.64.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "typescript": "6.0.3"
+  }
+}

@@ -191,14 +191,6 @@ export type CloudKitAuthErrorDetails = {
   statusText?: string;
   uuidPresent?: boolean;
 };
-
-export type CloudKitAuthChallenge = {
-  reason?: string;
-  redirectURL?: string;
-  serverErrorCode?: string;
-  uuid?: string;
-};
-
 export type CloudKitAuthSetupOptions = {
   grabAuthToken: boolean;
   persist: boolean;

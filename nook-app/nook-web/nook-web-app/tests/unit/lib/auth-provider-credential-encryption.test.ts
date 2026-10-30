@@ -192,158 +192,153 @@ function persistedOAuthCredentials(rawSnapshot: unknown): {
   }
 }
 
-describe.sequential(
-  'sync provider credential encryption (wasm + IndexedDB)',
-  () => {
-    beforeAll(async () => {
-      await initNookWasm()
-      manager = new NookVaultManager()
-      const setup = await manager.begin_device_protection()
-      try {
-        await manager.finish_device_protection(
-          new Uint8Array(32).fill(7),
-          setup.userHandle,
-          setup.prfInput,
-          new Uint8Array(32).fill(11),
-        )
-      } finally {
-        setup.free()
-      }
-    })
-
-    beforeEach(clearAuthProviderStore)
-
-    test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
-      const pat = 'github_pat_11UNITtestSECRETtoken'
-      await manager.save_auth_providers_snapshot({
-        providers: [githubProvider('gh-unit', pat)],
-        activeVaultStoreId: unselectedVaultScope(),
-      })
-
-      const raw = await readRawAuthProvidersFromIdb()
-      const storedPat = persistedGithubPat(raw)
-      expect(storedPat).toContain(AGE_ARMOR_MARKER)
-      expect(storedPat).not.toContain('UNITtestSECRET')
-    })
-
-    test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
-      const pat = 'github_pat_22LOADdecryptTOKEN'
-      await manager.save_auth_providers_snapshot({
-        providers: [githubProvider('gh-load', pat)],
-        activeVaultStoreId: unselectedVaultScope(),
-      })
-
-      const loaded = await manager.load_auth_providers_snapshot()
-      const provider = loaded.providers[0]
-      if (!provider) throw new Error('expected a loaded GitHub provider')
-      expect(githubPatValue(provider.githubPat)).toBe(pat)
-    })
-
-    test('loadAuthProviders rejects plaintext credentials', async () => {
-      const pat = 'github_pat_33PLAINtextROW'
-      await manager.save_auth_providers_snapshot({
-        providers: [githubProvider('gh-plain', 'github_pat_sealed_first')],
-        activeVaultStoreId: unselectedVaultScope(),
-      })
-      const stored = await readStoredProviderRecord()
-      // IndexedDB hands back a fresh copy, so editing it leaves the store alone.
-      const plaintext: unknown = stored.value
-      if (
-        !plaintext ||
-        typeof plaintext !== 'object' ||
-        !('providers' in plaintext) ||
-        !Array.isArray(plaintext.providers)
-      ) {
-        throw new Error('expected a persisted GitHub provider row')
-      }
-      const row: unknown = plaintext.providers[0]
-      if (!(row instanceof Object)) {
-        throw new Error('expected a persisted GitHub provider row')
-      }
-      Object.assign(row, { githubPat: { state: 'token', value: pat } })
-      await new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_auth', 1)
-        request.onerror = () =>
-          reject(
-            ((v) => (v ? v : new Error('Failed to open nook_auth.')))(
-              request.error,
-            ),
-          )
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('auth', 'readwrite')
-          tx.objectStore('auth').put(plaintext, stored.key)
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () =>
-            reject(
-              ((v) => (v ? v : new Error('IndexedDB tx failed.')))(tx.error),
-            )
-        }
-      })
-
-      await expect(manager.load_auth_providers_snapshot()).rejects.toThrow(
-        'Provider credential is not age-encrypted.',
+describe('sync provider credential encryption (wasm + IndexedDB)', () => {
+  beforeAll(async () => {
+    await initNookWasm()
+    manager = new NookVaultManager()
+    const setup = await manager.begin_device_protection()
+    try {
+      await manager.finish_device_protection(
+        new Uint8Array(32).fill(7),
+        setup.userHandle,
+        setup.prfInput,
+        new Uint8Array(32).fill(11),
       )
+    } finally {
+      setup.free()
+    }
+  })
 
-      const raw = await readRawAuthProvidersFromIdb()
-      expect(persistedGithubPat(raw)).toBe(pat)
+  beforeEach(clearAuthProviderStore)
+
+  test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
+    const pat = 'github_pat_11UNITtestSECRETtoken'
+    await manager.save_auth_providers_snapshot({
+      providers: [githubProvider('gh-unit', pat)],
+      activeVaultStoreId: unselectedVaultScope(),
     })
 
-    test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
-      const access = 'ya29.unit-oauth-access-token'
-      const refresh = '1//unit-refresh-token-secret'
-      const oauthFile = {
-        ...defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: DEFAULT_DRIVE_BACKUP_NAME,
-        }),
-        accessToken: storedOAuthCredential(access),
-        refreshToken: storedOAuthRefreshCredential(refresh),
-        accountEmail: storedOAuthAccountEmail('me@example.com'),
-      }
-      await manager.save_auth_providers_snapshot({
-        providers: [
-          {
-            ...providerPersistenceDefaults(),
-            id: 'gd-unit',
-            type: 'oauth-file',
-            label: 'Google Drive',
-            oauthFile: configuredOAuthFile(oauthFile),
-            syncCheckpoint: { state: 'neverSynced' },
-            createdAt: '2026-06-24T00:00:00.000Z',
-          },
-        ],
-        activeVaultStoreId: unselectedVaultScope(),
-      })
+    const raw = await readRawAuthProvidersFromIdb()
+    const storedPat = persistedGithubPat(raw)
+    expect(storedPat).toContain(AGE_ARMOR_MARKER)
+    expect(storedPat).not.toContain('UNITtestSECRET')
+  })
 
-      const raw = await readRawAuthProvidersFromIdb()
-      const oauth = persistedOAuthCredentials(raw)
-      expect(oauth.accessToken).toContain(AGE_ARMOR_MARKER)
-      expect(oauth.refreshToken).toContain(AGE_ARMOR_MARKER)
-      expect(oauth.accessToken).not.toContain(access)
-      expect(oauth.refreshToken).not.toContain(refresh)
-
-      const loaded = await manager.load_auth_providers_snapshot()
-      const provider = loaded.providers[0]
-      if (!provider) throw new Error('expected a loaded OAuth provider')
-      const loadedOauth = decodeStoredOAuthFileConfiguration(provider.oauthFile)
-      if (
-        loadedOauth.kind !== StoredOAuthFileConfigurationDecodeKind.Configured
-      ) {
-        throw new Error('expected configured OAuth credentials')
-      }
-      const loadedAccess = oauth_access_token(loadedOauth.config)
-      if (loadedAccess.kind !== 'available') {
-        throw new Error('expected a loaded OAuth access token')
-      }
-      expect(loadedAccess.token).toBe(access)
-      if (loadedOauth.config.refreshToken.state !== 'token') {
-        throw new Error('expected a loaded OAuth refresh token')
-      }
-      expect(loadedOauth.config.refreshToken.value).toBe(refresh)
+  test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
+    const pat = 'github_pat_22LOADdecryptTOKEN'
+    await manager.save_auth_providers_snapshot({
+      providers: [githubProvider('gh-load', pat)],
+      activeVaultStoreId: unselectedVaultScope(),
     })
-  },
-)
+
+    const loaded = await manager.load_auth_providers_snapshot()
+    const provider = loaded.providers[0]
+    if (!provider) throw new Error('expected a loaded GitHub provider')
+    expect(githubPatValue(provider.githubPat)).toBe(pat)
+  })
+
+  test('loadAuthProviders rejects plaintext credentials', async () => {
+    const pat = 'github_pat_33PLAINtextROW'
+    await manager.save_auth_providers_snapshot({
+      providers: [githubProvider('gh-plain', 'github_pat_sealed_first')],
+      activeVaultStoreId: unselectedVaultScope(),
+    })
+    const stored = await readStoredProviderRecord()
+    // IndexedDB hands back a fresh copy, so editing it leaves the store alone.
+    const plaintext: unknown = stored.value
+    if (
+      !plaintext ||
+      typeof plaintext !== 'object' ||
+      !('providers' in plaintext) ||
+      !Array.isArray(plaintext.providers)
+    ) {
+      throw new Error('expected a persisted GitHub provider row')
+    }
+    const row: unknown = plaintext.providers[0]
+    if (!(row instanceof Object)) {
+      throw new Error('expected a persisted GitHub provider row')
+    }
+    Object.assign(row, { githubPat: { state: 'token', value: pat } })
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(
+          ((v) => (v ? v : new Error('Failed to open nook_auth.')))(
+            request.error,
+          ),
+        )
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readwrite')
+        tx.objectStore('auth').put(plaintext, stored.key)
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () =>
+          reject(((v) => (v ? v : new Error('IndexedDB tx failed.')))(tx.error))
+      }
+    })
+
+    await expect(manager.load_auth_providers_snapshot()).rejects.toThrow(
+      'Provider credential is not age-encrypted.',
+    )
+
+    const raw = await readRawAuthProvidersFromIdb()
+    expect(persistedGithubPat(raw)).toBe(pat)
+  })
+
+  test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
+    const access = 'ya29.unit-oauth-access-token'
+    const refresh = '1//unit-refresh-token-secret'
+    const oauthFile = {
+      ...defaultOAuthFileConfig({
+        preset: 'google-drive',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
+      accessToken: storedOAuthCredential(access),
+      refreshToken: storedOAuthRefreshCredential(refresh),
+      accountEmail: storedOAuthAccountEmail('me@example.com'),
+    }
+    await manager.save_auth_providers_snapshot({
+      providers: [
+        {
+          ...providerPersistenceDefaults(),
+          id: 'gd-unit',
+          type: 'oauth-file',
+          label: 'Google Drive',
+          oauthFile: configuredOAuthFile(oauthFile),
+          syncCheckpoint: { state: 'neverSynced' },
+          createdAt: '2026-06-24T00:00:00.000Z',
+        },
+      ],
+      activeVaultStoreId: unselectedVaultScope(),
+    })
+
+    const raw = await readRawAuthProvidersFromIdb()
+    const oauth = persistedOAuthCredentials(raw)
+    expect(oauth.accessToken).toContain(AGE_ARMOR_MARKER)
+    expect(oauth.refreshToken).toContain(AGE_ARMOR_MARKER)
+    expect(oauth.accessToken).not.toContain(access)
+    expect(oauth.refreshToken).not.toContain(refresh)
+
+    const loaded = await manager.load_auth_providers_snapshot()
+    const provider = loaded.providers[0]
+    if (!provider) throw new Error('expected a loaded OAuth provider')
+    const loadedOauth = decodeStoredOAuthFileConfiguration(provider.oauthFile)
+    if (
+      loadedOauth.kind !== StoredOAuthFileConfigurationDecodeKind.Configured
+    ) {
+      throw new Error('expected configured OAuth credentials')
+    }
+    const loadedAccess = oauth_access_token(loadedOauth.config)
+    if (loadedAccess.kind !== 'available') {
+      throw new Error('expected a loaded OAuth access token')
+    }
+    expect(loadedAccess.token).toBe(access)
+    if (loadedOauth.config.refreshToken.state !== 'token') {
+      throw new Error('expected a loaded OAuth refresh token')
+    }
+    expect(loadedOauth.config.refreshToken.value).toBe(refresh)
+  })
+})

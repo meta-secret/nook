@@ -33,7 +33,6 @@ import {
 } from './passkey-availability'
 
 export {
-  type MatchingPasskeyAvailability,
   MatchingPasskeyAvailabilityKind,
   passkeyAccountCountForClassification,
 } from './passkey-availability'

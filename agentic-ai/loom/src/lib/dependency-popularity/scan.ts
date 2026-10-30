@@ -5,6 +5,10 @@ import path from 'node:path';
 import { ExecutableSkillCheckout } from '../../executable-skills/repository.ts';
 import { LoomFailureCode } from '../../loom-failure.ts';
 import {
+  NpmInstalledPackage,
+  type NpmManifestDependency,
+} from './installed-package.ts';
+import {
   UntrustedYamlPropertyPresence,
   type UntrustedYamlNode,
   UntrustedYamlBoundary,
@@ -79,11 +83,12 @@ export class RepositoryDependencyInventory {
       ) {
         continue;
       }
-      for (const name of Object.keys(blockProperty.value)) {
-        if (name.startsWith('@types/')) {
+      for (const [key, spec] of Object.entries(blockProperty.value)) {
+        if (key.startsWith('@types/') || typeof spec !== 'string') {
           continue;
         }
-        names.add(name);
+        const dependency: NpmManifestDependency = { key, spec };
+        names.add(NpmInstalledPackage.name(dependency));
       }
     }
     return ok([...names].sort());

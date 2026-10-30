@@ -69,6 +69,7 @@ export class InternalApiConsumerScope {
       '**/vite.config.ts',
       '**/vite-config.ts',
       '**/knip.json',
+      '**/knip.ts',
       '**/tsconfig.json',
       '**/tsconfig.app.json',
       'tsconfig.eslint.json',

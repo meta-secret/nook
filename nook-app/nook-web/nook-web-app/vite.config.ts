@@ -316,6 +316,11 @@ export default defineConfig(({ mode }) => {
       include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
       exclude: ['e2e/**', 'node_modules/**'],
       environment: 'happy-dom',
+      // happy-dom 21 loads no iframe page unless asked; the foreign document
+      // realm tests build theirs from an iframe.
+      environmentOptions: {
+        happyDOM: { settings: { enableIframePageLoading: true } },
+      },
       setupFiles: ['tests/unit/setup-wasm.ts'],
       isolate: true,
       pool: 'forks',

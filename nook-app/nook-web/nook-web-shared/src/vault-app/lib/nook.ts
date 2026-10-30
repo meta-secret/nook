@@ -34,13 +34,11 @@ import { browserLogRuntime } from "$lib/runtime/log";
 
 export type {
   NookImportResult,
-  NookJoinRequest,
   NookJoinRequest as JoinRequest,
   PasswordGenerationOptions,
   NookSecretListItem,
   NookSecretRecord,
   NookVaultManager,
-  NookVaultMember,
   NookVaultMember as VaultMember,
   NookVaultSyncResult,
   NookSecretFormFields,

@@ -49,23 +49,16 @@ export type {
 } from "./password-form-workflow-observation";
 
 export {
-  oneTimeCodeFieldSelectors,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
-  usernameFieldSelectors,
   passwordFieldDiscovery,
 } from "./password-form-fields";
-
-export type { PasskeyControlLookup } from "./password-form-fields";
-export type { PasswordFormScope };
 
 export { passwordFormCredentialInteraction } from "./password-form-field-actions";
 
 export type {
-  GeneratedPasswordFillRequest,
   LoginCredentials,
   LoginCredentialsFillRequest,
-  LoginCredentialsLookup,
   OneTimeCodeFillRequest,
 } from "./password-form-field-actions";
 

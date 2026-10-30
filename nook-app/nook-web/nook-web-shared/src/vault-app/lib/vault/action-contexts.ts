@@ -45,14 +45,8 @@ import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type { TranslationRequest } from "$lib/vault/translation";
 import type { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
-import type { NookLocalVaultEntry, NookPasswordEntrySummary } from "$app-wasm";
+import type { NookPasswordEntrySummary } from "$app-wasm";
 import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
-
-export type LocalVaultCatalogRefreshSnapshot = {
-  readonly vaults: readonly NookLocalVaultEntry[];
-  readonly activeVaultPresent: boolean;
-};
-
 export type PasswordEntriesRefreshSnapshot = {
   readonly entries: readonly NookPasswordEntrySummary[];
 };

@@ -79,24 +79,6 @@ export class LoginPickerSelectResponse {
     return Schema.decodeUnknownEffect(loginPickerSelectResponseSchema)(response)
   }
 }
-
-export type LoginPickerRequestMessage =
-  LoginPickerQueryMessage | LoginPickerSelectMessage
-
-export enum LoginPickerRuntimeResponseKind {
-  Query = 'query',
-  Selected = 'selected',
-  Rejected = 'rejected',
-}
-
-export type LoginPickerRuntimeResponse =
-  | {
-      readonly kind: LoginPickerRuntimeResponseKind.Query
-      readonly response: LoginPickerQueryResponse
-    }
-  | { readonly kind: LoginPickerRuntimeResponseKind.Selected }
-  | { readonly kind: LoginPickerRuntimeResponseKind.Rejected }
-
 export enum LoginPickerCancelMessageType {
   NookLoginPickerCancel = 'nook:login-picker-cancel',
 }
