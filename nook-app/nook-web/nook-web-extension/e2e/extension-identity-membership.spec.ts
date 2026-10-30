@@ -12,7 +12,6 @@ import {
   reuseNookTabForConnect,
 } from './helpers/extension-smoke-runtime'
 import {
-  authorizeDeviceProtection,
   connectGithubSyncProviderFromSettings,
   createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
@@ -100,13 +99,13 @@ test('the extension joins the keyring from the approval without reaching its pro
       connect: () => pairPopup.getByTestId('connect-simple-vault-btn').click(),
     })
     const consent = connectPage.getByTestId('extension-connect-consent')
-    const unlockStep = connectPage.getByTestId('identity-vault-row').first()
-    await expect(consent.or(unlockStep)).toBeVisible({
+    // The request unlocks the keyring, not a vault; the consent follows in
+    // place with no vault opened.
+    const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
+    await expect(consent.or(unlockKeyring)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    if (await unlockStep.isVisible()) {
-      await authorizeDeviceProtection(connectPage)
-    }
+    if (await unlockKeyring.isVisible()) await unlockKeyring.click()
     await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     // The extension joins the keyring, never one vault alone.
     await expect(
