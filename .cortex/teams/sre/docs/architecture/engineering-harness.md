@@ -172,7 +172,6 @@ target exports combined coverage, JUnit XML, and `artifact-files.tsv`
 inventories. Proof uploads contain compact evidence, with no full Cargo target
 trees or copied source contexts. BuildKit remains the authority for cache
 validity and reuse.
-
 Observed execution and cache-proof status are recorded in
 [native test-reuse evidence](native-test-reuse-proof.md).
 
