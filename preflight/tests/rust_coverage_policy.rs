@@ -345,7 +345,7 @@ fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> any
     assert!(terminal.ends_with(cleanup));
     assert_eq!(
         terminal.lines().rev().nth(1),
-        Some("&& nook-sccache-report native-core-coverage \\")
+        Some("&& nook-sccache-report --finish native-core-coverage \\")
     );
     for required in [
         "&& cargo llvm-cov nextest --no-clean --profile ci -p nook-core",
