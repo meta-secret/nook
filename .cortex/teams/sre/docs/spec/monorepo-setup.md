@@ -22,7 +22,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   GitHub Actions `go-task/setup-task` steps must pin this exact version.
   Do not resolve `3.x` at workflow runtime.
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
-- **wasm-bindgen** (crate + CLI): `0.2.127` in the Rust crates that export web-facing types (`nook-wasm`, and `nook-core` for simple shared DTOs/enums). CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
+- **wasm-bindgen** (crate + CLI): `0.2.129` in the Rust crates that export web-facing types (`nook-wasm`, and `nook-core` for simple shared DTOs/enums). CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
 
 ## 4. Docker & CI caching
 

@@ -1,118 +1,6 @@
-export enum DashboardLoadKind {
-  Loading = "loading",
-  Ready = "ready",
-  Failed = "failed",
-}
-
 export enum IdentityLifecycleMutationOutcome {
   CreationPrepared = "creation-prepared",
   Activated = "activated",
-}
-
-export interface DashboardSnapshotFailureRequest {
-  readonly currentGeneration: () => number;
-  readonly failAccessSnapshot: () => void;
-  readonly failDirectorySnapshot: () => void;
-}
-
-export class DashboardSnapshotFailureTransition {
-  constructor(private readonly request: DashboardSnapshotFailureRequest) {}
-
-  apply(generation: number): DashboardLoadKind {
-    if (generation !== this.request.currentGeneration()) {
-      return DashboardLoadKind.Loading;
-    }
-    this.request.failAccessSnapshot();
-    this.request.failDirectorySnapshot();
-    return DashboardLoadKind.Failed;
-  }
-}
-
-export enum DevicesAccessRepresentationKind {
-  List = "list",
-  Graph = "graph",
-}
-
-export type DashboardLoadState<ReadyView> =
-  | { kind: typeof DashboardLoadKind.Loading }
-  | { kind: typeof DashboardLoadKind.Ready; view: ReadyView }
-  | { kind: typeof DashboardLoadKind.Failed };
-
-export type DashboardReadyProjectionRequest<
-  AccessView,
-  DirectoryView,
-  Identity,
-> = {
-  readonly accessState: { readonly kind: string; readonly view?: AccessView };
-  readonly directoryState: {
-    readonly kind: string;
-    readonly view?: DirectoryView;
-  };
-  readonly selectedIdentity:
-    | { readonly kind: string }
-    | { readonly kind: string; readonly identity: Identity };
-};
-
-export enum DashboardReadyProjectionKind {
-  Unavailable = "unavailable",
-  Empty = "empty",
-  Selected = "selected",
-}
-
-export type DashboardReadyProjectionState<AccessView, DirectoryView, Identity> =
-  | { readonly kind: DashboardReadyProjectionKind.Unavailable }
-  | {
-      readonly kind: DashboardReadyProjectionKind.Empty;
-      readonly accessView: AccessView;
-      readonly directory: DirectoryView;
-    }
-  | {
-      readonly kind: DashboardReadyProjectionKind.Selected;
-      readonly accessView: AccessView;
-      readonly directory: DirectoryView;
-      readonly identity: Identity;
-    };
-
-/** Projects two independently loaded UI states only when both own ready views. */
-export class DashboardReadyProjectionOwner<
-  AccessView,
-  DirectoryView,
-  Identity,
-> {
-  constructor(
-    private readonly request: DashboardReadyProjectionRequest<
-      AccessView,
-      DirectoryView,
-      Identity
-    >,
-  ) {}
-
-  get state(): DashboardReadyProjectionState<
-    AccessView,
-    DirectoryView,
-    Identity
-  > {
-    const { accessState, directoryState, selectedIdentity } = this.request;
-    if (
-      accessState.kind !== DashboardLoadKind.Ready ||
-      directoryState.kind !== DashboardLoadKind.Ready ||
-      !("view" in accessState) ||
-      !("view" in directoryState)
-    ) {
-      return { kind: DashboardReadyProjectionKind.Unavailable };
-    }
-    const ready = {
-      accessView: accessState.view,
-      directory: directoryState.view,
-    };
-    return "identity" in selectedIdentity
-      ? {
-          kind: DashboardReadyProjectionKind.Selected,
-          ...ready,
-          identity: selectedIdentity.identity,
-        }
-      : { kind: DashboardReadyProjectionKind.Empty, ...ready };
-  }
 }
 
 export enum DashboardTextKind {
@@ -185,30 +73,9 @@ export type DashboardView = {
   keeper: PasskeyKeeperKind;
   vaults: VaultAccessView[];
 };
-
-export enum DevicesAccessTriggerKind {
-  Header = "header",
-  IdentityContext = "identity-context",
-}
-
-export enum DevicesAccessHostMountKind {
-  Unmounted = "unmounted",
-  Mounted = "mounted",
-}
-
-export type DevicesAccessHostMount =
-  | { kind: typeof DevicesAccessHostMountKind.Unmounted }
-  | {
-      kind: typeof DevicesAccessHostMountKind.Mounted;
-      element: HTMLDivElement;
-    };
-
 import type {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
   PasskeyKeeperKind,
 } from "$app-wasm";
 import type { VaultAccessView } from "./devices-access/access-chain";
-
-/** Leaves the Keys page through its own cleanup (abandons identity creation). */
-export type KeysPageLeave = () => Promise<void>;

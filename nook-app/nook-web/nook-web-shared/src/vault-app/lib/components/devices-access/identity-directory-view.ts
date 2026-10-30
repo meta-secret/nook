@@ -26,9 +26,6 @@ import {
   KnownDashboardText,
   UnknownDashboardText,
   type DashboardView,
-  type DashboardLoadState,
-  DashboardReadyProjectionOwner,
-  type DashboardReadyProjectionState,
 } from "../devices-access-dashboard-state";
 import type { VaultAccessView } from "./access-chain";
 
@@ -66,14 +63,6 @@ export type IdentityDirectorySelection =
       readonly kind: IdentityDirectorySelectionKind.Selected;
       readonly identityId: string;
     };
-
-export type SelectedIdentityEntry =
-  | { readonly kind: IdentityDirectorySelectionKind.Empty }
-  | {
-      readonly kind: IdentityDirectorySelectionKind.Selected;
-      readonly identity: IdentityDirectoryEntry;
-    };
-
 export type IdentityDirectoryView = {
   readonly identities: readonly IdentityDirectoryEntry[];
   readonly selection: IdentityDirectorySelection;
@@ -83,33 +72,6 @@ export type IdentityDirectoryAccessView = {
   readonly directory: IdentityDirectoryView;
   readonly access: DashboardView;
 };
-
-type DevicesAccessDashboardReadyProjectionRequest = {
-  readonly accessState: DashboardLoadState<DashboardView>;
-  readonly directoryState: IdentityDirectoryLoadState;
-  readonly selectedIdentity: SelectedIdentityEntry;
-};
-
-export type DevicesAccessDashboardReadyProjectionState =
-  DashboardReadyProjectionState<
-    DashboardView,
-    IdentityDirectoryView,
-    IdentityDirectoryEntry
-  >;
-
-export class DashboardReadyProjection extends DashboardReadyProjectionOwner<
-  DashboardView,
-  IdentityDirectoryView,
-  IdentityDirectoryEntry
-> {
-  constructor(request: DevicesAccessDashboardReadyProjectionRequest) {
-    super(request);
-  }
-
-  override get state(): DevicesAccessDashboardReadyProjectionState {
-    return super.state;
-  }
-}
 
 export type IdentityDirectoryLoadState =
   | { readonly kind: IdentityDirectoryLoadKind.Loading }
@@ -171,21 +133,6 @@ export class IdentityDirectoryReader {
     }
   }
 }
-
-export class IdentityDirectoryPresentation {
-  constructor(private readonly directory: IdentityDirectoryView) {}
-  selectedIdentity(): SelectedIdentityEntry {
-    const directory = this.directory;
-    if (directory.selection.kind === IdentityDirectorySelectionKind.Empty)
-      return { kind: IdentityDirectorySelectionKind.Empty };
-    for (const identity of directory.identities) {
-      if (identity.identityId === directory.selection.identityId)
-        return { kind: IdentityDirectorySelectionKind.Selected, identity };
-    }
-    return { kind: IdentityDirectorySelectionKind.Empty };
-  }
-}
-
 class NativeIdentityMember {
   constructor(private readonly member: NookIdentityMemberSnapshot) {}
   read(): Result<IdentityMemberView, VaultStorageFailure> {

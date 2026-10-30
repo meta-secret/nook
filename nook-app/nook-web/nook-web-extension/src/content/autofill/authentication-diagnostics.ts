@@ -35,7 +35,6 @@ export enum AuthenticationDiagnosticGateOutcome {
   Hidden = 'hidden',
   Missing = 'missing',
   Rendered = 'rendered',
-  Stale = 'stale',
 }
 
 export type AuthenticationDiagnosticObservation = {

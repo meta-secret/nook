@@ -380,6 +380,7 @@ describe('module expert audit', () => {
     );
     const bindingConfigurationPaths = [
       ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
+      'nook-app/nook-web/knip.ts',
       'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
       'nook-app/nook-web/nook-vault-simple/vite.config.ts',
       'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',

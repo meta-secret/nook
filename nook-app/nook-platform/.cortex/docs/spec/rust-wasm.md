@@ -2,7 +2,7 @@
 
 ## 1. Wasm Bindgen Setup
 
-- Use `wasm-bindgen = "0.2.127"` (see workspace
+- Use `wasm-bindgen = "0.2.129"` (see workspace
   `nook-app/nook-platform/Cargo.toml`).
 - Export functions with `#[wasm_bindgen]`. Domain logic stays in `nook-core`; WASM wraps I/O and session state.
 - Keep exported function and method names unchanged. Do not add callable

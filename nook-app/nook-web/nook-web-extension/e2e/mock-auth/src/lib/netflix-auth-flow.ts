@@ -1,5 +1,4 @@
 export const NETFLIX_MOCK_USERNAME = 'alice@nook.test'
-export const NETFLIX_MOCK_PASSWORD = 'extension-fill-password'
 
 export enum NetflixAuthTransitionKind {
   Completed = 'completed',

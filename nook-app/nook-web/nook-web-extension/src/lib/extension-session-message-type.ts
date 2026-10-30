@@ -59,6 +59,8 @@ type ExtraSessionMessageType = Exclude<
   `${ExtensionSessionMessageType}`,
   ExtensionSessionRequest['type']
 >
+/** @public Compile-time contract: a drift between this map and the Rust-generated
+ * request union fails the typecheck; nothing reads the value. */
 export const EXTENSION_SESSION_MESSAGE_TYPE_CONTRACT: [
   MissingGeneratedSessionMessageType,
   ExtraSessionMessageType,

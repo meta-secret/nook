@@ -15,7 +15,6 @@ import {
 } from "./provider-types";
 import {
   bind_google_drive_shared_folder,
-  delete_auth_providers_db,
   default as initNookWasm,
   default_drive_backup_name,
   default_github_repo,
@@ -30,9 +29,6 @@ import {
   provider_default_label_without_detail,
   provider_storage_detail,
   seal_auth_providers_for_device_public_key,
-  wasm_storage_mode_for_provider,
-  NookStoredOAuthFileConfigurationState,
-  NookStoredLocalFolderConfigurationState,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -90,12 +86,10 @@ export type {
 
 export {
   bind_google_drive_shared_folder,
-  delete_auth_providers_db,
   seal_auth_providers_for_device_public_key,
-  wasm_storage_mode_for_provider,
 };
 
-export type { OAuthAccessToken, DuplicateSyncProvider } from "$app-wasm";
+export type { DuplicateSyncProvider } from "$app-wasm";
 export { oauth_access_token, missing_oauth_access_token };
 
 export enum DriveFileIdentityKind {
@@ -104,7 +98,6 @@ export enum DriveFileIdentityKind {
 }
 
 export enum OAuthAccessTokenKind {
-  Missing = "missing",
   Available = "available",
 }
 
@@ -116,12 +109,6 @@ export type DriveStorageReference = {
   readonly identity: DriveFileIdentity;
   readonly fileName: string;
 };
-
-export type VaultProviderMembership = {
-  readonly provider: StorageProvider;
-  readonly storeId: string;
-};
-
 export type OAuthFileDefaults = {
   readonly preset: OAuthFilePreset;
   readonly fileName: string;
@@ -175,16 +162,6 @@ export function unscopedProviderVault(): ProviderVaultScope {
 export function scopedProviderVault(storeId: string): ProviderVaultScope {
   return { state: "storeId", value: storeId };
 }
-
-export function providerBelongsToVault({
-  provider,
-  storeId,
-}: VaultProviderMembership): boolean {
-  return (
-    provider.storeId.state === "unscoped" || provider.storeId.value === storeId
-  );
-}
-
 export function missingGithubPat(): StoredGithubPat {
   return { state: "missing" };
 }
@@ -236,27 +213,9 @@ export function storedOAuthRefreshCredential(
 export function unknownOAuthTokenExpiry(): StoredOAuthTokenExpiry {
   return { state: "unknown" };
 }
-
-export function storedOAuthTokenExpiry(
-  expiresAt: string,
-): StoredOAuthTokenExpiry {
-  return { state: "expiresAt", value: expiresAt };
-}
-
 export function unresolvedOAuthRemoteFileId(): StoredOAuthRemoteFileId {
   return { state: "unresolved" };
 }
-
-export function storedOAuthRemoteFileId(
-  fileId: string,
-): StoredOAuthRemoteFileId {
-  return { state: "fileId", value: fileId };
-}
-
-export function unresolvedOAuthRemoteFileName(): StoredOAuthRemoteFileName {
-  return { state: "unresolved" };
-}
-
 export function storedOAuthRemoteFileName(
   fileName: string,
 ): StoredOAuthRemoteFileName {
@@ -312,11 +271,6 @@ export function configuredLocalFolder(
 ): StoredLocalFolderConfiguration {
   return { state: "configured", config };
 }
-
-export function unnamedLocalFolderDirectory(): StoredLocalFolderDirectory {
-  return { state: "unnamed" };
-}
-
 export function storedLocalFolderDirectory(
   directoryName: string,
 ): StoredLocalFolderDirectory {
@@ -328,11 +282,6 @@ export function localFolderDirectoryValue(
 ): string {
   return directory.state === "directoryName" ? directory.value.trim() : "";
 }
-
-export function unboundLocalFolderHandle(): StoredLocalFolderHandle {
-  return { state: "unbound" };
-}
-
 export function storedLocalFolderHandle(
   handleId: string,
 ): StoredLocalFolderHandle {
@@ -387,8 +336,6 @@ export type LocalFolderHandle =
   | { kind: LocalFolderHandleKind.Unselected }
   | { kind: LocalFolderHandleKind.Selected; handleId: string };
 
-export { NookStoredOAuthFileConfigurationState };
-
 export enum StoredOAuthFileConfigurationDecodeKind {
   NotConfigured = "not-configured",
   Configured = "configured",
@@ -414,8 +361,6 @@ export function decodeStoredOAuthFileConfiguration(
       return { kind: StoredOAuthFileConfigurationDecodeKind.NotConfigured };
   }
 }
-
-export { NookStoredLocalFolderConfigurationState };
 
 export enum StoredLocalFolderConfigurationDecodeKind {
   NotConfigured = "not-configured",

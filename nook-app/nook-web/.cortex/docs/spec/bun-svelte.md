@@ -6,6 +6,21 @@
 - Use their Task or Bun commands instead of npm/yarn.
 - Do not check in `package-lock.json` or `yarn.lock` in Bun-owned packages.
 
+### TypeScript 7
+
+- TypeScript 7 is the compiler. Each package installs it as
+  `@typescript/native` (`npm:typescript@7`), which owns `tsc`.
+- The `typescript` package stays at 6 only as the JavaScript API that
+  typescript-eslint, svelte-check, and Loom load; TypeScript 7 ships no stable
+  JavaScript API. Nothing type-checks with it.
+- `svelte-check --tsgo-experimental-api` hands Svelte type checking to
+  TypeScript 7 through its API, in memory. Each surface keeps its own workspace
+  and tsconfig, and parallel runs share no output folder; `--tsgo` instead
+  writes one `.svelte-check` folder per workspace and checks only Svelte files
+  under the tsconfig's folder, which misses the shared components.
+- svelte-check's TypeScript 7 API client needs Node; under Bun alone it fails
+  to start.
+
 ## 2. Dev Server and Build
 
 - Start Vite dev server: `task web:dev` (Docker; port 5173). It uses the default dev/no-opt WASM mode; `task web:dev:fast` is an explicit alias for the same local-iteration behavior and expects the `nook-web:local` image to already exist, so run `task setup` once first on a fresh machine.
@@ -45,12 +60,12 @@ and `preflight` sources. Unused-code ownership is split as follows:
 
 - **Vault app graph:** Run under `bun run lint` / `task check`.
   - Reject unreachable files and exports.
-  - Keep the production graph pinned to Knip 5.88 until sibling vault and
-    extension packages become a real root workspace.
-  - Enable `classMembers`.
+  - Knip 6 analyzes only files under its own root. The graph therefore runs
+    from `nook-app/nook-web`, whose `package.json` and `knip.json` cover the
+    shared code, Simple, Sentinel, and the extension.
 - **Research graph:** Run its workspace-scoped Knip 6 graph through package
   `bun run check` and the research-only workflow with the correct `$lib` mapping.
-  - Knip 6 removed `classMembers`.
+- **Class members:** Knip 6 removed `classMembers` in both graphs.
   - Use TypeScript and ESLint for unused declarations plus manual caller audit
     for exported class members.
 - **TypeScript and ESLint:** Reject unused locals and parameters in `.ts`,

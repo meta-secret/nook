@@ -53,11 +53,6 @@ type QueryParameterValue =
 
 /** Parse `/app-logs?minLevel=debug&limit=500&offset=0` query parameters. */
 
-type AppLogsUrlRequest = {
-  readonly query: Partial<AppLogsQuery>;
-  readonly basePath: string;
-};
-
 /** Load persisted entries and wrap them in the canonical JSON export envelope. */
 
 export class AppLogsLocation {
@@ -130,18 +125,6 @@ export class AppLogsQueryString {
       return { kind: QueryParameterValueKind.Present, value };
     }
     return { kind: QueryParameterValueKind.Absent };
-  }
-}
-export class AppLogsLocationRequest {
-  constructor(private readonly request: AppLogsUrlRequest) {}
-  get url(): string {
-    const { query, basePath } = this.request;
-    const params = new URLSearchParams();
-    if (query.minLevel) params.set("minLevel", query.minLevel);
-    if ("limit" in query) params.set("limit", String(query.limit));
-    if ("offset" in query) params.set("offset", String(query.offset));
-    const qs = params.toString();
-    return qs ? `${basePath}?${qs}` : basePath;
   }
 }
 export class AppLogsExport {

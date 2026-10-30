@@ -97,13 +97,6 @@ export enum AccessChainStage {
   DeviceKey = "device-key",
   Vaults = "vaults",
 }
-
-export const ACCESS_CHAIN_STAGES: readonly AccessChainStage[] = [
-  AccessChainStage.Unlock,
-  AccessChainStage.DeviceKey,
-  AccessChainStage.Vaults,
-];
-
 export {
   AccessNodeDetailKind,
   type AccessNodeDetail,

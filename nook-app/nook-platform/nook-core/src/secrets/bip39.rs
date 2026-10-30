@@ -111,9 +111,7 @@ impl SeedPhraseSecret {
             return Vec::new();
         }
         Language::English
-            .words_by_prefix(&needle)
-            .iter()
-            .copied()
+            .words_by_prefix_iter(&needle)
             .take(limit)
             .collect()
     }

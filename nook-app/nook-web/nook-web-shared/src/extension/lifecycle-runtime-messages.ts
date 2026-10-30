@@ -30,11 +30,6 @@ function decodeRuntimeMessage<DecodedMessage, WireMessage>(
 export enum DismissAuthSidePanelMessageType {
   NookDismissAuthSidePanel = "nook:dismiss-auth-side-panel",
 }
-
-export type DismissAuthSidePanelMessageWire = {
-  readonly type: DismissAuthSidePanelMessageType.NookDismissAuthSidePanel;
-};
-
 const dismissAuthSidePanelTypeSchema = Schema.Literal(
   DismissAuthSidePanelMessageType.NookDismissAuthSidePanel,
 );

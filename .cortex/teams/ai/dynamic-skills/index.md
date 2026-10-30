@@ -84,7 +84,7 @@ authorities without copying their policies.
 - **[User-facing security abstractions](../../security/dynamic-skills/user-facing-security-abstractions.md)**
   - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced.
 - **[Web unused code](../../web-dev/dynamic-skills/web-unused-code.md)**
-  - Purpose: Map the main web app's Knip 5 class-member analysis and Research Knip 6 caller review to Nook's hosted unused-code checks.
+  - Purpose: Map the Knip 6 graphs and class-member caller review to Nook's hosted unused-code checks.
 - **[Cortex document map](cortex-document-map/SKILL.md)**
   - Purpose: Centralize Nook Cortex navigation across root, controller, team, shared, and nested Delivery Pipeline graphs.
 - **[Testing pyramid and regression](../../../shared/dynamic-skills/testing-pyramid-and-regression.md)**

@@ -17,11 +17,8 @@ import {
 } from './webauthn-message-types'
 
 export {
-  WebsitePasskeyCancelMessageType,
   WebsitePasskeyCeremony,
-  WebsitePasskeyOptionsMessageType,
   WebsitePasskeyOptionsStatus,
-  WebsitePasskeyPerformMessageType,
 } from './webauthn-message-types'
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */

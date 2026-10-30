@@ -70,7 +70,6 @@ import { IdentityControlModel } from "$lib/vault/identity-control.svelte";
 
 export {
   SyncProviderLabelKind,
-  type SyncProviderLabel,
   type VaultEditRestriction,
 } from "$lib/vault/runtime-state.svelte";
 

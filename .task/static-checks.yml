@@ -103,7 +103,9 @@ tasks:
         done
         config="$directory/tsconfig.json"
         if [ "$directory" = nook-web-app ]; then config="$directory/tsconfig.app.json"; fi
-        nook-web-app/node_modules/.bin/svelte-check --workspace "$directory" --tsconfig "${config#*/}" || failed=1
+        # TypeScript 7 checks the Svelte files through its API, in memory, so
+        # the surfaces share no output folder and run in parallel.
+        nook-web-app/node_modules/.bin/svelte-check --tsgo-experimental-api --workspace "$directory" --tsconfig "${config#*/}" || failed=1
         exit "$failed"
 
   static:check:

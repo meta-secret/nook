@@ -12,15 +12,15 @@ import {
   CORTEX_ARTICLE_PATH_LIMIT,
 } from './vocabulary.ts';
 
-// Zod is pinned to 4.4.3: its string .max() reads JavaScript UTF-16 length.
-// Keep this wire contract when changing the validator version.
+// The wire contract bounds strings by JavaScript (UTF-16) length. Zod 4.6's
+// string .max() counts code points, so each bound checks .length itself.
 export const CORTEX_ARTICLE_SAFE_PATH_SCHEMA = z
   .string()
   .regex(/\S/u)
   .regex(
     /^(?!\/)(?!.*\\)(?!.*[\u0000-\u001f\u007f])(?!\.\.?(?:\/|$))(?!.*\/\.\.?(?:\/|$))[^/]+(?:\/[^/]+)*$/su,
   )
-  .max(CORTEX_ARTICLE_PATH_LIMIT);
+  .refine((value) => value.length <= CORTEX_ARTICLE_PATH_LIMIT);
 
 export const CORTEX_ARTICLE_MARKDOWN_PATH_SCHEMA =
   CORTEX_ARTICLE_SAFE_PATH_SCHEMA.regex(
@@ -37,7 +37,9 @@ export const CORTEX_ARTICLE_HEADING_SCHEMA = z.strictObject({
   depth: z.number().int().min(1).max(CORTEX_ARTICLE_HEADING_DEPTH_LIMIT),
   kind: z.literal(CortexArticleSemanticKind.Heading),
   line: CORTEX_ARTICLE_LINE_SCHEMA,
-  text: z.string().max(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT),
+  text: z
+    .string()
+    .refine((value) => value.length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT),
 });
 
 export const CORTEX_ARTICLE_SIMPLE_KIND_SCHEMA = z
@@ -71,7 +73,10 @@ export const CORTEX_ARTICLE_FINDING_SCHEMA = z.strictObject({
   code: z.enum(CortexArticleFindingCode),
   file: CORTEX_ARTICLE_SAFE_PATH_SCHEMA,
   line: CORTEX_ARTICLE_LINE_SCHEMA,
-  message: z.string().regex(/\S/u).max(CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT),
+  message: z
+    .string()
+    .regex(/\S/u)
+    .refine((value) => value.length <= CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT),
 });
 
 export const CORTEX_ARTICLE_RESULT_SCHEMA = z.strictObject({

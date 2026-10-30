@@ -10,8 +10,8 @@ repository.workspace = true
 
 [dev-dependencies]
 anyhow = "1.0.104"
-insta = "1.48.0"
-proptest = "1.7.0"
+insta = "1.49.0"
+proptest = "1.12.0"
 
 [target.'cfg(loom)'.dev-dependencies]
 loom = "0.7.2"

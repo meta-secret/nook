@@ -6,17 +6,17 @@ publish = false
 license = "MIT"
 
 [dependencies]
-proc-macro2 = { version = "1.0.106", features = ["span-locations"] }
+proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.149"
-syn = { version = "3.0.3", features = ["full", "visit"] }
-tree-sitter = "0.26.12"
+serde_json = "1.0.154"
+syn = { version = "3.0.9", features = ["full", "visit"] }
+tree-sitter = "0.27.1"
 tree-sitter-svelte-next = "0.1.1"
 tree-sitter-typescript = "0.23.2"
 
 [dev-dependencies]
 anyhow = "1.0.104"
-ignore = "0.4.33"
+ignore = "0.4.34"
 regex = "1.13.1"
 tempfile = "3.27.0"
 

@@ -57,11 +57,6 @@ export type WebsitePasskeyRequestActivityArgs = {
   requestId: string
   expiresAt: number
 }
-
-export type WebsitePasskeyOperationResponse = Awaited<
-  ReturnType<typeof sessionWebsitePasskeys.handleWebsitePasskeyOperation>
->
-
 type PasskeyCancellationResponse = { readonly ok: true }
 type PasskeyRegistrationResponse = {
   readonly ok: true

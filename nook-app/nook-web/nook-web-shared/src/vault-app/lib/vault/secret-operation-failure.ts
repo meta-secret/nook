@@ -19,7 +19,6 @@ export type SecretOperationFailure =
 export type SecretOperationResult<T> = Result<T, SecretOperationFailure>;
 
 export enum SecretMutationOutcome {
-  Prepared = "prepared",
   Added = "added",
   Deleted = "deleted",
   Replaced = "replaced",

@@ -46,11 +46,4 @@ export const test = base.extend<{ nookAppLogs: void }>({
 })
 
 export { expect }
-export type {
-  Browser,
-  BrowserContext,
-  Locator,
-  Page,
-  Route,
-  TestInfo,
-} from '@playwright/test'
+export type { Browser, BrowserContext, Page } from '@playwright/test'

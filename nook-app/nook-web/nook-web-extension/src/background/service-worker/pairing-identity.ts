@@ -43,11 +43,7 @@ import {
   type ExtensionSessionStorageWrite,
 } from './pairing-identity-storage'
 
-export {
-  type ExtensionSessionStorageItems,
-  type ExtensionSessionStorageValue,
-  type ExtensionSessionStorageWrite,
-} from './pairing-identity-storage'
+export { type ExtensionSessionStorageValue } from './pairing-identity-storage'
 
 export type SessionMessageRequest = [message: ExtensionSessionTransportRequest]
 
@@ -59,11 +55,6 @@ export type DecodedSessionMessageRequest<Response, DecodeFailure> = [
 ]
 
 export { ExtensionSessionStatusAvailability }
-
-export enum HasPairingApprovedTypeResultType {
-  NookExtensionPairingApproved = 'nook:extension-pairing-approved',
-}
-
 export enum WebsitePasskeyRequestContextKind {
   Rejected = 'rejected',
   Validated = 'validated',

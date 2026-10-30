@@ -5,7 +5,6 @@ import { ExtensionSessionMessageType } from '../../lib/extension-session-message
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
   IdentityVaultPairing,
-  IdentityVaultPairingFailure,
   IdentityVaultSourceKind,
   type IdentitySessionSend,
   type IdentityVaultPair,
@@ -23,7 +22,6 @@ export type {
 
 export enum PairingIdentityConnectionFailure {
   JoinFailed = 'identity-join-failed',
-  VaultConnectFailed = IdentityVaultPairingFailure.VaultConnectFailed,
 }
 
 export type PairingIdentityConnectionRequest = {

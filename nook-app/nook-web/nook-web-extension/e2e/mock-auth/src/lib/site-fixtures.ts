@@ -58,15 +58,6 @@ export enum SiteFixtureSource {
   Research = 'research',
 }
 
-export type PopularLoginSite = {
-  id: string
-  name: string
-  family: string
-  loginUrl: string
-  hosts: string[]
-  rank: number
-}
-
 export type ShellTemplate = {
   id: string
   quirks: string[]
@@ -156,39 +147,6 @@ class SiteFixtureCatalogAdmission {
     return {
       quirks: this.decodeStringList(value.quirks),
       steps: this.decodeSteps(value.steps),
-    }
-  }
-
-  decodeSiteFixture(value: unknown): SiteFixture {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      Array.isArray(value) ||
-      !('id' in value) ||
-      typeof value.id !== 'string' ||
-      !('source' in value) ||
-      (value.source !== SiteFixtureSource.Capture &&
-        value.source !== SiteFixtureSource.Research) ||
-      !('loginUrl' in value) ||
-      typeof value.loginUrl !== 'string' ||
-      !('quirks' in value) ||
-      !('steps' in value) ||
-      !('template' in value) ||
-      typeof value.template !== 'string'
-    ) {
-      throw new TypeError('site fixture has an invalid shape')
-    }
-    const steps = this.decodeSteps(value.steps)
-    if (steps.length === 0) {
-      throw new TypeError('site fixture must contain at least one step')
-    }
-    return {
-      id: value.id,
-      source: value.source,
-      loginUrl: value.loginUrl,
-      quirks: this.decodeStringList(value.quirks),
-      steps,
-      template: value.template,
     }
   }
 
@@ -438,10 +396,6 @@ export function getTemplateFixture(templateId: string): SiteFixtureLookup {
       template: templateId,
     },
   }
-}
-
-export function decodeSiteFixture(value: unknown): SiteFixture {
-  return siteFixtureCatalogAdmission.decodeSiteFixture(value)
 }
 
 /** Build static HTML for unit tests (first step, or final step for password shells). */

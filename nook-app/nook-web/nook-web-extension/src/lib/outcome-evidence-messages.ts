@@ -1,11 +1,6 @@
 import { Schema } from 'effect'
 
-import type {
-  AuthenticationOutcomeDecision,
-  AuthenticationOutcomeResponse,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-
-export type { AuthenticationOutcomeResponse }
+import type { AuthenticationOutcomeDecision } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type AuthenticationOutcomeObservationView = {
   navigatedAwayFromAuthPath: boolean

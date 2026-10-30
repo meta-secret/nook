@@ -4,5 +4,3 @@ import { vaultApplicationEntrypoint } from "$vault-shared/main";
 
 configureVaultExtensionConnectScopeRuntime();
 await vaultApplicationEntrypoint.start(VaultApplication.Simple);
-
-export default {};

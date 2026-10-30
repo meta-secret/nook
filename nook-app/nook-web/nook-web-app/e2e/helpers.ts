@@ -1,8 +1,3 @@
-export {
-  cleanupAllRegisteredE2eGithubRepos,
-  cleanupE2eGithubRepo,
-} from './github-repos'
-export { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 export * from './helpers/environment'
 export * from './helpers/vault-setup'
 export * from './helpers/github-sync'
