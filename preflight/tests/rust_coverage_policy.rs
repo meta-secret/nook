@@ -371,7 +371,7 @@ fn native_coverage_leaves_declare_profiles_objects_and_junit() -> anyhow::Result
                 "cp target/llvm-cov-target/{package}-*.profraw /opt/nook/native-test-artifacts/{package}/profiles/"
             ),
             format!(
-                "cp target/llvm-cov-target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/{package}/junit.xml"
+                "cp target/nextest/ci/junit.xml /opt/nook/native-test-artifacts/{package}/junit.xml"
             ),
             format!("cp --parents -t /opt/nook/native-test-artifacts/{package}/objects/"),
         ] {
