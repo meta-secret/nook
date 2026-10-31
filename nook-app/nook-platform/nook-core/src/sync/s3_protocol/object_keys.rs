@@ -32,9 +32,22 @@ impl S3ObjectKey {
     }
 }
 
-/// A key a listing reported. S3 keys are arbitrary text, so every one is a
-/// key; whether it is an event is decided against its namespace.
-impl From<String> for S3ObjectKey {
+/// A key a listing reported. S3 keys are arbitrary text, and a URL parser
+/// may rewrite one holding `.` or `..` segments, so a listed key is only read
+/// back against the layout and never sent in a request: requests address the
+/// [`S3ObjectKey`] the layout builds.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct S3ListedObjectKey(String);
+
+impl S3ListedObjectKey {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        let Self(key) = self;
+        key
+    }
+}
+
+impl From<String> for S3ListedObjectKey {
     fn from(key: String) -> Self {
         Self(key)
     }
@@ -83,7 +96,7 @@ pub struct S3EventAddress<'a> {
 #[derive(Clone, Copy)]
 pub struct S3ListedKey<'a> {
     pub placed: &'a PlacedNamespace,
-    pub key: &'a S3ObjectKey,
+    pub key: &'a S3ListedObjectKey,
 }
 
 /// What a listed key is to the namespace it was listed in.
@@ -97,8 +110,9 @@ pub enum S3ListedEvent {
 /// What a folder below the provider root is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum S3IdentityFolder {
-    /// An identity's folder, as the prefix that lists its namespaces.
-    Identity(S3ListPrefix),
+    /// An identity's folder; [`S3KeyPrefix::identity_namespaces_listing`]
+    /// lists its namespaces.
+    Identity(IdentityId),
     Unrelated,
 }
 
@@ -181,11 +195,18 @@ impl S3KeyPrefix {
             return S3IdentityFolder::Unrelated;
         };
         match IdentityId::parse(identity) {
-            Ok(id) if id.as_str() == identity => {
-                S3IdentityFolder::Identity(S3ListPrefix(folder.as_str().to_owned()))
-            }
+            Ok(id) if id.as_str() == identity => S3IdentityFolder::Identity(id),
             Ok(_) | Err(_) => S3IdentityFolder::Unrelated,
         }
+    }
+
+    /// The prefix that lists the namespaces in one identity's folder.
+    #[must_use]
+    pub fn identity_namespaces_listing(&self, identity: &IdentityId) -> S3ListPrefix {
+        S3ListPrefix(format!(
+            "{}/",
+            self.key_of(&PlacedNamespace::identity_log(identity.clone()).identity_dir())
+        ))
     }
 
     /// Read a folder an identity folder's listing reported: the identity's
@@ -214,7 +235,7 @@ impl S3KeyPrefix {
 mod tests {
     use super::{
         S3CommonPrefix, S3EventAddress, S3IdentityFolder, S3ListedEvent, S3ListedKey,
-        S3ListedNamespace, S3ObjectKey,
+        S3ListedNamespace, S3ListedObjectKey,
     };
     use crate::{EventId, IdentityId, PlacedNamespace, S3KeyPrefix, StoreId};
 
@@ -286,7 +307,7 @@ mod tests {
         let listed = |key: String| {
             team.listed_event(S3ListedKey {
                 placed: &vault,
-                key: &S3ObjectKey::from(key),
+                key: &S3ListedObjectKey::from(key),
             })
         };
         let events = "team/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events";
@@ -324,7 +345,12 @@ mod tests {
         else {
             anyhow::bail!("an identity folder lists its namespaces");
         };
-        assert_eq!(identity.as_str(), "team/meta-secret-nook/idn_abcdefghijk/");
+        assert_eq!(identity, layout.identity);
+        // Its namespaces are listed below a prefix the layout builds again.
+        assert_eq!(
+            team.identity_namespaces_listing(&identity).as_str(),
+            "team/meta-secret-nook/idn_abcdefghijk/"
+        );
         for unrelated in [
             "team/meta-secret-nook/backups/",
             "team/meta-secret-nook/IDN_abcdefghijk/",

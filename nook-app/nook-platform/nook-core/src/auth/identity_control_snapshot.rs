@@ -146,8 +146,14 @@ impl IdentityMountView {
             provider,
             target,
             connected_here: providers.iter().any(|provider| {
-                provider.identity_mount_capability()
-                    == IdentityMountCapability::Mountable(mount.target.clone())
+                match provider.identity_mount_capability() {
+                    IdentityMountCapability::Mountable(target) => {
+                        target.names_same_location(&mount.target)
+                    }
+                    IdentityMountCapability::LocalOnly | IdentityMountCapability::Unconfigured => {
+                        false
+                    }
+                }
             }),
         }
     }
@@ -246,7 +252,7 @@ mod tests {
 
     use super::{IdentityMountProvider, IdentityMountView};
     use crate::{
-        IdentityProviderMount, ProviderMountId, S3ProviderConfig, StorageProviderData,
+        IdentityProviderMount, ProviderMountId, S3ProviderConfig, S3Region, StorageProviderData,
         StorageProviderType, StoredGithubPat, StoredS3Configuration,
     };
 
@@ -267,6 +273,12 @@ mod tests {
         assert_eq!(view.target, "http://127.0.0.1:8333/nook-dev/e2e/run-1");
         assert!(view.connected_here);
         assert!(!IdentityMountView::from_mount(&mount, &[]).connected_here);
+        // A row that signs for the same location in another region connects it.
+        let StoredS3Configuration::Configured(config) = &mut row.s3 else {
+            anyhow::bail!("an S3 row carries its block");
+        };
+        config.region = S3Region::parse("eu-central-1")?;
+        assert!(IdentityMountView::from_mount(&mount, slice::from_ref(&row)).connected_here);
         Ok(())
     }
 }

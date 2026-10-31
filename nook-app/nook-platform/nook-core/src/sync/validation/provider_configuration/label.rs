@@ -15,6 +15,8 @@ pub enum ProviderLabel<'a> {
     OAuth(OAuthProviderLabel<'a>),
     /// `S3 · bucket[/prefix]`, or `S3` before the connection is known.
     S3(&'a StoredS3Configuration),
+    /// `S3 · {location}` from a location label alone, `S3` when it is blank.
+    S3Location(&'a str),
 }
 impl ProviderLabel<'_> {
     #[must_use]
@@ -54,9 +56,13 @@ impl ProviderLabel<'_> {
             }
             Self::S3(configuration) => match configuration {
                 StoredS3Configuration::Configured(config) => {
-                    format!("S3 · {}", config.location_label())
+                    ProviderLabel::S3Location(&config.location_label()).render()
                 }
                 StoredS3Configuration::NotApplicable => "S3".to_owned(),
+            },
+            Self::S3Location(location) => match location.trim() {
+                "" => "S3".to_owned(),
+                location => format!("S3 · {location}"),
             },
         }
     }

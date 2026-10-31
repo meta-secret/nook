@@ -35,7 +35,7 @@ pub use listing::{
 };
 pub use object_keys::{
     S3CommonPrefix, S3EventAddress, S3IdentityFolder, S3ListPrefix, S3ListedEvent, S3ListedKey,
-    S3ListedNamespace, S3ObjectKey,
+    S3ListedNamespace, S3ListedObjectKey, S3ObjectKey,
 };
 pub use request::{
     S3HttpRequest, S3ObjectUpload, S3RequestBody, S3RequestHeader, S3RequestHeaderName,

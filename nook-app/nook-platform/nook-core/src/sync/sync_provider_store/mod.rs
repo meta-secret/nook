@@ -31,8 +31,8 @@ pub use keyring_providers::AppProviderShare;
 mod oauth;
 mod s3;
 pub use s3::{
-    S3ConnectionDraft, S3ProviderConfig, S3SecretAccessKeyInput, StoredS3Configuration,
-    StoredS3SecretAccessKey,
+    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3ProviderConfig,
+    S3SecretAccessKeyInput, StoredS3Configuration, StoredS3SecretAccessKey,
 };
 mod save;
 mod scope;

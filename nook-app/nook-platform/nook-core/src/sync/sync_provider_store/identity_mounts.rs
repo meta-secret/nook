@@ -199,7 +199,7 @@ impl ProviderRows<'_> {
             let known = recorded
                 .iter()
                 .chain(mounts.iter())
-                .any(|mount| mount.target == target);
+                .any(|mount| mount.target.names_same_location(&target));
             if known {
                 continue;
             }
@@ -227,7 +227,7 @@ mod tests {
     use super::*;
     use crate::{
         ActiveVaultScope, LocalFolderConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        S3AccessKeyId, S3ProviderConfig, StoredGithubPat, StoredLocalFolderHandle,
+        S3AccessKeyId, S3ProviderConfig, S3Region, StoredGithubPat, StoredLocalFolderHandle,
     };
 
     struct Row(StorageProviderData);
@@ -468,9 +468,15 @@ mod tests {
             ids(&rows.identity_replication(&identity)),
             vec![("s3-a", EventLogLocation::Identity(identity.clone()))]
         );
-        // Another device's key for the same location is the same mount.
+        // Another device's key and region for the same location is the same
+        // mount: the region only signs requests.
         let recorded = rows.unrecorded_mounts(&[])?;
-        let device_b = vec![Row::s3("s3-b", "device-b")?.0];
+        let mut device_b = Row::s3("s3-b", "device-b")?.0;
+        let StoredS3Configuration::Configured(config) = &mut device_b.s3 else {
+            anyhow::bail!("an S3 row carries its block");
+        };
+        config.region = S3Region::parse("eu-central-1")?;
+        let device_b = vec![device_b];
         assert!(
             ProviderRows {
                 providers: &device_b

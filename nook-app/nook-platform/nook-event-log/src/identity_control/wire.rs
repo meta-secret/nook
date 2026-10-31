@@ -198,6 +198,48 @@ pub enum IdentityMountTarget {
     },
 }
 
+/// What two mount records share when they name the same storage.
+#[derive(PartialEq, Eq)]
+enum MountLocation<'a> {
+    /// Every other target is its location as a whole.
+    Whole(&'a IdentityMountTarget),
+    /// An S3 location; the region only signs requests, so it is not part of it.
+    S3 {
+        endpoint: &'a str,
+        bucket: &'a str,
+        key_prefix: &'a str,
+    },
+}
+
+impl IdentityMountTarget {
+    fn location(&self) -> MountLocation<'_> {
+        match self {
+            Self::S3 {
+                endpoint,
+                region: _,
+                bucket,
+                key_prefix,
+            } => MountLocation::S3 {
+                endpoint,
+                bucket,
+                key_prefix,
+            },
+            Self::Github { .. }
+            | Self::GoogleDrive { .. }
+            | Self::ICloud { .. }
+            | Self::LocalFolder { .. } => MountLocation::Whole(self),
+        }
+    }
+
+    /// Whether two records name the same storage: an S3 location by its
+    /// endpoint, bucket, and key prefix, whatever region each signs with;
+    /// every other target as a whole.
+    #[must_use]
+    pub fn names_same_location(&self, other: &Self) -> bool {
+        self.location() == other.location()
+    }
+}
+
 /// One sync-provider mount owned by an identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

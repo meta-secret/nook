@@ -351,6 +351,12 @@ mod tests {
             ProviderLabel::S3(&StoredS3Configuration::Configured(config)).render(),
             "S3 · nook-dev"
         );
+        // A location label alone renders the same way.
+        assert_eq!(
+            ProviderLabel::S3Location(" nook-dev/team ").render(),
+            "S3 · nook-dev/team"
+        );
+        assert_eq!(ProviderLabel::S3Location(" ").render(), "S3");
         Ok(())
     }
 

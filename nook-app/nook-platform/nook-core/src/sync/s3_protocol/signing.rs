@@ -48,13 +48,6 @@ pub enum S3SigningError {
 pub struct S3UnixSeconds(u64);
 
 impl From<u64> for S3UnixSeconds {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: the browser clock reading crosses the host boundary as a number"
-        )
-    )]
     fn from(seconds: u64) -> Self {
         Self(seconds)
     }

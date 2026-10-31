@@ -8,9 +8,9 @@
 //! - A missing object (`404 NoSuchKey`) is absent, not a failure.
 //! - A create-only write that finds its key taken (`412`) is settled the way
 //!   the local-folder provider settles an existing event file.
-//! - A refused key (`403 AccessDenied`, `InvalidAccessKeyId`, or
-//!   `SignatureDoesNotMatch`) is one typed "this key has no access to the vault
-//!   folder" failure.
+//! - Every `403`, whatever its code or body, is one typed "this key has no
+//!   access to the vault folder" failure: a refused, unknown, or mis-signed
+//!   key alike.
 //! - Anything else keeps only its provider failure category and status. An
 //!   error body is read for its code only: its message can name keys, so it is
 //!   never kept.
@@ -29,13 +29,6 @@ use crate::{EventId, EventStorageBytes, ProviderFailureCause};
 pub struct S3HttpStatus(u16);
 
 impl From<u16> for S3HttpStatus {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: the transport reports the HTTP status as a number"
-        )
-    )]
     fn from(status: u16) -> Self {
         Self(status)
     }
@@ -97,8 +90,8 @@ pub enum S3ObjectDeletion {
 /// Why a request failed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum S3RequestFailure {
-    /// The server refused this key: unknown, wrong secret, or without access
-    /// to the bucket and prefix.
+    /// Any `403`: the server refused this key, did not know it, rejected its
+    /// signature, or gave it no access to the bucket and prefix.
     #[error("{}", i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED)]
     KeyAccessDenied,
     /// Any other failure, as its loggable category and status.
@@ -138,8 +131,6 @@ impl S3RequestFailure {
 
 /// The error codes an answer is classified by.
 enum S3ErrorCode {
-    /// `AccessDenied`, `InvalidAccessKeyId`, or `SignatureDoesNotMatch`.
-    KeyRefused,
     NoSuchKey,
     /// Any other code, or a body without one.
     Unclassified,
@@ -162,7 +153,6 @@ impl S3ErrorCode {
             return Self::Unclassified;
         };
         match error.code.as_str() {
-            "AccessDenied" | "InvalidAccessKeyId" | "SignatureDoesNotMatch" => Self::KeyRefused,
             "NoSuchKey" => Self::NoSuchKey,
             _ => Self::Unclassified,
         }
@@ -204,23 +194,19 @@ impl S3HttpStatus {
 }
 
 impl S3Response {
-    /// A `403` that refuses the key is the key's failure; every other failure
-    /// keeps the category of its status.
+    /// Every `403` is the key's failure, whatever its body says; every other
+    /// failure keeps the category of its status.
     fn failure(&self) -> S3RequestFailure {
         let status = self.status;
-        let by_status = S3RequestFailure::Provider {
-            cause: status.cause(),
-            status,
-        };
         match status.class() {
-            StatusClass::Forbidden => match S3ErrorCode::of(&self.body) {
-                S3ErrorCode::KeyRefused => S3RequestFailure::KeyAccessDenied,
-                S3ErrorCode::NoSuchKey | S3ErrorCode::Unclassified => by_status,
-            },
+            StatusClass::Forbidden => S3RequestFailure::KeyAccessDenied,
             StatusClass::Success
             | StatusClass::NotFound
             | StatusClass::PreconditionFailed
-            | StatusClass::Failure => by_status,
+            | StatusClass::Failure => S3RequestFailure::Provider {
+                cause: status.cause(),
+                status,
+            },
         }
     }
 
@@ -228,7 +214,7 @@ impl S3Response {
     fn absent_or_failure<T>(&self, absent: T) -> Result<T, S3RequestFailure> {
         match S3ErrorCode::of(&self.body) {
             S3ErrorCode::NoSuchKey => Ok(absent),
-            S3ErrorCode::KeyRefused | S3ErrorCode::Unclassified => Err(self.failure()),
+            S3ErrorCode::Unclassified => Err(self.failure()),
         }
     }
 
@@ -381,11 +367,16 @@ mod tests {
     }
 
     #[test]
-    fn every_refusal_of_the_key_is_one_access_failure() {
+    fn every_403_is_one_access_failure_whatever_its_body() {
+        // A refused, unknown, or mis-signed key, a skewed clock, a code Nook
+        // does not know, and a body without one are all the key's failure.
         for code in [
             "AccessDenied",
             "InvalidAccessKeyId",
             "SignatureDoesNotMatch",
+            "RequestTimeTooSkewed",
+            "SomethingNew",
+            "",
         ] {
             let refused = Answer { status: 403, code };
             assert_eq!(
@@ -405,15 +396,13 @@ mod tests {
                 Err(S3RequestFailure::KeyAccessDenied)
             );
         }
-        // A skewed clock is refused too, but it is not this key's fault.
+        let unreadable = S3Response {
+            status: S3HttpStatus::from(403),
+            body: S3ResponseBody::from(vec![0xff, 0xfe, 0x00]),
+        };
         assert_eq!(
-            Answer {
-                status: 403,
-                code: "RequestTimeTooSkewed",
-            }
-            .response()
-            .into_object_read(),
-            Err(provider(ProviderFailureCause::Forbidden, 403))
+            unreadable.into_listing(),
+            Err(S3RequestFailure::KeyAccessDenied)
         );
         assert_eq!(
             S3RequestFailure::KeyAccessDenied.to_string(),

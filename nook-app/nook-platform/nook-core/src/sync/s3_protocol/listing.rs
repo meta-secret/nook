@@ -8,7 +8,7 @@
 use quick_xml::de;
 use serde::Deserialize;
 
-use super::{S3CommonPrefix, S3ListPrefix, S3ObjectKey, S3RequestFailure};
+use super::{S3CommonPrefix, S3ListPrefix, S3ListedObjectKey, S3RequestFailure};
 
 /// Whether a listing stops at the first `/` below its prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,7 +104,7 @@ pub enum S3ListingContinuation {
 /// One page of a `ListObjectsV2` answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct S3ObjectListing {
-    pub keys: Vec<S3ObjectKey>,
+    pub keys: Vec<S3ListedObjectKey>,
     pub folders: Vec<S3CommonPrefix>,
     pub continuation: S3ListingContinuation,
 }
@@ -174,7 +174,7 @@ impl S3ObjectListing {
             keys: page
                 .contents
                 .into_iter()
-                .map(|object| S3ObjectKey::from(object.key))
+                .map(|object| S3ListedObjectKey::from(object.key))
                 .collect(),
             folders: page
                 .common_prefixes
@@ -192,7 +192,7 @@ mod tests {
         S3ContinuationToken, S3ListDepth, S3ListObjects, S3ListPage, S3ListPageSize,
         S3ListPageSizeOutOfRange, S3ListingContinuation, S3ObjectListing,
     };
-    use crate::{S3CommonPrefix, S3KeyPrefix, S3ObjectKey, S3RequestFailure};
+    use crate::{S3CommonPrefix, S3KeyPrefix, S3ListedObjectKey, S3RequestFailure};
 
     /// A delimited page of an identity folder, with the `&#34;` quote escapes
     /// Go-based S3 servers write into `ETag`.
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(
             page.keys
                 .iter()
-                .map(S3ObjectKey::as_str)
+                .map(S3ListedObjectKey::as_str)
                 .collect::<Vec<_>>(),
             vec!["e2e-run-1/meta-secret-nook/idn_abcdefghijk/identity.yaml"]
         );

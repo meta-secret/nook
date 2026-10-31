@@ -133,6 +133,73 @@ pub struct S3ProviderConfig {
     pub secret_access_key: StoredS3SecretAccessKey,
 }
 
+/// One field of the S3 setup form.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum S3DraftField {
+    Endpoint,
+    Region,
+    Bucket,
+    KeyPrefix,
+    AccessKeyId,
+    SecretAccessKey,
+}
+
+/// A field the form must correct, and the translation key saying why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct S3DraftFieldError {
+    pub field: S3DraftField,
+    pub error_key: String,
+}
+
+/// What validating the whole form found.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum S3DraftValidation {
+    /// Every field is valid: the block a new S3 row is saved with, and the
+    /// source that reads the location before it is saved.
+    Valid { configuration: S3ProviderConfig },
+    /// Every wrong field once, in form order.
+    Invalid { fields: Vec<S3DraftFieldError> },
+}
+
+impl S3DraftField {
+    /// This field's error, when its value does not parse.
+    fn errors<T>(self, parsed: ValidationResult<T>) -> Vec<S3DraftFieldError> {
+        match parsed {
+            Ok(_) => Vec::new(),
+            Err(error) => vec![S3DraftFieldError {
+                field: self,
+                error_key: error.to_string(),
+            }],
+        }
+    }
+}
+
+impl S3ConnectionDraft {
+    /// Validate every field, so the form can mark each wrong one at once.
+    #[must_use]
+    pub fn validate(self) -> S3DraftValidation {
+        let S3SecretAccessKeyInput(secret) = &self.secret_access_key;
+        let fields = [
+            S3DraftField::Endpoint.errors(S3Endpoint::parse(&self.endpoint)),
+            S3DraftField::Region.errors(S3Region::parse(&self.region)),
+            S3DraftField::Bucket.errors(S3BucketName::parse(&self.bucket)),
+            S3DraftField::KeyPrefix.errors(S3KeyPrefix::parse(&self.key_prefix)),
+            S3DraftField::AccessKeyId.errors(S3AccessKeyId::parse(&self.access_key_id)),
+            S3DraftField::SecretAccessKey.errors(S3SecretAccessKey::parse(secret)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        match S3ProviderConfig::try_from(self) {
+            Ok(configuration) => S3DraftValidation::Valid { configuration },
+            Err(_) => S3DraftValidation::Invalid { fields },
+        }
+    }
+}
+
 /// Validate the form in its field order, so the first wrong field is the
 /// one reported.
 impl TryFrom<S3ConnectionDraft> for S3ProviderConfig {
@@ -262,8 +329,8 @@ impl StoredS3Configuration {
 #[cfg(test)]
 mod tests {
     use super::{
-        S3ConnectionDraft, S3ProviderConfig, S3SecretAccessKeyInput, StoredS3Configuration,
-        StoredS3SecretAccessKey,
+        S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3ProviderConfig,
+        S3SecretAccessKeyInput, StoredS3Configuration, StoredS3SecretAccessKey,
     };
     use crate::errors::ValidationError;
     use crate::{IdentityMountTarget, S3_CONNECT_TARGET_V1_PREFIX, S3ConnectSlots, S3Connection};
@@ -288,6 +355,69 @@ mod tests {
         pub(crate) fn fixture() -> anyhow::Result<Self> {
             Ok(Self::try_from(S3ConnectionDraft::fixture())?)
         }
+    }
+
+    #[test]
+    fn a_draft_reports_every_wrong_field_once_in_form_order() -> anyhow::Result<()> {
+        let valid = S3ConnectionDraft::fixture().validate();
+        assert_eq!(
+            valid,
+            S3DraftValidation::Valid {
+                configuration: S3ProviderConfig::fixture()?
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&valid)?.get("state"),
+            Some(&json!("valid"))
+        );
+        let invalid = S3ConnectionDraft {
+            endpoint: "http://s3.example.com".to_owned(),
+            region: String::new(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix: "team/../other".to_owned(),
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: S3SecretAccessKeyInput::from(String::new()),
+        }
+        .validate();
+        let field = |field, error: ValidationError| S3DraftFieldError {
+            field,
+            error_key: error.to_string(),
+        };
+        assert_eq!(
+            invalid,
+            S3DraftValidation::Invalid {
+                fields: vec![
+                    field(S3DraftField::Endpoint, ValidationError::S3EndpointInsecure),
+                    field(S3DraftField::Region, ValidationError::S3RegionRequired),
+                    field(S3DraftField::KeyPrefix, ValidationError::S3KeyPrefixInvalid),
+                    field(
+                        S3DraftField::SecretAccessKey,
+                        ValidationError::S3SecretAccessKeyRequired
+                    ),
+                ]
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&invalid)?,
+            json!({
+                "state": "invalid",
+                "fields": [
+                    { "field": "endpoint", "errorKey": ValidationError::S3EndpointInsecure.to_string() },
+                    { "field": "region", "errorKey": ValidationError::S3RegionRequired.to_string() },
+                    { "field": "keyPrefix", "errorKey": ValidationError::S3KeyPrefixInvalid.to_string() },
+                    {
+                        "field": "secretAccessKey",
+                        "errorKey": ValidationError::S3SecretAccessKeyRequired.to_string()
+                    },
+                ]
+            })
+        );
+        // A wrong field never echoes the secret typed beside it.
+        let mut wrong_bucket = S3ConnectionDraft::fixture();
+        wrong_bucket.bucket = "Bad_Bucket".to_owned();
+        let report = serde_json::to_string(&wrong_bucket.validate())?;
+        assert!(!report.contains(SECRET), "{report}");
+        Ok(())
     }
 
     #[test]

@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn reads_and_deletes_address_the_object_without_a_body() -> anyhow::Result<()> {
         let fixture = Fixture::new("http://[::1]:9000")?;
-        let key = S3ObjectKey::from("e2e/run-1/a b/é.yaml".to_owned());
+        let key = fixture.event_key()?;
         let read = fixture.signer().get_object(&key)?;
         let delete = fixture.signer().delete_object(&key)?;
         assert_eq!(read.method, S3HttpMethod::Get);
@@ -500,7 +500,10 @@ mod tests {
         for request in [&read, &delete] {
             assert_eq!(
                 request.url.as_str(),
-                "http://[::1]:9000/nook-dev/e2e/run-1/a%20b/%C3%A9.yaml"
+                format!(
+                    "http://[::1]:9000/nook-dev/e2e/run-1/meta-secret-nook/idn_abcdefghijk/\
+                     store_abcdefghijk/events/{DIGEST}.yaml"
+                )
             );
             assert_eq!(request.body, S3RequestBody::Empty);
             assert_eq!(

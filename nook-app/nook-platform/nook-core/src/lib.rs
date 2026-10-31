@@ -382,10 +382,10 @@ pub use s3_protocol::{
     S3CommonPrefix, S3ContinuationToken, S3EventAddress, S3ExistingEvent, S3HttpMethod,
     S3HttpRequest, S3HttpStatus, S3IdentityFolder, S3ListDepth, S3ListObjects, S3ListPage,
     S3ListPageSize, S3ListPageSizeOutOfRange, S3ListPrefix, S3ListedEvent, S3ListedKey,
-    S3ListedNamespace, S3ListingContinuation, S3ObjectDeletion, S3ObjectKey, S3ObjectListing,
-    S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestBody, S3RequestFailure, S3RequestHeader,
-    S3RequestHeaderName, S3RequestSigner, S3RequestTime, S3RequestUrl, S3Response, S3ResponseBody,
-    S3SigningError, S3UnixSeconds,
+    S3ListedNamespace, S3ListedObjectKey, S3ListingContinuation, S3ObjectDeletion, S3ObjectKey,
+    S3ObjectListing, S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestBody, S3RequestFailure,
+    S3RequestHeader, S3RequestHeaderName, S3RequestSigner, S3RequestTime, S3RequestUrl, S3Response,
+    S3ResponseBody, S3SigningError, S3UnixSeconds,
 };
 pub use secrets::SecretRecordFilter;
 pub use session::{
@@ -422,8 +422,8 @@ pub use sync_provider_store::{
 };
 pub use sync_provider_store::{
     EnrollmentS3ConfigurationError, EnrollmentS3ConfigurationRequest, S3ConnectionDraft,
-    S3ProviderConfig, S3SecretAccessKeyInput, StagedS3Connection, StoredS3Configuration,
-    StoredS3SecretAccessKey,
+    S3DraftField, S3DraftFieldError, S3DraftValidation, S3ProviderConfig, S3SecretAccessKeyInput,
+    StagedS3Connection, StoredS3Configuration, StoredS3SecretAccessKey,
 };
 pub use validation::{
     ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
