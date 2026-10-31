@@ -29,6 +29,11 @@ mod wire;
 pub use identity_mounts::{DeviceJoinReach, IdentityMountCapability, ProviderReplicationTarget};
 pub use keyring_providers::AppProviderShare;
 mod oauth;
+mod s3;
+pub use s3::{
+    S3ConnectionDraft, S3ProviderConfig, S3SecretAccessKeyInput, StoredS3Configuration,
+    StoredS3SecretAccessKey,
+};
 mod save;
 mod scope;
 mod selection;
@@ -37,7 +42,8 @@ pub use selection::{
 };
 mod staged_connection;
 pub use staged_connection::{
-    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
+    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedS3Connection,
+    StagedStorageConnection,
 };
 mod state;
 mod storage_args;
@@ -204,6 +210,9 @@ pub struct StorageProvider {
     pub github_repo: StoredGithubRepository,
     pub oauth_file: StoredOAuthFileConfiguration,
     pub local_folder: StoredLocalFolderConfiguration,
+    /// Required on every row: `{ "state": "notApplicable" }` unless the row
+    /// is an S3 provider. Its secret access key is sealed at rest.
+    pub s3: StoredS3Configuration,
     pub store_id: ProviderVaultScope,
     #[serde(default)]
     pub sync_checkpoint: ProviderSyncCheckpoint,
@@ -221,6 +230,7 @@ impl StorageProvider {
             github_repo: StoredGithubRepository::Repository(repo.to_owned()),
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
@@ -261,10 +271,39 @@ mod tests {
             github_repo: StoredGithubRepository::Repository(repo.to_owned()),
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
+    }
+
+    #[test]
+    fn every_row_carries_its_s3_block_and_an_s3_row_round_trips() -> anyhow::Result<()> {
+        let mut value = serde_json::to_value(github_provider("github", "owner/repo", "pat"))?;
+        assert_eq!(
+            value.get("s3"),
+            Some(&serde_json::json!({ "state": "notApplicable" }))
+        );
+        // No migration fills a missing block in: such a row is not this shape.
+        value
+            .as_object_mut()
+            .ok_or_else(|| io::Error::other("provider must serialize as an object"))?
+            .remove("s3");
+        assert!(serde_json::from_value::<StorageProviderData>(value).is_err());
+
+        let mut row = github_provider("s3", "", "");
+        row.provider_type = StorageProviderType::S3;
+        row.github_pat = StoredGithubPat::Missing;
+        row.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        let wire = serde_json::to_value(&row)?;
+        assert_eq!(wire.get("type"), Some(&serde_json::json!("s3")));
+        assert_eq!(
+            wire.pointer("/s3/config/bucket"),
+            Some(&serde_json::json!("nook-dev"))
+        );
+        assert_eq!(serde_json::from_value::<StorageProviderData>(wire)?, row);
+        Ok(())
     }
 
     #[test]

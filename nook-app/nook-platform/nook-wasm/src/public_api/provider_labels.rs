@@ -3,6 +3,7 @@ use nook_core::DriveBackupName;
 use nook_core::{
     OAuthProviderLabel, OauthFilePreset, ProviderLabel, ProviderOauthPreset, StorageProviderType,
     StoredGithubRepository, StoredLocalFolderDirectory, StoredOAuthRemoteFileName,
+    StoredS3Configuration,
 };
 use wasm_bindgen::JsError;
 
@@ -86,6 +87,10 @@ pub fn provider_default_label(
             file_name: &StoredOAuthRemoteFileName::FileName(detail.to_owned()),
         })
         .render(),
+        // S3 rows take their label from their saved connection.
+        StorageProviderType::S3 => {
+            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render()
+        }
     })
 }
 
@@ -120,6 +125,10 @@ pub fn provider_default_label_without_detail(
             file_name: &StoredOAuthRemoteFileName::Unresolved,
         })
         .render(),
+        // S3 rows take their label from their saved connection.
+        StorageProviderType::S3 => {
+            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render()
+        }
     })
 }
 
@@ -148,6 +157,10 @@ pub fn staged_local_provider_label(
             file_name: &StoredOAuthRemoteFileName::Unresolved,
         })
         .render(),
+        // S3 rows take their label from their saved connection.
+        StorageProviderType::S3 => {
+            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render()
+        }
     })
 }
 

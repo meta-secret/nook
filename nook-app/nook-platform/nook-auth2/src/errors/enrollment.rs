@@ -42,6 +42,9 @@ pub enum EnrollmentError {
     #[error("OAuth file provider in enrollment code is malformed.")]
     MalformedOauthFileProvider,
 
+    #[error("S3 provider in enrollment code is malformed.")]
+    MalformedS3Provider,
+
     #[error("Shared provider grant in enrollment code is malformed.")]
     MalformedSharedProviderGrant,
 

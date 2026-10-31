@@ -2,11 +2,46 @@
 use crate::{
     DRIVE_SHARED_FOLDER_REF_PREFIX, EnrollmentProvider, EnrollmentProviderDataRef,
     OAuthAccountIdentity, OAuthFileConfigData, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, OauthFilePreset, PersonalEnrollmentProviderData, StoredGoogleDriveFolder,
-    StoredICloudShareTarget, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, ValidationError,
+    OAuthTokenExpiry, OauthFilePreset, PersonalEnrollmentProviderData, S3ConnectionDraft,
+    S3ProviderConfig, S3SecretAccessKeyInput, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRefreshCredential,
+    StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, ValidationError,
 };
+
+#[derive(Debug, thiserror::Error)]
+pub enum EnrollmentS3ConfigurationError {
+    #[error("Enrollment provider does not carry a personal S3 connection.")]
+    NotPersonalS3,
+    #[error(transparent)]
+    Invalid(#[from] ValidationError),
+}
+
+/// The joiner's side of an S3 invite: the inviter's connection, validated
+/// again field by field through the setup form's rules, as the S3 block of
+/// the joiner's new provider row. Saving that row seals its secret.
+pub struct EnrollmentS3ConfigurationRequest<'a> {
+    pub provider: &'a EnrollmentProvider,
+}
+
+impl EnrollmentS3ConfigurationRequest<'_> {
+    pub fn project(self) -> Result<S3ProviderConfig, EnrollmentS3ConfigurationError> {
+        let EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::S3(connection)) =
+            self.provider.data()
+        else {
+            return Err(EnrollmentS3ConfigurationError::NotPersonalS3);
+        };
+        Ok(S3ProviderConfig::try_from(S3ConnectionDraft {
+            endpoint: connection.endpoint.clone(),
+            region: connection.region.clone(),
+            bucket: connection.bucket.clone(),
+            key_prefix: connection.key_prefix.clone(),
+            access_key_id: connection.access_key_id.clone(),
+            secret_access_key: S3SecretAccessKeyInput::from(
+                connection.secret_access_key.expose().to_owned(),
+            ),
+        })?)
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum EnrollmentOAuthConfigurationError {
@@ -91,7 +126,136 @@ impl EnrollmentOAuthConfigurationRequest<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PersonalEnrollmentProvider;
+    use crate::{
+        CheckedEnrollmentEnvelope, EnrollmentAudience, EnrollmentIdentityTarget, EnrollmentInvite,
+        EnrollmentIssuance, EnrollmentIssueInput, EnrollmentProviderSecret, IdentityId,
+        IdentityInviteId, InviteSigningSeed, OnboardingType, PersonalEnrollmentProvider,
+        ProviderEnrollmentRequest, ReplicationType, S3EnrollmentConnection,
+        SharedEnrollmentAudience, StorageProviderData, StorageProviderType, StoredGithubPat,
+        StoredS3Configuration, StoredS3SecretAccessKey, VaultArchitecture,
+    };
+
+    const S3_SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
+
+    fn s3_row(config: S3ProviderConfig) -> StorageProviderData {
+        let mut row = StorageProviderData::github("s3", "S3 · nook-dev", "", "", "now");
+        row.provider_type = StorageProviderType::S3;
+        row.github_pat = StoredGithubPat::Missing;
+        row.s3 = StoredS3Configuration::Configured(config);
+        row
+    }
+
+    fn issue(provider: EnrollmentProvider) -> anyhow::Result<String> {
+        let input = EnrollmentIssueInput {
+            provider,
+            identity: EnrollmentIdentityTarget {
+                identity_id: IdentityId::generate()?,
+                label: "Team keyring".to_owned(),
+            },
+            invite: EnrollmentInvite {
+                invite_id: IdentityInviteId::parse("inv_abcdefghijk")?,
+                signing_seed: InviteSigningSeed::generate()?,
+                vaults: Vec::new(),
+            },
+            entry_id: "entry-s3".to_owned(),
+            issued_at: "2026-10-31T12:00:00Z".to_owned(),
+        };
+        Ok(EnrollmentIssuance {
+            input: &input,
+            password: "invite passphrase",
+            entry_label: "Laptop",
+        }
+        .check()?
+        .issue()?)
+    }
+
+    #[test]
+    fn an_s3_invite_hands_the_joiner_the_inviters_connection_and_key() -> anyhow::Result<()> {
+        let config = S3ProviderConfig::fixture()?;
+        let row = s3_row(config.clone());
+        let provider = ProviderEnrollmentRequest {
+            provider: &row,
+            architecture: &VaultArchitecture::default(),
+            audience: EnrollmentAudience::Personal,
+        }
+        .build()?;
+        assert_eq!(
+            OnboardingType::from_enrollment(&provider),
+            OnboardingType::PersonalCredentialTransfer
+        );
+
+        let code = issue(provider)?;
+        assert!(!code.contains(S3_SECRET));
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite passphrase")?;
+        let joined = EnrollmentS3ConfigurationRequest {
+            provider: &decrypted.provider,
+        }
+        .project()?;
+        assert_eq!(joined, config);
+        assert_eq!(joined.connect_args()?, config.connect_args()?);
+        Ok(())
+    }
+
+    #[test]
+    fn s3_invites_need_a_personal_vault_and_an_opened_valid_connection() -> anyhow::Result<()> {
+        let config = S3ProviderConfig::fixture()?;
+        let shared = VaultArchitecture {
+            replication_type: ReplicationType::Shared,
+            ..VaultArchitecture::default()
+        };
+        assert!(matches!(
+            ProviderEnrollmentRequest {
+                provider: &s3_row(config.clone()),
+                architecture: &shared,
+                audience: EnrollmentAudience::Shared(SharedEnrollmentAudience {
+                    joiner_identity: "joiner@example.com",
+                }),
+            }
+            .build(),
+            Err(ValidationError::UnsupportedProviderReplication { .. })
+        ));
+        let mut sealed = config;
+        sealed.secret_access_key = StoredS3SecretAccessKey::transitioned(
+            "-----BEGIN AGE ENCRYPTED FILE-----\nYWdl\n-----END AGE ENCRYPTED FILE-----".to_owned(),
+        );
+        assert_eq!(
+            ProviderEnrollmentRequest {
+                provider: &s3_row(sealed),
+                architecture: &VaultArchitecture::default(),
+                audience: EnrollmentAudience::Personal,
+            }
+            .build(),
+            Err(ValidationError::S3SecretAccessKeyInvalid)
+        );
+
+        // A decrypted code whose connection fails validation adds no provider.
+        let tampered =
+            EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(S3EnrollmentConnection {
+                endpoint: "http://s3.example.com".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: String::new(),
+                access_key_id: "device-a".to_owned(),
+                secret_access_key: EnrollmentProviderSecret::from(S3_SECRET.to_owned()),
+            }));
+        assert!(matches!(
+            EnrollmentS3ConfigurationRequest {
+                provider: &tampered
+            }
+            .project(),
+            Err(EnrollmentS3ConfigurationError::Invalid(
+                ValidationError::S3EndpointInsecure
+            ))
+        ));
+        assert!(matches!(
+            EnrollmentS3ConfigurationRequest {
+                provider: &EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
+            }
+            .project(),
+            Err(EnrollmentS3ConfigurationError::NotPersonalS3)
+        ));
+        Ok(())
+    }
 
     fn project(
         preset: &str,

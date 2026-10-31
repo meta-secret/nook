@@ -13,8 +13,14 @@ use super::{
 };
 
 mod github;
+mod s3;
 
 pub use github::*;
+pub use s3::{
+    S3_CONNECT_TARGET_V1_PREFIX, S3AccessKeyId, S3BucketName, S3ConnectReference, S3ConnectSlots,
+    S3Connection, S3Credentials, S3Endpoint, S3EndpointScheme, S3HostHeader, S3KeyPrefix,
+    S3KeyPrefixPath, S3Location, S3Region, S3SecretAccessKey, S3StorageIdentity,
+};
 
 /// Validated Google Drive app-data vault file name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -229,6 +235,7 @@ impl StorageProviderType {
         match self {
             Self::Local | Self::LocalFolder => StorageMode::Local,
             Self::Github => StorageMode::Github,
+            Self::S3 => StorageMode::S3,
             Self::OauthFile => match match oauth_preset {
                 ProviderOauthPreset::NotApplicable => OauthFilePreset::GoogleDrive,
                 ProviderOauthPreset::Preset(preset) => preset,
@@ -254,10 +261,10 @@ mod tests {
     use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
     use super::*;
     use crate::{
-        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        S3ProviderConfig, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
         StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
         StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-        SyncProviderTarget,
+        StoredS3Configuration, SyncProviderTarget,
     };
 
     #[test]
@@ -328,6 +335,25 @@ mod tests {
             "Local backup"
         );
     }
+    #[test]
+    fn s3_labels_name_the_bucket_and_prefix_they_keep_objects_in() -> anyhow::Result<()> {
+        assert_eq!(
+            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render(),
+            "S3"
+        );
+        let mut config = S3ProviderConfig::fixture()?;
+        assert_eq!(
+            ProviderLabel::S3(&StoredS3Configuration::Configured(config.clone())).render(),
+            "S3 · nook-dev/e2e/run-1"
+        );
+        config.key_prefix = S3KeyPrefix::BucketRoot;
+        assert_eq!(
+            ProviderLabel::S3(&StoredS3Configuration::Configured(config)).render(),
+            "S3 · nook-dev"
+        );
+        Ok(())
+    }
+
     #[test]
     fn provider_credentials_are_classified_by_their_owning_provider() {
         assert_eq!(

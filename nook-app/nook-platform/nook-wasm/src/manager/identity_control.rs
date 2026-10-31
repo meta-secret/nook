@@ -327,7 +327,7 @@ mod browser_tests {
         ActiveVaultScope, CheckedEnrollmentEnvelope, EnrollmentInvite, ProviderSyncCheckpoint,
         ProviderVaultScope, SigningIdentity, StorageProviderData, StorageProviderType,
         StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-        StoredOAuthFileConfiguration,
+        StoredOAuthFileConfiguration, StoredS3Configuration,
     };
     use wasm_bindgen_test::*;
 
@@ -421,6 +421,7 @@ mod browser_tests {
                 github_repo: StoredGithubRepository::Repository("owner/personal".to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-10-13T00:00:00Z".to_owned(),

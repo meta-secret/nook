@@ -16,6 +16,11 @@ use crate::{DriveBackupName, ProviderOauthPreset};
 
 /// Positional connect arguments expected by the current wasm manager boundary:
 /// storage mode, credential/token, and remote reference/repo.
+///
+/// An S3 connection crosses as `mode = "s3"`, its secret access key as the
+/// credential (`pat`), and the `s3-target-v1:` reference naming the endpoint,
+/// region, bucket, key prefix, and access key id as `repo`; see
+/// [`crate::S3Connection::from_connect_slots`].
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 pub struct StorageConnectArgs {
     pub mode: String,
@@ -86,6 +91,7 @@ impl StorageProviderData {
             }
             StorageProviderType::Github => self.github_connection_args(),
             StorageProviderType::OauthFile => self.oauth_file_connection_args()?,
+            StorageProviderType::S3 => self.s3.connect_args()?,
         };
         Ok(args)
     }
@@ -193,7 +199,7 @@ mod tests {
         SharedJoinerIdentityKind, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
         StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
         StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredS3Configuration,
     };
 
     use super::StorageConnectArgs;
@@ -226,6 +232,7 @@ mod tests {
                 github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -245,6 +252,7 @@ mod tests {
                     ),
                     handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
                 }),
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -270,6 +278,7 @@ mod tests {
                     ..OAuthFileConfigData::default()
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -318,6 +327,24 @@ mod tests {
         assert_eq!(
             (StorageProviderData::local_folder_provider("folder", "handle-1")).connection_args()?,
             StorageConnectArgs::local()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_row_connects_with_its_secret_and_versioned_reference() -> anyhow::Result<()> {
+        let config = crate::S3ProviderConfig::fixture()?;
+        let mut row = StorageProviderData::github_provider("s3", "", "");
+        row.provider_type = StorageProviderType::S3;
+        row.github_pat = StoredGithubPat::Missing;
+        row.s3 = StoredS3Configuration::Configured(config.clone());
+        assert_eq!(row.connection_args()?, config.connect_args()?);
+        assert!(row.validate_replication(ReplicationType::Personal).is_ok());
+        assert!(!row.supports_replication(ReplicationType::Shared));
+        row.s3 = StoredS3Configuration::NotApplicable;
+        assert_eq!(
+            row.connection_args(),
+            Err(ValidationError::S3StorageTargetInvalid)
         );
         Ok(())
     }

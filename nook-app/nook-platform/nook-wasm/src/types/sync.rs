@@ -69,6 +69,7 @@ impl NookEnrollmentProvider {
                     PersonalEnrollmentProviderData::OauthFile { .. } => {
                         StorageProviderType::OauthFile
                     }
+                    PersonalEnrollmentProviderData::S3(_) => StorageProviderType::S3,
                 },
                 EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
             }

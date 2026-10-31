@@ -93,9 +93,9 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, EventId, IdentityControlMember, IdentityId, IdentityMemberKeys,
-        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, SigningIdentity,
-        StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, S3ProviderConfig,
+        SigningIdentity, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, StoredS3Configuration,
     };
 
     fn row(id: &str, provider_type: StorageProviderType, pat: &str) -> StorageProviderData {
@@ -107,6 +107,7 @@ mod tests {
             github_repo: StoredGithubRepository::Repository("owner/nook".to_owned()),
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-10-29T00:00:00Z".to_owned(),
@@ -203,6 +204,35 @@ mod tests {
                 .open_credentials(&extension)
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_row_reaches_the_other_app_with_its_secret_sealed_to_that_app() -> anyhow::Result<()> {
+        let web = DeviceIdentity::generate()?;
+        let extension = DeviceIdentity::generate()?;
+        let state = keyring(&[&web, &extension])?;
+        let mut s3 = row("s3", StorageProviderType::S3, "");
+        s3.github_pat = StoredGithubPat::Missing;
+        s3.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        let providers = snapshot(vec![
+            row("local", StorageProviderType::Local, ""),
+            s3.clone(),
+        ]);
+
+        let shares = providers
+            .shares_for_keyring_apps(&state, web.app_id())
+            .map_err(ProviderCredentialRejection::into_cause)?;
+
+        let [share] = shares.as_slice() else {
+            anyhow::bail!("the extension gets exactly one share");
+        };
+        assert_eq!(ids(&share.providers), vec!["s3"]);
+        assert_ne!(share.providers, vec![s3.clone()]);
+        let opened = snapshot(share.providers.clone())
+            .open_credentials(&extension)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        assert_eq!(opened.providers, vec![s3]);
         Ok(())
     }
 

@@ -1,5 +1,6 @@
 //! Device-key sealing for sync-provider credential fields inside a persisted
-//! snapshot (`githubPat`, OAuth `accessToken` / `refreshToken`).
+//! snapshot (`githubPat`, OAuth `accessToken` / `refreshToken`, and the S3
+//! `secretAccessKey`).
 
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
@@ -13,8 +14,12 @@ use crate::{
     errors::{MultiDeviceError, MultiDeviceResult},
 };
 use crate::{OAuthFileConfigData, StorageProviderData, StoredOAuthFileConfiguration};
+use crate::{S3ProviderConfig, StoredS3Configuration, StoredS3SecretAccessKey};
 use std::mem;
 use zeroize::{Zeroize, Zeroizing};
+
+mod storage_admission;
+pub use storage_admission::{ProviderCredentialEncoding, ProviderCredentialStorageAdmission};
 
 /// Marker substring present in every age-armored credential ciphertext.
 pub const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
@@ -29,17 +34,7 @@ impl ProviderCredentialRejection {
     #[must_use]
     pub fn into_cause(mut self) -> MultiDeviceError {
         for provider in &mut self.snapshot.providers {
-            if let StoredGithubPat::Token(value) = &mut provider.github_pat {
-                value.zeroize();
-            }
-            if let StoredOAuthFileConfiguration::Configured(oauth) = &mut provider.oauth_file {
-                if let StoredOAuthAccessCredential::AccessToken(value) = &mut oauth.access_token {
-                    value.zeroize();
-                }
-                if let StoredOAuthRefreshCredential::Token(value) = &mut oauth.refresh_token {
-                    value.zeroize();
-                }
-            }
+            provider.zeroize_credentials();
         }
         self.cause
     }
@@ -68,6 +63,12 @@ impl PreparedProviderCredentials {
             {
                 return ProviderCredentialOpening::Opened;
             }
+        }
+        if let StoredS3Configuration::Configured(s3) = &provider.s3
+            && let ProviderCredentialOpening::Opened =
+                self.s3_secret.opening_evidence(s3.secret_access_key.text())
+        {
+            return ProviderCredentialOpening::Opened;
         }
         ProviderCredentialOpening::Unchanged
     }
@@ -116,6 +117,7 @@ struct PreparedProviderCredentials {
     github: PreparedCredentialProjection,
     access: PreparedCredentialProjection,
     refresh: PreparedCredentialProjection,
+    s3_secret: PreparedCredentialProjection,
 }
 impl CredentialTransition<'_> {
     fn project(&self, provider: &StorageProviderData) -> MultiDeviceResult<StorageProviderData> {
@@ -155,6 +157,21 @@ impl CredentialTransition<'_> {
                 })
             }
         };
+        let s3 = match &provider.s3 {
+            StoredS3Configuration::NotApplicable => StoredS3Configuration::NotApplicable,
+            StoredS3Configuration::Configured(config) => {
+                StoredS3Configuration::Configured(S3ProviderConfig {
+                    endpoint: config.endpoint.clone(),
+                    region: config.region.clone(),
+                    bucket: config.bucket.clone(),
+                    key_prefix: config.key_prefix.clone(),
+                    access_key_id: config.access_key_id.clone(),
+                    secret_access_key: StoredS3SecretAccessKey::transitioned(
+                        self.project_field(config.secret_access_key.text())?,
+                    ),
+                })
+            }
+        };
         Ok(StorageProviderData {
             id: provider.id.clone(),
             provider_type: provider.provider_type,
@@ -163,6 +180,7 @@ impl CredentialTransition<'_> {
             github_repo: provider.github_repo.clone(),
             oauth_file,
             local_folder: provider.local_folder.clone(),
+            s3,
             store_id: provider.store_id.clone(),
             sync_checkpoint: provider.sync_checkpoint.clone(),
             created_at: provider.created_at.clone(),
@@ -204,10 +222,17 @@ impl CredentialTransition<'_> {
                 PreparedCredentialProjection::Unchanged,
             ),
         };
+        let s3_secret = match &provider.s3 {
+            StoredS3Configuration::NotApplicable => PreparedCredentialProjection::Unchanged,
+            StoredS3Configuration::Configured(config) => {
+                self.field(config.secret_access_key.text())?
+            }
+        };
         Ok(PreparedProviderCredentials {
             github,
             access,
             refresh,
+            s3_secret,
         })
     }
     fn field(&self, value: &str) -> MultiDeviceResult<PreparedCredentialProjection> {
@@ -310,6 +335,13 @@ impl AuthProvidersSnapshotData {
                     mem::swap(value, &mut replacement);
                 }
             }
+            if let StoredS3Configuration::Configured(config) = &mut provider.s3
+                && let PreparedCredentialProjection::Transformed(mut replacement) =
+                    prepared.s3_secret
+            {
+                config.secret_access_key =
+                    StoredS3SecretAccessKey::transitioned(mem::take(&mut *replacement));
+            }
         }
         Ok(self)
     }
@@ -318,16 +350,8 @@ impl AuthProvidersSnapshotData {
     /// retaining the decrypted plaintext.
     pub fn authenticate_credentials_for(&self, identity: &DeviceIdentity) -> MultiDeviceResult<()> {
         for provider in &self.providers {
-            if let StoredGithubPat::Token(token) = &provider.github_pat {
-                ProviderCredentialField::authenticate(token, identity)?;
-            }
-            if let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file {
-                if let StoredOAuthAccessCredential::AccessToken(token) = &oauth.access_token {
-                    ProviderCredentialField::authenticate(token, identity)?;
-                }
-                if let StoredOAuthRefreshCredential::Token(token) = &oauth.refresh_token {
-                    ProviderCredentialField::authenticate(token, identity)?;
-                }
+            for text in provider.credential_texts() {
+                ProviderCredentialField::authenticate(text, identity)?;
             }
         }
         Ok(())
@@ -339,57 +363,27 @@ impl AuthProvidersSnapshotData {
     }
 }
 
-/// Observe whether every field is empty or contains the armor marker.
-/// This does not validate the armored bytes, recipient, or authentication.
-///
-/// Used by extension pairing to persist website-sealed provider grants without
-/// requiring an unlocked device session in the offscreen document.
-impl AuthProvidersSnapshotData {
-    #[must_use]
-    pub fn credential_storage_admission(&self) -> ProviderCredentialStorageAdmission {
-        let compatible = self.providers.iter().all(|provider| {
-            provider.credential_storage_admission()
-                == ProviderCredentialStorageAdmission::MarkerCompatible
-        });
-        if compatible {
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        } else {
-            ProviderCredentialStorageAdmission::PlaintextPresent
-        }
-    }
-}
-
 impl StorageProviderData {
-    /// Admit only absent or age-armored provider credentials for extension storage.
-    #[must_use]
-    pub fn credential_storage_admission(&self) -> ProviderCredentialStorageAdmission {
-        let github = match &self.github_pat {
-            StoredGithubPat::Missing => true,
-            StoredGithubPat::Token(token) => ProviderCredentialField::allows_storage(token),
-        };
-        let oauth = match &self.oauth_file {
-            StoredOAuthFileConfiguration::NotApplicable => true,
-            StoredOAuthFileConfiguration::Configured(oauth) => {
-                let access = match &oauth.access_token {
-                    StoredOAuthAccessCredential::SignedOut => true,
-                    StoredOAuthAccessCredential::AccessToken(token) => {
-                        ProviderCredentialField::allows_storage(token)
-                    }
-                };
-                let refresh = match &oauth.refresh_token {
-                    StoredOAuthRefreshCredential::NotIssued => true,
-                    StoredOAuthRefreshCredential::Token(token) => {
-                        ProviderCredentialField::allows_storage(token)
-                    }
-                };
-                access && refresh
-            }
-        };
-        if github && oauth {
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        } else {
-            ProviderCredentialStorageAdmission::PlaintextPresent
+    /// Every stored credential text of this row, in field order: the GitHub
+    /// token, the OAuth access and refresh tokens, and the S3 secret access
+    /// key. These are the fields sealing protects at rest.
+    fn credential_texts(&self) -> Vec<&str> {
+        let mut texts = Vec::new();
+        if let StoredGithubPat::Token(token) = &self.github_pat {
+            texts.push(token.as_str());
         }
+        if let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file {
+            if let StoredOAuthAccessCredential::AccessToken(token) = &oauth.access_token {
+                texts.push(token.as_str());
+            }
+            if let StoredOAuthRefreshCredential::Token(token) = &oauth.refresh_token {
+                texts.push(token.as_str());
+            }
+        }
+        if let StoredS3Configuration::Configured(config) = &self.s3 {
+            texts.push(config.secret_access_key.text());
+        }
+        texts
     }
 
     /// Clear every credential allocation owned by this provider row.
@@ -405,35 +399,12 @@ impl StorageProviderData {
                 token.zeroize();
             }
         }
-    }
-}
-
-/// Marker compatibility is a storage admission check, not ciphertext validity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProviderCredentialStorageAdmission {
-    MarkerCompatible,
-    PlaintextPresent,
-}
-
-/// A lexical credential observation, not ciphertext validation or authorization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProviderCredentialEncoding {
-    Empty,
-    ArmorMarked,
-    Plaintext,
-}
-impl ProviderCredentialEncoding {
-    #[must_use]
-    pub fn observe(value: &str) -> Self {
-        if value.is_empty() {
-            Self::Empty
-        } else if value.contains(AGE_ARMOR_MARKER) {
-            Self::ArmorMarked
-        } else {
-            Self::Plaintext
+        if let StoredS3Configuration::Configured(config) = &mut self.s3 {
+            config.secret_access_key.zeroize();
         }
     }
 }
+
 struct ProviderCredentialField;
 impl ProviderCredentialField {
     fn authenticate(value: &str, identity: &DeviceIdentity) -> MultiDeviceResult<()> {
@@ -467,12 +438,12 @@ mod tests {
 
     use super::{
         AGE_ARMOR_MARKER, AuthProvidersSnapshotData, MultiDeviceError, MultiDeviceResult,
-        ProviderCredentialEncoding, ProviderCredentialField, ProviderCredentialOpening,
-        ProviderCredentialRejection, ProviderCredentialStorageAdmission,
+        ProviderCredentialField, ProviderCredentialOpening, ProviderCredentialRejection,
+        ProviderCredentialStorageAdmission,
     };
     use crate::{
-        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
-        StorageProviderType,
+        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, S3ProviderConfig,
+        StorageProviderData, StorageProviderType, StoredS3Configuration,
     };
 
     enum ExpectedCredentialFailure {
@@ -544,6 +515,7 @@ mod tests {
                         ),
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    s3: StoredS3Configuration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -772,76 +744,102 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn presealed_check_accepts_sealed_or_empty_credentials() -> anyhow::Result<()> {
-        let identity = DeviceIdentity::generate()?;
-        let mut snapshot = AuthProvidersSnapshotData::github_snapshot("github_pat_11PRESEAL");
-        assert_ne!(
-            snapshot.credential_storage_admission(),
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        );
-        snapshot = snapshot
-            .seal_credentials(&identity)
-            .map_err(super::ProviderCredentialRejection::into_cause)?;
-        assert_eq!(
-            snapshot.credential_storage_admission(),
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        );
-        assert_eq!(
-            (AuthProvidersSnapshotData {
-                providers: Vec::new(),
-                active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
+    impl AuthProvidersSnapshotData {
+        fn s3_snapshot() -> anyhow::Result<AuthProvidersSnapshotData> {
+            let mut row = StorageProviderData::github("s3-1", "S3 · nook-dev", "", "", "now");
+            row.provider_type = StorageProviderType::S3;
+            row.github_pat = StoredGithubPat::Missing;
+            row.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+            Ok(AuthProvidersSnapshotData {
+                providers: vec![row],
+                active_vault_store_id: ActiveVaultScope::Unselected,
             })
-            .credential_storage_admission(),
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn marker_observation_does_not_validate_ciphertext() -> anyhow::Result<()> {
-        let identity = DeviceIdentity::generate()?;
-        let malformed = format!("prefix {AGE_ARMOR_MARKER} malformed suffix");
-        let mut snapshot = AuthProvidersSnapshotData::github_snapshot(&malformed);
-        assert_eq!(
-            ProviderCredentialEncoding::observe(&malformed),
-            ProviderCredentialEncoding::ArmorMarked
-        );
-        assert_eq!(
-            snapshot.credential_storage_admission(),
-            ProviderCredentialStorageAdmission::MarkerCompatible
-        );
-        let original = snapshot.clone();
-        snapshot = snapshot
-            .seal_credentials(&identity)
-            .map_err(super::ProviderCredentialRejection::into_cause)?;
-        assert_eq!(snapshot, original);
-        snapshot = snapshot
-            .seal_credentials_for(&identity.public_key())
-            .map_err(super::ProviderCredentialRejection::into_cause)?;
-        assert_eq!(snapshot, original);
-        snapshot = ExpectedCredentialFailure::AnyError
-            .verify_open(snapshot.open_credentials(&identity))?;
-        assert_eq!(snapshot, original);
-        Ok(())
-    }
-
-    #[test]
-    fn credential_observation_preserves_empty_and_case_distinctions() {
-        for (value, expected) in [
-            ("", ProviderCredentialEncoding::Empty),
-            (" ", ProviderCredentialEncoding::Plaintext),
-            (
-                "begin age encrypted file",
-                ProviderCredentialEncoding::Plaintext,
-            ),
-            (
-                "xBEGIN AGE ENCRYPTED FILEy",
-                ProviderCredentialEncoding::ArmorMarked,
-            ),
-        ] {
-            assert_eq!(ProviderCredentialEncoding::observe(value), expected);
         }
+
+        fn s3_secret_text(&self) -> anyhow::Result<String> {
+            match self.providers.first().map(|provider| &provider.s3) {
+                Some(StoredS3Configuration::Configured(config)) => {
+                    Ok(config.secret_access_key.text().to_owned())
+                }
+                Some(StoredS3Configuration::NotApplicable) | None => {
+                    anyhow::bail!("the S3 fixture row must be configured")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn seal_and_open_the_s3_secret_beside_its_readable_location() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let snapshot = AuthProvidersSnapshotData::s3_snapshot()?;
+        let plaintext = snapshot.s3_secret_text()?;
+        let sealed = snapshot
+            .clone()
+            .seal_credentials(&identity)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        let stored = sealed.s3_secret_text()?;
+        assert!(ProviderCredentialField::has_armor_marker(&stored));
+        assert!(!stored.contains(&plaintext));
+        // Only the secret is sealed: the location and key id stay readable.
+        let wire = serde_json::to_string(&sealed)?;
+        assert!(wire.contains("nook-dev") && wire.contains("device-a"));
+        assert!(!wire.contains(&plaintext));
+        assert_eq!(
+            sealed.credential_opening_evidence(&identity)?,
+            ProviderCredentialOpening::Opened
+        );
+        let resealed = sealed
+            .clone()
+            .seal_credentials(&identity)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        assert_eq!(resealed, sealed);
+        let opened = sealed
+            .open_credentials(&identity)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        assert_eq!(opened, snapshot);
+        Ok(())
+    }
+
+    #[test]
+    fn open_rejects_a_plaintext_s3_secret_and_keeps_the_row() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let snapshot = AuthProvidersSnapshotData::s3_snapshot()?;
+        let kept = ExpectedCredentialFailure::Unsealed
+            .verify_open(snapshot.clone().open_credentials(&identity))?;
+        assert_eq!(kept, snapshot);
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_secret_staged_for_another_app_opens_only_there() -> anyhow::Result<()> {
+        let website = DeviceIdentity::generate()?;
+        let extension = DeviceIdentity::generate()?;
+        let snapshot = AuthProvidersSnapshotData::s3_snapshot()?;
+        let staged = snapshot
+            .clone()
+            .seal_credentials_for(&extension.public_key())
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        staged.authenticate_credentials_for(&extension)?;
+        ExpectedCredentialFailure::AnyError
+            .verify(staged.authenticate_credentials_for(&website))?;
+        let rejected = ExpectedCredentialFailure::AnyError
+            .verify_open(staged.clone().open_credentials(&website))?;
+        assert_eq!(rejected, staged);
+        let opened = staged
+            .open_credentials(&extension)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        assert_eq!(opened, snapshot);
+        Ok(())
+    }
+
+    #[test]
+    fn zeroizing_a_row_wipes_its_s3_secret() -> anyhow::Result<()> {
+        let mut snapshot = AuthProvidersSnapshotData::s3_snapshot()?;
+        for provider in &mut snapshot.providers {
+            provider.zeroize_credentials();
+        }
+        assert_eq!(snapshot.s3_secret_text()?, "");
+        Ok(())
     }
 
     #[test]

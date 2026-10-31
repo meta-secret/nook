@@ -65,6 +65,24 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AuthorizedAccountOwner
             | ValidationError::GoogleDriveVaultFolderAmbiguous
             | ValidationError::JoinerAccountMismatch
+            | ValidationError::S3EndpointRequired
+            | ValidationError::S3EndpointInvalid
+            | ValidationError::S3EndpointInsecure
+            | ValidationError::S3EndpointNotOrigin
+            | ValidationError::S3RegionRequired
+            | ValidationError::S3RegionInvalid
+            | ValidationError::S3BucketRequired
+            | ValidationError::S3BucketLength
+            | ValidationError::S3BucketChars
+            | ValidationError::S3BucketInvalid
+            | ValidationError::S3KeyPrefixLength
+            | ValidationError::S3KeyPrefixChars
+            | ValidationError::S3KeyPrefixInvalid
+            | ValidationError::S3AccessKeyIdRequired
+            | ValidationError::S3AccessKeyIdInvalid
+            | ValidationError::S3SecretAccessKeyRequired
+            | ValidationError::S3SecretAccessKeyInvalid
+            | ValidationError::S3StorageTargetInvalid
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }
             | ValidationError::UnknownVaultType { .. }

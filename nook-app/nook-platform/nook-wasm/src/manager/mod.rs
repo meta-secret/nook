@@ -527,6 +527,10 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = StorageMode::parse(storage_mode)?;
+        // Refused before any state changes while S3 requests are unwired.
+        if let StorageMode::S3 = mode {
+            return Self::s3_storage_unwired();
+        }
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
@@ -586,6 +590,7 @@ impl NookVaultManager {
                 self.storage.icloud_event_target = PreparedICloudShare::Share(target);
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
             }
+            StorageMode::S3 => return Self::s3_storage_unwired(),
         }
 
         if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
@@ -646,12 +651,24 @@ impl NookVaultManager {
                     VaultSnapshotLookup::NotStored => String::new(),
                 }
             }
-            StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => {
+            StorageMode::Github
+            | StorageMode::GoogleDrive
+            | StorageMode::ICloud
+            | StorageMode::S3 => {
                 *remote_content_missing = true;
                 String::new()
             }
         };
         Ok(content)
+    }
+
+    /// S3 requests are not wired into the manager yet. Until they are, every
+    /// S3 operation fails closed with the typed unknown-storage-mode error.
+    pub(in crate::manager) fn s3_storage_unwired<T>() -> Result<T, NookError> {
+        Err(nook_core::ValidationError::UnknownStorageMode {
+            mode: StorageMode::S3.as_str().to_owned(),
+        }
+        .into())
     }
 }
 

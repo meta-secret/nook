@@ -14,7 +14,7 @@ use nook_event_log::{
 use super::{
     ProviderRows, StorageProviderData, StoredGithubRepository, StoredGoogleDriveFolder,
     StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
-    StoredOAuthFileConfiguration,
+    StoredOAuthFileConfiguration, StoredS3Configuration,
 };
 use crate::{DEFAULT_GITHUB_REPO_NAME, OAuthFilePreset, StorageProviderType};
 
@@ -49,7 +49,12 @@ impl StorageProviderData {
             IdentityMountCapability::Mountable(IdentityMountTarget::LocalFolder { .. })
             | IdentityMountCapability::LocalOnly
             | IdentityMountCapability::Unconfigured => DeviceJoinReach::ThisDeviceOnly,
-            IdentityMountCapability::Mountable(_) => DeviceJoinReach::OtherDevices,
+            IdentityMountCapability::Mountable(
+                IdentityMountTarget::Github { .. }
+                | IdentityMountTarget::GoogleDrive { .. }
+                | IdentityMountTarget::ICloud { .. }
+                | IdentityMountTarget::S3 { .. },
+            ) => DeviceJoinReach::OtherDevices,
         }
     }
 }
@@ -120,6 +125,13 @@ impl StorageProviderData {
                 StoredOAuthFileConfiguration::NotApplicable => {
                     IdentityMountCapability::Unconfigured
                 }
+            },
+            // Every device of the identity reaches the bucket with its own key.
+            StorageProviderType::S3 => match &self.s3 {
+                StoredS3Configuration::Configured(config) => {
+                    IdentityMountCapability::Mountable(config.mount_target())
+                }
+                StoredS3Configuration::NotApplicable => IdentityMountCapability::Unconfigured,
             },
         }
     }
@@ -215,7 +227,7 @@ mod tests {
     use super::*;
     use crate::{
         ActiveVaultScope, LocalFolderConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        StoredGithubPat, StoredLocalFolderHandle,
+        S3AccessKeyId, S3ProviderConfig, StoredGithubPat, StoredLocalFolderHandle,
     };
 
     struct Row(StorageProviderData);
@@ -230,10 +242,21 @@ mod tests {
                 github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-10-12T00:00:00Z".to_owned(),
             })
+        }
+
+        fn s3(id: &str, access_key_id: &str) -> anyhow::Result<Self> {
+            let mut config = S3ProviderConfig::fixture()?;
+            config.access_key_id = S3AccessKeyId::parse(access_key_id)?;
+            let mut row = Self::github(id, "unused").0;
+            row.provider_type = StorageProviderType::S3;
+            row.github_pat = StoredGithubPat::Missing;
+            row.s3 = StoredS3Configuration::Configured(config);
+            Ok(Self(row))
         }
 
         fn oauth(id: &str, config: OAuthFileConfig) -> Self {
@@ -415,6 +438,55 @@ mod tests {
                 folder_id: "vault-folder".to_owned()
             })
         );
+    }
+
+    #[test]
+    fn an_s3_row_is_an_identity_mount_every_device_reaches_with_its_own_key() -> anyhow::Result<()>
+    {
+        let store_id = StoreId::generate()?;
+        let identity = IdentityId::generate()?;
+        let device_a = Row::s3("s3-a", "device-a")?.0;
+        assert_eq!(device_a.device_join_reach(), DeviceJoinReach::OtherDevices);
+        assert_eq!(
+            device_a.identity_mount_capability(),
+            IdentityMountCapability::Mountable(IdentityMountTarget::S3 {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: "e2e/run-1".to_owned(),
+            })
+        );
+        let providers = vec![Row::local("local", &store_id).0, device_a.clone()];
+        let rows = ProviderRows {
+            providers: &providers,
+        };
+        assert_eq!(
+            ids(&rows.vault_replication(&store_id)),
+            vec![("s3-a", EventLogLocation::Vault(store_id.clone()))]
+        );
+        assert_eq!(
+            ids(&rows.identity_replication(&identity)),
+            vec![("s3-a", EventLogLocation::Identity(identity.clone()))]
+        );
+        // Another device's key for the same location is the same mount.
+        let recorded = rows.unrecorded_mounts(&[])?;
+        let device_b = vec![Row::s3("s3-b", "device-b")?.0];
+        assert!(
+            ProviderRows {
+                providers: &device_b
+            }
+            .unrecorded_mounts(&recorded)?
+            .is_empty()
+        );
+        let unconfigured = StorageProviderData {
+            s3: StoredS3Configuration::NotApplicable,
+            ..device_a
+        };
+        assert_eq!(
+            unconfigured.identity_mount_capability(),
+            IdentityMountCapability::Unconfigured
+        );
+        Ok(())
     }
 
     #[test]

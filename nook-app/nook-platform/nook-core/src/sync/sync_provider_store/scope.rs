@@ -78,7 +78,8 @@ impl AuthProvidersSnapshotData {
                 StorageProviderType::Local => matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if !id.trim().is_empty() && id.trim() != active_store_id),
                 StorageProviderType::Github
                 | StorageProviderType::OauthFile
-                | StorageProviderType::LocalFolder => !incoming_ids.contains(&provider.id.as_str()),
+                | StorageProviderType::LocalFolder
+                | StorageProviderType::S3 => !incoming_ids.contains(&provider.id.as_str()),
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -154,6 +155,7 @@ mod tests {
     use crate::{
         ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, StoredGithubPat,
         StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        StoredS3Configuration,
     };
 
     use crate::StorageProviderType;
@@ -175,6 +177,7 @@ mod tests {
                     github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                     oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    s3: StoredS3Configuration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -329,8 +332,14 @@ mod tests {
         let local = ProviderScopeFixture::local("local", "vault").provider;
         let mut folder = github.clone();
         folder.provider_type = StorageProviderType::LocalFolder;
+        let mut s3 = github.clone();
+        s3.provider_type = StorageProviderType::S3;
         assert_eq!(
             github.event_flush_target("any-vault"),
+            ProviderEventFlushTarget::Remote
+        );
+        assert_eq!(
+            s3.event_flush_target("any-vault"),
             ProviderEventFlushTarget::Remote
         );
         assert_eq!(
@@ -373,9 +382,9 @@ impl StorageProviderData {
                 }
             },
             StorageProviderType::LocalFolder => ProviderEventFlushTarget::LocalOnly,
-            StorageProviderType::Github | StorageProviderType::OauthFile => {
-                ProviderEventFlushTarget::Remote
-            }
+            StorageProviderType::Github
+            | StorageProviderType::OauthFile
+            | StorageProviderType::S3 => ProviderEventFlushTarget::Remote,
         }
     }
 }

@@ -68,12 +68,14 @@ impl AuthProvidersSnapshotData {
     }
 }
 impl StorageProviderData {
+    /// An S3 row is refused: each device brings its own S3 key, and Nook
+    /// copies one only into the extension's sealed staging or an invite code.
     pub(super) fn onboarding_cloud_mount(&self) -> Result<&Self, MultiDeviceError> {
         match self.provider_type {
             StorageProviderType::Github | StorageProviderType::OauthFile => Ok(self),
-            StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                Err(MultiDeviceError::InvalidSentinelGenesisPayload)
-            }
+            StorageProviderType::Local
+            | StorageProviderType::LocalFolder
+            | StorageProviderType::S3 => Err(MultiDeviceError::InvalidSentinelGenesisPayload),
         }
     }
 }
@@ -127,11 +129,18 @@ mod tests {
             anyhow::bail!("onboarding fixture must contain one provider");
         };
         folder_provider.provider_type = StorageProviderType::LocalFolder;
+        // Each device brings its own S3 key; onboarding never hands one over.
+        let mut s3 = fixture.snapshot.clone();
+        let Some(s3_provider) = s3.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        s3_provider.provider_type = StorageProviderType::S3;
         for snapshot in [
             AuthProvidersSnapshotData::default(),
             duplicate,
             local,
             folder,
+            s3,
         ] {
             assert!(matches!(
                 SentinelOnboardingIssuance {

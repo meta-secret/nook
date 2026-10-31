@@ -66,6 +66,7 @@ pub enum IdentityMountProvider {
     #[serde(rename = "icloud")]
     ICloud,
     LocalFolder,
+    S3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -126,6 +127,18 @@ impl IdentityMountView {
             IdentityMountTarget::LocalFolder { directory_name } => {
                 (IdentityMountProvider::LocalFolder, directory_name.clone())
             }
+            IdentityMountTarget::S3 {
+                endpoint,
+                bucket,
+                key_prefix,
+                ..
+            } => (
+                IdentityMountProvider::S3,
+                match key_prefix.as_str() {
+                    "" => format!("{endpoint}/{bucket}"),
+                    prefix => format!("{endpoint}/{bucket}/{prefix}"),
+                },
+            ),
         };
         Self {
             mount_id: mount.mount_id.as_str().to_owned(),
@@ -224,5 +237,36 @@ impl IdentityControlSnapshot {
                 .map(|mount| IdentityMountView::from_mount(mount, providers))
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::slice;
+
+    use super::{IdentityMountProvider, IdentityMountView};
+    use crate::{
+        IdentityProviderMount, ProviderMountId, S3ProviderConfig, StorageProviderData,
+        StorageProviderType, StoredGithubPat, StoredS3Configuration,
+    };
+
+    #[test]
+    fn an_s3_mount_shows_its_location_and_whether_this_app_connects_it() -> anyhow::Result<()> {
+        let config = S3ProviderConfig::fixture()?;
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "S3 · nook-dev/e2e/run-1".to_owned(),
+            target: config.mount_target(),
+        };
+        let mut row = StorageProviderData::github("s3", "S3", "", "", "now");
+        row.provider_type = StorageProviderType::S3;
+        row.github_pat = StoredGithubPat::Missing;
+        row.s3 = StoredS3Configuration::Configured(config);
+        let view = IdentityMountView::from_mount(&mount, slice::from_ref(&row));
+        assert_eq!(view.provider, IdentityMountProvider::S3);
+        assert_eq!(view.target, "http://127.0.0.1:8333/nook-dev/e2e/run-1");
+        assert!(view.connected_here);
+        assert!(!IdentityMountView::from_mount(&mount, &[]).connected_here);
+        Ok(())
     }
 }

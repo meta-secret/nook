@@ -160,6 +160,68 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_JOINER_ACCOUNT_MISMATCH)]
     JoinerAccountMismatch,
 
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_REQUIRED)]
+    S3EndpointRequired,
+
+    /// Not an absolute `http://` or `https://` address with a host.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_INVALID)]
+    S3EndpointInvalid,
+
+    /// Plain `http://` to a host other than `localhost`, `127.0.0.1`, or `[::1]`.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_INSECURE)]
+    S3EndpointInsecure,
+
+    /// A user name, password, path, query, or fragment beside the origin.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ENDPOINT_NOT_ORIGIN)]
+    S3EndpointNotOrigin,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_REGION_REQUIRED)]
+    S3RegionRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_REGION_INVALID)]
+    S3RegionInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_REQUIRED)]
+    S3BucketRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_LENGTH)]
+    S3BucketLength,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_CHARS)]
+    S3BucketChars,
+
+    /// Edge characters, adjacent dots, an IPv4 shape, or a reserved affix.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_BUCKET_INVALID)]
+    S3BucketInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_KEY_PREFIX_LENGTH)]
+    S3KeyPrefixLength,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_KEY_PREFIX_CHARS)]
+    S3KeyPrefixChars,
+
+    /// A leading slash, or an empty, `.`, or `..` segment.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_KEY_PREFIX_INVALID)]
+    S3KeyPrefixInvalid,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED)]
+    S3AccessKeyIdRequired,
+
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID)]
+    S3AccessKeyIdInvalid,
+
+    /// Carries no part of the rejected secret.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED)]
+    S3SecretAccessKeyRequired,
+
+    /// Carries no part of the rejected secret.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_INVALID)]
+    S3SecretAccessKeyInvalid,
+
+    /// The versioned S3 connect reference is missing, unknown, or malformed.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID)]
+    S3StorageTargetInvalid,
+
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,
 

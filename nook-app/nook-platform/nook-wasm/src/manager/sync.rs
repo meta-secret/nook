@@ -94,7 +94,10 @@ impl NookVaultManager {
                 .prepare_storage_preserving_vault_metadata("local", "", "")
                 .await
                 .map_err(|error| JsError::new(&error.to_string())),
-            StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => Ok(()),
+            StorageMode::Github
+            | StorageMode::GoogleDrive
+            | StorageMode::ICloud
+            | StorageMode::S3 => Ok(()),
         };
         match (sync_result, restore_result) {
             (Err(sync_error), _) => Err(sync_error),

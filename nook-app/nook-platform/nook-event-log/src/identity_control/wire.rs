@@ -187,6 +187,15 @@ pub enum IdentityMountTarget {
     LocalFolder {
         directory_name: String,
     },
+    /// An S3-compatible bucket location. Each installation signs with its own
+    /// access key; neither the key id nor its secret enters the log.
+    S3 {
+        endpoint: String,
+        region: String,
+        bucket: String,
+        /// Empty when the objects start at the bucket root.
+        key_prefix: String,
+    },
 }
 
 /// One sync-provider mount owned by an identity.
@@ -651,6 +660,34 @@ mod tests {
                 .union_storage_bytes(&[tampered.into_bytes().into()])
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_mount_records_its_bucket_location_and_no_key() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let founder = fixture.founder();
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "S3 · nook-dev/team".to_owned(),
+            target: IdentityMountTarget::S3 {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: "team".to_owned(),
+            },
+        };
+        let (event, _) = fixture.append(
+            &founder,
+            vec![IdentityControlOperation::ProviderMounted {
+                mount: mount.clone(),
+            }],
+        )?;
+        assert_eq!(fixture.state()?.mounts, vec![mount]);
+        let stored = String::from_utf8(Vec::from(event.serialize_storage_yaml()?))?;
+        assert!(stored.contains("kind: s3"));
+        assert!(stored.contains("key_prefix: team"));
+        assert!(!stored.contains("access_key"));
         Ok(())
     }
 }

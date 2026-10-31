@@ -159,6 +159,7 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(Vec::new()),
+            StorageMode::S3 => Self::s3_storage_unwired(),
         }
     }
 
@@ -246,6 +247,7 @@ impl NookVaultManager {
                 .await?
             }
             StorageMode::Local => Vec::new(),
+            StorageMode::S3 => return Self::s3_storage_unwired(),
         };
         raw_ids
             .into_iter()
@@ -305,6 +307,7 @@ impl NookVaultManager {
                 }
             }
             StorageMode::Local => Ok(RemoteEventRead::Unavailable),
+            StorageMode::S3 => Self::s3_storage_unwired(),
         }
     }
 
@@ -319,6 +322,7 @@ impl NookVaultManager {
             StorageMode::Github => "GitHub",
             StorageMode::GoogleDrive => "Drive",
             StorageMode::ICloud => "CloudKit",
+            StorageMode::S3 => "S3",
         };
         // A malformed event is refused before any network call, placement
         // included.
@@ -360,6 +364,7 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(()),
+            StorageMode::S3 => Self::s3_storage_unwired(),
         }
     }
 
@@ -399,6 +404,7 @@ impl NookVaultManager {
             .await?
                 > 0),
             StorageMode::Local => Ok(false),
+            StorageMode::S3 => Self::s3_storage_unwired(),
         }
     }
 
@@ -434,6 +440,7 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(Vec::new()),
+            StorageMode::S3 => Self::s3_storage_unwired(),
         }
     }
 

@@ -166,8 +166,9 @@ mod tests {
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
         EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
-        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-        PersonalEnrollmentProvider, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+        EnrollmentProviderSecret, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+        OAuthTokenExpiry, PersonalEnrollmentProvider, S3EnrollmentConnection,
+        SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
@@ -366,6 +367,49 @@ mod tests {
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_invite_carries_the_connection_and_key_only_inside_the_ciphertext() -> anyhow::Result<()>
+    {
+        let secret = "TEST-ONLY-device-a-secret-not-real";
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::s3(
+                S3EnrollmentConnection {
+                    endpoint: "http://127.0.0.1:8333".to_owned(),
+                    region: "us-east-1".to_owned(),
+                    bucket: "nook-dev".to_owned(),
+                    key_prefix: "team/vaults".to_owned(),
+                    access_key_id: "device-a".to_owned(),
+                    secret_access_key: EnrollmentProviderSecret::from(secret.to_owned()),
+                },
+            )),
+            identity: EnrollmentIdentityTarget::fixture("S3 keyring"),
+            invite: EnrollmentInvite::fixture()?,
+            entry_id: "entry-s3".to_owned(),
+            issued_at: "2026-10-31T12:00:00Z".to_owned(),
+        };
+        let code = EnrollmentIssuance {
+            input: &input,
+            password: "invite passphrase",
+            entry_label: "",
+        }
+        .check()?
+        .issue()?;
+        let checked = CheckedEnrollmentEnvelope::parse(&code)?;
+        let outer = serde_json::to_string(checked.envelope())?;
+        for clear in [secret, "device-a", "nook-dev", "127.0.0.1"] {
+            assert!(!code.contains(clear));
+            assert!(!outer.contains(clear));
+        }
+        assert!(
+            CheckedEnrollmentEnvelope::parse(&code)?
+                .decrypt("another passphrase")
+                .is_err()
+        );
+        let decrypted = checked.decrypt("invite passphrase")?;
+        assert_eq!(decrypted.provider, input.provider);
         Ok(())
     }
 

@@ -497,6 +497,7 @@ mod tests {
     use nook_core::StorageProviderType;
     use nook_core::StoredGithubPat;
     use nook_core::StoredOAuthAccessCredential;
+    use nook_core::StoredS3Configuration;
     use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -509,6 +510,7 @@ mod tests {
             github_repo: "owner/repo".into(),
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
         };
         assert_eq!(
             active_provider_credentials_projection_state(&Tsify::into_ts(

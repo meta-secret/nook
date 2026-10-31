@@ -9,7 +9,7 @@ use tsify::Tsify;
 
 use super::{
     StorageProviderData, StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName, StoredS3Configuration,
 };
 use crate::{DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, StorageProviderType};
 
@@ -31,6 +31,7 @@ pub struct ActiveProviderCredentialsRequest {
     pub current_github_repo: String,
     pub current_oauth_file: StoredOAuthFileConfiguration,
     pub current_local_folder: StoredLocalFolderConfiguration,
+    pub current_s3: StoredS3Configuration,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -41,6 +42,7 @@ pub struct ActiveProviderCredentialDraft {
     pub github_repo: String,
     pub oauth_file: StoredOAuthFileConfiguration,
     pub local_folder: StoredLocalFolderConfiguration,
+    pub s3: StoredS3Configuration,
 }
 
 impl ActiveProviderCredentialDraft {
@@ -51,6 +53,7 @@ impl ActiveProviderCredentialDraft {
             github_repo: request.current_github_repo.clone(),
             oauth_file: request.current_oauth_file.clone(),
             local_folder: request.current_local_folder.clone(),
+            s3: request.current_s3.clone(),
         }
     }
 }
@@ -107,6 +110,7 @@ impl ActiveProviderCredentialsRequest {
             draft.github_pat.clear();
             draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
             draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+            draft.s3 = StoredS3Configuration::NotApplicable;
             return ActiveProviderCredentialsProjection::Apply(Box::new(draft));
         }
 
@@ -121,6 +125,13 @@ impl ActiveProviderCredentialsRequest {
             if draft.storage_mode != StorageProviderType::LocalFolder {
                 draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
             }
+            draft.s3 = match draft.storage_mode {
+                StorageProviderType::S3 => draft.s3,
+                StorageProviderType::Local
+                | StorageProviderType::LocalFolder
+                | StorageProviderType::Github
+                | StorageProviderType::OauthFile => StoredS3Configuration::NotApplicable,
+            };
             return ActiveProviderCredentialsProjection::Apply(Box::new(draft));
         }
 
@@ -149,11 +160,19 @@ impl ActiveProviderCredentialsRequest {
                     StoredOAuthFileConfiguration::NotApplicable => DEFAULT_DRIVE_BACKUP_NAME,
                 };
                 name.clone_into(&mut draft.github_repo);
+                draft.s3 = StoredS3Configuration::NotApplicable;
             }
             StorageProviderType::LocalFolder => {
                 DEFAULT_GITHUB_REPO_NAME.clone_into(&mut draft.github_repo);
                 draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
                 draft.local_folder = provider.local_folder.clone();
+                draft.s3 = StoredS3Configuration::NotApplicable;
+            }
+            StorageProviderType::S3 => {
+                DEFAULT_GITHUB_REPO_NAME.clone_into(&mut draft.github_repo);
+                draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
+                draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+                draft.s3 = provider.s3.clone();
             }
             StorageProviderType::Local | StorageProviderType::Github => {
                 let repository = match &provider.github_repo {
@@ -165,6 +184,7 @@ impl ActiveProviderCredentialsRequest {
                 repository.clone_into(&mut draft.github_repo);
                 draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
                 draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+                draft.s3 = StoredS3Configuration::NotApplicable;
             }
         }
         ActiveProviderCredentialsProjection::Apply(Box::new(draft))
@@ -176,7 +196,7 @@ mod tests {
     use super::*;
     use crate::{
         LocalFolderConfigData, OAuthFileConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle,
+        S3ProviderConfig, StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle,
         StoredOAuthRemoteFileName,
     };
 
@@ -195,6 +215,7 @@ mod tests {
                 current_local_folder: StoredLocalFolderConfiguration::Configured(
                     LocalFolderConfigData::default(),
                 ),
+                current_s3: StoredS3Configuration::NotApplicable,
             }
         }
     }
@@ -209,6 +230,7 @@ mod tests {
                 github_repo: StoredGithubRepository::Repository(" owner/repo ".to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-08-12T00:00:00Z".to_owned(),
@@ -351,6 +373,48 @@ mod tests {
             projection.oauth_file,
             StoredOAuthFileConfiguration::NotApplicable
         );
+        Ok(())
+    }
+
+    #[test]
+    fn s3_provider_projects_its_block_and_clears_other_credentials() -> anyhow::Result<()> {
+        let config = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        let mut provider =
+            StorageProviderData::credential_projection_fixture(StorageProviderType::S3);
+        provider.github_pat = StoredGithubPat::Missing;
+        provider.s3 = config.clone();
+        let mut request = ActiveProviderCredentialsRequest::fixture();
+        request.sync_providers = vec![provider];
+
+        let projection = request.project().applied().map_err(anyhow::Error::msg)?;
+
+        assert_eq!(projection.storage_mode, StorageProviderType::S3);
+        assert!(projection.github_pat.is_empty());
+        assert_eq!(projection.github_repo, DEFAULT_GITHUB_REPO_NAME);
+        assert_eq!(projection.s3, config);
+        assert_eq!(
+            projection.oauth_file,
+            StoredOAuthFileConfiguration::NotApplicable
+        );
+        assert_eq!(
+            projection.local_folder,
+            StoredLocalFolderConfiguration::NotApplicable
+        );
+
+        // Choosing S3 at login keeps the S3 draft and nothing else; any other
+        // choice drops it.
+        request.sync_providers.clear();
+        request.current_s3 = config.clone();
+        request.login_setup = ActiveProviderLoginSetup::Active(StorageProviderType::S3);
+        let s3_login = request.project().applied().map_err(anyhow::Error::msg)?;
+        assert_eq!(s3_login.s3, config);
+        assert!(s3_login.github_pat.is_empty());
+        request.login_setup = ActiveProviderLoginSetup::Active(StorageProviderType::Github);
+        let github_login = request.project().applied().map_err(anyhow::Error::msg)?;
+        assert_eq!(github_login.s3, StoredS3Configuration::NotApplicable);
+        request.local_vault_present = true;
+        let local = request.project().applied().map_err(anyhow::Error::msg)?;
+        assert_eq!(local.s3, StoredS3Configuration::NotApplicable);
         Ok(())
     }
 

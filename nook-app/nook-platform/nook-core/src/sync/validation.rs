@@ -33,6 +33,8 @@ pub enum StorageMode {
     GoogleDrive,
     /// Shared `CloudKit` record zone (authenticated with `CloudKit` web auth token).
     ICloud,
+    /// S3-compatible bucket (each request signed with this device's own key).
+    S3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +43,8 @@ pub enum ConnectionCredentialValidation {
     Github(GithubPat),
     GoogleDrive,
     ICloud,
+    /// The credential slot holds a well-formed secret access key.
+    S3,
 }
 impl StorageMode {
     /// Canonical short tag used at every cross-language boundary (wasm-bindgen
@@ -52,6 +56,7 @@ impl StorageMode {
             Self::Github => "github",
             Self::GoogleDrive => "google-drive",
             Self::ICloud => "icloud",
+            Self::S3 => "s3",
         }
     }
 
@@ -64,12 +69,16 @@ impl StorageMode {
             "github" => Ok(Self::Github),
             "google-drive" => Ok(Self::GoogleDrive),
             "icloud" => Ok(Self::ICloud),
+            "s3" => Ok(Self::S3),
             other => Err(ValidationError::UnknownStorageMode {
                 mode: other.to_owned(),
             }),
         }
     }
 
+    /// The local cache and outbox key of the prepared provider. For S3 the
+    /// remote reference is the location's [`crate::S3StorageIdentity`],
+    /// which holds no credential.
     #[must_use]
     pub fn cache_ref(self, remote_ref: &str, path: &str) -> String {
         match self {
@@ -77,6 +86,7 @@ impl StorageMode {
             Self::Github => format!("github:{remote_ref}:{path}"),
             Self::GoogleDrive => format!("drive:{remote_ref}"),
             Self::ICloud => format!("icloud:{remote_ref}"),
+            Self::S3 => format!("s3:{remote_ref}"),
         }
     }
 
@@ -95,6 +105,10 @@ impl StorageMode {
             Self::ICloud => {
                 OauthAccessToken::parse(credential)?;
                 Ok(ConnectionCredentialValidation::ICloud)
+            }
+            Self::S3 => {
+                S3SecretAccessKey::parse(credential)?;
+                Ok(ConnectionCredentialValidation::S3)
             }
             Self::Local => Ok(ConnectionCredentialValidation::Local),
         }
@@ -127,6 +141,9 @@ pub enum StorageProviderType {
     LocalFolder,
     Github,
     OauthFile,
+    /// S3-compatible storage: endpoint, region, bucket, optional key prefix,
+    /// and this device's own access key.
+    S3,
 }
 
 impl StorageProviderType {
@@ -137,6 +154,7 @@ impl StorageProviderType {
             Self::LocalFolder => "local-folder",
             Self::Github => "github",
             Self::OauthFile => "oauth-file",
+            Self::S3 => "s3",
         }
     }
 
@@ -146,24 +164,33 @@ impl StorageProviderType {
             "local-folder" => Ok(Self::LocalFolder),
             "github" => Ok(Self::Github),
             "oauth-file" => Ok(Self::OauthFile),
+            "s3" => Ok(Self::S3),
             other => Err(ValidationError::UnknownStorageMode {
                 mode: other.to_owned(),
             }),
         }
     }
 
+    /// Whether a draft can enter the existing-vault import. Only the
+    /// providers configured by a browser step (an OAuth sign-in, a folder
+    /// picker) are gated here; GitHub and S3 drafts are typed into the form
+    /// and validated when their connection is projected.
     #[must_use]
     pub const fn readiness(
         self,
         oauth_file_configured: bool,
         local_folder_configured: bool,
     ) -> ExistingVaultProviderReadiness {
-        if matches!(self, Self::OauthFile) && !oauth_file_configured {
-            ExistingVaultProviderReadiness::MissingOauthFile
-        } else if matches!(self, Self::LocalFolder) && !local_folder_configured {
-            ExistingVaultProviderReadiness::MissingLocalFolder
-        } else {
-            ExistingVaultProviderReadiness::Ready
+        match self {
+            Self::OauthFile if !oauth_file_configured => {
+                ExistingVaultProviderReadiness::MissingOauthFile
+            }
+            Self::LocalFolder if !local_folder_configured => {
+                ExistingVaultProviderReadiness::MissingLocalFolder
+            }
+            Self::Local | Self::LocalFolder | Self::Github | Self::OauthFile | Self::S3 => {
+                ExistingVaultProviderReadiness::Ready
+            }
         }
     }
 }
@@ -321,6 +348,9 @@ pub enum SyncProviderTarget {
     LocalFolder(LocalFolderSyncTarget),
     Github(GithubSyncTarget),
     OauthFile(OauthFileSyncTarget),
+    /// Rows that reach the same S3 objects are one target, whatever key or
+    /// region they sign with.
+    S3(S3Location),
 }
 
 #[cfg(test)]
@@ -351,6 +381,11 @@ mod tests {
             StorageProviderType::LocalFolder.readiness(false, true),
             ExistingVaultProviderReadiness::Ready
         );
+        // An S3 draft is typed into the form, as a GitHub token is.
+        assert_eq!(
+            StorageProviderType::S3.readiness(false, false),
+            ExistingVaultProviderReadiness::Ready
+        );
     }
 
     #[test]
@@ -378,25 +413,61 @@ mod tests {
 
     #[test]
     fn validate_storage_mode_rejects_unknown() -> anyhow::Result<()> {
-        assert!(StorageMode::parse("s3").is_err());
+        assert!(StorageMode::parse("ipfs").is_err());
+        assert!(StorageMode::parse("S3").is_err());
         Ok(())
     }
 
     #[test]
     fn storage_mode_roundtrips_through_string_tag() -> anyhow::Result<()> {
+        for mode in [
+            StorageMode::Local,
+            StorageMode::Github,
+            StorageMode::GoogleDrive,
+            StorageMode::ICloud,
+            StorageMode::S3,
+        ] {
+            assert_eq!(StorageMode::parse(mode.as_str())?, mode);
+        }
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
         assert_eq!(StorageMode::ICloud.as_str(), "icloud");
-        assert_eq!(StorageMode::parse("local")?, StorageMode::Local);
-        assert_eq!(StorageMode::parse("github")?, StorageMode::Github);
-        assert_eq!(
-            StorageMode::parse("google-drive")?,
-            StorageMode::GoogleDrive
-        );
-        assert_eq!(StorageMode::parse("icloud")?, StorageMode::ICloud);
-        assert!(StorageMode::parse("s3").is_err());
+        assert_eq!(StorageMode::S3.as_str(), "s3");
         assert_eq!(format!("{}", StorageMode::Local), "local");
+        Ok(())
+    }
+
+    #[test]
+    fn s3_provider_type_and_mode_share_the_s3_tag() -> anyhow::Result<()> {
+        assert_eq!(StorageProviderType::parse("s3")?, StorageProviderType::S3);
+        assert_eq!(StorageProviderType::S3.as_str(), "s3");
+        assert_eq!(serde_json::to_string(&StorageProviderType::S3)?, "\"s3\"");
+        assert_eq!(
+            StorageProviderType::S3.storage_mode(crate::ProviderOauthPreset::NotApplicable),
+            StorageMode::S3
+        );
+        assert_eq!(
+            StorageMode::S3.cache_ref("http://127.0.0.1:8333/nook-dev", ""),
+            "s3:http://127.0.0.1:8333/nook-dev"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn validate_connect_s3_requires_a_well_formed_secret() -> anyhow::Result<()> {
+        assert_eq!(
+            StorageMode::S3.validate_connect(" TEST-ONLY-device-a-secret-not-real ")?,
+            ConnectionCredentialValidation::S3
+        );
+        assert_eq!(
+            StorageMode::S3.validate_connect(""),
+            Err(ValidationError::S3SecretAccessKeyRequired)
+        );
+        assert_eq!(
+            StorageMode::S3.validate_connect("-----BEGIN AGE ENCRYPTED FILE-----\nYWdl\n"),
+            Err(ValidationError::S3SecretAccessKeyInvalid)
+        );
         Ok(())
     }
 

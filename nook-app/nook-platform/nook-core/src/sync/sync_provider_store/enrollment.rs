@@ -15,7 +15,7 @@ use super::{
     StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry,
+    StoredOAuthTokenExpiry, StoredS3Configuration,
 };
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
@@ -160,7 +160,8 @@ impl StorageProviderData {
             StorageProviderType::OauthFile => ReplicationType::Shared,
             StorageProviderType::Local
             | StorageProviderType::LocalFolder
-            | StorageProviderType::Github => architecture.replication_type,
+            | StorageProviderType::Github
+            | StorageProviderType::S3 => architecture.replication_type,
         };
         self.validate_replication(effective_replication)?;
         Ok(match effective_replication {
@@ -213,6 +214,15 @@ impl CheckedProviderEnrollment<'_> {
                 .as_str()
                 .to_owned(),
             )),
+            // The inviter's connection and key travel like the GitHub token.
+            StorageProviderType::S3 => match &provider.s3 {
+                StoredS3Configuration::Configured(config) => Ok(PersonalEnrollmentProvider::s3(
+                    config.enrollment_connection()?,
+                )),
+                StoredS3Configuration::NotApplicable => {
+                    Err(ValidationError::S3StorageTargetInvalid)
+                }
+            },
             StorageProviderType::OauthFile => {
                 let StoredOAuthFileConfiguration::Configured(oauth) = &provider.oauth_file else {
                     return Err(ValidationError::OauthAccessTokenEmpty);
@@ -339,6 +349,7 @@ mod tests {
         ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
         StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
         StoredOAuthFileConfiguration, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        StoredS3Configuration,
     };
 
     use std::io;
@@ -372,6 +383,7 @@ mod tests {
                     github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                     oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    s3: StoredS3Configuration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -404,6 +416,7 @@ mod tests {
                         ..OAuthFileConfigData::default()
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    s3: StoredS3Configuration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),

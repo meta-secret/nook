@@ -16,7 +16,8 @@ use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
     GithubSyncTarget, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
     ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, SyncProviderTarget,
+    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, StoredS3Configuration,
+    SyncProviderTarget,
 };
 
 use super::{
@@ -136,6 +137,10 @@ impl StorageProviderData {
                 };
                 format!("{repo} · {pat}")
             }
+            StorageProviderType::S3 => match &provider.s3 {
+                StoredS3Configuration::Configured(config) => config.storage_detail(),
+                StoredS3Configuration::NotApplicable => labels.no_token_saved.clone(),
+            },
         }
     }
 }
@@ -233,6 +238,12 @@ impl StorageProviderData {
                     })
                 }
                 StoredOAuthFileConfiguration::NotApplicable => SyncProviderTarget::Empty,
+            },
+            StorageProviderType::S3 => match &provider.s3 {
+                StoredS3Configuration::Configured(config) => {
+                    SyncProviderTarget::S3(config.location())
+                }
+                StoredS3Configuration::NotApplicable => SyncProviderTarget::Empty,
             },
         }
     }
@@ -332,6 +343,7 @@ impl AuthProvidersSnapshotData {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
@@ -375,7 +387,8 @@ mod tests {
     use crate::{
         AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, LocalFolderConfigData,
         OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels, ProviderStorageDetailLabels,
-        ProviderSyncCheckpoint, StorageProviderData, StorageProviderType,
+        ProviderSyncCheckpoint, S3AccessKeyId, S3KeyPrefix, S3ProviderConfig, S3Region,
+        StorageProviderData, StorageProviderType, StoredS3Configuration,
     };
 
     use super::{
@@ -396,6 +409,7 @@ mod tests {
                 github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -420,10 +434,38 @@ mod tests {
                     ),
                     handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
                 }),
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
+        }
+    }
+
+    struct S3CatalogFixture<'a> {
+        id: &'a str,
+        key_prefix: &'a str,
+        access_key_id: &'a str,
+        region: &'a str,
+    }
+
+    impl S3CatalogFixture<'_> {
+        fn build(self) -> anyhow::Result<StorageProviderData> {
+            let mut config = S3ProviderConfig::fixture()?;
+            config.key_prefix = S3KeyPrefix::parse(self.key_prefix)?;
+            config.access_key_id = S3AccessKeyId::parse(self.access_key_id)?;
+            config.region = S3Region::parse(self.region)?;
+            let mut row = GithubCatalogFixture {
+                id: self.id,
+                repo: "",
+                pat: "",
+            }
+            .build();
+            row.provider_type = StorageProviderType::S3;
+            row.label = "S3".to_owned();
+            row.github_pat = StoredGithubPat::Missing;
+            row.s3 = StoredS3Configuration::Configured(config);
+            Ok(row)
         }
     }
 
@@ -450,6 +492,7 @@ mod tests {
                     ..OAuthFileConfigData::default()
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -659,6 +702,7 @@ mod tests {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
@@ -718,6 +762,65 @@ mod tests {
             .storage_detail(&labels),
             labels.google_signed_in
         );
+    }
+
+    #[test]
+    fn s3_rows_are_one_target_per_location_whatever_key_or_region() -> anyhow::Result<()> {
+        let existing = S3CatalogFixture {
+            id: "s3-a",
+            key_prefix: "team",
+            access_key_id: "device-a",
+            region: "us-east-1",
+        }
+        .build()?;
+        let same_location = S3CatalogFixture {
+            id: "s3-b",
+            key_prefix: "team/",
+            access_key_id: "device-b",
+            region: "eu-west-1",
+        }
+        .build()?;
+        assert!(matches!(
+            DuplicateProviderSelection {
+                providers: slice::from_ref(&existing),
+                candidate: &same_location,
+                policy: DuplicateCandidatePolicy::IncludeAll
+            }
+            .find(),
+            DuplicateSyncProvider::Duplicate { provider } if provider.id == "s3-a"
+        ));
+        let other_prefix = S3CatalogFixture {
+            id: "s3-c",
+            key_prefix: "",
+            access_key_id: "device-a",
+            region: "us-east-1",
+        }
+        .build()?;
+        assert_eq!(
+            DuplicateProviderSelection {
+                providers: slice::from_ref(&existing),
+                candidate: &other_prefix,
+                policy: DuplicateCandidatePolicy::IncludeAll
+            }
+            .find(),
+            DuplicateSyncProvider::Unique
+        );
+        let unconfigured = StorageProviderData {
+            s3: StoredS3Configuration::NotApplicable,
+            ..existing.clone()
+        };
+        assert_eq!(
+            unconfigured.target_key(),
+            SyncProviderTargetIdentity::Unconfigured
+        );
+
+        let labels = ProviderStorageDetailLabels::catalog_fixture();
+        assert_eq!(
+            existing.storage_detail(&labels),
+            "127.0.0.1:8333 · device-a"
+        );
+        assert_eq!(unconfigured.storage_detail(&labels), "No token saved");
+        Ok(())
     }
 
     #[test]

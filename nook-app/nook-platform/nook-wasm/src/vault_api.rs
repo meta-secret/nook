@@ -38,6 +38,7 @@ pub enum NookProviderSaveOutcomeState {
     Saved,
     Duplicate,
     LocalFolderRequired,
+    S3ConfigurationRequired,
 }
 
 #[wasm_bindgen]
@@ -105,6 +106,9 @@ impl NookProviderSaveOutcome {
             ProviderSaveOutcome::Duplicate => NookProviderSaveOutcomeState::Duplicate,
             ProviderSaveOutcome::LocalFolderRequired => {
                 NookProviderSaveOutcomeState::LocalFolderRequired
+            }
+            ProviderSaveOutcome::S3ConfigurationRequired => {
+                NookProviderSaveOutcomeState::S3ConfigurationRequired
             }
         }
     }

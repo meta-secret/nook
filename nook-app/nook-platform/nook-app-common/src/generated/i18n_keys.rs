@@ -751,6 +751,7 @@ pub const ERRORS_IDENTITY_JOIN_PASSKEY_IN_USE: &str = "errors.identity_join.pass
 pub const ERRORS_IDENTITY_JOIN_PASSKEY_LOCKED: &str = "errors.identity_join.passkey_locked";
 pub const ERRORS_LOCAL_BACKUP_FOLDER_REQUIRED: &str = "errors.local_backup_folder_required";
 pub const ERRORS_MANAGER_UNINITIALIZED: &str = "errors.manager_uninitialized";
+pub const ERRORS_S3_KEY_ACCESS_DENIED: &str = "errors.s3_key_access_denied";
 pub const ERRORS_SHARED_PROVIDER_ACCESS_REQUIRED: &str = "errors.shared_provider_access_required";
 pub const ERRORS_SHARED_PROVIDER_OAUTH_REQUIRED: &str = "errors.shared_provider_oauth_required";
 pub const ERRORS_VALIDATION_ADDRESS_LINE1_REQUIRED: &str =
@@ -835,6 +836,30 @@ pub const ERRORS_VALIDATION_ROUTING_NUMBER_INVALID: &str =
     "errors.validation.routing_number_invalid";
 pub const ERRORS_VALIDATION_ROUTING_NUMBER_REQUIRED: &str =
     "errors.validation.routing_number_required";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID: &str =
+    "errors.validation.s3_access_key_id_invalid";
+pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED: &str =
+    "errors.validation.s3_access_key_id_required";
+pub const ERRORS_VALIDATION_S3_BUCKET_CHARS: &str = "errors.validation.s3_bucket_chars";
+pub const ERRORS_VALIDATION_S3_BUCKET_INVALID: &str = "errors.validation.s3_bucket_invalid";
+pub const ERRORS_VALIDATION_S3_BUCKET_LENGTH: &str = "errors.validation.s3_bucket_length";
+pub const ERRORS_VALIDATION_S3_BUCKET_REQUIRED: &str = "errors.validation.s3_bucket_required";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_INSECURE: &str = "errors.validation.s3_endpoint_insecure";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_INVALID: &str = "errors.validation.s3_endpoint_invalid";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_NOT_ORIGIN: &str =
+    "errors.validation.s3_endpoint_not_origin";
+pub const ERRORS_VALIDATION_S3_ENDPOINT_REQUIRED: &str = "errors.validation.s3_endpoint_required";
+pub const ERRORS_VALIDATION_S3_KEY_PREFIX_CHARS: &str = "errors.validation.s3_key_prefix_chars";
+pub const ERRORS_VALIDATION_S3_KEY_PREFIX_INVALID: &str = "errors.validation.s3_key_prefix_invalid";
+pub const ERRORS_VALIDATION_S3_KEY_PREFIX_LENGTH: &str = "errors.validation.s3_key_prefix_length";
+pub const ERRORS_VALIDATION_S3_REGION_INVALID: &str = "errors.validation.s3_region_invalid";
+pub const ERRORS_VALIDATION_S3_REGION_REQUIRED: &str = "errors.validation.s3_region_required";
+pub const ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_INVALID: &str =
+    "errors.validation.s3_secret_access_key_invalid";
+pub const ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED: &str =
+    "errors.validation.s3_secret_access_key_required";
+pub const ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID: &str =
+    "errors.validation.s3_storage_target_invalid";
 pub const ERRORS_VALIDATION_SECRET_DATA_REQUIRED: &str = "errors.validation.secret_data_required";
 pub const ERRORS_VALIDATION_SECRET_ID_REQUIRED: &str = "errors.validation.secret_id_required";
 pub const ERRORS_VALIDATION_SECRET_ID_RESERVED: &str = "errors.validation.secret_id_reserved";

@@ -2,7 +2,7 @@
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OauthFilePreset, StoredGithubPat,
     StoredGithubRepository, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-    StoredOAuthAccessCredential, StoredOAuthRemoteFileName,
+    StoredOAuthAccessCredential, StoredOAuthRemoteFileName, StoredS3Configuration,
 };
 pub struct OAuthProviderLabel<'a> {
     pub preset: OauthFilePreset,
@@ -13,6 +13,8 @@ pub enum ProviderLabel<'a> {
     LocalFolder(&'a StoredLocalFolderDirectory),
     Github(&'a StoredGithubRepository),
     OAuth(OAuthProviderLabel<'a>),
+    /// `S3 · bucket[/prefix]`, or `S3` before the connection is known.
+    S3(&'a StoredS3Configuration),
 }
 impl ProviderLabel<'_> {
     #[must_use]
@@ -50,6 +52,12 @@ impl ProviderLabel<'_> {
                     | StoredOAuthRemoteFileName::Unresolved => prefix.to_owned(),
                 }
             }
+            Self::S3(configuration) => match configuration {
+                StoredS3Configuration::Configured(config) => {
+                    format!("S3 · {}", config.location_label())
+                }
+                StoredS3Configuration::NotApplicable => "S3".to_owned(),
+            },
         }
     }
 }

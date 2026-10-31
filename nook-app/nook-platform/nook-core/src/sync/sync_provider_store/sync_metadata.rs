@@ -84,7 +84,7 @@ mod tests {
     use crate::{
         ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision,
         ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageProviderData,
-        StorageProviderType,
+        StorageProviderType, StoredS3Configuration,
     };
 
     impl StorageProviderData {
@@ -97,6 +97,7 @@ mod tests {
                 github_repo: StoredGithubRepository::Repository(repo.to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),

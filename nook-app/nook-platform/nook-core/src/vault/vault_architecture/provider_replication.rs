@@ -58,9 +58,12 @@ impl ProviderReplicationCapability {
         oauth_preset: ProviderOauthPreset,
     ) -> Self {
         match provider_type {
+            // S3 mirrors GitHub: one credential per row, so an invite either
+            // carries the connection (personal) or the joiner connects itself.
             StorageProviderType::Local
             | StorageProviderType::LocalFolder
-            | StorageProviderType::Github => Self {
+            | StorageProviderType::Github
+            | StorageProviderType::S3 => Self {
                 provider_type: provider_type.as_str().to_owned(),
                 oauth_preset: ProviderOauthPreset::NotApplicable,
                 supports_personal: true,
@@ -177,6 +180,25 @@ mod tests {
         assert_eq!(
             icloud.shared_joiner_identity,
             ProviderJoinerIdentity::NotRequired
+        );
+
+        let s3 = ProviderReplicationCapability::validate(
+            StorageProviderType::S3,
+            ProviderOauthPreset::NotApplicable,
+            ReplicationType::Personal,
+        )?;
+        assert_eq!(s3.provider_type, "s3");
+        assert_eq!(
+            ProviderReplicationCapability::validate(
+                StorageProviderType::S3,
+                ProviderOauthPreset::NotApplicable,
+                ReplicationType::Shared,
+            ),
+            Err(ValidationError::UnsupportedProviderReplication {
+                provider_type: "s3".to_owned(),
+                oauth_preset: String::new(),
+                replication_type: "shared".to_owned(),
+            })
         );
         Ok(())
     }

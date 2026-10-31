@@ -168,6 +168,7 @@ mod wasm_idb_tests {
         StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
         StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
         StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+        StoredS3Configuration,
     };
 
     use super::*;
@@ -225,6 +226,7 @@ mod wasm_idb_tests {
                         icloud_share_target: StoredICloudShareTarget::Unbound,
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    s3: StoredS3Configuration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),

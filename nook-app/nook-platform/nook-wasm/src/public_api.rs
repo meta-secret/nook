@@ -498,7 +498,7 @@ mod browser_tests {
         StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
         StoredGoogleDriveFolder, StoredICloudShareTarget, StoredLocalFolderConfiguration,
         StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileName,
+        StoredOAuthRemoteFileName, StoredS3Configuration,
     };
     use serde::{Serialize, de::DeserializeOwned};
     use serde_wasm_bindgen::Serializer;
@@ -599,6 +599,7 @@ mod browser_tests {
                     },
                 ),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-01-01T00:00:00Z".into(),

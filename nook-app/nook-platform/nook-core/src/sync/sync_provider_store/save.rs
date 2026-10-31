@@ -19,7 +19,7 @@ use crate::{
     OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
     StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
     StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, StoredS3Configuration,
 };
 
 use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
@@ -57,6 +57,8 @@ pub struct ProviderSaveRequest {
     pub oauth_file: StoredOAuthFileConfiguration,
     pub oauth_preset: OAuthFilePreset,
     pub local_folder: StoredLocalFolderConfiguration,
+    /// The validated S3 block a new S3 provider is saved with.
+    pub s3: StoredS3Configuration,
     pub new_provider_id: String,
     pub created_at: String,
 }
@@ -70,10 +72,13 @@ pub enum ProviderSaveOutcome {
     },
     Duplicate,
     LocalFolderRequired,
+    /// A new S3 provider was requested without its validated connection.
+    S3ConfigurationRequired,
 }
 
 enum ProviderConstructionError {
     LocalFolderRequired,
+    S3ConfigurationRequired,
 }
 
 struct ProviderRowDefaults {
@@ -96,6 +101,7 @@ impl ProviderSaveRequest {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: request.row_scope(provider_type),
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: request.created_at.clone(),
@@ -109,7 +115,8 @@ impl ProviderSaveRequest {
             StorageProviderType::Local => self.provider_store_id.clone(),
             StorageProviderType::Github
             | StorageProviderType::OauthFile
-            | StorageProviderType::LocalFolder => ProviderVaultScope::Unscoped,
+            | StorageProviderType::LocalFolder
+            | StorageProviderType::S3 => ProviderVaultScope::Unscoped,
         }
     }
 
@@ -209,6 +216,17 @@ impl ProviderSaveRequest {
                 provider.local_folder = request.local_folder.clone();
                 Ok(provider)
             }
+            StorageProviderType::S3 => {
+                let StoredS3Configuration::Configured(config) = &request.s3 else {
+                    return Err(ProviderConstructionError::S3ConfigurationRequired);
+                };
+                let mut provider = request.provider_defaults(ProviderRowDefaults {
+                    provider_type,
+                    label: ProviderLabel::S3(&request.s3).render(),
+                });
+                provider.s3 = StoredS3Configuration::Configured(config.clone());
+                Ok(provider)
+            }
         }
     }
 }
@@ -282,6 +300,7 @@ impl OAuthUpdateTarget<'_> {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            s3: StoredS3Configuration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
@@ -343,6 +362,9 @@ impl ProviderSaveRequest {
                 Ok(provider) => provider,
                 Err(ProviderConstructionError::LocalFolderRequired) => {
                     return ProviderSaveOutcome::LocalFolderRequired;
+                }
+                Err(ProviderConstructionError::S3ConfigurationRequired) => {
+                    return ProviderSaveOutcome::S3ConfigurationRequired;
                 }
             };
             let duplicate = DuplicateProviderSelection {
@@ -443,10 +465,10 @@ impl ProviderSaveRequest {
 mod tests {
     use crate::{
         ActiveVaultScope, LocalFolderConfigData, OauthFilePreset, ProviderVaultScope,
-        StorageProviderType, StoredGoogleDriveFolder, StoredLocalFolderConfiguration,
-        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName,
+        S3ProviderConfig, StorageProviderType, StoredGoogleDriveFolder,
+        StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+        StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
+        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredS3Configuration,
     };
     use crate::{StoredGithubPat, StoredGithubRepository};
 
@@ -469,10 +491,55 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 oauth_preset: OauthFilePreset::GoogleDrive,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                s3: StoredS3Configuration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
             }
         }
+
+        fn s3_fixture() -> anyhow::Result<Self> {
+            let mut request = Self::fixture(StorageProviderType::S3);
+            request.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+            Ok(request)
+        }
+    }
+
+    #[test]
+    fn a_new_s3_provider_is_an_identity_mount_with_its_validated_block() -> anyhow::Result<()> {
+        let request = ProviderSaveRequest::s3_fixture()?;
+        let snapshot = request.apply().saved().map_err(anyhow::Error::msg)?;
+        let [row] = snapshot.providers.as_slice() else {
+            anyhow::bail!("exactly the S3 row is saved");
+        };
+        assert_eq!(row.provider_type, StorageProviderType::S3);
+        assert_eq!(row.label, "S3 · nook-dev/e2e/run-1");
+        assert_eq!(row.store_id, ProviderVaultScope::Unscoped);
+        assert_eq!(row.s3, request.s3);
+        assert_eq!(row.github_pat, StoredGithubPat::Missing);
+        assert_eq!(row.oauth_file, StoredOAuthFileConfiguration::NotApplicable);
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_provider_needs_its_connection_and_one_location_is_one_mount() -> anyhow::Result<()> {
+        assert_eq!(
+            ProviderSaveRequest::fixture(StorageProviderType::S3).apply(),
+            ProviderSaveOutcome::S3ConfigurationRequired
+        );
+        let saved = ProviderSaveRequest::s3_fixture()?
+            .apply()
+            .saved()
+            .map_err(anyhow::Error::msg)?;
+        // The same location with this device's other key is still one mount.
+        let mut again = ProviderSaveRequest::s3_fixture()?;
+        let mut other_key = S3ProviderConfig::fixture()?;
+        other_key.access_key_id = crate::S3AccessKeyId::parse("device-b")?;
+        again.s3 = StoredS3Configuration::Configured(other_key);
+        again.snapshot = saved.clone();
+        assert_eq!(again.apply(), ProviderSaveOutcome::Duplicate);
+        again.explicit_add = false;
+        assert_eq!(again.apply().saved().map_err(anyhow::Error::msg)?, saved);
+        Ok(())
     }
 
     impl ProviderSaveOutcome {
