@@ -2599,6 +2599,7 @@
   },
   "provider_identities": {
     "set_up_here": "{identity} is set up on this browser and synced.",
+    "added_here": "{identity} was added to this browser.",
     "leave": "Leave as is",
     "add": "Add to this browser",
     "recover": "Recover it",

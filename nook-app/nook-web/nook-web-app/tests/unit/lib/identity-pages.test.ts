@@ -103,6 +103,31 @@ describe('IdentityPages', () => {
     expect(cancelAdd).toHaveBeenCalledOnce()
   })
 
+  test('a keyring added beside the one in use ends adding the provider on the hub, with nothing saved', () => {
+    const vault = unlocked()
+    const save = vi.spyOn(vault, 'ensureProviderSaved')
+    const sync = vi.spyOn(vault.identityControl, 'syncWithMounts')
+    const cancelSetup = vi.spyOn(vault, 'cancelProviderSetup')
+    const cancelAdd = vi.spyOn(vault, 'cancelAddProvider')
+    vault.activateLoginSetup('oauth-file')
+    const pages = new IdentityPages(vault)
+    pages.addSyncProvider()
+
+    pages.keyringAddedBeside('inspire-alien-floor')
+
+    expect(cancelSetup).toHaveBeenCalledOnce()
+    expect(cancelAdd).toHaveBeenCalledOnce()
+    expect(save).not.toHaveBeenCalled()
+    expect(sync).not.toHaveBeenCalled()
+    // No Sync page in between: the hub shows the added keyring.
+    expect(vault.identityPage).toBe(WorkspaceSection.Identities)
+    const added: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesAddedHere,
+      replacements: { identity: 'inspire-alien-floor' },
+    }
+    expect(vault.successMsg).toBe(vault.t(added))
+  })
+
   test('connecting saves the provider being set up, gives the identity its log, then copies it', async () => {
     const vault = unlocked()
     const order: string[] = []

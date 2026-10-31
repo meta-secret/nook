@@ -1860,6 +1860,7 @@ export const I18N_KEYS = {
   ProtonPassImportTitle: 'proton_pass_import.title',
   ProviderIdentitiesAdd: 'provider_identities.add',
   ProviderIdentitiesAddFailed: 'provider_identities.add_failed',
+  ProviderIdentitiesAddedHere: 'provider_identities.added_here',
   ProviderIdentitiesApply: 'provider_identities.apply',
   ProviderIdentitiesApplying: 'provider_identities.applying',
   ProviderIdentitiesAskToJoin: 'provider_identities.ask_to_join',

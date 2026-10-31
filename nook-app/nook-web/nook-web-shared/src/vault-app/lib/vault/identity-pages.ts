@@ -101,6 +101,23 @@ export class IdentityPages {
     if (away !== false) vault.vaultPanelStoreId = away.storeId;
   }
 
+  /** A keyring the provider's listing offered was added beside the one in
+   * use, which stays selected. Adding the provider ends there: nothing is
+   * saved or synced for the keyring in use. The hub shows the added
+   * keyring's card, with a line saying it is here. */
+  keyringAddedBeside(label: string): void {
+    const vault = this.vault;
+    vault.cancelProviderSetup();
+    vault.cancelAddProvider();
+    if (vault.isAuthenticated) vault.openSection(WorkspaceSection.Identities);
+    else this.show(WorkspaceSection.Identities);
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesAddedHere,
+      replacements: { identity: label },
+    };
+    vault.showSuccess(vault.t(request));
+  }
+
   async removeProvider(id: string): Promise<void> {
     const vault = this.vault;
     const removed = await vault.removeProvider(id);

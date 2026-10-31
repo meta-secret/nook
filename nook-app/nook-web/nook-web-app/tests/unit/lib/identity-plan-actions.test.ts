@@ -224,7 +224,7 @@ describe('adding an identity the passkey in use is a member of', () => {
       plan('addWithPasskeyInUse'),
     )
 
-    expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.Applied)
+    expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.AddedBeside)
     expect(added).toHaveBeenCalledWith(SOURCE, IDENTITY, location.hostname)
     expect(reload).toHaveBeenCalledOnce()
     // No key ceremony opens and no device is asked.

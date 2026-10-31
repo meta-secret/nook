@@ -30,6 +30,7 @@ decrypts in memory and changes nothing.
   import { FirstRunIdentityAction } from '$lib/vault/first-run'
   import { IdentityControlViewKind } from '$lib/vault/identity-control.svelte'
   import {
+    IdentityDecisionText,
     IdentityPlan,
     identityChoices,
     type IdentityChoicesFailure,
@@ -42,6 +43,7 @@ decrypts in memory and changes nothing.
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
+  import { IdentityPages } from '$lib/vault/identity-pages'
   import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
@@ -159,6 +161,7 @@ decrypts in memory and changes nothing.
         plan.clear()
         switch (ran.value.kind) {
           case IdentityPlanOutcomeKind.Applied:
+          case IdentityPlanOutcomeKind.AddedBeside:
             break
           // A join waits for a new key of its own; its ceremony asks, and
           // Connect & sync waits for the identity that ceremony adopts.
@@ -198,8 +201,10 @@ decrypts in memory and changes nothing.
 
   /** The handler of one setup action: it runs for the identity picked. An
    * identity brought here (Continue, or a join found approved) completes the
-   * step as first run does: the provider connects and syncs. Otherwise the
-   * folder is read again unless a join waits for its own key. */
+   * step as first run does: the provider connects and syncs. One added
+   * beside the identity in use ends adding the provider on the hub instead:
+   * nothing is set up for the identity in use. Otherwise the folder is read
+   * again unless a join waits for its own key. */
   function act(
     action: FirstRunIdentityAction,
   ): (choice: ProviderIdentityChoice) => Promise<void> {
@@ -215,7 +220,11 @@ decrypts in memory and changes nothing.
         const ran = await new IdentityPlanActions(vault).run(run)
         if (ran.isErr()) vault.errorMsg = ran.error.message(vault)
         else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
-        else if (action !== FirstRunIdentityAction.AskToJoin) {
+        else if (ran.value.kind === IdentityPlanOutcomeKind.AddedBeside) {
+          const label = new IdentityDecisionText(vault).name(choice)
+          new IdentityPages(vault).keyringAddedBeside(label)
+          return
+        } else if (action !== FirstRunIdentityAction.AskToJoin) {
           await onConnect()
           return
         }
