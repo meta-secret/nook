@@ -55,23 +55,25 @@ pub struct IdentityJoinAdditionWrite {
     pub bytes: EventStorageBytes,
 }
 
-fn refused(reason: &str) -> EventError {
-    EventError::IdentityControlInvalid(reason.to_owned())
-}
-
 impl<'a> ProviderIdentityKeyInUse<'a> {
     /// Verify the provider's log and require the key in use among its
     /// members. A log the provider does not hold is refused too.
     pub fn verify(&self) -> VaultResult<KeyInUseMembership<'a>> {
         if self.events.is_empty() {
-            return Err(refused("the provider holds no control log for this identity").into());
+            return Err(KeyInUseMembership::refused(
+                "the provider holds no control log for this identity",
+            )
+            .into());
         }
         let log = IdentityControlLog::new(self.identity_id.clone())
             .union_storage_bytes(self.events)
             .map_err(|rejection| rejection.cause)?;
         let state = IdentityControlState::project(&log)?;
         if state.member(self.key_in_use.app_id()).is_none() {
-            return Err(refused("the key in use here is not a member of this identity").into());
+            return Err(KeyInUseMembership::refused(
+                "the key in use here is not a member of this identity",
+            )
+            .into());
         }
         Ok(KeyInUseMembership {
             log,
@@ -82,6 +84,10 @@ impl<'a> ProviderIdentityKeyInUse<'a> {
 }
 
 impl KeyInUseMembership<'_> {
+    fn refused(reason: &str) -> EventError {
+        EventError::IdentityControlInvalid(reason.to_owned())
+    }
+
     /// Sign the addition of the new key on the log's heads, with every vault
     /// DEK the key in use opens wrapped to it. It must apply there.
     pub fn addition(
@@ -108,7 +114,10 @@ impl KeyInUseMembership<'_> {
             .insert(event)
             .map_err(|rejection| rejection.cause)?;
         if inserted.status != IdentityEventInsertStatus::Applied {
-            return Err(refused("the addition does not apply to the identity log").into());
+            return Err(KeyInUseMembership::refused(
+                "the addition does not apply to the identity log",
+            )
+            .into());
         }
         Ok(IdentityJoinAdditionWrite { event_id, bytes })
     }
