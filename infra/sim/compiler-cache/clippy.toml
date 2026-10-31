@@ -1,0 +1,7 @@
+absolute-paths-max-segments = 2
+allow-expect-in-tests = false
+allow-unwrap-in-tests = false
+max-fn-params-bools = 0
+max-struct-bools = 0
+too-many-arguments-threshold = 2
+excessive-nesting-threshold = 5

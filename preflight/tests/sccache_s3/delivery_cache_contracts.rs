@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::Context;
+
 struct RepositoryFixture {
     path: PathBuf,
 }
@@ -87,7 +89,15 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         "cache_misses",
         "cache_errors",
         "cache_writes",
+        "local_hits",
+        "remote_hits",
+        "local_writes",
         "remote_writes",
+        "local_write_errors",
+        "remote_write_errors",
+        "local_backfills",
+        "compile_fails",
+        "--stop-server",
     ] {
         assert!(
             reporter.contains(required),
@@ -154,6 +164,102 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(main.contains("uses: ./.github/actions/nook-cache-telemetry"));
 
+    Ok(())
+}
+
+#[test]
+fn rust_compiler_snapshots_keep_local_cache_writes_in_private_image_layers() {
+    let root = RepositoryFixture::repository_root();
+    let rust_base = root.read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+    for required in [
+        "ENV SCCACHE_MULTILEVEL_CHAIN=disk,s3",
+        "ENV SCCACHE_DIR=/opt/nook/sccache",
+        "ENV SCCACHE_MULTILEVEL_WRITE_ERROR_POLICY=all",
+        "ENV SCCACHE_CLIENT_SIDE=0",
+    ] {
+        assert!(
+            rust_base.contains(required),
+            "compiler snapshots must keep strict disk/S3 configuration: {required}"
+        );
+    }
+
+    for path in [
+        "nook-app/nook-platform/docker/rust/base/Dockerfile",
+        "nook-app/nook-platform/docker/rust/compile/Dockerfile",
+        "preflight/Dockerfile",
+    ] {
+        let source = root.read(path);
+        assert!(
+            !source.contains("--mount=type=cache"),
+            "{path} must snapshot local compiler objects through ordinary private image layers"
+        );
+        let runs = super::dockerfile_run_instructions(&source);
+        let reports = runs
+            .iter()
+            .filter(|run| run.contains("nook-sccache-report ") && !run.contains("--replay"))
+            .collect::<Vec<_>>();
+        assert!(
+            !reports.is_empty(),
+            "{path} must expose compiler snapshot completion points"
+        );
+        for run in reports {
+            assert!(
+                run.contains("nook-sccache-report --finish ")
+                    || run.contains("nook-sccache-report --require --finish "),
+                "{path} must finish its compiler daemon before committing a reported snapshot: {run}"
+            );
+        }
+    }
+}
+
+#[test]
+fn plain_cargo_dependency_parents_preserve_workspace_inputs_before_real_sources()
+-> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    for path in [
+        "nook-app/nook-platform/docker/rust/base/Dockerfile",
+        "nook-app/nook-platform/docker/rust/compile/Dockerfile",
+    ] {
+        let source = root.read(path);
+        let (manifests, _) = source
+            .split_once("RUN --network=default RUSTC_WRAPPER= cargo fetch --locked")
+            .with_context(|| {
+                format!("{path} must fetch the manifest-only workspace before compiling")
+            })?;
+        for required in [
+            "COPY nook-app/nook-platform/.cargo .cargo",
+            "COPY nook-app/nook-platform/.config .config",
+            "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
+            "src/lib.rs",
+        ] {
+            assert!(manifests.contains(required), "{path} is missing {required}");
+        }
+        for member in [
+            "nook-app-common",
+            "nook-authenticator-domain",
+            "nook-auth2",
+            "nook-replication",
+            "nook-event-log",
+            "nook-companion-core",
+            "nook-core",
+            "nook-companion-wasm",
+            "nook-wasm",
+            "nook-wasm-composition-tests",
+        ] {
+            assert!(
+                manifests.contains(&format!(
+                    "COPY nook-app/nook-platform/{member}/Cargo.toml {member}/Cargo.toml"
+                )),
+                "{path} must preserve the real {member} manifest before creating placeholder roots"
+            );
+            assert!(
+                !manifests.contains(&format!("COPY nook-app/nook-platform/{member} {member}")),
+                "{path} dependency warmup must precede the real {member} source overlay"
+            );
+        }
+        assert!(!source.contains("cargo chef"));
+        assert!(!source.contains("recipe.json"));
+    }
     Ok(())
 }
 

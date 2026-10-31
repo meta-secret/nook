@@ -2,7 +2,9 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::Lines;
 
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
@@ -138,15 +140,18 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_node_deps.contains(
         "test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run"
     ));
-    let compiler_runs = dockerfile_run_instructions(wasm_node_deps)
+    let compiler_runs = DockerfileRunInstruction::parse_stage(wasm_node_deps)
         .into_iter()
         .filter(|run| run.contains("--no-run"))
         .collect::<Vec<_>>();
     assert_eq!(compiler_runs.len(), 2);
-    assert!(compiler_runs[0].contains("llvm-cov show-env --sh"));
-    assert!(!compiler_runs[0].contains("--target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
-    assert!(compiler_runs[1].contains("--target wasm32-unknown-unknown"));
+    let [native_run, wasm_run] = compiler_runs.as_slice() else {
+        bail!("WASM Node dependency warming must have exactly two compiler RUNs");
+    };
+    assert!(native_run.contains("llvm-cov show-env --sh"));
+    assert!(!native_run.contains("--target wasm32-unknown-unknown"));
+    assert!(wasm_run.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
+    assert!(wasm_run.contains("--target wasm32-unknown-unknown"));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
@@ -180,7 +185,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let (compiler, browser) = compiler_and_browser
         .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
         .context("isolated Node compiler and secret-free browser validation stages")?;
-    assert!(!handoff.contains("RUSTC_WRAPPER="));
+    WasmCoverageHandoff { source: handoff }.require_compiler_wrapper()?;
     assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(nook.contains("wasm-pack test --node --release nook-wasm"));
     assert!(companion.contains("wasm-pack test --node --release nook-companion-wasm"));
@@ -248,6 +253,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
+    DockerfileRunInstruction::preflight_fixture_coverage(&preflight)?.require_fixture_floor()?;
     assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
     let preflight_coverage_deps = preflight
         .split_once("FROM deps AS coverage-deps")
@@ -263,10 +269,22 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run"
     ));
     assert!(!preflight_coverage_deps.contains("COPY --from=repository-source"));
+    let (preflight_deps, _) = preflight
+        .split_once("\nFROM rust-base AS deps\n")
+        .and_then(|(_, tail)| tail.split_once("\nFROM deps AS coverage-deps\n"))
+        .context("coverage and build stages must inherit the same preflight dependency stage")?;
+    assert!(
+        preflight_deps
+            .lines()
+            .any(|line| line == "ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+    );
     let target_envs = preflight
-        .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+        .lines()
+        .filter(|line| *line == "ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
         .count();
-    assert_eq!(target_envs, 2);
+    assert_eq!(target_envs, 1);
+    assert!(preflight.contains("\nFROM deps AS build\n"));
+    assert!(preflight.contains("\nFROM build AS test\n"));
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
@@ -341,9 +359,7 @@ fn native_coverage_leaves_declare_profiles_objects_and_junit() -> anyhow::Result
         .split_once("FROM builder-native-core-source AS builder-debug")
         .map(|(stages, _)| stages)
         .context("native test leaves must join the report-only stage")?;
-    assert!(
-        sources.contains("RUN CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace")
-    );
+    DockerfileRunInstruction::require_native_source_cleanup(sources)?;
     assert!(!sources.contains("llvm-cov nextest"));
     assert!(!sources.contains("/opt/nook/native-test-artifacts"));
     assert_eq!(
@@ -390,7 +406,7 @@ fn terminal_native_coverage_cleanup_preserves_reports_and_failure_gates() -> any
         .and_then(|(_, tail)| tail.split_once("FROM scratch AS coverage-export"))
         .map(|(stage, _)| stage)
         .context("native coverage stage must exist")?;
-    let runs = dockerfile_run_instructions(native);
+    let runs = DockerfileRunInstruction::parse_stage(native);
     let terminal = runs
         .last()
         .context("native coverage must have a terminal RUN")?;
@@ -469,37 +485,339 @@ fn repository_root() -> anyhow::Result<PathBuf> {
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
-fn dockerfile_run_instructions(stage: &str) -> Vec<String> {
-    let mut runs = Vec::new();
-    let mut current: Option<String> = None;
-    for line in stage.lines() {
-        let trimmed = line.trim();
-        if let Some(run) = current.as_mut() {
-            run.push('\n');
-            run.push_str(trimmed);
-            if !trimmed.ends_with('\\') {
-                runs.push(current.take().expect("RUN instruction must be present"));
-            }
-            continue;
-        }
-        let Some(rest) = trimmed.strip_prefix("RUN") else {
-            continue;
-        };
-        if !rest.is_empty() && !rest.chars().next().is_some_and(char::is_whitespace) {
-            continue;
-        }
-        let instruction = trimmed.to_owned();
-        if trimmed.ends_with('\\') {
-            current = Some(instruction);
-        } else {
-            runs.push(instruction);
-        }
-    }
-    if let Some(run) = current {
-        runs.push(run);
-    }
-    runs
+struct DockerfileRunInstruction {
+    text: String,
 }
+
+impl DockerfileRunInstruction {
+    fn parse_stage(stage: &str) -> Vec<Self> {
+        let mut runs = Vec::new();
+        let mut lines = stage.lines();
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+            match trimmed.split_whitespace().next() {
+                Some("RUN") => (),
+                Some(_) | None => continue,
+            }
+            runs.push(
+                Self {
+                    text: trimmed.to_owned(),
+                }
+                .complete(&mut lines),
+            );
+        }
+        runs
+    }
+
+    fn require_native_source_cleanup(source: &str) -> anyhow::Result<()> {
+        let runs = Self::parse_stage(source);
+        let cleanup = runs.first().context("native source cleanup must exist")?;
+        anyhow::ensure!(
+            cleanup.text
+                == "RUN RUSTC_WRAPPER= CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace",
+            "native source cleanup must be exact and mount-free"
+        );
+        anyhow::ensure!(
+            source.matches("RUSTC_WRAPPER=").count() == 1,
+            "wrapper bypass outside the single native metadata cleanup is prohibited"
+        );
+        Ok(())
+    }
+
+    fn preflight_fixture_coverage(dockerfile: &str) -> anyhow::Result<Self> {
+        let (_, after_test) = dockerfile
+            .split_once("\nFROM build AS test\n")
+            .context("preflight must retain its actual test stage")?;
+        let (test_stage, _) = after_test
+            .split_once("\nFROM ")
+            .context("preflight test stage must end before its policy siblings")?;
+        Self::parse_stage(test_stage)
+            .into_iter()
+            .find(|run| run.contains("compiler_fixture_floor="))
+            .context("the actual preflight test stage must run the fixture floor decision")
+    }
+
+    fn require_fixture_floor(&self) -> anyhow::Result<()> {
+        let mut steps = self.text.split(" \\\n&& ");
+        let floor_assignment = steps
+            .find(|step| step.starts_with("compiler_fixture_floor="))
+            .context("fixture floor assignment must be reached through &&")?;
+        anyhow::ensure!(
+            floor_assignment
+                == r#"compiler_fixture_floor="$(jq -er '.package_lines_percent["nook-compiler-cache-proof"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)""#,
+            "fixture must read its own floor from the central coverage registry"
+        );
+        let command = steps
+            .next()
+            .context("fixture coverage must follow its floor assignment through &&")?;
+        let (targets, arguments) = command
+            .split_once(" cargo llvm-cov test ")
+            .context("fixture coverage must invoke llvm-cov test")?;
+        anyhow::ensure!(
+            targets
+                == "CARGO_TARGET_DIR=/meta-secret/compiler-cache-target CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target",
+            "fixture coverage must use its own Cargo and instrumented target directories"
+        );
+        let arguments = arguments.split_whitespace().collect::<Vec<_>>();
+        let [
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            manifest,
+            "-p",
+            package,
+            "--fail-under-lines",
+            floor_argument,
+            "--no-fail-fast",
+        ] = arguments.as_slice()
+        else {
+            bail!("fixture coverage must keep all test targets and direct floor failure semantics");
+        };
+        anyhow::ensure!(
+            *manifest == "/meta-secret/nook/infra/sim/compiler-cache/Cargo.toml",
+            "fixture coverage must select the actual fixture manifest"
+        );
+        anyhow::ensure!(
+            *package == "nook-compiler-cache-proof",
+            "fixture coverage must select its own package"
+        );
+        anyhow::ensure!(
+            *floor_argument == "\"$compiler_fixture_floor\"",
+            "fixture coverage must enforce its own floor value"
+        );
+        anyhow::ensure!(
+            steps.next().is_some(),
+            "fixture failure must propagate to the following && step"
+        );
+        Ok(())
+    }
+
+    #[must_use]
+    fn complete(mut self, lines: &mut Lines<'_>) -> Self {
+        while let Some('\\') = self.text.chars().last() {
+            let Some(line) = lines.next() else {
+                break;
+            };
+            self.text.push('\n');
+            self.text.push_str(line.trim());
+        }
+        self
+    }
+}
+
+impl Deref for DockerfileRunInstruction {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
+}
+
+#[test]
+fn native_source_cleanup_rejects_compiler_and_wrapper_expansion() {
+    let approved =
+        "RUN RUSTC_WRAPPER= CARGO_LLVM_COV_DENY_WARNINGS=1 cargo llvm-cov clean --workspace";
+    for source in [
+        approved.replace("llvm-cov clean", "build"),
+        format!("{approved} \\\n&& cargo build"),
+        approved.replacen(
+            "RUN ",
+            "RUN --mount=type=secret,id=sccache_s3_access_key ",
+            1,
+        ),
+        format!("ENV RUSTC_WRAPPER=\n{approved}"),
+    ] {
+        assert!(
+            DockerfileRunInstruction::require_native_source_cleanup(&source).is_err(),
+            "native cleanup expansion must remain rejected: {source}"
+        );
+    }
+}
+
+struct WasmCoverageHandoff<'a> {
+    source: &'a str,
+}
+
+impl WasmCoverageHandoff<'_> {
+    const WORKSPACE_CLEANUP: &'static str = concat!(
+        "RUN RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target \\\n",
+        "&& RUSTC_WRAPPER= cargo +\"${WASM_COVERAGE_NIGHTLY}\" clean --offline --locked --workspace --release --target-dir target/llvm-cov-target --target wasm32-unknown-unknown",
+    );
+
+    fn require_compiler_wrapper(&self) -> anyhow::Result<()> {
+        let mut cleanup_assignments = 0;
+        for run in DockerfileRunInstruction::parse_stage(self.source)
+            .into_iter()
+            .filter(|run| run.contains("RUSTC_WRAPPER="))
+        {
+            anyhow::ensure!(
+                run.text == Self::WORKSPACE_CLEANUP,
+                "only the exact mount-free host/WASM workspace cleanup RUN may disable the wrapper"
+            );
+            cleanup_assignments += run.matches("RUSTC_WRAPPER=").count();
+        }
+        anyhow::ensure!(
+            self.source.matches("RUSTC_WRAPPER=").count() == cleanup_assignments,
+            "wrapper assignments outside the approved cleanup RUN are prohibited"
+        );
+        Ok(())
+    }
+}
+
+#[test]
+fn fixture_coverage_decision_rejects_unbound_or_unreachable_commands() {
+    let floor = r#"compiler_fixture_floor="$(jq -er '.package_lines_percent["nook-compiler-cache-proof"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)""#;
+    let command = "CARGO_TARGET_DIR=/meta-secret/compiler-cache-target CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target cargo llvm-cov test --offline --locked --manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml -p nook-compiler-cache-proof --fail-under-lines \"$compiler_fixture_floor\" --no-fail-fast";
+    let run = format!("RUN true \\\n&& {floor} \\\n&& {command} \\\n&& true");
+    let dockerfile = format!("\nFROM build AS test\n{run}\nFROM deps AS policy-tools\n");
+    let commented_run = run
+        .lines()
+        .map(|line| format!("# {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for rejected in [
+        dockerfile.replace(
+            ".package_lines_percent[\"nook-compiler-cache-proof\"]",
+            ".package_lines_percent[\"nook-preflight\"]",
+        ),
+        dockerfile.replace("\"$compiler_fixture_floor\"", "\"$floor\""),
+        dockerfile.replace(
+            "--manifest-path /meta-secret/nook/infra/sim/compiler-cache/Cargo.toml",
+            "--manifest-path /meta-secret/nook/preflight/Cargo.toml",
+        ),
+        dockerfile.replace("-p nook-compiler-cache-proof", "-p nook-preflight"),
+        dockerfile.replace(
+            "CARGO_TARGET_DIR=/meta-secret/compiler-cache-target",
+            "CARGO_TARGET_DIR=/meta-secret/preflight-target",
+        ),
+        dockerfile.replace(
+            "CARGO_LLVM_COV_TARGET_DIR=/meta-secret/compiler-cache-target/llvm-cov-target",
+            "CARGO_LLVM_COV_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target",
+        ),
+        dockerfile.replace("&& CARGO_TARGET_DIR=", "; CARGO_TARGET_DIR="),
+        dockerfile.replace("&& true", "; true"),
+        dockerfile.replace("FROM build AS test", "FROM build AS unused-tests"),
+        dockerfile.replace(run.as_str(), &commented_run),
+    ] {
+        assert!(
+            DockerfileRunInstruction::preflight_fixture_coverage(&rejected)
+                .and_then(|run| run.require_fixture_floor())
+                .is_err(),
+            "fixture floor must stay bound to the actual failing test RUN: {rejected}"
+        );
+    }
+}
+
+#[test]
+fn coverage_handoff_allows_only_exact_metadata_cleanup() -> anyhow::Result<()> {
+    let source = format!(
+        "{}\nRUN cargo llvm-cov test --no-clean --release -p nook-wasm",
+        WasmCoverageHandoff::WORKSPACE_CLEANUP
+    );
+    WasmCoverageHandoff { source: &source }.require_compiler_wrapper()?;
+    WasmCoverageHandoff {
+        source: "RUN cargo clippy --release -- -D warnings",
+    }
+    .require_compiler_wrapper()?;
+    Ok(())
+}
+
+#[test]
+fn coverage_handoff_rejects_wrapper_bypass_and_cleanup_expansion() {
+    let cleanup = WasmCoverageHandoff::WORKSPACE_CLEANUP;
+    for source in [
+        cleanup.replace("clean --offline", "build --offline"),
+        cleanup.replace("clean --offline", "test --offline"),
+        cleanup.replace("clean --offline", "clippy --offline"),
+        cleanup.replace("--workspace", "-p nook-wasm"),
+        format!("{cleanup} \\\n&& cargo build --release"),
+        format!("{cleanup} \\\n&& cat /run/secrets/sccache_s3_access_key"),
+        cleanup.replacen(
+            "RUN ",
+            "RUN --mount=type=secret,id=sccache_s3_access_key ",
+            1,
+        ),
+        format!("ENV RUSTC_WRAPPER=\n{cleanup}"),
+        format!("{cleanup}\nRUN RUSTC_WRAPPER= cargo build --release"),
+    ] {
+        assert!(
+            WasmCoverageHandoff { source: &source }
+                .require_compiler_wrapper()
+                .is_err(),
+            "wrapper bypass must remain rejected: {source}"
+        );
+    }
+}
+
+struct WasmSourceOverlay<'a> {
+    declaration: &'a str,
+    packages: &'a [&'a str],
+    refresh: &'a str,
+}
+
+impl WasmSourceOverlay<'_> {
+    fn require_fresh_sources(&self, dockerfile: &str) -> anyhow::Result<()> {
+        let (_, tail) = dockerfile
+            .split_once(self.declaration)
+            .context("source overlay stage must exist")?;
+        let (stage, _) = tail
+            .split_once("\nFROM ")
+            .context("source overlay must end before the next stage")?;
+        let refresh = stage
+            .find(self.refresh)
+            .context("source overlay must refresh every Rust file in its copied packages")?;
+        for package in self.packages {
+            let copy = stage
+                .rfind(&format!("COPY nook-app/nook-platform/{package} {package}"))
+                .with_context(|| format!("source overlay must copy {package}"))?;
+            anyhow::ensure!(copy < refresh, "{package} must be copied before refreshing");
+        }
+        if let Some(compiler) = stage.find("cargo ") {
+            anyhow::ensure!(refresh < compiler, "source refresh must precede Cargo use");
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn wasm_source_overlays_refresh_all_rust_files_before_compilation() -> anyhow::Result<()> {
+    let root = repository_root()?;
+    let dockerfile = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    for overlay in [
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-deps AS builder-wasm-source-base",
+            packages: &[
+                "nook-app-common",
+                "nook-authenticator-domain",
+                "nook-auth2",
+                "nook-replication",
+                "nook-event-log",
+                "nook-companion-core",
+                "nook-core",
+            ],
+            refresh: "find nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-wasm-source\n",
+            packages: &["nook-companion-wasm", "nook-wasm"],
+            refresh: "find nook-companion-wasm nook-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-nook-wasm-source",
+            packages: &["nook-wasm"],
+            refresh: "find nook-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+        WasmSourceOverlay {
+            declaration: "FROM builder-wasm-source-base AS builder-companion-wasm-source",
+            packages: &["nook-companion-wasm"],
+            refresh: "find nook-companion-wasm -type f -name '*.rs' -exec touch {} +",
+        },
+    ] {
+        overlay.require_fresh_sources(&dockerfile)?;
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct CoveragePolicy {
     lines_percent: f64,

@@ -34,7 +34,7 @@ For crate dependency flow, see [application architecture](../../../../../nook-ap
 - Repository-wide invariant tests run through `task preflight`.
 - Preflight bakes through `preflight/docker-bake.hcl`.
 - It reuses the shared `rust-base` toolchain target.
-- It cooks dependency graphs with cargo-chef.
+- It warms dependency graphs with ordinary Cargo commands and placeholder crate roots.
 - It compiles with SeaweedFS sccache secret mounts.
 - Workspace source is copied into the `nook-web` image at build time.
 - Build definition: `nook-app/nook-web/nook-web-app/Dockerfile`.
@@ -98,8 +98,22 @@ legacy registered `nook` runner is not used.
 
 ### Rust/WASM Lineage
 
-- `rust-base` plus manifest-only chef cooking exposes a lightweight WASM dependency boundary.
-- Native verification extends it with nextest, clippy, and coverage profiles.
+- `rust-base` plus manifest-only Cargo stages exposes a source-free dependency boundary.
+- `platform-manifests` preserves the workspace manifests and lockfile.
+- It retains `.cargo`, `.config`, and `clippy.toml` beside placeholder crate roots.
+- `cargo fetch --locked` downloads sources before dependency compilation.
+- Native and WASM warmups branch independently from that stage.
+- The compile-only graph retains native-to-WASM dependency ancestry for its
+  single rooted portable export.
+- Their Cargo commands retain the target, features, and profile of each consumer.
+- Coverage dependencies retain their separate instrumented target trees.
+- Normal source overlays refresh Rust source timestamps before Cargo runs.
+  At independent WASM and preflight coverage joins, Cargo removes inherited
+  workspace artifacts from each graph's instrumented target directory.
+  Cleanup follows that graph's own target and profile settings.
+  Third-party instrumented dependencies, ordinary real build outputs, and
+  disk/S3 caches are preserved.
+- Native verification uses nextest, Clippy, and coverage warmups.
 - Trusted same-repository PR CI runs native coverage independently on ARC.
 - Fork PR native coverage remains GitHub-hosted and secret-free.
 - It verifies WASM once on a dedicated producer.
@@ -357,15 +371,16 @@ Observed execution and cache-proof status are recorded in
   verification runs both phases with no registry exporter while retaining
   sccache access. No manual version suffix or custom dependency fingerprint
   selects this cache; BuildKit invalidates from the real Docker inputs.
-- Cache telemetry schema version 2 records registry-export bytes as a closed
+- Cache telemetry schema version 3 requires complete measured local/S3 counters.
+  It records registry-export bytes as a closed
   measurement state. A byte count is `measured` only when BuildKit emits a
   structured status or plain-progress transfer count, including an observed
   zero. A completed export without either counter is `unavailable` with reason
   `buildkit_did_not_emit_byte_count`; it is never reported as numeric zero.
   Export completion and manifest evidence remain authoritative independently
-  of byte-count availability. Version 1 artifacts are rejected rather than
-  migrated because telemetry artifacts are per-run observations, not durable
-  state.
+  of byte-count availability. Version 2 and older artifacts are rejected rather
+  than migrated because telemetry artifacts are per-run observations, not
+  durable state.
 - Delivery CI persists the toolchain in `nook-rust-base-v2`.
 - Native dependencies use `nook-rust-deps-v4`.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.
@@ -377,7 +392,26 @@ Observed execution and cache-proof status are recorded in
 
 ### Rust Compiler Cache (`sccache`)
 
-- Wrapped by pinned `sccache` backed by SeaweedFS S3 at `https://sccache.dev.nokey.sh`.
+- Pinned `sccache` uses `SCCACHE_MULTILEVEL_CHAIN=disk,s3` in the Rust Docker lineage.
+- The disk cache lives at `/opt/nook/sccache` in ordinary image layers.
+- SeaweedFS S3 at `https://sccache.dev.nokey.sh` remains the shared remote backend.
+- `SCCACHE_MULTILEVEL_WRITE_ERROR_POLICY=all` checks every configured backend.
+  Normal write-through operations require successful writes to both levels.
+- Build-stage compiler steps end with `nook-sccache-report --finish STAGE`.
+  Required-cache steps use `--require --finish`.
+  The reporter emits safe counters and stops the daemon before the layer snapshot.
+  Plain report calls remain non-stopping for host-native consumers.
+- Parallel children inherit isolated writable snapshots of their warmed parent.
+  The parent retains Cargo downloads, target artifacts, metadata, and disk cache.
+  No shared mutable cache mount joins the children.
+- A disk hit counts toward the combined compiler-hit gate.
+  Per-level S3 writes supply remote-publication evidence.
+  The existing remote backend probe remains independent of local reuse.
+  Reports omit backend locations and credential values.
+- Every supported reporter measures the complete local/remote counter set.
+  Schema 3 requires that breakdown in each per-run artifact.
+- A summary with `report_count=0` has `counter_reliability=unavailable`.
+  Its zero observed totals do not establish any cache hits or writes.
 - Credentialed trusted Rust/WASM jobs require the healthy remote compiler cache
   before compilation and fail closed when credentials or sccache are
   unavailable. A first cold publisher may miss while recording authoritative
@@ -385,6 +419,17 @@ Observed execution and cache-proof status are recorded in
   repeated changed-head zero-hit evidence is terminal cache failure.
 - Fork and Dependabot jobs receive no S3 credentials and retain the direct
   compiler fallback because they are secret-free and never trusted publishers.
+
+Ordinary shutdown is not a guarantee that every S3-hit backfill has finished.
+In sccache 0.19, [backfill work](https://github.com/mozilla/sccache/blob/v0.19.0/src/cache/multilevel.rs#L455-L487)
+runs in detached tasks. The [shutdown path](https://github.com/mozilla/sccache/blob/v0.19.0/src/server.rs#L714-L727)
+waits for active client requests, without a documented barrier for those tasks.
+The retained Cargo target artifacts remain usable even when a disk backfill is
+absent. Actual post-snapshot hit measurements establish practical cache warming.
+Cold, warm, cache-import, and cache-export builds remain required evidence.
+They must retain real contexts, build arguments, outputs, and statistics.
+The [real compiler cache proof](../../../../../infra/sim/bake-cache/README.md#real-rust-compiler-cache-proof)
+defines the Rust/S3 checks and their portability limit.
 
 ### Main Cache Visibility
 
@@ -409,20 +454,20 @@ Observed execution and cache-proof status are recorded in
   - **Cache Strategy:** Local builder store; hosted BuildKit registry refs
   - **Location:** `registry.dev.nokey.sh`
 - **Native Rust dependencies**
-  - **Cache Strategy:** cargo-chef + Zot refs
+  - **Cache Strategy:** Plain Cargo dependency layers + Zot refs
   - **Location:** `nook-rust-deps-v4`
 - **WASM Rust dependencies**
-  - **Cache Strategy:** fingerprinted cargo-chef + Zot refs
+  - **Cache Strategy:** Manifest-only Cargo dependency layers + Zot refs
   - **Location:** `nook-rust-wasm-deps-v6`
 - **Rust compiler cache**
-  - **Cache Strategy:** SeaweedFS S3 `sccache`
-  - **Location:** `sccache.dev.nokey.sh`
+  - **Cache Strategy:** Layered disk + SeaweedFS S3 `sccache`
+  - **Location:** `/opt/nook/sccache`, then `sccache.dev.nokey.sh`
 - **OCI registry**
   - **Cache Strategy:** Zot in k0s
   - **Location:** `10.96.90.10:5000` via Traefik
-- **`nook-app/target/`**
+- **`nook-app/nook-platform/target/`**
   - **Cache Strategy:** Rust lineage only
-  - **Location:** `/meta-secret/nook/nook-app/target`
+  - **Location:** `/meta-secret/nook/nook-app/nook-platform/target`
 - **`node_modules`**
   - **Cache Strategy:** `web-deps` Dockerfile layer
   - **Location:** Immutable image layer
