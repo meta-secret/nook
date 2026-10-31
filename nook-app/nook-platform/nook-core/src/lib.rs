@@ -51,11 +51,11 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, passkey_identity_addition, provider_identity_choice,
-    provider_identity_join, provider_identity_log, provider_vault_access, provider_vault_join,
-    provider_vault_listing, sync_provider_credentials, sync_provider_store, validation,
-    vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
-    vault_sync_store,
+    authorized_accounts, drive_vault_folder, key_in_use_addition, passkey_identity_addition,
+    provider_identity_choice, provider_identity_join, provider_identity_log, provider_vault_access,
+    provider_vault_join, provider_vault_listing, sync_provider_credentials, sync_provider_store,
+    validation, vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session,
+    vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -350,6 +350,9 @@ pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
 };
+pub use key_in_use_addition::{
+    IdentityJoinAdditionWrite, KeyInUseAddition, KeyInUseMembership, ProviderIdentityKeyInUse,
+};
 pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,
 };
@@ -358,8 +361,7 @@ pub use provider_identity_choice::{
     ProviderIdentityChoices,
 };
 pub use provider_identity_join::{
-    IdentityJoinAdditionWrite, IdentityJoinRequestPlan, IdentityJoinRequestWrite,
-    IdentityJoinSponsor, ProviderIdentityJoinRequest,
+    IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
 };
 pub use provider_identity_log::{
     ListedIdentityLog, ListingAppKey, ListingLocalIdentity, ProviderIdentityJoin,

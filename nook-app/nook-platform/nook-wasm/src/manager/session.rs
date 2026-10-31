@@ -416,30 +416,11 @@ pub(in crate::manager) enum LocalIdentityCreation {
     Creating(String),
 }
 
-/// The key in use when a join began with a new key, held in memory until
-/// that new key asks: a keyring that lists it as a member adds the new key
-/// itself. Dropped once the new key asked, when the join is cancelled, and
-/// on lock.
-#[derive(Default)]
-pub(in crate::manager) enum HeldJoinSponsor {
-    #[default]
-    None,
-    Held(Box<HeldJoinKey>),
-}
-
-/// The held key, the identity its join began for, and its event signer.
-pub(in crate::manager) struct HeldJoinKey {
-    pub(in crate::manager) identity_id: nook_core::IdentityId,
-    pub(in crate::manager) app_key: nook_core::AppKey,
-    pub(in crate::manager) signing: nook_core::SigningIdentity,
-}
-
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
     pub(in crate::manager) pending_local_identity_label: LocalIdentityCreation,
-    pub(in crate::manager) join_sponsor: HeldJoinSponsor,
 }
 
 impl DeviceSessionState {

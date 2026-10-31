@@ -92,13 +92,15 @@ offers adding by another passkey.
 - **This browser, first run:** **Continue** (Finish joining: a passkey made before restores the identity's record without its log or vault keys, so the provider's log and this key's grants come here; then Drive is saved, the log syncs, and a vault the identity granted opens through it, as after an invite; setup ends on the identities page with that vault's panel open beside the card, not inside the vault).
 - **This browser, identity in use:** **In use** (no action).
 - **Join approved:** **Continue** (Finish joining).
-- **Passkey in use:** **Continue** (Ask to join). The key is a member, but
-  here it already holds the identity in use, which has its own log or
-  vaults. One key holds one identity, so the join sets up a new key with its
-  own passkey, as for any second identity. The member key stays held in
-  memory until that new key asks, then adds it itself (`member-approved`,
-  `same-as` the member key): no other device answers, and the identity is
-  here at once.
+- **Passkey in use:** **Continue** (Add to this browser,
+  `addWithPasskeyInUse`). The key is a member, but here it already holds the
+  identity in use, which has its own log or vaults, and one key holds one
+  identity. One tap of the passkey that protects the key in use (no new
+  passkey) wraps a new key for the identity (`PasskeyWrappedLocal`, the same
+  PRF input). The key in use then adds that key itself (`member-approved`,
+  `same-as` the key in use) at the provider: no other device answers. The
+  identity is added beside the one in use, which stays selected. A key in
+  use that is no member is refused before the passkey is asked for.
 - **Opens with a checked passkey:** **Continue** (Add to this browser).
 - **Join requested:** **Waiting** (Check again).
 - **Not on this browser, not opened, or join denied:** **Request to join**.
@@ -117,8 +119,8 @@ offers adding by another passkey.
 - A passkey made for Nook before re-derives the same app key, so an identity
   it is a member of reads as **Join approved** with no extra tap. That holds
   only while the key's identity here is still fresh (no log, no vaults, no
-  other member). Otherwise it reads as **Passkey in use** and continues
-  with a new key that the member key adds.
+  other member). Otherwise it reads as **Passkey in use** and is added under
+  a new key the same passkey protects.
 - A refusal from Rust reaches the user with its reason after the failed
   action, not as a bare "could not" sentence.
 - A new passkey is a member of nothing: every identity asks to join.

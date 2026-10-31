@@ -290,9 +290,9 @@ mod tests {
     use crate::{
         EventStorageBytes, IdentityControlLog, IdentityControlSnapshot,
         IdentityControlSnapshotRequest, IdentityControlStanding, IdentityEvent,
-        IdentityEventSigning, IdentityGenesisRequest, IdentityJoinRequestPlan, IdentityJoinSponsor,
-        IdentityMemberKeys, IdentityVaultRegistration, ProviderIdentityJoinRequest,
-        ReplicatedMembershipRequest, SigningIdentity,
+        IdentityEventSigning, IdentityGenesisRequest, IdentityJoinRequestPlan, IdentityMemberKeys,
+        IdentityVaultRegistration, ProviderIdentityJoinRequest, ReplicatedMembershipRequest,
+        SigningIdentity,
     };
     use nook_auth2::{
         IdentityCreation, IdentityVaultKeyOpening, IsoTimestamp, MemberLabel, MemberLabelState,
@@ -417,7 +417,6 @@ mod tests {
                 member: &asking.keys("Phone"),
                 signing: &asking.signer,
                 created_at: &self.at,
-                sponsor: IdentityJoinSponsor::None,
             })
             .plan()?
             else {

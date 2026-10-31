@@ -79,10 +79,9 @@ pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameSt
 mod grant_authority;
 
 pub(in crate::manager) use session::{
-    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState, HeldJoinKey,
-    HeldJoinSponsor, PreparedDriveFolder, PreparedICloudShare, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
+    PreparedDriveFolder, PreparedICloudShare, SearchCatalogRestore, SearchCatalogState,
+    StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};

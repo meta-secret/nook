@@ -78,7 +78,8 @@ pub enum ProviderIdentityJoin {
     Approved,
     /// The key is a member, but here it already holds the identity in use,
     /// which has its own log or vaults: one key holds one identity, so this
-    /// one joins here with a new key, which that member key adds.
+    /// one gets a new key here, protected by the same passkey, which that
+    /// member key adds.
     KeyInUse,
 }
 

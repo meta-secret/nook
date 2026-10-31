@@ -9,46 +9,52 @@
 //!
 //! The browser extension completes the same way, from the log the web app
 //! hands it after adding it to the keyring: its key is a member already.
+//!
+//! A browser whose key in use is already a member of the identity needs no
+//! request: one tap of that key's passkey protects a new key for the
+//! identity, and the key in use adds it (`add_identity_with_passkey_in_use`).
 
 use nook_core::{
-    AppId, DriveEventParent, EventId, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
-    IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
-    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityJoinSponsor,
-    PlacedNamespace, ProviderIdentityJoinRequest, StorageMode,
+    AppId, AppKey, DriveEventParent, EventId, EventLogLocation, EventStorageBytes,
+    IdentityConnectionKey, IdentityControlLog, IdentityControlState, IdentityId,
+    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityJoinAnswer,
+    IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan,
+    IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyRegistration,
+    PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
+    ProviderIdentityKeyInUse, ProviderIdentityLogEvents, SigningIdentity, StorageMode,
+    WebAuthnPrfInput, WebAuthnPrfOutput,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+use zeroize::Zeroizing;
 
 use super::connection::NookIdentityConnectionStart;
+use super::passkey_addition::NookIdentityAdded;
 use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
+use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
-use crate::manager::{HeldJoinKey, HeldJoinSponsor, NookVaultManager};
 use crate::storage::identity_log::IdentityLogWrite;
-use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
+use crate::storage::identity_record::{
+    KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, StoredIdentityProtection,
+};
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
 use crate::storage::provider_vault_listing::DriveVaultListing;
 use crate::storage::remote_event::RemoteEventRead;
-use crate::{DriveStorageClient, IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError};
+use crate::{
+    BrowserPasskeyClient, BrowserPasskeyRequestOptions, DriveStorageClient,
+    IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError,
+};
 
-/// What asking to join an identity at a provider did.
+/// A join request written into an identity's log at a provider.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum NookIdentityJoinAsk {
-    /// The request is in the identity's log; a device of the identity
-    /// answers it.
-    #[serde(rename_all = "camelCase")]
-    Requested {
-        identity_id: String,
-        /// The asking app key, as the identity's devices list it.
-        app_id: String,
-        /// When the request was written; asking again reports the first one.
-        requested_at: String,
-    },
-    /// A member key held here added the asking key: the identity is on this
-    /// browser under its original id.
-    Joined,
+#[serde(rename_all = "camelCase")]
+pub struct NookIdentityJoinRequested {
+    pub identity_id: String,
+    /// The asking app key, as the identity's devices list it.
+    pub app_id: String,
+    /// When the request was written; asking again reports the first one.
+    pub requested_at: String,
 }
 
 /// Where completing a join request left this browser.
@@ -244,10 +250,9 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Start asking to join an identity. A fresh unlocked key asks itself; a
     /// key that already belongs to an identity stages a new local identity
-    /// named `label`, whose protection ceremony creates the key that asks,
-    /// and is held until then: where the identity lists it as a member, it
-    /// adds that new key itself. A key already bound to the identity, or an
-    /// identity another key here holds, is refused.
+    /// named `label`, whose protection ceremony creates the key that asks.
+    /// A key already bound to the identity, or an identity another key here
+    /// holds, is refused.
     #[wasm_bindgen]
     pub async fn begin_identity_join(
         &mut self,
@@ -268,11 +273,6 @@ impl NookVaultManager {
             IdentityConnectionKey::CurrentAppKey => NookIdentityConnectionStart::CurrentKey,
             IdentityConnectionKey::NewAppKey => {
                 self.begin_local_identity_creation(label).await?;
-                self.device.join_sponsor = HeldJoinSponsor::Held(Box::new(HeldJoinKey {
-                    identity_id: invited,
-                    signing: self.ensure_signing_identity().await?,
-                    app_key,
-                }));
                 NookIdentityConnectionStart::NewKeyStaged
             }
         };
@@ -283,15 +283,13 @@ impl NookVaultManager {
     /// app key must be a fresh one, as an invite join needs: a browser whose
     /// key already belongs to an identity first protects a new key for this
     /// one. The request carries public keys only and opens nothing until a
-    /// device of the identity approves it. When the key held since the join
-    /// began is a member of the identity, it adds this key instead, and the
-    /// identity is joined here at once.
+    /// device of the identity approves it.
     #[wasm_bindgen]
     pub async fn request_identity_join(
         &mut self,
         source: &tsify::Ts<NookProviderSource>,
         identity_id: String,
-    ) -> Result<tsify::Ts<NookIdentityJoinAsk>, JsError> {
+    ) -> Result<tsify::Ts<NookIdentityJoinRequested>, JsError> {
         let source = source
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
@@ -321,66 +319,31 @@ impl NookVaultManager {
         let member = self.own_identity_member_keys(&app_key).await?;
         let signing = self.ensure_signing_identity().await?;
         let created_at = Self::identity_event_time()?;
-        let sponsor = match &self.device.join_sponsor {
-            HeldJoinSponsor::Held(held) if held.identity_id == identity_id => {
-                IdentityJoinSponsor::Held {
-                    app_key: &held.app_key,
-                    signing: &held.signing,
-                }
-            }
-            HeldJoinSponsor::Held(_) | HeldJoinSponsor::None => IdentityJoinSponsor::None,
-        };
         let plan = ProviderIdentityJoinRequest {
             identity_id: &identity_id,
             events: &events,
             member: &member,
             signing: &signing,
             created_at: &created_at,
-            sponsor,
         }
         .plan()?;
-        let requested = |requested_at: &nook_core::IsoTimestamp| NookIdentityJoinAsk::Requested {
-            identity_id: identity_id.as_str().to_owned(),
-            app_id: app_key.app_id().as_str().to_owned(),
-            requested_at: requested_at.as_str().to_owned(),
-        };
-        let asked = match plan {
+        let requested_at = match plan {
             IdentityJoinRequestPlan::Write(write) => {
                 let put = IdentityEventPut {
                     event_id: &write.event_id,
                     bytes: &write.bytes,
                 };
                 self.put_identity_event_at(&at, &put).await?;
-                requested(&write.requested_at)
+                write.requested_at
             }
-            IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested(&requested_at),
-            IdentityJoinRequestPlan::Added(write) => {
-                let put = IdentityEventPut {
-                    event_id: &write.event_id,
-                    bytes: &write.bytes,
-                };
-                self.put_identity_event_at(&at, &put).await?;
-                let mut joined = events;
-                joined.push(write.bytes);
-                match Self::complete_join_from_log(IdentityJoinLog {
-                    identity_id: &identity_id,
-                    app_key: &app_key,
-                    events: &joined,
-                })
-                .await?
-                {
-                    NookIdentityJoinCompletion::Approved => NookIdentityJoinAsk::Joined,
-                    NookIdentityJoinCompletion::Pending | NookIdentityJoinCompletion::Denied => {
-                        return Err(NookError::Database(
-                            "The keyring did not take this key's addition.".to_owned(),
-                        )
-                        .into());
-                    }
-                }
-            }
+            IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested_at,
         };
-        self.device.join_sponsor = HeldJoinSponsor::None;
-        Tsify::into_ts(&asked).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        let requested = NookIdentityJoinRequested {
+            identity_id: identity_id.as_str().to_owned(),
+            app_id: app_key.app_id().as_str().to_owned(),
+            requested_at: requested_at.as_str().to_owned(),
+        };
+        Tsify::into_ts(&requested).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 
     /// Read the identity's log at the source again. Once a device approved
@@ -464,6 +427,103 @@ impl NookVaultManager {
                 .into())
             }
         }
+    }
+
+    /// Add an identity found at a source whose member key is the key in use
+    /// here, which already holds the identity in use. One tap of the passkey
+    /// that protects the key in use wraps a new key for the identity, and
+    /// the key in use, a member, adds that key itself on this device. The
+    /// identity is added under its original id beside the one in use, which
+    /// stays selected; no other device answers. A key in use that is no
+    /// member is refused before the passkey is asked for.
+    #[wasm_bindgen]
+    pub async fn add_identity_with_passkey_in_use(
+        &mut self,
+        source: &tsify::Ts<NookProviderSource>,
+        identity_id: String,
+        rp_id: &str,
+    ) -> Result<tsify::Ts<NookIdentityAdded>, JsError> {
+        let source = source
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let identity_id = IdentityId::parse(&identity_id)?;
+        let key_in_use = self.unlocked_app_key()?;
+        let in_use_member = self.own_identity_member_keys(&key_in_use).await?;
+        let key_in_use_signing = self.ensure_signing_identity().await?;
+        let opened = self.open_identity_source(&source).await?;
+        let at = IdentityLogAtSource {
+            source: &opened,
+            identity_id: &identity_id,
+        };
+        let mut events = self.identity_events_at(&at).await?;
+        let membership = ProviderIdentityKeyInUse {
+            identity_id: &identity_id,
+            events: &events,
+            key_in_use: &key_in_use,
+        }
+        .verify()?;
+        let StoredIdentityProtection::Protected(entry) =
+            NookDatabase::load_entry_for_app_id(key_in_use.app_id()).await?
+        else {
+            return Err(NookError::Database(
+                "The key in use here has no passkey to protect another keyring.".to_owned(),
+            )
+            .into());
+        };
+        let credential_id = entry.wrapped_app_key().credential_id()?;
+        let user_handle = entry.wrapped_app_key().user_handle()?;
+        let prf_input = WebAuthnPrfInput::deterministic();
+        let request_options =
+            BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+                rp_id,
+                credential_id: credential_id.as_ref(),
+                prf_input: prf_input.as_ref(),
+            })?;
+        let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+        let prf_output = Zeroizing::new(BrowserPasskeyClient::require_prf_output(&credential)?);
+        let material = PasskeyRegistration::new(PasskeyRegistrationInput {
+            credential_id: &credential_id,
+            user_handle: &user_handle,
+            prf_input: &prf_input,
+            mode: PasskeyDeviceProtectionMode::AntiHacker,
+        })
+        .complete(&WebAuthnPrfOutput::try_from(prf_output.to_vec())?)?;
+        let new_key = AppKey::from_secret_str(material.identity_secret())?;
+        let (new_signing, new_signer) = SigningIdentity::generate()?;
+        let new_member = IdentityMemberKeys {
+            app_id: new_key.app_id().clone(),
+            encryption_public_key: new_key.public_key(),
+            signing_public_key: new_signing.public_key(),
+            label: in_use_member.label,
+        };
+        let write = membership.addition(&KeyInUseAddition {
+            member: &new_member,
+            signing: &key_in_use_signing,
+            created_at: &Self::identity_event_time()?,
+        })?;
+        let put = IdentityEventPut {
+            event_id: &write.event_id,
+            bytes: &write.bytes,
+        };
+        self.put_identity_event_at(&at, &put).await?;
+        events.push(write.bytes);
+        let selection =
+            NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
+                app_key: &new_key,
+                record: material.record(),
+                signer: &new_signer,
+                identity_id: &identity_id,
+                identity_logs: &[ProviderIdentityLogEvents {
+                    identity_id: identity_id.clone(),
+                    events,
+                }],
+            })
+            .await?;
+        Tsify::into_ts(&NookIdentityAdded {
+            identity_id,
+            selection,
+        })
+        .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 
     /// Approve a device asking to join this identity: it becomes a member
@@ -557,7 +617,6 @@ mod browser_tests {
             member: &member,
             signing: &signer,
             created_at: &created_at,
-            sponsor: IdentityJoinSponsor::None,
         })
         .plan()?
         else {

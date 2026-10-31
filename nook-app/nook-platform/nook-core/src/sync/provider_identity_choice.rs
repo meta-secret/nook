@@ -54,8 +54,8 @@ pub enum IdentityStanding {
     JoinApproved,
     /// Its passkey's key is a member, but here that key already holds the
     /// identity in use, which has its own log or vaults. One key holds one
-    /// identity, so this one joins with a new key of its own, which that
-    /// member key adds itself: no other device has to answer.
+    /// identity, so this one gets a new key here, protected by the same
+    /// passkey, which the member key adds itself.
     PasskeyInUse,
     /// Passkeys were checked here, and none belongs to it.
     NotOpened,
@@ -89,9 +89,8 @@ impl IdentityStanding {
             },
             Self::JoinRequested => IdentitySetup::Waiting,
             Self::JoinDenied | Self::NotOpened | Self::Unchecked => IdentitySetup::RequestToJoin,
-            // The member key here adds the new key the join sets up.
             Self::PasskeyInUse => IdentitySetup::Continue {
-                decision: IdentityDecision::AskToJoin,
+                decision: IdentityDecision::AddWithPasskeyInUse,
             },
             Self::OtherIdentityHere { .. } => IdentitySetup::Unavailable,
         }
@@ -110,6 +109,9 @@ pub enum IdentityDecision {
     AskToJoin,
     /// Add the identity a device approved this browser's request for.
     FinishJoining,
+    /// Add it to this browser under a new key the passkey in use here
+    /// protects; that passkey's member key adds the new key itself.
+    AddWithPasskeyInUse,
 }
 
 /// What first-run setup does with an identity: one action, decided by the
@@ -237,6 +239,9 @@ impl ProviderIdentityChoices<'_> {
             (IdentityStanding::JoinApproved, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
             }
+            (IdentityStanding::PasskeyInUse, _) => {
+                vec![IdentityDecision::Leave, IdentityDecision::AddWithPasskeyInUse]
+            }
             // A passkey that opens the identity completes it here: there
             // is nothing to merge.
             (IdentityStanding::OpenedByPasskey { .. }, _) => {
@@ -252,9 +257,8 @@ impl ProviderIdentityChoices<'_> {
                 IdentitySession::IdentityInUse,
             )
             | (IdentityStanding::NotOpened, IdentitySession::NoIdentity)
-            // A denied request may be asked again; a member key here adds
-            // the new key a join sets up.
-            | (IdentityStanding::JoinDenied | IdentityStanding::PasskeyInUse, _) => {
+            // A denied request may be asked again.
+            | (IdentityStanding::JoinDenied, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
             }
         }
@@ -627,21 +631,26 @@ mod tests {
     }
 
     #[test]
-    fn a_member_key_that_holds_the_identity_in_use_joins_with_a_new_key() -> anyhow::Result<()> {
+    fn a_member_key_that_holds_the_identity_in_use_adds_it_with_the_same_passkey()
+    -> anyhow::Result<()> {
         // The same passkey made the identity in use here, which has vaults,
         // and is a member of the listed one: that key cannot take a second
-        // identity, so continuing joins with a new key it adds itself.
+        // identity, so continuing adds it under a new key the same passkey
+        // protects, which the member key adds itself.
         for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
             let choice = Fixture::only_choice(ProviderIdentityJoin::KeyInUse, session)?;
             assert_eq!(choice.standing, IdentityStanding::PasskeyInUse);
             assert_eq!(
                 choice.decisions,
-                vec![IdentityDecision::Leave, IdentityDecision::AskToJoin]
+                vec![
+                    IdentityDecision::Leave,
+                    IdentityDecision::AddWithPasskeyInUse
+                ]
             );
             assert_eq!(
                 choice.setup,
                 IdentitySetup::Continue {
-                    decision: IdentityDecision::AskToJoin,
+                    decision: IdentityDecision::AddWithPasskeyInUse,
                 }
             );
         }

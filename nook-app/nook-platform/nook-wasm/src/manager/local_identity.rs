@@ -1,6 +1,6 @@
 //! Local identity creation, selection, and session adoption.
 
-use super::session::{HeldJoinSponsor, LocalIdentityCreation};
+use super::session::LocalIdentityCreation;
 
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
@@ -160,7 +160,6 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn cancel_local_identity_creation(&mut self) {
         self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
-        self.device.join_sponsor = HeldJoinSponsor::None;
     }
 
     #[wasm_bindgen(getter)]

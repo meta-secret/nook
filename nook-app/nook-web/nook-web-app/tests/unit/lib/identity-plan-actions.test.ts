@@ -6,7 +6,7 @@ import initNookWasm, {
   type IdentityDecision,
   type NookIdentityConnectionStart,
   type NookIdentityJoinCompletion,
-  type NookIdentityJoinAsk,
+  type NookIdentityJoinRequested,
   type NookProviderSource,
   type ProviderIdentityChoice,
 } from '$app-wasm'
@@ -82,8 +82,7 @@ class JoinSession {
     vi.spyOn(this.manager, 'request_identity_join').mockImplementation(
       (source, identityId) => {
         this.requested.push(`${source.kind}:${identityId}`)
-        const requested: NookIdentityJoinAsk = {
-          state: 'requested',
+        const requested: NookIdentityJoinRequested = {
           identityId,
           appId: 'app_fresh',
           requestedAt: '2026-10-28T08:00:00Z',
@@ -176,34 +175,6 @@ describe('asking to join from an identity plan', () => {
     expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
   })
 
-  test('a new key a member key here added joins at once and follows the identity', async () => {
-    const session = new JoinSession('current-key').unlocked()
-    const joined: NookIdentityJoinAsk = { state: 'joined' }
-    vi.spyOn(session.manager, 'request_identity_join').mockResolvedValue(joined)
-    const reload = vi
-      .spyOn(IdentityDirectoryLoader.prototype, 'reload')
-      .mockResolvedValue()
-    const follow = vi
-      .spyOn(session.vault.identityControl, 'followInviteJoin')
-      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
-    const wait: WaitingIdentityJoin = {
-      kind: IdentityJoinWaitKind.NewKey,
-      join: { source: SOURCE, identityId: IDENTITY, label: LABEL },
-    }
-    session.vault.identityJoin = wait
-
-    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
-
-    expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.Joined)
-    expect(reload).toHaveBeenCalledOnce()
-    expect(follow).toHaveBeenCalledWith(LABEL)
-    // Nothing waits for a device: no request was announced.
-    expect(session.vault.successMsg).not.toBe(
-      session.vault.t(I18N_KEYS.AccessCheckJoinRequested),
-    )
-    expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
-  })
-
   test('a new key that still cannot ask stops the join instead of another ceremony', async () => {
     const session = new JoinSession('new-key-staged').unlocked()
     const wait: WaitingIdentityJoin = {
@@ -233,6 +204,33 @@ describe('asking to join from an identity plan', () => {
     expect(ran._unsafeUnwrapErr().translationKey).toBe(
       I18N_KEYS.ProviderIdentitiesJoinFailed,
     )
+  })
+})
+
+describe('adding an identity the passkey in use is a member of', () => {
+  test('the passkey in use adds it here without a new passkey or a request', async () => {
+    const session = new JoinSession('new-key-staged').unlocked()
+    const added = vi
+      .spyOn(session.manager, 'add_identity_with_passkey_in_use')
+      .mockResolvedValue({
+        identityId: IDENTITY,
+        selection: 'besideIdentityInUse',
+      })
+    const reload = vi
+      .spyOn(IdentityDirectoryLoader.prototype, 'reload')
+      .mockResolvedValue()
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('addWithPasskeyInUse'),
+    )
+
+    expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.Applied)
+    expect(added).toHaveBeenCalledWith(SOURCE, IDENTITY, location.hostname)
+    expect(reload).toHaveBeenCalledOnce()
+    // No key ceremony opens and no device is asked.
+    expect(session.manager.begin_identity_join).not.toHaveBeenCalled()
+    expect(session.requested).toEqual([])
+    expect(session.vault.newIdentity).not.toBe(NewIdentityStage.Key)
   })
 })
 

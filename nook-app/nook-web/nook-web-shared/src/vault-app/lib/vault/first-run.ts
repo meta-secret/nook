@@ -215,12 +215,6 @@ export class FirstRunActions {
       vault.errorMsg = asked.error.message(vault);
       return;
     }
-    if (asked.value === IdentityJoinAsked.Joined) {
-      // A member key held here added it: the identity is here already.
-      await new IdentityJoinActions(vault).follow(join);
-      await this.connectProvider();
-      return;
-    }
     if (asked.value !== IdentityJoinAsked.Requested) {
       // Setup asks only with a fresh key; say why this one cannot.
       const failure = new IdentityPlanFailure(
