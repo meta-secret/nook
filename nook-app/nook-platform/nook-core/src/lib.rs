@@ -53,9 +53,9 @@ pub(crate) use secrets::{
 pub(crate) use sync::{
     authorized_accounts, drive_vault_folder, key_in_use_addition, passkey_identity_addition,
     provider_identity_choice, provider_identity_join, provider_identity_log, provider_vault_access,
-    provider_vault_join, provider_vault_listing, sync_provider_credentials, sync_provider_store,
-    validation, vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session,
-    vault_sync_state, vault_sync_store,
+    provider_vault_join, provider_vault_listing, s3_protocol, sync_provider_credentials,
+    sync_provider_store, validation, vault_access_check, vault_sync, vault_sync_conflict,
+    vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -377,6 +377,15 @@ pub use provider_vault_listing::{
     KnownVaultName, LocalVaultItemCount, LocalVaultOccupancy, NOOK_PROVIDER_ROOT_NAME,
     ProviderEventCount, ProviderInstant, ProviderVaultListing, ProviderVaultListingRequest,
     ProviderVaultName, ProviderVaultObservation, ProviderVaultSummary, ProviderVaultTime,
+};
+pub use s3_protocol::{
+    S3CommonPrefix, S3ContinuationToken, S3EventAddress, S3ExistingEvent, S3HttpMethod,
+    S3HttpRequest, S3HttpStatus, S3IdentityFolder, S3ListDepth, S3ListObjects, S3ListPage,
+    S3ListPageSize, S3ListPageSizeOutOfRange, S3ListPrefix, S3ListedEvent, S3ListedKey,
+    S3ListedNamespace, S3ListingContinuation, S3ObjectDeletion, S3ObjectKey, S3ObjectListing,
+    S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestBody, S3RequestFailure, S3RequestHeader,
+    S3RequestHeaderName, S3RequestSigner, S3RequestTime, S3RequestUrl, S3Response, S3ResponseBody,
+    S3SigningError, S3UnixSeconds,
 };
 pub use secrets::SecretRecordFilter;
 pub use session::{

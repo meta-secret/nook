@@ -10,6 +10,7 @@ pub(crate) mod provider_identity_log;
 pub(crate) mod provider_vault_access;
 pub(crate) mod provider_vault_join;
 pub(crate) mod provider_vault_listing;
+pub(crate) mod s3_protocol;
 pub(crate) mod sync_provider_credentials;
 pub(crate) mod sync_provider_store;
 pub(crate) mod validation;
