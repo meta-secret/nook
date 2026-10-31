@@ -114,9 +114,12 @@ offers adding by another passkey.
   offered. First run names a fresh identity there. With an identity in use,
   it saves that identity on the provider as a new one and connects.
 - An identity Continue adds beside the identity in use (Add to this
-  browser, or the passkey in use) ends adding the provider there: nothing is
-  saved or synced for the identity in use, no Sync page shows in between,
-  and the hub says "{identity} was added to this browser".
+  browser, or the passkey in use) ends adding the provider there. The
+  sign-in is bound to the account's Nook folder and saved for the added
+  identity, sealed to its key here (`save_added_identity_providers`), so it
+  syncs without another sign-in. Nothing is saved or synced for the identity
+  in use, no Sync page shows in between, and the hub says "{identity} was
+  added to this browser".
 - With an identity in use, **This browser** is that identity, so Rust
   answers `InUse` and its card has no action. On first run nothing is in
   use yet, so the same standing continues on the identity. Another action

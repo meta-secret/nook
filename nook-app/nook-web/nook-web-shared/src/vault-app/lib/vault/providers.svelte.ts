@@ -93,6 +93,7 @@ import {
   type ProviderSaveSetup,
   type ProviderSaveRequest,
   type AuthProvidersSnapshot,
+  type ProviderVaultScope,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -754,6 +755,13 @@ export class VaultProviderActions {
   }
 }
 
+/** The rows a provider being set up joins, and where it is kept. */
+type ProviderSaveTarget = {
+  readonly snapshot: AuthProvidersSnapshot;
+  readonly providerStoreId: ProviderVaultScope;
+  readonly explicitAdd: boolean;
+};
+
 export class ProviderPersistenceActions {
   constructor(private readonly state: ProviderSaveContext) {}
 
@@ -789,13 +797,9 @@ export class ProviderPersistenceActions {
     );
   }
 
-  async ensureProviderSaved(): Promise<
-    Result<ProviderSaveOutcome, StorageOperationFailure>
-  > {
+  /** The save of the provider being set up, onto the rows it joins. */
+  private saveRequest(target: ProviderSaveTarget): ProviderSaveRequest {
     const state = this.state;
-    const scope = await this.providerStoreIdForSave();
-    if (scope.isErr()) return storageErr(scope.error);
-    const providerStoreId = scope.value;
     const oauthFile =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
         ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
@@ -810,22 +814,12 @@ export class ProviderPersistenceActions {
         : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
           ? state.oauthSetupSelection.preset
           : "google-drive";
-    const setup = providerSaveSetup(state.loginSetup);
-    const request: ProviderSaveRequest = {
-      snapshot: {
-        providers: $state.snapshot(state.providers),
-        activeVaultStoreId:
-          state.activeVault.kind === ActiveVaultKind.Open
-            ? activeVaultScope(state.activeVault.storeId)
-            : unselectedVaultScope(),
-      },
-      providerStoreId,
+    return {
+      snapshot: target.snapshot,
+      providerStoreId: target.providerStoreId,
       storageMode: state.storageMode,
-      setup,
-      explicitAdd:
-        state.addProviderOpen ||
-        (state.isAuthenticated &&
-          state.loginSetup.kind === LoginSetupKind.Active),
+      setup: providerSaveSetup(state.loginSetup),
+      explicitAdd: target.explicitAdd,
       githubPat: state.githubPat,
       githubRepo: state.githubRepo,
       oauthFile,
@@ -834,7 +828,76 @@ export class ProviderPersistenceActions {
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
     };
-    const outcome = apply_provider_save_policy(request);
+  }
+
+  /** Save the provider being set up for an identity added beside the one
+   * in use, under that identity's own key here: the sign-in that found it
+   * serves it too. The identity in use and its providers stay as they are. */
+  async saveProviderForAddedIdentity(
+    identityId: string,
+  ): Promise<Result<ProviderSaveOutcome, StorageOperationFailure>> {
+    const state = this.state;
+    const target: ProviderSaveTarget = {
+      snapshot: { providers: [], activeVaultStoreId: unselectedVaultScope() },
+      providerStoreId: unscopedProviderVault(),
+      explicitAdd: true,
+    };
+    const outcome = apply_provider_save_policy(this.saveRequest(target));
+    try {
+      if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.DuplicateProvider,
+          ),
+        );
+      }
+      if (outcome.state === NookProviderSaveOutcomeState.LocalFolderRequired) {
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.LocalFolderRequired,
+          ),
+        );
+      }
+      const snapshot = outcome.snapshot;
+      return await state.enqueueStorage(async () => {
+        const manager = state.admitManager();
+        if (manager.isErr()) return storageErr(manager.error);
+        try {
+          await manager.value.save_added_identity_providers(
+            identityId,
+            snapshot,
+          );
+          return storageOk(ProviderSaveOutcome.Saved);
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+    } finally {
+      outcome.free();
+    }
+  }
+
+  async ensureProviderSaved(): Promise<
+    Result<ProviderSaveOutcome, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const scope = await this.providerStoreIdForSave();
+    if (scope.isErr()) return storageErr(scope.error);
+    const target: ProviderSaveTarget = {
+      snapshot: {
+        providers: $state.snapshot(state.providers),
+        activeVaultStoreId:
+          state.activeVault.kind === ActiveVaultKind.Open
+            ? activeVaultScope(state.activeVault.storeId)
+            : unselectedVaultScope(),
+      },
+      providerStoreId: scope.value,
+      explicitAdd:
+        state.addProviderOpen ||
+        (state.isAuthenticated &&
+          state.loginSetup.kind === LoginSetupKind.Active),
+    };
+    const outcome = apply_provider_save_policy(this.saveRequest(target));
     try {
       if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
         return storageErr(

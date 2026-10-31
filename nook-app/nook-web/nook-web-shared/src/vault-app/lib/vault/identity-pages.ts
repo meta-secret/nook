@@ -3,6 +3,13 @@ import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { VaultState } from "$lib/vault.svelte";
 
+/** A keyring a provider's listing added beside the one in use. */
+export type AddedKeyring = {
+  readonly identityId: string;
+  /** Its name, or its three words. */
+  readonly label: string;
+};
+
 /**
  * The pages of an identity unlocked while none of its vaults is open: its
  * overview beside its card on the hub, and its Sync, Devices, Add a device,
@@ -102,18 +109,24 @@ export class IdentityPages {
   }
 
   /** A keyring the provider's listing offered was added beside the one in
-   * use, which stays selected. Adding the provider ends there: nothing is
-   * saved or synced for the keyring in use. The hub shows the added
-   * keyring's card, with a line saying it is here. */
-  keyringAddedBeside(label: string): void {
+   * use, which stays selected. The provider being set up is saved for the
+   * added keyring, so the same sign-in serves it; nothing is saved or synced
+   * for the keyring in use. The hub then shows the added keyring's card,
+   * with a line saying it is here, or why its provider was not saved. */
+  async keyringAddedBeside(added: AddedKeyring): Promise<void> {
     const vault = this.vault;
+    const saved = await vault.saveProviderForAddedIdentity(added.identityId);
     vault.cancelProviderSetup();
     vault.cancelAddProvider();
     if (vault.isAuthenticated) vault.openSection(WorkspaceSection.Identities);
     else this.show(WorkspaceSection.Identities);
+    if (saved.isErr()) {
+      vault.errorMsg = vault.t(saved.error.translationKey);
+      return;
+    }
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.ProviderIdentitiesAddedHere,
-      replacements: { identity: label },
+      replacements: { identity: added.label },
     };
     vault.showSuccess(vault.t(request));
   }

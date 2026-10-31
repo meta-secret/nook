@@ -11,7 +11,7 @@ use std::mem;
 
 use nook_core::{
     ActiveVaultScope, AppId, AppKeyIdentityMembership, AuthProvidersSnapshotData,
-    IdentityControlState, ProviderCredentialRejection, StorageProvider,
+    IdentityControlState, IdentityId, ProviderCredentialRejection, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -141,6 +141,55 @@ impl NookVaultManager {
             taken += snapshot.providers.len();
         }
         u32::try_from(taken).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+
+    /// Save sync providers for an identity added beside the one in use,
+    /// sealed to the identity's own key on this browser as the keyring hands
+    /// its providers to another app. The identity syncs through them once it
+    /// is opened, so the sign-in that found it serves it too.
+    #[wasm_bindgen]
+    pub async fn save_added_identity_providers(
+        &self,
+        identity_id: String,
+        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+    ) -> Result<(), JsError> {
+        let identity_id = IdentityId::parse(&identity_id)?;
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let keyring = NookDatabase::load_keyring().await?;
+        let entry = keyring
+            .entry(&identity_id)
+            .require_protected()
+            .map_err(NookDatabase::map_domain_error)?;
+        let public_key = NookDatabase::load_identity_directory()
+            .await?
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == identity_id)
+            .and_then(|record| {
+                record
+                    .members
+                    .iter()
+                    .find(|member| &member.app_id == entry.app_id())
+            })
+            .map(|member| member.public_key.clone())
+            .ok_or_else(|| {
+                crate::NookError::Database(
+                    "The added identity lists no key of this browser.".to_owned(),
+                )
+            })?;
+        let sealed = snapshot
+            .seal_credentials_for(&public_key)
+            .map_err(ProviderCredentialRejection::into_cause)?;
+        PresealedProviderSnapshotPublication {
+            app_id: entry.app_id(),
+            snapshot: &sealed,
+            merge: PresealedProviderMerge::KeyringProviders,
+        }
+        .save()
+        .await?;
+        Ok(())
     }
 }
 

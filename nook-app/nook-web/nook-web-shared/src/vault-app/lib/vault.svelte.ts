@@ -482,6 +482,12 @@ export class VaultState extends VaultRuntimeState {
     ).ensureProviderSaved();
   }
 
+  async saveProviderForAddedIdentity(identityId: string) {
+    return new providersActions.ProviderPersistenceActions(
+      this,
+    ).saveProviderForAddedIdentity(identityId);
+  }
+
   startVaultSync() {
     return new syncActions.VaultSyncActions(this).startVaultSync();
   }

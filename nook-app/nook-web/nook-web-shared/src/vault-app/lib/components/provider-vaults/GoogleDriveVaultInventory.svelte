@@ -43,7 +43,8 @@ decrypts in memory and changes nothing.
     type IdentityPlanRun,
   } from '$lib/vault/identity-plan-actions'
   import type { VaultState } from '$lib/vault.svelte'
-  import { IdentityPages } from '$lib/vault/identity-pages'
+  import { IdentityPages, type AddedKeyring } from '$lib/vault/identity-pages'
+  import { VaultOAuthActions } from '$lib/vault/oauth'
   import { IdentityJoinWaitKind } from '$lib/vault/identity-join-wait'
   import {
     AccessCheckActions,
@@ -221,8 +222,18 @@ decrypts in memory and changes nothing.
         if (ran.isErr()) vault.errorMsg = ran.error.message(vault)
         else if (ran.value.kind === IdentityPlanOutcomeKind.WaitsForKey) return
         else if (ran.value.kind === IdentityPlanOutcomeKind.AddedBeside) {
-          const label = new IdentityDecisionText(vault).name(choice)
-          new IdentityPages(vault).keyringAddedBeside(label)
+          // The added keyring syncs in this account's Nook folder: the
+          // sign-in is bound to it, then saved for that keyring.
+          const folder = await new VaultOAuthActions(vault).connectGoogleVaultFolder()
+          if (folder.isErr()) {
+            vault.errorMsg = vault.t(folder.error.translationKey)
+            return
+          }
+          const added: AddedKeyring = {
+            identityId: choice.identity.identityId,
+            label: new IdentityDecisionText(vault).name(choice),
+          }
+          await new IdentityPages(vault).keyringAddedBeside(added)
           return
         } else if (action !== FirstRunIdentityAction.AskToJoin) {
           await onConnect()
