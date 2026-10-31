@@ -93,7 +93,7 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, EventId, IdentityControlMember, IdentityId, IdentityMemberKeys,
-        MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, SigningIdentity,
+        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, SigningIdentity,
         StorageProviderType, StoredGithubPat, StoredGithubRepository,
         StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
@@ -140,6 +140,7 @@ mod tests {
                         label: MemberLabel::from_trusted("app".to_owned()),
                     },
                     approved_in: EventId::parse(&format!("sha256u:{}A", "a".repeat(42)))?,
+                    device: MemberDevice::Own,
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;

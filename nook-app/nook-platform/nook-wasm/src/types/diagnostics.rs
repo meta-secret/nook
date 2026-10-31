@@ -433,7 +433,7 @@ mod browser_tests {
             nook_core::IdentityHealthAssessment {
                 copy_provider_count: copies.into(),
                 device_join_provider_count: joinable.into(),
-                app_count: apps.into(),
+                device_count: apps.into(),
                 stored_item_count: items.into(),
             },
         ))

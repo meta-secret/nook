@@ -1,10 +1,7 @@
 import type { NookVaultManager } from "$app-wasm";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
-import {
-  VaultStorageFailure as StorageOperationFailure,
-  VaultStorageFailureKind as StorageOperationFailureKind,
-} from "$lib/runtime/storage-failure";
+import { VaultStorageFailure as StorageOperationFailure } from "$lib/runtime/storage-failure";
 import { ProviderFailureLogContext } from "$lib/vault/provider-failure-log-context";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
@@ -12,9 +9,8 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type {
   ActiveProviderCredentialsContext,
   ProviderActionsContext,
-  ProviderSaveContext,
 } from "$lib/vault/action-contexts";
-import { generate_id, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
+import type { VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
@@ -44,8 +40,6 @@ import {
   rootGoogleDriveFolder,
   signedOutOAuthCredential,
   storedOAuthRemoteFileName,
-  scopedProviderVault,
-  unscopedProviderVault,
   unselectedVaultScope,
   unknownOAuthAccountIdentity,
   unknownOAuthTokenExpiry,
@@ -56,7 +50,6 @@ import {
   type StorageProviderType,
 } from "$lib/auth/providers";
 import {
-  apply_provider_save_policy,
   active_provider_login_setup,
   active_provider_credentials_projection_draft,
   active_provider_credentials_projection,
@@ -65,14 +58,11 @@ import {
   draft_github_storage_args,
   draft_local_storage_args,
   draft_oauth_storage_args,
-  existing_provider_save_setup,
   has_github_credentials,
   has_local_vault,
   has_local_folder_credentials,
   has_oauth_credentials,
   inactive_provider_login_setup,
-  new_provider_save_setup,
-  NookProviderSaveOutcomeState,
   NookActiveProviderCredentialsProjectionState,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
@@ -90,8 +80,6 @@ import {
   local_vault_storage_args,
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
-  type ProviderSaveSetup,
-  type ProviderSaveRequest,
   type AuthProvidersSnapshot,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
@@ -112,18 +100,12 @@ export { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
 
 export { ProviderConnectionActions } from "$lib/vault/provider-connection";
 
-const log = browserLogRuntime.createLogger("vault-providers");
+export {
+  ProviderPersistenceActions,
+  ProviderSaveOutcome,
+} from "$lib/vault/provider-persistence.svelte";
 
-function providerSaveSetup(
-  loginSetup: ProviderActionsContext["loginSetup"],
-): ProviderSaveSetup {
-  switch (loginSetup.kind) {
-    case LoginSetupKind.Active:
-      return new_provider_save_setup(loginSetup.providerType);
-    case LoginSetupKind.Inactive:
-      return existing_provider_save_setup();
-  }
-}
+const log = browserLogRuntime.createLogger("vault-providers");
 
 export interface VaultConnectAssessmentRequest {
   readonly args: NookStorageConnectArgs;
@@ -163,11 +145,6 @@ export interface ProviderSetup {
 
 export interface ProviderRemoval {
   readonly id: string;
-}
-
-/** Confirms provider persistence without exposing credential-bearing provider state. */
-export enum ProviderSaveOutcome {
-  Saved = "saved",
 }
 
 export enum ProviderPersistenceOutcome {
@@ -751,131 +728,6 @@ export class VaultProviderActions {
       providers: state.providers,
     };
     return storageOk(outcome);
-  }
-}
-
-export class ProviderPersistenceActions {
-  constructor(private readonly state: ProviderSaveContext) {}
-
-  private async providerStoreIdForSave(): Promise<
-    Result<
-      | ReturnType<typeof scopedProviderVault>
-      | ReturnType<typeof unscopedProviderVault>,
-      StorageOperationFailure
-    >
-  > {
-    const state = this.state;
-    if (!state.hasManager)
-      return storageOk(
-        state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
-          ? scopedProviderVault(state.selectedLoginVault.storeId)
-          : unscopedProviderVault(),
-      );
-    const storeId = await state.enqueueStorage(async () => {
-      const manager = state.admitManager();
-      if (manager.isErr()) return storageErr(manager.error);
-      try {
-        return storageOk(manager.value.vaultStoreId.trim());
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-    });
-    if (storeId.isErr()) return storageErr(storeId.error);
-    if (storeId.value) return storageOk(scopedProviderVault(storeId.value));
-    return storageOk(
-      state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
-        ? scopedProviderVault(state.selectedLoginVault.storeId)
-        : unscopedProviderVault(),
-    );
-  }
-
-  async ensureProviderSaved(): Promise<
-    Result<ProviderSaveOutcome, StorageOperationFailure>
-  > {
-    const state = this.state;
-    const scope = await this.providerStoreIdForSave();
-    if (scope.isErr()) return storageErr(scope.error);
-    const providerStoreId = scope.value;
-    const oauthFile =
-      state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
-        : oauthConfigurationNotApplicable();
-    const localFolder =
-      state.localFolderDraft.kind === LocalFolderDraftKind.Configured
-        ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
-        : localFolderConfigurationNotApplicable();
-    const oauthPreset =
-      state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? state.oauthFileDraft.config.preset
-        : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-          ? state.oauthSetupSelection.preset
-          : "google-drive";
-    const setup = providerSaveSetup(state.loginSetup);
-    const request: ProviderSaveRequest = {
-      snapshot: {
-        providers: $state.snapshot(state.providers),
-        activeVaultStoreId:
-          state.activeVault.kind === ActiveVaultKind.Open
-            ? activeVaultScope(state.activeVault.storeId)
-            : unselectedVaultScope(),
-      },
-      providerStoreId,
-      storageMode: state.storageMode,
-      setup,
-      explicitAdd:
-        state.addProviderOpen ||
-        (state.isAuthenticated &&
-          state.loginSetup.kind === LoginSetupKind.Active),
-      githubPat: state.githubPat,
-      githubRepo: state.githubRepo,
-      oauthFile,
-      oauthPreset,
-      localFolder,
-      newProviderId: generate_id(),
-      createdAt: isoTimestamp(),
-    };
-    const outcome = apply_provider_save_policy(request);
-    try {
-      if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.DuplicateProvider,
-          ),
-        );
-      }
-      if (outcome.state === NookProviderSaveOutcomeState.LocalFolderRequired) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.LocalFolderRequired,
-          ),
-        );
-      }
-      const persistenceOptions: ProviderPersistenceOptions = {
-        replace: false,
-        providers: outcome.snapshot.providers,
-      };
-      const persistence = await state.persistProviders(persistenceOptions);
-      if (persistence.isErr()) {
-        return storageErr(persistence.error);
-      }
-      const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
-        outcome.oauthFile,
-      );
-      if (
-        oauthFileConfiguration.kind ===
-        StoredOAuthFileConfigurationDecodeKind.Configured
-      ) {
-        state.configureOauthFile(oauthFileConfiguration.config);
-      }
-      state.clearLoginSetup();
-      state.loginRequiresExistingVault = false;
-      state.addProviderOpen = false;
-      state.applyActiveProviderCredentials();
-      log.info("sync provider saved");
-      return storageOk(ProviderSaveOutcome.Saved);
-    } finally {
-      outcome.free();
-    }
   }
 }
 

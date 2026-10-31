@@ -80,6 +80,7 @@ export class IdentityPlan {
         this.picks = others;
         return;
       case "addToBrowser":
+      case "addWithPasskeyInUse":
       case "askToJoin":
       case "finishJoining":
         this.picks = [...others, pick];
@@ -102,6 +103,7 @@ export class IdentityPlan {
         case "leave":
           continue;
         case "addToBrowser":
+        case "addWithPasskeyInUse":
         case "askToJoin":
         case "finishJoining":
           if (choice.decisions.includes(decision)) {
@@ -138,6 +140,8 @@ export class IdentityDecisionText {
         return vault.identityInUse
           ? vault.t(I18N_KEYS.ProviderIdentitiesAdd)
           : vault.t(I18N_KEYS.ProviderIdentitiesRecover);
+      case "addWithPasskeyInUse":
+        return vault.t(I18N_KEYS.ProviderIdentitiesAdd);
       case "askToJoin":
         return vault.t(I18N_KEYS.ProviderIdentitiesAskToJoin);
       case "finishJoining":

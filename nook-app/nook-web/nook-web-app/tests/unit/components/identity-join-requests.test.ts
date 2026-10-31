@@ -43,7 +43,15 @@ function identityWith(requests: IdentityJoinRequestView[]): VaultState {
     identityId: 'idn_test',
     identityLabel: 'Personal',
     standing: 'member',
-    members: [{ appId: 'app_here', label: '', isCurrentInstallation: true }],
+    members: [
+      {
+        appId: 'app_here',
+        label: '',
+        isCurrentInstallation: true,
+        onCurrentDevice: true,
+      },
+    ],
+    deviceCount: 1,
     joinRequests: requests,
     vaults: [],
     mounts: [],

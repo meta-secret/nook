@@ -73,7 +73,7 @@ describe('extension deployment archive', () => {
     ).toThrow()
   })
 
-  test('creates a stable root-manifest archive without spawning zip', async () => {
+  test('creates a stable root-manifest archive without source maps or spawning zip', async () => {
     const workspaceDirectory = await mkdtemp(
       join(tmpdir(), 'nook-extension-package-'),
     )
@@ -89,6 +89,11 @@ describe('extension deployment archive', () => {
         '{"manifest_version":3}',
       )
       await writeFile(join(sourceDirectory, 'service-worker.js'), 'self.test()')
+      // A debugging aid the installed extension never loads.
+      await writeFile(
+        join(sourceDirectory, 'service-worker.js.map'),
+        '{"version":3}',
+      )
       await mkdir(join(sourceDirectory, 'assets'))
       await writeFile(
         join(sourceDirectory, 'assets', 'icon.svg'),

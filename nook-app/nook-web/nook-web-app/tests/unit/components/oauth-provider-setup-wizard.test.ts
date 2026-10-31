@@ -134,7 +134,15 @@ function useIdentity(vault: VaultState): void {
     identityId: 'idn_personalide',
     identityLabel: 'Personal',
     standing: 'member',
-    members: [{ appId: 'app_here', label: '', isCurrentInstallation: true }],
+    members: [
+      {
+        appId: 'app_here',
+        label: '',
+        isCurrentInstallation: true,
+        onCurrentDevice: true,
+      },
+    ],
+    deviceCount: 1,
     joinRequests: [],
     vaults: [],
     mounts: [],

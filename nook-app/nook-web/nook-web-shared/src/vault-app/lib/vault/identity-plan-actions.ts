@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
 import type {
+  AddedIdentitySelection,
   NookIdentityJoinCompletion,
   NookProviderSource,
   NookVaultManager,
@@ -25,10 +26,14 @@ export enum IdentityPlanOutcomeKind {
    * that key's ceremony, which asks once the key exists. Decisions after
    * the join have not run. */
   WaitsForKey = "waits-for-key",
+  /** Every decision ran, and an identity was added beside the one in use,
+   * which stays selected: nothing is set up for the one in use. */
+  AddedBeside = "added-beside",
 }
 
 export type IdentityPlanOutcome =
   | { readonly kind: IdentityPlanOutcomeKind.Applied }
+  | { readonly kind: IdentityPlanOutcomeKind.AddedBeside }
   | {
       readonly kind: IdentityPlanOutcomeKind.WaitsForKey;
       readonly wait: WaitingIdentityJoin;
@@ -283,6 +288,9 @@ export class IdentityPlanActions {
     Result<IdentityPlanOutcome, IdentityPlanFailure>
   > {
     const names = new IdentityDecisionText(this.vault);
+    let outcome: IdentityPlanOutcome = {
+      kind: IdentityPlanOutcomeKind.Applied,
+    };
     for (const { choice, decision } of planned) {
       const join: IdentityJoinIntent = {
         source,
@@ -295,14 +303,14 @@ export class IdentityPlanActions {
       switch (ran.value.kind) {
         case IdentityPlanOutcomeKind.Applied:
           continue;
+        case IdentityPlanOutcomeKind.AddedBeside:
+          outcome = ran.value;
+          continue;
         case IdentityPlanOutcomeKind.WaitsForKey:
           return ran;
       }
     }
-    const applied: IdentityPlanOutcome = {
-      kind: IdentityPlanOutcomeKind.Applied,
-    };
-    return ok(applied);
+    return ok(outcome);
   }
 
   /** Run one decision for one identity. */
@@ -322,15 +330,34 @@ export class IdentityPlanActions {
         const add: ManagerCall<IdentityPlanOutcome> = {
           failure: new IdentityPlanFailure(IdentityPlanFailureKind.Add),
           run: async (manager) => {
-            await manager.add_identity_with_passkey(
+            const added = await manager.add_identity_with_passkey(
               join.source,
               join.identityId,
               location.hostname,
             );
-            return applied;
+            return IdentityPlanActions.added(added.selection);
           },
         };
         return calls.run(add);
+      }
+      case "addWithPasskeyInUse": {
+        // The passkey in use here protects a new key for the identity, which
+        // its member key adds: one tap, nothing to create, no device asked.
+        const add: ManagerCall<IdentityPlanOutcome> = {
+          failure: new IdentityPlanFailure(IdentityPlanFailureKind.Add),
+          run: async (manager) => {
+            const added = await manager.add_identity_with_passkey_in_use(
+              join.source,
+              join.identityId,
+              location.hostname,
+            );
+            return IdentityPlanActions.added(added.selection);
+          },
+        };
+        const added = await calls.run(add);
+        if (added.isOk())
+          await new IdentityDirectoryLoader(this.vault).reload();
+        return added;
       }
       case "askToJoin": {
         const asked = await joins.ask(join);
@@ -351,8 +378,19 @@ export class IdentityPlanActions {
     }
   }
 
+  /** Where Rust put an identity it added: in use when none was, otherwise
+   * beside the one in use. */
+  private static added(selection: AddedIdentitySelection): IdentityPlanOutcome {
+    switch (selection) {
+      case "inUse":
+        return { kind: IdentityPlanOutcomeKind.Applied };
+      case "besideIdentityInUse":
+        return { kind: IdentityPlanOutcomeKind.AddedBeside };
+    }
+  }
+
   /** Whether an asked join waits for a key, and which. */
-  private waiting({ asked, join }: AskedJoin): IdentityPlanOutcome {
+  private waiting({ asked, join }: AskedJoin): AskedJoinOutcome {
     switch (asked) {
       case IdentityJoinAsked.Requested:
         return { kind: IdentityPlanOutcomeKind.Applied };
@@ -375,6 +413,12 @@ type PlanStep = {
   readonly decision: PlannedDecision["decision"];
   readonly join: IdentityJoinIntent;
 };
+
+/** What asking to join leaves: it adds no identity by itself. */
+type AskedJoinOutcome = Exclude<
+  IdentityPlanOutcome,
+  { readonly kind: IdentityPlanOutcomeKind.AddedBeside }
+>;
 
 /** How Rust answered asking to join, for the identity asked. */
 type AskedJoin = {

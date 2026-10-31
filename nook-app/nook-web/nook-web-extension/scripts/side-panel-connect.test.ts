@@ -618,6 +618,9 @@ describe('side panel connect state', () => {
     const personSteps: ExtensionConnectStep[] = [
       { kind: ExtensionConnectStepKind.Opened },
       { kind: ExtensionConnectStepKind.Unlock },
+      // Setting up a vault or keyring: passkey, provider and names are the
+      // person's to enter in the tab.
+      { kind: ExtensionConnectStepKind.Creating },
       { kind: ExtensionConnectStepKind.Consent },
       {
         kind: ExtensionConnectStepKind.Failed,
@@ -639,18 +642,13 @@ describe('side panel connect state', () => {
       }),
     ).toBe(SidePanelTabPointer.Left)
 
-    // Nook works on its own, so there is nothing to point at.
-    for (const kind of [
-      ExtensionConnectStepKind.Creating,
-      ExtensionConnectStepKind.Approved,
-    ] as const) {
-      expect(
-        SidePanelConnects.tabPointer({
-          connect: at({ kind }),
-          side: SidePanelSide.Right,
-        }),
-      ).toBe(SidePanelTabPointer.None)
-    }
+    // The approval ends the connect, so there is nothing to point at.
+    expect(
+      SidePanelConnects.tabPointer({
+        connect: at({ kind: ExtensionConnectStepKind.Approved }),
+        side: SidePanelSide.Right,
+      }),
+    ).toBe(SidePanelTabPointer.None)
 
     // Another tab covers the Nook tab: Show Nook tab leads instead.
     const behind = SidePanelConnects.tabActivated({

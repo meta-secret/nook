@@ -92,9 +92,19 @@ offers adding by another passkey.
 - **This browser, first run:** **Continue** (Finish joining: a passkey made before restores the identity's record without its log or vault keys, so the provider's log and this key's grants come here; then Drive is saved, the log syncs, and a vault the identity granted opens through it, as after an invite; setup ends on the identities page with that vault's panel open beside the card, not inside the vault).
 - **This browser, identity in use:** **In use** (no action).
 - **Join approved:** **Continue** (Finish joining).
-- **Passkey in use:** no action. The key is a member, but here it already
-  holds the identity in use, which has its own log or vaults. One key holds
-  one identity, so finishing would fail; the tag says why instead.
+- **Passkey in use:** **Continue** (Add to this browser,
+  `addWithPasskeyInUse`). The key is a member, but here it already holds the
+  identity in use, which has its own log or vaults, and one key holds one
+  identity. One tap of the passkey that protects the key in use (no new
+  passkey) wraps a new key for the identity (`PasskeyWrappedLocal`, the same
+  PRF input). The key in use then adds that key itself (`member-approved`,
+  `same-as` the key in use) at the provider: no other device answers. The
+  identity is added beside the one in use, which stays selected. This
+  browser's directory lists the key in use under the identity it holds
+  only; the added identity's record leaves it out, though its log still lists
+  it for the browser that holds the identity with it. The addition is decided
+  locally before the provider sees it, and a key in use that is no member is
+  refused before the passkey is asked for.
 - **Opens with a checked passkey:** **Continue** (Add to this browser).
 - **Join requested:** **Waiting** (Check again).
 - **Not on this browser, not opened, or join denied:** **Request to join**.
@@ -103,6 +113,13 @@ offers adding by another passkey.
 - Below the list, after an "or", **Create a new identity** is always
   offered. First run names a fresh identity there. With an identity in use,
   it saves that identity on the provider as a new one and connects.
+- An identity Continue adds beside the identity in use (Add to this
+  browser, or the passkey in use) ends adding the provider there. The
+  sign-in is bound to the account's Nook folder and saved for the added
+  identity, sealed to its key here (`save_added_identity_providers`), so it
+  syncs without another sign-in. Nothing is saved or synced for the identity
+  in use, no Sync page shows in between, and the hub says "{identity} was
+  added to this browser".
 - With an identity in use, **This browser** is that identity, so Rust
   answers `InUse` and its card has no action. On first run nothing is in
   use yet, so the same standing continues on the identity. Another action
@@ -113,8 +130,8 @@ offers adding by another passkey.
 - A passkey made for Nook before re-derives the same app key, so an identity
   it is a member of reads as **Join approved** with no extra tap. That holds
   only while the key's identity here is still fresh (no log, no vaults, no
-  other member). Otherwise it reads as **Passkey in use**, tagged "Its
-  passkey is already in use here".
+  other member). Otherwise it reads as **Passkey in use** and is added under
+  a new key the same passkey protects.
 - A refusal from Rust reaches the user with its reason after the failed
   action, not as a bare "could not" sentence.
 - A new passkey is a member of nothing: every identity asks to join.

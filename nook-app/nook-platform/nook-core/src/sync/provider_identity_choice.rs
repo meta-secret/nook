@@ -54,7 +54,8 @@ pub enum IdentityStanding {
     JoinApproved,
     /// Its passkey's key is a member, but here that key already holds the
     /// identity in use, which has its own log or vaults. One key holds one
-    /// identity, so this one cannot be added on this browser.
+    /// identity, so this one gets a new key here, protected by the same
+    /// passkey, which the member key adds itself.
     PasskeyInUse,
     /// Passkeys were checked here, and none belongs to it.
     NotOpened,
@@ -88,7 +89,10 @@ impl IdentityStanding {
             },
             Self::JoinRequested => IdentitySetup::Waiting,
             Self::JoinDenied | Self::NotOpened | Self::Unchecked => IdentitySetup::RequestToJoin,
-            Self::OtherIdentityHere { .. } | Self::PasskeyInUse => IdentitySetup::Unavailable,
+            Self::PasskeyInUse => IdentitySetup::Continue {
+                decision: IdentityDecision::AddWithPasskeyInUse,
+            },
+            Self::OtherIdentityHere { .. } => IdentitySetup::Unavailable,
         }
     }
 }
@@ -105,6 +109,9 @@ pub enum IdentityDecision {
     AskToJoin,
     /// Add the identity a device approved this browser's request for.
     FinishJoining,
+    /// Add it to this browser under a new key the passkey in use here
+    /// protects; that passkey's member key adds the new key itself.
+    AddWithPasskeyInUse,
 }
 
 /// What first-run setup does with an identity: one action, decided by the
@@ -226,12 +233,14 @@ impl ProviderIdentityChoices<'_> {
             (
                 IdentityStanding::ThisBrowser
                 | IdentityStanding::OtherIdentityHere { .. }
-                | IdentityStanding::JoinRequested
-                | IdentityStanding::PasskeyInUse,
+                | IdentityStanding::JoinRequested,
                 _,
             ) => Vec::new(),
             (IdentityStanding::JoinApproved, _) => {
                 vec![IdentityDecision::Leave, IdentityDecision::FinishJoining]
+            }
+            (IdentityStanding::PasskeyInUse, _) => {
+                vec![IdentityDecision::Leave, IdentityDecision::AddWithPasskeyInUse]
             }
             // A passkey that opens the identity completes it here: there
             // is nothing to merge.
@@ -622,15 +631,28 @@ mod tests {
     }
 
     #[test]
-    fn a_member_key_that_holds_the_identity_in_use_offers_nothing() -> anyhow::Result<()> {
+    fn a_member_key_that_holds_the_identity_in_use_adds_it_with_the_same_passkey()
+    -> anyhow::Result<()> {
         // The same passkey made the identity in use here, which has vaults,
-        // and is a member of the listed one: finishing would fail, so the
-        // listing says why instead of offering it.
+        // and is a member of the listed one: that key cannot take a second
+        // identity, so continuing adds it under a new key the same passkey
+        // protects, which the member key adds itself.
         for session in [IdentitySession::NoIdentity, IdentitySession::IdentityInUse] {
             let choice = Fixture::only_choice(ProviderIdentityJoin::KeyInUse, session)?;
             assert_eq!(choice.standing, IdentityStanding::PasskeyInUse);
-            assert!(choice.decisions.is_empty());
-            assert_eq!(choice.setup, IdentitySetup::Unavailable);
+            assert_eq!(
+                choice.decisions,
+                vec![
+                    IdentityDecision::Leave,
+                    IdentityDecision::AddWithPasskeyInUse
+                ]
+            );
+            assert_eq!(
+                choice.setup,
+                IdentitySetup::Continue {
+                    decision: IdentityDecision::AddWithPasskeyInUse,
+                }
+            );
         }
         Ok(())
     }

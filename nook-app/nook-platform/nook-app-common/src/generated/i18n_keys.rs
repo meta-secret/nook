@@ -2209,6 +2209,7 @@ pub const PROTON_PASS_IMPORT_SUPPORTED_TYPES: &str = "proton_pass_import.support
 pub const PROTON_PASS_IMPORT_TITLE: &str = "proton_pass_import.title";
 pub const PROVIDER_IDENTITIES_ADD: &str = "provider_identities.add";
 pub const PROVIDER_IDENTITIES_ADD_FAILED: &str = "provider_identities.add_failed";
+pub const PROVIDER_IDENTITIES_ADDED_HERE: &str = "provider_identities.added_here";
 pub const PROVIDER_IDENTITIES_APPLY: &str = "provider_identities.apply";
 pub const PROVIDER_IDENTITIES_APPLYING: &str = "provider_identities.applying";
 pub const PROVIDER_IDENTITIES_ASK_TO_JOIN: &str = "provider_identities.ask_to_join";

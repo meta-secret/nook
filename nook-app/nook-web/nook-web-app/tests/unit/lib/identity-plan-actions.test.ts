@@ -207,6 +207,33 @@ describe('asking to join from an identity plan', () => {
   })
 })
 
+describe('adding an identity the passkey in use is a member of', () => {
+  test('the passkey in use adds it here without a new passkey or a request', async () => {
+    const session = new JoinSession('new-key-staged').unlocked()
+    const added = vi
+      .spyOn(session.manager, 'add_identity_with_passkey_in_use')
+      .mockResolvedValue({
+        identityId: IDENTITY,
+        selection: 'besideIdentityInUse',
+      })
+    const reload = vi
+      .spyOn(IdentityDirectoryLoader.prototype, 'reload')
+      .mockResolvedValue()
+
+    const ran = await new IdentityPlanActions(session.vault).run(
+      plan('addWithPasskeyInUse'),
+    )
+
+    expect(ran._unsafeUnwrap().kind).toBe(IdentityPlanOutcomeKind.AddedBeside)
+    expect(added).toHaveBeenCalledWith(SOURCE, IDENTITY, location.hostname)
+    expect(reload).toHaveBeenCalledOnce()
+    // No key ceremony opens and no device is asked.
+    expect(session.manager.begin_identity_join).not.toHaveBeenCalled()
+    expect(session.requested).toEqual([])
+    expect(session.vault.newIdentity).not.toBe(NewIdentityStage.Key)
+  })
+})
+
 describe('finishing a join a device approved', () => {
   test('an approved join adds the identity and follows it like an invite join', async () => {
     const session = new JoinSession('current-key').unlocked()

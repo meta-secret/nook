@@ -46,7 +46,8 @@ pub enum ProviderIdentityLog {
     Absent,
     #[serde(rename_all = "camelCase")]
     Read {
-        /// Devices that are members now; revoked ones are not counted.
+        /// Devices its members run on now: apps sharing one device count
+        /// once, and revoked ones are not counted.
         #[tsify(type = "number")]
         devices: ProviderLogCount,
         /// When the most recently approved device joined.
@@ -77,7 +78,8 @@ pub enum ProviderIdentityJoin {
     Approved,
     /// The key is a member, but here it already holds the identity in use,
     /// which has its own log or vaults: one key holds one identity, so this
-    /// one cannot be added here.
+    /// one gets a new key here, protected by the same passkey, which that
+    /// member key adds.
     KeyInUse,
 }
 
@@ -169,7 +171,7 @@ impl ProviderIdentityLogEvents {
         Ok(ListedIdentityLog {
             identity_id,
             log: ProviderIdentityLog::Read {
-                devices: ProviderLogCount::of(state.members.len()),
+                devices: ProviderLogCount::of(state.device_members().count()),
                 newest_device: joining_time
                     .into_iter()
                     .max()

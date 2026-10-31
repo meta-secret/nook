@@ -74,13 +74,13 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn assess_identity_health(
     copy_provider_count: u32,
     device_join_provider_count: u32,
-    app_count: u32,
+    device_count: u32,
     stored_item_count: u32,
 ) -> NookIdentityHealth {
     NookIdentityHealth::from_core(IdentityHealth::assess(IdentityHealthAssessment {
         copy_provider_count: (copy_provider_count as usize).into(),
         device_join_provider_count: (device_join_provider_count as usize).into(),
-        app_count: (app_count as usize).into(),
+        device_count: (device_count as usize).into(),
         stored_item_count: (stored_item_count as usize).into(),
     }))
 }

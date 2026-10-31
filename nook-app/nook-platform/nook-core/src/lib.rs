@@ -51,11 +51,11 @@ pub(crate) use secrets::{
     session,
 };
 pub(crate) use sync::{
-    authorized_accounts, drive_vault_folder, passkey_identity_addition, provider_identity_choice,
-    provider_identity_join, provider_identity_log, provider_vault_access, provider_vault_join,
-    provider_vault_listing, sync_provider_credentials, sync_provider_store, validation,
-    vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session, vault_sync_state,
-    vault_sync_store,
+    authorized_accounts, drive_vault_folder, key_in_use_addition, passkey_identity_addition,
+    provider_identity_choice, provider_identity_join, provider_identity_log, provider_vault_access,
+    provider_vault_join, provider_vault_listing, sync_provider_credentials, sync_provider_store,
+    validation, vault_access_check, vault_sync, vault_sync_conflict, vault_sync_session,
+    vault_sync_state, vault_sync_store,
 };
 pub use vault::domain_numbers::*;
 pub use vault::passkey_detail_read::{
@@ -326,9 +326,9 @@ pub use nook_event_log::{
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
     IdentityJoinRequest, IdentityMemberAddition, IdentityMemberKeys, IdentityMountTarget,
     IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
-    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberSealedName, MemberVaultDek,
-    OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId, VaultAuthorizedRoster,
-    VaultPlacement, VaultRosterMember,
+    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberDevice, MemberSealedName,
+    MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId,
+    VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
@@ -349,6 +349,9 @@ pub use authorized_accounts::{
 pub use drive_vault_folder::{
     DRIVE_FOLDER_MIME_TYPE, DriveVaultFolderLookup, DriveVaultFolderObservation,
     DriveVaultFolderSelection,
+};
+pub use key_in_use_addition::{
+    IdentityJoinAdditionWrite, KeyInUseAddition, KeyInUseMembership, ProviderIdentityKeyInUse,
 };
 pub use passkey_identity_addition::{
     AddedIdentitySelection, PasskeyIdentityAdded, PasskeyIdentityAddition,

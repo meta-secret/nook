@@ -127,6 +127,15 @@ export class IdentityControlModel {
     return snapshot === false ? vaultRosterCount : snapshot.members.length;
   }
 
+  /**
+   * Devices those apps run on: the extension in this browser shares this
+   * device. Before the identity log is projected, each roster app counts.
+   */
+  deviceCount(vaultRosterCount: number): number {
+    const snapshot = this.snapshot;
+    return snapshot === false ? vaultRosterCount : snapshot.deviceCount;
+  }
+
   newPassphrase(): string {
     return generate_password(PASSPHRASE_OPTIONS);
   }

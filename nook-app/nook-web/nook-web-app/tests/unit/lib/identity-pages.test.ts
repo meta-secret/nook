@@ -103,6 +103,59 @@ describe('IdentityPages', () => {
     expect(cancelAdd).toHaveBeenCalledOnce()
   })
 
+  test('a keyring added beside the one in use keeps the sign-in and ends on the hub', async () => {
+    const vault = unlocked()
+    const savedForAdded = vi
+      .spyOn(vault, 'saveProviderForAddedIdentity')
+      .mockResolvedValue(ok(ProviderSaveOutcome.Saved))
+    const save = vi.spyOn(vault, 'ensureProviderSaved')
+    const sync = vi.spyOn(vault.identityControl, 'syncWithMounts')
+    const cancelSetup = vi.spyOn(vault, 'cancelProviderSetup')
+    const cancelAdd = vi.spyOn(vault, 'cancelAddProvider')
+    vault.activateLoginSetup('oauth-file')
+    const pages = new IdentityPages(vault)
+    pages.addSyncProvider()
+
+    await pages.keyringAddedBeside({
+      identityId: 'idn_inspirealien',
+      label: 'inspire-alien-floor',
+    })
+
+    // The sign-in serves the added keyring; the one in use gets nothing.
+    expect(savedForAdded).toHaveBeenCalledWith('idn_inspirealien')
+    expect(save).not.toHaveBeenCalled()
+    expect(sync).not.toHaveBeenCalled()
+    expect(cancelSetup).toHaveBeenCalledOnce()
+    expect(cancelAdd).toHaveBeenCalledOnce()
+    // No Sync page in between: the hub shows the added keyring.
+    expect(vault.identityPage).toBe(WorkspaceSection.Identities)
+    const added: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ProviderIdentitiesAddedHere,
+      replacements: { identity: 'inspire-alien-floor' },
+    }
+    expect(vault.successMsg).toBe(vault.t(added))
+  })
+
+  test('a keyring added beside whose provider cannot be saved says why on the hub', async () => {
+    const vault = unlocked()
+    const refused = new VaultStorageFailure(
+      VaultStorageFailureKind.DuplicateProvider,
+    )
+    vi.spyOn(vault, 'saveProviderForAddedIdentity').mockResolvedValue(
+      err(refused),
+    )
+    vault.activateLoginSetup('oauth-file')
+
+    await new IdentityPages(vault).keyringAddedBeside({
+      identityId: 'idn_inspirealien',
+      label: 'inspire-alien-floor',
+    })
+
+    expect(vault.identityPage).toBe(WorkspaceSection.Identities)
+    expect(vault.errorMsg).toBe(vault.t(refused.translationKey))
+    expect(vault.successMsg).toBe('')
+  })
+
   test('connecting saves the provider being set up, gives the identity its log, then copies it', async () => {
     const vault = unlocked()
     const order: string[] = []
@@ -140,6 +193,7 @@ describe('IdentityPages', () => {
       identityLabel: 'Personal',
       standing: 'member',
       members: [],
+      deviceCount: 0,
       joinRequests: [],
       vaults: [
         {

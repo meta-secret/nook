@@ -14,7 +14,7 @@ use super::graph::IdentityControlLog;
 use super::projection::IdentityControlState;
 use super::wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
-    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant,
+    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant, MemberDevice,
     MemberSealedName, MemberVaultDek,
 };
 use crate::signing::SigningIdentity;
@@ -54,6 +54,8 @@ pub struct IdentityMemberAddition<'a> {
     pub member: &'a IdentityMemberKeys,
     /// Every vault the identity owns, opened by that member at its current epoch.
     pub vaults: &'a [OpenedVaultDek<'a>],
+    /// The device the app runs on.
+    pub device: &'a MemberDevice,
 }
 
 /// Named values required to name an identity.
@@ -221,9 +223,11 @@ impl IdentityControlState {
             ))
         })?;
         self.require_every_vault(request.vaults)?;
+        // A join request comes through a provider, from a device of its own.
         Ok(IdentityControlOperation::MemberApproved {
             member: join.member.clone(),
             vault_deks: join.member.vault_dek_grants(request.vaults)?,
+            device: MemberDevice::Own,
         })
     }
 
@@ -242,10 +246,19 @@ impl IdentityControlState {
             )));
         }
         request.member.signing_actor()?;
+        if let MemberDevice::SameAs { app_id } = request.device
+            && self.member(app_id).is_none()
+        {
+            return Err(EventError::IdentityControlInvalid(format!(
+                "app {} cannot share the device of app {app_id}, which is not a member",
+                request.member.app_id
+            )));
+        }
         self.require_every_vault(request.vaults)?;
         Ok(IdentityControlOperation::MemberApproved {
             member: request.member.clone(),
             vault_deks: request.member.vault_dek_grants(request.vaults)?,
+            device: request.device.clone(),
         })
     }
 
@@ -545,10 +558,14 @@ mod tests {
         // The extension never asked: its keys came with its connect request.
         let extension = Installation::new()?;
         let keys = extension.keys("Nook extension");
+        let beside_founder = MemberDevice::SameAs {
+            app_id: fixture.founder.app.app_id().clone(),
+        };
         let state = fixture.state()?;
         let incomplete = state.addition_operation(&IdentityMemberAddition {
             member: &keys,
             vaults: &[first_dek],
+            device: &beside_founder,
         });
         assert!(matches!(
             incomplete,
@@ -558,6 +575,7 @@ mod tests {
         let addition = state.addition_operation(&IdentityMemberAddition {
             member: &keys,
             vaults: &[first_dek, second_dek],
+            device: &beside_founder,
         })?;
         let founder = fixture.founder();
         fixture.append(&founder, vec![addition])?;
@@ -585,6 +603,7 @@ mod tests {
         let again = state.addition_operation(&IdentityMemberAddition {
             member: &keys,
             vaults: &[first_dek, second_dek],
+            device: &beside_founder,
         });
         assert!(matches!(again, Err(EventError::IdentityControlInvalid(_))));
 
@@ -592,6 +611,104 @@ mod tests {
         let (_, status) = fixture.append(
             &extension,
             vec![rename(extension.app.app_id(), "Nook extension, work")],
+        )?;
+        assert_eq!(status, IdentityEventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn an_app_on_a_members_device_adds_no_device_until_that_member_leaves() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let founder = fixture.founder();
+        let device_count = |state: &IdentityControlState| state.device_members().count();
+
+        // The extension runs in the founder's browser: still one device.
+        let extension = Installation::new()?;
+        let keys = extension.keys("Nook extension");
+        let beside_founder = MemberDevice::SameAs {
+            app_id: founder.app.app_id().clone(),
+        };
+        let addition = fixture
+            .state()?
+            .addition_operation(&IdentityMemberAddition {
+                member: &keys,
+                vaults: &[],
+                device: &beside_founder,
+            })?;
+        fixture.append(&founder, vec![addition])?;
+        let state = fixture.state()?;
+        assert_eq!(state.members.len(), 2);
+        assert_eq!(device_count(&state), 1);
+        assert_eq!(
+            state
+                .member(extension.app.app_id())
+                .map(|member| &member.device),
+            Some(&beside_founder)
+        );
+
+        // A phone approved through its join request is a device of its own.
+        let phone = Installation::new()?;
+        fixture.request_join(&phone)?;
+        let approval = fixture
+            .state()?
+            .approval_operation(&IdentityApprovalRequest {
+                app_id: phone.app.app_id(),
+                vaults: &[],
+            })?;
+        fixture.append(&founder, vec![approval])?;
+        assert_eq!(device_count(&fixture.state()?), 2);
+
+        // An app cannot share the device of an app outside the identity.
+        let outsider = Installation::new()?;
+        let stray = Installation::new()?;
+        let refused = fixture
+            .state()?
+            .addition_operation(&IdentityMemberAddition {
+                member: &stray.keys("Stray"),
+                vaults: &[],
+                device: &MemberDevice::SameAs {
+                    app_id: outsider.app.app_id().clone(),
+                },
+            });
+        assert!(matches!(
+            refused,
+            Err(EventError::IdentityControlInvalid(_))
+        ));
+
+        // With the founder gone, the extension's device is its own again.
+        let revoke = fixture
+            .state()?
+            .revocation_operation(founder.app.app_id())?;
+        fixture.append(&phone, vec![revoke])?;
+        let state = fixture.state()?;
+        assert_eq!(state.members.len(), 2);
+        assert_eq!(device_count(&state), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn a_member_cannot_share_a_device_with_itself() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let extension = Installation::new()?;
+        let self_shared = fixture.log.build_append(
+            vec![IdentityControlOperation::MemberApproved {
+                member: extension.keys("Nook extension"),
+                vault_deks: Vec::new(),
+                device: MemberDevice::SameAs {
+                    app_id: extension.app.app_id().clone(),
+                },
+            }],
+            &fixture.founder().signing(&fixture.at),
+        )?;
+        assert!(fixture.log.clone().insert(self_shared).is_err());
+        let founder = fixture.founder();
+        let (_, status) = fixture.append(
+            &founder,
+            vec![IdentityControlOperation::MemberApproved {
+                member: extension.keys("Nook extension"),
+                vault_deks: Vec::new(),
+                device: MemberDevice::Own,
+            }],
         )?;
         assert_eq!(status, IdentityEventInsertStatus::Applied);
         Ok(())

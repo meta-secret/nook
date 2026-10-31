@@ -52,6 +52,7 @@ function snapshot(
     identityLabel: IDENTITY,
     standing,
     members: [],
+    deviceCount: 0,
     joinRequests: [],
     vaults: [],
     mounts: [],

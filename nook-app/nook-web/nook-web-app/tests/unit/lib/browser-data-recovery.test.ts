@@ -161,7 +161,9 @@ describe('local data recovery support', () => {
       close(): void {}
     }
 
-    vi.stubGlobal('navigator', { locks: {} })
+    vi.stubGlobal('navigator', {
+      locks: { query: () => Promise.resolve({ held: [] }) },
+    })
     vi.stubGlobal('BroadcastChannel', RecoveryChannel)
 
     const pending = browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
@@ -219,7 +221,9 @@ describe('local data recovery support', () => {
       close(): void {}
     }
 
-    vi.stubGlobal('navigator', { locks: {} })
+    vi.stubGlobal('navigator', {
+      locks: { query: () => Promise.resolve({ held: [] }) },
+    })
     vi.stubGlobal('BroadcastChannel', RecoveryChannel)
 
     const pending = browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
@@ -229,6 +233,64 @@ describe('local data recovery support', () => {
     expect(rejection.isErr() ? rejection.error.kind : rejection.value).toBe(
       VaultStorageFailureKind.PeerFailed,
     )
+  })
+
+  test('waits for a present tab that answers only after the first moments', async () => {
+    vi.useFakeTimers()
+    const messages: Array<{ readonly type: string }> = []
+
+    class RecoveryChannel {
+      onmessage?: (event: MessageEvent) => void
+
+      postMessage(message: {
+        readonly type: string
+        readonly requestId?: string
+        readonly senderId: string
+      }): void {
+        messages.push(message)
+        if (message.type !== 'request' || !message.requestId) return
+        const requestId = message.requestId
+        // The tab is busy loading: it answers a second later, ready.
+        setTimeout(() => {
+          for (const type of ['seen', 'ready']) {
+            this.onmessage?.(
+              messageEvent({
+                data: {
+                  type,
+                  requestId,
+                  senderId: message.senderId,
+                  responderId: 'busy-tab',
+                  readiness: { kind: 'ready' },
+                },
+              }),
+            )
+          }
+        }, 1_000)
+      }
+
+      close(): void {}
+    }
+
+    vi.stubGlobal('navigator', {
+      locks: {
+        query: () =>
+          Promise.resolve({ held: [{ name: 'nook-tab-presence:busy-tab' }] }),
+      },
+    })
+    vi.stubGlobal('BroadcastChannel', RecoveryChannel)
+
+    const pending = browserDataLifecycle.quiesceOtherTabsForLocalRecovery()
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(500)
+    // Not answered yet: the deleting tab keeps waiting for it.
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1_000)
+    const quiesced = await pending
+    expect(quiesced.isOk()).toBe(true)
+    expect(messages.some((message) => message.type === 'reload')).toBe(false)
   })
 
   test('reports a rejected peer cleanup as failed readiness', async () => {
@@ -246,12 +308,24 @@ describe('local data recovery support', () => {
       close(): void {}
     }
     vi.stubGlobal('BroadcastChannel', RecoveryChannel)
+    const presence: string[] = []
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: (name: string, hold: () => Promise<void>) => {
+          presence.push(name)
+          return hold()
+        },
+      },
+    })
 
     const subscription =
       browserDataLifecycle.subscribeToLocalBrowserDataDeletion(() =>
         Promise.reject(new Error('peer cleanup rejected')),
       )
     expect(subscription.isOk()).toBe(true)
+    // The listening tab announces itself to tabs that delete the data.
+    expect(presence).toHaveLength(1)
+    expect(presence[0]).toMatch(/^nook-tab-presence:/)
     RecoveryChannel.instance.onmessage?.(
       messageEvent({
         data: {
@@ -281,6 +355,7 @@ describe('local data recovery support', () => {
             () => Promise<Result<void, VaultStorageFailure>>,
           ]
         ) => request[2](),
+        query: () => Promise.resolve({ held: [] }),
       },
     })
     class RecoveryChannel {

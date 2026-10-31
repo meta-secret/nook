@@ -99,6 +99,7 @@ identity decrypts in memory and changes nothing.
       plan.clear()
       switch (ran.value.kind) {
         case IdentityPlanOutcomeKind.Applied:
+        case IdentityPlanOutcomeKind.AddedBeside:
           break
         // A join waits for a fresh key; its ceremony asks, then lists again.
         case IdentityPlanOutcomeKind.WaitsForKey:

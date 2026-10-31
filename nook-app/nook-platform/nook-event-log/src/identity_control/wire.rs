@@ -124,6 +124,18 @@ impl IdentityMemberKeys {
     }
 }
 
+/// The device a member's app runs on. Apps on one device are lost together
+/// with it, so they protect the identity as one device.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum MemberDevice {
+    /// A device of its own, as far as the identity knows.
+    Own,
+    /// The device of another member: the web app adds the browser extension
+    /// that connects to it in the same browser.
+    SameAs { app_id: AppId },
+}
+
 /// One vault DEK pair wrapped to one member's encryption public key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -245,6 +257,8 @@ pub enum IdentityControlOperation {
     MemberApproved {
         member: IdentityMemberKeys,
         vault_deks: Vec<IdentityVaultDekGrant>,
+        /// The device it runs on, as the approving member knows it.
+        device: MemberDevice,
     },
     MemberJoinDenied {
         app_id: AppId,
@@ -399,8 +413,29 @@ impl IdentityEvent {
             EventId::parse(parent.as_str())?;
         }
         self.validate_operation_structure()?;
+        self.check_member_devices()?;
         self.verify_actor_signature()?;
         self.id()
+    }
+
+    /// An approved member runs beside another app, never beside itself.
+    fn check_member_devices(&self) -> EventResult<()> {
+        let beside_itself = self.body.operations.iter().any(|operation| {
+            matches!(
+                operation,
+                IdentityControlOperation::MemberApproved {
+                    member,
+                    device: MemberDevice::SameAs { app_id },
+                    ..
+                } if app_id == &member.app_id
+            )
+        });
+        if beside_itself {
+            return Err(EventError::IdentityControlInvalid(
+                "a member cannot share a device with itself".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     fn validate_operation_structure(&self) -> EventResult<()> {
@@ -443,7 +478,9 @@ impl IdentityEvent {
                         ));
                     }
                 }
-                IdentityControlOperation::MemberApproved { member, vault_deks } => {
+                IdentityControlOperation::MemberApproved {
+                    member, vault_deks, ..
+                } => {
                     member.signing_actor()?;
                     Self::check_one_grant_per_vault(vault_deks)?;
                 }

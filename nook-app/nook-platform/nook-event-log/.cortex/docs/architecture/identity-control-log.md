@@ -76,6 +76,16 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
 - **`member-approved`**
   - Holds the joiner's member keys and one DEK grant per vault the identity
     keeps, at each vault's current key epoch.
+  - Holds the `device` the joiner runs on: `own`, or `same-as` a current
+    member's `app_id`. An approved join request is `own`. The web app adds
+    the browser extension `same-as` itself, since the extension connects
+    from the web app's browser.
+  - The device must not be the joiner's own `app_id`.
+  - The projection counts one device per member, except a member on another
+    current member's device. The identity's protection asks for a second
+    device by that count, so the extension in the same browser does not
+    satisfy it. A founder and an invite holder each run on a device of
+    their own.
 - **`member-join-denied`**
   - Answers a pending request without admitting its app key.
 - **`member-revoked`**

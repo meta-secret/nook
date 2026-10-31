@@ -1,19 +1,21 @@
 //! Day-2 health of an identity, shared by every host application.
 //!
 //! An identity is safe once it survives two losses, built in this order: a
-//! copy outside this browser (any sync provider), then a second app that can
-//! open it (which joins through a cloud provider). The assessment names the
-//! stage reached, the single next step, how firmly to ask for it, and the
-//! checklist of both protections with what each still needs.
+//! copy outside this browser (any sync provider), then a second device that
+//! can open it (which joins through a cloud provider). Apps on one device,
+//! as the web app and the browser extension in its browser, are one device.
+//! The assessment names the stage reached, the single next step, how firmly
+//! to ask for it, and the checklist of both protections with what each still
+//! needs.
 
 /// How far an identity is protected against loss.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityHealthStage {
     /// Only this browser holds the identity and its vaults.
     LocalOnly,
-    /// A sync provider keeps a copy; only this app can open it.
+    /// A sync provider keeps a copy; only this device can open it.
     CopyKept,
-    /// A sync provider keeps a copy and another app can open it.
+    /// A sync provider keeps a copy and another device can open it.
     MultiDevice,
 }
 
@@ -24,7 +26,7 @@ pub enum IdentityNextStep {
     AddSyncProvider,
     /// The copy is local; devices join only through a cloud provider.
     AddCloudProvider,
-    /// Let a second app open the identity.
+    /// Let a second device open the identity.
     AddDevice,
     /// Nothing is missing.
     Done,
@@ -46,7 +48,7 @@ pub enum IdentityNudge {
 pub enum IdentityProtectionTask {
     /// A sync provider keeps a copy: clearing this browser loses nothing.
     CopyOutsideBrowser,
-    /// Another app opens the identity: losing this device loses nothing.
+    /// Another device opens the identity: losing this one loses nothing.
     SecondDevice,
 }
 
@@ -82,8 +84,9 @@ pub struct IdentityHealthAssessment {
     pub copy_provider_count: crate::VaultSyncProviderCount,
     /// Of those, providers another device can reach to join.
     pub device_join_provider_count: crate::VaultSyncProviderCount,
-    /// Apps that can open the identity, this one included.
-    pub app_count: crate::EnrolledDeviceCount,
+    /// Devices whose apps can open the identity, this one included. Apps on
+    /// one device count once: losing it loses them all.
+    pub device_count: crate::EnrolledDeviceCount,
     /// Items stored in the open vault.
     pub stored_item_count: crate::SecretRecordCount,
 }
@@ -103,12 +106,12 @@ impl IdentityHealth {
         let IdentityHealthAssessment {
             copy_provider_count,
             device_join_provider_count,
-            app_count,
+            device_count,
             stored_item_count,
         } = request;
         let stage = if copy_provider_count.is_zero() {
             IdentityHealthStage::LocalOnly
-        } else if app_count.is_at_most_one() {
+        } else if device_count.is_at_most_one() {
             IdentityHealthStage::CopyKept
         } else {
             IdentityHealthStage::MultiDevice
@@ -144,7 +147,7 @@ impl IdentityHealth {
                 action: IdentityNextStep::Done,
             }
         };
-        let second_device = if !app_count.is_at_most_one() {
+        let second_device = if !device_count.is_at_most_one() {
             IdentityProtectionStep {
                 task: IdentityProtectionTask::SecondDevice,
                 state: IdentityProtectionTaskState::Done,
@@ -194,7 +197,7 @@ mod tests {
         IdentityHealth::assess(IdentityHealthAssessment {
             copy_provider_count: copies.into(),
             device_join_provider_count: joinable.into(),
-            app_count: apps.into(),
+            device_count: apps.into(),
             stored_item_count: items.into(),
         })
     }

@@ -21,7 +21,7 @@ use nook_auth2::{
 use nook_event_log::{
     EventError, EventId, IdentityApprovalRequest, IdentityControlOperation, IdentityControlState,
     IdentityMemberAddition, IdentityMemberKeys, IdentityNaming, IdentityVaultDekLookup,
-    OpenedVaultDek,
+    MemberDevice, OpenedVaultDek,
 };
 
 use super::identity_control::ReplicatedIdentityStanding;
@@ -127,7 +127,9 @@ pub struct IdentityMemberAdd<'a> {
 
 impl IdentityMemberAdd<'_> {
     /// Add the app with every vault DEK encrypted to its key, and re-seal
-    /// the identity's name so it reads it too.
+    /// the identity's name so it reads it too. An app shown directly runs on
+    /// the adding member's device, as the browser extension runs in the
+    /// browser of the web app it connects to, so it adds no device.
     pub fn addition(&self) -> VaultResult<Vec<IdentityControlOperation>> {
         let answer = IdentityJoinAnswer {
             state: self.state,
@@ -147,6 +149,9 @@ impl IdentityMemberAdd<'_> {
         let mut operations = vec![self.state.addition_operation(&IdentityMemberAddition {
             member: self.member,
             vaults: &vaults,
+            device: &MemberDevice::SameAs {
+                app_id: self.approver.app_id().clone(),
+            },
         })?];
         if let Some(sealed) = self.state.sealed_name_for(self.approver.app_id()) {
             let name = self.approver.open_utf8(sealed)?;

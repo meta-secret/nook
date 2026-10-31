@@ -31,6 +31,8 @@ asking to open the open vault above the list.
   const snapshot = $derived(control.snapshot);
   const standing = $derived(new IdentityStandingPresentation(snapshot));
   const members = $derived(snapshot === false ? [] : snapshot.members);
+  /** Apps in one browser, as the web app and its extension, are one device. */
+  const deviceCount = $derived(snapshot === false ? 0 : snapshot.deviceCount);
   const joinRequests = $derived(
     snapshot === false ? [] : snapshot.joinRequests,
   );
@@ -53,7 +55,7 @@ asking to open the open vault above the list.
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="vault-devices-panel">
   <IdentityStandingNotices {vault} />
 
-  {#if standing.isMember() && members.length <= 1}
+  {#if standing.isMember() && deviceCount <= 1}
     <p
       class="nk-banner nk-banner-warning flex items-start gap-2 px-4 py-3 text-sm text-pretty text-foreground"
       role="note"
@@ -88,13 +90,13 @@ asking to open the open vault above the list.
     {#snippet badge()}
       <div class="flex items-center gap-2">
         <StatusTag
-          tone={members.length > 0 ? StatusTone.Success : StatusTone.Neutral}
-          label={members.length === 1
+          tone={deviceCount > 0 ? StatusTone.Success : StatusTone.Neutral}
+          label={deviceCount === 1
             ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
             : (() => {
                 const countRequest: Parameters<typeof vault.t>[0] = {
                   key: I18N_KEYS.SettingsDeviceCountPlural,
-                  replacements: { count: String(members.length) },
+                  replacements: { count: String(deviceCount) },
                 };
                 return vault.t(countRequest);
               })()}

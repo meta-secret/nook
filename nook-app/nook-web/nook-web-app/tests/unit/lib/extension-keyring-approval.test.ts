@@ -85,7 +85,15 @@ function keyringSnapshot(
     identityId,
     identityLabel: 'Personal',
     standing: 'member',
-    members: [{ appId: 'app-web', label: 'Web', isCurrentInstallation: true }],
+    members: [
+      {
+        appId: 'app-web',
+        label: 'Web',
+        isCurrentInstallation: true,
+        onCurrentDevice: true,
+      },
+    ],
+    deviceCount: 1,
     joinRequests: [],
     vaults: storeIds.map((storeId) => ({
       storeId,

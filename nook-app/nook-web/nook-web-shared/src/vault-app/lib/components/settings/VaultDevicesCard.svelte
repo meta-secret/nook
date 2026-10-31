@@ -165,7 +165,7 @@ adding a device live on the Devices page around this list.
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-start gap-3">
                 <div class="nk-tile shrink-0" aria-hidden="true">
-                  {#if isCurrent}
+                  {#if member.onCurrentDevice}
                     <Laptop class="size-4" />
                   {:else}
                     <Smartphone class="size-4" />
@@ -198,6 +198,12 @@ adding a device live on the Devices page around this list.
                         data-testid="current-device-badge"
                       >
                         {vault.t(I18N_KEYS.IdentityControlCurrentApp)}
+                      </span>
+                    {:else if member.onCurrentDevice}
+                      <!-- Another app in this browser, as the extension:
+                           the same device, not a second one. -->
+                      <span class="nk-tag" data-testid="same-device-badge">
+                        {vault.t(I18N_KEYS.JoinThisDevice)}
                       </span>
                     {:else}
                       <span class="nk-tag">

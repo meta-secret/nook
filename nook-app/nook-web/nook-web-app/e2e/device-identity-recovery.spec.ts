@@ -193,15 +193,18 @@ test('waits for peer storage work before destructive identity recovery', async (
     delete window.__releaseRecoveryStorageWork
   })
 
-  // The peer reloads once its storage work finishes; an evaluation that the
-  // reload interrupts is read again from the reloaded page.
+  // The peer reloads once its storage work finishes and recovery has reset
+  // the device key; an evaluation that the reload interrupts is read again
+  // from the reloaded page.
   await expect
-    .poll(() =>
-      peer
-        .evaluate(() => {
-          return window.__nookVault?.localDataDeletionStarted !== false
-        })
-        .catch(() => true),
+    .poll(
+      () =>
+        peer
+          .evaluate(() => {
+            return window.__nookVault?.localDataDeletionStarted !== false
+          })
+          .catch(() => true),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(false)
   const persisted = await readRecoveryStorage(page)

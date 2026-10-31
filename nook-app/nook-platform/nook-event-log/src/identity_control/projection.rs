@@ -11,8 +11,8 @@ use nook_auth2::{AgeArmoredCiphertext, AppId, IdentityId, IsoTimestamp, StoreId}
 
 use super::graph::IdentityControlLog;
 use super::wire::{
-    IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, MemberSealedName,
-    MemberVaultDek, ProviderMountId,
+    IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, IdentityVaultDekGrant,
+    MemberDevice, MemberSealedName, MemberVaultDek, ProviderMountId,
 };
 use crate::{EventError, EventId, EventResult};
 
@@ -21,6 +21,7 @@ use crate::{EventError, EventId, EventResult};
 pub struct IdentityControlMember {
     pub keys: IdentityMemberKeys,
     pub approved_in: EventId,
+    pub device: MemberDevice,
 }
 
 /// A join request no approval, denial, or revocation has resolved.
@@ -103,7 +104,7 @@ struct VaultAccumulator {
 #[derive(Default)]
 struct ProjectionAccumulator {
     created: bool,
-    member_keys: BTreeMap<AppId, (IdentityMemberKeys, EventId)>,
+    member_keys: BTreeMap<AppId, (IdentityMemberKeys, EventId, MemberDevice)>,
     requests: Vec<IdentityJoinRequest>,
     resolutions: Vec<(EventId, AppId)>,
     denials: Vec<(EventId, AppId)>,
@@ -122,7 +123,46 @@ struct VaultRecipients<'a> {
     recipients: &'a [MemberVaultDek],
 }
 
+/// A member admitted by one event, with the DEKs that event grants it.
+#[derive(Clone, Copy)]
+struct MemberAdmission<'a> {
+    event: &'a EventId,
+    member: &'a IdentityMemberKeys,
+    vault_deks: &'a [IdentityVaultDekGrant],
+    device: &'a MemberDevice,
+}
+
 impl ProjectionAccumulator {
+    fn admit(&mut self, admission: MemberAdmission<'_>) {
+        let MemberAdmission {
+            event,
+            member,
+            vault_deks,
+            device,
+        } = admission;
+        self.member_keys.insert(
+            member.app_id.clone(),
+            (member.clone(), event.clone(), device.clone()),
+        );
+        self.resolutions
+            .push((event.clone(), member.app_id.clone()));
+        for grant in vault_deks {
+            let vault = self.vaults.entry(grant.store_id.clone()).or_default();
+            vault
+                .epochs
+                .entry(grant.key_epoch.clone())
+                .or_default()
+                .insert(
+                    member.app_id.clone(),
+                    MemberVaultDek {
+                        app_id: member.app_id.clone(),
+                        secrets_key_ciphertext: grant.secrets_key_ciphertext.clone(),
+                        members_key_ciphertext: grant.members_key_ciphertext.clone(),
+                    },
+                );
+        }
+    }
+
     fn grant(&mut self, request: VaultRecipients<'_>) {
         let vault = self.vaults.entry(request.store_id.clone()).or_default();
         vault.current_key_epoch = Some(request.key_epoch.clone());
@@ -141,8 +181,10 @@ impl ProjectionAccumulator {
         match operation {
             IdentityControlOperation::IdentityCreated { founder } => {
                 self.created = true;
-                self.member_keys
-                    .insert(founder.app_id.clone(), (founder.clone(), id.clone()));
+                self.member_keys.insert(
+                    founder.app_id.clone(),
+                    (founder.clone(), id.clone(), MemberDevice::Own),
+                );
             }
             IdentityControlOperation::MemberJoinRequested { member } => {
                 self.requests.push(IdentityJoinRequest {
@@ -151,29 +193,25 @@ impl ProjectionAccumulator {
                     requested_at: created_at.clone(),
                 });
             }
-            IdentityControlOperation::MemberApproved { member, vault_deks }
-            | IdentityControlOperation::MemberJoinedByInvite {
+            IdentityControlOperation::MemberApproved {
+                member,
+                vault_deks,
+                device,
+            } => self.admit(MemberAdmission {
+                event: id,
+                member,
+                vault_deks,
+                device,
+            }),
+            // The invite holder joins from wherever it typed the code.
+            IdentityControlOperation::MemberJoinedByInvite {
                 member, vault_deks, ..
-            } => {
-                self.member_keys
-                    .insert(member.app_id.clone(), (member.clone(), id.clone()));
-                self.resolutions.push((id.clone(), member.app_id.clone()));
-                for grant in vault_deks {
-                    let vault = self.vaults.entry(grant.store_id.clone()).or_default();
-                    vault
-                        .epochs
-                        .entry(grant.key_epoch.clone())
-                        .or_default()
-                        .insert(
-                            member.app_id.clone(),
-                            MemberVaultDek {
-                                app_id: member.app_id.clone(),
-                                secrets_key_ciphertext: grant.secrets_key_ciphertext.clone(),
-                                members_key_ciphertext: grant.members_key_ciphertext.clone(),
-                            },
-                        );
-                }
-            }
+            } => self.admit(MemberAdmission {
+                event: id,
+                member,
+                vault_deks,
+                device: &MemberDevice::Own,
+            }),
             IdentityControlOperation::MemberJoinDenied { app_id } => {
                 self.resolutions.push((id.clone(), app_id.clone()));
                 self.denials.push((id.clone(), app_id.clone()));
@@ -184,7 +222,7 @@ impl ProjectionAccumulator {
             // An invite grants nothing until its holder joins with it.
             IdentityControlOperation::MemberInvited { .. } => {}
             IdentityControlOperation::MemberRenamed { app_id, label } => {
-                if let Some((keys, _)) = self.member_keys.get_mut(app_id) {
+                if let Some((keys, _, _)) = self.member_keys.get_mut(app_id) {
                     keys.label = label.clone();
                 }
             }
@@ -282,9 +320,10 @@ impl IdentityControlState {
             .member_keys
             .iter()
             .filter(|(app_id, _)| active.contains_key(*app_id))
-            .map(|(_, (keys, approved_in))| IdentityControlMember {
+            .map(|(_, (keys, approved_in, device))| IdentityControlMember {
                 keys: keys.clone(),
                 approved_in: approved_in.clone(),
+                device: device.clone(),
             })
             .collect::<Vec<_>>();
         let revoked = accumulator
@@ -368,6 +407,28 @@ impl IdentityControlState {
         self.members
             .iter()
             .find(|member| &member.keys.app_id == app_id)
+    }
+
+    /// Whether two members' apps run on one device: one was added on the
+    /// other's device.
+    #[must_use]
+    pub fn share_a_device(&self, app: &AppId, other: &AppId) -> bool {
+        let added_beside = |member: &AppId, beside: &AppId| {
+            self.member(member).is_some_and(|member| {
+                matches!(&member.device, MemberDevice::SameAs { app_id } if app_id == beside)
+            })
+        };
+        added_beside(app, other) || added_beside(other, app)
+    }
+
+    /// One member per device the identity's apps run on. A member on another
+    /// member's device adds none: losing that device loses both. Once that
+    /// member is gone, the device is its own again.
+    pub fn device_members(&self) -> impl Iterator<Item = &IdentityControlMember> {
+        self.members.iter().filter(|member| match &member.device {
+            MemberDevice::Own => true,
+            MemberDevice::SameAs { app_id } => self.member(app_id).is_none(),
+        })
     }
 
     #[must_use]
