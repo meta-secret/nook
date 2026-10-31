@@ -38,6 +38,7 @@ with it. Dismissing the gate leaves the join and asks nothing.
     }
     switch (resumed.value) {
       case IdentityJoinAsked.Requested:
+      case IdentityJoinAsked.Joined:
         await onRequested()
         return
       case IdentityJoinAsked.WaitsForDevice:

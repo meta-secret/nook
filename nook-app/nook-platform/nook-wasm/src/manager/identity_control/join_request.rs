@@ -11,10 +11,10 @@
 //! hands it after adding it to the keyring: its key is a member already.
 
 use nook_core::{
-    AppId, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
+    AppId, DriveEventParent, EventId, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
     IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
     IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
-    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityJoinRequestWrite,
+    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityJoinSponsor,
     PlacedNamespace, ProviderIdentityJoinRequest, StorageMode,
 };
 use serde::{Deserialize, Serialize};
@@ -23,8 +23,8 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::connection::NookIdentityConnectionStart;
 use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
-use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
+use crate::manager::{HeldJoinKey, HeldJoinSponsor, NookVaultManager};
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::KeyringDbRebindLocalIdentity;
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
@@ -32,15 +32,23 @@ use crate::storage::provider_vault_listing::DriveVaultListing;
 use crate::storage::remote_event::RemoteEventRead;
 use crate::{DriveStorageClient, IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError};
 
-/// A join request written into an identity's log at a provider.
+/// What asking to join an identity at a provider did.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct NookIdentityJoinRequested {
-    pub identity_id: String,
-    /// The asking app key, as the identity's devices list it.
-    pub app_id: String,
-    /// When the request was written; asking again reports the first one.
-    pub requested_at: String,
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum NookIdentityJoinAsk {
+    /// The request is in the identity's log; a device of the identity
+    /// answers it.
+    #[serde(rename_all = "camelCase")]
+    Requested {
+        identity_id: String,
+        /// The asking app key, as the identity's devices list it.
+        app_id: String,
+        /// When the request was written; asking again reports the first one.
+        requested_at: String,
+    },
+    /// A member key held here added the asking key: the identity is on this
+    /// browser under its original id.
+    Joined,
 }
 
 /// Where completing a join request left this browser.
@@ -77,6 +85,13 @@ enum OpenedIdentitySource<'a> {
 struct IdentityLogAtSource<'a> {
     source: &'a OpenedIdentitySource<'a>,
     identity_id: &'a IdentityId,
+}
+
+/// One signed identity event to put at a source.
+#[derive(Clone, Copy)]
+struct IdentityEventPut<'a> {
+    event_id: &'a EventId,
+    bytes: &'a EventStorageBytes,
 }
 
 impl NookVaultManager {
@@ -188,14 +203,15 @@ impl NookVaultManager {
     async fn put_identity_event_at(
         &self,
         at: &IdentityLogAtSource<'_>,
-        write: &IdentityJoinRequestWrite,
+        event: &IdentityEventPut<'_>,
     ) -> Result<(), NookError> {
+        let IdentityEventPut { event_id, bytes } = *event;
         match at.source {
             OpenedIdentitySource::CurrentProvider => {
                 self.put_provider_event_at(
                     &EventLogLocation::Identity(at.identity_id.clone()),
-                    &write.event_id,
-                    write.bytes.as_ref(),
+                    event_id,
+                    bytes.as_ref(),
                 )
                 .await
             }
@@ -204,17 +220,17 @@ impl NookVaultManager {
                     token: access_token,
                     root,
                 }
-                .put_identity_event(at.identity_id, &write.event_id, write.bytes.as_ref())
+                .put_identity_event(at.identity_id, event_id, bytes.as_ref())
                 .await
             }
             OpenedIdentitySource::LocalFolder(folder) => {
-                let content = String::from_utf8(write.bytes.as_ref().to_vec())
+                let content = String::from_utf8(bytes.as_ref().to_vec())
                     .map_err(|error| NookError::Serialization(error.to_string()))?;
                 folder
                     .write_events(
                         &PlacedNamespace::identity_log(at.identity_id.clone()),
                         &[LocalFolderEventWrite {
-                            event_id: write.event_id.as_str().to_owned(),
+                            event_id: event_id.as_str().to_owned(),
                             content,
                         }],
                     )
@@ -228,9 +244,10 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Start asking to join an identity. A fresh unlocked key asks itself; a
     /// key that already belongs to an identity stages a new local identity
-    /// named `label`, whose protection ceremony creates the key that asks.
-    /// A key already bound to the identity, or an identity another key here
-    /// holds, is refused.
+    /// named `label`, whose protection ceremony creates the key that asks,
+    /// and is held until then: where the identity lists it as a member, it
+    /// adds that new key itself. A key already bound to the identity, or an
+    /// identity another key here holds, is refused.
     #[wasm_bindgen]
     pub async fn begin_identity_join(
         &mut self,
@@ -251,6 +268,11 @@ impl NookVaultManager {
             IdentityConnectionKey::CurrentAppKey => NookIdentityConnectionStart::CurrentKey,
             IdentityConnectionKey::NewAppKey => {
                 self.begin_local_identity_creation(label).await?;
+                self.device.join_sponsor = HeldJoinSponsor::Held(Box::new(HeldJoinKey {
+                    identity_id: invited,
+                    signing: self.ensure_signing_identity().await?,
+                    app_key,
+                }));
                 NookIdentityConnectionStart::NewKeyStaged
             }
         };
@@ -261,13 +283,15 @@ impl NookVaultManager {
     /// app key must be a fresh one, as an invite join needs: a browser whose
     /// key already belongs to an identity first protects a new key for this
     /// one. The request carries public keys only and opens nothing until a
-    /// device of the identity approves it.
+    /// device of the identity approves it. When the key held since the join
+    /// began is a member of the identity, it adds this key instead, and the
+    /// identity is joined here at once.
     #[wasm_bindgen]
     pub async fn request_identity_join(
         &mut self,
         source: &tsify::Ts<NookProviderSource>,
         identity_id: String,
-    ) -> Result<tsify::Ts<NookIdentityJoinRequested>, JsError> {
+    ) -> Result<tsify::Ts<NookIdentityJoinAsk>, JsError> {
         let source = source
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
@@ -297,27 +321,66 @@ impl NookVaultManager {
         let member = self.own_identity_member_keys(&app_key).await?;
         let signing = self.ensure_signing_identity().await?;
         let created_at = Self::identity_event_time()?;
+        let sponsor = match &self.device.join_sponsor {
+            HeldJoinSponsor::Held(held) if held.identity_id == identity_id => {
+                IdentityJoinSponsor::Held {
+                    app_key: &held.app_key,
+                    signing: &held.signing,
+                }
+            }
+            HeldJoinSponsor::Held(_) | HeldJoinSponsor::None => IdentityJoinSponsor::None,
+        };
         let plan = ProviderIdentityJoinRequest {
             identity_id: &identity_id,
             events: &events,
             member: &member,
             signing: &signing,
             created_at: &created_at,
+            sponsor,
         }
         .plan()?;
-        let requested_at = match plan {
-            IdentityJoinRequestPlan::Write(write) => {
-                self.put_identity_event_at(&at, &write).await?;
-                write.requested_at
-            }
-            IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested_at,
-        };
-        let requested = NookIdentityJoinRequested {
+        let requested = |requested_at: &nook_core::IsoTimestamp| NookIdentityJoinAsk::Requested {
             identity_id: identity_id.as_str().to_owned(),
             app_id: app_key.app_id().as_str().to_owned(),
             requested_at: requested_at.as_str().to_owned(),
         };
-        Tsify::into_ts(&requested).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        let asked = match plan {
+            IdentityJoinRequestPlan::Write(write) => {
+                let put = IdentityEventPut {
+                    event_id: &write.event_id,
+                    bytes: &write.bytes,
+                };
+                self.put_identity_event_at(&at, &put).await?;
+                requested(&write.requested_at)
+            }
+            IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested(&requested_at),
+            IdentityJoinRequestPlan::Added(write) => {
+                let put = IdentityEventPut {
+                    event_id: &write.event_id,
+                    bytes: &write.bytes,
+                };
+                self.put_identity_event_at(&at, &put).await?;
+                let mut joined = events;
+                joined.push(write.bytes);
+                match Self::complete_join_from_log(IdentityJoinLog {
+                    identity_id: &identity_id,
+                    app_key: &app_key,
+                    events: &joined,
+                })
+                .await?
+                {
+                    NookIdentityJoinCompletion::Approved => NookIdentityJoinAsk::Joined,
+                    NookIdentityJoinCompletion::Pending | NookIdentityJoinCompletion::Denied => {
+                        return Err(NookError::Database(
+                            "The keyring did not take this key's addition.".to_owned(),
+                        )
+                        .into());
+                    }
+                }
+            }
+        };
+        self.device.join_sponsor = HeldJoinSponsor::None;
+        Tsify::into_ts(&asked).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 
     /// Read the identity's log at the source again. Once a device approved
@@ -494,6 +557,7 @@ mod browser_tests {
             member: &member,
             signing: &signer,
             created_at: &created_at,
+            sponsor: IdentityJoinSponsor::None,
         })
         .plan()?
         else {

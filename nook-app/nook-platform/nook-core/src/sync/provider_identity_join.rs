@@ -5,6 +5,11 @@
 //! applicable heads at the provider, so a device of the identity that syncs
 //! the log sees it and answers it. Until a member approves it, the request
 //! opens nothing.
+//!
+//! A browser that already holds a member key of the identity, as the key of
+//! another keyring here made from the same passkey, needs no answer: that
+//! key adds the asking key itself, on its own device, as the web app adds
+//! the browser extension.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -13,10 +18,24 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    EventError, EventId, EventStorageBytes, IdentityControlLog, IdentityControlOperation,
+    AppKey, EventError, EventId, EventStorageBytes, IdentityControlLog, IdentityControlOperation,
     IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityId,
-    IdentityMemberKeys, IsoTimestamp, ReplicatedIdentityStanding, SigningIdentity,
+    IdentityMemberAdd, IdentityMemberKeys, IsoTimestamp, ReplicatedIdentityStanding,
+    SigningIdentity,
 };
+
+/// A member key of the identity this browser holds beside the asking key.
+#[derive(Clone, Copy)]
+pub enum IdentityJoinSponsor<'a> {
+    /// None here: a device of the identity answers the request.
+    None,
+    /// The key in use when the join began, with its event signer. It adds
+    /// the asking key when the identity lists it as a member.
+    Held {
+        app_key: &'a AppKey,
+        signing: &'a SigningIdentity,
+    },
+}
 
 /// One identity's log at a provider and the app key asking to join it.
 pub struct ProviderIdentityJoinRequest<'a> {
@@ -28,6 +47,7 @@ pub struct ProviderIdentityJoinRequest<'a> {
     /// The asking app key's event signer; it signs its own request.
     pub signing: &'a SigningIdentity,
     pub created_at: &'a IsoTimestamp,
+    pub sponsor: IdentityJoinSponsor<'a>,
 }
 
 /// The signed request to put into the identity's log at the provider.
@@ -38,6 +58,14 @@ pub struct IdentityJoinRequestWrite {
     pub requested_at: IsoTimestamp,
 }
 
+/// A member key's addition of the asking key, to put into the identity's
+/// log at the provider. The asking key is a member once it is there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityJoinAdditionWrite {
+    pub event_id: EventId,
+    pub bytes: EventStorageBytes,
+}
+
 /// What asking to join writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityJoinRequestPlan {
@@ -45,6 +73,8 @@ pub enum IdentityJoinRequestPlan {
     Write(IdentityJoinRequestWrite),
     /// The app key already asked, and no member answered yet.
     AlreadyPending { requested_at: IsoTimestamp },
+    /// A member key held here added the asking key: put its addition there.
+    Added(IdentityJoinAdditionWrite),
 }
 
 impl ProviderIdentityJoinRequest<'_> {
@@ -52,8 +82,32 @@ impl ProviderIdentityJoinRequest<'_> {
         EventError::IdentityControlInvalid(reason.to_owned())
     }
 
-    /// Verify the provider's log and sign the request on its heads. A member,
-    /// a removed app key, or a log the provider does not hold is refused.
+    /// Sign the operations on the log's heads; they must apply there.
+    fn appended(
+        &self,
+        log: IdentityControlLog,
+        operations: Vec<IdentityControlOperation>,
+        signing: &SigningIdentity,
+    ) -> VaultResult<(EventId, EventStorageBytes)> {
+        let event = log.build_append(
+            operations,
+            &IdentityEventSigning {
+                signing_key: signing.signing_key(),
+                created_at: self.created_at,
+            },
+        )?;
+        let event_id = event.id()?;
+        let bytes = event.serialize_storage_yaml()?;
+        let inserted = log.insert(event).map_err(|rejection| rejection.cause)?;
+        if inserted.status != IdentityEventInsertStatus::Applied {
+            return Err(Self::refused("the join does not apply to the identity log").into());
+        }
+        Ok((event_id, bytes))
+    }
+
+    /// Verify the provider's log and sign on its heads: the addition by a
+    /// member key held here, otherwise the request. A member, a removed app
+    /// key, or a log the provider does not hold is refused.
     pub fn plan(&self) -> VaultResult<IdentityJoinRequestPlan> {
         if self.events.is_empty() {
             return Err(
@@ -83,23 +137,28 @@ impl ProviderIdentityJoinRequest<'_> {
             }
             ReplicatedIdentityStanding::NotListed => {}
         }
-        let event = log.build_append(
+        if let IdentityJoinSponsor::Held { app_key, signing } = self.sponsor
+            && state.member(app_key.app_id()).is_some()
+        {
+            let operations = IdentityMemberAdd {
+                state: &state,
+                approver: app_key,
+                member: self.member,
+            }
+            .addition()?;
+            let (event_id, bytes) = self.appended(log, operations, signing)?;
+            return Ok(IdentityJoinRequestPlan::Added(IdentityJoinAdditionWrite {
+                event_id,
+                bytes,
+            }));
+        }
+        let (event_id, bytes) = self.appended(
+            log,
             vec![IdentityControlOperation::MemberJoinRequested {
                 member: self.member.clone(),
             }],
-            &IdentityEventSigning {
-                signing_key: self.signing.signing_key(),
-                created_at: self.created_at,
-            },
+            self.signing,
         )?;
-        let event_id = event.id()?;
-        let bytes = event.serialize_storage_yaml()?;
-        let inserted = log.insert(event).map_err(|rejection| rejection.cause)?;
-        if inserted.status != IdentityEventInsertStatus::Applied {
-            return Err(
-                Self::refused("the join request does not apply to the identity log").into(),
-            );
-        }
         Ok(IdentityJoinRequestPlan::Write(IdentityJoinRequestWrite {
             event_id,
             bytes,
@@ -111,7 +170,7 @@ impl ProviderIdentityJoinRequest<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppKey, IdentityEvent, IdentityGenesisRequest};
+    use crate::{IdentityEvent, IdentityGenesisRequest, MemberDevice};
     use nook_auth2::MemberLabel;
 
     struct Device {
@@ -177,16 +236,81 @@ mod tests {
                 member: &device.keys(),
                 signing: &device.signer,
                 created_at: &self.at,
+                sponsor: IdentityJoinSponsor::None,
+            }
+            .plan()?)
+        }
+
+        /// Ask with a key of another keyring held beside the asking one.
+        fn ask_beside(
+            &self,
+            device: &Device,
+            held: &Device,
+        ) -> anyhow::Result<IdentityJoinRequestPlan> {
+            Ok(ProviderIdentityJoinRequest {
+                identity_id: self.log.identity_id(),
+                events: &self.events()?,
+                member: &device.keys(),
+                signing: &device.signer,
+                created_at: &self.at,
+                sponsor: IdentityJoinSponsor::Held {
+                    app_key: &held.app,
+                    signing: &held.signer,
+                },
             }
             .plan()?)
         }
 
         fn put(&mut self, write: &IdentityJoinRequestWrite) -> anyhow::Result<()> {
-            let event = IdentityEvent::parse_storage_bytes(&write.bytes)?;
-            assert_eq!(event.id()?, write.event_id);
+            self.put_event(&write.event_id, &write.bytes)
+        }
+
+        fn put_event(&mut self, id: &EventId, bytes: &EventStorageBytes) -> anyhow::Result<()> {
+            let event = IdentityEvent::parse_storage_bytes(bytes)?;
+            assert_eq!(&event.id()?, id);
             self.log = self.log.clone().insert(event)?.log;
             Ok(())
         }
+    }
+
+    #[test]
+    fn a_member_key_held_here_adds_the_asking_key_on_its_own_device() -> anyhow::Result<()> {
+        let mut provider = ProviderLog::founded()?;
+        let asking = Device::new()?;
+
+        // The founder's key holds another keyring on this browser.
+        let IdentityJoinRequestPlan::Added(write) =
+            provider.ask_beside(&asking, &provider.founder)?
+        else {
+            anyhow::bail!("a member key held here must add the asking key");
+        };
+        provider.put_event(&write.event_id, &write.bytes)?;
+        let state = IdentityControlState::project(&provider.log)?;
+        let member = state
+            .member(asking.app.app_id())
+            .ok_or_else(|| anyhow::anyhow!("the asking key must be a member"))?;
+        assert_eq!(
+            member.device,
+            MemberDevice::SameAs {
+                app_id: provider.founder.app.app_id().clone(),
+            }
+        );
+        assert!(state.pending_joins.is_empty());
+        // Both keys run on this browser: still one device.
+        assert_eq!(state.device_members().count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn a_held_key_that_is_no_member_leaves_the_request_to_the_identity() -> anyhow::Result<()> {
+        let provider = ProviderLog::founded()?;
+        let asking = Device::new()?;
+        let stranger = Device::new()?;
+        assert!(matches!(
+            provider.ask_beside(&asking, &stranger)?,
+            IdentityJoinRequestPlan::Write(_)
+        ));
+        Ok(())
     }
 
     #[test]
@@ -229,6 +353,7 @@ mod tests {
             member: &asking.keys(),
             signing: &asking.signer,
             created_at: &provider.at,
+            sponsor: IdentityJoinSponsor::None,
         }
         .plan();
         assert!(missing.is_err());
@@ -246,6 +371,7 @@ mod tests {
             member: &asking.keys(),
             signing: &impostor.signer,
             created_at: &provider.at,
+            sponsor: IdentityJoinSponsor::None,
         }
         .plan();
         assert!(forged.is_err());

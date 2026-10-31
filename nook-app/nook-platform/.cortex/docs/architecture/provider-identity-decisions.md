@@ -92,9 +92,13 @@ offers adding by another passkey.
 - **This browser, first run:** **Continue** (Finish joining: a passkey made before restores the identity's record without its log or vault keys, so the provider's log and this key's grants come here; then Drive is saved, the log syncs, and a vault the identity granted opens through it, as after an invite; setup ends on the identities page with that vault's panel open beside the card, not inside the vault).
 - **This browser, identity in use:** **In use** (no action).
 - **Join approved:** **Continue** (Finish joining).
-- **Passkey in use:** no action. The key is a member, but here it already
-  holds the identity in use, which has its own log or vaults. One key holds
-  one identity, so finishing would fail; the tag says why instead.
+- **Passkey in use:** **Continue** (Ask to join). The key is a member, but
+  here it already holds the identity in use, which has its own log or
+  vaults. One key holds one identity, so the join sets up a new key with its
+  own passkey, as for any second identity. The member key stays held in
+  memory until that new key asks, then adds it itself (`member-approved`,
+  `same-as` the member key): no other device answers, and the identity is
+  here at once.
 - **Opens with a checked passkey:** **Continue** (Add to this browser).
 - **Join requested:** **Waiting** (Check again).
 - **Not on this browser, not opened, or join denied:** **Request to join**.
@@ -113,8 +117,8 @@ offers adding by another passkey.
 - A passkey made for Nook before re-derives the same app key, so an identity
   it is a member of reads as **Join approved** with no extra tap. That holds
   only while the key's identity here is still fresh (no log, no vaults, no
-  other member). Otherwise it reads as **Passkey in use**, tagged "Its
-  passkey is already in use here".
+  other member). Otherwise it reads as **Passkey in use** and continues
+  with a new key that the member key adds.
 - A refusal from Rust reaches the user with its reason after the failed
   action, not as a bare "could not" sentence.
 - A new passkey is a member of nothing: every identity asks to join.

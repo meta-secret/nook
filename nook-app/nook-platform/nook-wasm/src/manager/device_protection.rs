@@ -4,7 +4,7 @@ mod association;
 use nook_core::PasskeyAccessProfile;
 use wasm_bindgen::JsError;
 
-use super::NookVaultManager;
+use super::{HeldJoinSponsor, NookVaultManager};
 use crate::BrowserPasskeyClient;
 use crate::BrowserPasskeyCreationOptions;
 use crate::BrowserPasskeyObservation;
@@ -78,6 +78,7 @@ impl NookVaultManager {
         self.device.identity_private_key.clear();
         self.event_log.signing_seed.zeroize();
         self.event_log.signing_seed.clear();
+        self.device.join_sponsor = HeldJoinSponsor::None;
     }
 
     #[wasm_bindgen]

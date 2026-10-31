@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
 import type {
+  NookIdentityJoinAsk,
   NookIdentityJoinCompletion,
   NookProviderSource,
   NookVaultManager,
@@ -136,6 +137,8 @@ export enum IdentityJoinAsked {
   WaitsForDevice = "waits-for-device",
   /** The key in use belongs to an identity; Rust staged a new one. */
   WaitsForNewKey = "waits-for-new-key",
+  /** A member key held here added the asking key: the identity is here. */
+  Joined = "joined",
 }
 
 /**
@@ -163,14 +166,25 @@ export class IdentityJoinActions {
         );
         switch (start) {
           case "current-key":
-            await manager.request_identity_join(join.source, join.identityId);
-            return IdentityJoinAsked.Requested;
+            return IdentityJoinActions.asked(
+              await manager.request_identity_join(join.source, join.identityId),
+            );
           case "new-key-staged":
             return IdentityJoinAsked.WaitsForNewKey;
         }
       },
     };
     return new IdentityManagerCalls(this.vault).run(call);
+  }
+
+  /** What Rust's answer to a join request means for the join. */
+  private static asked(ask: NookIdentityJoinAsk): IdentityJoinAsked {
+    switch (ask.state) {
+      case "requested":
+        return IdentityJoinAsked.Requested;
+      case "joined":
+        return IdentityJoinAsked.Joined;
+    }
   }
 
   /** Hand the join to the ceremony of the key it waits for. */
@@ -197,6 +211,9 @@ export class IdentityJoinActions {
     switch (asked.value) {
       case IdentityJoinAsked.Requested:
         this.announce();
+        return asked;
+      case IdentityJoinAsked.Joined:
+        await this.follow(wait.join);
         return asked;
       case IdentityJoinAsked.WaitsForNewKey:
         if (wait.kind === IdentityJoinWaitKind.Device) {
@@ -259,12 +276,18 @@ export class IdentityJoinActions {
       case "approved":
         break;
     }
+    await this.follow(join);
+    return ok(IdentityPlanOutcomeKind.Applied);
+  }
+
+  /** The identity is on this browser now: the page follows it as after an
+   * invite join. */
+  async follow(join: IdentityJoinIntent): Promise<void> {
     const vault = this.vault;
     await new IdentityDirectoryLoader(vault).reload();
     const followed = await vault.identityControl.followInviteJoin(join.label);
     if (followed.isErr())
       vault.errorMsg = vault.t(followed.error.translationKey);
-    return ok(IdentityPlanOutcomeKind.Applied);
   }
 }
 
@@ -339,7 +362,9 @@ export class IdentityPlanActions {
         const outcome = this.waiting(waiting);
         switch (outcome.kind) {
           case IdentityPlanOutcomeKind.Applied:
-            joins.announce();
+            if (asked.value === IdentityJoinAsked.Joined)
+              await joins.follow(join);
+            else joins.announce();
             break;
           case IdentityPlanOutcomeKind.WaitsForKey:
             joins.waitFor(outcome.wait);
@@ -355,6 +380,7 @@ export class IdentityPlanActions {
   private waiting({ asked, join }: AskedJoin): IdentityPlanOutcome {
     switch (asked) {
       case IdentityJoinAsked.Requested:
+      case IdentityJoinAsked.Joined:
         return { kind: IdentityPlanOutcomeKind.Applied };
       case IdentityJoinAsked.WaitsForDevice:
         return {

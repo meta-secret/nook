@@ -358,7 +358,8 @@ pub use provider_identity_choice::{
     ProviderIdentityChoices,
 };
 pub use provider_identity_join::{
-    IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
+    IdentityJoinAdditionWrite, IdentityJoinRequestPlan, IdentityJoinRequestWrite,
+    IdentityJoinSponsor, ProviderIdentityJoinRequest,
 };
 pub use provider_identity_log::{
     ListedIdentityLog, ListingAppKey, ListingLocalIdentity, ProviderIdentityJoin,

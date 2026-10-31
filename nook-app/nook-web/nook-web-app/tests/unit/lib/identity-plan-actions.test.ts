@@ -6,7 +6,7 @@ import initNookWasm, {
   type IdentityDecision,
   type NookIdentityConnectionStart,
   type NookIdentityJoinCompletion,
-  type NookIdentityJoinRequested,
+  type NookIdentityJoinAsk,
   type NookProviderSource,
   type ProviderIdentityChoice,
 } from '$app-wasm'
@@ -82,7 +82,8 @@ class JoinSession {
     vi.spyOn(this.manager, 'request_identity_join').mockImplementation(
       (source, identityId) => {
         this.requested.push(`${source.kind}:${identityId}`)
-        const requested: NookIdentityJoinRequested = {
+        const requested: NookIdentityJoinAsk = {
+          state: 'requested',
           identityId,
           appId: 'app_fresh',
           requestedAt: '2026-10-28T08:00:00Z',
@@ -172,6 +173,34 @@ describe('asking to join from an identity plan', () => {
 
     expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.Requested)
     expect(session.requested).toEqual([`googleDrive:${IDENTITY}`])
+    expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
+  })
+
+  test('a new key a member key here added joins at once and follows the identity', async () => {
+    const session = new JoinSession('current-key').unlocked()
+    const joined: NookIdentityJoinAsk = { state: 'joined' }
+    vi.spyOn(session.manager, 'request_identity_join').mockResolvedValue(joined)
+    const reload = vi
+      .spyOn(IdentityDirectoryLoader.prototype, 'reload')
+      .mockResolvedValue()
+    const follow = vi
+      .spyOn(session.vault.identityControl, 'followInviteJoin')
+      .mockResolvedValue(ok(IdentityActionOutcome.Completed))
+    const wait: WaitingIdentityJoin = {
+      kind: IdentityJoinWaitKind.NewKey,
+      join: { source: SOURCE, identityId: IDENTITY, label: LABEL },
+    }
+    session.vault.identityJoin = wait
+
+    const resumed = await new IdentityJoinActions(session.vault).resume(wait)
+
+    expect(resumed._unsafeUnwrap()).toBe(IdentityJoinAsked.Joined)
+    expect(reload).toHaveBeenCalledOnce()
+    expect(follow).toHaveBeenCalledWith(LABEL)
+    // Nothing waits for a device: no request was announced.
+    expect(session.vault.successMsg).not.toBe(
+      session.vault.t(I18N_KEYS.AccessCheckJoinRequested),
+    )
     expect(session.vault.identityJoin.kind).toBe(IdentityJoinWaitKind.Idle)
   })
 

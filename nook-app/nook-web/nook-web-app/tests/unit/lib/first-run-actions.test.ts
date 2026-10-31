@@ -4,7 +4,7 @@ import initNookWasm, {
   DeviceProtectionStatus,
   NookVaultManager,
   type NookIdentityJoinCompletion,
-  type NookIdentityJoinRequested,
+  type NookIdentityJoinAsk,
   type NookProviderSource,
   type ProviderIdentityChoice,
 } from '$app-wasm'
@@ -84,7 +84,8 @@ class Setup {
     )
     vi.spyOn(this.manager, 'request_identity_join').mockImplementation(
       (_source, identityId) => {
-        const requested: NookIdentityJoinRequested = {
+        const requested: NookIdentityJoinAsk = {
+          state: 'requested',
           identityId,
           appId: 'app_fresh',
           requestedAt: '2026-10-28T08:00:00Z',
