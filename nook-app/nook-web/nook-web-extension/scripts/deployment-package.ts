@@ -161,7 +161,9 @@ export async function makeDeterministicZip(
     throw new Error('Extension archive must contain manifest.json at its root.')
   }
   const archiveEntries: Zippable = {}
-  for (const file of files) {
+  // Source maps are debugging aids the installed extension never loads; left
+  // out, the download stays well under the 25 MiB a hosted file may be.
+  for (const file of files.filter((path) => !path.endsWith('.map'))) {
     archiveEntries[file] = await readFile(join(sourceDirectory, file))
   }
   const archiveOptions: ZipOptions = {
