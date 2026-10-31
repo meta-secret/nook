@@ -84,14 +84,14 @@
   function setSecretsAddOpen(open: boolean): void {
     secretsAddOpen = open
   }
-  /** Day-2 health of the identity: a copy elsewhere, then a second app. */
+  /** Day-2 health of the identity: a copy elsewhere, then a second device. */
   const identityHealth = $derived(
     assess_identity_health(
       vault.syncProviders.length,
       vault.syncProviders.filter((provider) =>
         provider_carries_device_join(provider),
       ).length,
-      vault.identityControl.memberCount(vault.vaultMembers.length),
+      vault.identityControl.deviceCount(vault.vaultMembers.length),
       vault.secretTotal,
     ),
   )

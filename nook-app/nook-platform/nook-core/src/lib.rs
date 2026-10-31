@@ -326,9 +326,9 @@ pub use nook_event_log::{
     IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
     IdentityJoinRequest, IdentityMemberAddition, IdentityMemberKeys, IdentityMountTarget,
     IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
-    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberSealedName, MemberVaultDek,
-    OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId, VaultAuthorizedRoster,
-    VaultPlacement, VaultRosterMember,
+    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberDevice, MemberSealedName,
+    MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId,
+    VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,

@@ -465,6 +465,7 @@ mod tests {
             vec![IdentityControlOperation::MemberApproved {
                 member: outsider.keys("Intruder"),
                 vault_deks: Vec::new(),
+                device: MemberDevice::Own,
             }],
             &outsider.signing(&fixture.at),
         )?;
@@ -506,6 +507,7 @@ mod tests {
             vec![IdentityControlOperation::MemberApproved {
                 member: second.keys("Phone"),
                 vault_deks: Vec::new(),
+                device: MemberDevice::Own,
             }],
             &second.signing(&fixture.at),
         )?;

@@ -140,6 +140,7 @@ describe('IdentityPages', () => {
       identityLabel: 'Personal',
       standing: 'member',
       members: [],
+      deviceCount: 0,
       joinRequests: [],
       vaults: [
         {

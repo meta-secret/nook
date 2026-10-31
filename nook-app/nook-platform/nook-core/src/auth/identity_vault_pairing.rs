@@ -89,6 +89,7 @@ mod tests {
             identity_label: "Family".to_owned(),
             standing,
             members: Vec::new(),
+            device_count: 0,
             join_requests: Vec::new(),
             vaults,
             mounts: Vec::new(),

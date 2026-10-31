@@ -50,10 +50,13 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
   const members = $derived(
     control.snapshot === false ? [] : control.snapshot.members,
   );
-  /** Each device that opens the identity holds its own key; this browser
-   * holds one even before the device list loads. */
+  /** Each app that opens the identity holds its own key; this browser
+   * holds one even before the device list loads. Apps in one browser, as
+   * the web app and its extension, are one device. */
   const keyCount = $derived(Math.max(members.length, 1));
-  const deviceCount = $derived(Math.max(members.length, 1));
+  const deviceCount = $derived(
+    Math.max(control.snapshot === false ? 0 : control.snapshot.deviceCount, 1),
+  );
   const keyCountText = $derived.by(() => {
     const request: Parameters<typeof vault.t>[0] = {
       key:
@@ -140,7 +143,7 @@ vaults, this browser), then the details (sign-in keys). Each action says what it
             member.appId,
             member.isCurrentInstallation,
           ),
-          current: member.isCurrentInstallation,
+          current: member.onCurrentDevice,
         }))
       : [
           {

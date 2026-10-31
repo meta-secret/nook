@@ -68,7 +68,8 @@ pub use identity_control::{
     IdentityInviteJoin, IdentityInviteProof, IdentityJoinRequest, IdentityMemberAddition,
     IdentityMemberKeys, IdentityMountTarget, IdentityNaming, IdentityProviderMount,
     IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, MemberSealedName, MemberVaultDek, OpenedVaultDek, ProviderMountId,
+    IdentityVaultRegistration, MemberDevice, MemberSealedName, MemberVaultDek, OpenedVaultDek,
+    ProviderMountId,
 };
 pub use location::{
     EventLogLocation, EventLogNamespaceKind, IDENTITY_LOG_DIR, PROVIDER_ROOT_DIR, PlacedNamespace,

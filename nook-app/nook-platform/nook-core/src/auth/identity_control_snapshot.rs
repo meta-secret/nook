@@ -34,6 +34,9 @@ pub struct IdentityMemberView {
     pub app_id: String,
     pub label: String,
     pub is_current_installation: bool,
+    /// It runs on this installation's device: this app, or one sharing its
+    /// device, as the browser extension in the web app's browser.
+    pub on_current_device: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -85,6 +88,15 @@ pub struct IdentityControlSnapshot {
     pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
+    /// Devices the members run on: apps sharing one device count once.
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: carries the device count to JavaScript as a Number"
+        )
+    )]
+    pub device_count: usize,
     /// Devices asking to join, which this installation can answer as a member.
     pub join_requests: Vec<IdentityJoinRequestView>,
     pub vaults: Vec<IdentityVaultView>,
@@ -137,6 +149,7 @@ impl IdentityControlSnapshot {
             identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
+            device_count: 0,
             join_requests: Vec::new(),
             vaults: Vec::new(),
             mounts: Vec::new(),
@@ -168,8 +181,11 @@ impl IdentityControlSnapshot {
                     app_id: member.keys.app_id.as_str().to_owned(),
                     label: member.keys.label.as_str().to_owned(),
                     is_current_installation: &member.keys.app_id == *current_app_id,
+                    on_current_device: &member.keys.app_id == *current_app_id
+                        || state.share_a_device(&member.keys.app_id, current_app_id),
                 })
                 .collect(),
+            device_count: state.device_members().count(),
             // Only a member answers join requests.
             join_requests: match standing {
                 IdentityControlStanding::Member => state

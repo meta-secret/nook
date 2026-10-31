@@ -13,12 +13,13 @@ use nook_core::{
     IdentityControlOperation, IdentityControlSnapshot, IdentityControlSnapshotRequest,
     IdentityControlStanding, IdentityControlState, IdentityCreation, IdentityDirectory,
     IdentityEvent, IdentityEventInsertStatus, IdentityEventSigning, IdentityGenesisRequest,
-    IdentityId, IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
-    IdentityMemberAdd, IdentityMemberKeys, IdentityVaultKeyOpening, IdentityVaultPairingRequest,
-    IdentityVaultRegistration, IsoTimestamp, LocalIdentityLog, MemberLabel, MemberLabelState,
-    MultiDeviceError, OpenedVaultDek, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
-    ReplicatedIdentityStanding, ReplicatedMembershipRequest, SigningIdentity, StoreId, VaultError,
-    VaultKeys,
+    IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityId,
+    IdentityInvitationBinding, IdentityJoinCompletion, IdentityJoinCompletionPlan,
+    IdentityMemberAdd, IdentityMemberKeys, IdentityNextStep, IdentityVaultKeyOpening,
+    IdentityVaultPairingRequest, IdentityVaultRegistration, IsoTimestamp, LocalIdentityLog,
+    MemberLabel, MemberLabelState, MultiDeviceError, OpenedVaultDek, ReplicatedIdentityAdoption,
+    ReplicatedIdentityMembership, ReplicatedIdentityStanding, ReplicatedMembershipRequest,
+    SigningIdentity, StoreId, VaultError, VaultKeys,
 };
 
 fn at() -> IsoTimestamp {
@@ -323,6 +324,32 @@ fn the_web_app_adds_the_extension_and_it_joins_from_the_keyring_log() -> anyhow:
     assert_eq!(plan.to_pair.len(), 2);
     assert!(plan.to_pair.contains(&first.to_string()));
     assert!(plan.to_pair.contains(&other.to_string()));
+    Ok(())
+}
+
+#[test]
+fn the_extension_runs_in_the_web_apps_browser_so_it_adds_no_device() -> anyhow::Result<()> {
+    let mut family = WebIdentity::found()?;
+    let mut extension = Extension::new();
+    let key = extension.protect()?;
+    family.add(&key)?;
+
+    let snapshot = family.snapshot_for(&family.founder)?;
+    assert_eq!(snapshot.members.len(), 2);
+    assert_eq!(snapshot.device_count, 1);
+    // Each app sees the other on its own device.
+    for view in [snapshot.clone(), family.snapshot_for(&key)?] {
+        assert!(view.members.iter().all(|member| member.on_current_device));
+    }
+    // Both apps sit on one device: losing it still loses the keyring.
+    let health = IdentityHealth::assess(IdentityHealthAssessment {
+        copy_provider_count: 1_usize.into(),
+        device_join_provider_count: 1_usize.into(),
+        device_count: snapshot.device_count.into(),
+        stored_item_count: 3_usize.into(),
+    });
+    assert_eq!(health.stage, IdentityHealthStage::CopyKept);
+    assert_eq!(health.next_step, IdentityNextStep::AddDevice);
     Ok(())
 }
 

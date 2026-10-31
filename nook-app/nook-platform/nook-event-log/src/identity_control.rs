@@ -27,7 +27,7 @@ pub use projection::{
 pub use wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
     IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekGrant, MemberSealedName, MemberVaultDek,
+    IdentityProviderMount, IdentityVaultDekGrant, MemberDevice, MemberSealedName, MemberVaultDek,
     ProviderMountId,
 };
 
