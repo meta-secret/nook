@@ -99,8 +99,12 @@ offers adding by another passkey.
   passkey) wraps a new key for the identity (`PasskeyWrappedLocal`, the same
   PRF input). The key in use then adds that key itself (`member-approved`,
   `same-as` the key in use) at the provider: no other device answers. The
-  identity is added beside the one in use, which stays selected. A key in
-  use that is no member is refused before the passkey is asked for.
+  identity is added beside the one in use, which stays selected. This
+  browser's directory lists the key in use under the identity it holds
+  only; the added identity's record leaves it out, though its log still lists
+  it for the browser that holds the identity with it. The addition is decided
+  locally before the provider sees it, and a key in use that is no member is
+  refused before the passkey is asked for.
 - **Opens with a checked passkey:** **Continue** (Add to this browser).
 - **Join requested:** **Waiting** (Check again).
 - **Not on this browser, not opened, or join denied:** **Request to join**.

@@ -19,8 +19,8 @@ use nook_core::{
     IdentityConnectionKey, IdentityControlLog, IdentityControlState, IdentityId,
     IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityJoinAnswer,
     IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan,
-    IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyRegistration,
-    PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
+    IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition,
+    PasskeyRegistration, PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
     ProviderIdentityKeyInUse, ProviderIdentityLogEvents, SigningIdentity, StorageMode,
     WebAuthnPrfInput, WebAuthnPrfOutput,
 };
@@ -505,18 +505,29 @@ impl NookVaultManager {
             event_id: &write.event_id,
             bytes: &write.bytes,
         };
+        events.push(write.bytes.clone());
+        let identity_logs = [ProviderIdentityLogEvents {
+            identity_id: identity_id.clone(),
+            events,
+        }];
+        // Decide the addition here first: a refusal leaves the provider's log
+        // as it was, with no member key nobody holds.
+        PasskeyIdentityAddition {
+            app_key: &new_key,
+            signer: &new_signer,
+            identity_id: &identity_id,
+            identity_logs: &identity_logs,
+            directory: &NookDatabase::load_identity_directory().await?,
+        }
+        .add()?;
         self.put_identity_event_at(&at, &put).await?;
-        events.push(write.bytes);
         let selection =
             NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
                 app_key: &new_key,
                 record: material.record(),
                 signer: &new_signer,
                 identity_id: &identity_id,
-                identity_logs: &[ProviderIdentityLogEvents {
-                    identity_id: identity_id.clone(),
-                    events,
-                }],
+                identity_logs: &identity_logs,
             })
             .await?;
         Tsify::into_ts(&NookIdentityAdded {

@@ -5,6 +5,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use std::collections::HashSet;
+
 use super::{
     AppKeyIdentityMembership, IdentityDirectory, IdentityDirectoryRejection, IdentitySelection,
 };
@@ -48,11 +50,26 @@ pub struct ReplicatedIdentityAddition<'a> {
     pub membership: ReplicatedIdentityMembership<'a>,
 }
 
+/// One identity's replicated membership, and the app keys other local
+/// identities here already list.
+struct MembershipMirror<'a, 'b> {
+    request: &'a ReplicatedIdentityMembership<'b>,
+    listed_elsewhere: &'a HashSet<AppId>,
+}
+
 impl IdentityRecord {
+    /// Mirror the replicated members. A member another local identity here
+    /// already lists is left out: one key holds one identity on a browser,
+    /// and a key in use here may still be a member of this identity from a
+    /// browser where it holds this one, as when one passkey made both.
     fn apply_replicated_membership(
         &mut self,
-        request: &ReplicatedIdentityMembership<'_>,
+        mirror: &MembershipMirror<'_, '_>,
     ) -> MultiDeviceResult<bool> {
+        let MembershipMirror {
+            request,
+            listed_elsewhere,
+        } = *mirror;
         let own_app_id = request.app_key.app_id();
         if request.revoked.contains(own_app_id) {
             return Err(MultiDeviceError::AppKeyRevokedFromIdentity {
@@ -73,7 +90,11 @@ impl IdentityRecord {
             ));
         }
         let mut changed = false;
-        for replicated in &request.members {
+        for replicated in request
+            .members
+            .iter()
+            .filter(|member| !listed_elsewhere.contains(&member.app_id))
+        {
             match self
                 .members
                 .iter_mut()
@@ -184,12 +205,22 @@ impl IdentityRecord {
 }
 
 impl IdentityDirectory {
+    /// The app keys local identities other than `identity_id` list.
+    fn listed_elsewhere(&self, identity_id: &IdentityId) -> HashSet<AppId> {
+        self.identities
+            .iter()
+            .filter(|record| &record.identity_id != identity_id)
+            .flat_map(|record| record.members.iter().map(|member| member.app_id.clone()))
+            .collect()
+    }
+
     /// Cache replicated membership and this installation's own DEK grants.
     pub fn apply_replicated_membership(
         self,
         request: &ReplicatedIdentityMembership<'_>,
     ) -> Result<Self, IdentityDirectoryRejection> {
         let mut candidate = self.clone();
+        let listed_elsewhere = self.listed_elsewhere(request.identity_id);
         let applied: MultiDeviceResult<()> = (|| {
             let record = candidate
                 .identities
@@ -198,7 +229,10 @@ impl IdentityDirectory {
                 .ok_or_else(|| MultiDeviceError::IdentityNotFound {
                     identity_id: request.identity_id.to_string(),
                 })?;
-            record.apply_replicated_membership(request)?;
+            record.apply_replicated_membership(&MembershipMirror {
+                request,
+                listed_elsewhere: &listed_elsewhere,
+            })?;
             candidate.validate()
         })();
         match applied {
@@ -291,7 +325,10 @@ impl IdentityDirectory {
                 MemberLabelState::Unnamed,
             )?;
             record.identity_id = membership.identity_id.clone();
-            record.apply_replicated_membership(membership)?;
+            record.apply_replicated_membership(&MembershipMirror {
+                request: membership,
+                listed_elsewhere: &candidate.listed_elsewhere(membership.identity_id),
+            })?;
             candidate.identities.push(record);
             if candidate.selection == IdentitySelection::Empty {
                 candidate.selection = IdentitySelection::Selected(membership.identity_id.clone());
@@ -558,6 +595,60 @@ mod tests {
                 store_id,
             })?,
             keys
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_in_use_that_is_a_member_of_the_added_identity_stays_with_its_own() -> anyhow::Result<()>
+    {
+        // One passkey's key holds Personal here and is a member of Family,
+        // which another browser holds with it. Family comes here under a
+        // new key of its own.
+        let passkey_key = AppKey::generate()?;
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &passkey_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let personal = created.identity_id;
+        let family = IdentityId::generate()?;
+        let family_key = AppKey::generate()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+
+        let directory = created.directory.add_replicated_identity(&addition(
+            &family,
+            &family_key,
+            &passkey_key,
+            (&store_id, &keys),
+        )?)?;
+        let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            identity_id: &family,
+            app_key: &family_key,
+            members: vec![
+                member(&family_key, "This browser"),
+                member(&passkey_key, "Other browser"),
+            ],
+            revoked: Vec::new(),
+            own_grants: Vec::new(),
+            removed_vaults: Vec::new(),
+        })?;
+
+        let added = directory
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == family)
+            .ok_or_else(|| anyhow::anyhow!("the identity is added under its own id"))?;
+        assert!(added.has_app_id(family_key.app_id()));
+        assert!(!added.has_app_id(passkey_key.app_id()));
+        assert_eq!(
+            directory.identity_for_app_key(&passkey_key)?,
+            AppKeyIdentityMembership::Enrolled(personal)
+        );
+        assert_eq!(
+            directory.identity_for_app_key(&family_key)?,
+            AppKeyIdentityMembership::Enrolled(family)
         );
         Ok(())
     }

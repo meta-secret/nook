@@ -117,7 +117,11 @@ impl KeyInUseMembership<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{IdentityEvent, IdentityGenesisRequest, MemberDevice};
+    use crate::{
+        AddedIdentitySelection, AppKeyIdentityMembership, IdentityCreation, IdentityDirectory,
+        IdentityEvent, IdentityGenesisRequest, MemberDevice, MemberLabelState,
+        PasskeyIdentityAddition, ProviderIdentityLogEvents,
+    };
     use nook_auth2::MemberLabel;
 
     struct Device {
@@ -211,6 +215,64 @@ mod tests {
         );
         // Both keys run on this browser: still one device.
         assert_eq!(state.device_members().count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn the_identity_is_added_beside_the_one_the_key_in_use_holds() -> anyhow::Result<()> {
+        let provider = ProviderLog::founded()?;
+        // The founder's key holds Personal on this browser.
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &provider.founder.app,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let personal = created.identity_id;
+        let new_key = AppKey::generate()?;
+        let (new_signing, new_signer) = SigningIdentity::generate()?;
+        let mut events = provider.events()?;
+        let write = ProviderIdentityKeyInUse {
+            identity_id: provider.log.identity_id(),
+            events: &events,
+            key_in_use: &provider.founder.app,
+        }
+        .verify()?
+        .addition(&KeyInUseAddition {
+            member: &IdentityMemberKeys {
+                app_id: new_key.app_id().clone(),
+                encryption_public_key: new_key.public_key(),
+                signing_public_key: new_signing.public_key(),
+                label: MemberLabel::from_trusted("Laptop".to_owned()),
+            },
+            signing: &provider.founder.signer,
+            created_at: &provider.at,
+        })?;
+        events.push(write.bytes);
+
+        let added = PasskeyIdentityAddition {
+            app_key: &new_key,
+            signer: &new_signer,
+            identity_id: provider.log.identity_id(),
+            identity_logs: &[ProviderIdentityLogEvents {
+                identity_id: provider.log.identity_id().clone(),
+                events,
+            }],
+            directory: &created.directory,
+        }
+        .add()?;
+
+        assert_eq!(added.selection, AddedIdentitySelection::BesideIdentityInUse);
+        // Each key still holds one identity here.
+        assert_eq!(
+            added
+                .directory
+                .identity_for_app_key(&provider.founder.app)?,
+            AppKeyIdentityMembership::Enrolled(personal)
+        );
+        assert_eq!(
+            added.directory.identity_for_app_key(&new_key)?,
+            AppKeyIdentityMembership::Enrolled(provider.log.identity_id().clone())
+        );
         Ok(())
     }
 
