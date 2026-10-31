@@ -1852,7 +1852,7 @@
       "opened": "Nook opened in a tab. Continue there.",
       "unlock": "Unlock Nook in the tab and choose the keyring to connect.",
       "choosing": "In the Nook tab, create your first vault or join with a keyring you already use.",
-      "creating": "Nook is setting up your vault in the tab…",
+      "creating": "Finish setting up in the Nook tab.",
       "consent": "Approve this browser in the Nook tab.",
       "approved": "Connected. Loading your keyrings…",
       "failed_authorization": "Nook did not approve this browser. Try again in the Nook tab.",

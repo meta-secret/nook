@@ -352,9 +352,9 @@ export class SidePanelConnects {
     }
   }
 
-  /** Points at the Nook tab while it is the page beside the panel and the
-   * next move is the person's there; not while Nook works on its own, and
-   * not while another tab covers it, where Show Nook tab leads. */
+  /** Points at the Nook tab while it is the page beside the panel: every
+   * step there, setting up a vault or a keyring included, is the person's.
+   * Not while another tab covers it, where Show Nook tab leads. */
   static tabPointer(request: SidePanelTabPointerRequest): SidePanelTabPointer {
     const { connect, side } = request
     if (connect.kind !== SidePanelConnectKind.InTab) {
@@ -366,9 +366,6 @@ export class SidePanelConnects {
       case SidePanelTabPlace.Behind:
         return SidePanelTabPointer.None
     }
-    if (!SidePanelConnects.awaitsPerson(connect.follow)) {
-      return SidePanelTabPointer.None
-    }
     switch (side) {
       case SidePanelSide.Left:
         return SidePanelTabPointer.Right
@@ -376,26 +373,6 @@ export class SidePanelConnects {
         return SidePanelTabPointer.Left
       case SidePanelSide.Unknown:
         return SidePanelTabPointer.None
-    }
-  }
-
-  private static awaitsPerson(follow: SidePanelTabFollow): boolean {
-    switch (follow.kind) {
-      case SidePanelTabFollowKind.Waiting:
-        return true
-      case SidePanelTabFollowKind.Following:
-        break
-    }
-    switch (follow.step.kind) {
-      case ExtensionConnectStepKind.Opened:
-      case ExtensionConnectStepKind.Unlock:
-      case ExtensionConnectStepKind.Choosing:
-      case ExtensionConnectStepKind.Consent:
-      case ExtensionConnectStepKind.Failed:
-        return true
-      case ExtensionConnectStepKind.Creating:
-      case ExtensionConnectStepKind.Approved:
-        return false
     }
   }
 
