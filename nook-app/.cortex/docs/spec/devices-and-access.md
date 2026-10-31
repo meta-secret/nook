@@ -228,6 +228,10 @@ It is never shown as stored on one physical laptop.
   - Never let a racing peer write restore the retired identity after cleanup.
   - After scoped recovery quiesces peer tabs, reload those tabs on both success
     and failure so none remain permanently suspended from storage work.
+  - Wait for every open peer tab before deleting, not only those that answer
+    at once: each tab holds a presence Web Lock while it listens, and a tab
+    too busy to answer quickly is still waited for until the deadline.
+    Reloading a tab before it cleaned up keeps its session data.
   - If recovery preserves another local identity, direct the user to unlock a
     remaining identity. Ask for a new passkey only when no local identity
     survives.

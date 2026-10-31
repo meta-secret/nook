@@ -14,6 +14,11 @@ const LOCAL_DATA_STORAGE_GENERATION = "nook-local-data-storage-generation";
 
 const TAB_ID = crypto.randomUUID();
 
+/** Each tab that listens for local data deletion holds a lock named with
+ * this prefix and its id while it is open, so the tab deleting the data
+ * knows which tabs to wait for however busy they are. */
+const TAB_PRESENCE_LOCK_PREFIX = "nook-tab-presence:";
+
 enum LocalDataResetMessageType {
   Request = "request",
   Seen = "seen",
@@ -355,7 +360,52 @@ class BrowserDataLifecycle {
       }
       void handleRequest(event.data);
     };
-    return ok(() => channel.close());
+    // Held while this tab listens, so a tab deleting the data waits for this
+    // one even when its main thread is too busy to answer at once.
+    let releasePresence = () => {};
+    if ("locks" in this.browser.navigator) {
+      const presence = new Promise<void>((resolve) => {
+        releasePresence = resolve;
+      });
+      try {
+        void this.browser.navigator.locks
+          .request(`${TAB_PRESENCE_LOCK_PREFIX}${TAB_ID}`, () => presence)
+          .catch(() =>
+            browserLogRuntime
+              .createLogger("browser-data")
+              .warn(
+                "This tab could not announce itself to local data deletion",
+              ),
+          );
+      } catch {
+        channel.close();
+        return err(new VaultStorageFailure(VaultStorageFailureKind.LockFailed));
+      }
+    }
+    return ok(() => {
+      channel.close();
+      releasePresence();
+    });
+  }
+
+  /** The other tabs listening for local data deletion, by the presence
+   * locks they hold. */
+  private async presentOtherTabs(): Promise<
+    Result<ReadonlySet<string>, VaultStorageFailure>
+  > {
+    try {
+      const snapshot = await this.browser.navigator.locks.query();
+      const tabs = new Set<string>();
+      for (const lock of snapshot.held ? snapshot.held : []) {
+        const name = typeof lock.name === "string" ? lock.name : "";
+        if (!name.startsWith(TAB_PRESENCE_LOCK_PREFIX)) continue;
+        const tab = name.slice(TAB_PRESENCE_LOCK_PREFIX.length);
+        if (tab !== TAB_ID) tabs.add(tab);
+      }
+      return ok(tabs);
+    } catch {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.LockFailed));
+    }
   }
 
   requireLocalDataRecoverySupport(): Result<
@@ -415,10 +465,18 @@ class BrowserDataLifecycle {
           new VaultStorageFailure(VaultStorageFailureKind.BroadcastFailed),
         );
       }
-      if (outcome.isOk()) {
+      // Every other tab that holds a presence lock is waited for, not only
+      // those that answered within the first moments: a tab busy loading
+      // answers late, and reloading it before it cleaned up keeps its data.
+      const present = outcome.isOk()
+        ? await this.presentOtherTabs()
+        : ok<ReadonlySet<string>, VaultStorageFailure>(new Set());
+      if (present.isErr()) outcome = err(present.error);
+      if (outcome.isOk() && present.isOk()) {
         const deadline = Date.now() + 20_000;
         await new Promise((resolve) => setTimeout(resolve, 150));
-        while ([...seen].some((tab) => !ready.has(tab))) {
+        const waitedFor = () => new Set([...seen, ...present.value]);
+        while ([...waitedFor()].some((tab) => !ready.has(tab))) {
           if (Date.now() >= deadline) {
             outcome = err(
               new VaultStorageFailure(VaultStorageFailureKind.PeerTimeout),
