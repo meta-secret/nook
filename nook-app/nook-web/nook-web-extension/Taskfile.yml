@@ -295,19 +295,25 @@ tasks:
       persists until s3:dev:reset.
     interactive: true
     deps:
+      - extension:dev:bun
       - s3:dev:install
     env:
       # CORS admits the dev extension build: the local channel.
       NOOK_EXTENSION_CHANNEL: local
     vars:
+      DEV_BUN_VERSION: *dev-bun-version
       SEAWEEDFS_VERSION: *seaweedfs-version
     cmds:
-      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}:$PATH" bun scripts/local-s3-server.ts dev
+      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}:$PATH" bun scripts/local-s3-server.ts dev
 
   s3:dev:reset:
     desc: Delete the local S3 server's dev data; refuses while a server answers on 127.0.0.1:8333.
+    deps:
+      - extension:dev:bun
+    vars:
+      DEV_BUN_VERSION: *dev-bun-version
     cmds:
-      - cd "{{.EXTENSION_ROOT}}" && bun scripts/local-s3-server.ts reset
+      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" bun scripts/local-s3-server.ts reset
 
   s3:dev:install:
     desc: Install the pinned SeaweedFS weed binary under ~/.nook/seaweedfs/<version>, verifying its SHA-256.
