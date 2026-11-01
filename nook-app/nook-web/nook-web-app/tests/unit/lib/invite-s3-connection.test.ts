@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { configuredS3, S3_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
   InviteS3Connection,
@@ -11,7 +12,7 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 /** An invite provider whose S3 block Rust refused to project. */
 class RejectedInviteProvider implements InviteS3Provider {
   get s3Configuration(): InviteS3Provider['s3Configuration'] {
-    throw new Error('errors.validation.s3_endpoint_insecure')
+    throw new Error(I18N_KEYS.ErrorsValidationS3EndpointInsecure)
   }
 }
 
