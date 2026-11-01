@@ -30,10 +30,7 @@ pub use identity_mounts::{DeviceJoinReach, IdentityMountCapability, ProviderRepl
 pub use keyring_providers::AppProviderShare;
 mod oauth;
 mod s3;
-pub use s3::{
-    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3ProviderConfig,
-    S3SecretAccessKeyInput, StoredS3Configuration, StoredS3SecretAccessKey,
-};
+pub use s3::StoredS3Configuration;
 mod save;
 mod scope;
 mod selection;
@@ -42,8 +39,7 @@ pub use selection::{
 };
 mod staged_connection;
 pub use staged_connection::{
-    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedS3Connection,
-    StagedStorageConnection,
+    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
 };
 mod state;
 mod storage_args;
@@ -254,8 +250,8 @@ pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use crate::{
-        ProviderOauthPreset, ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ProviderOauthPreset, ProviderVaultScope, S3Connection, StoredGithubPat,
+        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
 
     use std::io;
@@ -295,7 +291,7 @@ mod tests {
         let mut row = github_provider("s3", "", "");
         row.provider_type = StorageProviderType::S3;
         row.github_pat = StoredGithubPat::Missing;
-        row.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        row.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
         let wire = serde_json::to_value(&row)?;
         assert_eq!(wire.get("type"), Some(&serde_json::json!("s3")));
         assert_eq!(

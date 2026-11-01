@@ -6,7 +6,7 @@ stays beside the form, where the user acted.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { S3ProviderConfig } from '$app-wasm'
+  import type { S3Connection } from '$app-wasm'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import S3ConnectionPanel from '$lib/components/S3ConnectionPanel.svelte'
@@ -65,7 +65,7 @@ stays beside the form, where the user acted.
     return attempt
   })
 
-  async function connect(configuration: S3ProviderConfig): Promise<void> {
+  async function connect(configuration: S3Connection): Promise<void> {
     alert = { kind: S3ConnectionAlertKind.None }
     const revision = vault.errorMsgRevision
     vault.configureS3(configuration)

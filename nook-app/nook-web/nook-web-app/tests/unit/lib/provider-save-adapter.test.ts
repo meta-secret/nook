@@ -25,7 +25,7 @@ import {
   storedLocalFolderHandle,
   type LocalFolderConfig,
   type OAuthFileConfig,
-  type S3ProviderConfig,
+  type S3Connection,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth/providers'
@@ -151,7 +151,7 @@ function localFolderProvider(config: LocalFolderConfig): StorageProvider {
   }
 }
 
-function s3Provider(config: S3ProviderConfig): StorageProvider {
+function s3Provider(config: S3Connection): StorageProvider {
   return {
     ...providerPersistenceDefaults(),
     id: 's3-existing',
@@ -163,7 +163,7 @@ function s3Provider(config: S3ProviderConfig): StorageProvider {
 }
 
 /** An S3 setup whose form produced this configuration. */
-function s3SetupState(config: S3ProviderConfig): AdapterState {
+function s3SetupState(config: S3Connection): AdapterState {
   return {
     ...providerState(S3_PROVIDER_TYPE),
     githubPat: '',

@@ -14,7 +14,7 @@ use crate::{
     errors::{MultiDeviceError, MultiDeviceResult},
 };
 use crate::{OAuthFileConfigData, StorageProviderData, StoredOAuthFileConfiguration};
-use crate::{S3ProviderConfig, StoredS3Configuration, StoredS3SecretAccessKey};
+use crate::{S3Connection, S3SecretAccessKey, StoredS3Configuration};
 use std::mem;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -65,8 +65,9 @@ impl PreparedProviderCredentials {
             }
         }
         if let StoredS3Configuration::Configured(s3) = &provider.s3
-            && let ProviderCredentialOpening::Opened =
-                self.s3_secret.opening_evidence(s3.secret_access_key.text())
+            && let ProviderCredentialOpening::Opened = self
+                .s3_secret
+                .opening_evidence(s3.secret_access_key.expose())
         {
             return ProviderCredentialOpening::Opened;
         }
@@ -160,14 +161,14 @@ impl CredentialTransition<'_> {
         let s3 = match &provider.s3 {
             StoredS3Configuration::NotApplicable => StoredS3Configuration::NotApplicable,
             StoredS3Configuration::Configured(config) => {
-                StoredS3Configuration::Configured(S3ProviderConfig {
+                StoredS3Configuration::Configured(S3Connection {
                     endpoint: config.endpoint.clone(),
                     region: config.region.clone(),
                     bucket: config.bucket.clone(),
                     key_prefix: config.key_prefix.clone(),
                     access_key_id: config.access_key_id.clone(),
-                    secret_access_key: StoredS3SecretAccessKey::transitioned(
-                        self.project_field(config.secret_access_key.text())?,
+                    secret_access_key: S3SecretAccessKey::transitioned(
+                        self.project_field(config.secret_access_key.expose())?,
                     ),
                 })
             }
@@ -225,7 +226,7 @@ impl CredentialTransition<'_> {
         let s3_secret = match &provider.s3 {
             StoredS3Configuration::NotApplicable => PreparedCredentialProjection::Unchanged,
             StoredS3Configuration::Configured(config) => {
-                self.field(config.secret_access_key.text())?
+                self.field(config.secret_access_key.expose())?
             }
         };
         Ok(PreparedProviderCredentials {
@@ -340,7 +341,7 @@ impl AuthProvidersSnapshotData {
                     prepared.s3_secret
             {
                 config.secret_access_key =
-                    StoredS3SecretAccessKey::transitioned(mem::take(&mut *replacement));
+                    S3SecretAccessKey::transitioned(mem::take(&mut *replacement));
             }
         }
         Ok(self)
@@ -381,7 +382,7 @@ impl StorageProviderData {
             }
         }
         if let StoredS3Configuration::Configured(config) = &self.s3 {
-            texts.push(config.secret_access_key.text());
+            texts.push(config.secret_access_key.expose());
         }
         texts
     }
@@ -442,8 +443,8 @@ mod tests {
         ProviderCredentialStorageAdmission,
     };
     use crate::{
-        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, S3ProviderConfig,
-        StorageProviderData, StorageProviderType, StoredS3Configuration,
+        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, S3Connection, StorageProviderData,
+        StorageProviderType, StoredS3Configuration,
     };
 
     enum ExpectedCredentialFailure {
@@ -749,7 +750,7 @@ mod tests {
             let mut row = StorageProviderData::github("s3-1", "S3 · nook-dev", "", "", "now");
             row.provider_type = StorageProviderType::S3;
             row.github_pat = StoredGithubPat::Missing;
-            row.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+            row.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
             Ok(AuthProvidersSnapshotData {
                 providers: vec![row],
                 active_vault_store_id: ActiveVaultScope::Unselected,
@@ -759,7 +760,7 @@ mod tests {
         fn s3_secret_text(&self) -> anyhow::Result<String> {
             match self.providers.first().map(|provider| &provider.s3) {
                 Some(StoredS3Configuration::Configured(config)) => {
-                    Ok(config.secret_access_key.text().to_owned())
+                    Ok(config.secret_access_key.expose().to_owned())
                 }
                 Some(StoredS3Configuration::NotApplicable) | None => {
                     anyhow::bail!("the S3 fixture row must be configured")

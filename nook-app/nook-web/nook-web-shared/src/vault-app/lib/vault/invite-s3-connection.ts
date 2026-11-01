@@ -3,7 +3,7 @@ import {
   draft_s3_storage_args,
   type NookEnrollmentProvider,
   type NookStorageConnectArgs,
-  type S3ProviderConfig,
+  type S3Connection,
 } from "$app-wasm";
 import { S3_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
@@ -43,7 +43,7 @@ export class InviteS3Connection {
   /** The inviter's connection; one Rust rejects joins nothing. */
   private configuration(
     provider: InviteS3Provider,
-  ): Result<S3ProviderConfig, VaultStorageFailure> {
+  ): Result<S3Connection, VaultStorageFailure> {
     try {
       const block = provider.s3Configuration;
       switch (block.state) {

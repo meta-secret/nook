@@ -21,7 +21,7 @@
 //! `..` segments, so a listed key is only read back, never sent: requests
 //! address an [`S3EventAddress`], whose key the layout builds.
 
-use crate::{EventId, IdentityId, PROVIDER_ROOT_DIR, PlacedNamespace, S3KeyPrefix};
+use crate::{EventId, IdentityId, PROVIDER_ROOT_DIR, PlacedNamespace, S3Connection};
 
 /// One event's object in one namespace.
 #[derive(Clone, Copy)]
@@ -48,7 +48,7 @@ pub enum S3ListedEvent {
 /// What a folder below the provider root is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum S3IdentityFolder {
-    /// An identity's folder; [`S3KeyPrefix::identity_namespaces_listing`]
+    /// An identity's folder; [`S3Connection::identity_namespaces_listing`]
     /// lists its namespaces.
     Identity(IdentityId),
     Unrelated,
@@ -67,21 +67,21 @@ enum KeyBelowPrefix<'a> {
     Outside,
 }
 
-impl S3KeyPrefix {
-    /// The key a provider path takes below this prefix.
+impl S3Connection {
+    /// The key a provider path takes below the key prefix.
     fn key_of(&self, path: &str) -> String {
-        match self {
-            Self::BucketRoot => path.to_owned(),
-            Self::Folder(prefix) => format!("{prefix}/{path}"),
+        match self.key_prefix.as_str() {
+            "" => path.to_owned(),
+            prefix => format!("{prefix}/{path}"),
         }
     }
 
-    /// The provider path of a key, when the key is below this prefix.
+    /// The provider path of a key, when the key is below the key prefix.
     fn path_of<'a>(&self, key: &'a str) -> KeyBelowPrefix<'a> {
-        match self {
-            Self::BucketRoot => KeyBelowPrefix::Below(key),
-            Self::Folder(prefix) => match key
-                .strip_prefix(prefix.as_str())
+        match self.key_prefix.as_str() {
+            "" => KeyBelowPrefix::Below(key),
+            prefix => match key
+                .strip_prefix(prefix)
                 .and_then(|rest| rest.strip_prefix('/'))
             {
                 Some(path) => KeyBelowPrefix::Below(path),
@@ -171,9 +171,16 @@ impl S3KeyPrefix {
 #[cfg(test)]
 mod tests {
     use super::{S3EventAddress, S3IdentityFolder, S3ListedEvent, S3ListedKey, S3ListedNamespace};
-    use crate::{EventId, IdentityId, PlacedNamespace, S3KeyPrefix, StoreId};
+    use crate::{EventId, IdentityId, PlacedNamespace, S3Connection, S3ConnectionDraft, StoreId};
 
     const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+
+    /// A connection that keeps its objects below this key prefix.
+    fn below(prefix: &str) -> anyhow::Result<S3Connection> {
+        let mut draft = S3ConnectionDraft::fixture();
+        draft.key_prefix = prefix.to_owned();
+        Ok(S3Connection::try_from(draft)?)
+    }
 
     struct Layout {
         identity: IdentityId,
@@ -203,7 +210,7 @@ mod tests {
     fn event_objects_take_the_local_folder_paths_and_read_back_as_their_events()
     -> anyhow::Result<()> {
         let layout = Layout::new()?;
-        let team = S3KeyPrefix::parse("team/vaults/")?;
+        let (team, root) = (below("team/vaults/")?, below("")?);
         let (vault, log) = (layout.vault(), layout.log());
         for (prefix, placed, key) in [
             (
@@ -214,7 +221,7 @@ mod tests {
                 ),
             ),
             (
-                &S3KeyPrefix::BucketRoot,
+                &root,
                 &log,
                 format!("meta-secret-nook/idn_abcdefghijk/log/events/{DIGEST}.yaml"),
             ),
@@ -236,17 +243,14 @@ mod tests {
             team.namespace_listing(&log),
             "team/vaults/meta-secret-nook/idn_abcdefghijk/log/events/"
         );
-        assert_eq!(
-            S3KeyPrefix::BucketRoot.identity_folders_listing(),
-            "meta-secret-nook/"
-        );
+        assert_eq!(root.identity_folders_listing(), "meta-secret-nook/");
         Ok(())
     }
 
     #[test]
     fn a_namespace_listing_keeps_only_its_own_event_objects() -> anyhow::Result<()> {
         let layout = Layout::new()?;
-        let team = S3KeyPrefix::parse("team")?;
+        let team = below("team")?;
         let vault = layout.vault();
         let events = "team/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events";
         for unrelated in [
@@ -275,7 +279,7 @@ mod tests {
     #[test]
     fn folder_listings_name_identities_and_their_namespaces() -> anyhow::Result<()> {
         let layout = Layout::new()?;
-        let team = S3KeyPrefix::parse("team")?;
+        let team = below("team")?;
         let S3IdentityFolder::Identity(identity) =
             team.listed_identity_folder("team/meta-secret-nook/idn_abcdefghijk/")
         else {

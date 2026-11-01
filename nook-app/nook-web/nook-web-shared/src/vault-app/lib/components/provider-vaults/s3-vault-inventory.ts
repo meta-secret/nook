@@ -4,7 +4,7 @@ import {
   staged_s3_provider_detail,
   staged_s3_provider_label,
   type ProviderVaultListing,
-  type S3ProviderConfig,
+  type S3Connection,
 } from "$app-wasm";
 import { configuredS3 } from "$lib/auth/providers";
 import { S3ConnectionFailureKind } from "$lib/components/s3-connection-form";
@@ -93,7 +93,7 @@ export class S3VaultInventoryReader {
 
   constructor(private readonly vault: VaultState) {}
 
-  async read(configuration: S3ProviderConfig): Promise<S3VaultRead> {
+  async read(configuration: S3Connection): Promise<S3VaultRead> {
     const localVault = new ProviderVaultActions(
       this.vault,
     ).localVaultOccupancy();
@@ -132,7 +132,7 @@ export class S3VaultInventoryReader {
 /** Where a staged S3 connection points, in Rust's words: the label
  * `S3 · bucket[/prefix]` and the detail `host[:port] · accessKeyId`. */
 export class S3StagedLocation {
-  constructor(private readonly configuration: S3ProviderConfig) {}
+  constructor(private readonly configuration: S3Connection) {}
 
   get label(): string {
     return staged_s3_provider_label(configuredS3(this.configuration));

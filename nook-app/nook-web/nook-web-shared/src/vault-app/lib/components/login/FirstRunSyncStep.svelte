@@ -14,7 +14,7 @@ its location lists, its keyrings show the same way.
   import type {
     NookProviderSource,
     ProviderIdentityChoice,
-    S3ProviderConfig,
+    S3Connection,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -151,7 +151,7 @@ its location lists, its keyrings show the same way.
   }
 
   /** Read the staged S3 location again; a failure says why under the list. */
-  async function loadS3(configuration: S3ProviderConfig): Promise<void> {
+  async function loadS3(configuration: S3Connection): Promise<void> {
     s3Inventory = { kind: S3VaultInventoryKind.Loading }
     const read = await new S3VaultInventoryReader(vault).read(configuration)
     const staged = vault.s3Draft
@@ -244,7 +244,7 @@ its location lists, its keyrings show the same way.
 
   /** S3 is staged once its location lists; a refused key or a failed
    * listing stays on the form, said there. */
-  async function connectS3(configuration: S3ProviderConfig): Promise<void> {
+  async function connectS3(configuration: S3Connection): Promise<void> {
     s3Alert = { kind: S3ConnectionAlertKind.None }
     s3Connect = S3ConnectionProgress.Connecting
     try {

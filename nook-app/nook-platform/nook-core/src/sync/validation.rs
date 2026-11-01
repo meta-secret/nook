@@ -43,7 +43,7 @@ pub enum ConnectionCredentialValidation {
     Github(GithubPat),
     GoogleDrive,
     ICloud,
-    /// The credential slot holds a well-formed secret access key.
+    /// The credential slot holds a secret access key.
     S3,
 }
 impl StorageMode {
@@ -77,7 +77,7 @@ impl StorageMode {
     }
 
     /// The local cache and outbox key of the prepared provider. For S3 the
-    /// remote reference is the location's [`crate::S3StorageIdentity`],
+    /// remote reference is [`crate::S3Connection::location_identity`],
     /// which holds no credential.
     #[must_use]
     pub fn cache_ref(self, remote_ref: &str, path: &str) -> String {
@@ -348,9 +348,10 @@ pub enum SyncProviderTarget {
     LocalFolder(LocalFolderSyncTarget),
     Github(GithubSyncTarget),
     OauthFile(OauthFileSyncTarget),
-    /// Rows that reach the same S3 objects are one target, whatever key or
-    /// region they sign with.
-    S3(S3Location),
+    /// An S3 location by its [`crate::S3Connection::location_identity`]: rows
+    /// that reach the same objects are one target, whatever key or region they
+    /// sign with.
+    S3(String),
 }
 
 #[cfg(test)]
@@ -455,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_s3_requires_a_well_formed_secret() -> anyhow::Result<()> {
+    fn validate_connect_s3_requires_a_secret() -> anyhow::Result<()> {
         assert_eq!(
             StorageMode::S3.validate_connect(" TEST-ONLY-device-a-secret-not-real ")?,
             ConnectionCredentialValidation::S3
@@ -463,10 +464,6 @@ mod tests {
         assert_eq!(
             StorageMode::S3.validate_connect(""),
             Err(ValidationError::S3SecretAccessKeyRequired)
-        );
-        assert_eq!(
-            StorageMode::S3.validate_connect("-----BEGIN AGE ENCRYPTED FILE-----\nYWdl\n"),
-            Err(ValidationError::S3SecretAccessKeyInvalid)
         );
         Ok(())
     }

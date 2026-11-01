@@ -245,13 +245,13 @@ mod tests {
 
     use super::{IdentityMountProvider, IdentityMountView};
     use crate::{
-        IdentityProviderMount, ProviderMountId, S3ProviderConfig, S3Region, StorageProviderData,
+        IdentityProviderMount, ProviderMountId, S3Connection, StorageProviderData,
         StorageProviderType, StoredGithubPat, StoredS3Configuration,
     };
 
     #[test]
     fn an_s3_mount_shows_its_location_and_whether_this_app_connects_it() -> anyhow::Result<()> {
-        let config = S3ProviderConfig::fixture()?;
+        let config = S3Connection::fixture()?;
         let mount = IdentityProviderMount {
             mount_id: ProviderMountId::generate()?,
             label: "S3 · nook-dev/e2e/run-1".to_owned(),
@@ -270,7 +270,7 @@ mod tests {
         let StoredS3Configuration::Configured(config) = &mut row.s3 else {
             anyhow::bail!("an S3 row carries its block");
         };
-        config.region = S3Region::parse("eu-central-1")?;
+        config.region = "eu-central-1".to_owned();
         assert!(IdentityMountView::from_mount(&mount, slice::from_ref(&row)).connected_here);
         Ok(())
     }

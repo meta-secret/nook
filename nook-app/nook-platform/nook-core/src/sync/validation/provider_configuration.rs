@@ -17,9 +17,8 @@ mod s3;
 
 pub use github::*;
 pub use s3::{
-    S3_CONNECT_TARGET_V1_PREFIX, S3AccessKeyId, S3BucketName, S3ConnectReference, S3ConnectSlots,
-    S3Connection, S3Credentials, S3Endpoint, S3EndpointScheme, S3HostHeader, S3KeyPrefix,
-    S3KeyPrefixPath, S3Location, S3Region, S3SecretAccessKey, S3StorageIdentity,
+    S3_CONNECT_TARGET_V1_PREFIX, S3ConnectReference, S3ConnectSlots, S3Connection,
+    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3SecretAccessKey,
 };
 
 /// Validated Google Drive app-data vault file name.
@@ -261,7 +260,7 @@ mod tests {
     use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
     use super::*;
     use crate::{
-        S3ProviderConfig, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        S3Connection, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
         StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
         StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
         StoredS3Configuration, SyncProviderTarget,
@@ -341,12 +340,12 @@ mod tests {
             ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render(),
             "S3"
         );
-        let mut config = S3ProviderConfig::fixture()?;
+        let mut config = S3Connection::fixture()?;
         assert_eq!(
             ProviderLabel::S3(&StoredS3Configuration::Configured(config.clone())).render(),
             "S3 · nook-dev/e2e/run-1"
         );
-        config.key_prefix = S3KeyPrefix::BucketRoot;
+        config.key_prefix = String::new();
         assert_eq!(
             ProviderLabel::S3(&StoredS3Configuration::Configured(config)).render(),
             "S3 · nook-dev"

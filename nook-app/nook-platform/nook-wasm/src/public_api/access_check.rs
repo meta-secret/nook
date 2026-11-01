@@ -36,7 +36,7 @@ pub enum NookAccessCheckSource {
     LocalFolder { handle_id: String },
     /// An S3 location with this device's key.
     S3 {
-        configuration: nook_core::S3ProviderConfig,
+        configuration: nook_core::S3Connection,
     },
 }
 
@@ -96,10 +96,9 @@ impl NookAccessCheckSource {
             }
             Self::LocalFolder { handle_id } => Self::folder_contents(handle_id).await,
             Self::S3 { configuration } => {
-                let connection = configuration.connection()?;
                 let location = S3VaultListing {
                     storage: S3Storage {
-                        connection: &connection,
+                        connection: configuration,
                     },
                 };
                 Ok(SourceContents {

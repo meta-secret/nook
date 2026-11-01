@@ -93,7 +93,7 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, EventId, IdentityControlMember, IdentityId, IdentityMemberKeys,
-        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, S3ProviderConfig,
+        MemberDevice, MemberLabel, ProviderSyncCheckpoint, ProviderVaultScope, S3Connection,
         SigningIdentity, StorageProviderType, StoredGithubPat, StoredGithubRepository,
         StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, StoredS3Configuration,
     };
@@ -214,7 +214,7 @@ mod tests {
         let state = keyring(&[&web, &extension])?;
         let mut s3 = row("s3", StorageProviderType::S3, "");
         s3.github_pat = StoredGithubPat::Missing;
-        s3.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        s3.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
         let providers = snapshot(vec![
             row("local", StorageProviderType::Local, ""),
             s3.clone(),

@@ -15,10 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{
-    S3AccessKeyId, S3BucketName, S3Connection, S3Credentials, S3Endpoint, S3KeyPrefix, S3Location,
-    S3Region, S3SecretAccessKey,
-};
+use super::{S3Connection, S3ConnectionDraft};
 use crate::errors::{ValidationError, ValidationResult};
 
 /// Version tag of the only S3 reference shape so far.
@@ -29,11 +26,11 @@ pub const S3_CONNECT_TARGET_V1_PREFIX: &str = "s3-target-v1:";
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct S3ConnectTargetV1 {
-    endpoint: S3Endpoint,
-    region: S3Region,
-    bucket: S3BucketName,
-    key_prefix: S3KeyPrefix,
-    access_key_id: S3AccessKeyId,
+    endpoint: String,
+    region: String,
+    bucket: String,
+    key_prefix: String,
+    access_key_id: String,
 }
 
 /// The reference slot of an S3 connection's connect arguments.
@@ -67,11 +64,11 @@ impl S3Connection {
     /// The reference slot for this connection: its location and key id.
     pub fn connect_reference(&self) -> ValidationResult<S3ConnectReference> {
         let target = S3ConnectTargetV1 {
-            endpoint: self.location.endpoint.clone(),
-            region: self.location.region.clone(),
-            bucket: self.location.bucket.clone(),
-            key_prefix: self.location.key_prefix.clone(),
-            access_key_id: self.credentials.access_key_id.clone(),
+            endpoint: self.endpoint.clone(),
+            region: self.region.clone(),
+            bucket: self.bucket.clone(),
+            key_prefix: self.key_prefix.clone(),
+            access_key_id: self.access_key_id.clone(),
         };
         serde_json::to_string(&target)
             .map(|json| S3ConnectReference(format!("{S3_CONNECT_TARGET_V1_PREFIX}{json}")))
@@ -79,8 +76,8 @@ impl S3Connection {
     }
 
     /// Read a connection back from its connect arguments. A reference that is
-    /// not exactly the current version, or any field that fails validation,
-    /// rejects the whole connection.
+    /// not exactly the current version is not one; its fields and the secret
+    /// are validated as the setup form validates them.
     pub fn from_connect_slots(slots: S3ConnectSlots<'_>) -> ValidationResult<Self> {
         let Some(json) = slots
             .reference
@@ -91,18 +88,13 @@ impl S3Connection {
         };
         let target: S3ConnectTargetV1 =
             serde_json::from_str(json).map_err(|_| ValidationError::S3StorageTargetInvalid)?;
-        let secret_access_key = S3SecretAccessKey::parse(slots.credential)?;
-        Ok(Self {
-            location: S3Location {
-                endpoint: target.endpoint,
-                region: target.region,
-                bucket: target.bucket,
-                key_prefix: target.key_prefix,
-            },
-            credentials: S3Credentials {
-                access_key_id: target.access_key_id,
-                secret_access_key,
-            },
+        Self::try_from(S3ConnectionDraft {
+            endpoint: target.endpoint,
+            region: target.region,
+            bucket: target.bucket,
+            key_prefix: target.key_prefix,
+            access_key_id: target.access_key_id,
+            secret_access_key: slots.credential.to_owned(),
         })
     }
 }
@@ -110,34 +102,14 @@ impl S3Connection {
 #[cfg(test)]
 mod tests {
     use super::{S3_CONNECT_TARGET_V1_PREFIX, S3ConnectSlots};
+    use crate::S3Connection;
     use crate::errors::ValidationError;
-    use crate::{
-        S3AccessKeyId, S3BucketName, S3Connection, S3Credentials, S3Endpoint, S3KeyPrefix,
-        S3Location, S3Region, S3SecretAccessKey,
-    };
 
     const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
 
-    impl S3Connection {
-        fn connect_fixture() -> anyhow::Result<Self> {
-            Ok(Self {
-                location: S3Location {
-                    endpoint: S3Endpoint::parse("http://127.0.0.1:8333")?,
-                    region: S3Region::parse("us-east-1")?,
-                    bucket: S3BucketName::parse("nook-dev")?,
-                    key_prefix: S3KeyPrefix::parse("e2e/run-1")?,
-                },
-                credentials: S3Credentials {
-                    access_key_id: S3AccessKeyId::parse("device-a")?,
-                    secret_access_key: S3SecretAccessKey::parse(SECRET)?,
-                },
-            })
-        }
-    }
-
     #[test]
     fn the_reference_names_the_location_and_key_id_but_never_the_secret() -> anyhow::Result<()> {
-        let connection = S3Connection::connect_fixture()?;
+        let connection = S3Connection::fixture()?;
         let reference = connection.connect_reference()?;
         assert_eq!(
             reference.as_str(),
@@ -153,18 +125,13 @@ mod tests {
             credential: SECRET,
             reference: reference.as_str(),
         })?;
-        assert_eq!(read.location, connection.location);
-        assert_eq!(
-            read.credentials.access_key_id,
-            connection.credentials.access_key_id
-        );
-        assert_eq!(read.credentials.secret_access_key.expose(), SECRET);
+        assert_eq!(read, connection);
         Ok(())
     }
 
     #[test]
     fn damaged_or_foreign_references_reject_the_connection() -> anyhow::Result<()> {
-        let reference = S3Connection::connect_fixture()?.connect_reference()?;
+        let reference = S3Connection::fixture()?.connect_reference()?;
         let body = reference
             .as_str()
             .strip_prefix(S3_CONNECT_TARGET_V1_PREFIX)
@@ -174,33 +141,45 @@ mod tests {
             body.to_owned(),
             format!("s3-target-v2:{body}"),
             format!("{S3_CONNECT_TARGET_V1_PREFIX}{{}}"),
-            reference.as_str().replace("nook-dev", "Nook_Dev"),
-            reference
-                .as_str()
-                .replace("http://127.0.0.1", "http://10.0.0.1"),
             reference.as_str().replace(
                 "\"accessKeyId\"",
                 "\"secretAccessKey\":\"x\",\"accessKeyId\"",
             ),
         ] {
-            assert!(
-                matches!(
-                    S3Connection::from_connect_slots(S3ConnectSlots {
-                        credential: SECRET,
-                        reference: &damaged,
-                    }),
-                    Err(ValidationError::S3StorageTargetInvalid)
-                ),
+            assert_eq!(
+                S3Connection::from_connect_slots(S3ConnectSlots {
+                    credential: SECRET,
+                    reference: &damaged,
+                })
+                .err(),
+                Some(ValidationError::S3StorageTargetInvalid),
                 "{damaged}"
             );
         }
-        assert!(matches!(
-            S3Connection::from_connect_slots(S3ConnectSlots {
-                credential: " ",
-                reference: reference.as_str(),
-            }),
-            Err(ValidationError::S3SecretAccessKeyRequired)
-        ));
+        // Its fields and the credential are validated again.
+        for (credential, reference, error) in [
+            (
+                SECRET,
+                reference
+                    .as_str()
+                    .replace("http://127.0.0.1", "http://10.0.0.1"),
+                ValidationError::S3EndpointInsecure,
+            ),
+            (
+                "",
+                reference.as_str().to_owned(),
+                ValidationError::S3SecretAccessKeyRequired,
+            ),
+        ] {
+            assert_eq!(
+                S3Connection::from_connect_slots(S3ConnectSlots {
+                    credential,
+                    reference: &reference,
+                })
+                .err(),
+                Some(error)
+            );
+        }
         Ok(())
     }
 }

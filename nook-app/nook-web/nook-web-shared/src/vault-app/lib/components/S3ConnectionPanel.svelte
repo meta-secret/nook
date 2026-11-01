@@ -13,7 +13,7 @@ submission could never carry them into a URL.
     validate_s3_connection_draft,
     type S3ConnectionDraft,
     type S3DraftField,
-    type S3ProviderConfig,
+    type S3Connection,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -57,7 +57,7 @@ submission could never carry them into a URL.
     progress: S3ConnectionProgress
     availability: S3ConnectAvailability
     alert: S3ConnectionAlert
-    onConnect: (configuration: S3ProviderConfig) => void | Promise<void>
+    onConnect: (configuration: S3Connection) => void | Promise<void>
     beforeConnect?: Snippet
   } = $props()
 

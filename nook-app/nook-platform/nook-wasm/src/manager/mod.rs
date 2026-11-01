@@ -601,7 +601,7 @@ impl NookVaultManager {
                         reference: github_repo_name,
                     })?;
                 self.storage.access_token = github_pat.trim().to_owned();
-                self.storage.remote_ref = connection.location.storage_identity().to_string();
+                self.storage.remote_ref = connection.location_identity();
                 self.storage.remote_path.clear();
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
@@ -816,13 +816,13 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn s3_storage_is_prepared_from_its_connect_arguments_alone() -> anyhow::Result<()> {
-        let args = nook_core::S3ProviderConfig::try_from(nook_core::S3ConnectionDraft {
+        let args = nook_core::S3Connection::try_from(nook_core::S3ConnectionDraft {
             endpoint: "http://127.0.0.1:8333".to_owned(),
             region: "us-east-1".to_owned(),
             bucket: "nook-dev".to_owned(),
             key_prefix: "e2e".to_owned(),
             access_key_id: "device-a".to_owned(),
-            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
         })?
         .connect_args()?;
         let mut manager = NookVaultManager::new();

@@ -229,7 +229,7 @@ mod tests {
     use super::*;
     use crate::{
         ActiveVaultScope, LocalFolderConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        S3AccessKeyId, S3ProviderConfig, S3Region, StoredGithubPat, StoredLocalFolderHandle,
+        S3Connection, StoredGithubPat, StoredLocalFolderHandle,
     };
 
     struct Row(StorageProviderData);
@@ -252,8 +252,8 @@ mod tests {
         }
 
         fn s3(id: &str, access_key_id: &str) -> anyhow::Result<Self> {
-            let mut config = S3ProviderConfig::fixture()?;
-            config.access_key_id = S3AccessKeyId::parse(access_key_id)?;
+            let mut config = S3Connection::fixture()?;
+            config.access_key_id = access_key_id.to_owned();
             let mut row = Self::github(id, "unused").0;
             row.provider_type = StorageProviderType::S3;
             row.github_pat = StoredGithubPat::Missing;
@@ -471,7 +471,7 @@ mod tests {
         let StoredS3Configuration::Configured(config) = &mut resigned.s3 else {
             anyhow::bail!("an S3 row carries its block");
         };
-        config.region = S3Region::parse("eu-central-1")?;
+        config.region = "eu-central-1".to_owned();
         assert_eq!(unmounted(&resigned), recorded_ids);
         Ok(())
     }
@@ -510,7 +510,7 @@ mod tests {
         let StoredS3Configuration::Configured(config) = &mut device_b.s3 else {
             anyhow::bail!("an S3 row carries its block");
         };
-        config.region = S3Region::parse("eu-central-1")?;
+        config.region = "eu-central-1".to_owned();
         let device_b = vec![device_b];
         assert!(
             ProviderRows {

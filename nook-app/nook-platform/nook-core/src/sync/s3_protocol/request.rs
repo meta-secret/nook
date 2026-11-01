@@ -106,7 +106,7 @@ impl S3RequestSigner<'_> {
     /// One page of `ListObjectsV2`, delimited at `/` as a folder lists its
     /// entries.
     pub fn list_objects(self, listing: &S3ListObjects) -> Result<S3HttpRequest, S3SigningError> {
-        let location = &self.connection.location;
+        let connection = self.connection;
         let continuation = match &listing.page {
             S3ListPage::First => String::new(),
             S3ListPage::After(token) => {
@@ -118,8 +118,8 @@ impl S3RequestSigner<'_> {
         };
         let url = format!(
             "{}/{}?delimiter=%2F&list-type=2&prefix={}{continuation}",
-            location.endpoint,
-            utf8_percent_encode(location.bucket.as_str(), UNRESERVED),
+            connection.endpoint,
+            utf8_percent_encode(&connection.bucket, UNRESERVED),
             utf8_percent_encode(&listing.prefix, UNRESERVED),
         );
         self.sign(Request::get(url).body(Bytes::new()))
@@ -128,11 +128,11 @@ impl S3RequestSigner<'_> {
     /// `<endpoint>/<bucket>/<key>`, each `/`-separated part of the key that
     /// the layout builds for the event encoded alone.
     fn object_url(self, event: S3EventAddress<'_>) -> String {
-        let location = &self.connection.location;
-        let key = location.key_prefix.event_key(event);
-        iter::once(location.bucket.as_str())
+        let connection = self.connection;
+        let key = connection.event_key(event);
+        iter::once(connection.bucket.as_str())
             .chain(key.split('/'))
-            .fold(location.endpoint.to_string(), |url, segment| {
+            .fold(connection.endpoint.clone(), |url, segment| {
                 format!("{url}/{}", utf8_percent_encode(segment, UNRESERVED))
             })
     }
@@ -150,10 +150,9 @@ impl S3RequestSigner<'_> {
             .and_then(|since| i64::try_from(since.as_secs()).ok())
             .and_then(|seconds| OffsetDateTime::from_unix_timestamp(seconds).ok())
             .ok_or(S3SigningError::RequestTimeOutOfRange)?;
-        let credentials = &self.connection.credentials;
         let identity = Credentials::new(
-            credentials.access_key_id.as_str(),
-            credentials.secret_access_key.expose(),
+            self.connection.access_key_id.as_str(),
+            self.connection.secret_access_key.expose(),
             None,
             None,
             "nook",
@@ -165,7 +164,7 @@ impl S3RequestSigner<'_> {
         settings.payload_checksum_kind = PayloadChecksumKind::XAmzSha256;
         let params = v4::SigningParams::builder()
             .identity(&identity)
-            .region(self.connection.location.region.as_str())
+            .region(self.connection.region.as_str())
             .name("s3")
             .time(self.time)
             .settings(settings)
@@ -210,9 +209,8 @@ mod tests {
         S3HttpRequest, S3ListObjects, S3ListPage, S3ObjectUpload, S3RequestSigner, S3SigningError,
     };
     use crate::{
-        EventId, EventStorageBytes, IdentityId, PlacedNamespace, S3AccessKeyId, S3BucketName,
-        S3Connection, S3Credentials, S3Endpoint, S3EventAddress, S3KeyPrefix, S3Location, S3Region,
-        S3SecretAccessKey, StoreId,
+        EventId, EventStorageBytes, IdentityId, PlacedNamespace, S3Connection, S3ConnectionDraft,
+        S3EventAddress, StoreId,
     };
 
     const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
@@ -221,18 +219,9 @@ mod tests {
     const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
 
     fn connection(endpoint: &str) -> anyhow::Result<S3Connection> {
-        Ok(S3Connection {
-            location: S3Location {
-                endpoint: S3Endpoint::parse(endpoint)?,
-                region: S3Region::parse("us-east-1")?,
-                bucket: S3BucketName::parse("nook-dev")?,
-                key_prefix: S3KeyPrefix::parse("e2e/run-1")?,
-            },
-            credentials: S3Credentials {
-                access_key_id: S3AccessKeyId::parse("device-a")?,
-                secret_access_key: S3SecretAccessKey::parse(SECRET)?,
-            },
-        })
+        let mut draft = S3ConnectionDraft::fixture();
+        draft.endpoint = endpoint.to_owned();
+        Ok(S3Connection::try_from(draft)?)
     }
 
     fn at(unix_seconds: u64) -> SystemTime {
@@ -257,20 +246,14 @@ mod tests {
     fn the_aws_get_object_example_signs_to_its_published_signature() -> anyhow::Result<()> {
         // Amazon S3 API Reference, "Signature Calculations for the
         // Authorization Header: Transferring Payload in a Single Chunk".
-        let example = S3Connection {
-            location: S3Location {
-                endpoint: S3Endpoint::parse("https://examplebucket.s3.amazonaws.com")?,
-                region: S3Region::parse("us-east-1")?,
-                bucket: S3BucketName::parse("examplebucket")?,
-                key_prefix: S3KeyPrefix::BucketRoot,
-            },
-            credentials: S3Credentials {
-                access_key_id: S3AccessKeyId::parse("AKIAIOSFODNN7EXAMPLE")?,
-                secret_access_key: S3SecretAccessKey::parse(
-                    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-                )?,
-            },
-        };
+        let example = S3Connection::try_from(S3ConnectionDraft {
+            endpoint: "https://examplebucket.s3.amazonaws.com".to_owned(),
+            region: "us-east-1".to_owned(),
+            bucket: "examplebucket".to_owned(),
+            key_prefix: String::new(),
+            access_key_id: "AKIAIOSFODNN7EXAMPLE".to_owned(),
+            secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_owned(),
+        })?;
         let signed = S3RequestSigner {
             connection: &example,
             // 2013-05-24T00:00:00Z.
@@ -363,7 +346,7 @@ mod tests {
     fn a_listing_continues_with_its_token_encoded_and_no_credentials() -> anyhow::Result<()> {
         let connection = connection("https://s3.example.com")?;
         let mut listing = S3ListObjects {
-            prefix: connection.location.key_prefix.identity_folders_listing(),
+            prefix: connection.identity_folders_listing(),
             page: S3ListPage::First,
         };
         let first = signer(&connection).list_objects(&listing)?;

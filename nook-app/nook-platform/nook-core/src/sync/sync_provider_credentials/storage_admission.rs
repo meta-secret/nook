@@ -74,7 +74,7 @@ mod tests {
     use super::{AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialStorageAdmission};
     use crate::{
         ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialRejection,
-        S3ProviderConfig, StorageProviderData, StorageProviderType, StoredGithubPat,
+        S3Connection, StorageProviderData, StorageProviderType, StoredGithubPat,
         StoredS3Configuration,
     };
 
@@ -125,7 +125,7 @@ mod tests {
         let mut row = StorageProviderData::github("s3", "S3", "", "", "now");
         row.provider_type = StorageProviderType::S3;
         row.github_pat = StoredGithubPat::Missing;
-        row.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        row.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![row],
             active_vault_store_id: ActiveVaultScope::Unselected,

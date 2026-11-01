@@ -40,7 +40,7 @@ pub enum NookProviderSource {
     /// An S3 location with this device's key: a validated setup draft, or
     /// a saved row's S3 block.
     S3 {
-        configuration: nook_core::S3ProviderConfig,
+        configuration: nook_core::S3Connection,
     },
 }
 

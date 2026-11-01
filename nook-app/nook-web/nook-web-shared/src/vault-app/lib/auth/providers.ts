@@ -51,7 +51,7 @@ import {
   type StoredOAuthRemoteFileName,
   type StoredOAuthTokenExpiry,
   type StoredS3Configuration,
-  type S3ProviderConfig,
+  type S3Connection,
   type ProviderVaultScope,
   NookGithubPatHintState,
   type DuplicateSyncProvider,
@@ -84,7 +84,7 @@ export type {
   StoredOAuthRemoteFileName,
   StoredOAuthTokenExpiry,
   StoredS3Configuration,
-  S3ProviderConfig,
+  S3Connection,
   ProviderVaultScope,
 } from "$app-wasm";
 
@@ -278,7 +278,7 @@ export function s3ConfigurationNotApplicable(): StoredS3Configuration {
   return { state: "notApplicable" };
 }
 
-export function configuredS3(config: S3ProviderConfig): StoredS3Configuration {
+export function configuredS3(config: S3Connection): StoredS3Configuration {
   return { state: "configured", config };
 }
 

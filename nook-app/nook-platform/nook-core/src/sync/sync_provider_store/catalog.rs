@@ -241,7 +241,7 @@ impl StorageProviderData {
             },
             StorageProviderType::S3 => match &provider.s3 {
                 StoredS3Configuration::Configured(config) => {
-                    SyncProviderTarget::S3(config.location())
+                    SyncProviderTarget::S3(config.location_identity())
                 }
                 StoredS3Configuration::NotApplicable => SyncProviderTarget::Empty,
             },
@@ -387,8 +387,8 @@ mod tests {
     use crate::{
         AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, LocalFolderConfigData,
         OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels, ProviderStorageDetailLabels,
-        ProviderSyncCheckpoint, S3AccessKeyId, S3KeyPrefix, S3ProviderConfig, S3Region,
-        StorageProviderData, StorageProviderType, StoredS3Configuration,
+        ProviderSyncCheckpoint, S3Connection, S3ConnectionDraft, StorageProviderData,
+        StorageProviderType, StoredS3Configuration,
     };
 
     use super::{
@@ -451,10 +451,11 @@ mod tests {
 
     impl S3CatalogFixture<'_> {
         fn build(self) -> anyhow::Result<StorageProviderData> {
-            let mut config = S3ProviderConfig::fixture()?;
-            config.key_prefix = S3KeyPrefix::parse(self.key_prefix)?;
-            config.access_key_id = S3AccessKeyId::parse(self.access_key_id)?;
-            config.region = S3Region::parse(self.region)?;
+            let mut draft = S3ConnectionDraft::fixture();
+            draft.key_prefix = self.key_prefix.to_owned();
+            draft.access_key_id = self.access_key_id.to_owned();
+            draft.region = self.region.to_owned();
+            let config = S3Connection::try_from(draft)?;
             let mut row = GithubCatalogFixture {
                 id: self.id,
                 repo: "",

@@ -208,10 +208,7 @@ mod browser_tests {
     use super::S3VaultListing;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::s3::S3Storage;
-    use nook_core::{
-        EventId, IdentityId, S3AccessKeyId, S3BucketName, S3Connection, S3Credentials, S3Endpoint,
-        S3KeyPrefix, S3Location, S3Region, S3SecretAccessKey, StoreId,
-    };
+    use nook_core::{EventId, IdentityId, S3Connection, S3ConnectionDraft, StoreId};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -222,18 +219,14 @@ mod browser_tests {
     const ROOT_QUERY: &str = "prefix=e2e%2Fmeta-secret-nook%2F";
 
     fn connection() -> anyhow::Result<S3Connection> {
-        Ok(S3Connection {
-            location: S3Location {
-                endpoint: S3Endpoint::parse("http://127.0.0.1:8333")?,
-                region: S3Region::parse("us-east-1")?,
-                bucket: S3BucketName::parse("nook-dev")?,
-                key_prefix: S3KeyPrefix::parse("e2e")?,
-            },
-            credentials: S3Credentials {
-                access_key_id: S3AccessKeyId::parse("device-a")?,
-                secret_access_key: S3SecretAccessKey::parse("TEST-ONLY-device-a-secret-not-real")?,
-            },
-        })
+        Ok(S3Connection::try_from(S3ConnectionDraft {
+            endpoint: "http://127.0.0.1:8333".to_owned(),
+            region: "us-east-1".to_owned(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix: "e2e".to_owned(),
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+        })?)
     }
 
     /// A listing page with these keys and folders.

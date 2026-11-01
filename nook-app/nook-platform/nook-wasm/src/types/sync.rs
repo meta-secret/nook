@@ -117,8 +117,8 @@ impl NookEnrollmentProvider {
     pub fn s3_configuration(
         &self,
     ) -> Result<tsify::Ts<nook_core::StoredS3Configuration>, wasm_bindgen::JsError> {
-        let config = nook_core::EnrollmentS3ConfigurationRequest { provider: &self.0 }.project()?;
-        Tsify::into_ts(&nook_core::StoredS3Configuration::Configured(config))
+        let connection = nook_core::S3Connection::try_from(&self.0)?;
+        Tsify::into_ts(&nook_core::StoredS3Configuration::Configured(connection))
             .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 

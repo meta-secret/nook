@@ -106,21 +106,22 @@ impl S3Storage<'_> {
         &self,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<PlacedNamespace>, NookError> {
-        let prefix = &self.connection.location.key_prefix;
-        let identity_folders = self.list(prefix.identity_folders_listing()).await?;
+        let connection = self.connection;
+        let identity_folders = self.list(connection.identity_folders_listing()).await?;
         let mut placed = Vec::new();
         for folder in &identity_folders.folders {
-            let S3IdentityFolder::Identity(identity) = prefix.listed_identity_folder(folder) else {
+            let S3IdentityFolder::Identity(identity) = connection.listed_identity_folder(folder)
+            else {
                 continue;
             };
             let namespaces = self
-                .list(prefix.identity_namespaces_listing(&identity))
+                .list(connection.identity_namespaces_listing(&identity))
                 .await?;
             placed.extend(
                 namespaces
                     .folders
                     .iter()
-                    .filter_map(|folder| match prefix.listed_namespace(folder) {
+                    .filter_map(|folder| match connection.listed_namespace(folder) {
                         S3ListedNamespace::Namespace(namespace) => Some(namespace),
                         S3ListedNamespace::Unrelated => None,
                     })
@@ -142,16 +143,16 @@ impl S3EventStore<'_> {
     /// The events the namespace holds, read from the event keys directly in
     /// its `events/` folder.
     pub(crate) async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
-        let prefix = &self.storage.connection.location.key_prefix;
+        let connection = self.storage.connection;
         let listed = self
             .storage
-            .list(prefix.namespace_listing(self.placed))
+            .list(connection.namespace_listing(self.placed))
             .await?;
         Ok(listed
             .keys
             .iter()
             .filter_map(|key| {
-                match prefix.listed_event(S3ListedKey {
+                match connection.listed_event(S3ListedKey {
                     placed: self.placed,
                     key,
                 }) {
@@ -229,9 +230,8 @@ mod browser_tests {
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::remote_event::RemoteEventRead;
     use nook_core::{
-        EventId, EventLogNamespaceKind, IdentityId, PlacedNamespace, S3AccessKeyId, S3BucketName,
-        S3Connection, S3Credentials, S3Endpoint, S3KeyPrefix, S3Location, S3Region,
-        S3RequestFailure, S3SecretAccessKey, StoreId,
+        EventId, EventLogNamespaceKind, IdentityId, PlacedNamespace, S3Connection,
+        S3ConnectionDraft, S3RequestFailure, StoreId,
     };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -249,20 +249,14 @@ mod browser_tests {
     impl Fixture {
         fn new() -> anyhow::Result<Self> {
             Ok(Self {
-                connection: S3Connection {
-                    location: S3Location {
-                        endpoint: S3Endpoint::parse("http://127.0.0.1:8333")?,
-                        region: S3Region::parse("us-east-1")?,
-                        bucket: S3BucketName::parse("nook-dev")?,
-                        key_prefix: S3KeyPrefix::parse("e2e")?,
-                    },
-                    credentials: S3Credentials {
-                        access_key_id: S3AccessKeyId::parse("device-a")?,
-                        secret_access_key: S3SecretAccessKey::parse(
-                            "TEST-ONLY-device-a-secret-not-real",
-                        )?,
-                    },
-                },
+                connection: S3Connection::try_from(S3ConnectionDraft {
+                    endpoint: "http://127.0.0.1:8333".to_owned(),
+                    region: "us-east-1".to_owned(),
+                    bucket: "nook-dev".to_owned(),
+                    key_prefix: "e2e".to_owned(),
+                    access_key_id: "device-a".to_owned(),
+                    secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+                })?,
                 vault: PlacedNamespace::vault(
                     IdentityId::parse("idn_abcdefghijk")?,
                     StoreId::parse("store_abcdefghijk")?,

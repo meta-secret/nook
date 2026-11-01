@@ -89,7 +89,7 @@ impl SyncProviderTarget {
                 };
                 format!("oauth-file:{}:{file_key}:{account}", oauth.preset.as_str())
             }
-            Self::S3(location) => format!("s3:{}", location.storage_identity()),
+            Self::S3(location) => format!("s3:{location}"),
         };
         SyncProviderTargetIdentity::Configured(key.into())
     }

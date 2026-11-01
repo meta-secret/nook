@@ -464,11 +464,11 @@ impl ProviderSaveRequest {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ActiveVaultScope, LocalFolderConfigData, OauthFilePreset, ProviderVaultScope,
-        S3ProviderConfig, StorageProviderType, StoredGoogleDriveFolder,
-        StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
-        StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
-        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredS3Configuration,
+        ActiveVaultScope, LocalFolderConfigData, OauthFilePreset, ProviderVaultScope, S3Connection,
+        StorageProviderType, StoredGoogleDriveFolder, StoredLocalFolderConfiguration,
+        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName, StoredS3Configuration,
     };
     use crate::{StoredGithubPat, StoredGithubRepository};
 
@@ -499,7 +499,7 @@ mod tests {
 
         fn s3_fixture() -> anyhow::Result<Self> {
             let mut request = Self::fixture(StorageProviderType::S3);
-            request.s3 = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+            request.s3 = StoredS3Configuration::Configured(S3Connection::fixture()?);
             Ok(request)
         }
     }
@@ -532,8 +532,8 @@ mod tests {
             .map_err(anyhow::Error::msg)?;
         // The same location with this device's other key is still one mount.
         let mut again = ProviderSaveRequest::s3_fixture()?;
-        let mut other_key = S3ProviderConfig::fixture()?;
-        other_key.access_key_id = crate::S3AccessKeyId::parse("device-b")?;
+        let mut other_key = S3Connection::fixture()?;
+        other_key.access_key_id = "device-b".to_owned();
         again.s3 = StoredS3Configuration::Configured(other_key);
         again.snapshot = saved.clone();
         assert_eq!(again.apply(), ProviderSaveOutcome::Duplicate);

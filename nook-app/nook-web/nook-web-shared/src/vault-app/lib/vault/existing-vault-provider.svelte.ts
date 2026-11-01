@@ -17,7 +17,7 @@ import {
   type StorageProviderType,
   type LocalFolderConfig,
   type OAuthFileConfig,
-  type S3ProviderConfig,
+  type S3Connection,
 } from "$lib/auth/providers";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
@@ -43,7 +43,7 @@ export type ExistingVaultProviderSnapshot =
     }
   | {
       setupType: typeof S3_PROVIDER_TYPE;
-      s3: S3ProviderConfig;
+      s3: S3Connection;
     };
 
 export type ExistingVaultProviderPreparation =

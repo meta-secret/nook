@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn an_s3_row_connects_with_its_secret_and_versioned_reference() -> anyhow::Result<()> {
-        let config = crate::S3ProviderConfig::fixture()?;
+        let config = crate::S3Connection::fixture()?;
         let mut row = StorageProviderData::github_provider("s3", "", "");
         row.provider_type = StorageProviderType::S3;
         row.github_pat = StoredGithubPat::Missing;

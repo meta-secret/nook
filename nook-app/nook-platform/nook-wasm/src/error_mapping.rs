@@ -42,10 +42,6 @@ impl From<nook_core::EventError> for NookError {
 }
 
 impl From<nook_core::ValidationError> for NookError {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the mapping names every validation error, so each new one is a compile-time choice of its group"
-    )]
     fn from(err: nook_core::ValidationError) -> Self {
         use nook_core::ValidationError;
         match err {
@@ -72,20 +68,14 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::S3EndpointRequired
             | ValidationError::S3EndpointInvalid
             | ValidationError::S3EndpointInsecure
-            | ValidationError::S3EndpointNotOrigin
             | ValidationError::S3RegionRequired
             | ValidationError::S3RegionInvalid
             | ValidationError::S3BucketRequired
-            | ValidationError::S3BucketLength
-            | ValidationError::S3BucketChars
             | ValidationError::S3BucketInvalid
-            | ValidationError::S3KeyPrefixLength
-            | ValidationError::S3KeyPrefixChars
             | ValidationError::S3KeyPrefixInvalid
             | ValidationError::S3AccessKeyIdRequired
             | ValidationError::S3AccessKeyIdInvalid
             | ValidationError::S3SecretAccessKeyRequired
-            | ValidationError::S3SecretAccessKeyInvalid
             | ValidationError::S3StorageTargetInvalid
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }

@@ -126,7 +126,7 @@ impl NookVaultManager {
                 LocalFolderHandles::current().open_folder(handle_id).await?,
             ),
             NookProviderSource::S3 { configuration } => {
-                OpenedIdentitySource::S3(configuration.connection()?)
+                OpenedIdentitySource::S3(configuration.clone())
             }
         })
     }

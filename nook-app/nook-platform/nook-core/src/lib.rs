@@ -393,6 +393,7 @@ pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialOpening,
     ProviderCredentialRejection, ProviderCredentialStorageAdmission,
 };
+pub use sync_provider_store::StoredS3Configuration;
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
@@ -417,11 +418,6 @@ pub use sync_provider_store::{
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     StoredOAuthTokenExpiry, VaultStorageConnection,
 };
-pub use sync_provider_store::{
-    EnrollmentS3ConfigurationError, EnrollmentS3ConfigurationRequest, S3ConnectionDraft,
-    S3DraftField, S3DraftFieldError, S3DraftValidation, S3ProviderConfig, S3SecretAccessKeyInput,
-    StagedS3Connection, StoredS3Configuration, StoredS3SecretAccessKey,
-};
 pub use validation::{
     ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
     DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
@@ -429,9 +425,8 @@ pub use validation::{
     GoogleDriveFolderId, ICloudShareRole, ICloudSharedTarget, LocalFolderSyncTarget,
     OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
     ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel, ProviderTargetKey,
-    S3_CONNECT_TARGET_V1_PREFIX, S3AccessKeyId, S3BucketName, S3ConnectReference, S3ConnectSlots,
-    S3Connection, S3Credentials, S3Endpoint, S3EndpointScheme, S3HostHeader, S3KeyPrefix,
-    S3KeyPrefixPath, S3Location, S3Region, S3SecretAccessKey, S3StorageIdentity,
+    S3_CONNECT_TARGET_V1_PREFIX, S3ConnectReference, S3ConnectSlots, S3Connection,
+    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3SecretAccessKey,
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
     SyncProviderTargetIdentity,
 };

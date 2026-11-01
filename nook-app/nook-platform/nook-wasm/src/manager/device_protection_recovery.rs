@@ -145,15 +145,14 @@ mod tests {
         manager.storage.remote_path = "vault.yaml".to_owned();
         manager.storage.mode = StorageMode::Github;
         manager.storage.s3_connection = PreparedS3Connection::Connection(
-            nook_core::S3ProviderConfig::try_from(nook_core::S3ConnectionDraft {
+            nook_core::S3Connection::try_from(nook_core::S3ConnectionDraft {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
                 region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
                 key_prefix: String::new(),
                 access_key_id: "device-a".to_owned(),
-                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
-            })?
-            .connection()?,
+                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+            })?,
         );
 
         manager.quiesce_for_local_recovery();

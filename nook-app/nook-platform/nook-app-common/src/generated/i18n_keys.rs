@@ -841,22 +841,14 @@ pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_INVALID: &str =
     "errors.validation.s3_access_key_id_invalid";
 pub const ERRORS_VALIDATION_S3_ACCESS_KEY_ID_REQUIRED: &str =
     "errors.validation.s3_access_key_id_required";
-pub const ERRORS_VALIDATION_S3_BUCKET_CHARS: &str = "errors.validation.s3_bucket_chars";
 pub const ERRORS_VALIDATION_S3_BUCKET_INVALID: &str = "errors.validation.s3_bucket_invalid";
-pub const ERRORS_VALIDATION_S3_BUCKET_LENGTH: &str = "errors.validation.s3_bucket_length";
 pub const ERRORS_VALIDATION_S3_BUCKET_REQUIRED: &str = "errors.validation.s3_bucket_required";
 pub const ERRORS_VALIDATION_S3_ENDPOINT_INSECURE: &str = "errors.validation.s3_endpoint_insecure";
 pub const ERRORS_VALIDATION_S3_ENDPOINT_INVALID: &str = "errors.validation.s3_endpoint_invalid";
-pub const ERRORS_VALIDATION_S3_ENDPOINT_NOT_ORIGIN: &str =
-    "errors.validation.s3_endpoint_not_origin";
 pub const ERRORS_VALIDATION_S3_ENDPOINT_REQUIRED: &str = "errors.validation.s3_endpoint_required";
-pub const ERRORS_VALIDATION_S3_KEY_PREFIX_CHARS: &str = "errors.validation.s3_key_prefix_chars";
 pub const ERRORS_VALIDATION_S3_KEY_PREFIX_INVALID: &str = "errors.validation.s3_key_prefix_invalid";
-pub const ERRORS_VALIDATION_S3_KEY_PREFIX_LENGTH: &str = "errors.validation.s3_key_prefix_length";
 pub const ERRORS_VALIDATION_S3_REGION_INVALID: &str = "errors.validation.s3_region_invalid";
 pub const ERRORS_VALIDATION_S3_REGION_REQUIRED: &str = "errors.validation.s3_region_required";
-pub const ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_INVALID: &str =
-    "errors.validation.s3_secret_access_key_invalid";
 pub const ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED: &str =
     "errors.validation.s3_secret_access_key_required";
 pub const ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID: &str =

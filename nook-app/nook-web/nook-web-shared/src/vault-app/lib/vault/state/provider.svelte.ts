@@ -14,7 +14,7 @@ import {
   type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
-  type S3ProviderConfig,
+  type S3Connection,
   type StorageProvider,
   type StorageProviderType,
   type StoredS3Configuration,
@@ -113,7 +113,7 @@ export enum S3DraftKind {
  * its secret access key included, held in memory only. */
 export type S3Draft =
   | { kind: S3DraftKind.NotConfigured }
-  | { kind: S3DraftKind.Configured; config: S3ProviderConfig };
+  | { kind: S3DraftKind.Configured; config: S3Connection };
 export enum OAuthSetupPresetKind {
   NotSelected = "not-selected",
   Selected = "selected",
@@ -261,7 +261,7 @@ export class VaultProviderState {
         return s3ConfigurationNotApplicable();
     }
   }
-  configureS3(value: S3ProviderConfig): void {
+  configureS3(value: S3Connection): void {
     this.s3State = { kind: S3DraftKind.Configured, config: value };
   }
   clearS3(): void {

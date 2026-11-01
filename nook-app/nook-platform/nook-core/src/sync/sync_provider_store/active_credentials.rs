@@ -196,7 +196,7 @@ mod tests {
     use super::*;
     use crate::{
         LocalFolderConfigData, OAuthFileConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        S3ProviderConfig, StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle,
+        S3Connection, StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle,
         StoredOAuthRemoteFileName,
     };
 
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn s3_provider_projects_its_block_and_clears_other_credentials() -> anyhow::Result<()> {
-        let config = StoredS3Configuration::Configured(S3ProviderConfig::fixture()?);
+        let config = StoredS3Configuration::Configured(S3Connection::fixture()?);
         let mut provider =
             StorageProviderData::credential_projection_fixture(StorageProviderType::S3);
         provider.github_pat = StoredGithubPat::Missing;

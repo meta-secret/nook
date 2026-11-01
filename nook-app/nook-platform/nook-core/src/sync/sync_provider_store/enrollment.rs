@@ -217,7 +217,7 @@ impl CheckedProviderEnrollment<'_> {
             // The inviter's connection and key travel like the GitHub token.
             StorageProviderType::S3 => match &provider.s3 {
                 StoredS3Configuration::Configured(config) => Ok(PersonalEnrollmentProvider::s3(
-                    config.enrollment_connection()?,
+                    config.enrollment_connection(),
                 )),
                 StoredS3Configuration::NotApplicable => {
                     Err(ValidationError::S3StorageTargetInvalid)
