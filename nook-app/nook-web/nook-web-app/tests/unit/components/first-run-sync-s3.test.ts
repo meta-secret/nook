@@ -104,7 +104,7 @@ describe('first-run Sync step on S3 storage', () => {
     await fireEvent.click(view.getByTestId('first-run-s3-option'))
 
     expect(view.getByTestId('first-run-s3-setup')).toBeTruthy()
-    expect(view.queryByTestId('first-run-providers')).toBeNull()
+    expect(view.queryAllByTestId('first-run-providers')).toHaveLength(0)
     expect(document.activeElement).toBe(view.getByTestId('s3-endpoint-input'))
 
     await fireEvent.click(view.getByTestId('cancel-provider-setup'))

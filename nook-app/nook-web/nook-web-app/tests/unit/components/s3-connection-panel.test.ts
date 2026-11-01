@@ -90,7 +90,7 @@ describe('S3 connection form', () => {
       view.getByTestId('s3-secret-access-key-error').textContent?.trim(),
     ).toBe(I18N_KEYS.ErrorsValidationS3SecretAccessKeyRequired)
     // The key prefix is optional: an empty one is the bucket root.
-    expect(view.queryByTestId('s3-key-prefix-error')).toBeNull()
+    expect(view.queryAllByTestId('s3-key-prefix-error')).toHaveLength(0)
     const endpoint = view.getByTestId('s3-endpoint-input')
     expect(document.activeElement).toBe(endpoint)
     expect(endpoint.getAttribute('aria-invalid')).toBe('true')
@@ -108,7 +108,7 @@ describe('S3 connection form', () => {
       target: { value: 'https://s3.example.com' },
     })
 
-    expect(view.queryByTestId('s3-endpoint-error')).toBeNull()
+    expect(view.queryAllByTestId('s3-endpoint-error')).toHaveLength(0)
     expect(view.getByTestId('s3-region-error')).toBeTruthy()
   })
 
@@ -123,7 +123,7 @@ describe('S3 connection form', () => {
     expect(fixture.onConnect).toHaveBeenCalledWith(
       S3ConnectionFixture.configuration(),
     )
-    expect(view.queryByRole('alert')).toBeNull()
+    expect(view.queryAllByRole('alert')).toHaveLength(0)
   })
 
   test('the secret is a password input with no reveal, and never in the markup', async () => {

@@ -22,7 +22,6 @@ import {
 } from './helpers/extension-smoke-runtime'
 import {
   addSecret,
-  authorizeDeviceProtection,
   connectS3InFirstRun,
   createFirstRunKey,
   createIsolatedContext,
@@ -98,6 +97,10 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
     )
     await triggerVaultSyncRefresh(vaultPage)
     const storeId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
+    // While the vault is open, its member invites another app: the code
+    // carries the open vault's key.
+    const issued = await issueIdentityEnrollmentCode(vaultPage)
+    const inviteLink = localizeAppLinkForE2e(vaultPage, issued.link)
 
     // Connect from the extension: the vault tab already open takes the
     // connect route, and its member approves the extension.
@@ -112,11 +115,14 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       nookPage: vaultPage,
       connect: () => connectButton.click(),
     })
+    // The connect route opens with the keyring locked. Its request unlocks
+    // the keyring, not a vault, and the consent follows in place.
+    const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
+    await expect(unlockKeyring).toBeEnabled({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    await unlockKeyring.click()
     const consent = connectPage.getByTestId('extension-connect-consent')
-    await expect(
-      consent.or(connectPage.getByTestId('identity-vault-row')).first(),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    await authorizeDeviceProtection(connectPage)
     await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     await approveExtensionConnect(connectPage)
     await waitForExtensionPairingReady(
@@ -142,10 +148,8 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       throw new Error('The S3 vault grant names no extension app')
     }
 
-    // The member invites another app, then the extension's browser keeps
-    // no Nook page open: nothing more reaches the extension through it.
-    const issued = await issueIdentityEnrollmentCode(connectPage)
-    const inviteLink = localizeAppLinkForE2e(connectPage, issued.link)
+    // The extension's browser now keeps no Nook page open: nothing more
+    // reaches the extension through it.
     await connectPage.close()
 
     // The other app joins in a separate browser and saves a second secret,
