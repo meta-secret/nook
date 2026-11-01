@@ -37,15 +37,6 @@ pub enum StorageMode {
     S3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionCredentialValidation {
-    Local,
-    Github(GithubPat),
-    GoogleDrive,
-    ICloud,
-    /// The credential slot holds a secret access key.
-    S3,
-}
 impl StorageMode {
     /// Canonical short tag used at every cross-language boundary (wasm-bindgen
     /// arguments, `IndexedDB` JSON, GitHub PR descriptions, log lines).
@@ -60,22 +51,6 @@ impl StorageMode {
         }
     }
 
-    /// Parse a tag string (typically arriving from the JS layer) into the
-    /// enum. Unknown values are rejected at the boundary so no caller has
-    /// to defend against typos downstream.
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value {
-            "local" => Ok(Self::Local),
-            "github" => Ok(Self::Github),
-            "google-drive" => Ok(Self::GoogleDrive),
-            "icloud" => Ok(Self::ICloud),
-            "s3" => Ok(Self::S3),
-            other => Err(ValidationError::UnknownStorageMode {
-                mode: other.to_owned(),
-            }),
-        }
-    }
-
     /// The local cache and outbox key of the prepared provider. For S3 the
     /// remote reference is [`crate::S3Connection::location_identity`],
     /// which holds no credential.
@@ -87,30 +62,6 @@ impl StorageMode {
             Self::GoogleDrive => format!("drive:{remote_ref}"),
             Self::ICloud => format!("icloud:{remote_ref}"),
             Self::S3 => format!("s3:{remote_ref}"),
-        }
-    }
-
-    pub fn validate_connect(
-        self,
-        credential: &str,
-    ) -> Result<ConnectionCredentialValidation, ValidationError> {
-        match self {
-            Self::Github => Ok(ConnectionCredentialValidation::Github(GithubPat::parse(
-                credential,
-            )?)),
-            Self::GoogleDrive => {
-                OauthAccessToken::parse(credential)?;
-                Ok(ConnectionCredentialValidation::GoogleDrive)
-            }
-            Self::ICloud => {
-                OauthAccessToken::parse(credential)?;
-                Ok(ConnectionCredentialValidation::ICloud)
-            }
-            Self::S3 => {
-                S3SecretAccessKey::parse(credential)?;
-                Ok(ConnectionCredentialValidation::S3)
-            }
-            Self::Local => Ok(ConnectionCredentialValidation::Local),
         }
     }
 }
@@ -386,46 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_github_requires_pat() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?.validate_connect(" ghp_test ")?,
-            ConnectionCredentialValidation::Github(GithubPat::parse("ghp_test")?)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn validate_connect_local_ok() -> anyhow::Result<()> {
-        assert_eq!(
-            StorageMode::parse(STORAGE_MODE_LOCAL)?.validate_connect("")?,
-            ConnectionCredentialValidation::Local
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn validate_storage_mode_rejects_unknown() -> anyhow::Result<()> {
-        assert!(StorageMode::parse("ipfs").is_err());
-        assert!(StorageMode::parse("S3").is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn storage_mode_roundtrips_through_string_tag() -> anyhow::Result<()> {
-        for mode in [
-            StorageMode::Local,
-            StorageMode::Github,
-            StorageMode::GoogleDrive,
-            StorageMode::ICloud,
-            StorageMode::S3,
-        ] {
-            assert_eq!(StorageMode::parse(mode.as_str())?, mode);
-        }
+    fn storage_mode_has_its_string_tag() -> anyhow::Result<()> {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
@@ -452,50 +364,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_s3_requires_a_secret() -> anyhow::Result<()> {
-        assert_eq!(
-            StorageMode::S3.validate_connect(" TEST-ONLY-device-a-secret-not-real ")?,
-            ConnectionCredentialValidation::S3
-        );
-        assert_eq!(
-            StorageMode::S3.validate_connect(""),
-            Err(ValidationError::S3SecretAccessKeyRequired)
-        );
-        Ok(())
-    }
-
-    #[test]
     fn storage_mode_consts_match_enum() -> anyhow::Result<()> {
         assert_eq!(STORAGE_MODE_LOCAL, StorageMode::Local.as_str());
         assert_eq!(STORAGE_MODE_GITHUB, StorageMode::Github.as_str());
-        Ok(())
-    }
-
-    #[test]
-    fn validate_connect_icloud_requires_access_token() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse("icloud")?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse("icloud")?.validate_connect(" ck-web-token ")?,
-            ConnectionCredentialValidation::ICloud
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn validate_connect_google_drive_requires_access_token() -> anyhow::Result<()> {
-        assert!(
-            StorageMode::parse("google-drive")?
-                .validate_connect("  ")
-                .is_err()
-        );
-        assert_eq!(
-            StorageMode::parse("google-drive")?.validate_connect(" ya29.test ")?,
-            ConnectionCredentialValidation::GoogleDrive
-        );
         Ok(())
     }
 

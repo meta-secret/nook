@@ -8,8 +8,8 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
-    SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat,
-    VaultFormatDocument, VaultMetaState, VaultRecordSet,
+    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
+    VaultMetaState, VaultRecordSet,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -389,20 +389,6 @@ fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     assert_eq!(
         restored.list().first().map(|item| &item.data),
         Some(&api_key(&password))
-    );
-    Ok(())
-}
-
-#[test]
-fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
-    assert!(StorageMode::parse("dropbox").is_err());
-    assert_eq!(
-        StorageMode::parse("local")?.validate_connect("ignored")?,
-        nook_core::ConnectionCredentialValidation::Local
-    );
-    assert_eq!(
-        StorageMode::parse("github")?.validate_connect("  ghp_abc  ")?,
-        nook_core::ConnectionCredentialValidation::Github(nook_core::GithubPat::parse("ghp_abc")?)
     );
     Ok(())
 }
