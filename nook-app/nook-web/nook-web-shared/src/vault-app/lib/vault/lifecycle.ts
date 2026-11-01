@@ -631,6 +631,7 @@ class DeviceInitializationContinuation {
       state.githubPat = "";
       state.clearOauthFile();
       state.clearLocalFolder();
+      state.clearS3();
     } else {
       state.applyActiveProviderCredentials();
     }

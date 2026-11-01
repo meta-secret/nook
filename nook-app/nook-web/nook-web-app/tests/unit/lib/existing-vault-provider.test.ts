@@ -7,6 +7,7 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   defaultOAuthFileConfig,
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
@@ -14,6 +15,8 @@ import {
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { ExistingVaultProviderDraft } from '$lib/vault/existing-vault-provider.svelte'
+import { VaultStorageFailureKind } from '$lib/runtime/storage-failure'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 
 function providerState(): ProviderActionsContext {
   const oauthFile = defaultOAuthFileConfig({
@@ -81,5 +84,38 @@ describe('existing vault provider snapshot', () => {
         kind: NookExistingVaultProviderReadiness.Ready,
         provider: { setupType: LOCAL_FOLDER_PROVIDER_TYPE },
       })
+  })
+
+  test('keeps the S3 connection its form produced across the device unlock', () => {
+    const state = providerState()
+    state.configureS3(S3ConnectionFixture.configuration())
+
+    const s3 = new ExistingVaultProviderDraft({
+      state: state,
+      setupType: S3_PROVIDER_TYPE,
+    }).prepare()
+
+    expect(s3).toEqual(
+      ok({
+        kind: NookExistingVaultProviderReadiness.Ready,
+        provider: {
+          setupType: S3_PROVIDER_TYPE,
+          s3: S3ConnectionFixture.configuration(),
+        },
+      }),
+    )
+  })
+
+  test('an S3 setup without its connection says the connection is incomplete', () => {
+    const s3 = new ExistingVaultProviderDraft({
+      state: providerState(),
+      setupType: S3_PROVIDER_TYPE,
+    }).prepare()
+
+    expect(s3.isErr()).toBe(true)
+    if (s3.isErr())
+      expect(s3.error.kind).toBe(
+        VaultStorageFailureKind.S3ConfigurationRequired,
+      )
   })
 })

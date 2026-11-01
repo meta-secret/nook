@@ -1,6 +1,7 @@
 import {
   classify_vault_recovery_error,
   provider_failure_cause,
+  provider_failure_code,
   VaultRecoveryErrorKind,
 } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
@@ -18,6 +19,8 @@ export enum VaultStorageFailureKind {
   TimedOut = "timed-out",
   OperationFailed = "operation-failed",
   GitHubTokenRejected = "github-token-rejected",
+  S3KeyAccessDenied = "s3-key-access-denied",
+  S3ConfigurationRequired = "s3-configuration-required",
   VaultSelectionFailed = "vault-selection-failed",
   DuplicateProvider = "duplicate-provider",
   LocalFolderRequired = "local-folder-required",
@@ -38,6 +41,58 @@ export enum VaultStorageFailureKind {
 /** Stable codes attached by the native provider adapter across the WASM boundary. */
 export enum NativeProviderFailureCode {
   GitHubTokenRejected = "github-token-rejected",
+  S3KeyAccessDenied = "s3-key-access-denied",
+}
+
+/** What a native failure's stable provider code says. */
+export enum NativeProviderFailureKind {
+  GitHubTokenRejected = "github-token-rejected",
+  S3KeyAccessDenied = "s3-key-access-denied",
+  /** No stable code: the failure keeps its generic kind. */
+  Unclassified = "unclassified",
+}
+
+/** Reads a caught native failure's stable provider code: the code the
+ * adapter attached, else the one Rust reads from the message. TypeScript
+ * never matches the message text itself. */
+export class NativeProviderFailure<NativeCause = Error | string> {
+  constructor(private readonly cause: NativeCause) {}
+
+  kind(): NativeProviderFailureKind {
+    const cause = this.cause;
+    if (cause instanceof Error && "code" in cause) {
+      switch (cause.code) {
+        case NativeProviderFailureCode.GitHubTokenRejected:
+          return NativeProviderFailureKind.GitHubTokenRejected;
+        case NativeProviderFailureCode.S3KeyAccessDenied:
+          return NativeProviderFailureKind.S3KeyAccessDenied;
+      }
+    }
+    switch (provider_failure_code(this.message())) {
+      case "s3-key-access-denied":
+        return NativeProviderFailureKind.S3KeyAccessDenied;
+      case "unclassified":
+        return NativeProviderFailureKind.Unclassified;
+    }
+  }
+
+  /** The storage failure kind the code names. */
+  storageFailureKind(): VaultStorageFailureKind {
+    switch (this.kind()) {
+      case NativeProviderFailureKind.GitHubTokenRejected:
+        return VaultStorageFailureKind.GitHubTokenRejected;
+      case NativeProviderFailureKind.S3KeyAccessDenied:
+        return VaultStorageFailureKind.S3KeyAccessDenied;
+      case NativeProviderFailureKind.Unclassified:
+        return VaultStorageFailureKind.OperationFailed;
+    }
+  }
+
+  private message(): string {
+    const cause = this.cause;
+    if (cause instanceof Error) return cause.message;
+    return String(cause);
+  }
 }
 
 export type VaultStorageFailureRequest = {
@@ -97,6 +152,10 @@ export class VaultStorageFailure {
         return I18N_KEYS.ErrorsVaultSelectionFailed;
       case VaultStorageFailureKind.GitHubTokenRejected:
         return I18N_KEYS.AuthStorageGithubTokenRejected;
+      case VaultStorageFailureKind.S3KeyAccessDenied:
+        return I18N_KEYS.ErrorsS3KeyAccessDenied;
+      case VaultStorageFailureKind.S3ConfigurationRequired:
+        return I18N_KEYS.ErrorsValidationS3StorageTargetInvalid;
       case VaultStorageFailureKind.ExtensionApprovalContextChanged:
         return I18N_KEYS.ExtensionConsentApprovalFailed;
       case VaultStorageFailureKind.ExtensionProvidersHandOverFailed:
@@ -134,14 +193,8 @@ export class NativeVaultStorageFailure<
 > extends VaultStorageFailure {
   constructor(cause: NativeCause) {
     const causeMessage = cause instanceof Error ? cause.message : String(cause);
-    const isGitHubTokenRejected =
-      cause instanceof Error &&
-      "code" in cause &&
-      cause.code === NativeProviderFailureCode.GitHubTokenRejected;
     const request: VaultStorageFailureRequest = {
-      kind: isGitHubTokenRejected
-        ? VaultStorageFailureKind.GitHubTokenRejected
-        : VaultStorageFailureKind.OperationFailed,
+      kind: new NativeProviderFailure(cause).storageFailureKind(),
       recoveryKind: classify_vault_recovery_error(causeMessage),
       cause: provider_failure_cause(causeMessage),
     };

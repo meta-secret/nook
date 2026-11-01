@@ -7,13 +7,17 @@ import {
   type VaultRecoverySummary,
 } from "$app-wasm";
 import {
+  configuredS3,
   DEFAULT_GITHUB_REPO,
   LOCAL_PROVIDER_TYPE,
+  s3ConfigurationNotApplicable,
   type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
+  type S3ProviderConfig,
   type StorageProvider,
   type StorageProviderType,
+  type StoredS3Configuration,
 } from "$lib/auth/providers";
 import {
   default_vault_architecture,
@@ -100,6 +104,16 @@ export enum LocalFolderDraftKind {
 export type LocalFolderDraft =
   | { kind: LocalFolderDraftKind.NotConfigured }
   | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig };
+export enum S3DraftKind {
+  NotConfigured = "not-configured",
+  Configured = "configured",
+}
+
+/** The S3 connection being set up or in use: a configuration Rust validated,
+ * its secret access key included, held in memory only. */
+export type S3Draft =
+  | { kind: S3DraftKind.NotConfigured }
+  | { kind: S3DraftKind.Configured; config: S3ProviderConfig };
 export enum OAuthSetupPresetKind {
   NotSelected = "not-selected",
   Selected = "selected",
@@ -232,6 +246,28 @@ export class VaultProviderState {
       return;
     this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
   }
+  private s3State = $state.raw<S3Draft>({ kind: S3DraftKind.NotConfigured });
+  get s3Draft(): S3Draft {
+    return this.s3State;
+  }
+  /** The S3 block a save, a staged label, or the credential projection
+   * reads from the draft. */
+  get s3Configuration(): StoredS3Configuration {
+    const draft = this.s3State;
+    switch (draft.kind) {
+      case S3DraftKind.Configured:
+        return configuredS3(draft.config);
+      case S3DraftKind.NotConfigured:
+        return s3ConfigurationNotApplicable();
+    }
+  }
+  configureS3(value: S3ProviderConfig): void {
+    this.s3State = { kind: S3DraftKind.Configured, config: value };
+  }
+  clearS3(): void {
+    if (this.s3State.kind === S3DraftKind.NotConfigured) return;
+    this.s3State = { kind: S3DraftKind.NotConfigured };
+  }
   localFolderBackupSupported = $state(
     "window" in globalThis && is_local_folder_backup_supported(),
   );
@@ -270,6 +306,7 @@ export class VaultProviderState {
     this.githubRepo = DEFAULT_GITHUB_REPO;
     this.clearOauthFile();
     this.clearLocalFolder();
+    this.clearS3();
     this.clearOauthSetupPreset();
     this.googleOAuthBusy = false;
     this.icloudOAuthPreparing = false;

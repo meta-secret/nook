@@ -16,6 +16,10 @@ import {
 } from "$lib/auth/providers";
 import type { VaultState } from "$lib/vault.svelte";
 import {
+  NativeProviderFailure,
+  NativeProviderFailureKind,
+} from "$lib/runtime/storage-failure";
+import {
   LocalFolderDraftKind,
   LoginSetupKind,
 } from "$lib/vault/state/provider.svelte";
@@ -24,11 +28,25 @@ import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
 export enum AccessCheckFailureKind {
   Passkey = "passkey",
   BackupPassword = "backup-password",
+  /** The S3 server refused this device's key. */
+  S3KeyAccessDenied = "s3-key-access-denied",
 }
 
 /** A check that could not finish; what it says to the user. */
 export class AccessCheckFailure {
   constructor(readonly kind: AccessCheckFailureKind) {}
+
+  /** The same failure, unless a refused S3 key stopped the check: then
+   * that refusal, which names what to fix. */
+  refusedBy<NativeCause>(refusal: NativeCause): AccessCheckFailure {
+    switch (new NativeProviderFailure(refusal).kind()) {
+      case NativeProviderFailureKind.S3KeyAccessDenied:
+        return new AccessCheckFailure(AccessCheckFailureKind.S3KeyAccessDenied);
+      case NativeProviderFailureKind.GitHubTokenRejected:
+      case NativeProviderFailureKind.Unclassified:
+        return this;
+    }
+  }
 
   get translationKey(): I18nKey {
     switch (this.kind) {
@@ -36,6 +54,8 @@ export class AccessCheckFailure {
         return I18N_KEYS.AccessCheckPasskeyFailed;
       case AccessCheckFailureKind.BackupPassword:
         return I18N_KEYS.AccessCheckFailed;
+      case AccessCheckFailureKind.S3KeyAccessDenied:
+        return I18N_KEYS.ErrorsS3KeyAccessDenied;
     }
   }
 }
@@ -85,8 +105,8 @@ export class AccessCheckActions {
           return ok(
             await check_passkey_access(target.source, location.hostname),
           );
-        } catch {
-          return err(failure);
+        } catch (refusal) {
+          return err(failure.refusedBy(refusal));
         }
       case AccessCheckTargetKind.CurrentProvider: {
         const check: CurrentProviderCheck = {
@@ -115,8 +135,8 @@ export class AccessCheckActions {
           return ok(
             await check_backup_password_access(target.source, password),
           );
-        } catch {
-          return err(failure);
+        } catch (refusal) {
+          return err(failure.refusedBy(refusal));
         }
       case AccessCheckTargetKind.CurrentProvider: {
         const check: CurrentProviderCheck = {
@@ -147,13 +167,16 @@ export class AccessCheckActions {
       if (admitted.isErr()) return err(failure);
       try {
         return ok(await run(admitted.value));
-      } catch {
-        return err(failure);
+      } catch (refusal) {
+        return err(failure.refusedBy(refusal));
       }
     });
     // A queue that refused the check (local data being deleted) is the
-    // same failed check to the user.
-    return checked.mapErr(() => failure);
+    // same failed check to the user; the check's own failure keeps its kind.
+    return checked.mapErr((refused) => {
+      if (refused instanceof AccessCheckFailure) return refused;
+      return failure;
+    });
   }
 }
 
@@ -195,6 +218,11 @@ export function recoveryCheckTarget(vault: VaultState): AccessCheckTarget {
       return {
         kind: AccessCheckTargetKind.Source,
         source: { kind: "googleDrive", accessToken: source.accessToken },
+      };
+    case "s3":
+      return {
+        kind: AccessCheckTargetKind.Source,
+        source: { kind: "s3", configuration: source.configuration },
       };
   }
 }

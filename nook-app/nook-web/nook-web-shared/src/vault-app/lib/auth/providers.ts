@@ -12,6 +12,7 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
 } from "./provider-types";
 import {
   bind_google_drive_shared_folder,
@@ -49,6 +50,8 @@ import {
   type StoredOAuthRemoteFileId,
   type StoredOAuthRemoteFileName,
   type StoredOAuthTokenExpiry,
+  type StoredS3Configuration,
+  type S3ProviderConfig,
   type ProviderVaultScope,
   NookGithubPatHintState,
   type DuplicateSyncProvider,
@@ -80,6 +83,8 @@ export type {
   StoredOAuthRemoteFileId,
   StoredOAuthRemoteFileName,
   StoredOAuthTokenExpiry,
+  StoredS3Configuration,
+  S3ProviderConfig,
   ProviderVaultScope,
 } from "$app-wasm";
 
@@ -126,6 +131,7 @@ export {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
 };
 
 export type ProviderSetupRequest =
@@ -137,7 +143,8 @@ export type ProviderSetupRequest =
       readonly type:
         | typeof LOCAL_PROVIDER_TYPE
         | typeof LOCAL_FOLDER_PROVIDER_TYPE
-        | typeof GITHUB_PROVIDER_TYPE;
+        | typeof GITHUB_PROVIDER_TYPE
+        | typeof S3_PROVIDER_TYPE;
     };
 
 export const DEFAULT_GITHUB_REPO = default_github_repo();
@@ -267,6 +274,14 @@ export function configuredLocalFolder(
 ): StoredLocalFolderConfiguration {
   return { state: "configured", config };
 }
+export function s3ConfigurationNotApplicable(): StoredS3Configuration {
+  return { state: "notApplicable" };
+}
+
+export function configuredS3(config: S3ProviderConfig): StoredS3Configuration {
+  return { state: "configured", config };
+}
+
 export function storedLocalFolderDirectory(
   directoryName: string,
 ): StoredLocalFolderDirectory {
@@ -303,13 +318,14 @@ export function defaultOAuthFileConfig({
 
 export function providerPersistenceDefaults(): Pick<
   StorageProvider,
-  "githubPat" | "githubRepo" | "oauthFile" | "localFolder" | "storeId"
+  "githubPat" | "githubRepo" | "oauthFile" | "localFolder" | "s3" | "storeId"
 > {
   return {
     githubPat: missingGithubPat(),
     githubRepo: defaultGithubRepository(),
     oauthFile: oauthConfigurationNotApplicable(),
     localFolder: localFolderConfigurationNotApplicable(),
+    s3: s3ConfigurationNotApplicable(),
     storeId: unscopedProviderVault(),
   };
 }

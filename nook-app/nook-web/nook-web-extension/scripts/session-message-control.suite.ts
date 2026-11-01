@@ -247,6 +247,7 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       githubRepo: { state: 'defaultRepository' },
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
+      s3: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-08-10T00:00:00Z',

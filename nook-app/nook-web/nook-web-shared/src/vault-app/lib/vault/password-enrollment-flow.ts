@@ -152,6 +152,7 @@ export class PasswordEnrollmentActions {
       state.githubRepo = githubRepositoryValue(provider.githubRepo);
       state.clearOauthFile();
       state.clearLocalFolder();
+      state.clearS3();
       return storageOk(state.storageMode);
     }
     if (provider.type === "oauth-file") {
@@ -179,6 +180,7 @@ export class PasswordEnrollmentActions {
         state.githubRepo = fileName.fileName;
       }
       state.clearLocalFolder();
+      state.clearS3();
       return storageOk(state.storageMode);
     }
 
@@ -197,6 +199,7 @@ export class PasswordEnrollmentActions {
     state.configureLocalFolder(configuration.config);
     state.githubPat = "";
     state.clearOauthFile();
+    state.clearS3();
     return storageOk(state.storageMode);
   }
 
@@ -593,6 +596,7 @@ export class PasswordEnrollmentActions {
               state.githubRepo = fileName.fileName;
             }
             state.clearLocalFolder();
+            state.clearS3();
             enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
           } else {
             // A local provider cannot carry an identity to another app.

@@ -41,6 +41,7 @@ function githubProvider(id: string): StorageProvider {
     githubRepo: { state: 'repository', value: 'family/vaults' },
     oauthFile: { state: 'notApplicable' },
     localFolder: { state: 'notApplicable' },
+    s3: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     createdAt: '2026-10-16T00:00:00Z',
     syncCheckpoint: { state: 'neverSynced' },

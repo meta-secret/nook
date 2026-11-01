@@ -129,6 +129,7 @@ function storedProvider(
     githubRepo: { state: 'defaultRepository' } as const,
     oauthFile: { state: 'notApplicable' } as const,
     localFolder: { state: 'notApplicable' } as const,
+    s3: { state: 'notApplicable' } as const,
     storeId: providerVaultScope(provider, seedScope),
     syncCheckpoint: { state: 'neverSynced' } as const,
     createdAt,

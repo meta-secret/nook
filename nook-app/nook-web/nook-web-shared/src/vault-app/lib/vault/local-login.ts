@@ -296,6 +296,7 @@ export class VaultLoginActions {
       state.githubPat = "";
       state.clearOauthFile();
       state.clearLocalFolder();
+      state.clearS3();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
         if (canPublishPreparationResult())
@@ -444,6 +445,7 @@ export class VaultLoginActions {
     state.githubPat = "";
     state.clearOauthFile();
     state.clearLocalFolder();
+    state.clearS3();
     state.isVerifying = true;
     let creationState = LocalVaultCreationState.Pending;
 

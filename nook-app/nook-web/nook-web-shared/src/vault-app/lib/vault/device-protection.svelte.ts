@@ -96,6 +96,7 @@ type DeviceProtectionRecoveryState = Pick<
   | "clearUnlockedSession"
   | "clearOauthFile"
   | "clearLocalFolder"
+  | "clearS3"
   | "dismissSuccess"
   | "showSuccess"
   | "t"
@@ -169,6 +170,7 @@ export class DeviceProtectionActions {
     state.githubPat = "";
     state.clearOauthFile();
     state.clearLocalFolder();
+    state.clearS3();
     if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE;
 
     // Dispose native authority synchronously, before any queued or asynchronous work.
@@ -746,6 +748,7 @@ export class DeviceProtectionRecoveryActions {
     state.githubPat = "";
     state.clearOauthFile();
     state.clearLocalFolder();
+    state.clearS3();
     state.storageMode = LOCAL_PROVIDER_TYPE;
   }
 

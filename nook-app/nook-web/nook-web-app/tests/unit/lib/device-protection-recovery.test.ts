@@ -56,6 +56,7 @@ describe('device protection recovery', () => {
       clearUnlockedSession: vi.fn(),
       clearOauthFile: vi.fn(),
       clearLocalFolder: vi.fn(),
+      clearS3: vi.fn(),
       dismissSuccess: vi.fn(),
       showSuccess: vi.fn(),
       t: vi.fn(() => 'Recovery failed'),

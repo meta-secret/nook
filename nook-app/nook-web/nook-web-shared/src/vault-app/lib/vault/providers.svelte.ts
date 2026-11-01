@@ -36,6 +36,7 @@ import {
   OAuthFilePresentation,
   OAuthFileNameKind,
   oauthConfigurationNotApplicable,
+  S3_PROVIDER_TYPE,
   unboundICloudShareTarget,
   rootGoogleDriveFolder,
   signedOutOAuthCredential,
@@ -58,6 +59,7 @@ import {
   draft_github_storage_args,
   draft_local_storage_args,
   draft_oauth_storage_args,
+  draft_s3_storage_args,
   has_github_credentials,
   has_local_vault,
   has_local_folder_credentials,
@@ -66,6 +68,7 @@ import {
   NookActiveProviderCredentialsProjectionState,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
+  NookStoredS3ConfigurationState,
   remove_local_folder_handle,
   RemoteVaultAssessDecision,
   RemoteVaultRecoveryState,
@@ -75,7 +78,9 @@ import {
   staged_github_remote_storage_args,
   staged_local_remote_storage_args,
   staged_oauth_remote_storage_args,
+  staged_s3_provider_label,
   staged_unconfigured_oauth_provider_label,
+  stored_s3_configuration_state,
   update_oauth_remote_ref,
   local_vault_storage_args,
   type NookStorageConnectArgs,
@@ -90,6 +95,7 @@ import {
   LoginSetupKind,
   OAuthFileDraftKind,
   OAuthSetupPresetKind,
+  S3DraftKind,
   StagedRemoteStorageKind,
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
@@ -214,6 +220,12 @@ export class VaultProviderActions {
         $state.snapshot(state.oauthFileDraft.config),
       );
     }
+    if (
+      state.storageMode === S3_PROVIDER_TYPE &&
+      state.s3Draft.kind === S3DraftKind.Configured
+    ) {
+      return draft_s3_storage_args(state.s3Draft.config);
+    }
     return draft_local_storage_args();
   }
 
@@ -243,6 +255,7 @@ export class VaultProviderActions {
   stagedRemoteStorageArgs(): StagedRemoteStorage {
     const state = this.state;
     const type = this.stagedProviderType();
+    if (type === S3_PROVIDER_TYPE) return this.stagedS3StorageArgs();
     const staged =
       type === GITHUB_PROVIDER_TYPE
         ? staged_github_remote_storage_args(state.githubPat, state.githubRepo)
@@ -261,6 +274,20 @@ export class VaultProviderActions {
         : { kind: StagedRemoteStorageKind.Unavailable };
     } finally {
       staged.free();
+    }
+  }
+
+  /** S3 connects once its form produced a configuration Rust validated. */
+  private stagedS3StorageArgs(): StagedRemoteStorage {
+    const draft = this.state.s3Draft;
+    switch (draft.kind) {
+      case S3DraftKind.Configured:
+        return {
+          kind: StagedRemoteStorageKind.Available,
+          args: draft_s3_storage_args(draft.config),
+        };
+      case S3DraftKind.NotConfigured:
+        return { kind: StagedRemoteStorageKind.Unavailable };
     }
   }
 
@@ -289,6 +316,9 @@ export class VaultProviderActions {
             state.oauthSetupSelection.preset,
           )
         : staged_unconfigured_oauth_provider_label();
+    }
+    if (providerType === S3_PROVIDER_TYPE) {
+      return staged_s3_provider_label(state.s3Configuration);
     }
     return staged_local_provider_label(providerType);
   }
@@ -319,6 +349,12 @@ export class VaultProviderActions {
       folderHandle.kind === LocalFolderHandleKind.Selected
     ) {
       return has_local_folder_credentials(folderHandle.handleId);
+    }
+    if (state.storageMode === S3_PROVIDER_TYPE) {
+      return (
+        stored_s3_configuration_state(state.s3Configuration) ===
+        NookStoredS3ConfigurationState.Configured
+      );
     }
     return state.storageMode === LOCAL_PROVIDER_TYPE;
   }
@@ -542,6 +578,7 @@ export class VaultProviderActions {
       state.githubPat = "";
       state.clearOauthFile();
       state.clearLocalFolder();
+      state.clearS3();
     }
     return storageOk(promoted.value);
   }
@@ -615,6 +652,7 @@ export class VaultProviderActions {
       state.clearOauthFile();
     }
     state.clearLocalFolder();
+    state.clearS3();
     state.clearExistingVaultRecoverySummary();
     state.errorMsg = "";
     state.dismissSuccess();
@@ -657,6 +695,7 @@ export class VaultProviderActions {
           ? DEFAULT_DRIVE_BACKUP_NAME
           : DEFAULT_GITHUB_REPO;
       state.clearLocalFolder();
+      state.clearS3();
       state.clearExistingVaultRecoverySummary();
       state.errorMsg = "";
       return;
@@ -664,6 +703,9 @@ export class VaultProviderActions {
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
     state.addProviderOpen = false;
+    // The S3 setup's connection goes with it; a saved S3 row's own block
+    // comes back through the credential projection.
+    state.clearS3();
     state.applyActiveProviderCredentials();
     state.errorMsg = "";
   }
@@ -757,6 +799,7 @@ export class ActiveProviderCredentialsActions {
       currentGithubRepo: state.githubRepo,
       currentOauthFile,
       currentLocalFolder,
+      currentS3: state.s3Configuration,
     };
     const projection = active_provider_credentials_projection(projectionArgs);
     if (
@@ -790,6 +833,14 @@ export class ActiveProviderCredentialsActions {
       state.configureLocalFolder(localFolderConfiguration.config);
     } else {
       state.clearLocalFolder();
+    }
+    switch (draft.s3.state) {
+      case "configured":
+        state.configureS3(draft.s3.config);
+        return;
+      case "notApplicable":
+        state.clearS3();
+        return;
     }
   }
 }

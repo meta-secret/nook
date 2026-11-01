@@ -93,6 +93,10 @@ const providerKeys = [
   "localFolderDraft",
   "configureLocalFolder",
   "clearLocalFolder",
+  "s3Draft",
+  "s3Configuration",
+  "configureS3",
+  "clearS3",
   "localFolderBackupSupported",
   "vaultArchitecture",
   "draftDeviceMode",
@@ -267,6 +271,10 @@ class VaultStateSlicesImplementation {
   declare readonly localFolderDraft: VaultProviderState["localFolderDraft"];
   declare configureLocalFolder: VaultProviderState["configureLocalFolder"];
   declare clearLocalFolder: VaultProviderState["clearLocalFolder"];
+  declare readonly s3Draft: VaultProviderState["s3Draft"];
+  declare readonly s3Configuration: VaultProviderState["s3Configuration"];
+  declare configureS3: VaultProviderState["configureS3"];
+  declare clearS3: VaultProviderState["clearS3"];
   declare localFolderBackupSupported: VaultProviderState["localFolderBackupSupported"];
   declare vaultArchitecture: VaultProviderState["vaultArchitecture"];
   declare draftDeviceMode: VaultProviderState["draftDeviceMode"];

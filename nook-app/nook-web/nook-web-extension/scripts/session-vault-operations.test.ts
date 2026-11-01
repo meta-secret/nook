@@ -54,6 +54,7 @@ function githubProvider(): StorageProvider {
     githubRepo: { state: 'defaultRepository' },
     oauthFile: { state: 'notApplicable' },
     localFolder: { state: 'notApplicable' },
+    s3: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     createdAt: '2026-08-11T00:00:00Z',
     syncCheckpoint: { state: 'neverSynced' },

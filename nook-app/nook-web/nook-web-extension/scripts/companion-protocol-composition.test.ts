@@ -255,6 +255,7 @@ class CompanionPairingApprovalFixture {
             githubRepo: { state: 'defaultRepository' },
             oauthFile: { state: 'notApplicable' },
             localFolder: { state: 'notApplicable' },
+            s3: { state: 'notApplicable' },
             storeId: { state: 'storeId', value: extension.vaultStoreId },
             syncCheckpoint: { state: 'neverSynced' },
             createdAt: '2026-09-07T00:00:00Z',

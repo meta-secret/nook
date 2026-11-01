@@ -11,10 +11,13 @@ import {
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   configuredLocalFolder,
   configuredOAuthFile,
+  configuredS3,
   defaultOAuthFileConfig,
   providerPersistenceDefaults,
+  s3ConfigurationNotApplicable,
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
@@ -22,6 +25,7 @@ import {
   storedLocalFolderHandle,
   type LocalFolderConfig,
   type OAuthFileConfig,
+  type S3ProviderConfig,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth/providers'
@@ -44,6 +48,7 @@ import {
   OAuthFileDraftKind,
   OAuthSetupPresetKind,
 } from '$lib/vault/state/provider.svelte'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 
 type AdapterState = Omit<
   ProviderSaveContext,
@@ -73,6 +78,7 @@ function providerState(providerType: StorageProviderType): AdapterState {
     oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
     oauthSetupSelection: { kind: OAuthSetupPresetKind.NotSelected },
     localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
+    s3Configuration: s3ConfigurationNotApplicable(),
     errorMsg: '',
     loginRequiresExistingVault: true,
     t: (request: TranslationRequest) =>
@@ -115,6 +121,9 @@ function projectionState(
     clearOauthFile: vi.fn(),
     configureLocalFolder: vi.fn(),
     clearLocalFolder: vi.fn(),
+    s3Configuration: s3ConfigurationNotApplicable(),
+    configureS3: vi.fn(),
+    clearS3: vi.fn(),
   }
 }
 
@@ -139,6 +148,26 @@ function localFolderProvider(config: LocalFolderConfig): StorageProvider {
     localFolder: configuredLocalFolder(config),
     storeId: scopedProviderVault('vault-1'),
     createdAt: '2026-08-11T00:00:00Z',
+  }
+}
+
+function s3Provider(config: S3ProviderConfig): StorageProvider {
+  return {
+    ...providerPersistenceDefaults(),
+    id: 's3-existing',
+    type: S3_PROVIDER_TYPE,
+    label: 'S3 · nook-dev/e2e',
+    s3: configuredS3(config),
+    createdAt: '2026-10-31T00:00:00Z',
+  }
+}
+
+/** An S3 setup whose form produced this configuration. */
+function s3SetupState(config: S3ProviderConfig): AdapterState {
+  return {
+    ...providerState(S3_PROVIDER_TYPE),
+    githubPat: '',
+    s3Configuration: configuredS3(config),
   }
 }
 
@@ -182,6 +211,66 @@ describe('provider save web adapter', () => {
     expect(state.storageMode).toBe(LOCAL_FOLDER_PROVIDER_TYPE)
     expect(state.configureLocalFolder).toHaveBeenCalledWith(localFolder)
     expect(state.clearOauthFile).toHaveBeenCalledOnce()
+  })
+
+  test('applies a saved S3 provider through the portable projection', () => {
+    const config = S3ConnectionFixture.configuration()
+    const state = projectionState(s3Provider(config))
+
+    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
+
+    expect(state.storageMode).toBe(S3_PROVIDER_TYPE)
+    expect(state.githubPat).toBe('')
+    expect(state.configureS3).toHaveBeenCalledWith(config)
+    expect(state.clearS3).not.toHaveBeenCalled()
+    expect(state.clearOauthFile).toHaveBeenCalledOnce()
+    expect(state.clearLocalFolder).toHaveBeenCalledOnce()
+  })
+
+  test('drops the S3 connection when another provider is in use', () => {
+    const state = projectionState(githubProvider())
+
+    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
+
+    expect(state.clearS3).toHaveBeenCalledOnce()
+    expect(state.configureS3).not.toHaveBeenCalled()
+  })
+
+  test('saves a new S3 provider with the block its form produced', async () => {
+    const config = S3ConnectionFixture.configuration()
+    const state = s3SetupState(config)
+
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
+
+    expect(saved).toEqual(ok(ProviderSaveOutcome.Saved))
+    expect(state.persistProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [
+          expect.objectContaining({
+            type: S3_PROVIDER_TYPE,
+            label: 'S3 · nook-dev/e2e',
+            s3: configuredS3(config),
+          }),
+        ],
+      }),
+    )
+  })
+
+  test('maps an S3 setup without its connection to translated state', async () => {
+    const state = providerState(S3_PROVIDER_TYPE)
+
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
+
+    expect(saved.isErr()).toBe(true)
+    if (saved.isOk()) return
+    expect(saved.error.translationKey).toBe(
+      I18N_KEYS.ErrorsValidationS3StorageTargetInvalid,
+    )
+    expect(state.persistProviders).not.toHaveBeenCalled()
   })
 
   test('maps an explicit duplicate to translated state without persistence', async () => {

@@ -1,7 +1,8 @@
 import { err, ok, type Result } from "neverthrow";
 import {
   NativeVaultStorageFailure,
-  type VaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import {
   existing_vault_provider_readiness,
@@ -12,14 +13,17 @@ import {
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   type StorageProviderType,
   type LocalFolderConfig,
   type OAuthFileConfig,
+  type S3ProviderConfig,
 } from "$lib/auth/providers";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
   LocalFolderDraftKind,
   OAuthFileDraftKind,
+  S3DraftKind,
 } from "$lib/vault/state/provider.svelte";
 
 export type ExistingVaultProviderSnapshot =
@@ -36,6 +40,10 @@ export type ExistingVaultProviderSnapshot =
   | {
       setupType: typeof LOCAL_FOLDER_PROVIDER_TYPE;
       localFolder: LocalFolderConfig;
+    }
+  | {
+      setupType: typeof S3_PROVIDER_TYPE;
+      s3: S3ProviderConfig;
     };
 
 export type ExistingVaultProviderPreparation =
@@ -109,6 +117,24 @@ export class ExistingVaultProviderDraft {
         provider: { setupType, localFolder: $state.snapshot(folder.config) },
       };
       return ok(preparation);
+    }
+    if (setupType === S3_PROVIDER_TYPE) {
+      const s3 = state.s3Draft;
+      switch (s3.kind) {
+        case S3DraftKind.NotConfigured:
+          return err(
+            new VaultStorageFailure(
+              VaultStorageFailureKind.S3ConfigurationRequired,
+            ),
+          );
+        case S3DraftKind.Configured: {
+          const preparation: ExistingVaultProviderPreparation = {
+            kind: readiness,
+            provider: { setupType, s3: s3.config },
+          };
+          return ok(preparation);
+        }
+      }
     }
     const preparation: ExistingVaultProviderPreparation = {
       kind: readiness,

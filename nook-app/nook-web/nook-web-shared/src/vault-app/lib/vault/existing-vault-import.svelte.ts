@@ -7,6 +7,7 @@ import {
   GITHUB_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
 } from "$lib/auth/providers";
 import {
   ExistingVaultImportQueueKind,
@@ -131,6 +132,11 @@ export class ExistingVaultImportLifecycle {
       this.vault.configureLocalFolder(pending.provider.localFolder);
     } else {
       this.vault.clearLocalFolder();
+    }
+    if (pending.provider.setupType === S3_PROVIDER_TYPE) {
+      this.vault.configureS3(pending.provider.s3);
+    } else {
+      this.vault.clearS3();
     }
     const recoveryDiscovery = this.vault.recoveryDiscovery;
     await this.vault.connectStagedProvider();

@@ -1,9 +1,15 @@
-import { draft_github_storage_args, NookVaultManager } from '$app-wasm'
-import { GITHUB_PROVIDER_TYPE } from '$lib/auth/providers'
+import {
+  draft_github_storage_args,
+  draft_s3_storage_args,
+  NookVaultManager,
+} from '$app-wasm'
+import { GITHUB_PROVIDER_TYPE, S3_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
   NativeProviderFailureCode,
+  NativeVaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 import { VaultProviderActions } from '$lib/vault/providers.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -76,5 +82,68 @@ describe('GitHub provider assessment failure', () => {
 
     state.clearManager()
     manager.free()
+  })
+})
+
+describe('S3 provider assessment failure', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    mockLogger.warnWithContext.mockClear()
+  })
+
+  test('a refused key keeps its typed code, says what to check, and logs no secret', async () => {
+    const state = VaultStateTestFixture.create()
+    const manager = new NookVaultManager()
+    state.openManager(manager)
+    VaultStateTestFixture.runStorageImmediately(state)
+    const refusal = Object.assign(
+      new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
+      {
+        name: 'NookProviderFailure',
+        code: NativeProviderFailureCode.S3KeyAccessDenied,
+      },
+    )
+    vi.spyOn(manager, 'assess_vault_connect').mockRejectedValue(refusal)
+    const args = draft_s3_storage_args(S3ConnectionFixture.configuration())
+
+    const assessment = await new VaultProviderActions(
+      state,
+    ).assessVaultConnectStatus({ args })
+
+    expect(assessment.isErr()).toBe(true)
+    if (assessment.isErr()) {
+      expect(assessment.error.kind).toBe(
+        VaultStorageFailureKind.S3KeyAccessDenied,
+      )
+      expect(assessment.error.translationKey).toBe(
+        I18N_KEYS.ErrorsS3KeyAccessDenied,
+      )
+    }
+    const logContextCall = mockLogger.warnWithContext.mock.calls[0]
+    if (!logContextCall) throw new Error('expected a logged warning context')
+    const [logContext] = logContextCall
+    expect(JSON.parse(logContext.serializedContext)).toEqual({
+      provider_type: S3_PROVIDER_TYPE,
+      failure_kind: VaultStorageFailureKind.S3KeyAccessDenied,
+      cause: 'forbidden',
+      http_status: 403,
+    })
+    expect(JSON.stringify(logContext)).not.toContain(S3ConnectionFixture.SECRET)
+
+    state.clearManager()
+    manager.free()
+  })
+
+  test('a refusal another export reports by message alone keeps the same kind', () => {
+    const failure = new NativeVaultStorageFailure(
+      new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
+    )
+
+    expect(failure.kind).toBe(VaultStorageFailureKind.S3KeyAccessDenied)
+    expect(
+      new NativeVaultStorageFailure(
+        new Error('S3 request failed with status 503'),
+      ).kind,
+    ).toBe(VaultStorageFailureKind.OperationFailed)
   })
 })

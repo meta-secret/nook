@@ -19,7 +19,7 @@ import {
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
 import { VaultRecoveryErrorKind } from "$app-wasm";
-import { I18N_KEYS } from "../../../generated/i18n-keys";
+import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
@@ -70,6 +70,21 @@ export {
 /** Owns browser orchestration for one password unlock context. */
 export class VaultPasswordActions {
   constructor(private readonly state: VaultState) {}
+
+  /** What the remote provider in use needs before a backup password can
+   * unlock through it. */
+  private missingCredentialsKey(): I18nKey {
+    switch (this.state.storageMode) {
+      case "oauth-file":
+        return I18N_KEYS.ErrorsGoogleSignInRequired;
+      case "s3":
+        return I18N_KEYS.ErrorsValidationS3StorageTargetInvalid;
+      case "local":
+      case "local-folder":
+      case "github":
+        return I18N_KEYS.ErrorsGithubCredentialsRequired;
+    }
+  }
 
   async addVaultPassword({
     label,
@@ -265,10 +280,7 @@ export class VaultPasswordActions {
       return;
     }
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
-      state.errorMsg =
-        state.storageMode === "oauth-file"
-          ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
-          : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
+      state.errorMsg = state.t(this.missingCredentialsKey());
       return;
     }
     if (state.storageMode !== "local") {

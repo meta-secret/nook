@@ -9,6 +9,7 @@ export const LOCAL_FOLDER_PROVIDER_TYPE =
 export const GITHUB_PROVIDER_TYPE = "github" satisfies StorageProviderType;
 export const OAUTH_FILE_PROVIDER_TYPE =
   "oauth-file" satisfies StorageProviderType;
+export const S3_PROVIDER_TYPE = "s3" satisfies StorageProviderType;
 export const GOOGLE_DRIVE_OAUTH_FILE_PRESET =
   "google-drive" satisfies OAuthFilePreset;
 export const ICLOUD_OAUTH_FILE_PRESET = "icloud" satisfies OAuthFilePreset;

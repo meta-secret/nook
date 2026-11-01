@@ -135,9 +135,38 @@ export class ProviderPersistenceActions {
       oauthFile,
       oauthPreset,
       localFolder,
+      s3: state.s3Configuration,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
     };
+  }
+
+  /** The saved outcome, or the failure of a save Rust's policy refused. */
+  private savedOutcome(
+    state: NookProviderSaveOutcomeState,
+  ): Result<ProviderSaveOutcome, StorageOperationFailure> {
+    switch (state) {
+      case NookProviderSaveOutcomeState.Saved:
+        return storageOk(ProviderSaveOutcome.Saved);
+      case NookProviderSaveOutcomeState.Duplicate:
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.DuplicateProvider,
+          ),
+        );
+      case NookProviderSaveOutcomeState.LocalFolderRequired:
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.LocalFolderRequired,
+          ),
+        );
+      case NookProviderSaveOutcomeState.S3ConfigurationRequired:
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.S3ConfigurationRequired,
+          ),
+        );
+    }
   }
 
   /** Save the provider being set up for an identity added beside the one
@@ -154,20 +183,8 @@ export class ProviderPersistenceActions {
     };
     const outcome = apply_provider_save_policy(this.saveRequest(target));
     try {
-      if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.DuplicateProvider,
-          ),
-        );
-      }
-      if (outcome.state === NookProviderSaveOutcomeState.LocalFolderRequired) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.LocalFolderRequired,
-          ),
-        );
-      }
+      const admitted = this.savedOutcome(outcome.state);
+      if (admitted.isErr()) return storageErr(admitted.error);
       const snapshot = outcome.snapshot;
       return await state.enqueueStorage(async () => {
         const manager = state.admitManager();
@@ -209,20 +226,8 @@ export class ProviderPersistenceActions {
     };
     const outcome = apply_provider_save_policy(this.saveRequest(target));
     try {
-      if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.DuplicateProvider,
-          ),
-        );
-      }
-      if (outcome.state === NookProviderSaveOutcomeState.LocalFolderRequired) {
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.LocalFolderRequired,
-          ),
-        );
-      }
+      const admitted = this.savedOutcome(outcome.state);
+      if (admitted.isErr()) return storageErr(admitted.error);
       const persistenceOptions: ProviderPersistenceOptions = {
         replace: false,
         providers: outcome.snapshot.providers,

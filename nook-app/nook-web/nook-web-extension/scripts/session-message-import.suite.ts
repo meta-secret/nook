@@ -33,6 +33,7 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
         githubRepo: { state: 'defaultRepository' as const },
         oauthFile: { state: 'notApplicable' as const },
         localFolder: { state: 'notApplicable' as const },
+        s3: { state: 'notApplicable' as const },
         storeId: { state: 'unscoped' as const },
         syncCheckpoint: { state: 'neverSynced' as const },
         createdAt: '2026-06-24T00:00:00.000Z',

@@ -17,6 +17,18 @@ test('includes the rejected GitHub token status in provider warning logs', () =>
   )
 })
 
+test('includes the refused S3 key status in provider warning logs', () => {
+  const context = ProviderFailureLogContext.from({
+    provider_type: 's3',
+    failure_kind: VaultStorageFailureKind.S3KeyAccessDenied,
+    cause: 'forbidden',
+  })
+
+  expect(context.serialize()).toBe(
+    '{"provider_type":"s3","failure_kind":"s3-key-access-denied","cause":"forbidden","http_status":403}',
+  )
+})
+
 test('omits the HTTP status for other provider failures', () => {
   const context = ProviderFailureLogContext.from({
     provider_type: 'github',
