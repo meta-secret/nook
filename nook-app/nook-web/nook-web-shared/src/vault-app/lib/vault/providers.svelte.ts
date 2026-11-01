@@ -79,6 +79,7 @@ import {
   staged_local_remote_storage_args,
   staged_oauth_remote_storage_args,
   staged_s3_provider_label,
+  staged_s3_remote_storage_args,
   staged_unconfigured_oauth_provider_label,
   stored_s3_configuration_state,
   update_oauth_remote_ref,
@@ -279,15 +280,19 @@ export class VaultProviderActions {
 
   /** S3 connects once its form produced a configuration Rust validated. */
   private stagedS3StorageArgs(): StagedRemoteStorage {
-    const draft = this.state.s3Draft;
-    switch (draft.kind) {
-      case S3DraftKind.Configured:
-        return {
-          kind: StagedRemoteStorageKind.Available,
-          args: draft_s3_storage_args(draft.config),
-        };
-      case S3DraftKind.NotConfigured:
-        return { kind: StagedRemoteStorageKind.Unavailable };
+    const staged = staged_s3_remote_storage_args(this.state.s3Configuration);
+    try {
+      switch (staged.state) {
+        case NookStagedStorageArgsState.Ready:
+          return {
+            kind: StagedRemoteStorageKind.Available,
+            args: staged.args,
+          };
+        case NookStagedStorageArgsState.Incomplete:
+          return { kind: StagedRemoteStorageKind.Unavailable };
+      }
+    } finally {
+      staged.free();
     }
   }
 

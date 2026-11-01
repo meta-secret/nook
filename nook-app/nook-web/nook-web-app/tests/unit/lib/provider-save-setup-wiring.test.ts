@@ -5,10 +5,13 @@ import {
   draft_oauth_storage_args,
   oauth_remote_storage_ref,
   staged_oauth_remote_storage_args,
+  staged_s3_remote_storage_args,
 } from '$app-wasm'
 import {
+  configuredS3,
   defaultOAuthFileConfig,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   storedGoogleDriveFolder,
   storedOAuthCredential,
   type OAuthFileConfig,
@@ -21,6 +24,7 @@ import {
   OAuthFileDraftKind,
   StagedRemoteStorageKind,
 } from '$lib/vault/state/provider.svelte'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 function driveConfig(): OAuthFileConfig {
@@ -69,6 +73,37 @@ describe('provider storage wiring', () => {
     state.storageMode = OAUTH_FILE_PROVIDER_TYPE
     state.activateLoginSetup(OAUTH_FILE_PROVIDER_TYPE)
     state.configureOauthFile(config)
+    expect(new VaultProviderActions(state).stagedRemoteStorageArgs()).toEqual({
+      kind: StagedRemoteStorageKind.Unavailable,
+    })
+  })
+
+  test('stages an S3 setup’s connection through Rust', () => {
+    const state = VaultStateTestFixture.create()
+    state.storageMode = S3_PROVIDER_TYPE
+    state.activateLoginSetup(S3_PROVIDER_TYPE)
+    state.configureS3(S3ConnectionFixture.configuration())
+    const expectedStaged = staged_s3_remote_storage_args(
+      configuredS3(S3ConnectionFixture.configuration()),
+    )
+
+    try {
+      expect(new VaultProviderActions(state).stagedRemoteStorageArgs()).toEqual(
+        {
+          kind: StagedRemoteStorageKind.Available,
+          args: expectedStaged.args,
+        },
+      )
+      expect(expectedStaged.args.mode).toBe(S3_PROVIDER_TYPE)
+    } finally {
+      expectedStaged.free()
+    }
+  })
+
+  test('an S3 setup without its connection stages nothing', () => {
+    const state = VaultStateTestFixture.create()
+    state.storageMode = S3_PROVIDER_TYPE
+    state.activateLoginSetup(S3_PROVIDER_TYPE)
     expect(new VaultProviderActions(state).stagedRemoteStorageArgs()).toEqual({
       kind: StagedRemoteStorageKind.Unavailable,
     })
