@@ -1,25 +1,24 @@
-// The local S3 server for the host-native dev loop and Playwright: the pinned
-// SeaweedFS `weed mini` (installed by `task s3:dev`, present in the e2e image),
-// bound to loopback with the TEST-ONLY identities in local-s3-identities.json.
-// This module owns its command line, ports, bucket, CORS origins, readiness
-// probe and fixture keys; local-s3-server.ts runs it. E2e specs import the
-// endpoint, region, bucket and keys from here.
+// The local S3 server of the dev loop and Playwright: the pinned SeaweedFS
+// `weed mini` (installed by `task s3:dev`, present in the e2e image) with the
+// fixed flags in local-s3.options: loopback listeners on 8333-8337 (the master
+// leaves its 9333 default, the dev loop's browser CDP port), bucket nook-dev,
+// and the TEST-ONLY keys in local-s3-identities.json.
+//
+//   bun scripts/local-s3.ts        serve the persistent dev data until stopped
+//   bun scripts/local-s3.ts reset  delete that data while no server runs
+import { mkdir, rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { PlaywrightTestConfig } from '@playwright/test'
 import { extensionChannelIdentity } from './channel-identity'
-import identitiesFixture from './local-s3-identities.json' with { type: 'json' }
+import identities from './local-s3-identities.json' with { type: 'json' }
 
-export enum LocalS3Mode {
-  /** Serve the persistent dev data directory (`task s3:dev`, `task extension:dev`). */
-  Dev = 'dev',
-  /** Serve a fresh temporary data directory, deleted when the server exits (Playwright). */
-  E2e = 'e2e',
-  /** Delete the dev data directory while no server runs (`task s3:dev:reset`). */
-  Reset = 'reset',
-}
+export const LOCAL_S3_ENDPOINT = 'http://127.0.0.1:8333'
+export const LOCAL_S3_REGION = 'us-east-1'
+export const LOCAL_S3_BUCKET = 'nook-dev'
 
-/** The fixture's access keys: three devices with full access to the bucket, one with none. */
+/** The fixture's keys: three devices with full access to the bucket, one with none. */
 export enum LocalS3Identity {
   DeviceA = 'device-a',
   DeviceB = 'device-b',
@@ -32,108 +31,11 @@ export type LocalS3Credentials = {
   secretAccessKey: string
 }
 
-export type LocalS3Launch = {
-  mode: LocalS3Mode
-  dataDir: string
-  channel: string
-}
-
-export type LocalS3Host = {
-  platform: string
-  home: string
-  xdgDataHome: string
-}
-
-type PlaywrightWebServers = Extract<
-  NonNullable<PlaywrightTestConfig['webServer']>,
-  readonly unknown[]
->
-type PlaywrightWebServer = PlaywrightWebServers[number]
-
-const extensionRoot = fileURLToPath(new URL('..', import.meta.url))
-
-// Every listener binds 127.0.0.1, and gRPC listens on each port + 10000. The
-// master leaves its 9333 default, which is the dev loop's browser CDP port.
-const s3Port = 8333
-const filerPort = 8334
-const volumePort = 8335
-const masterPort = 8336
-const adminPort = 8337
-
-export const LOCAL_S3_ENDPOINT = `http://127.0.0.1:${s3Port}`
-export const LOCAL_S3_REGION = 'us-east-1'
-export const LOCAL_S3_BUCKET = 'nook-dev'
-// Answers 404 until `weed mini` has created the bucket, then 200: the fixture's
-// anonymous identity may list only this empty prefix. The S3 root answers 403
-// from the first second, and Playwright already counts 403 as ready.
-export const LOCAL_S3_READY_URL = `${LOCAL_S3_ENDPOINT}/${LOCAL_S3_BUCKET}?list-type=2&prefix=ready-probe%2F`
-export const LOCAL_S3_IDENTITIES_PATH = join(
-  extensionRoot,
-  'scripts',
-  'local-s3-identities.json',
-)
-
-// The dev loop and `web:dev` vault, the web-app e2e server, and the Simple
-// Vault e2e server.
-const webOrigins = [
-  'https://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-]
-
-/** CORS allows exactly the web origins and the extension build of this channel. */
-export const localS3AllowedOrigins = (channel: string): string[] => [
-  ...webOrigins,
-  `chrome-extension://${extensionChannelIdentity(channel).extensionId}`,
-]
-
-/** The channel of the extension build; scripts/build.ts applies the same default. */
-export const localS3ExtensionChannel = (): string =>
-  process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production'
-
-export const localS3Arguments = (launch: LocalS3Launch): string[] => [
-  // Dev prints the server log in its terminal. E2e keeps it in the disposable
-  // data directory, so Playwright shows only weed's warnings and errors.
-  launch.mode === LocalS3Mode.Dev
-    ? '-logtostderr'
-    : `-logdir=${launch.dataDir}`,
-  'mini',
-  `-dir=${launch.dataDir}`,
-  '-ip=127.0.0.1',
-  '-ip.bind=127.0.0.1',
-  '-master.telemetry=false',
-  '-webdav=false',
-  '-admin.ui=false',
-  '-s3.port.iceberg=0',
-  '-s3.port.lance=0',
-  `-s3.port=${s3Port}`,
-  `-filer.port=${filerPort}`,
-  `-volume.port=${volumePort}`,
-  `-master.port=${masterPort}`,
-  `-admin.port=${adminPort}`,
-  `-s3.config=${LOCAL_S3_IDENTITIES_PATH}`,
-  `-s3.allowedOrigins=${localS3AllowedOrigins(launch.channel).join(',')}`,
-  `-bucket=${LOCAL_S3_BUCKET}`,
-]
-
-export const localS3DevDataDir = (host: LocalS3Host): string => {
-  if (host.platform === 'darwin') {
-    return join(host.home, 'Library', 'Application Support', 'Nook', 's3-dev')
-  }
-  if (host.platform === 'linux') {
-    const dataHome = host.xdgDataHome || join(host.home, '.local', 'share')
-    return join(dataHome, 'nook', 's3-dev')
-  }
-  throw new Error(
-    `The local S3 server supports macOS and Linux hosts, not ${host.platform}.`,
-  )
-}
-
 /** The TEST-ONLY key pair of a fixture identity. */
 export const localS3Credentials = (
   identity: LocalS3Identity,
 ): LocalS3Credentials => {
-  const credential = identitiesFixture.identities.find(
+  const credential = identities.identities.find(
     (entry) => entry.name === identity,
   )?.credentials?.[0]
   if (!credential) {
@@ -145,17 +47,93 @@ export const localS3Credentials = (
   }
 }
 
-/** The webServer entry both Playwright configs append: one server per run. */
-export const localS3WebServer = (isCi: boolean): PlaywrightWebServer => ({
-  name: 'local-s3',
-  // `exec` replaces the shell with the launcher, so Playwright's graceful
-  // shutdown waits until weed has stopped and released its ports.
-  command: `exec bun scripts/local-s3-server.ts ${LocalS3Mode.E2e}`,
-  cwd: extensionRoot,
-  url: LOCAL_S3_READY_URL,
-  reuseExistingServer: !isCi,
-  timeout: isCi ? 120_000 : 30_000,
-  // weed mini waits up to 10 s for its admin component, then stops the filer
-  // and volume server.
-  gracefulShutdown: { signal: 'SIGTERM', timeout: 20_000 },
-})
+const extensionRoot = fileURLToPath(new URL('..', import.meta.url))
+
+/** Where weed logs, where it keeps its data, and CORS: the dev and e2e web
+ * origins plus the extension build of `channel`. */
+const weedArguments = (
+  log: string,
+  dataDir: string,
+  channel: string,
+): string[] => [
+  log,
+  'mini',
+  '-options=scripts/local-s3.options',
+  `-dir=${dataDir}`,
+  `-s3.allowedOrigins=${[
+    'https://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    `chrome-extension://${extensionChannelIdentity(channel).extensionId}`,
+  ].join(',')}`,
+]
+
+type PlaywrightWebServers = Extract<
+  NonNullable<PlaywrightTestConfig['webServer']>,
+  readonly unknown[]
+>
+
+/** The webServer entry both Playwright configs append. Each run starts from
+ * an empty scratch directory. */
+export const localS3WebServer = (
+  isCi: boolean,
+): PlaywrightWebServers[number] => {
+  const dataDir = '.local-s3-e2e'
+  // scripts/build.ts gives the extension build the same default channel.
+  const channel = process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production'
+  return {
+    name: 'local-s3',
+    // `exec` lets Playwright's graceful shutdown wait for weed itself.
+    command: `rm -rf ${dataDir} && mkdir ${dataDir} && exec weed ${weedArguments(`-logdir=${dataDir}`, dataDir, channel).join(' ')}`,
+    cwd: extensionRoot,
+    // 404 until weed has created the bucket: the fixture's anonymous
+    // identity may list only this empty prefix.
+    url: `${LOCAL_S3_ENDPOINT}/${LOCAL_S3_BUCKET}?list-type=2&prefix=ready-probe%2F`,
+    reuseExistingServer: !isCi,
+    timeout: isCi ? 120_000 : 30_000,
+    // weed mini waits up to 10 s for its admin component before stopping.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 20_000 },
+  }
+}
+
+const devDataDir = (): string =>
+  process.platform === 'darwin'
+    ? join(homedir(), 'Library', 'Application Support', 'Nook', 's3-dev')
+    : join(
+        process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share'),
+        'nook',
+        's3-dev',
+      )
+
+const resetDevData = async (): Promise<number> => {
+  // Any answer on the S3 port means a server may be using the data.
+  const answers = await fetch(`${LOCAL_S3_ENDPOINT}/healthz`).then(
+    () => true,
+    () => false,
+  )
+  if (answers) {
+    console.error('Stop the local S3 server before resetting its data.')
+    return 1
+  }
+  await rm(devDataDir(), { recursive: true, force: true })
+  return 0
+}
+
+const serveDevData = async (): Promise<number> => {
+  await mkdir(devDataDir(), { recursive: true })
+  // `task s3:dev` and the dev loop serve the local extension channel.
+  const weed = Bun.spawn(
+    ['weed', ...weedArguments('-logtostderr', devDataDir(), 'local')],
+    { cwd: extensionRoot, stdio: ['ignore', 'inherit', 'inherit'] },
+  )
+  // The first stop signal goes on to weed, whose own shutdown frees the ports.
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => weed.kill(signal))
+  }
+  return weed.exited
+}
+
+if (import.meta.main) {
+  const run = process.argv[2] === 'reset' ? resetDevData : serveDevData
+  void run().then((code) => process.exit(code))
+}

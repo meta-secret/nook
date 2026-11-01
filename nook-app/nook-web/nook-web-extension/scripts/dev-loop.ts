@@ -8,7 +8,6 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type { Subprocess } from 'bun'
-import { LocalS3Mode } from './local-s3'
 
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
@@ -113,7 +112,7 @@ const startVite = (): Subprocess =>
 
 // Like Vite, the local S3 server holds a fixed port; weed reports a conflict.
 const startLocalS3 = (): Subprocess =>
-  Bun.spawn(['bun', 'scripts/local-s3-server.ts', LocalS3Mode.Dev], {
+  Bun.spawn(['bun', 'scripts/local-s3.ts'], {
     stdout: 'inherit',
     stderr: 'inherit',
   })
