@@ -89,8 +89,12 @@
     SentinelLoginPresentationReader,
     SentinelLoginPresentationKind,
   } from '$lib/vault/sentinel-login-presentation.svelte'
-  import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
+  import RemoteVaultRecoveryPrompt from '$lib/components/login/RemoteVaultRecoveryPrompt.svelte'
   import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
+  import {
+    ProviderSetupName,
+    type ProviderSetupNameRequest,
+  } from '$lib/components/provider-setup-name'
   import { SentinelGenesisPhase, VaultApplication } from '$app-wasm'
   import {
     ActiveVaultKind,
@@ -574,6 +578,20 @@
         ? vault.oauthSetupSelection.preset
         : 'google-drive',
   )
+  const setupProviderName = $derived.by(() => {
+    const request: ProviderSetupNameRequest = {
+      vault,
+      setup: loginSetup,
+      oauthPreset,
+      localWords: I18N_KEYS.OnboardingLocalStorage,
+    }
+    return new ProviderSetupName(request).text()
+  })
+  const recoveryPromptVisible = $derived(
+    vault.clientPolicy.remote_recovery_prompt_visible(
+      vault.remoteVaultRecoveryState,
+    ),
+  )
 
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
@@ -641,6 +659,9 @@
 {#snippet sentinelCeremony()}
   <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
 {/snippet}
+{#snippet recoveryPrompt()}
+  <RemoteVaultRecoveryPrompt {vault} {isVerifying} />
+{/snippet}
 {#snippet cardPinUnlock()}
   <CardPinUnlock
     {vault}
@@ -706,17 +727,7 @@
             {(() => {
               const tArgs: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.OnboardingConnectTo,
-                replacements: {
-                  provider: setupIs('github')
-                    ? 'GitHub'
-                    : setupIs('oauth-file')
-                      ? oauthPreset === 'icloud'
-                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
-                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                      : setupIs('local-folder')
-                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                        : vault.t(I18N_KEYS.OnboardingLocalStorage),
-                },
+                replacements: { provider: setupProviderName },
               }
               return vault.t(tArgs)
             })()}
@@ -780,29 +791,11 @@
             idPrefix="login"
             {isVerifying}
             {isInitializing}
-            connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
-              vault.remoteVaultRecoveryState,
-            )}
+            connectDisabled={recoveryPromptVisible}
             {onCancelSetup}
             onConnect={onUnlock}
-          >
-            {#snippet beforeConnect()}
-              {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
-                <RemoteVaultRecoveryPanel
-                  {vault}
-                  state={vault.remoteVaultRecoveryState}
-                  isBusy={isVerifying}
-                  onRecover={() => vault.confirmRecoverRemoteVault()}
-                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                  onDismiss={() => {
-                    const cleared = vault.clearRemoteVaultRecovery()
-                    if (cleared.isErr())
-                      vault.errorMsg = vault.t(cleared.error.translationKey)
-                  }}
-                />
-              {/if}
-            {/snippet}
-          </GitHubProviderSetupWizard>
+            beforeConnect={recoveryPrompt}
+          />
         {:else if setupIs('local-folder')}
           <LocalFolderProviderSetupWizard
             {vault}

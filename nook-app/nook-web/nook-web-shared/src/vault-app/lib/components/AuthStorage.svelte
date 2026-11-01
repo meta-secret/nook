@@ -22,6 +22,10 @@
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
   import ProviderConnectionStatus from '$lib/components/ProviderConnectionStatus.svelte'
+  import {
+    ProviderSetupName,
+    type ProviderSetupNameRequest,
+  } from '$lib/components/provider-setup-name'
   import { ProviderConnectionProgress } from '$lib/vault/provider-connection-progress'
   import type {
     OAuthFileConfig,
@@ -180,6 +184,15 @@
         ? vault.oauthSetupSelection.preset
         : 'google-drive',
   )
+  const setupProviderName = $derived.by(() => {
+    const request: ProviderSetupNameRequest = {
+      vault,
+      setup: loginSetup,
+      oauthPreset,
+      localWords: I18N_KEYS.AuthStorageThisDevice,
+    }
+    return new ProviderSetupName(request).text()
+  })
 </script>
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
@@ -206,17 +219,7 @@
             {(() => {
               const tArgs2: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.AuthStorageConnectToType,
-                replacements: {
-                  type: setupIs('github')
-                    ? vault.t(I18N_KEYS.AuthStorageGithub)
-                    : setupIs('oauth-file')
-                      ? oauthPreset === 'icloud'
-                        ? vault.t(I18N_KEYS.ProviderPickerIcloud)
-                        : vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                      : setupIs('local-folder')
-                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                        : vault.t(I18N_KEYS.AuthStorageThisDevice),
-                },
+                replacements: { type: setupProviderName },
               }
               return vault.t(tArgs2)
             })()}
