@@ -44,6 +44,7 @@ import {
   oauthConfigurationNotApplicable,
   OAUTH_FILE_PROVIDER_TYPE,
   providerPersistenceDefaults,
+  S3_PROVIDER_TYPE,
   storedGoogleDriveFolder,
   storedICloudShareTarget,
   storedOAuthAccountEmail,
@@ -52,6 +53,7 @@ import {
   type OAuthFileConfig,
   type StorageProvider,
 } from "$lib/auth/providers";
+import { InviteS3Connection } from "$lib/vault/invite-s3-connection";
 import {
   GoogleAccountIdentityKind,
   GoogleOAuthPrompt,
@@ -266,6 +268,15 @@ export class PasswordEnrollmentActions {
               createdAt: isoTimestamp(),
             };
             enrollmentStorageArgs = state.providerWasmArgs(githubMount);
+          } else if (enrollmentProvider.type === S3_PROVIDER_TYPE) {
+            const staged = new InviteS3Connection(state).stage(
+              enrollmentProvider,
+            );
+            if (staged.isErr()) {
+              state.errorMsg = state.t(staged.error.translationKey);
+              return;
+            }
+            enrollmentStorageArgs = staged.value;
           } else if (
             payload.onboardingType === OnboardingType.SharedProviderGrant
           ) {

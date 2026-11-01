@@ -1,0 +1,57 @@
+import { describe, expect, test } from 'vitest'
+import { configuredS3, S3_PROVIDER_TYPE } from '$lib/auth/providers'
+import {
+  InviteS3Connection,
+  type InviteS3Provider,
+} from '$lib/vault/invite-s3-connection'
+import { LoginSetupKind, S3DraftKind } from '$lib/vault/state/provider.svelte'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+
+/** An invite provider whose S3 block Rust refused to project. */
+class RejectedInviteProvider implements InviteS3Provider {
+  get s3Configuration(): InviteS3Provider['s3Configuration'] {
+    throw new Error('errors.validation.s3_endpoint_insecure')
+  }
+}
+
+describe('joining through an invite that carries an S3 connection', () => {
+  test('stages the inviter’s connection and connects through it', () => {
+    const vault = VaultStateTestFixture.create()
+    const provider: InviteS3Provider = {
+      s3Configuration: configuredS3(S3ConnectionFixture.configuration()),
+    }
+
+    const staged = new InviteS3Connection(vault).stage(provider)
+
+    expect(staged.isOk()).toBe(true)
+    if (staged.isErr()) return
+    expect(staged.value.mode).toBe('s3')
+    expect(staged.value.pat).toBe(S3ConnectionFixture.SECRET)
+    // The reference names the location and key id, never the secret.
+    expect(staged.value.repo.startsWith('s3-target-v1:')).toBe(true)
+    expect(staged.value.repo).not.toContain(S3ConnectionFixture.SECRET)
+    // The save after the join keeps this S3 setup.
+    expect(vault.storageMode).toBe(S3_PROVIDER_TYPE)
+    expect(vault.loginSetup).toEqual({
+      kind: LoginSetupKind.Active,
+      providerType: S3_PROVIDER_TYPE,
+    })
+    expect(vault.s3Draft).toEqual({
+      kind: S3DraftKind.Configured,
+      config: S3ConnectionFixture.configuration(),
+    })
+  })
+
+  test('a connection Rust rejects joins nothing and stages nothing', () => {
+    const vault = VaultStateTestFixture.create()
+
+    const staged = new InviteS3Connection(vault).stage(
+      new RejectedInviteProvider(),
+    )
+
+    expect(staged.isErr()).toBe(true)
+    expect(vault.loginSetup.kind).toBe(LoginSetupKind.Inactive)
+    expect(vault.s3Draft.kind).toBe(S3DraftKind.NotConfigured)
+  })
+})
