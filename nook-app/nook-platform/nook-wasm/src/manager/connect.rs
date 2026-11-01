@@ -33,20 +33,8 @@ use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::{JsCast, JsError};
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(extends = JsNativeError, typescript_type = "Error & { code: string }")]
-    type GitHubProviderError;
-
-    #[wasm_bindgen(method, getter, structural, js_name = code)]
-    fn github_provider_error_code(error: &GitHubProviderError) -> js_sys::JsString;
-
-    #[wasm_bindgen(method, setter, structural, js_name = code)]
-    fn set_github_provider_error_code(error: &GitHubProviderError, code: &str);
-}
 
 impl NookError {
     fn requires_sentinel_ceremony(&self) -> bool {
@@ -112,35 +100,6 @@ mod tests {
             }
             .verify();
         }
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    fn github_token_rejection_projects_a_typed_safe_wasm_error() {
-        let failure = NookVaultManager::assessment_failure_js_error(NookError::GitHubTokenRejected);
-
-        assert_eq!(
-            failure
-                .unchecked_ref::<GitHubProviderError>()
-                .github_provider_error_code()
-                .as_string()
-                .as_deref(),
-            Some("github-token-rejected")
-        );
-        assert_eq!(
-            failure.message().as_string().as_deref(),
-            Some("GitHub authentication failed.")
-        );
-        assert_eq!(
-            failure.name().as_string().as_deref(),
-            Some("NookProviderFailure")
-        );
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -484,20 +443,6 @@ impl NookVaultManager {
         );
         Ok(status)
     }
-
-    fn assessment_failure_js_error(error: NookError) -> JsNativeError {
-        match error {
-            NookError::GitHubTokenRejected => {
-                let js_error = JsNativeError::new("GitHub authentication failed.");
-                js_error.set_name("NookProviderFailure");
-                js_error
-                    .unchecked_ref::<GitHubProviderError>()
-                    .set_github_provider_error_code("github-token-rejected");
-                js_error
-            }
-            other => JsNativeError::new(&other.to_string()),
-        }
-    }
 }
 
 #[wasm_bindgen]
@@ -511,7 +456,7 @@ impl NookVaultManager {
     ) -> Result<nook_core::VaultAccessStatus, JsNativeError> {
         self.assess_vault_connect_inner(storage_mode, github_pat, github_repo)
             .await
-            .map_err(Self::assessment_failure_js_error)
+            .map_err(|error| JsNativeError::new(&error.to_string()))
     }
 
     /// Return an authenticated local session to local storage after a staged

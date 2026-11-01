@@ -5,7 +5,6 @@ import {
 } from '$app-wasm'
 import { GITHUB_PROVIDER_TYPE, S3_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
-  NativeProviderFailureCode,
   NativeVaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
@@ -41,9 +40,8 @@ describe('GitHub provider assessment failure', () => {
     VaultStateTestFixture.runStorageImmediately(state)
 
     const sentinel = 'unit-test-secret-that-must-not-be-logged'
-    const nativeFailure = Object.assign(
-      new Error(`Request failed; Authorization: Bearer ${sentinel}`),
-      { code: NativeProviderFailureCode.GitHubTokenRejected },
+    const nativeFailure = new Error(
+      `${I18N_KEYS.AuthStorageGithubTokenRejected}; Authorization: Bearer ${sentinel}`,
     )
     vi.spyOn(manager, 'assess_vault_connect').mockRejectedValue(nativeFailure)
 
@@ -74,8 +72,8 @@ describe('GitHub provider assessment failure', () => {
     expect(JSON.parse(logContext.serializedContext)).toEqual({
       provider_type: GITHUB_PROVIDER_TYPE,
       failure_kind: VaultStorageFailureKind.GitHubTokenRejected,
-      // The message names no status Rust can read; the typed code supplies 401.
-      cause: 'other',
+      // Rust reads the rejection's translation key as an unauthorized answer.
+      cause: 'unauthorized',
       http_status: 401,
     })
     expect(JSON.stringify(logContext)).not.toContain(sentinel)

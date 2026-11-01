@@ -38,11 +38,6 @@ export enum VaultStorageFailureKind {
   ExtensionProvidersHandOverFailed = "extension-providers-hand-over-failed",
 }
 
-/** Stable codes attached by the native provider adapter across the WASM boundary. */
-export enum NativeProviderFailureCode {
-  GitHubTokenRejected = "github-token-rejected",
-}
-
 /** What a native failure's stable provider code says. */
 export enum NativeProviderFailureKind {
   GitHubTokenRejected = "github-token-rejected",
@@ -51,21 +46,15 @@ export enum NativeProviderFailureKind {
   Unclassified = "unclassified",
 }
 
-/** Reads a caught native failure's stable provider code: GitHub's attached
- * code, else the one Rust reads from the raw message, which is the only
- * reading of an S3 refusal. TypeScript never matches the message text. */
+/** Reads a caught native failure's stable provider code, which Rust reads
+ * from the raw message. TypeScript never matches the message text. */
 export class NativeProviderFailure<NativeCause = Error | string> {
   constructor(private readonly cause: NativeCause) {}
 
   kind(): NativeProviderFailureKind {
-    const cause = this.cause;
-    if (cause instanceof Error && "code" in cause) {
-      switch (cause.code) {
-        case NativeProviderFailureCode.GitHubTokenRejected:
-          return NativeProviderFailureKind.GitHubTokenRejected;
-      }
-    }
     switch (provider_failure_code(this.message())) {
+      case "github-token-rejected":
+        return NativeProviderFailureKind.GitHubTokenRejected;
       case "s3-key-access-denied":
         return NativeProviderFailureKind.S3KeyAccessDenied;
       case "unclassified":

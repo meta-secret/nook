@@ -27,7 +27,7 @@
 use tsify::Tsify;
 
 use nook_companion_core::ExtensionConnectScope;
-use nook_core::WebsiteHostError;
+use nook_core::{WebsiteHostError, i18n_keys};
 mod application;
 mod conversion;
 mod device_access;
@@ -187,7 +187,9 @@ pub enum NookError {
     #[error("GitHub error: {0}")]
     GitHub(String),
 
-    #[error("GitHub authentication failed.")]
+    /// Its message is its translation key, which the web classifies through
+    /// `provider_failure_code` like every other refusal.
+    #[error("{}", i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED)]
     GitHubTokenRejected,
 
     #[error("Drive error: {0}")]

@@ -274,25 +274,30 @@ mod tests {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn an_s3_refusal_from_any_export_classifies_into_its_stable_code() -> Result<(), JsError> {
+    fn refusals_from_any_export_classify_into_their_stable_codes() -> Result<(), JsError> {
         use crate::NookError;
         use nook_core::S3RequestFailure;
-        use wasm_bindgen::{JsCast, JsValue};
-        // Every export turns its NookError into a JsError through this one
-        // conversion, which keeps only the message: the translation key.
-        let rejected = JsValue::from(JsError::from(NookError::S3Request(
-            S3RequestFailure::KeyAccessDenied,
-        )));
-        let message = rejected
-            .unchecked_into::<js_sys::Error>()
-            .message()
-            .as_string()
-            .unwrap_or_default();
-        let code = provider_failure_code(&message)?
-            .to_rust()
-            .map_err(|_| JsError::new("code"))?;
-        assert_eq!(code, ProviderFailureCode::S3KeyAccessDenied);
-        assert_eq!(provider_failure_cause(&message), "forbidden");
+        // Every export rejects with the error's message: for a refusal, its
+        // translation key.
+        for (error, code, cause) in [
+            (
+                NookError::S3Request(S3RequestFailure::KeyAccessDenied),
+                ProviderFailureCode::S3KeyAccessDenied,
+                "forbidden",
+            ),
+            (
+                NookError::GitHubTokenRejected,
+                ProviderFailureCode::GitHubTokenRejected,
+                "unauthorized",
+            ),
+        ] {
+            let message = error.to_string();
+            let classified = provider_failure_code(&message)?
+                .to_rust()
+                .map_err(|_| JsError::new("code"))?;
+            assert_eq!(classified, code);
+            assert_eq!(provider_failure_cause(&message), cause);
+        }
         let other = provider_failure_code("S3 request failed with status 503")?
             .to_rust()
             .map_err(|_| JsError::new("code"))?;

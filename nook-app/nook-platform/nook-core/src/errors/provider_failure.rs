@@ -16,6 +16,9 @@ use tsify::Tsify;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProviderFailureCode {
+    /// GitHub rejected this device's token: `github-token-rejected`.
+    #[serde(rename = "github-token-rejected")]
+    GitHubTokenRejected,
     /// The S3 server refused this device's key: `s3-key-access-denied`.
     S3KeyAccessDenied,
     /// Any other failure; its message says what happened.
@@ -23,13 +26,16 @@ pub enum ProviderFailureCode {
 }
 
 impl ProviderFailureCode {
-    /// Classify a caught failure by its message. The S3 refusal's message is
+    /// Classify a caught failure by its message. Each refusal's message is
     /// its translation key, which every export rejects with unchanged.
     #[must_use]
     pub fn classify(message: &str) -> Self {
-        match message.find(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED) {
-            Some(_) => Self::S3KeyAccessDenied,
-            None => Self::Unclassified,
+        if message.contains(i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED) {
+            Self::GitHubTokenRejected
+        } else if message.contains(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED) {
+            Self::S3KeyAccessDenied
+        } else {
+            Self::Unclassified
         }
     }
 }
@@ -60,11 +66,13 @@ pub enum ProviderFailureCause {
 }
 
 impl ProviderFailureCause {
-    /// Classify a provider failure message without retaining it. A refused
-    /// S3 key is forbidden, whatever its status line says.
+    /// Classify a provider failure message without retaining it. A rejected
+    /// GitHub token is unauthorized and a refused S3 key forbidden, whatever
+    /// their status lines say.
     #[must_use]
     pub fn classify(message: &str) -> Self {
         match ProviderFailureCode::classify(message) {
+            ProviderFailureCode::GitHubTokenRejected => Self::Unauthorized,
             ProviderFailureCode::S3KeyAccessDenied => Self::Forbidden,
             ProviderFailureCode::Unclassified => Self::classify_described(message),
         }
@@ -160,26 +168,28 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_s3_key_has_its_stable_code_and_logs_as_forbidden() -> anyhow::Result<()> {
-        let refused = i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED;
-        assert_eq!(
-            ProviderFailureCode::classify(refused),
-            ProviderFailureCode::S3KeyAccessDenied
-        );
-        assert_eq!(
-            ProviderFailureCause::classify(refused),
-            ProviderFailureCause::Forbidden
-        );
-        // A message a host wrapped still names the refusal.
-        assert_eq!(
-            ProviderFailureCode::classify(&format!("Database error: {refused}")),
-            ProviderFailureCode::S3KeyAccessDenied
-        );
-        for other in [
-            "S3 request failed with status 503",
-            "GitHub authentication failed.",
-            "",
+    fn refusals_have_stable_codes_and_log_by_their_status() -> anyhow::Result<()> {
+        for (refused, code, cause) in [
+            (
+                i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
+                ProviderFailureCode::S3KeyAccessDenied,
+                ProviderFailureCause::Forbidden,
+            ),
+            (
+                i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
+                ProviderFailureCode::GitHubTokenRejected,
+                ProviderFailureCause::Unauthorized,
+            ),
         ] {
+            assert_eq!(ProviderFailureCode::classify(refused), code);
+            assert_eq!(ProviderFailureCause::classify(refused), cause);
+            // A message a host wrapped still names the refusal.
+            assert_eq!(
+                ProviderFailureCode::classify(&format!("Database error: {refused}")),
+                code
+            );
+        }
+        for other in ["S3 request failed with status 503", "GitHub error: 500", ""] {
             assert_eq!(
                 ProviderFailureCode::classify(other),
                 ProviderFailureCode::Unclassified,
@@ -189,6 +199,10 @@ mod tests {
         assert_eq!(
             serde_json::to_value(ProviderFailureCode::S3KeyAccessDenied)?,
             serde_json::json!(crate::S3RequestFailure::KEY_ACCESS_DENIED_CODE)
+        );
+        assert_eq!(
+            serde_json::to_value(ProviderFailureCode::GitHubTokenRejected)?,
+            serde_json::json!("github-token-rejected")
         );
         Ok(())
     }
