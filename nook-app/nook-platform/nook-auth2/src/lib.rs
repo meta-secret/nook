@@ -47,7 +47,10 @@ mod auth;
 mod crypto;
 mod ids;
 mod records;
+mod s3_key_prefix;
 mod wire;
+
+pub use s3_key_prefix::{S3KeyPrefix, S3KeyPrefixPath};
 
 pub use auth::device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,

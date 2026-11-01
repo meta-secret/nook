@@ -21,7 +21,7 @@
 //! `..` segments, so a listed key is only read back, never sent: requests
 //! address an [`S3EventAddress`], whose key the layout builds.
 
-use crate::{EventId, IdentityId, PROVIDER_ROOT_DIR, PlacedNamespace, S3Connection};
+use crate::{EventId, IdentityId, PROVIDER_ROOT_DIR, PlacedNamespace, S3Connection, S3KeyPrefix};
 
 /// One event's object in one namespace.
 #[derive(Clone, Copy)]
@@ -68,20 +68,12 @@ enum KeyBelowPrefix<'a> {
 }
 
 impl S3Connection {
-    /// The key a provider path takes below the key prefix.
-    fn key_of(&self, path: &str) -> String {
-        match self.key_prefix.as_str() {
-            "" => path.to_owned(),
-            prefix => format!("{prefix}/{path}"),
-        }
-    }
-
     /// The provider path of a key, when the key is below the key prefix.
     fn path_of<'a>(&self, key: &'a str) -> KeyBelowPrefix<'a> {
-        match self.key_prefix.as_str() {
-            "" => KeyBelowPrefix::Below(key),
-            prefix => match key
-                .strip_prefix(prefix)
+        match &self.key_prefix {
+            S3KeyPrefix::BucketRoot => KeyBelowPrefix::Below(key),
+            S3KeyPrefix::Prefix(prefix) => match key
+                .strip_prefix(prefix.as_str())
                 .and_then(|rest| rest.strip_prefix('/'))
             {
                 Some(path) => KeyBelowPrefix::Below(path),
@@ -92,7 +84,8 @@ impl S3Connection {
 
     /// The full key, prefix included, of one event's object.
     pub(super) fn event_key(&self, event: S3EventAddress<'_>) -> String {
-        self.key_of(&event.placed.event_path(event.event_id))
+        self.key_prefix
+            .key_of(&event.placed.event_path(event.event_id))
     }
 
     /// The prefix that lists one namespace's event objects. Every listing
@@ -100,7 +93,7 @@ impl S3Connection {
     /// shares a name prefix.
     #[must_use]
     pub fn namespace_listing(&self, placed: &PlacedNamespace) -> String {
-        format!("{}/", self.key_of(&placed.root()))
+        format!("{}/", self.key_prefix.key_of(&placed.root()))
     }
 
     /// Read a key a namespace listing reported. Only `<digest>.yaml`
@@ -119,7 +112,7 @@ impl S3Connection {
     /// The prefix that lists the identity folders below the provider root.
     #[must_use]
     pub fn identity_folders_listing(&self) -> String {
-        format!("{}/", self.key_of(PROVIDER_ROOT_DIR))
+        format!("{}/", self.key_prefix.key_of(PROVIDER_ROOT_DIR))
     }
 
     /// Read a folder the identity-folder listing reported.
@@ -143,7 +136,8 @@ impl S3Connection {
     pub fn identity_namespaces_listing(&self, identity: &IdentityId) -> String {
         format!(
             "{}/",
-            self.key_of(&PlacedNamespace::identity_log(identity.clone()).identity_dir())
+            self.key_prefix
+                .key_of(&PlacedNamespace::identity_log(identity.clone()).identity_dir())
         )
     }
 

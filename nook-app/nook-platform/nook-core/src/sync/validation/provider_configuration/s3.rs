@@ -18,21 +18,35 @@ use tsify::Tsify;
 use url::{Host, Url};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::ProviderSecretText;
 use crate::errors::{ValidationError, ValidationResult};
+use crate::{ProviderSecretText, S3EnrollmentConnection, S3KeyPrefix};
 
 /// One device's validated connection: where the objects live and the key it
 /// signs with. The endpoint is a canonical origin, `scheme://host[:port]`, and
-/// the key prefix its normalized segments, `""` for the bucket root.
+/// the objects start at the bucket root or below a key prefix.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", try_from = "S3ConnectionDraft")]
+#[serde(rename_all = "camelCase", try_from = "S3ConnectionRecord")]
 pub struct S3Connection {
     pub(crate) endpoint: String,
     pub(crate) region: String,
     pub(crate) bucket: String,
-    pub(crate) key_prefix: String,
+    pub(crate) key_prefix: S3KeyPrefix,
     pub(crate) access_key_id: String,
     pub(crate) secret_access_key: ProviderSecretText,
+}
+
+/// A stored or carried connection as it reads back. The prefix and the secret
+/// are typed already; the location strings and the key id go through the
+/// setup form's validators again.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct S3ConnectionRecord {
+    endpoint: String,
+    region: String,
+    bucket: String,
+    key_prefix: S3KeyPrefix,
+    access_key_id: String,
+    secret_access_key: ProviderSecretText,
 }
 
 /// What the S3 setup form holds, field by field, before validation. The
@@ -46,7 +60,7 @@ pub struct S3ConnectionDraft {
     pub region: String,
     #[zeroize(skip)]
     pub bucket: String,
-    /// Empty for the bucket root.
+    /// The typed text; blank, or slashes alone, for the bucket root.
     #[zeroize(skip)]
     pub key_prefix: String,
     #[zeroize(skip)]
@@ -102,7 +116,7 @@ impl S3ConnectionDraft {
             S3DraftField::Endpoint.error(S3Connection::parse_endpoint(&self.endpoint)),
             S3DraftField::Region.error(S3Connection::parse_region(&self.region)),
             S3DraftField::Bucket.error(S3Connection::parse_bucket(&self.bucket)),
-            S3DraftField::KeyPrefix.error(S3Connection::parse_key_prefix(&self.key_prefix)),
+            S3DraftField::KeyPrefix.error(S3KeyPrefix::parse(&self.key_prefix)),
             S3DraftField::AccessKeyId.error(S3Connection::parse_access_key_id(&self.access_key_id)),
             S3DraftField::SecretAccessKey.error(S3Connection::parse_secret_access_key(
                 &self.secret_access_key,
@@ -126,9 +140,39 @@ impl TryFrom<S3ConnectionDraft> for S3Connection {
             endpoint: Self::parse_endpoint(&draft.endpoint)?,
             region: Self::parse_region(&draft.region)?,
             bucket: Self::parse_bucket(&draft.bucket)?,
-            key_prefix: Self::parse_key_prefix(&draft.key_prefix)?,
+            key_prefix: S3KeyPrefix::parse(&draft.key_prefix)?,
             access_key_id: Self::parse_access_key_id(&draft.access_key_id)?,
             secret_access_key: Self::parse_secret_access_key(&draft.secret_access_key)?,
+        })
+    }
+}
+
+/// Validate a read-back connection's strings as the form's are validated.
+impl TryFrom<S3ConnectionRecord> for S3Connection {
+    type Error = ValidationError;
+    fn try_from(record: S3ConnectionRecord) -> ValidationResult<Self> {
+        Ok(Self {
+            endpoint: Self::parse_endpoint(&record.endpoint)?,
+            region: Self::parse_region(&record.region)?,
+            bucket: Self::parse_bucket(&record.bucket)?,
+            key_prefix: record.key_prefix,
+            access_key_id: Self::parse_access_key_id(&record.access_key_id)?,
+            secret_access_key: record.secret_access_key,
+        })
+    }
+}
+
+/// An invite's connection, validated again as a stored one is.
+impl TryFrom<&S3EnrollmentConnection> for S3Connection {
+    type Error = ValidationError;
+    fn try_from(carried: &S3EnrollmentConnection) -> ValidationResult<Self> {
+        Self::try_from(S3ConnectionRecord {
+            endpoint: carried.endpoint.clone(),
+            region: carried.region.clone(),
+            bucket: carried.bucket.clone(),
+            key_prefix: carried.key_prefix.clone(),
+            access_key_id: carried.access_key_id.clone(),
+            secret_access_key: carried.secret_access_key.clone(),
         })
     }
 }
@@ -217,30 +261,11 @@ impl S3Connection {
         }
     }
 
-    /// The segments the objects sit below, without the slashes around them;
-    /// empty for the bucket root. No segment is empty, `.`, or `..`, so a
-    /// prefix never escapes or blurs the key layout below it.
-    fn parse_key_prefix(raw: &str) -> ValidationResult<String> {
-        match raw.trim().trim_matches('/') {
-            "" => Ok(String::new()),
-            prefix
-                if prefix.chars().any(char::is_control)
-                    || prefix
-                        .split('/')
-                        .any(|segment| matches!(segment, "" | "." | "..")) =>
-            {
-                Err(ValidationError::S3KeyPrefixInvalid)
-            }
-            prefix => Ok(prefix.to_owned()),
-        }
-    }
-
-    /// The location's identity, `endpoint/bucket[/prefix]`. Rows with the
-    /// same identity reach the same objects, whatever key or region they sign
-    /// with, so duplicate detection and the local cache key use it.
+    /// The location's identity, `endpoint/bucket[/prefix]`, as its mount
+    /// record formats it. Duplicate detection and the local cache key use it.
     #[must_use]
     pub fn location_identity(&self) -> String {
-        format!("{}/{}", self.endpoint, self.location_label())
+        self.mount_location().location_identity()
     }
 }
 
@@ -249,6 +274,7 @@ mod tests {
     use super::{
         S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
     };
+    use crate::S3KeyPrefix;
     use crate::errors::ValidationError;
     use serde_json::json;
 
@@ -289,45 +315,56 @@ mod tests {
             S3Connection::try_from(draft)
         }
 
-        /// What the connection keeps for this field.
-        fn kept(self, connection: &S3Connection) -> &str {
-            match self {
-                Self::Endpoint => &connection.endpoint,
-                Self::Region => &connection.region,
-                Self::Bucket => &connection.bucket,
-                Self::KeyPrefix => &connection.key_prefix,
-                Self::AccessKeyId => &connection.access_key_id,
-                Self::SecretAccessKey => connection.secret_access_key.expose(),
-            }
+        /// What the connection keeps for this field, as its row stores it.
+        fn kept(self, connection: &S3Connection) -> anyhow::Result<serde_json::Value> {
+            let serde_json::Value::String(name) = serde_json::to_value(self)? else {
+                anyhow::bail!("a form field serializes as its name");
+            };
+            serde_json::to_value(connection)?
+                .get(&name)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("the connection keeps {name}"))
         }
     }
 
     #[test]
     fn each_field_keeps_what_it_accepts_in_its_canonical_form() -> anyhow::Result<()> {
         use S3DraftField::{AccessKeyId, Bucket, Endpoint, KeyPrefix, Region, SecretAccessKey};
-        let accepted: &[(S3DraftField, &str, &str)] = &[
+        let accepted = [
             (
                 Endpoint,
                 " https://S3.Example.COM ",
-                "https://s3.example.com",
+                json!("https://s3.example.com"),
             ),
             (
                 Endpoint,
                 "https://s3.example.com:443/",
-                "https://s3.example.com",
+                json!("https://s3.example.com"),
             ),
-            (Endpoint, "http://localhost:8333/", "http://localhost:8333"),
-            (Endpoint, "HTTP://LOCALHOST:80", "http://localhost"),
-            (Region, " eu_central-1 ", "eu_central-1"),
-            (Bucket, "Nook_Dev..backups", "Nook_Dev..backups"),
-            (KeyPrefix, "/", ""),
-            (KeyPrefix, " /team/vaults/ ", "team/vaults"),
-            (KeyPrefix, "a/.b/c..d/команда 1", "a/.b/c..d/команда 1"),
-            (AccessKeyId, " user@team+1 ", "user@team+1"),
-            (SecretAccessKey, " kept exactly\n", " kept exactly\n"),
+            (
+                Endpoint,
+                "http://localhost:8333/",
+                json!("http://localhost:8333"),
+            ),
+            (Endpoint, "HTTP://LOCALHOST:80", json!("http://localhost")),
+            (Region, " eu_central-1 ", json!("eu_central-1")),
+            (Bucket, "Nook_Dev..backups", json!("Nook_Dev..backups")),
+            (KeyPrefix, "/", json!({ "state": "bucketRoot" })),
+            (
+                KeyPrefix,
+                " /team/vaults/ ",
+                json!({ "state": "prefix", "value": "team/vaults" }),
+            ),
+            (
+                KeyPrefix,
+                "a/.b/c..d/команда 1",
+                json!({ "state": "prefix", "value": "a/.b/c..d/команда 1" }),
+            ),
+            (AccessKeyId, " user@team+1 ", json!("user@team+1")),
+            (SecretAccessKey, " kept exactly\n", json!(" kept exactly\n")),
         ];
-        for &(field, raw, kept) in accepted {
-            assert_eq!(field.kept(&field.validated(raw)?), kept, "{raw:?}");
+        for (field, raw, kept) in accepted {
+            assert_eq!(field.kept(&field.validated(raw)?)?, kept, "{raw:?}");
         }
         // These endpoints are canonical origins already.
         for raw in [
@@ -336,7 +373,7 @@ mod tests {
             "http://127.0.0.1:8333",
             "http://[::1]:8333",
         ] {
-            assert_eq!(Endpoint.kept(&Endpoint.validated(raw)?), raw);
+            assert_eq!(Endpoint.kept(&Endpoint.validated(raw)?)?, json!(raw));
         }
         Ok(())
     }
@@ -476,11 +513,54 @@ mod tests {
             elsewhere.location_identity(),
             connection.location_identity()
         );
-        elsewhere.key_prefix = String::new();
+        elsewhere.key_prefix = S3KeyPrefix::BucketRoot;
         assert_eq!(
             elsewhere.location_identity(),
             "http://127.0.0.1:8333/nook-dev"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_stored_connection_reads_back_only_through_the_form_validators() -> anyhow::Result<()> {
+        let stored = serde_json::to_value(S3Connection::fixture()?)?;
+        assert_eq!(
+            stored,
+            json!({
+                "endpoint": "http://127.0.0.1:8333",
+                "region": "us-east-1",
+                "bucket": "nook-dev",
+                "keyPrefix": { "state": "prefix", "value": "e2e/run-1" },
+                "accessKeyId": "device-a",
+                "secretAccessKey": SECRET,
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<S3Connection>(stored.clone())?,
+            S3Connection::fixture()?
+        );
+        for (field, value) in [
+            ("keyPrefix", json!("e2e/run-1")),
+            (
+                "keyPrefix",
+                json!({ "state": "prefix", "value": "e2e/run-1/" }),
+            ),
+            ("endpoint", json!("http://s3.example.com")),
+            ("region", json!("")),
+            ("bucket", json!("nook/dev")),
+            ("accessKeyId", json!("device a")),
+            ("secretAccessKey", json!(" ")),
+            ("sessionToken", json!("not-a-connection-field")),
+        ] {
+            let mut row = stored.clone();
+            if let Some(fields) = row.as_object_mut() {
+                fields.insert(field.to_owned(), value);
+            }
+            assert!(
+                serde_json::from_value::<S3Connection>(row).is_err(),
+                "{field}"
+            );
+        }
         Ok(())
     }
 }

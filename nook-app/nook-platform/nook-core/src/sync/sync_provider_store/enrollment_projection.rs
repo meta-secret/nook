@@ -4,9 +4,9 @@ use crate::{
     DRIVE_SHARED_FOLDER_REF_PREFIX, EnrollmentProvider, EnrollmentProviderDataRef,
     OAuthAccountIdentity, OAuthFileConfigData, OAuthRefreshCredential, OAuthRemoteFile,
     OAuthTokenExpiry, OauthFilePreset, PersonalEnrollmentProviderData, S3Connection,
-    S3ConnectionDraft, StoredGoogleDriveFolder, StoredICloudShareTarget,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRefreshCredential,
-    StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, ValidationError,
+    StoredGoogleDriveFolder, StoredICloudShareTarget, StoredOAuthAccessCredential,
+    StoredOAuthAccountIdentity, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, ValidationError,
 };
 
 /// The joiner's side of an S3 invite: the inviter's connection, validated
@@ -21,14 +21,7 @@ impl TryFrom<&EnrollmentProvider> for S3Connection {
         else {
             return Err(ValidationError::S3StorageTargetInvalid);
         };
-        Self::try_from(S3ConnectionDraft {
-            endpoint: connection.endpoint.clone(),
-            region: connection.region.clone(),
-            bucket: connection.bucket.clone(),
-            key_prefix: connection.key_prefix.clone(),
-            access_key_id: connection.access_key_id.clone(),
-            secret_access_key: connection.secret_access_key.expose().to_owned(),
-        })
+        Self::try_from(connection)
     }
 }
 
@@ -119,8 +112,9 @@ mod tests {
         CheckedEnrollmentEnvelope, EnrollmentAudience, EnrollmentIdentityTarget, EnrollmentInvite,
         EnrollmentIssuance, EnrollmentIssueInput, IdentityId, IdentityInviteId, InviteSigningSeed,
         OnboardingType, PersonalEnrollmentProvider, ProviderEnrollmentRequest, ProviderSecretText,
-        ReplicationType, S3EnrollmentConnection, SharedEnrollmentAudience, StorageProviderData,
-        StorageProviderType, StoredGithubPat, StoredS3Configuration, VaultArchitecture,
+        ReplicationType, S3EnrollmentConnection, S3KeyPrefix, SharedEnrollmentAudience,
+        StorageProviderData, StorageProviderType, StoredGithubPat, StoredS3Configuration,
+        VaultArchitecture,
     };
 
     const S3_SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
@@ -204,7 +198,7 @@ mod tests {
                 endpoint: "http://s3.example.com".to_owned(),
                 region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
-                key_prefix: String::new(),
+                key_prefix: S3KeyPrefix::BucketRoot,
                 access_key_id: "device-a".to_owned(),
                 secret_access_key: ProviderSecretText::try_from(S3_SECRET.to_owned())?,
             }));

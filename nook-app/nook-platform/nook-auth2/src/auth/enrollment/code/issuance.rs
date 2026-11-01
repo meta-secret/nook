@@ -163,7 +163,6 @@ impl CheckedEnrollmentIssuance<'_> {
 mod tests {
     use super::{CheckedEnrollmentIssuance, EnrollmentIssuance};
     use crate::EnrollmentError;
-    use crate::ProviderSecretText;
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
         EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
@@ -171,6 +170,7 @@ mod tests {
         PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
         SharedEnrollmentProviderData,
     };
+    use crate::{ProviderSecretText, S3KeyPrefix};
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
     impl EnrollmentIssueInput {
@@ -381,7 +381,7 @@ mod tests {
                     endpoint: "http://127.0.0.1:8333".to_owned(),
                     region: "us-east-1".to_owned(),
                     bucket: "nook-dev".to_owned(),
-                    key_prefix: "team/vaults".to_owned(),
+                    key_prefix: S3KeyPrefix::parse("team/vaults")?,
                     access_key_id: "device-a".to_owned(),
                     secret_access_key: ProviderSecretText::try_from(secret.to_owned())?,
                 },

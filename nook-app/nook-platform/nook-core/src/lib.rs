@@ -148,10 +148,10 @@ pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
     ContextBoundSentinelUnlock, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    LocalIdentityProtection, ProviderSecretText, RemovedLocalIdentityKey, SentinelUnlockPolicy,
-    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
-    SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
-    WrappedAppKeyReplacement,
+    LocalIdentityProtection, ProviderSecretText, RemovedLocalIdentityKey, S3KeyPrefix,
+    S3KeyPrefixPath, SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness,
+    SentinelUnlockRejection, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
+    SentinelUnlockStatus, SentinelUnlockVersion, WrappedAppKeyReplacement,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -328,7 +328,7 @@ pub use nook_event_log::{
     IdentityNaming, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
     IdentityVaultEpochDeks, IdentityVaultRegistration, MemberDevice, MemberSealedName,
     MemberVaultDek, OpenedVaultDek, PROVIDER_ROOT_DIR, PlacedNamespace, ProviderMountId,
-    VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
+    S3MountTarget, VaultAuthorizedRoster, VaultPlacement, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,

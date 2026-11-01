@@ -209,10 +209,10 @@ mod tests {
     use super::super::{GithubSyncTarget, LocalFolderSyncTarget, OauthFileSyncTarget};
     use super::*;
     use crate::{
-        S3Connection, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-        StoredLocalFolderDirectory, StoredLocalFolderHandle, StoredOAuthAccessCredential,
-        StoredOAuthAccountIdentity, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-        StoredS3Configuration, SyncProviderTarget,
+        S3Connection, S3KeyPrefix, StoredGithubPat, StoredGithubRepository,
+        StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName, StoredS3Configuration, SyncProviderTarget,
     };
 
     #[test]
@@ -294,7 +294,7 @@ mod tests {
             ProviderLabel::S3(&StoredS3Configuration::Configured(config.clone())).render(),
             "S3 · nook-dev/e2e/run-1"
         );
-        config.key_prefix = String::new();
+        config.key_prefix = S3KeyPrefix::BucketRoot;
         assert_eq!(
             ProviderLabel::S3(&StoredS3Configuration::Configured(config)).render(),
             "S3 · nook-dev"

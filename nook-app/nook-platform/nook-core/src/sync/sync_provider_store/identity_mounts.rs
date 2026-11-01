@@ -53,7 +53,7 @@ impl StorageProviderData {
                 IdentityMountTarget::Github { .. }
                 | IdentityMountTarget::GoogleDrive { .. }
                 | IdentityMountTarget::ICloud { .. }
-                | IdentityMountTarget::S3 { .. },
+                | IdentityMountTarget::S3(_),
             ) => DeviceJoinReach::OtherDevices,
         }
     }
@@ -229,7 +229,7 @@ mod tests {
     use super::*;
     use crate::{
         ActiveVaultScope, LocalFolderConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
-        S3Connection, StoredGithubPat, StoredLocalFolderHandle,
+        S3Connection, S3KeyPrefix, S3MountTarget, StoredGithubPat, StoredLocalFolderHandle,
     };
 
     struct Row(StorageProviderData);
@@ -485,11 +485,11 @@ mod tests {
         assert_eq!(device_a.device_join_reach(), DeviceJoinReach::OtherDevices);
         assert_eq!(
             device_a.identity_mount_capability(),
-            IdentityMountCapability::Mountable(IdentityMountTarget::S3 {
+            IdentityMountCapability::Mountable(IdentityMountTarget::S3(S3MountTarget {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
                 bucket: "nook-dev".to_owned(),
-                key_prefix: "e2e/run-1".to_owned(),
-            })
+                key_prefix: S3KeyPrefix::parse("e2e/run-1")?,
+            }))
         );
         let providers = vec![Row::local("local", &store_id).0, device_a.clone()];
         let rows = ProviderRows {

@@ -127,17 +127,9 @@ impl IdentityMountView {
             IdentityMountTarget::LocalFolder { directory_name } => {
                 (IdentityMountProvider::LocalFolder, directory_name.clone())
             }
-            IdentityMountTarget::S3 {
-                endpoint,
-                bucket,
-                key_prefix,
-            } => (
-                IdentityMountProvider::S3,
-                match key_prefix.as_str() {
-                    "" => format!("{endpoint}/{bucket}"),
-                    prefix => format!("{endpoint}/{bucket}/{prefix}"),
-                },
-            ),
+            IdentityMountTarget::S3(location) => {
+                (IdentityMountProvider::S3, location.location_identity())
+            }
         };
         Self {
             mount_id: mount.mount_id.as_str().to_owned(),

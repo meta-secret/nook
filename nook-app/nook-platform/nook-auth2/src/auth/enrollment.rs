@@ -5,7 +5,7 @@
 )]
 //! Enrollment-code payloads for one-step QR-based device joins.
 
-use crate::{EnrollmentKeyDerivationIterations, ProviderSecretText};
+use crate::{EnrollmentKeyDerivationIterations, ProviderSecretText, S3KeyPrefix};
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData};
 
@@ -79,8 +79,7 @@ pub struct S3EnrollmentConnection {
     pub endpoint: String,
     pub region: String,
     pub bucket: String,
-    /// Empty when the objects start at the bucket root.
-    pub key_prefix: String,
+    pub key_prefix: S3KeyPrefix,
     pub access_key_id: String,
     pub secret_access_key: ProviderSecretText,
 }
@@ -578,7 +577,7 @@ mod tests {
         PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
         SharedEnrollmentProviderData,
     };
-    use crate::{EnrollmentError, ProviderSecretText};
+    use crate::{EnrollmentError, ProviderSecretText, S3KeyPrefix};
     use serde_json::json;
 
     #[test]
@@ -744,7 +743,7 @@ mod tests {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
                 region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
-                key_prefix: String::new(),
+                key_prefix: S3KeyPrefix::BucketRoot,
                 access_key_id: "device-a".to_owned(),
                 secret_access_key: ProviderSecretText::try_from(S3_TEST_SECRET.to_owned())?,
             })
@@ -789,7 +788,7 @@ mod tests {
                     "endpoint": "http://127.0.0.1:8333",
                     "region": "us-east-1",
                     "bucket": "nook-dev",
-                    "key_prefix": "",
+                    "key_prefix": { "state": "bucketRoot" },
                     "access_key_id": "device-a",
                     "secret_access_key": S3_TEST_SECRET,
                 }
@@ -805,6 +804,14 @@ mod tests {
             *secret = json!(" ");
         }
         assert!(serde_json::from_value::<EnrollmentProvider>(blank_secret).is_err());
+        // The prefix is a named state: a bare string or a damaged path is refused.
+        for damaged in [json!(""), json!({ "state": "prefix", "value": "team/" })] {
+            let mut wire = serde_json::to_value(&provider)?;
+            if let Some(prefix) = wire.pointer_mut("/provider/key_prefix") {
+                *prefix = damaged;
+            }
+            assert!(serde_json::from_value::<EnrollmentProvider>(wire).is_err());
+        }
         // A shared grant never carries a personal S3 connection.
         let shared = json!({
             "onboardingType": "shared-provider-grant",

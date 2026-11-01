@@ -202,7 +202,7 @@ mod tests {
                     "endpoint": "http://127.0.0.1:8333",
                     "region": "us-east-1",
                     "bucket": "nook-dev",
-                    "keyPrefix": "e2e",
+                    "keyPrefix": { "state": "prefix", "value": "e2e" },
                     "accessKeyId": "device-a",
                     "secretAccessKey": SECRET,
                 },

@@ -11,7 +11,7 @@
 //! only its storage connection and a credential-bearing invite ever carry
 //! onward.
 
-use nook_event_log::IdentityMountTarget;
+use nook_event_log::{IdentityMountTarget, S3MountTarget};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -22,10 +22,7 @@ impl S3Connection {
     /// the key prefix below it.
     #[must_use]
     pub fn location_label(&self) -> String {
-        match self.key_prefix.as_str() {
-            "" => self.bucket.clone(),
-            prefix => format!("{}/{prefix}", self.bucket),
-        }
+        self.key_prefix.below(&self.bucket)
     }
 
     /// The row's detail line: the host it talks to and the key it uses.
@@ -53,14 +50,20 @@ impl S3Connection {
         }
     }
 
-    /// The credential-free mount record of this location.
+    /// Where the objects live, without the key or the region that reach them.
     #[must_use]
-    pub fn mount_target(&self) -> IdentityMountTarget {
-        IdentityMountTarget::S3 {
+    pub fn mount_location(&self) -> S3MountTarget {
+        S3MountTarget {
             endpoint: self.endpoint.clone(),
             bucket: self.bucket.clone(),
             key_prefix: self.key_prefix.clone(),
         }
+    }
+
+    /// The credential-free mount record of this location.
+    #[must_use]
+    pub fn mount_target(&self) -> IdentityMountTarget {
+        IdentityMountTarget::S3(self.mount_location())
     }
 }
 
@@ -90,7 +93,7 @@ mod tests {
                 "endpoint": "http://127.0.0.1:8333",
                 "region": "us-east-1",
                 "bucket": bucket,
-                "keyPrefix": "e2e/run-1",
+                "keyPrefix": { "state": "prefix", "value": "e2e/run-1" },
                 "accessKeyId": "device-a",
                 "secretAccessKey": secret,
             }
