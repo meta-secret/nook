@@ -82,40 +82,44 @@ const host: LocalS3Host = {
   home: homedir(),
   xdgDataHome: process.env.XDG_DATA_HOME?.trim() || '',
 }
-const [modeArgument = ''] = process.argv.slice(2)
-const mode = parseMode(modeArgument)
-
-switch (mode) {
-  case LocalS3Mode.Dev: {
-    const launch: LocalS3Launch = {
-      mode,
-      dataDir: localS3DevDataDir(host),
-      channel: localS3ExtensionChannel(),
-    }
-    console.log(
-      `Local S3 ${LOCAL_S3_ENDPOINT}, bucket ${LOCAL_S3_BUCKET}, data ${launch.dataDir}, TEST-ONLY keys in ${LOCAL_S3_IDENTITIES_PATH}`,
-    )
-    process.exit(await serve(launch))
-  }
-  case LocalS3Mode.E2e: {
-    const launch: LocalS3Launch = {
-      mode,
-      dataDir: await mkdtemp(join(tmpdir(), 'nook-s3-e2e-')),
-      channel: localS3ExtensionChannel(),
-    }
-    const exitCode = await serve(launch)
-    await rm(launch.dataDir, { recursive: true, force: true })
-    process.exit(exitCode)
-  }
-  case LocalS3Mode.Reset: {
-    const dataDir = localS3DevDataDir(host)
-    if (await portAnswers()) {
-      console.error(
-        `A server answers on ${LOCAL_S3_ENDPOINT}; stop it before deleting ${dataDir}.`,
+// Each mode returns the exit code the process ends with.
+const run = async (mode: LocalS3Mode): Promise<number> => {
+  switch (mode) {
+    case LocalS3Mode.Dev: {
+      const launch: LocalS3Launch = {
+        mode,
+        dataDir: localS3DevDataDir(host),
+        channel: localS3ExtensionChannel(),
+      }
+      console.log(
+        `Local S3 ${LOCAL_S3_ENDPOINT}, bucket ${LOCAL_S3_BUCKET}, data ${launch.dataDir}, TEST-ONLY keys in ${LOCAL_S3_IDENTITIES_PATH}`,
       )
-      process.exit(1)
+      return serve(launch)
     }
-    await rm(dataDir, { recursive: true, force: true })
-    console.log(`Deleted the local S3 dev data in ${dataDir}`)
+    case LocalS3Mode.E2e: {
+      const launch: LocalS3Launch = {
+        mode,
+        dataDir: await mkdtemp(join(tmpdir(), 'nook-s3-e2e-')),
+        channel: localS3ExtensionChannel(),
+      }
+      const exitCode = await serve(launch)
+      await rm(launch.dataDir, { recursive: true, force: true })
+      return exitCode
+    }
+    case LocalS3Mode.Reset: {
+      const dataDir = localS3DevDataDir(host)
+      if (await portAnswers()) {
+        console.error(
+          `A server answers on ${LOCAL_S3_ENDPOINT}; stop it before deleting ${dataDir}.`,
+        )
+        return 1
+      }
+      await rm(dataDir, { recursive: true, force: true })
+      console.log(`Deleted the local S3 dev data in ${dataDir}`)
+      return 0
+    }
   }
 }
+
+const [modeArgument = ''] = process.argv.slice(2)
+process.exit(await run(parseMode(modeArgument)))
