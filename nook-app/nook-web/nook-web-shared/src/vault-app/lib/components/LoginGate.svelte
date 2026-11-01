@@ -59,6 +59,7 @@
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
+  import S3ProviderSetupWizard from '$lib/components/S3ProviderSetupWizard.svelte'
   import {
     LoginVaultEntryKind,
     type LoginVaultEntry,
@@ -751,6 +752,8 @@
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
           </p>
+        {:else if showSetup && setupIs('s3')}
+          <!-- The title names the task; the S3 form carries its one line. -->
         {:else if showSetup}
           <p class="text-sm text-pretty text-muted-foreground">
             {vault.t(I18N_KEYS.OnboardingLocalDescription)}
@@ -788,6 +791,17 @@
             {vault}
             bind:githubPat
             bind:githubRepo
+            idPrefix="login"
+            {isVerifying}
+            {isInitializing}
+            connectDisabled={recoveryPromptVisible}
+            {onCancelSetup}
+            onConnect={onUnlock}
+            beforeConnect={recoveryPrompt}
+          />
+        {:else if setupIs('s3')}
+          <S3ProviderSetupWizard
+            {vault}
             idPrefix="login"
             {isVerifying}
             {isInitializing}

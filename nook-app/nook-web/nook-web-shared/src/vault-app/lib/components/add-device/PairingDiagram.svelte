@@ -28,7 +28,7 @@ once the invite is out, since it then joins by itself.
 
 {#snippet label(text: string, strong: boolean)}
   <span
-    class="w-20 text-center text-[11px] leading-tight {strong
+    class="w-20 text-center text-[11px] leading-tight break-words {strong
       ? 'font-semibold text-foreground'
       : 'text-muted-foreground'}"
   >

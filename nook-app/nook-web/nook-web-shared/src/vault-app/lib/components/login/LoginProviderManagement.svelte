@@ -1,6 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
+    Archive,
     ChevronDown,
     Cloud,
     HardDrive,
@@ -17,6 +18,7 @@
   } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
+    S3_PROVIDER_TYPE,
     localizedProviderStorageDetail,
     localizeProviderLabel,
   } from '$lib/auth/providers'
@@ -167,6 +169,10 @@
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
               {#if provider.type === GITHUB_PROVIDER_TYPE}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              {:else if provider.type === S3_PROVIDER_TYPE}
+                <Archive
+                  class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                />
               {:else}
                 <HardDrive
                   class="mt-0.5 size-4 shrink-0 text-muted-foreground"

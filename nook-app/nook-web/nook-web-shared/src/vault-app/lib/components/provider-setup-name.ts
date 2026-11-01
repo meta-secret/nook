@@ -1,10 +1,14 @@
 import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
 import {
   GITHUB_PROVIDER_TYPE,
+  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
   ICLOUD_OAUTH_FILE_PRESET,
   LOCAL_FOLDER_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   type OAuthFilePreset,
+  type StorageProviderType,
 } from "$lib/auth/providers";
 import type { VaultState } from "$lib/vault.svelte";
 import {
@@ -26,18 +30,36 @@ export class ProviderSetupName {
   constructor(private readonly request: ProviderSetupNameRequest) {}
 
   text(): string {
-    const { vault, setup, oauthPreset, localWords } = this.request;
-    if (setup.kind !== LoginSetupKind.Active) return vault.t(localWords);
-    if (setup.providerType === GITHUB_PROVIDER_TYPE)
-      return vault.t(I18N_KEYS.AuthStorageGithub);
-    if (setup.providerType === OAUTH_FILE_PROVIDER_TYPE)
-      return vault.t(
-        oauthPreset === ICLOUD_OAUTH_FILE_PRESET
-          ? I18N_KEYS.ProviderPickerIcloud
-          : I18N_KEYS.ProviderPickerGoogleDrive,
-      );
-    if (setup.providerType === LOCAL_FOLDER_PROVIDER_TYPE)
-      return vault.t(I18N_KEYS.ProviderPickerLocalFolder);
-    return vault.t(localWords);
+    const { vault, setup, localWords } = this.request;
+    switch (setup.kind) {
+      case LoginSetupKind.Inactive:
+        return vault.t(localWords);
+      case LoginSetupKind.Active:
+        return vault.t(this.providerKey(setup.providerType));
+    }
+  }
+
+  private providerKey(type: StorageProviderType): I18nKey {
+    switch (type) {
+      case GITHUB_PROVIDER_TYPE:
+        return I18N_KEYS.AuthStorageGithub;
+      case OAUTH_FILE_PROVIDER_TYPE:
+        return this.oauthPresetKey();
+      case LOCAL_FOLDER_PROVIDER_TYPE:
+        return I18N_KEYS.ProviderPickerLocalFolder;
+      case S3_PROVIDER_TYPE:
+        return I18N_KEYS.ProviderPickerS3;
+      case LOCAL_PROVIDER_TYPE:
+        return this.request.localWords;
+    }
+  }
+
+  private oauthPresetKey(): I18nKey {
+    switch (this.request.oauthPreset) {
+      case ICLOUD_OAUTH_FILE_PRESET:
+        return I18N_KEYS.ProviderPickerIcloud;
+      case GOOGLE_DRIVE_OAUTH_FILE_PRESET:
+        return I18N_KEYS.ProviderPickerGoogleDrive;
+    }
   }
 }

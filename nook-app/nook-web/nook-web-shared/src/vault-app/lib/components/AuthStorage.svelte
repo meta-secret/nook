@@ -6,6 +6,7 @@
     type NookManualProviderSync,
   } from '$app-wasm'
   import {
+    Archive,
     ShieldCheck,
     RefreshCw,
     HardDrive,
@@ -20,6 +21,7 @@
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
+  import S3ProviderSetupWizard from '$lib/components/S3ProviderSetupWizard.svelte'
   import AuthorizedAccountsPanel from '$lib/components/AuthorizedAccountsPanel.svelte'
   import ProviderConnectionStatus from '$lib/components/ProviderConnectionStatus.svelte'
   import {
@@ -45,6 +47,7 @@
     localizeProviderLabel,
     oauth_access_token,
     OAUTH_FILE_PROVIDER_TYPE,
+    S3_PROVIDER_TYPE,
   } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -248,6 +251,7 @@
     {/if}
     <form
       novalidate
+      hidden={setupIs(S3_PROVIDER_TYPE)}
       onsubmit={(e) => {
         e.preventDefault()
         void onReconnect()
@@ -284,7 +288,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else}
+        {:else if !setupIs(S3_PROVIDER_TYPE)}
           <ProviderSetupFields {vault} {onCancelSetup} />
         {/if}
       {:else if addProviderOpen}
@@ -334,6 +338,7 @@
                     vault.vaultArchitecture.replication_type,
                   )}
                 {@const sharedConfig = sharedProviderConfig(provider)}
+                {@const providerLabel = providerTitle(provider)}
                 <li class="nk-panel grid gap-4 p-3 sm:p-4">
                   <div class="flex items-center gap-2">
                     <div
@@ -342,19 +347,19 @@
                     >
                       {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
                         <Cloud class="size-4 shrink-0 text-primary" />
+                      {:else if provider.type === S3_PROVIDER_TYPE}
+                        <Archive class="size-4 shrink-0 text-primary" />
                       {:else}
                         <HardDrive class="size-4 shrink-0 text-primary" />
                       {/if}
                       <span class="min-w-0 flex-1">
-                        <span class="block truncate font-medium text-sm">
-                          {(() => {
-                            const localizeProviderLabelArgs: Parameters<
-                              typeof localizeProviderLabel
-                            >[0] = { label: provider.label, t: vault.t }
-                            return localizeProviderLabel(
-                              localizeProviderLabelArgs,
-                            )
-                          })()}
+                        <!-- A bucket and key prefix can be long: the full
+                             label stays readable on hover. -->
+                        <span
+                          class="block truncate font-medium text-sm"
+                          title={providerLabel}
+                        >
+                          {providerLabel}
                         </span>
                         <span
                           class="block truncate text-xs text-muted-foreground"
@@ -494,5 +499,17 @@
         </div>
       {/if}
     </form>
+    {#if setupIs(S3_PROVIDER_TYPE)}
+      <!-- The S3 form is a form of its own, and forms do not nest: it sits
+           beside this one, which stays hidden meanwhile. -->
+      <S3ProviderSetupWizard
+        {vault}
+        idPrefix="settings"
+        {isVerifying}
+        {isInitializing}
+        {onCancelSetup}
+        onConnect={onReconnect}
+      />
+    {/if}
   </div>
 </div>

@@ -7,7 +7,7 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ReplicationType } from '$app-wasm'
 
-  import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
+  import { Archive, Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import {
     configuredOAuthFile,
     DEFAULT_DRIVE_BACKUP_NAME,
@@ -18,6 +18,7 @@
     LOCAL_FOLDER_PROVIDER_TYPE,
     LOCAL_PROVIDER_TYPE,
     OAUTH_FILE_PROVIDER_TYPE,
+    S3_PROVIDER_TYPE,
     providerPersistenceDefaults,
     storedGithubPat,
     storedGithubRepository,
@@ -65,6 +66,9 @@
   }
   const githubProviderRequest: Parameters<typeof blocked>[0] = {
     type: GITHUB_PROVIDER_TYPE,
+  }
+  const s3ProviderRequest: Parameters<typeof blocked>[0] = {
+    type: S3_PROVIDER_TYPE,
   }
 
   function draftProvider(request: ProviderSetupRequest): StorageProvider {
@@ -305,6 +309,33 @@
               const descriptionRequest: Parameters<typeof description>[0] = {
                 key: I18N_KEYS.ProviderPickerGithubDesc,
                 request: githubProviderRequest,
+              }
+              return description(descriptionRequest)
+            })()}
+          </span>
+        </span>
+      </button>
+    </li>
+    <li class="min-w-0 max-w-full">
+      <button
+        type="button"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        data-testid="provider-option-s3"
+        disabled={blocked(s3ProviderRequest)}
+        onclick={() => {
+          if (!blocked(s3ProviderRequest)) onSelect(s3ProviderRequest)
+        }}
+      >
+        <Archive class="size-4 shrink-0 text-foreground" />
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground"
+            >{vault.t(I18N_KEYS.ProviderPickerS3)}</span
+          >
+          <span class="block truncate text-xs text-muted-foreground">
+            {(() => {
+              const descriptionRequest: Parameters<typeof description>[0] = {
+                key: I18N_KEYS.ProviderPickerS3Desc,
+                request: s3ProviderRequest,
               }
               return description(descriptionRequest)
             })()}

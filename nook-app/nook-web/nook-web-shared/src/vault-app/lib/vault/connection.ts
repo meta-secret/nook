@@ -335,6 +335,8 @@ export class VaultConnectionActions {
         state.showSuccess(state.t(I18N_KEYS.ToastsLocalFolderConnected));
       } else if (state.storageMode === "oauth-file") {
         state.showSuccess(state.t(I18N_KEYS.ToastsGoogleDriveConnected));
+      } else if (state.storageMode === "s3") {
+        state.showSuccess(state.t(I18N_KEYS.ToastsS3Connected));
       } else {
         state.showSuccess(state.t(I18N_KEYS.ToastsGithubConnected));
       }
