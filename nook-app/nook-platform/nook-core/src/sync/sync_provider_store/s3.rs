@@ -299,7 +299,6 @@ impl S3ProviderConfig {
     pub fn mount_target(&self) -> IdentityMountTarget {
         IdentityMountTarget::S3 {
             endpoint: self.endpoint.to_string(),
-            region: self.region.to_string(),
             bucket: self.bucket.to_string(),
             key_prefix: self.key_prefix.to_string(),
         }
@@ -540,7 +539,6 @@ mod tests {
             S3ProviderConfig::fixture()?.mount_target(),
             IdentityMountTarget::S3 {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
-                region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
                 key_prefix: "e2e/run-1".to_owned(),
             }

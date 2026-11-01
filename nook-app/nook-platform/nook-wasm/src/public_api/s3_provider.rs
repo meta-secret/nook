@@ -3,17 +3,16 @@
 //! before it is saved.
 //!
 //! Rust validates every field and reads the location; the web only renders
-//! the typed results. A refused key surfaces as a `NookProviderFailure` whose
-//! `code` is `s3-key-access-denied`.
-use super::NookStorageConnectArgs;
+//! the typed results. A refused key rejects like every export, with the
+//! message `provider_failure_code` classifies as `s3-key-access-denied`.
 use super::wasm_bindgen;
+use super::{NookStagedStorageArgs, NookStorageConnectArgs};
+use crate::NookError;
 use crate::storage::provider_vault_listing::{BrowserHeldVaults, LocalVaultClassification};
 use crate::storage::s3::{S3Storage, S3VaultListing};
-use crate::{NookError, NookVaultManager};
-use js_sys::Error as JsNativeError;
 use nook_core::{
     LocalVaultOccupancy, ProviderLabel, ProviderVaultListing, S3ConnectionDraft, S3DraftValidation,
-    S3ProviderConfig, StoredS3Configuration,
+    S3ProviderConfig, StagedRemoteConnection, StagedS3Connection, StoredS3Configuration,
 };
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -89,28 +88,44 @@ pub enum NookStoredS3ConfigurationState {
         .map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
 }
 
+/// The staged connect arguments of an S3 block, as the GitHub and OAuth
+/// staged exports give theirs: ready once the block holds its connection,
+/// incomplete before.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_s3_remote_storage_args(
+    configuration: &tsify::Ts<StoredS3Configuration>,
+) -> Result<NookStagedStorageArgs, JsError> {
+    let configuration = configuration
+        .to_rust()
+        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+    Ok(NookStagedStorageArgs::new(
+        StagedRemoteConnection::S3(StagedS3Connection {
+            configuration: &configuration,
+        })
+        .project()?,
+    ))
+}
+
 /// List the vaults at an S3 location without saving or connecting to it,
 /// each with how this device can open it, as a Google Drive account's are.
-/// A key the server refuses fails with the `s3-key-access-denied` code.
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn list_s3_vaults(
     configuration: &tsify::Ts<S3ProviderConfig>,
     local_vault: &tsify::Ts<LocalVaultOccupancy>,
-) -> Result<tsify::Ts<ProviderVaultListing>, JsNativeError> {
+) -> Result<tsify::Ts<ProviderVaultListing>, JsError> {
     let configuration = configuration
         .to_rust()
-        .map_err(|_| JsNativeError::new(INVALID_TYPED_INPUT))?;
+        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
     let local_vault = local_vault
         .to_rust()
-        .map_err(|_| JsNativeError::new(INVALID_TYPED_INPUT))?;
+        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
     let listing = S3ProviderListing {
         configuration: &configuration,
         local_vault: &local_vault,
     }
     .listing()
-    .await
-    .map_err(NookVaultManager::assessment_failure_js_error)?;
-    Tsify::into_ts(&listing).map_err(|_| JsNativeError::new(UNENCODABLE_TYPED_OUTPUT))
+    .await?;
+    Tsify::into_ts(&listing).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
 }
 
 /// One S3 location and the vault open on this device.
@@ -142,9 +157,10 @@ impl S3ProviderListing<'_> {
 mod tests {
     use super::{
         NookStoredS3ConfigurationState, draft_s3_storage_args, staged_s3_provider_detail,
-        staged_s3_provider_label, stored_s3_configuration_state,
+        staged_s3_provider_label, staged_s3_remote_storage_args, stored_s3_configuration_state,
     };
     use crate::public_api::NookAccessCheckSource;
+    use crate::public_api::NookStagedStorageArgsState;
     use nook_core::{S3ConnectionDraft, S3ProviderConfig, StoredS3Configuration};
     use tsify::Tsify;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -204,6 +220,39 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
+    fn an_s3_block_stages_its_connect_arguments_once_configured() -> anyhow::Result<()> {
+        let staged = staged_s3_remote_storage_args(&typed(&StoredS3Configuration::Configured(
+            configuration()?,
+        ))?)
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(staged.state(), NookStagedStorageArgsState::Ready);
+        let args = staged
+            .args()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(args.mode, "s3");
+        assert_eq!(args.pat, SECRET);
+        assert!(
+            args.repo
+                .starts_with(nook_core::S3_CONNECT_TARGET_V1_PREFIX)
+        );
+        assert!(!args.repo.contains(SECRET));
+        let unconfigured =
+            staged_s3_remote_storage_args(&typed(&StoredS3Configuration::NotApplicable)?)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(unconfigured.state(), NookStagedStorageArgsState::Incomplete);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
     fn rows_report_their_s3_block_label_and_connect_arguments() -> anyhow::Result<()> {
         let configured = StoredS3Configuration::Configured(configuration()?);
         let state = |configuration: &StoredS3Configuration| {
@@ -245,11 +294,13 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::list_s3_vaults;
+    use crate::public_api::provider_failure_code;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
-    use js_sys::Reflect;
-    use nook_core::{LocalVaultOccupancy, S3ConnectionDraft, S3ProviderConfig};
+    use nook_core::{
+        LocalVaultOccupancy, ProviderFailureCode, S3ConnectionDraft, S3ProviderConfig,
+    };
     use tsify::Tsify;
-    use wasm_bindgen::JsValue;
+    use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -262,8 +313,7 @@ mod browser_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn a_403_from_the_server_rejects_the_listing_with_the_refused_key_code()
-    -> anyhow::Result<()> {
+    async fn a_403_from_the_server_rejects_the_listing_as_a_refused_key() -> anyhow::Result<()> {
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let configuration = S3ProviderConfig::try_from(S3ConnectionDraft {
@@ -283,14 +333,16 @@ mod browser_tests {
         let Err(failure) = rejected else {
             anyhow::bail!("a refused key fails the listing");
         };
-        let code = Reflect::get(&failure, &JsValue::from_str("code"))
+        let message = JsValue::from(failure)
+            .unchecked_into::<js_sys::Error>()
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        let code = provider_failure_code(&message)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .as_string();
-        assert_eq!(code.as_deref(), Some("s3-key-access-denied"));
-        assert_eq!(
-            failure.name().as_string().as_deref(),
-            Some("NookProviderFailure")
-        );
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(code, ProviderFailureCode::S3KeyAccessDenied);
         Ok(())
     }
 }

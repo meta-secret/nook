@@ -199,7 +199,7 @@ impl ProviderRows<'_> {
             let known = recorded
                 .iter()
                 .chain(mounts.iter())
-                .any(|mount| mount.target.names_same_location(&target));
+                .any(|mount| mount.target == target);
             if known {
                 continue;
             }
@@ -223,6 +223,8 @@ impl ProviderRows<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::super::OAuthFileConfig;
     use super::*;
     use crate::{
@@ -441,6 +443,40 @@ mod tests {
     }
 
     #[test]
+    fn an_s3_row_removes_the_mount_it_recorded_whatever_region_it_signs_with() -> anyhow::Result<()>
+    {
+        let row = Row::s3("s3-a", "device-a")?.0;
+        let recorded = ProviderRows {
+            providers: slice::from_ref(&row),
+        }
+        .unrecorded_mounts(&[])?;
+        // Removing a row unmounts each recorded mount equal to its target.
+        let unmounted = |row: &StorageProviderData| match row.identity_mount_capability() {
+            IdentityMountCapability::Mountable(target) => recorded
+                .iter()
+                .filter(|mount| mount.target == target)
+                .map(|mount| mount.mount_id.clone())
+                .collect::<Vec<_>>(),
+            IdentityMountCapability::LocalOnly | IdentityMountCapability::Unconfigured => {
+                Vec::new()
+            }
+        };
+        let recorded_ids = recorded
+            .iter()
+            .map(|mount| mount.mount_id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(recorded_ids.len(), 1);
+        assert_eq!(unmounted(&row), recorded_ids);
+        let mut resigned = row;
+        let StoredS3Configuration::Configured(config) = &mut resigned.s3 else {
+            anyhow::bail!("an S3 row carries its block");
+        };
+        config.region = S3Region::parse("eu-central-1")?;
+        assert_eq!(unmounted(&resigned), recorded_ids);
+        Ok(())
+    }
+
+    #[test]
     fn an_s3_row_is_an_identity_mount_every_device_reaches_with_its_own_key() -> anyhow::Result<()>
     {
         let store_id = StoreId::generate()?;
@@ -451,7 +487,6 @@ mod tests {
             device_a.identity_mount_capability(),
             IdentityMountCapability::Mountable(IdentityMountTarget::S3 {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
-                region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
                 key_prefix: "e2e/run-1".to_owned(),
             })

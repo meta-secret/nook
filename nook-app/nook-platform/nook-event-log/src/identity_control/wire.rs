@@ -187,57 +187,15 @@ pub enum IdentityMountTarget {
     LocalFolder {
         directory_name: String,
     },
-    /// An S3-compatible bucket location. Each installation signs with its own
-    /// access key; neither the key id nor its secret enters the log.
+    /// An S3-compatible bucket location: endpoint, bucket, and key prefix.
+    /// Each installation signs with its own access key and region; neither the
+    /// key id nor its secret enters the log.
     S3 {
         endpoint: String,
-        region: String,
         bucket: String,
         /// Empty when the objects start at the bucket root.
         key_prefix: String,
     },
-}
-
-/// What two mount records share when they name the same storage.
-#[derive(PartialEq, Eq)]
-enum MountLocation<'a> {
-    /// Every other target is its location as a whole.
-    Whole(&'a IdentityMountTarget),
-    /// An S3 location; the region only signs requests, so it is not part of it.
-    S3 {
-        endpoint: &'a str,
-        bucket: &'a str,
-        key_prefix: &'a str,
-    },
-}
-
-impl IdentityMountTarget {
-    fn location(&self) -> MountLocation<'_> {
-        match self {
-            Self::S3 {
-                endpoint,
-                region: _,
-                bucket,
-                key_prefix,
-            } => MountLocation::S3 {
-                endpoint,
-                bucket,
-                key_prefix,
-            },
-            Self::Github { .. }
-            | Self::GoogleDrive { .. }
-            | Self::ICloud { .. }
-            | Self::LocalFolder { .. } => MountLocation::Whole(self),
-        }
-    }
-
-    /// Whether two records name the same storage: an S3 location by its
-    /// endpoint, bucket, and key prefix, whatever region each signs with;
-    /// every other target as a whole.
-    #[must_use]
-    pub fn names_same_location(&self, other: &Self) -> bool {
-        self.location() == other.location()
-    }
 }
 
 /// One sync-provider mount owned by an identity.
@@ -658,72 +616,6 @@ mod tests {
 
     use crate::identity_control::test_fixtures::*;
 
-    /// An S3 mount record with its four strings.
-    struct S3Mount {
-        endpoint: &'static str,
-        region: &'static str,
-        bucket: &'static str,
-        key_prefix: &'static str,
-    }
-
-    impl S3Mount {
-        const TEAM: Self = Self {
-            endpoint: "https://s3.example.com",
-            region: "us-east-1",
-            bucket: "nook-vaults",
-            key_prefix: "team",
-        };
-
-        fn target(&self) -> super::IdentityMountTarget {
-            super::IdentityMountTarget::S3 {
-                endpoint: self.endpoint.to_owned(),
-                region: self.region.to_owned(),
-                bucket: self.bucket.to_owned(),
-                key_prefix: self.key_prefix.to_owned(),
-            }
-        }
-    }
-
-    #[test]
-    fn s3_mounts_name_one_location_by_endpoint_bucket_and_prefix_alone() {
-        let team = S3Mount::TEAM.target();
-        let elsewhere_signed = S3Mount {
-            region: "eu-central-1",
-            ..S3Mount::TEAM
-        }
-        .target();
-        assert!(team.names_same_location(&elsewhere_signed));
-        assert!(elsewhere_signed.names_same_location(&team));
-        for other in [
-            S3Mount {
-                endpoint: "https://s3.other.example.com",
-                ..S3Mount::TEAM
-            },
-            S3Mount {
-                bucket: "nook-other",
-                ..S3Mount::TEAM
-            },
-            S3Mount {
-                key_prefix: "",
-                ..S3Mount::TEAM
-            },
-        ] {
-            assert!(!team.names_same_location(&other.target()));
-        }
-        // Another provider kind never names the same location, even with
-        // the same text.
-        let github = super::IdentityMountTarget::Github {
-            repository: "nook-vaults".to_owned(),
-        };
-        assert!(!team.names_same_location(&github));
-        assert!(!github.names_same_location(&team));
-        assert!(github.names_same_location(&github.clone()));
-        let folder = super::IdentityMountTarget::LocalFolder {
-            directory_name: "nook-vaults".to_owned(),
-        };
-        assert!(!github.names_same_location(&folder));
-    }
-
     #[test]
     fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
@@ -780,7 +672,6 @@ mod tests {
             label: "S3 · nook-dev/team".to_owned(),
             target: IdentityMountTarget::S3 {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
-                region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
                 key_prefix: "team".to_owned(),
             },

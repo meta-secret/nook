@@ -131,7 +131,6 @@ impl IdentityMountView {
                 endpoint,
                 bucket,
                 key_prefix,
-                ..
             } => (
                 IdentityMountProvider::S3,
                 match key_prefix.as_str() {
@@ -146,14 +145,8 @@ impl IdentityMountView {
             provider,
             target,
             connected_here: providers.iter().any(|provider| {
-                match provider.identity_mount_capability() {
-                    IdentityMountCapability::Mountable(target) => {
-                        target.names_same_location(&mount.target)
-                    }
-                    IdentityMountCapability::LocalOnly | IdentityMountCapability::Unconfigured => {
-                        false
-                    }
-                }
+                provider.identity_mount_capability()
+                    == IdentityMountCapability::Mountable(mount.target.clone())
             }),
         }
     }
