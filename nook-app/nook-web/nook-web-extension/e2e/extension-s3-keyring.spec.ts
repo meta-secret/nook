@@ -25,10 +25,15 @@ import {
   authorizeDeviceProtection,
   connectS3InFirstRun,
   createFirstRunKey,
+  createIsolatedContext,
   createKeyringOnS3,
   disableVaultIdleLock,
+  issueIdentityEnrollmentCode,
+  localizeAppLinkForE2e,
+  openVaultAfterIdentityJoin,
   openVaultPage,
   readLocalVaultYamlFromIdb,
+  redeemIdentityEnrollmentCode,
   triggerVaultSyncRefresh,
   uniqueS3KeyPrefix,
   uniqueSecretKey,
@@ -43,12 +48,23 @@ function storeIdOf(yaml: string): string {
   return storeId
 }
 
+function itemCount(count: number): string {
+  return enLocale.extension.companion.item_count.replace(
+    '{count}',
+    String(count),
+  )
+}
+
 // The Simple Vault keeps a keyring, its vault and a secret on the local S3
-// server. The approval adds the extension to the keyring with the keyring's
-// S3 provider. With the vault page closed, the extension's identity refresh
-// (what the popup asks for after an unlock) reads the keyring's log and the
-// vault's events through S3 from its offscreen document.
+// server, and approves the extension, which takes the keyring's S3 provider.
+// Every save on a Nook page in the extension's browser also reaches the
+// extension through its page bridge, so the second secret comes from another
+// app of the keyring in a separate browser, after the extension's vault page
+// has closed: it reaches the extension only when the extension's identity
+// refresh (what the popup asks for after an unlock) reads the vault through
+// S3 from its offscreen document.
 test('the extension joins a keyring on S3 and reads its vault through the local S3 server', async ({
+  browser,
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -126,15 +142,50 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       throw new Error('The S3 vault grant names no extension app')
     }
 
-    // From here only S3 holds the vault: no Nook page is open to hand its
-    // records over. The refresh fails unless the offscreen document reads
-    // the keyring's log and the vault's events from the local server.
+    // The member invites another app, then the extension's browser keeps
+    // no Nook page open: nothing more reaches the extension through it.
+    const issued = await issueIdentityEnrollmentCode(connectPage)
+    const inviteLink = localizeAppLinkForE2e(connectPage, issued.link)
     await connectPage.close()
+
+    // The other app joins in a separate browser and saves a second secret,
+    // which it syncs to S3.
+    const otherContext = await createIsolatedContext(browser)
+    try {
+      const otherApp = await otherContext.newPage()
+      await otherApp.goto(inviteLink)
+      await expect(otherApp.getByTestId('join-this-device')).toBeVisible({
+        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+      })
+      await redeemIdentityEnrollmentCode(otherApp, issued.passphrase)
+      await openVaultAfterIdentityJoin(otherApp)
+      await addSecret(
+        otherApp,
+        uniqueSecretKey('s3-extension-second'),
+        's3-extension-second-secret-value',
+      )
+      await triggerVaultSyncRefresh(otherApp)
+    } finally {
+      await otherContext.close()
+    }
+
+    // Before its refresh the extension holds only the first secret.
     const popup = await context.newPage()
     await popup.goto(popupUrl)
     await expect(popup.getByTestId('extension-toolbar-menu')).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
+    const vaultCount = popup
+      .locator(
+        `[data-testid="companion-vault"][data-vault-store-id="${storeId}"]`,
+      )
+      .getByTestId('companion-vault-count')
+    await expect(vaultCount).toHaveText(itemCount(1), {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+
+    // The refresh reads the keyring's log and the vault's events from the
+    // local server, so the second secret arrives only through S3.
     const refresh: IdentityVaultsRefreshMessage = {
       type: PairedVaultsMessageType.RefreshIdentity,
       deviceId: grant.deviceId,
@@ -148,15 +199,10 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
     )
     expect(refreshed).toEqual({ ok: true, paired: 0, awaitingGrant: 0 })
 
-    // The popup shows the vault read through S3 with its one secret.
     await popup.reload()
-    const vaultRow = popup.locator(
-      `[data-testid="companion-vault"][data-vault-store-id="${storeId}"]`,
-    )
-    await expect(vaultRow.getByTestId('companion-vault-count')).toHaveText(
-      enLocale.extension.companion.item_count.replace('{count}', '1'),
-      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-    )
+    await expect(vaultCount).toHaveText(itemCount(2), {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
   } finally {
     await context.close()
   }
