@@ -5,64 +5,29 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 //! What an S3 answer means for the request that received it.
 //!
-//! - A missing object (`404 NoSuchKey`) is absent, not a failure.
+//! - A missing object (`404`) is absent, not a failure.
 //! - A create-only write that finds its key taken (`412`) is settled the way
 //!   the local-folder provider settles an existing event file.
-//! - Every `403`, whatever its code or body, is one typed "this key has no
-//!   access to the vault folder" failure: a refused, unknown, or mis-signed
-//!   key alike.
+//! - Every `403`, whatever its body, is one typed "this key has no access to
+//!   the vault folder" failure: a refused, unknown, or mis-signed key alike.
 //! - Anything else keeps only its provider failure category and status. An
-//!   error body is read for its code only: its message can name keys, so it is
-//!   never kept.
+//!   error body is never read: its message can name keys.
 
-use std::{fmt, str};
+use std::str;
 
+use bytes::Bytes;
+use http::StatusCode;
 use nook_app_common::i18n_keys;
 use quick_xml::de;
 use serde::Deserialize;
 
-use super::S3ObjectListing;
 use crate::{EventId, EventStorageBytes, ProviderFailureCause};
 
-/// The HTTP status of an answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct S3HttpStatus(u16);
-
-impl From<u16> for S3HttpStatus {
-    fn from(status: u16) -> Self {
-        Self(status)
-    }
-}
-
-impl fmt::Display for S3HttpStatus {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self(status) = self;
-        status.fmt(formatter)
-    }
-}
-
-/// The body of an answer, as the transport received it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct S3ResponseBody(Vec<u8>);
-
-impl From<Vec<u8>> for S3ResponseBody {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: the transport hands over the response body as bytes"
-        )
-    )]
-    fn from(body: Vec<u8>) -> Self {
-        Self(body)
-    }
-}
-
-/// One answer to one request.
+/// One answer to one request, as the transport received it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct S3Response {
-    pub status: S3HttpStatus,
-    pub body: S3ResponseBody,
+    pub status: StatusCode,
+    pub body: Bytes,
 }
 
 /// What reading one object found.
@@ -87,6 +52,22 @@ pub enum S3ObjectDeletion {
     Absent,
 }
 
+/// Whether more pages follow a listing page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum S3ListingContinuation {
+    Complete,
+    /// The opaque token S3 continues the listing after.
+    Continues(String),
+}
+
+/// One page of a `ListObjectsV2` answer: the keys and folders it listed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S3ObjectListing {
+    pub keys: Vec<String>,
+    pub folders: Vec<String>,
+    pub continuation: S3ListingContinuation,
+}
+
 /// Why a request failed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum S3RequestFailure {
@@ -95,10 +76,10 @@ pub enum S3RequestFailure {
     #[error("{}", i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED)]
     KeyAccessDenied,
     /// Any other failure, as its loggable category and status.
-    #[error("S3 request failed with status {status}")]
+    #[error("S3 request failed with status {}", .status.as_u16())]
     Provider {
         cause: ProviderFailureCause,
-        status: S3HttpStatus,
+        status: StatusCode,
     },
     /// A successful answer whose body is not what the request returns.
     #[error("S3 response could not be read")]
@@ -115,81 +96,55 @@ impl S3RequestFailure {
     /// The stable code the WASM boundary attaches to a refused key, as it
     /// attaches `github-token-rejected` to a rejected GitHub token.
     pub const KEY_ACCESS_DENIED_CODE: &'static str = "s3-key-access-denied";
-
-    /// The loggable category of this failure.
-    #[must_use]
-    pub fn cause(&self) -> ProviderFailureCause {
-        match self {
-            Self::KeyAccessDenied => ProviderFailureCause::Forbidden,
-            Self::Provider { cause, .. } => *cause,
-            Self::MalformedResponse
-            | Self::EventContentDiverged { .. }
-            | Self::EventConflictUnresolved { .. } => ProviderFailureCause::Other,
-        }
-    }
-}
-
-/// The error codes an answer is classified by.
-enum S3ErrorCode {
-    NoSuchKey,
-    /// Any other code, or a body without one.
-    Unclassified,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct ErrorXml {
+struct ListedObjectXml {
+    key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ListedFolderXml {
+    prefix: String,
+}
+
+/// The parts of `ListBucketResult` a listing uses; other elements are skipped.
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ListBucketResultXml {
+    is_truncated: bool,
     #[serde(default)]
-    code: String,
+    next_continuation_token: String,
+    #[serde(default)]
+    contents: Vec<ListedObjectXml>,
+    #[serde(default)]
+    common_prefixes: Vec<ListedFolderXml>,
 }
 
-impl S3ErrorCode {
-    fn of(body: &S3ResponseBody) -> Self {
-        let S3ResponseBody(bytes) = body;
-        let Ok(text) = str::from_utf8(bytes) else {
-            return Self::Unclassified;
+impl S3ObjectListing {
+    /// Read one page. A body that is not this XML, or a truncated page
+    /// without a token to continue it, is malformed.
+    fn parse(body: &[u8]) -> Result<Self, S3RequestFailure> {
+        let page: ListBucketResultXml = str::from_utf8(body)
+            .ok()
+            .and_then(|text| de::from_str(text).ok())
+            .ok_or(S3RequestFailure::MalformedResponse)?;
+        let continuation = match (page.is_truncated, page.next_continuation_token.as_str()) {
+            (false, _) => S3ListingContinuation::Complete,
+            (true, "") => return Err(S3RequestFailure::MalformedResponse),
+            (true, token) => S3ListingContinuation::Continues(token.to_owned()),
         };
-        let Ok(error) = de::from_str::<ErrorXml>(text) else {
-            return Self::Unclassified;
-        };
-        match error.code.as_str() {
-            "NoSuchKey" => Self::NoSuchKey,
-            _ => Self::Unclassified,
-        }
-    }
-}
-
-/// The status families classification tells apart.
-enum StatusClass {
-    Success,
-    Forbidden,
-    NotFound,
-    PreconditionFailed,
-    Failure,
-}
-
-impl S3HttpStatus {
-    fn class(self) -> StatusClass {
-        let Self(status) = self;
-        match status {
-            200..=299 => StatusClass::Success,
-            403 => StatusClass::Forbidden,
-            404 => StatusClass::NotFound,
-            412 => StatusClass::PreconditionFailed,
-            _ => StatusClass::Failure,
-        }
-    }
-
-    fn cause(self) -> ProviderFailureCause {
-        let Self(status) = self;
-        match status {
-            401 => ProviderFailureCause::Unauthorized,
-            403 => ProviderFailureCause::Forbidden,
-            404 => ProviderFailureCause::NotFound,
-            429 => ProviderFailureCause::RateLimited,
-            500..=599 => ProviderFailureCause::ProviderError,
-            _ => ProviderFailureCause::Other,
-        }
+        Ok(Self {
+            keys: page.contents.into_iter().map(|object| object.key).collect(),
+            folders: page
+                .common_prefixes
+                .into_iter()
+                .map(|folder| folder.prefix)
+                .collect(),
+            continuation,
+        })
     }
 }
 
@@ -197,76 +152,55 @@ impl S3Response {
     /// Every `403` is the key's failure, whatever its body says; every other
     /// failure keeps the category of its status.
     fn failure(&self) -> S3RequestFailure {
-        let status = self.status;
-        match status.class() {
-            StatusClass::Forbidden => S3RequestFailure::KeyAccessDenied,
-            StatusClass::Success
-            | StatusClass::NotFound
-            | StatusClass::PreconditionFailed
-            | StatusClass::Failure => S3RequestFailure::Provider {
-                cause: status.cause(),
-                status,
+        match self.status.as_u16() {
+            403 => S3RequestFailure::KeyAccessDenied,
+            status => S3RequestFailure::Provider {
+                cause: match status {
+                    401 => ProviderFailureCause::Unauthorized,
+                    404 => ProviderFailureCause::NotFound,
+                    429 => ProviderFailureCause::RateLimited,
+                    500..=599 => ProviderFailureCause::ProviderError,
+                    _ => ProviderFailureCause::Other,
+                },
+                status: self.status,
             },
-        }
-    }
-
-    /// Only `NoSuchKey` makes a 404 an absent object; a missing bucket fails.
-    fn absent_or_failure<T>(&self, absent: T) -> Result<T, S3RequestFailure> {
-        match S3ErrorCode::of(&self.body) {
-            S3ErrorCode::NoSuchKey => Ok(absent),
-            S3ErrorCode::Unclassified => Err(self.failure()),
         }
     }
 
     /// Classify the answer to `GetObject`.
     pub fn into_object_read(self) -> Result<S3ObjectRead, S3RequestFailure> {
-        match self.status.class() {
-            StatusClass::Success => {
-                let S3ResponseBody(bytes) = self.body;
-                Ok(S3ObjectRead::Found(EventStorageBytes::from(bytes)))
-            }
-            StatusClass::NotFound => self.absent_or_failure(S3ObjectRead::Absent),
-            StatusClass::Forbidden | StatusClass::PreconditionFailed | StatusClass::Failure => {
-                Err(self.failure())
-            }
+        match self.status.as_u16() {
+            200..=299 => Ok(S3ObjectRead::Found(EventStorageBytes::from(Vec::from(
+                self.body,
+            )))),
+            404 => Ok(S3ObjectRead::Absent),
+            _ => Err(self.failure()),
         }
     }
 
     /// Classify the answer to a create-only `PutObject`.
     pub fn into_object_write(self) -> Result<S3ObjectWrite, S3RequestFailure> {
-        match self.status.class() {
-            StatusClass::Success => Ok(S3ObjectWrite::Created),
-            StatusClass::PreconditionFailed => Ok(S3ObjectWrite::AlreadyExists),
-            StatusClass::Forbidden | StatusClass::NotFound | StatusClass::Failure => {
-                Err(self.failure())
-            }
+        match self.status.as_u16() {
+            200..=299 => Ok(S3ObjectWrite::Created),
+            412 => Ok(S3ObjectWrite::AlreadyExists),
+            _ => Err(self.failure()),
         }
     }
 
     /// Classify the answer to `DeleteObject`.
     pub fn into_object_deletion(self) -> Result<S3ObjectDeletion, S3RequestFailure> {
-        match self.status.class() {
-            StatusClass::Success => Ok(S3ObjectDeletion::Deleted),
-            StatusClass::NotFound => self.absent_or_failure(S3ObjectDeletion::Absent),
-            StatusClass::Forbidden | StatusClass::PreconditionFailed | StatusClass::Failure => {
-                Err(self.failure())
-            }
+        match self.status.as_u16() {
+            200..=299 => Ok(S3ObjectDeletion::Deleted),
+            404 => Ok(S3ObjectDeletion::Absent),
+            _ => Err(self.failure()),
         }
     }
 
     /// Classify the answer to `ListObjectsV2` and read its page.
     pub fn into_listing(self) -> Result<S3ObjectListing, S3RequestFailure> {
-        match self.status.class() {
-            StatusClass::Success => {
-                let S3ResponseBody(bytes) = &self.body;
-                let text =
-                    str::from_utf8(bytes).map_err(|_| S3RequestFailure::MalformedResponse)?;
-                S3ObjectListing::parse(text)
-            }
-            StatusClass::Forbidden
-            | StatusClass::NotFound
-            | StatusClass::PreconditionFailed
-            | StatusClass::Failure => Err(self.failure()),
+        match self.status.as_u16() {
+            200..=299 => S3ObjectListing::parse(&self.body),
+            _ => Err(self.failure()),
         }
     }
 }
@@ -297,247 +231,215 @@ impl S3ExistingEvent<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        S3ExistingEvent, S3HttpStatus, S3ObjectDeletion, S3ObjectRead, S3ObjectWrite,
-        S3RequestFailure, S3Response, S3ResponseBody,
-    };
-    use crate::{EventId, EventStorageBytes, ProviderFailureCause};
+    use bytes::Bytes;
+    use http::StatusCode;
     use nook_app_common::i18n_keys;
 
-    struct Answer {
-        status: u16,
-        code: &'static str,
+    use super::{
+        S3ExistingEvent, S3ListingContinuation, S3ObjectDeletion, S3ObjectRead, S3ObjectWrite,
+        S3RequestFailure, S3Response,
+    };
+    use crate::{EventId, EventStorageBytes, ProviderFailureCause};
+
+    const EVENT: &[u8] = b"event: first\n";
+
+    /// A delimited page of an identity folder, with the `&#34;` quote escapes
+    /// Go-based S3 servers write into `ETag`.
+    const SERVER_IDENTITY_FOLDER: &str = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        "\n",
+        r#"<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>nook-dev</Name>"#,
+        "<Prefix>e2e-run-1/meta-secret-nook/idn_abcdefghijk/</Prefix><MaxKeys>1000</MaxKeys>",
+        "<Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><Contents>",
+        "<Key>e2e-run-1/meta-secret-nook/idn_abcdefghijk/identity.yaml</Key>",
+        "<ETag>&#34;fb4cdbcd656745d8fd4a22ed9e2680f5&#34;</ETag><Size>16</Size>",
+        "<StorageClass>STANDARD</StorageClass><LastModified>2026-10-31T21:27:58Z</LastModified>",
+        "</Contents><CommonPrefixes><Prefix>e2e-run-1/meta-secret-nook/idn_abcdefghijk/log/</Prefix>",
+        "</CommonPrefixes><CommonPrefixes>",
+        "<Prefix>e2e-run-1/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/</Prefix>",
+        "</CommonPrefixes><KeyCount>3</KeyCount></ListBucketResult>",
+    );
+
+    /// A truncated page in the shape the S3 API Reference documents.
+    const TRUNCATED_PAGE: &str = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        r#"<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">"#,
+        "<Name>bucket</Name><Prefix>p/</Prefix><KeyCount>2</KeyCount><MaxKeys>2</MaxKeys>",
+        "<IsTruncated>true</IsTruncated>",
+        "<NextContinuationToken>1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=</NextContinuationToken>",
+        "<Contents><Key>p/a.yaml</Key><LastModified>2026-10-31T10:00:00.000Z</LastModified>",
+        "<ETag>&quot;9b2c&quot;</ETag><Size>412</Size><StorageClass>STANDARD</StorageClass></Contents>",
+        "<Contents><Key>p/b.yaml</Key><LastModified>2026-10-31T10:00:01.000Z</LastModified>",
+        "<ETag>&quot;0f34&quot;</ETag><Size>398</Size><StorageClass>STANDARD</StorageClass></Contents>",
+        "</ListBucketResult>",
+    );
+
+    fn answer(status: u16, body: &[u8]) -> anyhow::Result<S3Response> {
+        Ok(S3Response {
+            status: StatusCode::from_u16(status)?,
+            body: Bytes::copy_from_slice(body),
+        })
     }
 
-    impl Answer {
-        fn response(&self) -> S3Response {
-            let body = match self.code {
-                "" => String::new(),
-                code => format!(
-                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>{code}</Code>\
-                     <Message>The resource /nook-dev/team/meta-secret-nook/x does not exist</Message>\
-                     <RequestId>4442587FB7D0A2F9</RequestId></Error>"
-                ),
-            };
-            S3Response {
-                status: S3HttpStatus::from(self.status),
-                body: S3ResponseBody::from(body.into_bytes()),
-            }
-        }
-    }
-
-    fn provider(cause: ProviderFailureCause, status: u16) -> S3RequestFailure {
-        S3RequestFailure::Provider {
+    fn provider(cause: ProviderFailureCause, status: u16) -> anyhow::Result<S3RequestFailure> {
+        Ok(S3RequestFailure::Provider {
             cause,
-            status: S3HttpStatus::from(status),
-        }
+            status: StatusCode::from_u16(status)?,
+        })
     }
 
     #[test]
-    fn a_read_finds_the_object_or_its_absence() -> anyhow::Result<()> {
-        let found = S3Response {
-            status: S3HttpStatus::from(200),
-            body: S3ResponseBody::from(b"event: yaml\n".to_vec()),
-        };
-        assert_eq!(
-            found.into_object_read()?,
-            S3ObjectRead::Found(EventStorageBytes::from(b"event: yaml\n".to_vec()))
-        );
-        let missing = Answer {
-            status: 404,
-            code: "NoSuchKey",
-        };
-        assert_eq!(missing.response().into_object_read()?, S3ObjectRead::Absent);
-        for not_an_object in [
-            Answer {
-                status: 404,
-                code: "NoSuchBucket",
-            },
-            Answer {
-                status: 404,
-                code: "",
-            },
+    fn each_status_means_what_its_request_asked_for() -> anyhow::Result<()> {
+        let found = || Ok(S3ObjectRead::Found(EventStorageBytes::from(EVENT.to_vec())));
+        let denied = S3RequestFailure::KeyAccessDenied;
+        let other = |status| provider(ProviderFailureCause::Other, status);
+        // Each row: the status, then what a read, a create-only write, and a
+        // deletion make of it. A listing fails like a read, except that its
+        // success body must be a listing and a 404 is the provider's.
+        for (status, read, write, deletion) in [
+            (
+                200,
+                found(),
+                Ok(S3ObjectWrite::Created),
+                Ok(S3ObjectDeletion::Deleted),
+            ),
+            (
+                204,
+                found(),
+                Ok(S3ObjectWrite::Created),
+                Ok(S3ObjectDeletion::Deleted),
+            ),
+            (
+                404,
+                Ok(S3ObjectRead::Absent),
+                Err(provider(ProviderFailureCause::NotFound, 404)?),
+                Ok(S3ObjectDeletion::Absent),
+            ),
+            (
+                412,
+                Err(other(412)?),
+                Ok(S3ObjectWrite::AlreadyExists),
+                Err(other(412)?),
+            ),
+            (
+                403,
+                Err(denied.clone()),
+                Err(denied.clone()),
+                Err(denied.clone()),
+            ),
         ] {
+            assert_eq!(answer(status, EVENT)?.into_object_read(), read, "{status}");
             assert_eq!(
-                not_an_object.response().into_object_read(),
-                Err(provider(ProviderFailureCause::NotFound, 404))
+                answer(status, EVENT)?.into_object_write(),
+                write,
+                "{status}"
+            );
+            assert_eq!(
+                answer(status, EVENT)?.into_object_deletion(),
+                deletion,
+                "{status}"
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn every_403_is_one_access_failure_whatever_its_body() {
-        // A refused, unknown, or mis-signed key, a skewed clock, a code Nook
-        // does not know, and a body without one are all the key's failure.
-        for code in [
-            "AccessDenied",
-            "InvalidAccessKeyId",
-            "SignatureDoesNotMatch",
-            "RequestTimeTooSkewed",
-            "SomethingNew",
-            "",
+        for (status, listing) in [
+            (200, S3RequestFailure::MalformedResponse),
+            (404, provider(ProviderFailureCause::NotFound, 404)?),
+            (412, other(412)?),
+            (403, denied.clone()),
         ] {
-            let refused = Answer { status: 403, code };
             assert_eq!(
-                refused.response().into_object_read(),
-                Err(S3RequestFailure::KeyAccessDenied)
-            );
-            assert_eq!(
-                refused.response().into_object_write(),
-                Err(S3RequestFailure::KeyAccessDenied)
-            );
-            assert_eq!(
-                refused.response().into_listing(),
-                Err(S3RequestFailure::KeyAccessDenied)
-            );
-            assert_eq!(
-                refused.response().into_object_deletion(),
-                Err(S3RequestFailure::KeyAccessDenied)
+                answer(status, EVENT)?.into_listing(),
+                Err(listing),
+                "{status}"
             );
         }
-        let unreadable = S3Response {
-            status: S3HttpStatus::from(403),
-            body: S3ResponseBody::from(vec![0xff, 0xfe, 0x00]),
-        };
+        // Every other failure keeps its category and status, never its body,
+        // and hosts that keep only the message classify it the same way.
+        for (status, cause) in [
+            (401, ProviderFailureCause::Unauthorized),
+            (429, ProviderFailureCause::RateLimited),
+            (500, ProviderFailureCause::ProviderError),
+            (503, ProviderFailureCause::ProviderError),
+            (301, ProviderFailureCause::Other),
+            (400, ProviderFailureCause::Other),
+        ] {
+            let failure = provider(cause, status)?;
+            let body = b"<Error><Message>No key team/meta-secret-nook/x</Message></Error>";
+            assert_eq!(answer(status, body)?.into_listing(), Err(failure.clone()));
+            assert_eq!(
+                answer(status, body)?.into_object_read(),
+                Err(failure.clone())
+            );
+            let shown = failure.to_string();
+            assert_eq!(shown, format!("S3 request failed with status {status}"));
+            assert_eq!(ProviderFailureCause::classify(&shown), cause, "{shown}");
+        }
+        assert_eq!(denied.to_string(), i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED);
         assert_eq!(
-            unreadable.into_listing(),
-            Err(S3RequestFailure::KeyAccessDenied)
-        );
-        assert_eq!(
-            S3RequestFailure::KeyAccessDenied.to_string(),
-            i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED
+            ProviderFailureCause::classify(&denied.to_string()),
+            ProviderFailureCause::Forbidden
         );
         assert_eq!(
             S3RequestFailure::KEY_ACCESS_DENIED_CODE,
             "s3-key-access-denied"
         );
-        assert_eq!(
-            S3RequestFailure::KeyAccessDenied.cause(),
-            ProviderFailureCause::Forbidden
-        );
-    }
-
-    #[test]
-    fn a_create_only_write_reports_a_taken_key() -> anyhow::Result<()> {
-        assert_eq!(
-            Answer {
-                status: 200,
-                code: "",
-            }
-            .response()
-            .into_object_write()?,
-            S3ObjectWrite::Created
-        );
-        assert_eq!(
-            Answer {
-                status: 412,
-                code: "PreconditionFailed",
-            }
-            .response()
-            .into_object_write()?,
-            S3ObjectWrite::AlreadyExists
-        );
-        assert_eq!(
-            Answer {
-                status: 409,
-                code: "ConditionalRequestConflict",
-            }
-            .response()
-            .into_object_write(),
-            Err(provider(ProviderFailureCause::Other, 409))
-        );
         Ok(())
     }
 
     #[test]
-    fn a_deletion_of_a_missing_object_is_absent() -> anyhow::Result<()> {
-        for deleted in [204, 200] {
+    fn a_listing_page_reads_its_keys_folders_and_continuation() -> anyhow::Result<()> {
+        let page = answer(200, SERVER_IDENTITY_FOLDER.as_bytes())?.into_listing()?;
+        assert_eq!(
+            page.keys,
+            vec!["e2e-run-1/meta-secret-nook/idn_abcdefghijk/identity.yaml"]
+        );
+        assert_eq!(
+            page.folders,
+            vec![
+                "e2e-run-1/meta-secret-nook/idn_abcdefghijk/log/",
+                "e2e-run-1/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/",
+            ]
+        );
+        assert_eq!(page.continuation, S3ListingContinuation::Complete);
+
+        // The namespace declaration is optional.
+        let plain =
+            TRUNCATED_PAGE.replace(r#" xmlns="http://s3.amazonaws.com/doc/2006-03-01/""#, "");
+        for truncated in [TRUNCATED_PAGE, plain.as_str()] {
+            let page = answer(200, truncated.as_bytes())?.into_listing()?;
+            assert_eq!(page.keys, vec!["p/a.yaml", "p/b.yaml"]);
+            assert!(page.folders.is_empty());
             assert_eq!(
-                Answer {
-                    status: deleted,
-                    code: "",
-                }
-                .response()
-                .into_object_deletion()?,
-                S3ObjectDeletion::Deleted
+                page.continuation,
+                S3ListingContinuation::Continues(
+                    "1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=".to_owned()
+                )
             );
         }
-        assert_eq!(
-            Answer {
-                status: 404,
-                code: "NoSuchKey",
-            }
-            .response()
-            .into_object_deletion()?,
-            S3ObjectDeletion::Absent
-        );
-        Ok(())
-    }
 
-    #[test]
-    fn other_failures_keep_their_category_and_status_but_no_body() {
-        for (answer, cause) in [
-            (
-                Answer {
-                    status: 503,
-                    code: "SlowDown",
-                },
-                ProviderFailureCause::ProviderError,
-            ),
-            (
-                Answer {
-                    status: 429,
-                    code: "",
-                },
-                ProviderFailureCause::RateLimited,
-            ),
-            (
-                Answer {
-                    status: 500,
-                    code: "InternalError",
-                },
-                ProviderFailureCause::ProviderError,
-            ),
-            (
-                Answer {
-                    status: 401,
-                    code: "",
-                },
-                ProviderFailureCause::Unauthorized,
-            ),
-            (
-                Answer {
-                    status: 301,
-                    code: "PermanentRedirect",
-                },
-                ProviderFailureCause::Other,
-            ),
-            (
-                Answer {
-                    status: 400,
-                    code: "AuthorizationHeaderMalformed",
-                },
-                ProviderFailureCause::Other,
-            ),
+        let no_token = TRUNCATED_PAGE.replace(
+            "<NextContinuationToken>1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=</NextContinuationToken>",
+            "",
+        );
+        for body in [
+            no_token.as_bytes(),
+            b"",
+            b"not xml",
+            b"<ListBucketResult><Name>bucket</Name></ListBucketResult>",
+            &[0xff, 0xfe, 0x00],
         ] {
-            let failure = answer.response().into_listing();
-            assert_eq!(failure, Err(provider(cause, answer.status)));
-            let Err(failure) = failure else {
-                continue;
-            };
-            let shown = failure.to_string();
-            assert!(!shown.contains("meta-secret-nook"), "{shown}");
-            assert_eq!(failure.cause(), cause);
-            // Hosts that only keep the message classify it the same way.
-            assert_eq!(ProviderFailureCause::classify(&shown), cause, "{shown}");
+            assert_eq!(
+                answer(200, body)?.into_listing(),
+                Err(S3RequestFailure::MalformedResponse),
+                "{body:?}"
+            );
         }
+        Ok(())
     }
 
     #[test]
     fn a_taken_event_key_is_settled_like_an_existing_event_file() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let requested = EventStorageBytes::from(b"event: first\n".to_vec());
+        let requested = EventStorageBytes::from(EVENT.to_vec());
         let existing = S3ExistingEvent {
             event_id: &event_id,
             requested: &requested,

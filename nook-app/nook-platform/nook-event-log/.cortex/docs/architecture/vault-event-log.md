@@ -454,9 +454,9 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 - **Provider outbox + union**
   - **Test location:** `event_log_workflow.rs`, `nook-event-log/src/store.rs`
 - **S3 object keys, SigV4 signing, answer classification, listing pages**
-  - **Test location:** `nook-core/src/sync/s3_protocol/` unit tests. AWS's
-    published SigV4 examples pin the signer. The `nook-wasm` S3 adapter has
-    browser tests in `nook-wasm/src/storage/s3.rs`.
+  - **Test location:** `nook-core/src/sync/s3_protocol/` unit tests. A
+    published AWS SigV4 example pins the signer wiring. The `nook-wasm` S3
+    adapter has browser tests in `nook-wasm/src/storage/s3.rs`.
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 

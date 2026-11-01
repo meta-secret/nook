@@ -17,73 +17,11 @@
 //! Listings read keys back the way the folder adapter reads file names: an
 //! event key directly in a namespace's `events/` folder whose name is
 //! `<digest>.yaml` is an event, and every other key is unrelated and ignored.
+//! S3 keys are arbitrary text, and a URL parser may rewrite one holding `.` or
+//! `..` segments, so a listed key is only read back, never sent: requests
+//! address an [`S3EventAddress`], whose key the layout builds.
 
 use crate::{EventId, IdentityId, PROVIDER_ROOT_DIR, PlacedNamespace, S3KeyPrefix};
-
-/// The full key of one object in the bucket, prefix included.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct S3ObjectKey(String);
-
-impl S3ObjectKey {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        let Self(key) = self;
-        key
-    }
-}
-
-/// A key a listing reported. S3 keys are arbitrary text, and a URL parser
-/// may rewrite one holding `.` or `..` segments, so a listed key is only read
-/// back against the layout and never sent in a request: requests address the
-/// [`S3ObjectKey`] the layout builds.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct S3ListedObjectKey(String);
-
-impl S3ListedObjectKey {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        let Self(key) = self;
-        key
-    }
-}
-
-impl From<String> for S3ListedObjectKey {
-    fn from(key: String) -> Self {
-        Self(key)
-    }
-}
-
-/// The prefix a listing asks for. It always ends with `/`, so a listing never
-/// matches a sibling folder that merely shares a name prefix.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct S3ListPrefix(String);
-
-impl S3ListPrefix {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        let Self(prefix) = self;
-        prefix
-    }
-}
-
-/// A folder a delimited listing reported below the listed prefix, ending
-/// with `/`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct S3CommonPrefix(String);
-
-impl S3CommonPrefix {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        let Self(prefix) = self;
-        prefix
-    }
-}
-
-impl From<String> for S3CommonPrefix {
-    fn from(prefix: String) -> Self {
-        Self(prefix)
-    }
-}
 
 /// One event's object in one namespace.
 #[derive(Clone, Copy)]
@@ -96,7 +34,7 @@ pub struct S3EventAddress<'a> {
 #[derive(Clone, Copy)]
 pub struct S3ListedKey<'a> {
     pub placed: &'a PlacedNamespace,
-    pub key: &'a S3ListedObjectKey,
+    pub key: &'a str,
 }
 
 /// What a listed key is to the namespace it was listed in.
@@ -152,23 +90,24 @@ impl S3KeyPrefix {
         }
     }
 
-    /// The object of one event.
-    #[must_use]
-    pub fn event_key(&self, event: S3EventAddress<'_>) -> S3ObjectKey {
-        S3ObjectKey(self.key_of(&event.placed.event_path(event.event_id)))
+    /// The full key, prefix included, of one event's object.
+    pub(super) fn event_key(&self, event: S3EventAddress<'_>) -> String {
+        self.key_of(&event.placed.event_path(event.event_id))
     }
 
-    /// The prefix that lists one namespace's event objects.
+    /// The prefix that lists one namespace's event objects. Every listing
+    /// prefix ends with `/`, so it never matches a sibling folder that merely
+    /// shares a name prefix.
     #[must_use]
-    pub fn namespace_listing(&self, placed: &PlacedNamespace) -> S3ListPrefix {
-        S3ListPrefix(format!("{}/", self.key_of(&placed.root())))
+    pub fn namespace_listing(&self, placed: &PlacedNamespace) -> String {
+        format!("{}/", self.key_of(&placed.root()))
     }
 
     /// Read a key a namespace listing reported. Only `<digest>.yaml`
     /// directly in the namespace's `events/` folder is an event.
     #[must_use]
     pub fn listed_event(&self, listed: S3ListedKey<'_>) -> S3ListedEvent {
-        let KeyBelowPrefix::Below(path) = self.path_of(listed.key.as_str()) else {
+        let KeyBelowPrefix::Below(path) = self.path_of(listed.key) else {
             return S3ListedEvent::Unrelated;
         };
         match listed.placed.event_id_from_path(path) {
@@ -179,16 +118,15 @@ impl S3KeyPrefix {
 
     /// The prefix that lists the identity folders below the provider root.
     #[must_use]
-    pub fn identity_folders_listing(&self) -> S3ListPrefix {
-        S3ListPrefix(format!("{}/", self.key_of(PROVIDER_ROOT_DIR)))
+    pub fn identity_folders_listing(&self) -> String {
+        format!("{}/", self.key_of(PROVIDER_ROOT_DIR))
     }
 
     /// Read a folder the identity-folder listing reported.
     #[must_use]
-    pub fn listed_identity_folder(&self, folder: &S3CommonPrefix) -> S3IdentityFolder {
-        let S3ListPrefix(root) = self.identity_folders_listing();
+    pub fn listed_identity_folder(&self, folder: &str) -> S3IdentityFolder {
+        let root = self.identity_folders_listing();
         let Some(identity) = folder
-            .as_str()
             .strip_prefix(root.as_str())
             .and_then(|rest| rest.strip_suffix('/'))
         else {
@@ -202,20 +140,19 @@ impl S3KeyPrefix {
 
     /// The prefix that lists the namespaces in one identity's folder.
     #[must_use]
-    pub fn identity_namespaces_listing(&self, identity: &IdentityId) -> S3ListPrefix {
-        S3ListPrefix(format!(
+    pub fn identity_namespaces_listing(&self, identity: &IdentityId) -> String {
+        format!(
             "{}/",
             self.key_of(&PlacedNamespace::identity_log(identity.clone()).identity_dir())
-        ))
+        )
     }
 
     /// Read a folder an identity folder's listing reported: the identity's
     /// log, a vault it files, or something unrelated.
     #[must_use]
-    pub fn listed_namespace(&self, folder: &S3CommonPrefix) -> S3ListedNamespace {
-        let S3ListPrefix(root) = self.identity_folders_listing();
+    pub fn listed_namespace(&self, folder: &str) -> S3ListedNamespace {
+        let root = self.identity_folders_listing();
         let Some(rest) = folder
-            .as_str()
             .strip_prefix(root.as_str())
             .and_then(|rest| rest.strip_suffix('/'))
         else {
@@ -233,10 +170,7 @@ impl S3KeyPrefix {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        S3CommonPrefix, S3EventAddress, S3IdentityFolder, S3ListedEvent, S3ListedKey,
-        S3ListedNamespace, S3ListedObjectKey,
-    };
+    use super::{S3EventAddress, S3IdentityFolder, S3ListedEvent, S3ListedKey, S3ListedNamespace};
     use crate::{EventId, IdentityId, PlacedNamespace, S3KeyPrefix, StoreId};
 
     const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
@@ -266,34 +200,44 @@ mod tests {
     }
 
     #[test]
-    fn event_objects_take_the_local_folder_paths_below_the_prefix() -> anyhow::Result<()> {
+    fn event_objects_take_the_local_folder_paths_and_read_back_as_their_events()
+    -> anyhow::Result<()> {
         let layout = Layout::new()?;
         let team = S3KeyPrefix::parse("team/vaults/")?;
-        assert_eq!(
-            team.event_key(S3EventAddress {
-                placed: &layout.vault(),
+        let (vault, log) = (layout.vault(), layout.log());
+        for (prefix, placed, key) in [
+            (
+                &team,
+                &vault,
+                format!(
+                    "team/vaults/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/{DIGEST}.yaml"
+                ),
+            ),
+            (
+                &S3KeyPrefix::BucketRoot,
+                &log,
+                format!("meta-secret-nook/idn_abcdefghijk/log/events/{DIGEST}.yaml"),
+            ),
+        ] {
+            let built = prefix.event_key(S3EventAddress {
+                placed,
                 event_id: &layout.event,
-            })
-            .as_str(),
-            format!(
-                "team/vaults/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/{DIGEST}.yaml"
-            )
-        );
+            });
+            assert_eq!(built, key);
+            assert_eq!(
+                prefix.listed_event(S3ListedKey {
+                    placed,
+                    key: &built
+                }),
+                S3ListedEvent::Event(layout.event.clone())
+            );
+        }
         assert_eq!(
-            S3KeyPrefix::BucketRoot
-                .event_key(S3EventAddress {
-                    placed: &layout.log(),
-                    event_id: &layout.event,
-                })
-                .as_str(),
-            format!("meta-secret-nook/idn_abcdefghijk/log/events/{DIGEST}.yaml")
-        );
-        assert_eq!(
-            team.namespace_listing(&layout.log()).as_str(),
+            team.namespace_listing(&log),
             "team/vaults/meta-secret-nook/idn_abcdefghijk/log/events/"
         );
         assert_eq!(
-            S3KeyPrefix::BucketRoot.identity_folders_listing().as_str(),
+            S3KeyPrefix::BucketRoot.identity_folders_listing(),
             "meta-secret-nook/"
         );
         Ok(())
@@ -304,17 +248,7 @@ mod tests {
         let layout = Layout::new()?;
         let team = S3KeyPrefix::parse("team")?;
         let vault = layout.vault();
-        let listed = |key: String| {
-            team.listed_event(S3ListedKey {
-                placed: &vault,
-                key: &S3ListedObjectKey::from(key),
-            })
-        };
         let events = "team/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events";
-        assert_eq!(
-            listed(format!("{events}/{DIGEST}.yaml")),
-            S3ListedEvent::Event(layout.event.clone())
-        );
         for unrelated in [
             format!("{events}/{DIGEST}.yml"),
             format!("{events}/notes.txt"),
@@ -327,7 +261,10 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                listed(unrelated.clone()),
+                team.listed_event(S3ListedKey {
+                    placed: &vault,
+                    key: &unrelated,
+                }),
                 S3ListedEvent::Unrelated,
                 "{unrelated}"
             );
@@ -339,16 +276,15 @@ mod tests {
     fn folder_listings_name_identities_and_their_namespaces() -> anyhow::Result<()> {
         let layout = Layout::new()?;
         let team = S3KeyPrefix::parse("team")?;
-        let folder = |prefix: &str| S3CommonPrefix::from(prefix.to_owned());
         let S3IdentityFolder::Identity(identity) =
-            team.listed_identity_folder(&folder("team/meta-secret-nook/idn_abcdefghijk/"))
+            team.listed_identity_folder("team/meta-secret-nook/idn_abcdefghijk/")
         else {
             anyhow::bail!("an identity folder lists its namespaces");
         };
         assert_eq!(identity, layout.identity);
         // Its namespaces are listed below a prefix the layout builds again.
         assert_eq!(
-            team.identity_namespaces_listing(&identity).as_str(),
+            team.identity_namespaces_listing(&identity),
             "team/meta-secret-nook/idn_abcdefghijk/"
         );
         for unrelated in [
@@ -358,20 +294,18 @@ mod tests {
             "team/meta-secret-nook/idn_abcdefghijk/log/",
         ] {
             assert_eq!(
-                team.listed_identity_folder(&folder(unrelated)),
+                team.listed_identity_folder(unrelated),
                 S3IdentityFolder::Unrelated,
                 "{unrelated}"
             );
         }
 
         assert_eq!(
-            team.listed_namespace(&folder("team/meta-secret-nook/idn_abcdefghijk/log/")),
+            team.listed_namespace("team/meta-secret-nook/idn_abcdefghijk/log/"),
             S3ListedNamespace::Namespace(layout.log())
         );
         assert_eq!(
-            team.listed_namespace(&folder(
-                "team/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/"
-            )),
+            team.listed_namespace("team/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/"),
             S3ListedNamespace::Namespace(layout.vault())
         );
         for unrelated in [
@@ -381,7 +315,7 @@ mod tests {
             "meta-secret-nook/idn_abcdefghijk/log/",
         ] {
             assert_eq!(
-                team.listed_namespace(&folder(unrelated)),
+                team.listed_namespace(unrelated),
                 S3ListedNamespace::Unrelated,
                 "{unrelated}"
             );

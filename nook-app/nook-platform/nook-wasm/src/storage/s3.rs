@@ -14,17 +14,16 @@
 mod vault_listing;
 
 use std::collections::BTreeSet;
+use std::time::{Duration, UNIX_EPOCH};
 
 use js_sys::Date;
 use nook_core::{
-    EventId, EventLogNamespaceKind, EventStorageBytes, PlacedNamespace, S3CommonPrefix,
-    S3Connection, S3EventAddress, S3ExistingEvent, S3HttpMethod, S3HttpRequest, S3HttpStatus,
-    S3IdentityFolder, S3ListDepth, S3ListObjects, S3ListPage, S3ListPageSize, S3ListPrefix,
-    S3ListedEvent, S3ListedKey, S3ListedNamespace, S3ListedObjectKey, S3ListingContinuation,
-    S3ObjectDeletion, S3ObjectKey, S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestBody,
-    S3RequestSigner, S3RequestTime, S3Response, S3ResponseBody, S3UnixSeconds,
+    EventId, EventLogNamespaceKind, EventStorageBytes, PlacedNamespace, S3Connection,
+    S3EventAddress, S3ExistingEvent, S3HttpRequest, S3IdentityFolder, S3ListObjects, S3ListPage,
+    S3ListedEvent, S3ListedKey, S3ListedNamespace, S3ListingContinuation, S3ObjectDeletion,
+    S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestSigner, S3Response,
 };
-use reqwest::{Client, Method, RequestBuilder};
+use reqwest::{Client, Request};
 
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
@@ -33,8 +32,8 @@ pub(crate) use vault_listing::S3VaultListing;
 
 /// Every key and folder one listing reported, across all of its pages.
 struct S3ListedObjects {
-    keys: Vec<S3ListedObjectKey>,
-    folders: Vec<S3CommonPrefix>,
+    keys: Vec<String>,
+    folders: Vec<String>,
 }
 
 /// One S3 location, reached with this device's key.
@@ -44,84 +43,59 @@ pub(crate) struct S3Storage<'a> {
 }
 
 impl S3Storage<'_> {
-    /// The browser clock in whole seconds. Each request is signed when it is
-    /// built, so a long listing never sends a stale signature.
-    fn request_time() -> Result<S3RequestTime, NookError> {
+    /// Signs at the browser clock's current instant. Each request is signed
+    /// when it is built, so a long listing never sends a stale signature.
+    fn signer(&self) -> S3RequestSigner<'_> {
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
             reason = "Date.now() is a whole, non-negative millisecond count far below u64::MAX; \
                       `as` saturates otherwise, and the signer refuses an unsignable time"
         )]
-        let seconds = (Date::now() / 1000.0) as u64;
-        Ok(S3RequestTime::try_from(S3UnixSeconds::from(seconds))?)
-    }
-
-    fn signer(&self) -> Result<S3RequestSigner<'_>, NookError> {
-        Ok(S3RequestSigner {
+        let milliseconds = Date::now() as u64;
+        S3RequestSigner {
             connection: self.connection,
-            time: Self::request_time()?,
-        })
+            time: UNIX_EPOCH + Duration::from_millis(milliseconds),
+        }
     }
 
     /// Send one signed request exactly as built. The URL sets `Host`; a
     /// failed fetch, a refused CORS preflight included, is a network failure
     /// without the URL.
     async fn send(request: S3HttpRequest) -> Result<S3Response, NookError> {
-        let method = match request.method {
-            S3HttpMethod::Get => Method::GET,
-            S3HttpMethod::Put => Method::PUT,
-            S3HttpMethod::Delete => Method::DELETE,
-        };
-        let builder = request.headers.iter().fold(
-            Client::new().request(method, request.url.as_str()),
-            |builder: RequestBuilder, header| builder.header(header.name.as_str(), header.value()),
-        );
-        let builder = match request.body {
-            S3RequestBody::Empty => builder,
-            S3RequestBody::Event(bytes) => builder.body(Vec::<u8>::from(bytes)),
-        };
-        let response = builder
-            .send()
+        let request =
+            Request::try_from(request).map_err(|error| NookError::Network(error.without_url()))?;
+        let response = Client::new()
+            .execute(request)
             .await
             .map_err(|error| NookError::Network(error.without_url()))?;
-        let status = S3HttpStatus::from(response.status().as_u16());
+        let status = response.status();
         let body = response
             .bytes()
             .await
             .map_err(|error| NookError::Network(error.without_url()))?;
-        Ok(S3Response {
-            status,
-            body: S3ResponseBody::from(body.to_vec()),
-        })
-    }
-
-    /// The first page of one listing.
-    fn listing(prefix: S3ListPrefix) -> S3ListObjects {
-        S3ListObjects {
-            prefix,
-            depth: S3ListDepth::DirectChildren,
-            page: S3ListPage::First,
-            page_size: S3ListPageSize::MAXIMUM,
-        }
+        Ok(S3Response { status, body })
     }
 
     /// Every key and folder directly below a prefix, page after page.
-    async fn list(&self, prefix: S3ListPrefix) -> Result<S3ListedObjects, NookError> {
+    async fn list(&self, prefix: String) -> Result<S3ListedObjects, NookError> {
         let mut listed = S3ListedObjects {
             keys: Vec::new(),
             folders: Vec::new(),
         };
-        let mut page = Self::listing(prefix);
+        let mut listing = S3ListObjects {
+            prefix,
+            page: S3ListPage::First,
+        };
         loop {
-            let answer = Self::send(self.signer()?.list_objects(&page)?)
+            let answer = Self::send(self.signer().list_objects(&listing)?)
                 .await?
                 .into_listing()?;
             listed.keys.extend(answer.keys);
             listed.folders.extend(answer.folders);
             match answer.continuation {
                 S3ListingContinuation::Complete => return Ok(listed),
-                S3ListingContinuation::Continues(token) => page = page.next_page(token),
+                S3ListingContinuation::Continues(token) => listing.page = S3ListPage::After(token),
             }
         }
     }
@@ -165,17 +139,6 @@ pub(crate) struct S3EventStore<'a> {
 }
 
 impl S3EventStore<'_> {
-    fn key(&self, event_id: &EventId) -> S3ObjectKey {
-        self.storage
-            .connection
-            .location
-            .key_prefix
-            .event_key(S3EventAddress {
-                placed: self.placed,
-                event_id,
-            })
-    }
-
     /// The events the namespace holds, read from the event keys directly in
     /// its `events/` folder.
     pub(crate) async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
@@ -201,7 +164,10 @@ impl S3EventStore<'_> {
 
     /// One event's stored bytes, or that the namespace does not hold it.
     pub(crate) async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
-        let request = self.storage.signer()?.get_object(&self.key(event_id))?;
+        let request = self.storage.signer().get_object(S3EventAddress {
+            placed: self.placed,
+            event_id,
+        })?;
         Ok(match S3Storage::send(request).await?.into_object_read()? {
             S3ObjectRead::Found(bytes) => RemoteEventRead::Retrieved(bytes),
             S3ObjectRead::Absent => RemoteEventRead::Unavailable,
@@ -215,19 +181,19 @@ impl S3EventStore<'_> {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
-        let key = self.key(event_id);
+        let event = S3EventAddress {
+            placed: self.placed,
+            event_id,
+        };
         let requested = EventStorageBytes::from(bytes.to_vec());
-        let request = self
-            .storage
-            .signer()?
-            .put_object_if_absent(S3ObjectUpload {
-                key: &key,
-                body: &requested,
-            })?;
+        let request = self.storage.signer().put_object_if_absent(S3ObjectUpload {
+            event,
+            body: &requested,
+        })?;
         match S3Storage::send(request).await?.into_object_write()? {
             S3ObjectWrite::Created => Ok(()),
             S3ObjectWrite::AlreadyExists => {
-                let stored = S3Storage::send(self.storage.signer()?.get_object(&key)?)
+                let stored = S3Storage::send(self.storage.signer().get_object(event)?)
                     .await?
                     .into_object_read()?;
                 Ok(S3ExistingEvent {
@@ -243,7 +209,10 @@ impl S3EventStore<'_> {
     pub(crate) async fn delete_events(&self) -> Result<usize, NookError> {
         let mut outcomes = Vec::new();
         for event_id in self.event_ids().await? {
-            let request = self.storage.signer()?.delete_object(&self.key(&event_id))?;
+            let request = self.storage.signer().delete_object(S3EventAddress {
+                placed: self.placed,
+                event_id: &event_id,
+            })?;
             outcomes.push(S3Storage::send(request).await?.into_object_deletion()?);
         }
         Ok(outcomes

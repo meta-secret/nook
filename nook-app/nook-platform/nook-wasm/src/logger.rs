@@ -32,7 +32,7 @@ use std::{fmt, mem};
 use tracing::field::{Field, Visit};
 use tracing::{Level, subscriber};
 use tracing_subscriber::Layer;
-use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
@@ -461,7 +461,8 @@ impl LoggerState {
 }
 
 /// Install the global `tracing` subscriber (once). Wires a reloadable level
-/// filter -> [`IndexedDbLayer`] -> `tracing-web` performance timeline layer,
+/// filter and the `aws_sigv4` silencer -> [`IndexedDbLayer`] -> `tracing-web`
+/// performance timeline layer,
 /// and stashes a setter so [`log_set_level`] can move the filter at runtime.
 #[wasm_bindgen]
 #[cfg_attr(
@@ -482,9 +483,15 @@ impl LoggerState {
         let (filter, handle) = ReloadLayer::new(active.to_filter());
 
         let perf = tracing_web::performance_layer().with_details_from_fields(DefaultFields::new());
+        // The S3 signer traces every request it signs, URL included; none of
+        // its events reaches the console or the log store at any level.
+        let quiet_signer = Targets::new()
+            .with_default(LevelFilter::TRACE)
+            .with_target("aws_sigv4", LevelFilter::OFF);
 
         let subscriber = Registry::default()
             .with(filter)
+            .with(quiet_signer)
             .with(IndexedDbLayer)
             .with(perf);
 

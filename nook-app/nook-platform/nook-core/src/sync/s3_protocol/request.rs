@@ -7,307 +7,212 @@
 //!
 //! Every request is path-style, `<endpoint>/<bucket>[/<key>]`, so a bucket
 //! name never becomes part of a host name and the endpoint's certificate
-//! covers every bucket. A request is complete: the transport sends its
-//! method, URL, headers, and body exactly as given and lets the URL set
-//! `Host`, which is signed as the endpoint's `host[:port]`. The secret signs
-//! the request and appears in none of its parts.
+//! covers every bucket. `aws-sigv4` signs it in the `Authorization` header,
+//! with the body's real SHA-256, at the instant the caller supplies; the URL's
+//! authority is the signed `host`. The transport sends the request unchanged.
+//! The secret enters only the signing-key derivation and appears in no URL,
+//! header, or error.
 
-use std::{fmt, iter};
+use std::iter;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::{
-    S3CanonicalPath, S3CanonicalQuery, S3HttpMethod, S3ListDepth, S3ListObjects, S3ListPage,
-    S3ObjectKey, S3PayloadHash, S3QueryParameter, S3RequestTime, S3SignedHeader, S3SigningError,
-    S3SigningInput,
+use aws_credential_types::Credentials;
+use aws_sigv4::http_request::{
+    self, PayloadChecksumKind, PercentEncodingMode, SignableBody, SignableRequest, SigningSettings,
+    UriPathNormalizationMode,
 };
+use aws_sigv4::sign::v4;
+use bytes::Bytes;
+use http::Request;
+use http::header::{AUTHORIZATION, IF_NONE_MATCH};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use time::OffsetDateTime;
+
+use super::S3EventAddress;
 use crate::{EventStorageBytes, S3Connection};
 
-/// The headers a request sends besides `Host`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum S3RequestHeaderName {
-    Authorization,
-    AmzContentSha256,
-    AmzDate,
-    IfNoneMatch,
-}
-
-impl S3RequestHeaderName {
-    /// The lowercase header name.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Authorization => "authorization",
-            Self::AmzContentSha256 => "x-amz-content-sha256",
-            Self::AmzDate => "x-amz-date",
-            Self::IfNoneMatch => "if-none-match",
-        }
-    }
-}
-
-/// One header to send exactly as given.
-#[derive(Clone, PartialEq, Eq)]
-pub struct S3RequestHeader {
-    pub name: S3RequestHeaderName,
-    value: String,
-}
-
-impl S3RequestHeader {
-    #[must_use]
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-}
-
-/// A signature authorizes its exact request until the request time is too
-/// old, so diagnostics show the `Authorization` value redacted.
-impl fmt::Debug for S3RequestHeader {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self.name {
-            S3RequestHeaderName::Authorization => "[redacted]",
-            S3RequestHeaderName::AmzContentSha256
-            | S3RequestHeaderName::AmzDate
-            | S3RequestHeaderName::IfNoneMatch => self.value.as_str(),
-        };
-        formatter
-            .debug_struct("S3RequestHeader")
-            .field("name", &self.name.as_str())
-            .field("value", &value)
-            .finish()
-    }
-}
-
-/// The full URL of a request: endpoint, bucket, key, and query.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct S3RequestUrl(String);
-
-impl S3RequestUrl {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        let Self(url) = self;
-        url
-    }
-}
-
-/// What a request uploads.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum S3RequestBody {
-    Empty,
-    Event(EventStorageBytes),
-}
-
-impl S3RequestBody {
-    fn bytes(&self) -> &[u8] {
-        match self {
-            Self::Empty => &[],
-            Self::Event(bytes) => bytes.as_ref(),
-        }
-    }
-}
+/// RFC 3986 unreserved characters stay literal; every other byte is
+/// percent-encoded, so the URL is already in the form S3 signs.
+const UNRESERVED: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
 
 /// One signed request, ready for the transport.
+pub type S3HttpRequest = Request<Bytes>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum S3SigningError {
+    #[error("S3 request time is outside the signable range")]
+    RequestTimeOutOfRange,
+    #[error("S3 request could not be signed")]
+    Unsignable,
+}
+
+/// Which page of a listing a request asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct S3HttpRequest {
-    pub method: S3HttpMethod,
-    pub url: S3RequestUrl,
-    pub headers: Vec<S3RequestHeader>,
-    pub body: S3RequestBody,
+pub enum S3ListPage {
+    First,
+    /// The page after the one that answered with this continuation token.
+    After(String),
+}
+
+/// One `ListObjectsV2` page of the keys and folders directly below a prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S3ListObjects {
+    pub prefix: String,
+    pub page: S3ListPage,
 }
 
 /// One event object to create.
 #[derive(Clone, Copy)]
 pub struct S3ObjectUpload<'a> {
-    pub key: &'a S3ObjectKey,
+    pub event: S3EventAddress<'a>,
     pub body: &'a EventStorageBytes,
-}
-
-/// `If-None-Match: *`, signed so that it cannot be dropped on the way.
-const KEY_ABSENT: [S3SignedHeader<'static>; 1] = [S3SignedHeader {
-    name: S3RequestHeaderName::IfNoneMatch.as_str(),
-    value: "*",
-}];
-
-/// Whether a write must leave an existing object in place.
-#[derive(Clone, Copy)]
-enum WriteCondition {
-    Unconditional,
-    /// S3 answers `412` instead of replacing an existing object.
-    KeyAbsent,
-}
-
-impl WriteCondition {
-    fn signed_headers(self) -> &'static [S3SignedHeader<'static>] {
-        match self {
-            Self::Unconditional => &[],
-            Self::KeyAbsent => &KEY_ABSENT,
-        }
-    }
-
-    fn request_headers(self) -> Vec<S3RequestHeader> {
-        match self {
-            Self::Unconditional => Vec::new(),
-            Self::KeyAbsent => vec![S3RequestHeader {
-                name: S3RequestHeaderName::IfNoneMatch,
-                value: "*".to_owned(),
-            }],
-        }
-    }
-}
-
-/// One request before it is signed.
-struct UnsignedRequest {
-    method: S3HttpMethod,
-    path: S3CanonicalPath,
-    query: S3CanonicalQuery,
-    condition: WriteCondition,
-    body: S3RequestBody,
 }
 
 /// Signs requests for one connection at one instant.
 #[derive(Clone, Copy)]
 pub struct S3RequestSigner<'a> {
     pub connection: &'a S3Connection,
-    pub time: S3RequestTime,
+    pub time: SystemTime,
 }
 
 impl S3RequestSigner<'_> {
-    /// `GetObject` of one key.
-    pub fn get_object(self, key: &S3ObjectKey) -> Result<S3HttpRequest, S3SigningError> {
-        self.sign(UnsignedRequest {
-            method: S3HttpMethod::Get,
-            path: self.object_path(key),
-            query: S3CanonicalQuery::of(&[]),
-            condition: WriteCondition::Unconditional,
-            body: S3RequestBody::Empty,
-        })
+    /// `GetObject` of one event.
+    pub fn get_object(self, event: S3EventAddress<'_>) -> Result<S3HttpRequest, S3SigningError> {
+        self.sign(Request::get(self.object_url(event)).body(Bytes::new()))
     }
 
-    /// `PutObject` that creates the key, or is answered `412` when the key
-    /// is taken.
+    /// `PutObject` that creates the event's key, or is answered `412` when the
+    /// key is taken. `If-None-Match` is signed, so it cannot be dropped.
     pub fn put_object_if_absent(
         self,
         upload: S3ObjectUpload<'_>,
     ) -> Result<S3HttpRequest, S3SigningError> {
-        self.sign(UnsignedRequest {
-            method: S3HttpMethod::Put,
-            path: self.object_path(upload.key),
-            query: S3CanonicalQuery::of(&[]),
-            condition: WriteCondition::KeyAbsent,
-            body: S3RequestBody::Event(upload.body.clone()),
-        })
-    }
-
-    /// `DeleteObject` of one key.
-    pub fn delete_object(self, key: &S3ObjectKey) -> Result<S3HttpRequest, S3SigningError> {
-        self.sign(UnsignedRequest {
-            method: S3HttpMethod::Delete,
-            path: self.object_path(key),
-            query: S3CanonicalQuery::of(&[]),
-            condition: WriteCondition::Unconditional,
-            body: S3RequestBody::Empty,
-        })
-    }
-
-    /// One page of `ListObjectsV2`.
-    pub fn list_objects(self, listing: &S3ListObjects) -> Result<S3HttpRequest, S3SigningError> {
-        let page_size = listing.page_size.text();
-        let mut parameters = vec![
-            S3QueryParameter {
-                name: "list-type",
-                value: "2",
-            },
-            S3QueryParameter {
-                name: "prefix",
-                value: listing.prefix.as_str(),
-            },
-            S3QueryParameter {
-                name: "max-keys",
-                value: &page_size,
-            },
-        ];
-        parameters.extend(match listing.depth {
-            S3ListDepth::DirectChildren => vec![S3QueryParameter {
-                name: "delimiter",
-                value: "/",
-            }],
-            S3ListDepth::AllDescendants => Vec::new(),
-        });
-        parameters.extend(match &listing.page {
-            S3ListPage::First => Vec::new(),
-            S3ListPage::After(token) => vec![S3QueryParameter {
-                name: "continuation-token",
-                value: token.as_str(),
-            }],
-        });
-        self.sign(UnsignedRequest {
-            method: S3HttpMethod::Get,
-            path: S3CanonicalPath::of_segments([self.connection.location.bucket.as_str()]),
-            query: S3CanonicalQuery::of(&parameters),
-            condition: WriteCondition::Unconditional,
-            body: S3RequestBody::Empty,
-        })
-    }
-
-    /// `/<bucket>/<key>`, each `/`-separated part of the key encoded alone.
-    fn object_path(self, key: &S3ObjectKey) -> S3CanonicalPath {
-        S3CanonicalPath::of_segments(
-            iter::once(self.connection.location.bucket.as_str()).chain(key.as_str().split('/')),
+        self.sign(
+            Request::put(self.object_url(upload.event))
+                .header(IF_NONE_MATCH, "*")
+                .body(Bytes::copy_from_slice(upload.body.as_ref())),
         )
     }
 
-    fn sign(self, request: UnsignedRequest) -> Result<S3HttpRequest, S3SigningError> {
+    /// `DeleteObject` of one event.
+    pub fn delete_object(self, event: S3EventAddress<'_>) -> Result<S3HttpRequest, S3SigningError> {
+        self.sign(Request::delete(self.object_url(event)).body(Bytes::new()))
+    }
+
+    /// One page of `ListObjectsV2`, delimited at `/` as a folder lists its
+    /// entries.
+    pub fn list_objects(self, listing: &S3ListObjects) -> Result<S3HttpRequest, S3SigningError> {
         let location = &self.connection.location;
-        let host = location.endpoint.host_header();
-        let payload = S3PayloadHash::of(request.body.bytes());
-        let authorization = S3SigningInput {
-            method: request.method,
-            host: &host,
-            path: &request.path,
-            query: &request.query,
-            headers: request.condition.signed_headers(),
-            payload: &payload,
-            time: self.time,
-            region: &location.region,
-            credentials: &self.connection.credentials,
-        }
-        .sign()?;
-        let url = match request.query.as_str() {
-            "" => format!("{}{}", location.endpoint, request.path.as_str()),
-            query => format!("{}{}?{query}", location.endpoint, request.path.as_str()),
+        let continuation = match &listing.page {
+            S3ListPage::First => String::new(),
+            S3ListPage::After(token) => {
+                format!(
+                    "&continuation-token={}",
+                    utf8_percent_encode(token, UNRESERVED)
+                )
+            }
         };
-        let mut headers = vec![
-            S3RequestHeader {
-                name: S3RequestHeaderName::Authorization,
-                value: authorization.into_inner(),
-            },
-            S3RequestHeader {
-                name: S3RequestHeaderName::AmzContentSha256,
-                value: payload.as_str().to_owned(),
-            },
-            S3RequestHeader {
-                name: S3RequestHeaderName::AmzDate,
-                value: self.time.amz_date(),
-            },
-        ];
-        headers.extend(request.condition.request_headers());
-        Ok(S3HttpRequest {
-            method: request.method,
-            url: S3RequestUrl(url),
-            headers,
-            body: request.body,
-        })
+        let url = format!(
+            "{}/{}?delimiter=%2F&list-type=2&prefix={}{continuation}",
+            location.endpoint,
+            utf8_percent_encode(location.bucket.as_str(), UNRESERVED),
+            utf8_percent_encode(&listing.prefix, UNRESERVED),
+        );
+        self.sign(Request::get(url).body(Bytes::new()))
+    }
+
+    /// `<endpoint>/<bucket>/<key>`, each `/`-separated part of the key that
+    /// the layout builds for the event encoded alone.
+    fn object_url(self, event: S3EventAddress<'_>) -> String {
+        let location = &self.connection.location;
+        let key = location.key_prefix.event_key(event);
+        iter::once(location.bucket.as_str())
+            .chain(key.split('/'))
+            .fold(location.endpoint.to_string(), |url, segment| {
+                format!("{url}/{}", utf8_percent_encode(segment, UNRESERVED))
+            })
+    }
+
+    /// Sign the request the `http` builder produced, with S3's settings: the
+    /// URL is signed exactly as encoded, and the body hash is sent as
+    /// `x-amz-content-sha256`.
+    fn sign(self, built: http::Result<S3HttpRequest>) -> Result<S3HttpRequest, S3SigningError> {
+        let mut request = built.map_err(|_| S3SigningError::Unsignable)?;
+        // The signer writes the instant through `time`, which panics after
+        // the year 9999, so an unwritable clock fails here instead.
+        self.time
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .and_then(|since| i64::try_from(since.as_secs()).ok())
+            .and_then(|seconds| OffsetDateTime::from_unix_timestamp(seconds).ok())
+            .ok_or(S3SigningError::RequestTimeOutOfRange)?;
+        let credentials = &self.connection.credentials;
+        let identity = Credentials::new(
+            credentials.access_key_id.as_str(),
+            credentials.secret_access_key.expose(),
+            None,
+            None,
+            "nook",
+        )
+        .into();
+        let mut settings = SigningSettings::default();
+        settings.percent_encoding_mode = PercentEncodingMode::Single;
+        settings.uri_path_normalization_mode = UriPathNormalizationMode::Disabled;
+        settings.payload_checksum_kind = PayloadChecksumKind::XAmzSha256;
+        let params = v4::SigningParams::builder()
+            .identity(&identity)
+            .region(self.connection.location.region.as_str())
+            .name("s3")
+            .time(self.time)
+            .settings(settings)
+            .build()
+            .map_err(|_| S3SigningError::Unsignable)?
+            .into();
+        let headers = request
+            .headers()
+            .iter()
+            .map(|(name, value)| value.to_str().map(|value| (name.as_str(), value)))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| S3SigningError::Unsignable)?;
+        let signable = SignableRequest::new(
+            request.method().as_str(),
+            request.uri().to_string(),
+            headers.into_iter(),
+            SignableBody::Bytes(request.body()),
+        )
+        .map_err(|_| S3SigningError::Unsignable)?;
+        let (instructions, _signature) = http_request::sign(signable, &params)
+            .map_err(|_| S3SigningError::Unsignable)?
+            .into_parts();
+        instructions.apply_to_request_http1x(&mut request);
+        // A signature authorizes its exact request until the request time is
+        // too old, so diagnostics show it redacted.
+        let Some(authorization) = request.headers_mut().get_mut(AUTHORIZATION) else {
+            return Err(S3SigningError::Unsignable);
+        };
+        authorization.set_sensitive(true);
+        Ok(request)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use bytes::Bytes;
+    use http::{Method, Request};
+
     use super::{
-        S3HttpRequest, S3ObjectUpload, S3RequestBody, S3RequestHeaderName, S3RequestSigner,
+        S3HttpRequest, S3ListObjects, S3ListPage, S3ObjectUpload, S3RequestSigner, S3SigningError,
     };
     use crate::{
         EventId, EventStorageBytes, IdentityId, PlacedNamespace, S3AccessKeyId, S3BucketName,
-        S3Connection, S3Credentials, S3Endpoint, S3EventAddress, S3HttpMethod, S3HttpStatus,
-        S3KeyPrefix, S3ListDepth, S3ListObjects, S3ListPage, S3ListPageSize, S3ListingContinuation,
-        S3Location, S3ObjectKey, S3Region, S3RequestTime, S3Response, S3ResponseBody,
-        S3SecretAccessKey, S3UnixSeconds, StoreId,
+        S3Connection, S3Credentials, S3Endpoint, S3EventAddress, S3KeyPrefix, S3Location, S3Region,
+        S3SecretAccessKey, StoreId,
     };
 
     const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
@@ -315,236 +220,169 @@ mod tests {
     const SIGNED_AT: u64 = 1_793_484_445;
     const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
 
-    struct Fixture {
-        connection: S3Connection,
-        time: S3RequestTime,
+    fn connection(endpoint: &str) -> anyhow::Result<S3Connection> {
+        Ok(S3Connection {
+            location: S3Location {
+                endpoint: S3Endpoint::parse(endpoint)?,
+                region: S3Region::parse("us-east-1")?,
+                bucket: S3BucketName::parse("nook-dev")?,
+                key_prefix: S3KeyPrefix::parse("e2e/run-1")?,
+            },
+            credentials: S3Credentials {
+                access_key_id: S3AccessKeyId::parse("device-a")?,
+                secret_access_key: S3SecretAccessKey::parse(SECRET)?,
+            },
+        })
     }
 
-    impl Fixture {
-        fn new(endpoint: &str) -> anyhow::Result<Self> {
-            Ok(Self {
-                connection: S3Connection {
-                    location: S3Location {
-                        endpoint: S3Endpoint::parse(endpoint)?,
-                        region: S3Region::parse("us-east-1")?,
-                        bucket: S3BucketName::parse("nook-dev")?,
-                        key_prefix: S3KeyPrefix::parse("e2e/run-1")?,
-                    },
-                    credentials: S3Credentials {
-                        access_key_id: S3AccessKeyId::parse("device-a")?,
-                        secret_access_key: S3SecretAccessKey::parse(SECRET)?,
-                    },
-                },
-                time: S3RequestTime::try_from(S3UnixSeconds::from(SIGNED_AT))?,
-            })
-        }
+    fn at(unix_seconds: u64) -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(unix_seconds)
+    }
 
-        fn signer(&self) -> S3RequestSigner<'_> {
-            S3RequestSigner {
-                connection: &self.connection,
-                time: self.time,
-            }
-        }
-
-        fn event_key(&self) -> anyhow::Result<S3ObjectKey> {
-            Ok(self
-                .connection
-                .location
-                .key_prefix
-                .event_key(S3EventAddress {
-                    placed: &PlacedNamespace::vault(
-                        IdentityId::parse("idn_abcdefghijk")?,
-                        StoreId::parse("store_abcdefghijk")?,
-                    ),
-                    event_id: &EventId::parse(&format!("sha256u:{DIGEST}"))?,
-                }))
+    fn signer(connection: &S3Connection) -> S3RequestSigner<'_> {
+        S3RequestSigner {
+            connection,
+            time: at(SIGNED_AT),
         }
     }
 
-    /// One sent header, laid out for comparison.
-    #[derive(Debug, PartialEq, Eq)]
-    struct SentHeader {
-        name: &'static str,
-        value: String,
+    fn header<'a>(request: &'a S3HttpRequest, name: &str) -> Option<&'a str> {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
     }
-
-    impl SentHeader {
-        fn of(request: &S3HttpRequest) -> Vec<Self> {
-            request
-                .headers
-                .iter()
-                .map(|header| Self {
-                    name: header.name.as_str(),
-                    value: header.value().to_owned(),
-                })
-                .collect()
-        }
-    }
-
-    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     #[test]
-    fn a_create_only_put_signs_its_body_and_its_condition() -> anyhow::Result<()> {
-        let fixture = Fixture::new("http://127.0.0.1:8333")?;
-        let key = fixture.event_key()?;
-        let body = EventStorageBytes::from(b"event: first\n".to_vec());
-        let request = fixture.signer().put_object_if_absent(S3ObjectUpload {
-            key: &key,
-            body: &body,
-        })?;
-        assert_eq!(request.method, S3HttpMethod::Put);
+    fn the_aws_get_object_example_signs_to_its_published_signature() -> anyhow::Result<()> {
+        // Amazon S3 API Reference, "Signature Calculations for the
+        // Authorization Header: Transferring Payload in a Single Chunk".
+        let example = S3Connection {
+            location: S3Location {
+                endpoint: S3Endpoint::parse("https://examplebucket.s3.amazonaws.com")?,
+                region: S3Region::parse("us-east-1")?,
+                bucket: S3BucketName::parse("examplebucket")?,
+                key_prefix: S3KeyPrefix::BucketRoot,
+            },
+            credentials: S3Credentials {
+                access_key_id: S3AccessKeyId::parse("AKIAIOSFODNN7EXAMPLE")?,
+                secret_access_key: S3SecretAccessKey::parse(
+                    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                )?,
+            },
+        };
+        let signed = S3RequestSigner {
+            connection: &example,
+            // 2013-05-24T00:00:00Z.
+            time: at(1_369_353_600),
+        }
+        .sign(
+            Request::get("https://examplebucket.s3.amazonaws.com/test.txt")
+                .header("range", "bytes=0-9")
+                .body(Bytes::new()),
+        )?;
         assert_eq!(
-            request.url.as_str(),
-            format!(
-                "http://127.0.0.1:8333/nook-dev/e2e/run-1/meta-secret-nook/idn_abcdefghijk/\
-                 store_abcdefghijk/events/{DIGEST}.yaml"
+            header(&signed, "authorization"),
+            Some(
+                "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, \
+                 SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, \
+                 Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"
             )
         );
-        // The signature was computed independently from the canonical request
-        // `PUT`, the URL path, an empty query, the `host:127.0.0.1:8333`,
-        // `if-none-match:*`, `x-amz-content-sha256`, and `x-amz-date` lines,
-        // and the body's SHA-256.
-        assert_eq!(
-            SentHeader::of(&request),
-            vec![
-                SentHeader {
-                    name: "authorization",
-                    value: "AWS4-HMAC-SHA256 Credential=device-a/20261031/us-east-1/s3/aws4_request, \
-                            SignedHeaders=host;if-none-match;x-amz-content-sha256;x-amz-date, \
-                            Signature=3092bda55ca4107d3b8da51c00caab0cc43f0d539d311a351056df02e0040426"
-                        .to_owned(),
-                },
-                SentHeader {
-                    name: "x-amz-content-sha256",
-                    value: "634e0e87464f7ec2b8293a0b8fb86169f62a1b5086d76dc9bd3a92b799ed41cf".to_owned(),
-                },
-                SentHeader {
-                    name: "x-amz-date",
-                    value: "20261031T220725Z".to_owned(),
-                },
-                SentHeader {
-                    name: "if-none-match",
-                    value: "*".to_owned(),
-                },
-            ]
-        );
-        assert_eq!(request.body, S3RequestBody::Event(body));
         Ok(())
     }
 
     #[test]
-    fn a_listing_page_signs_its_whole_query() -> anyhow::Result<()> {
-        let fixture = Fixture::new("https://s3.example.com")?;
-        let listing = S3ListObjects {
-            prefix: fixture
-                .connection
-                .location
-                .key_prefix
-                .identity_folders_listing(),
-            depth: S3ListDepth::DirectChildren,
-            page: S3ListPage::First,
-            page_size: S3ListPageSize::MAXIMUM,
-        };
-        let first = fixture.signer().list_objects(&listing)?;
-        assert_eq!(first.method, S3HttpMethod::Get);
-        assert_eq!(
-            first.url.as_str(),
-            "https://s3.example.com/nook-dev?delimiter=%2F&list-type=2&max-keys=1000\
-             &prefix=e2e%2Frun-1%2Fmeta-secret-nook%2F"
+    fn a_create_only_put_signs_its_condition_and_its_body() -> anyhow::Result<()> {
+        let connection = connection("http://127.0.0.1:8333")?;
+        let vault = PlacedNamespace::vault(
+            IdentityId::parse("idn_abcdefghijk")?,
+            StoreId::parse("store_abcdefghijk")?,
         );
+        let event_id = EventId::parse(&format!("sha256u:{DIGEST}"))?;
+        let event = S3EventAddress {
+            placed: &vault,
+            event_id: &event_id,
+        };
+        let body = EventStorageBytes::from(b"event: first\n".to_vec());
+        let put =
+            signer(&connection).put_object_if_absent(S3ObjectUpload { event, body: &body })?;
+        let url = format!(
+            "http://127.0.0.1:8333/nook-dev/e2e/run-1/meta-secret-nook/idn_abcdefghijk/\
+             store_abcdefghijk/events/{DIGEST}.yaml"
+        );
+        assert_eq!(put.method(), Method::PUT);
+        assert_eq!(put.uri().to_string(), url);
+        assert_eq!(put.body().as_ref(), b"event: first\n");
+        assert_eq!(header(&put, "if-none-match"), Some("*"));
+        // The SHA-256 of `event: first\n`.
         assert_eq!(
-            SentHeader::of(&first)
-                .first()
-                .map(|header| header.value.clone()),
+            header(&put, "x-amz-content-sha256"),
+            Some("634e0e87464f7ec2b8293a0b8fb86169f62a1b5086d76dc9bd3a92b799ed41cf")
+        );
+        assert_eq!(header(&put, "x-amz-date"), Some("20261031T220725Z"));
+        // Computed independently from the canonical request `PUT`, the URL
+        // path, an empty query, the `host:127.0.0.1:8333`, `if-none-match:*`,
+        // `x-amz-content-sha256`, and `x-amz-date` lines, and the body hash.
+        assert_eq!(
+            header(&put, "authorization"),
             Some(
                 "AWS4-HMAC-SHA256 Credential=device-a/20261031/us-east-1/s3/aws4_request, \
-                 SignedHeaders=host;x-amz-content-sha256;x-amz-date, \
-                 Signature=607bcba7e68baea879e28e2e9c17da4bb052bfe0557030d0d0ded15c4ca8eefa"
-                    .to_owned()
+                 SignedHeaders=host;if-none-match;x-amz-content-sha256;x-amz-date, \
+                 Signature=3092bda55ca4107d3b8da51c00caab0cc43f0d539d311a351056df02e0040426"
             )
         );
-        assert_eq!(first.body, S3RequestBody::Empty);
+        let shown = format!("{put:?}");
+        assert!(!shown.contains(SECRET), "{shown}");
+        assert!(!shown.contains("Signature="), "{shown}");
 
-        let truncated = S3Response {
-            status: S3HttpStatus::from(200),
-            body: S3ResponseBody::from(
-                "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>\
-                 1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=</NextContinuationToken>\
-                 </ListBucketResult>"
-                    .as_bytes()
-                    .to_vec(),
-            ),
+        // Reads and deletes address the same object, without a body or a
+        // condition.
+        for (request, method) in [
+            (signer(&connection).get_object(event)?, Method::GET),
+            (signer(&connection).delete_object(event)?, Method::DELETE),
+        ] {
+            assert_eq!(request.method(), method);
+            assert_eq!(request.uri().to_string(), url);
+            assert!(request.body().is_empty());
+            assert_eq!(header(&request, "if-none-match"), None);
         }
-        .into_listing()?;
-        let S3ListingContinuation::Continues(token) = truncated.continuation else {
-            anyhow::bail!("a truncated page continues");
+
+        let unwritable = S3RequestSigner {
+            connection: &connection,
+            time: at(253_402_300_800),
         };
-        let next = fixture.signer().list_objects(&listing.next_page(token))?;
         assert_eq!(
-            next.url.as_str(),
-            "https://s3.example.com/nook-dev?continuation-token=1ueGcxLPRx1Tr%2FXYExHnhbYLgveDs2J\
-             %2Fwm36Hy4vbOwM%3D&delimiter=%2F&list-type=2&max-keys=1000\
-             &prefix=e2e%2Frun-1%2Fmeta-secret-nook%2F"
+            unwritable.get_object(event).err(),
+            Some(S3SigningError::RequestTimeOutOfRange)
         );
         Ok(())
     }
 
     #[test]
-    fn reads_and_deletes_address_the_object_without_a_body() -> anyhow::Result<()> {
-        let fixture = Fixture::new("http://[::1]:9000")?;
-        let key = fixture.event_key()?;
-        let read = fixture.signer().get_object(&key)?;
-        let delete = fixture.signer().delete_object(&key)?;
-        assert_eq!(read.method, S3HttpMethod::Get);
-        assert_eq!(delete.method, S3HttpMethod::Delete);
-        for request in [&read, &delete] {
-            assert_eq!(
-                request.url.as_str(),
-                format!(
-                    "http://[::1]:9000/nook-dev/e2e/run-1/meta-secret-nook/idn_abcdefghijk/\
-                     store_abcdefghijk/events/{DIGEST}.yaml"
-                )
-            );
-            assert_eq!(request.body, S3RequestBody::Empty);
-            assert_eq!(
-                request
-                    .headers
-                    .iter()
-                    .map(|header| header.name)
-                    .collect::<Vec<_>>(),
-                vec![
-                    S3RequestHeaderName::Authorization,
-                    S3RequestHeaderName::AmzContentSha256,
-                    S3RequestHeaderName::AmzDate,
-                ]
-            );
-            assert_eq!(
-                SentHeader::of(request)
-                    .get(1)
-                    .map(|header| header.value.as_str()),
-                Some(EMPTY_SHA256)
-            );
-        }
-        assert_ne!(read.headers.first(), delete.headers.first());
-        Ok(())
-    }
-
-    #[test]
-    fn no_part_of_a_request_carries_the_secret() -> anyhow::Result<()> {
-        let fixture = Fixture::new("https://s3.example.com")?;
-        let key = fixture.event_key()?;
-        let body = EventStorageBytes::from(b"event: first\n".to_vec());
-        let request = fixture.signer().put_object_if_absent(S3ObjectUpload {
-            key: &key,
-            body: &body,
-        })?;
-        let shown = format!("{request:?}");
-        assert!(!shown.contains(SECRET), "{shown}");
-        assert!(!shown.contains("Signature="), "{shown}");
-        assert!(!request.url.as_str().contains(SECRET));
-        for header in &request.headers {
-            assert!(!header.value().contains(SECRET), "{header:?}");
-        }
+    fn a_listing_continues_with_its_token_encoded_and_no_credentials() -> anyhow::Result<()> {
+        let connection = connection("https://s3.example.com")?;
+        let mut listing = S3ListObjects {
+            prefix: connection.location.key_prefix.identity_folders_listing(),
+            page: S3ListPage::First,
+        };
+        let first = signer(&connection).list_objects(&listing)?;
+        assert_eq!(first.method(), Method::GET);
+        assert_eq!(
+            first.uri().to_string(),
+            "https://s3.example.com/nook-dev?delimiter=%2F&list-type=2\
+             &prefix=e2e%2Frun-1%2Fmeta-secret-nook%2F"
+        );
+        listing.page = S3ListPage::After("1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vb+M=".to_owned());
+        let next = signer(&connection).list_objects(&listing)?;
+        let url = next.uri().to_string();
+        assert_eq!(
+            url,
+            "https://s3.example.com/nook-dev?delimiter=%2F&list-type=2\
+             &prefix=e2e%2Frun-1%2Fmeta-secret-nook%2F\
+             &continuation-token=1ueGcxLPRx1Tr%2FXYExHnhbYLgveDs2J%2Fwm36Hy4vb%2BM%3D"
+        );
+        assert!(!url.contains(SECRET) && !url.contains("device-a"), "{url}");
         Ok(())
     }
 }

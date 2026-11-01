@@ -576,13 +576,14 @@ owns the object keys, the create-only writes, and the listings.
   - Loopback HTTP works only where no CSP applies. Vite's dev, preview, and e2e
     servers send none, and the extension pages set no `connect-src`.
 - **Signing:** Rust signs each request with AWS Signature Version 4 in the
-  `Authorization` header. The URLs are path-style, the body's real SHA-256 is
-  signed, and the browser clock supplies the time. `nook-wasm` sends the
-  request unchanged.
+  `Authorization` header, through the `aws-sigv4` crate. The URLs are
+  path-style, the body's real SHA-256 is signed, and the browser clock supplies
+  the time. `nook-wasm` sends the request unchanged.
   - The secret enters only the signing-key derivation. It appears in no URL,
-    header, log line, error, or `Debug` output.
+    header, log line, error, or `Debug` output. The logger drops the signer's
+    `aws_sigv4` trace events at every level.
   - Any failure other than the key refusal below keeps its category and status.
-    An error body is read for its code only, because its message can name keys.
+    An error body is never read, because its message can name keys.
 
 **Prohibited:** presign each request as a query string so the browser can fetch
 a plain URL.
