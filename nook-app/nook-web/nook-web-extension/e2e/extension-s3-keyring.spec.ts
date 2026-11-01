@@ -5,10 +5,7 @@ import {
   PairedVaultsMessageType,
   type IdentityVaultsRefreshMessage,
 } from '../src/lib/paired-vaults'
-import {
-  approveExtensionConnect,
-  waitForExtensionPairingReady,
-} from './helpers/extension-approval'
+import { approveExtensionConnect } from './helpers/extension-approval'
 import {
   EXTENSION_UNLOCK_TIMEOUT_MS,
   installMockPasskeyRuntime,
@@ -17,7 +14,6 @@ import {
   readExtensionStorage,
   reuseNookTabForConnect,
   setupPasskeyExtensionPopup,
-  setupStorageKey,
   showKeyringConsent,
   simpleVaultBaseUrl,
 } from './helpers/extension-smoke-runtime'
@@ -118,11 +114,19 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
     })
     await showKeyringConsent(connectPage)
     await approveExtensionConnect(connectPage)
-    await waitForExtensionPairingReady(
-      connectPage,
-      async () => (await readExtensionStorage(context))[setupStorageKey],
-      KEYRING_NAME,
-    )
+    // The approved keyring's vault is paired, and the join did not fail.
+    await expect
+      .poll(
+        async () =>
+          (await readExtensionStorage(context))[
+            `${PAIRING_GRANT_PREFIX}${storeId}`
+          ],
+        { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+      )
+      .toBeTruthy()
+    await expect(
+      connectPage.locator('[data-extension-pairing-rejection-reason]'),
+    ).toHaveCount(0)
 
     // The extension took the keyring's one sync provider: the S3 location.
     const grant = (await readExtensionStorage(context))[
