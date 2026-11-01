@@ -348,7 +348,6 @@ tasks:
         tar -xzf "$staging/weed.tar.gz" -C "$staging" weed
         mkdir -p "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}"
         mv "$staging/weed" "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}/weed"
-        "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}/weed" version
 
   extension:setup:brave:
     desc: Install a hosted extension in Brave, PIN-protect the device, create a Simple Vault, approve pairing, and leave Brave open (CHANNEL=dev or PR=<number>).

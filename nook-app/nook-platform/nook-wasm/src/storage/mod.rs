@@ -169,7 +169,13 @@ pub(crate) mod fetch_stub {
                 };
                 let init = ResponseInit::new();
                 init.set_status(status);
-                match Response::new_with_opt_str_and_init(Some(&body), &init) {
+                // A null-body status (`204`, `205`, `304`) may carry no body
+                // at all, not even an empty one.
+                let body = match status {
+                    204 | 205 | 304 => None,
+                    _ => Some(body.as_str()),
+                };
+                match Response::new_with_opt_str_and_init(body, &init) {
                     Ok(response) => {
                         // A constructed Response has no URL; HTTP clients read it.
                         let descriptor = Object::new();
