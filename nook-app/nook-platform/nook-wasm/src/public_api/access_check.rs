@@ -7,7 +7,7 @@
 //! written, and the passkey's re-derived app key is dropped afterwards.
 use super::wasm_bindgen;
 use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::provider_vault_listing::DriveVaultListing;
+use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use nook_core::{

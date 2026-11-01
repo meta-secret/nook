@@ -26,7 +26,7 @@ use crate::NookError;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::{
     BrowserHeldVaults, CountedVaultNamespace, DriveVaultListing, InspectedVaults,
-    LocalVaultClassification,
+    LocalVaultClassification, ProviderLocation,
 };
 use crate::storage::remote_event::RemoteEventRead;
 

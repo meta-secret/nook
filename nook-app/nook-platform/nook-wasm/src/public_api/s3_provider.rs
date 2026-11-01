@@ -8,7 +8,9 @@
 use super::wasm_bindgen;
 use super::{NookStagedStorageArgs, NookStorageConnection};
 use crate::NookError;
-use crate::storage::provider_vault_listing::{BrowserHeldVaults, LocalVaultClassification};
+use crate::storage::provider_vault_listing::{
+    BrowserHeldVaults, LocalVaultClassification, ProviderLocation,
+};
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use nook_core::{
     LocalVaultOccupancy, ProviderLabel, ProviderVaultListing, S3Connection, S3ConnectionDraft,
@@ -139,8 +141,10 @@ impl S3ProviderListing<'_> {
         };
         let held = BrowserHeldVaults::load().await?;
         let observations = location.observations().await?;
-        let identity_logs = location.identity_logs(&held).await?;
-        let inspected = location.inspect_vaults(&held, &observations).await?;
+        let identity_logs = location.identity_logs(held.listing_key.as_ref()).await?;
+        let inspected = location
+            .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
+            .await?;
         Ok(LocalVaultClassification {
             local_vault: self.local_vault,
         }

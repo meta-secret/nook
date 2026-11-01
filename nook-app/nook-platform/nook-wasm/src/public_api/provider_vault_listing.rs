@@ -7,7 +7,7 @@
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
 use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, DriveVaultListing, LocalVaultClassification,
+    BrowserHeldVaults, DriveVaultListing, LocalVaultClassification, ProviderLocation,
 };
 use futures_util::future::try_join;
 use nook_core::{

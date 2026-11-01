@@ -39,7 +39,7 @@ use crate::storage::identity_record::{
     KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, StoredIdentityProtection,
 };
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
-use crate::storage::provider_vault_listing::DriveVaultListing;
+use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
 use crate::storage::remote_event::RemoteEventRead;
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{
