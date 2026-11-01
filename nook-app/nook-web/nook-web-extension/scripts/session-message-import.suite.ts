@@ -18,6 +18,7 @@ import {
   vaultImportRequest,
   type StorageProvider,
 } from './session-message-dispatch-test-support'
+import { S3ProviderFixture } from './s3-provider-fixture'
 
 describe('ExtensionSessionMessageDispatcher vault import', () => {
   test('stages provider credentials before awaiting cold WASM', async () => {
@@ -57,6 +58,34 @@ describe('ExtensionSessionMessageDispatcher vault import', () => {
     expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+  })
+
+  test('wipes an S3 row’s key from the raw payload before awaiting cold WASM', async () => {
+    const providers = [S3ProviderFixture.row(S3ProviderFixture.SEALED_SECRET)]
+    const parsing = parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        vaultStoreId: 'store_abcdefghijk',
+        deviceId: 'device',
+        devicePublicKey: 'public',
+        deviceSigningPublicKey: 'signing',
+        providers,
+        eventLogRecords: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+
+    expect(providers[0]).toHaveProperty('s3.config.secretAccessKey', '')
+    const parsed = await parsing
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    // The staged request keeps the key for the import itself.
+    expect(
+      sessionMessageWireFixture.providers(parsed.request)[0],
+    ).toHaveProperty(
+      's3.config.secretAccessKey',
+      S3ProviderFixture.SEALED_SECRET,
+    )
   })
 
   test('rejects non-serialized providers before dispatching a vault import', async () => {

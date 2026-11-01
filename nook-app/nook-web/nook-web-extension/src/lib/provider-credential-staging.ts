@@ -74,6 +74,7 @@ export class ProviderCredentialBuffer {
         !('githubRepo' in provider) ||
         !('oauthFile' in provider) ||
         !('localFolder' in provider) ||
+        !('s3' in provider) ||
         !('storeId' in provider) ||
         !('createdAt' in provider)
       ) {
@@ -122,6 +123,16 @@ export class ProviderCredentialBuffer {
         if ('accessToken' in oauth && typeof oauth.accessToken === 'string')
           oauth.accessToken = ''
         if ('refreshToken' in oauth) delete oauth.refreshToken
+      }
+      if ('s3' in provider && provider.s3 && typeof provider.s3 === 'object') {
+        const s3 = provider.s3
+        if (
+          'config' in s3 &&
+          s3.config &&
+          typeof s3.config === 'object' &&
+          'secretAccessKey' in s3.config
+        )
+          s3.config.secretAccessKey = ''
       }
     }
   }

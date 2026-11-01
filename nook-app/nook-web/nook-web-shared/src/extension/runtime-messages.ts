@@ -301,6 +301,7 @@ export const ExtensionStorageProviderType = {
   LocalFolder: "local-folder",
   Github: "github",
   OAuthFile: "oauth-file",
+  S3: "s3",
 } satisfies Record<string, RustExtensionStorageProviderType>;
 export type ExtensionStorageProviderPayload = ExtensionStorageProviderIdentity;
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
@@ -328,7 +329,8 @@ export class ExtensionStorageProviderPayloadAdmission {
       case ExtensionStorageProviderType.Local:
       case ExtensionStorageProviderType.LocalFolder:
       case ExtensionStorageProviderType.Github:
-      case ExtensionStorageProviderType.OAuthFile: {
+      case ExtensionStorageProviderType.OAuthFile:
+      case ExtensionStorageProviderType.S3: {
         const admittedProvider: ExtensionStorageProviderPayload = {
           id: provider.id,
           type: provider.type,

@@ -166,9 +166,11 @@ enum ExtensionSessionPayloadField {
   Providers = 'providers',
   GithubPat = 'githubPat',
   OauthFile = 'oauthFile',
+  S3 = 's3',
   Config = 'config',
   AccessToken = 'accessToken',
   RefreshToken = 'refreshToken',
+  SecretAccessKey = 'secretAccessKey',
 }
 
 enum ExtensionSessionSensitiveField {
@@ -563,7 +565,20 @@ function clearRawProviderCredentials(
           )
       }
     }
+    clearRawS3Secret(provider)
   }
+}
+
+/** Wipe an S3 row's secret access key in a raw provider payload. */
+function clearRawS3Secret(provider: ExtensionSessionPayloadTarget): void {
+  if (!(ExtensionSessionPayloadField.S3 in provider)) return
+  const s3 = safeReflect.get(provider, ExtensionSessionPayloadField.S3)
+  if (!s3 || typeof s3 !== 'object' || Array.isArray(s3)) return
+  if (!(ExtensionSessionPayloadField.Config in s3)) return
+  const config = safeReflect.get(s3, ExtensionSessionPayloadField.Config)
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return
+  if (ExtensionSessionPayloadField.SecretAccessKey in config)
+    safeReflect.set(config, ExtensionSessionPayloadField.SecretAccessKey, '')
 }
 
 function clearRawExtensionSessionSecrets(

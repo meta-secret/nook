@@ -9,7 +9,10 @@ import initNookWasm, {
   type NookPairedVaults,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
+import {
+  GITHUB_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
+} from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
@@ -18,6 +21,7 @@ import {
   type ExtensionMembershipManager,
   type RefreshExtensionIdentityVaultsRequest,
 } from '../src/offscreen/session-identity-membership'
+import { S3ProviderFixture } from './s3-provider-fixture'
 
 beforeAll(async () => {
   const wasm: Parameters<typeof initNookWasm>[0] = {
@@ -156,6 +160,25 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
       toPair: ['store_later'],
       awaitingGrant: ['store_unshared'],
       mountProviderIds: ['github-family'],
+    })
+  })
+
+  test('syncs the identity log through an S3 mount and opens vaults through it', async () => {
+    const manager = new MembershipManager(
+      'member',
+      [S3ProviderFixture.row(S3ProviderFixture.SECRET)],
+      false,
+    )
+
+    const refreshed = await refresh(manager)
+
+    expect(manager.synced).toHaveLength(1)
+    const [synced] = manager.synced
+    expect(synced?.mode).toBe(S3_PROVIDER_TYPE)
+    expect(synced?.pat).toBe(S3ProviderFixture.SECRET)
+    expect(synced?.repo).not.toContain(S3ProviderFixture.SECRET)
+    expect(refreshed._unsafeUnwrap()).toMatchObject({
+      mountProviderIds: [S3ProviderFixture.ID],
     })
   })
 

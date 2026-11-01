@@ -1,4 +1,4 @@
-import { err } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   ProviderCredentialFailure,
@@ -19,6 +19,7 @@ import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   parseExtensionSessionRequest,
 } from '../src/offscreen/session-request-adapter'
+import { S3ProviderFixture } from './s3-provider-fixture'
 
 beforeAll(async () => {
   await initNookWasm({
@@ -282,6 +283,40 @@ describe('provider credential staging', () => {
     if (staging.isErr()) return
     new ProviderCredentialBuffer(staging.value).clear()
     expect(staging.value[0]?.githubPat).toEqual({ state: 'missing' })
+  })
+
+  test('stages an S3 row through canonical admission and erases the staged copy’s key', async () => {
+    const source = [S3ProviderFixture.row(S3ProviderFixture.SEALED_SECRET)]
+    let staged: StorageProvider[] = []
+    const staging = await new ProviderCredentialBuffer(source).stage({
+      decode: async (candidate) => {
+        staged = candidate
+        return admit_extension_storage_providers(candidate)
+      },
+    })
+    expect(staging.isOk()).toBe(true)
+    if (staging.isErr()) return
+    expect(staging.value).toEqual(source)
+    expect(staged).toHaveProperty('0.s3.config.secretAccessKey', '')
+    expect(source[0]).toHaveProperty(
+      's3.config.secretAccessKey',
+      S3ProviderFixture.SEALED_SECRET,
+    )
+  })
+
+  test('a row without its S3 block is an invalid transport', async () => {
+    const source = providerStagingFixture.github()
+    Reflect.deleteProperty(source, 's3')
+    expect(await providerStagingFixture.stage([source])).toEqual(
+      err(ProviderCredentialFailure.InvalidTransport),
+    )
+  })
+
+  test('names an S3 row by its identity alone', () => {
+    const row = S3ProviderFixture.row(S3ProviderFixture.SEALED_SECRET)
+    expect(new ProviderCredentialBuffer([row]).identities()).toEqual(
+      ok([{ id: S3ProviderFixture.ID, type: 's3' }]),
+    )
   })
 
   test('scrubs a raw IPC snapshot after successful handoff', async () => {
