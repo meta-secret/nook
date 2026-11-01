@@ -4,6 +4,7 @@ import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
+import { localS3WebServer } from '../nook-web-extension/scripts/local-s3'
 import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
@@ -157,6 +158,7 @@ export default defineConfig({
             ),
           },
     },
+    localS3WebServer(isCi),
   ],
   projects: configuredProjects,
 })

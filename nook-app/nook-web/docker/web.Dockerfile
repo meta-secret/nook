@@ -50,3 +50,17 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 RUN apt-get update \
     && apt-get install -y --no-install-recommends chromium ffmpeg xvfb \
     && rm -rf /var/lib/apt/lists/*
+
+# Local S3 server (SeaweedFS weed mini) that Playwright's webServer starts. Pin version + sha256;
+# the host-native install in nook-web-extension/Taskfile.yml pins the same release.
+ENV SEAWEEDFS_VERSION=4.48
+ENV SEAWEEDFS_SHA256=4a7d108384d044d95212d1342cdda9533fa55842c1c9b41f606ca3c8a9561124
+
+RUN curl -fsSL \
+      "https://github.com/seaweedfs/seaweedfs/releases/download/${SEAWEEDFS_VERSION}/linux_amd64.tar.gz" \
+      -o /tmp/seaweedfs.tar.gz \
+    && echo "${SEAWEEDFS_SHA256}  /tmp/seaweedfs.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/seaweedfs.tar.gz -C /tmp weed \
+    && install -m 0755 /tmp/weed /usr/local/bin/weed \
+    && rm -f /tmp/seaweedfs.tar.gz /tmp/weed \
+    && weed version

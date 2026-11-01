@@ -233,13 +233,15 @@ tasks:
 
   extension:dev:
     desc: >-
-      Host-native fast loop: build dev WASM, serve https://localhost:5173 with Vite, open Brave with the
-      unpacked localhost extension, and rebuild/reload it on Rust or web source changes.
+      Host-native fast loop: build dev WASM, serve https://localhost:5173 with Vite, run the local
+      S3 server on http://127.0.0.1:8333, open Brave with the unpacked localhost extension, and
+      rebuild/reload it on Rust or web source changes.
     interactive: true
     env:
       NOOK_DEV_FRESH_PROFILE: '{{default "" .FRESH}}'
-      # The loop's WASM build, extension build and Vite inherit these from the
-      # start: a dev WASM build, the local channel against the HTTPS dev vault.
+      # The loop's WASM build, extension build, Vite and local S3 server inherit
+      # these from the start: a dev WASM build, the local channel against the
+      # HTTPS dev vault.
       WASM_BUILD_MODE: dev
       NOOK_SIMPLE_VAULT_URL: https://localhost:5173/
       NOOK_EXTENSION_CHANNEL: local
@@ -248,9 +250,12 @@ tasks:
       NOOK_LOCAL_HTTPS_KEY_PATH: '{{.LOCAL_HTTPS_DIR}}/localhost-key.pem'
     deps:
       - extension:dev:bun
+      - s3:dev:install
     vars:
       DEV_BUN_VERSION: &dev-bun-version
         sh: jq -r '.packageManager | sub("^bun@"; "")' "{{.EXTENSION_ROOT}}/package.json"
+      # The pinned SeaweedFS release; web.Dockerfile pins the same one for e2e.
+      SEAWEEDFS_VERSION: &seaweedfs-version '4.48'
     preconditions:
       - sh: command -v wasm-pack >/dev/null && command -v cargo >/dev/null
         msg: The host loop needs cargo (with the wasm32-unknown-unknown target) and wasm-pack on PATH.
@@ -260,7 +265,8 @@ tasks:
         msg: Run `task web:https:setup` once to create and trust the localhost certificate.
     cmds:
       # The pinned Bun matches the Docker images; newer bundlers emit different content-script output.
-      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$PATH" bun scripts/dev-loop.ts
+      # The pinned weed serves the loop's local S3 server.
+      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}/bin:$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}:$PATH" bun scripts/dev-loop.ts
 
   extension:dev:fresh:
     desc: >-
@@ -281,6 +287,65 @@ tasks:
     cmds:
       - curl -fsSL --create-dirs -o "$HOME/.nook/bun-install.sh" https://bun.sh/install
       - BUN_INSTALL="$HOME/.nook/bun/{{.DEV_BUN_VERSION}}" bash "$HOME/.nook/bun-install.sh" "bun-v{{.DEV_BUN_VERSION}}"
+
+  s3:dev:
+    desc: >-
+      Run the pinned local S3 server (SeaweedFS weed mini) on http://127.0.0.1:8333 with bucket
+      nook-dev and the TEST-ONLY keys in scripts/local-s3-identities.json until Ctrl+C. Its data
+      persists until s3:dev:reset.
+    interactive: true
+    deps:
+      - s3:dev:install
+    env:
+      # CORS admits the dev extension build: the local channel.
+      NOOK_EXTENSION_CHANNEL: local
+    vars:
+      SEAWEEDFS_VERSION: *seaweedfs-version
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && PATH="$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}:$PATH" bun scripts/local-s3-server.ts dev
+
+  s3:dev:reset:
+    desc: Delete the local S3 server's dev data; refuses while a server answers on 127.0.0.1:8333.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun scripts/local-s3-server.ts reset
+
+  s3:dev:install:
+    desc: Install the pinned SeaweedFS weed binary under ~/.nook/seaweedfs/<version>, verifying its SHA-256.
+    internal: true
+    vars:
+      SEAWEEDFS_VERSION: *seaweedfs-version
+      HOST_PLATFORM:
+        sh: uname -sm
+    status:
+      - test -x "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}/weed"
+    cmds:
+      - |
+        set -eu
+        case "{{.HOST_PLATFORM}}" in
+          'Darwin arm64')
+            asset=darwin_arm64
+            digest=faa194e72a346755dc4404288b0561eb3c260351702901d8363024d5099bdd7d
+            verify='shasum -a 256 -c -'
+            ;;
+          'Linux x86_64')
+            asset=linux_amd64
+            digest=4a7d108384d044d95212d1342cdda9533fa55842c1c9b41f606ca3c8a9561124
+            verify='sha256sum -c -'
+            ;;
+          *)
+            echo 'The local S3 server pins SeaweedFS for darwin-arm64 and linux-amd64 hosts only.' >&2
+            exit 1
+            ;;
+        esac
+        mkdir -p "$HOME/.nook/seaweedfs"
+        staging="$(mktemp -d "$HOME/.nook/seaweedfs/.install.XXXXXX")"
+        trap 'rm -rf "$staging"' EXIT
+        curl -fsSL -o "$staging/weed.tar.gz" "https://github.com/seaweedfs/seaweedfs/releases/download/{{.SEAWEEDFS_VERSION}}/$asset.tar.gz"
+        echo "$digest  $staging/weed.tar.gz" | $verify
+        tar -xzf "$staging/weed.tar.gz" -C "$staging" weed
+        mkdir -p "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}"
+        mv "$staging/weed" "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}/weed"
+        "$HOME/.nook/seaweedfs/{{.SEAWEEDFS_VERSION}}/weed" version
 
   extension:setup:brave:
     desc: Install a hosted extension in Brave, PIN-protect the device, create a Simple Vault, approve pairing, and leave Brave open (CHANNEL=dev or PR=<number>).
