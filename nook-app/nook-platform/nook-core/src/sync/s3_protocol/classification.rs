@@ -92,12 +92,6 @@ pub enum S3RequestFailure {
     EventConflictUnresolved { event_id: EventId },
 }
 
-impl S3RequestFailure {
-    /// The stable code the WASM boundary attaches to a refused key, as it
-    /// attaches `github-token-rejected` to a rejected GitHub token.
-    pub const KEY_ACCESS_DENIED_CODE: &'static str = "s3-key-access-denied";
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ListedObjectXml {
@@ -377,10 +371,6 @@ mod tests {
         assert_eq!(
             ProviderFailureCause::classify(&denied.to_string()),
             ProviderFailureCause::Forbidden
-        );
-        assert_eq!(
-            S3RequestFailure::KEY_ACCESS_DENIED_CODE,
-            "s3-key-access-denied"
         );
         Ok(())
     }

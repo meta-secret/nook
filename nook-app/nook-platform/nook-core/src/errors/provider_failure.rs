@@ -198,7 +198,7 @@ mod tests {
         }
         assert_eq!(
             serde_json::to_value(ProviderFailureCode::S3KeyAccessDenied)?,
-            serde_json::json!(crate::S3RequestFailure::KEY_ACCESS_DENIED_CODE)
+            serde_json::json!("s3-key-access-denied")
         );
         assert_eq!(
             serde_json::to_value(ProviderFailureCode::GitHubTokenRejected)?,

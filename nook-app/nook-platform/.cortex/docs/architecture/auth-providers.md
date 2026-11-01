@@ -605,8 +605,8 @@ reports copy it.
     `errors.s3_key_access_denied` translation key. `provider_failure_code`
     classifies it as `s3-key-access-denied`, so the web never matches message
     text.
-  - A rejected GitHub token still carries its own attached code,
-    `github-token-rejected`.
+  - A rejected GitHub token's message is its own translation key, which
+    `provider_failure_code` classifies as `github-token-rejected`.
   - The web shows the translated message beside the action that failed: under
     the S3 form or under the first-run list.
 
@@ -689,27 +689,9 @@ tests have not exercised it against AWS.
 }
 ```
 
-SeaweedFS scopes an action with the `Action:bucket/prefix/*` form. Nook's tests
-use that form only for the local server's readiness probe, which lists
-`nook-dev/ready-probe/*`.
-
-```json
-{
-  "identities": [
-    {
-      "name": "web-vault",
-      "credentials": [
-        { "accessKey": "ACCESS_KEY_ID", "secretKey": "SECRET_ACCESS_KEY" }
-      ],
-      "actions": [
-        "Read:BUCKET/PREFIX/*",
-        "Write:BUCKET/PREFIX/*",
-        "List:BUCKET/PREFIX/*"
-      ]
-    }
-  ]
-}
-```
+SeaweedFS scopes an action with the `Action:bucket/prefix/*` form; the local
+server's test-only identities in
+`nook-web/nook-web-extension/scripts/local-s3-identities.json` show it.
 
 ---
 
