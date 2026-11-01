@@ -48,6 +48,7 @@ const uiKeys = [
   "joinICloudSignIn",
   "identityPage",
   "firstRunPlace",
+  "firstRunSyncSource",
   "firstRunJoin",
   "newIdentity",
   "newIdentityName",
@@ -228,6 +229,7 @@ class VaultStateSlicesImplementation {
   declare joinICloudSignIn: VaultUiState["joinICloudSignIn"];
   declare identityPage: VaultUiState["identityPage"];
   declare firstRunPlace: VaultUiState["firstRunPlace"];
+  declare firstRunSyncSource: VaultUiState["firstRunSyncSource"];
   declare firstRunJoin: VaultUiState["firstRunJoin"];
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];

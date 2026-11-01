@@ -2,10 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { NookProviderSource, ProviderIdentityChoice } from "$app-wasm";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
-  GITHUB_PROVIDER_TYPE,
   GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  LOCAL_FOLDER_PROVIDER_TYPE,
-  LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
   S3_PROVIDER_TYPE,
   type ProviderSetupRequest,
@@ -34,6 +31,7 @@ import {
 import {
   FirstRunPlace,
   FirstRunStage,
+  FirstRunSyncSource,
   WorkspaceSection,
 } from "$lib/vault/state/ui.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
@@ -67,12 +65,6 @@ enum FirstRunNamingOutcome {
 /** The identity could not be named. */
 class FirstRunNamingFailure {
   readonly translationKey = I18N_KEYS.FirstRunNameFailed;
-}
-
-/** The sync provider first run lists keyrings from and connects. */
-export enum FirstRunSyncSource {
-  GoogleDrive = "google-drive",
-  S3 = "s3",
 }
 
 /** The provider the new identity was named on, staged before its vault
@@ -141,26 +133,21 @@ export class FirstRunActions {
       oauthPreset: GOOGLE_DRIVE_OAUTH_FILE_PRESET,
     };
     this.vault.beginProviderSetup(request);
+    this.vault.firstRunSyncSource = FirstRunSyncSource.GoogleDrive;
   }
 
   /** Stage S3 in place of Google Drive; its form supplies the connection. */
   beginS3(): void {
     const request: ProviderSetupRequest = { type: S3_PROVIDER_TYPE };
     this.vault.beginProviderSetup(request);
+    this.vault.firstRunSyncSource = FirstRunSyncSource.S3;
   }
 
-  /** S3 once its row was picked, Google Drive otherwise. The storage mode
-   * stays S3 after the provider is saved, so a retried connect keeps it. */
+  /** The provider picked last: S3 once its row was picked, Google Drive
+   * otherwise. It stays picked after the save, so a retried connect runs
+   * on the same provider. */
   syncSource(): FirstRunSyncSource {
-    switch (this.vault.storageMode) {
-      case S3_PROVIDER_TYPE:
-        return FirstRunSyncSource.S3;
-      case LOCAL_PROVIDER_TYPE:
-      case LOCAL_FOLDER_PROVIDER_TYPE:
-      case GITHUB_PROVIDER_TYPE:
-      case OAUTH_FILE_PROVIDER_TYPE:
-        return FirstRunSyncSource.GoogleDrive;
-    }
+    return this.vault.firstRunSyncSource;
   }
 
   /** Name a new identity next: on the signed-in sync provider, or on this

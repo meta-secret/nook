@@ -106,6 +106,12 @@ export enum FirstRunPlace {
   SyncProvider = "sync-provider",
 }
 
+/** The sync provider first run lists keyrings from and connects. */
+export enum FirstRunSyncSource {
+  GoogleDrive = "google-drive",
+  S3 = "s3",
+}
+
 /** Where creating another identity stands. */
 export enum NewIdentityStage {
   /** No identity being created. */
@@ -136,6 +142,11 @@ export class VaultUiState {
   identityPage = $state<WorkspaceSection>(WorkspaceSection.Identities);
   /** Where a new identity created during setup is kept. */
   firstRunPlace = $state<FirstRunPlace>(FirstRunPlace.ThisBrowser);
+  /** The sync provider picked during setup. Saving it projects the saved
+   * credentials back, so it is kept here, not read from the storage mode. */
+  firstRunSyncSource = $state<FirstRunSyncSource>(
+    FirstRunSyncSource.GoogleDrive,
+  );
   /** The identity this browser asked to join during setup. */
   firstRunJoin = $state.raw<FirstRunJoin>({ kind: FirstRunJoinKind.None });
   newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);

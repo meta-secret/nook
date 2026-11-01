@@ -68,7 +68,6 @@ its location lists, its keyrings show the same way.
   import {
     FirstRunActions,
     FirstRunIdentityAction,
-    FirstRunSyncSource,
     type FirstRunIdentityRun,
   } from '$lib/vault/first-run'
   import { VaultOAuthActions } from '$lib/vault/oauth'
@@ -77,7 +76,11 @@ its location lists, its keyrings show the same way.
     OAuthFileDraftKind,
     S3DraftKind,
   } from '$lib/vault/state/provider.svelte'
-  import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import {
+    FirstRunPlace,
+    FirstRunStage,
+    FirstRunSyncSource,
+  } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 

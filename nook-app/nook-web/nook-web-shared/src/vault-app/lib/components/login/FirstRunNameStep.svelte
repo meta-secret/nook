@@ -15,8 +15,12 @@ browser, it asks next whether to create a first vault.
   import FirstRunBackLink from './FirstRunBackLink.svelte'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { FirstRunActions, FirstRunSyncSource } from '$lib/vault/first-run'
-  import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunActions } from '$lib/vault/first-run'
+  import {
+    FirstRunPlace,
+    FirstRunStage,
+    FirstRunSyncSource,
+  } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 

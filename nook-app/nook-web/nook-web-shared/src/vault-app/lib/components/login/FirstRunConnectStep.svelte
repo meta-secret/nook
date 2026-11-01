@@ -11,8 +11,8 @@ can be tried again, or left for the Sync page.
   import { Button } from '$lib/components/ui/button'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { FirstRunActions, FirstRunSyncSource } from '$lib/vault/first-run'
-  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
+  import { FirstRunActions } from '$lib/vault/first-run'
+  import { FirstRunStage, FirstRunSyncSource } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,

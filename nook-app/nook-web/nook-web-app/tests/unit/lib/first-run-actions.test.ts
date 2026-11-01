@@ -13,7 +13,6 @@ import type { DeviceIdentityInitializationSnapshot } from '$lib/vault/action-con
 import {
   FirstRunActions,
   FirstRunIdentityAction,
-  FirstRunSyncSource,
   type FirstRunIdentityRun,
 } from '$lib/vault/first-run'
 import { S3_PROVIDER_TYPE } from '$lib/auth/providers'
@@ -25,6 +24,7 @@ import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import {
   FirstRunPlace,
   FirstRunStage,
+  FirstRunSyncSource,
   WorkspaceSection,
 } from '$lib/vault/state/ui.svelte'
 import {
