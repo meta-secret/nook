@@ -5,7 +5,7 @@
 )]
 //! Enrollment-code payloads for one-step QR-based device joins.
 
-use crate::EnrollmentKeyDerivationIterations;
+use crate::{EnrollmentKeyDerivationIterations, ProviderSecretText};
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData};
 
@@ -69,44 +69,11 @@ pub enum OAuthAccountIdentity {
     Email(String),
 }
 
-/// Secret text a credential-bearing invite carries inside the passphrase-
-/// encrypted code. It never reaches `Debug` output and is wiped on drop.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct EnrollmentProviderSecret(String);
-
-impl From<String> for EnrollmentProviderSecret {
-    fn from(secret: String) -> Self {
-        Self(secret)
-    }
-}
-
-impl EnrollmentProviderSecret {
-    /// The secret for the joiner's validating projection into a provider row.
-    #[must_use]
-    pub fn expose(&self) -> &str {
-        let Self(secret) = self;
-        secret
-    }
-}
-
-impl fmt::Debug for EnrollmentProviderSecret {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("EnrollmentProviderSecret([REDACTED])")
-    }
-}
-
-impl Drop for EnrollmentProviderSecret {
-    fn drop(&mut self) {
-        let Self(secret) = self;
-        zeroize::Zeroize::zeroize(secret);
-    }
-}
-
 /// The inviter's S3 connection, carried inside the passphrase-encrypted code as
 /// the GitHub variant carries its token. Nook-core builds it from a validated
 /// provider row and validates every field again when the joiner projects it
 /// back into one; this crate only checks that the required fields are present.
+/// The secret is never blank by its type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct S3EnrollmentConnection {
     pub endpoint: String,
@@ -115,7 +82,7 @@ pub struct S3EnrollmentConnection {
     /// Empty when the objects start at the bucket root.
     pub key_prefix: String,
     pub access_key_id: String,
-    pub secret_access_key: EnrollmentProviderSecret,
+    pub secret_access_key: ProviderSecretText,
 }
 
 impl S3EnrollmentConnection {
@@ -125,7 +92,6 @@ impl S3EnrollmentConnection {
             self.region.as_str(),
             self.bucket.as_str(),
             self.access_key_id.as_str(),
-            self.secret_access_key.expose(),
         ];
         match required.iter().find(|field| field.trim().is_empty()) {
             Some(_) => Err(EnrollmentError::MalformedS3Provider),
@@ -139,7 +105,7 @@ impl S3EnrollmentConnection {
 pub enum PersonalEnrollmentProviderData {
     Local,
     Github {
-        pat: String,
+        pat: ProviderSecretText,
         repo: String,
     },
     #[serde(rename = "oauth-file")]
@@ -218,7 +184,7 @@ impl PersonalEnrollmentProvider {
     }
 
     #[must_use]
-    pub fn github(pat: String, repo: String) -> Self {
+    pub fn github(pat: ProviderSecretText, repo: String) -> Self {
         Self {
             provider: PersonalEnrollmentProviderData::Github { pat, repo },
             state: PhantomData,
@@ -518,12 +484,11 @@ impl EnrollmentProvider {
         match self {
             EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
                 PersonalEnrollmentProviderData::Local => Ok(()),
-                PersonalEnrollmentProviderData::Github { pat, repo } => {
-                    if pat.is_empty() || repo.is_empty() {
-                        return Err(EnrollmentError::MalformedGithubProvider);
-                    }
-                    Ok(())
-                }
+                // The token is never blank by its type; the repository is required.
+                PersonalEnrollmentProviderData::Github { repo, .. } => match repo.as_str() {
+                    "" => Err(EnrollmentError::MalformedGithubProvider),
+                    _ => Ok(()),
+                },
                 PersonalEnrollmentProviderData::OauthFile {
                     preset,
                     access_token,
@@ -609,11 +574,11 @@ impl EnrollmentEmail<'_> {
 mod tests {
     use super::{
         EnrollmentEmail, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviderPayload,
-        EnrollmentProviderSecret, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-        OAuthTokenExpiry, PersonalEnrollmentProvider, S3EnrollmentConnection,
-        SharedEnrollmentProvider, SharedEnrollmentProviderData,
+        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+        PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
+        SharedEnrollmentProviderData,
     };
-    use crate::EnrollmentError;
+    use crate::{EnrollmentError, ProviderSecretText};
     use serde_json::json;
 
     #[test]
@@ -634,14 +599,12 @@ mod tests {
     #[test]
     fn provider_validation_keeps_raw_github_and_trimmed_shared_target_checks() -> anyhow::Result<()>
     {
-        EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-            " ".to_owned(),
-            " ".to_owned(),
-        ))
-        .validate()?;
+        let token = || ProviderSecretText::try_from("github_pat_TEST-ONLY".to_owned());
+        EnrollmentProvider::personal(PersonalEnrollmentProvider::github(token()?, " ".to_owned()))
+            .validate()?;
         let missing = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+            token()?,
             String::new(),
-            "repo".to_owned(),
         ));
         assert!(matches!(
             missing.validate(),
@@ -776,15 +739,15 @@ mod tests {
     const S3_TEST_SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
 
     impl S3EnrollmentConnection {
-        fn fixture() -> Self {
-            Self {
+        fn fixture() -> anyhow::Result<Self> {
+            Ok(Self {
                 endpoint: "http://127.0.0.1:8333".to_owned(),
                 region: "us-east-1".to_owned(),
                 bucket: "nook-dev".to_owned(),
                 key_prefix: String::new(),
                 access_key_id: "device-a".to_owned(),
-                secret_access_key: EnrollmentProviderSecret::from(S3_TEST_SECRET.to_owned()),
-            }
+                secret_access_key: ProviderSecretText::try_from(S3_TEST_SECRET.to_owned())?,
+            })
         }
 
         fn provider(self) -> EnrollmentProvider {
@@ -794,18 +757,15 @@ mod tests {
 
     #[test]
     fn s3_provider_needs_its_location_and_key_but_not_a_prefix() -> anyhow::Result<()> {
-        S3EnrollmentConnection::fixture().provider().validate()?;
-        let blanks: [fn(&mut S3EnrollmentConnection); 5] = [
+        S3EnrollmentConnection::fixture()?.provider().validate()?;
+        let blanks: [fn(&mut S3EnrollmentConnection); 4] = [
             |connection| connection.endpoint = " ".to_owned(),
             |connection| connection.region = String::new(),
             |connection| connection.bucket = "\t".to_owned(),
             |connection| connection.access_key_id = String::new(),
-            |connection| {
-                connection.secret_access_key = EnrollmentProviderSecret::from(" ".to_owned());
-            },
         ];
         for blank in blanks {
-            let mut connection = S3EnrollmentConnection::fixture();
+            let mut connection = S3EnrollmentConnection::fixture()?;
             blank(&mut connection);
             assert!(matches!(
                 connection.provider().validate(),
@@ -817,7 +777,7 @@ mod tests {
 
     #[test]
     fn s3_payload_is_tagged_and_keeps_its_secret_out_of_debug() -> anyhow::Result<()> {
-        let provider = S3EnrollmentConnection::fixture().provider();
+        let provider = S3EnrollmentConnection::fixture()?.provider();
         assert!(!format!("{provider:?}").contains(S3_TEST_SECRET));
         let wire = serde_json::to_value(&provider)?;
         assert_eq!(
@@ -839,6 +799,12 @@ mod tests {
             serde_json::from_value::<EnrollmentProvider>(wire)?,
             provider
         );
+        // A blank secret names no key: such a code fails to decode.
+        let mut blank_secret = serde_json::to_value(&provider)?;
+        if let Some(secret) = blank_secret.pointer_mut("/provider/secret_access_key") {
+            *secret = json!(" ");
+        }
+        assert!(serde_json::from_value::<EnrollmentProvider>(blank_secret).is_err());
         // A shared grant never carries a personal S3 connection.
         let shared = json!({
             "onboardingType": "shared-provider-grant",

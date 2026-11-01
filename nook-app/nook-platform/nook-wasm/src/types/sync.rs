@@ -4,8 +4,8 @@ use super::{
 use nook_core::OnboardingType;
 use nook_core::{
     EnrollmentProvider, EnrollmentProviderDataRef, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    StorageProviderType, SyncProviderTarget,
+    PersonalEnrollmentProviderData, ProviderSecretText, SharedEnrollmentProvider,
+    SharedEnrollmentProviderData, StorageProviderType, SyncProviderTarget,
 };
 use tsify::Tsify;
 use wasm_bindgen::JsError;
@@ -24,12 +24,12 @@ impl NookEnrollmentProvider {
         ))
     }
 
+    /// A blank token is refused with its validation key.
     #[wasm_bindgen]
-    #[must_use]
-    pub fn github(repo: String, pat: String) -> Self {
-        Self(EnrollmentProvider::personal(
-            PersonalEnrollmentProvider::github(pat, repo),
-        ))
+    pub fn github(repo: String, pat: String) -> Result<Self, wasm_bindgen::JsError> {
+        Ok(Self(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::github(ProviderSecretText::try_from(pat)?, repo),
+        )))
     }
 
     #[wasm_bindgen]
@@ -95,7 +95,7 @@ impl NookEnrollmentProvider {
             EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::Github {
                 pat,
                 ..
-            }) => Ok(pat.clone()),
+            }) => Ok(pat.expose().to_owned()),
             _ => Err(JsError::new("enrollment provider is not GitHub")),
         }
     }
@@ -545,7 +545,7 @@ mod tests {
         ));
         assert!(local.github_pat().is_err());
 
-        let github = NookEnrollmentProvider::github("owner/repo".into(), "pat".into());
+        let github = NookEnrollmentProvider::github("owner/repo".into(), "pat".into())?;
         assert_eq!(
             github.provider_type()?.to_rust()?,
             StorageProviderType::Github
@@ -625,7 +625,8 @@ mod tests {
                 vaults: Vec::new(),
             })
         };
-        let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
+        let provider = NookEnrollmentProvider::github("repo".into(), "pat".into())
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let malformed = NookEnrollmentIssueInput::for_identity(
             provider.clone(),
             "not-an-identity".into(),

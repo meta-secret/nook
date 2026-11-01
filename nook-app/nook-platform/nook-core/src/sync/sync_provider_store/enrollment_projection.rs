@@ -117,11 +117,10 @@ mod tests {
     use super::*;
     use crate::{
         CheckedEnrollmentEnvelope, EnrollmentAudience, EnrollmentIdentityTarget, EnrollmentInvite,
-        EnrollmentIssuance, EnrollmentIssueInput, EnrollmentProviderSecret, IdentityId,
-        IdentityInviteId, InviteSigningSeed, OnboardingType, PersonalEnrollmentProvider,
-        ProviderEnrollmentRequest, ReplicationType, S3EnrollmentConnection,
-        SharedEnrollmentAudience, StorageProviderData, StorageProviderType, StoredGithubPat,
-        StoredS3Configuration, VaultArchitecture,
+        EnrollmentIssuance, EnrollmentIssueInput, IdentityId, IdentityInviteId, InviteSigningSeed,
+        OnboardingType, PersonalEnrollmentProvider, ProviderEnrollmentRequest, ProviderSecretText,
+        ReplicationType, S3EnrollmentConnection, SharedEnrollmentAudience, StorageProviderData,
+        StorageProviderType, StoredGithubPat, StoredS3Configuration, VaultArchitecture,
     };
 
     const S3_SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
@@ -207,7 +206,7 @@ mod tests {
                 bucket: "nook-dev".to_owned(),
                 key_prefix: String::new(),
                 access_key_id: "device-a".to_owned(),
-                secret_access_key: EnrollmentProviderSecret::from(S3_SECRET.to_owned()),
+                secret_access_key: ProviderSecretText::try_from(S3_SECRET.to_owned())?,
             }));
         assert_eq!(
             S3Connection::try_from(&tampered),

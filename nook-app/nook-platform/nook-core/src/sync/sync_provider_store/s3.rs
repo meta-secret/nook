@@ -15,7 +15,7 @@ use nook_event_log::IdentityMountTarget;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use crate::{EnrollmentProviderSecret, S3Connection, S3EnrollmentConnection};
+use crate::{S3Connection, S3EnrollmentConnection};
 
 impl S3Connection {
     /// Where the row's objects live, as its label shows it: the bucket and
@@ -49,9 +49,7 @@ impl S3Connection {
             bucket: self.bucket.clone(),
             key_prefix: self.key_prefix.clone(),
             access_key_id: self.access_key_id.clone(),
-            secret_access_key: EnrollmentProviderSecret::from(
-                self.secret_access_key.expose().to_owned(),
-            ),
+            secret_access_key: self.secret_access_key.clone(),
         }
     }
 

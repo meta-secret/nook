@@ -37,7 +37,7 @@ argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "ze
 hkdf = "0.13.0"
 pbkdf2 = { version = "0.13.0", features = ["sha2"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std", "attributes"] }
-zeroize = "1.9.1"
+zeroize = { version = "1.9.1", features = ["derive"] }
 wasm-bindgen = "0.2.129"
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
 percent-encoding = "2.3.2"

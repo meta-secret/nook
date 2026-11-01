@@ -118,11 +118,11 @@ pub use enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
     EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentInvite,
     EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput,
-    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentProviderSecret, EnrollmentState,
-    InviteSigningSeed, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, S3EnrollmentConnection, SharedEnrollmentProvider,
-    SharedEnrollmentProviderData, SharedProviderGrant, TypedEnrollmentProvider,
+    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, InviteSigningSeed,
+    OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+    PersonalCredentialTransfer, PersonalEnrollmentProvider, PersonalEnrollmentProviderData,
+    S3EnrollmentConnection, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
@@ -148,8 +148,8 @@ pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
     ContextBoundSentinelUnlock, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    LocalIdentityProtection, RemovedLocalIdentityKey, SentinelUnlockPolicy, SentinelUnlockQuorum,
-    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    LocalIdentityProtection, ProviderSecretText, RemovedLocalIdentityKey, SentinelUnlockPolicy,
+    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
     WrappedAppKeyReplacement,
 };
@@ -425,8 +425,8 @@ pub use validation::{
     LocalFolderSyncTarget, OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset,
     OauthFileSyncTarget, ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel,
     ProviderTargetKey, S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError,
-    S3DraftValidation, S3SecretAccessKey, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode,
-    StorageProviderType, SyncProviderTarget, SyncProviderTargetIdentity,
+    S3DraftValidation, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
+    SyncProviderTarget, SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,

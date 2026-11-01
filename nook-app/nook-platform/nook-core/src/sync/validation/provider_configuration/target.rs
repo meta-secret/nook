@@ -5,8 +5,10 @@ use crate::{
     StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, SyncProviderTarget,
 };
 use std::fmt;
-use zeroize::Zeroize;
-#[derive(Clone, PartialEq, Eq)]
+use zeroize::{Zeroize, ZeroizeOnDrop};
+/// A provider's duplicate-detection key. It can hold a token, so it is
+/// redacted in `Debug` and wiped when dropped.
+#[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct ProviderTargetKey(String);
 impl From<String> for ProviderTargetKey {
     fn from(value: String) -> Self {
@@ -16,11 +18,6 @@ impl From<String> for ProviderTargetKey {
 impl fmt::Debug for ProviderTargetKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("ProviderTargetKey([redacted])")
-    }
-}
-impl Drop for ProviderTargetKey {
-    fn drop(&mut self) {
-        self.0.zeroize();
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

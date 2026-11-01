@@ -14,7 +14,7 @@ use crate::{
     errors::{MultiDeviceError, MultiDeviceResult},
 };
 use crate::{OAuthFileConfigData, StorageProviderData, StoredOAuthFileConfiguration};
-use crate::{S3Connection, S3SecretAccessKey, StoredS3Configuration};
+use crate::{ProviderSecretText, S3Connection, StoredS3Configuration};
 use std::mem;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -65,9 +65,8 @@ impl PreparedProviderCredentials {
             }
         }
         if let StoredS3Configuration::Configured(s3) = &provider.s3
-            && let ProviderCredentialOpening::Opened = self
-                .s3_secret
-                .opening_evidence(s3.secret_access_key.expose())
+            && let ProviderCredentialOpening::Opened =
+                self.s3_secret.opening_evidence(&s3.secret_access_key)
         {
             return ProviderCredentialOpening::Opened;
         }
@@ -114,11 +113,25 @@ impl PreparedCredentialProjection {
         }
     }
 }
+/// The S3 secret a transition prepared, typed before any row changes.
+enum PreparedSecretText {
+    Unchanged,
+    Transformed(ProviderSecretText),
+}
+impl PreparedSecretText {
+    fn opening_evidence(&self, original: &ProviderSecretText) -> ProviderCredentialOpening {
+        match self {
+            Self::Unchanged => ProviderCredentialOpening::Unchanged,
+            Self::Transformed(value) if value == original => ProviderCredentialOpening::Unchanged,
+            Self::Transformed(_) => ProviderCredentialOpening::Opened,
+        }
+    }
+}
 struct PreparedProviderCredentials {
     github: PreparedCredentialProjection,
     access: PreparedCredentialProjection,
     refresh: PreparedCredentialProjection,
-    s3_secret: PreparedCredentialProjection,
+    s3_secret: PreparedSecretText,
 }
 impl CredentialTransition<'_> {
     fn project(&self, provider: &StorageProviderData) -> MultiDeviceResult<StorageProviderData> {
@@ -167,9 +180,9 @@ impl CredentialTransition<'_> {
                     bucket: config.bucket.clone(),
                     key_prefix: config.key_prefix.clone(),
                     access_key_id: config.access_key_id.clone(),
-                    secret_access_key: S3SecretAccessKey::transitioned(
+                    secret_access_key: ProviderSecretText::try_from(
                         self.project_field(config.secret_access_key.expose())?,
-                    ),
+                    )?,
                 })
             }
         };
@@ -224,9 +237,16 @@ impl CredentialTransition<'_> {
             ),
         };
         let s3_secret = match &provider.s3 {
-            StoredS3Configuration::NotApplicable => PreparedCredentialProjection::Unchanged,
+            StoredS3Configuration::NotApplicable => PreparedSecretText::Unchanged,
             StoredS3Configuration::Configured(config) => {
-                self.field(config.secret_access_key.expose())?
+                match self.field(config.secret_access_key.expose())? {
+                    PreparedCredentialProjection::Unchanged => PreparedSecretText::Unchanged,
+                    PreparedCredentialProjection::Transformed(mut text) => {
+                        PreparedSecretText::Transformed(ProviderSecretText::try_from(mem::take(
+                            &mut *text,
+                        ))?)
+                    }
+                }
             }
         };
         Ok(PreparedProviderCredentials {
@@ -337,11 +357,9 @@ impl AuthProvidersSnapshotData {
                 }
             }
             if let StoredS3Configuration::Configured(config) = &mut provider.s3
-                && let PreparedCredentialProjection::Transformed(mut replacement) =
-                    prepared.s3_secret
+                && let PreparedSecretText::Transformed(replacement) = prepared.s3_secret
             {
-                config.secret_access_key =
-                    S3SecretAccessKey::transitioned(mem::take(&mut *replacement));
+                config.secret_access_key = replacement;
             }
         }
         Ok(self)

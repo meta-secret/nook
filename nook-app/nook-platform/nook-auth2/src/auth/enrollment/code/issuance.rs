@@ -163,12 +163,13 @@ impl CheckedEnrollmentIssuance<'_> {
 mod tests {
     use super::{CheckedEnrollmentIssuance, EnrollmentIssuance};
     use crate::EnrollmentError;
+    use crate::ProviderSecretText;
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
         EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
-        EnrollmentProviderSecret, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-        OAuthTokenExpiry, PersonalEnrollmentProvider, S3EnrollmentConnection,
-        SharedEnrollmentProvider, SharedEnrollmentProviderData,
+        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+        PersonalEnrollmentProvider, S3EnrollmentConnection, SharedEnrollmentProvider,
+        SharedEnrollmentProviderData,
     };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
@@ -176,7 +177,7 @@ mod tests {
         fn github_fixture() -> anyhow::Result<Self> {
             Ok(Self {
                 provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                    "github_pat_11AAAAbbbbCCCC".to_owned(),
+                    ProviderSecretText::try_from("github_pat_11AAAAbbbbCCCC".to_owned())?,
                     "team-vault".to_owned(),
                 )),
                 identity: EnrollmentIdentityTarget::fixture("Team vault"),
@@ -205,8 +206,8 @@ mod tests {
         input.entry_id = " ".to_owned();
         input.identity.label = "\n".to_owned();
         input.provider = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+            ProviderSecretText::try_from("github_pat_11AAAAbbbbCCCC".to_owned())?,
             String::new(),
-            "repo".to_owned(),
         ));
         EnrollmentIssuance {
             input: &input,
@@ -244,7 +245,7 @@ mod tests {
     -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                " token ".to_owned(),
+                ProviderSecretText::try_from(" token ".to_owned())?,
                 " repo ".to_owned(),
             )),
             identity: EnrollmentIdentityTarget::fixture("  Vault \n"),
@@ -382,7 +383,7 @@ mod tests {
                     bucket: "nook-dev".to_owned(),
                     key_prefix: "team/vaults".to_owned(),
                     access_key_id: "device-a".to_owned(),
-                    secret_access_key: EnrollmentProviderSecret::from(secret.to_owned()),
+                    secret_access_key: ProviderSecretText::try_from(secret.to_owned())?,
                 },
             )),
             identity: EnrollmentIdentityTarget::fixture("S3 keyring"),

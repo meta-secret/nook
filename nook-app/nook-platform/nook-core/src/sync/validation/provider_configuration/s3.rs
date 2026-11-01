@@ -11,66 +11,15 @@
 //! also how every stored row, invite, and storage connection reads one back.
 //! Validation stays minimal: the server refuses anything else.
 
-use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use url::{Host, Url};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::ProviderSecretText;
 use crate::errors::{ValidationError, ValidationResult};
-
-/// The secret half of an access key: the plaintext while its row is open, the
-/// age armor sealed to a device key at rest, as the GitHub token is. Never
-/// empty, redacted in `Debug`, and wiped when dropped; it enters no URL,
-/// header, error, or log line.
-#[derive(Clone, PartialEq, Eq, Serialize, Tsify)]
-#[tsify(type = "string")]
-pub struct S3SecretAccessKey(String);
-
-impl S3SecretAccessKey {
-    /// Required, and kept exactly as written: sealed text is armor whose line
-    /// breaks matter.
-    pub(crate) fn parse(raw: &str) -> ValidationResult<Self> {
-        match raw {
-            "" => Err(ValidationError::S3SecretAccessKeyRequired),
-            secret => Ok(Self(secret.to_owned())),
-        }
-    }
-
-    /// Text a sealing transition produced: armor when sealing, the opened
-    /// plaintext when opening. Transitions never produce empty text.
-    pub(crate) fn transitioned(text: String) -> Self {
-        Self(text)
-    }
-
-    /// The stored text, for the signer, the sealing transitions, and the
-    /// credential of an invite.
-    pub(crate) fn expose(&self) -> &str {
-        let Self(text) = self;
-        text
-    }
-}
-
-impl fmt::Debug for S3SecretAccessKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("S3SecretAccessKey([redacted])")
-    }
-}
-
-impl Zeroize for S3SecretAccessKey {
-    fn zeroize(&mut self) {
-        let Self(text) = self;
-        text.zeroize();
-    }
-}
-
-impl Drop for S3SecretAccessKey {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
 
 /// One device's validated connection: where the objects live and the key it
 /// signs with. The endpoint is a canonical origin, `scheme://host[:port]`, and
@@ -83,27 +32,26 @@ pub struct S3Connection {
     pub(crate) bucket: String,
     pub(crate) key_prefix: String,
     pub(crate) access_key_id: String,
-    pub(crate) secret_access_key: S3SecretAccessKey,
+    pub(crate) secret_access_key: ProviderSecretText,
 }
 
 /// What the S3 setup form holds, field by field, before validation. The
 /// typed secret is wiped when the draft is dropped.
-#[derive(Deserialize, Tsify)]
+#[derive(Deserialize, Tsify, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase")]
 pub struct S3ConnectionDraft {
+    #[zeroize(skip)]
     pub endpoint: String,
+    #[zeroize(skip)]
     pub region: String,
+    #[zeroize(skip)]
     pub bucket: String,
     /// Empty for the bucket root.
+    #[zeroize(skip)]
     pub key_prefix: String,
+    #[zeroize(skip)]
     pub access_key_id: String,
     pub secret_access_key: String,
-}
-
-impl Drop for S3ConnectionDraft {
-    fn drop(&mut self) {
-        self.secret_access_key.zeroize();
-    }
 }
 
 /// One field of the S3 setup form.
@@ -156,7 +104,9 @@ impl S3ConnectionDraft {
             S3DraftField::Bucket.error(S3Connection::parse_bucket(&self.bucket)),
             S3DraftField::KeyPrefix.error(S3Connection::parse_key_prefix(&self.key_prefix)),
             S3DraftField::AccessKeyId.error(S3Connection::parse_access_key_id(&self.access_key_id)),
-            S3DraftField::SecretAccessKey.error(S3SecretAccessKey::parse(&self.secret_access_key)),
+            S3DraftField::SecretAccessKey.error(S3Connection::parse_secret_access_key(
+                &self.secret_access_key,
+            )),
         ]
         .into_iter()
         .flatten()
@@ -178,7 +128,7 @@ impl TryFrom<S3ConnectionDraft> for S3Connection {
             bucket: Self::parse_bucket(&draft.bucket)?,
             key_prefix: Self::parse_key_prefix(&draft.key_prefix)?,
             access_key_id: Self::parse_access_key_id(&draft.access_key_id)?,
-            secret_access_key: S3SecretAccessKey::parse(&draft.secret_access_key)?,
+            secret_access_key: Self::parse_secret_access_key(&draft.secret_access_key)?,
         })
     }
 }
@@ -230,6 +180,13 @@ impl S3Connection {
             return Err(ValidationError::S3BucketInvalid);
         }
         Ok(bucket)
+    }
+
+    /// Required, and kept exactly as written: sealed text is armor whose line
+    /// breaks matter. A blank key is this field's own error.
+    fn parse_secret_access_key(raw: &str) -> ValidationResult<ProviderSecretText> {
+        ProviderSecretText::try_from(raw.to_owned())
+            .map_err(|_| ValidationError::S3SecretAccessKeyRequired)
     }
 
     fn parse_access_key_id(raw: &str) -> ValidationResult<String> {
@@ -438,10 +395,11 @@ mod tests {
                 ValidationError::S3AccessKeyIdInvalid,
                 &["AKIA EXAMPLE", "AKIA\u{7f}"],
             ),
+            // One blank rule for every provider secret: empty or whitespace only.
             (
                 SecretAccessKey,
                 ValidationError::S3SecretAccessKeyRequired,
-                &[""],
+                &["", " ", "\t\n"],
             ),
         ];
         for (field, error, raws) in rejected {

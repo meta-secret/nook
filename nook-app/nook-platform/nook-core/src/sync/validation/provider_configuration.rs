@@ -16,10 +16,7 @@ mod github;
 mod s3;
 
 pub use github::*;
-pub use s3::{
-    S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
-    S3SecretAccessKey,
-};
+pub use s3::{S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation};
 
 /// Validated Google Drive app-data vault file name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

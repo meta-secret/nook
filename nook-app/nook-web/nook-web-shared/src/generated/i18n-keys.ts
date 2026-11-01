@@ -667,6 +667,7 @@ export const I18N_KEYS = {
   ErrorsValidationPersonNameRequired: 'errors.validation.person_name_required',
   ErrorsValidationPersonPhoneInvalid: 'errors.validation.person_phone_invalid',
   ErrorsValidationPersonalDataTextInvalid: 'errors.validation.personal_data_text_invalid',
+  ErrorsValidationProviderSecretRequired: 'errors.validation.provider_secret_required',
   ErrorsValidationRoutingNumberInvalid: 'errors.validation.routing_number_invalid',
   ErrorsValidationRoutingNumberRequired: 'errors.validation.routing_number_required',
   ErrorsValidationS3AccessKeyIdInvalid: 'errors.validation.s3_access_key_id_invalid',

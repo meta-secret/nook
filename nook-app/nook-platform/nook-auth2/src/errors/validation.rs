@@ -204,6 +204,10 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID)]
     S3StorageTargetInvalid,
 
+    /// A provider credential is blank. Carries no part of the rejected text.
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_PROVIDER_SECRET_REQUIRED)]
+    ProviderSecretRequired,
+
     #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,
 

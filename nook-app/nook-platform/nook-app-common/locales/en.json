@@ -1105,7 +1105,8 @@
       "s3_access_key_id_required": "Enter the S3 access key ID.",
       "s3_access_key_id_invalid": "The S3 access key ID must not contain spaces.",
       "s3_secret_access_key_required": "Enter the S3 secret access key.",
-      "s3_storage_target_invalid": "This S3 connection is incomplete or damaged. Connect the S3 storage again."
+      "s3_storage_target_invalid": "This S3 connection is incomplete or damaged. Connect the S3 storage again.",
+      "provider_secret_required": "A saved sync provider credential is missing. Connect the provider again."
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
     "engine_loading": "Vault engine is still loading. Try again in a moment.",

@@ -20,8 +20,8 @@ use super::{
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     EnrollmentProvider, GithubPat, GithubRepoName, OauthAccessToken, OauthFilePreset,
-    OnboardingType, PersonalEnrollmentProvider, ReplicationType, SharedEnrollmentProvider,
-    SharedStorageTargetSelection, StorageProviderType, VaultArchitecture,
+    OnboardingType, PersonalEnrollmentProvider, ProviderSecretText, ReplicationType,
+    SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProviderType, VaultArchitecture,
 };
 
 /// Borrowed configuration for one enrollment payload construction.
@@ -169,6 +169,16 @@ impl StorageProviderData {
             ReplicationType::Shared => OnboardingType::SharedProviderGrant,
         })
     }
+
+    /// The row's trimmed GitHub token for a personal invite, refused when the row holds none.
+    fn github_enrollment_token(&self) -> ValidationResult<ProviderSecretText> {
+        match &self.github_pat {
+            StoredGithubPat::Token(token) => {
+                ProviderSecretText::try_from(GithubPat::parse(token)?.into_inner())
+            }
+            StoredGithubPat::Missing => Err(ValidationError::GithubPatEmpty),
+        }
+    }
 }
 
 /// Resolve the onboarding ceremony encoded by an enrollment provider payload.
@@ -201,12 +211,7 @@ impl CheckedProviderEnrollment<'_> {
                 Ok(PersonalEnrollmentProvider::local())
             }
             StorageProviderType::Github => Ok(PersonalEnrollmentProvider::github(
-                GithubPat::parse(match &provider.github_pat {
-                    StoredGithubPat::Token(token) => token,
-                    StoredGithubPat::Missing => return Err(ValidationError::GithubPatEmpty),
-                })?
-                .as_str()
-                .to_owned(),
+                provider.github_enrollment_token()?,
                 GithubRepoName::parse(match &provider.github_repo {
                     StoredGithubRepository::Repository(repo) => repo,
                     StoredGithubRepository::DefaultRepository => "",
