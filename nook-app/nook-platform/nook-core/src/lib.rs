@@ -126,8 +126,8 @@ pub use enrollment::{
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
-    MultiDeviceError, PasswordError, ProviderFailureCause, SecretPayloadError, SessionError,
-    ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
+    MultiDeviceError, PasswordError, ProviderFailureCause, ProviderFailureCode, SecretPayloadError,
+    SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
     VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use google_authenticator_import::{

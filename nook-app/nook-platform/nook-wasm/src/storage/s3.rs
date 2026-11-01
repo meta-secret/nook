@@ -472,6 +472,52 @@ mod browser_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
+    async fn deleting_a_namespace_deletes_only_its_event_objects() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let key =
+            format!("e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/{DIGEST}.yaml");
+        let stub = FetchStub::install(vec![
+            answer(
+                "GET",
+                "list-type=2",
+                200,
+                &listing(&[
+                    key.clone(),
+                    "e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/../x.yaml"
+                        .to_owned(),
+                ]),
+            ),
+            answer("DELETE", &format!("{EVENTS}/{DIGEST}.yaml"), 204, ""),
+        ])
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let deleted = fixture
+            .store()
+            .delete_events()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert_eq!(deleted, 1);
+        // The listed `..` key is never echoed into a request.
+        let calls = stub.calls();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| call.starts_with("DELETE "))
+                .count(),
+            1,
+            "{calls:?}"
+        );
+        assert!(calls.iter().all(|call| !call.contains("..")), "{calls:?}");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     async fn namespaces_are_read_from_identity_folders_and_unrelated_folders_ignored()
     -> anyhow::Result<()> {
         let fixture = Fixture::new()?;

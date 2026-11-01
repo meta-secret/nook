@@ -186,6 +186,47 @@ mod tests {
         );
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    #[wasm_bindgen_test]
+    async fn a_403_from_the_server_rejects_the_assessment_with_the_refused_key_code()
+    -> anyhow::Result<()> {
+        use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+        let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let args = nook_core::S3ProviderConfig::try_from(nook_core::S3ConnectionDraft {
+            endpoint: "http://127.0.0.1:8333".to_owned(),
+            region: "us-east-1".to_owned(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix: "e2e".to_owned(),
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
+        })?
+        .connect_args()?;
+        let mut manager = NookVaultManager::new();
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().as_str().to_owned();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        let Err(failure) = manager
+            .assess_vault_connect(args.mode, args.pat, args.repo)
+            .await
+        else {
+            anyhow::bail!("a refused key fails the assessment");
+        };
+        assert_eq!(
+            failure
+                .unchecked_ref::<NativeProviderError>()
+                .native_provider_error_code()
+                .as_string()
+                .as_deref(),
+            Some("s3-key-access-denied")
+        );
+        assert_eq!(
+            failure.message().as_string().as_deref(),
+            Some(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED)
+        );
+        Ok(())
+    }
+
     #[wasm_bindgen_test]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",

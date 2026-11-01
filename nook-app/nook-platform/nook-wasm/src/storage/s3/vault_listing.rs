@@ -200,3 +200,201 @@ impl S3VaultListing<'_> {
         NookError::Database("The identity is not at this S3 location.".to_owned())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use std::slice;
+
+    use super::S3VaultListing;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::storage::s3::S3Storage;
+    use nook_core::{
+        EventId, IdentityId, S3AccessKeyId, S3BucketName, S3Connection, S3Credentials, S3Endpoint,
+        S3KeyPrefix, S3Location, S3Region, S3SecretAccessKey, StoreId,
+    };
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+    const ROOT: &str = "e2e/meta-secret-nook";
+    /// The query value of a listing prefix below the root.
+    const ROOT_QUERY: &str = "prefix=e2e%2Fmeta-secret-nook%2F";
+
+    fn connection() -> anyhow::Result<S3Connection> {
+        Ok(S3Connection {
+            location: S3Location {
+                endpoint: S3Endpoint::parse("http://127.0.0.1:8333")?,
+                region: S3Region::parse("us-east-1")?,
+                bucket: S3BucketName::parse("nook-dev")?,
+                key_prefix: S3KeyPrefix::parse("e2e")?,
+            },
+            credentials: S3Credentials {
+                access_key_id: S3AccessKeyId::parse("device-a")?,
+                secret_access_key: S3SecretAccessKey::parse("TEST-ONLY-device-a-secret-not-real")?,
+            },
+        })
+    }
+
+    /// A listing page with these keys and folders.
+    fn page(keys: &[String], folders: &[String]) -> String {
+        let keys = keys.iter().fold(String::new(), |page, key| {
+            page + "<Contents><Key>" + key + "</Key></Contents>"
+        });
+        let folders = folders.iter().fold(String::new(), |page, folder| {
+            page + "<CommonPrefixes><Prefix>" + folder + "</Prefix></CommonPrefixes>"
+        });
+        format!(
+            "<ListBucketResult><IsTruncated>false</IsTruncated>{keys}{folders}</ListBucketResult>"
+        )
+    }
+
+    fn listed(url_contains: &str, body: String) -> FetchRoute {
+        FetchRoute {
+            method: "GET",
+            url_contains: url_contains.to_owned(),
+            status: 200,
+            body,
+        }
+    }
+
+    /// A listing that lists the given identities' folders.
+    fn identity_folders(identities: &[&str]) -> FetchRoute {
+        let folders = identities
+            .iter()
+            .map(|identity| format!("{ROOT}/{identity}/"))
+            .collect::<Vec<_>>();
+        // Every later listing URL contains this prefix too; routes are taken
+        // in order, so this one answers the first request, the root listing.
+        listed(ROOT_QUERY, page(&[], &folders))
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn an_identity_log_is_read_only_where_the_location_holds_it() -> anyhow::Result<()> {
+        let connection = connection()?;
+        let location = S3VaultListing {
+            storage: S3Storage {
+                connection: &connection,
+            },
+        };
+        let held = IdentityId::parse("idn_abcdefghijk")?;
+        let key = format!("{ROOT}/idn_abcdefghijk/log/events/{DIGEST}.yaml");
+        let stub = FetchStub::install(vec![
+            listed("idn_strangerabc%2Flog%2Fevents%2F", page(&[], &[])),
+            listed("idn_strangerabc%2Flog%2Fevents%2F", page(&[], &[])),
+            listed("idn_abcdefghijk%2Flog%2Fevents%2F", page(&[key], &[])),
+            FetchRoute::ok(
+                "GET",
+                &format!("/log/events/{DIGEST}.yaml"),
+                "kind: genesis\n",
+            ),
+        ])
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let stranger = IdentityId::parse("idn_strangerabc")?;
+        assert!(location.identity_events(&stranger).await.is_err());
+        let event_id = EventId::parse(&format!("sha256u:{DIGEST}"))?;
+        // Writing into a log the location does not hold is refused unsent.
+        assert!(
+            location
+                .put_identity_event(&stranger, &event_id, b"kind: join\n")
+                .await
+                .is_err()
+        );
+        let events = location
+            .identity_events(&held)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert_eq!(events.len(), 1);
+        let calls = stub.calls();
+        assert!(
+            calls.iter().all(|call| !call.starts_with("PUT ")),
+            "{calls:?}"
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn each_vault_is_observed_by_its_event_count() -> anyhow::Result<()> {
+        let connection = connection()?;
+        let store_id = StoreId::parse("store_abcdefghijk")?;
+        let vault = format!("{ROOT}/idn_abcdefghijk/store_abcdefghijk/");
+        let _stub = FetchStub::install(vec![
+            identity_folders(&["idn_abcdefghijk"]),
+            listed("idn_abcdefghijk%2F", page(&[], slice::from_ref(&vault))),
+            listed(
+                "store_abcdefghijk%2Fevents%2F",
+                page(
+                    &[
+                        format!("{vault}events/{DIGEST}.yaml"),
+                        format!("{vault}events/{}.yaml", "A".repeat(43)),
+                        format!("{vault}events/notes.txt"),
+                    ],
+                    &[],
+                ),
+            ),
+        ])
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let observations = S3VaultListing {
+            storage: S3Storage {
+                connection: &connection,
+            },
+        }
+        .observations()
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let [observation] = observations.as_slice() else {
+            anyhow::bail!("one vault is listed: {observations:?}");
+        };
+        assert_eq!(observation.store_id, store_id);
+        assert_eq!(observation.identity, IdentityId::parse("idn_abcdefghijk")?);
+        assert_eq!(observation.events.len(), 2);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_vault_filed_under_two_identities_fails_closed() -> anyhow::Result<()> {
+        let connection = connection()?;
+        let _stub = FetchStub::install(vec![
+            identity_folders(&["idn_abcdefghijk", "idn_strangerabc"]),
+            listed(
+                "idn_abcdefghijk%2F",
+                page(&[], &[format!("{ROOT}/idn_abcdefghijk/store_abcdefghijk/")]),
+            ),
+            listed(
+                "idn_strangerabc%2F",
+                page(&[], &[format!("{ROOT}/idn_strangerabc/store_abcdefghijk/")]),
+            ),
+        ])
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let observed = S3VaultListing {
+            storage: S3Storage {
+                connection: &connection,
+            },
+        }
+        .observations()
+        .await;
+        assert!(observed.is_err(), "{observed:?}");
+        Ok(())
+    }
+}

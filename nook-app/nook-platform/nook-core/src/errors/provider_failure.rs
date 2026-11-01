@@ -4,6 +4,35 @@
 //! so hosts never log it. This keeps only its category: the HTTP status class
 //! a provider answered with, a network failure, a busy vault engine, or the
 //! layer that failed.
+//!
+//! A failure the web must tell apart carries a stable [`ProviderFailureCode`],
+//! classified here from the message every WASM export rejects with.
+
+use nook_app_common::i18n_keys;
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+
+/// The stable code of a provider failure the web tells apart from others.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderFailureCode {
+    /// The S3 server refused this device's key: `s3-key-access-denied`.
+    S3KeyAccessDenied,
+    /// Any other failure; its message says what happened.
+    Unclassified,
+}
+
+impl ProviderFailureCode {
+    /// Classify a caught failure by its message. The S3 refusal's message is
+    /// its translation key, which every export rejects with unchanged.
+    #[must_use]
+    pub fn classify(message: &str) -> Self {
+        match message.find(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED) {
+            Some(_) => Self::S3KeyAccessDenied,
+            None => Self::Unclassified,
+        }
+    }
+}
 
 /// The category of one failed provider operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,9 +60,17 @@ pub enum ProviderFailureCause {
 }
 
 impl ProviderFailureCause {
-    /// Classify a provider failure message without retaining it.
+    /// Classify a provider failure message without retaining it. A refused
+    /// S3 key is forbidden, whatever its status line says.
     #[must_use]
     pub fn classify(message: &str) -> Self {
+        match ProviderFailureCode::classify(message) {
+            ProviderFailureCode::S3KeyAccessDenied => Self::Forbidden,
+            ProviderFailureCode::Unclassified => Self::classify_described(message),
+        }
+    }
+
+    fn classify_described(message: &str) -> Self {
         let normalized = message.to_ascii_lowercase();
         if let Some(status) = Self::http_status(&normalized) {
             return match status {
@@ -120,6 +157,40 @@ mod tests {
         ] {
             assert_eq!(ProviderFailureCause::classify(message), cause, "{message}");
         }
+    }
+
+    #[test]
+    fn a_refused_s3_key_has_its_stable_code_and_logs_as_forbidden() -> anyhow::Result<()> {
+        let refused = i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED;
+        assert_eq!(
+            ProviderFailureCode::classify(refused),
+            ProviderFailureCode::S3KeyAccessDenied
+        );
+        assert_eq!(
+            ProviderFailureCause::classify(refused),
+            ProviderFailureCause::Forbidden
+        );
+        // A message a host wrapped still names the refusal.
+        assert_eq!(
+            ProviderFailureCode::classify(&format!("Database error: {refused}")),
+            ProviderFailureCode::S3KeyAccessDenied
+        );
+        for other in [
+            "S3 request failed with status 503",
+            "GitHub authentication failed.",
+            "",
+        ] {
+            assert_eq!(
+                ProviderFailureCode::classify(other),
+                ProviderFailureCode::Unclassified,
+                "{other}"
+            );
+        }
+        assert_eq!(
+            serde_json::to_value(ProviderFailureCode::S3KeyAccessDenied)?,
+            serde_json::json!(crate::S3RequestFailure::KEY_ACCESS_DENIED_CODE)
+        );
+        Ok(())
     }
 
     #[test]

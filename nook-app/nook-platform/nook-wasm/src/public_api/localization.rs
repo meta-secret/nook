@@ -5,7 +5,7 @@ use crate::{
 };
 use nook_core::AuthenticationWorkflowMatch;
 use nook_core::SupportedAppLocale;
-use nook_core::{AppLocale, ProviderFailureCause, VaultRecoveryErrorKind};
+use nook_core::{AppLocale, ProviderFailureCause, ProviderFailureCode, VaultRecoveryErrorKind};
 use nook_core::{IdentityHealth, IdentityHealthAssessment};
 use nook_core::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
@@ -54,6 +54,15 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_failure_cause(message: &str) -> String {
     ProviderFailureCause::classify(message).label().to_owned()
+}
+
+/// The stable code of a caught provider failure, read from the message every
+/// export rejects with: `s3-key-access-denied` for a refused S3 key, from
+/// any export, and `unclassified` for every other failure.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_failure_code(message: &str) -> Result<tsify::Ts<ProviderFailureCode>, JsError> {
+    Tsify::into_ts(&ProviderFailureCode::classify(message))
+        .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -262,6 +271,34 @@ mod tests {
     use super::*;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn an_s3_refusal_from_any_export_classifies_into_its_stable_code() -> Result<(), JsError> {
+        use crate::NookError;
+        use nook_core::S3RequestFailure;
+        use wasm_bindgen::{JsCast, JsValue};
+        // Every export turns its NookError into a JsError through this one
+        // conversion, which keeps only the message: the translation key.
+        let rejected = JsValue::from(JsError::from(NookError::S3Request(
+            S3RequestFailure::KeyAccessDenied,
+        )));
+        let message = rejected
+            .unchecked_into::<js_sys::Error>()
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        let code = provider_failure_code(&message)?
+            .to_rust()
+            .map_err(|_| JsError::new("code"))?;
+        assert_eq!(code, ProviderFailureCode::S3KeyAccessDenied);
+        assert_eq!(provider_failure_cause(&message), "forbidden");
+        let other = provider_failure_code("S3 request failed with status 503")?
+            .to_rust()
+            .map_err(|_| JsError::new("code"))?;
+        assert_eq!(other, ProviderFailureCode::Unclassified);
+        Ok(())
+    }
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]

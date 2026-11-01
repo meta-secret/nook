@@ -64,6 +64,18 @@ pub enum NookStoredS3ConfigurationState {
     Ok(ProviderLabel::S3(&configuration).render())
 }
 
+/// The detail line of a validated S3 configuration, as its saved row shows
+/// it: `host[:port] · accessKeyId`. It never names the secret.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_s3_provider_detail(
+    configuration: &tsify::Ts<S3ProviderConfig>,
+) -> Result<String, JsError> {
+    let configuration = configuration
+        .to_rust()
+        .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+    Ok(configuration.storage_detail())
+}
+
 /// The connect arguments of a validated S3 configuration that is not saved
 /// yet: `s3`, the secret in the credential slot, and the versioned reference.
 #[wasm_bindgen]
@@ -129,8 +141,8 @@ impl S3ProviderListing<'_> {
 #[cfg(test)]
 mod tests {
     use super::{
-        NookStoredS3ConfigurationState, draft_s3_storage_args, staged_s3_provider_label,
-        stored_s3_configuration_state,
+        NookStoredS3ConfigurationState, draft_s3_storage_args, staged_s3_provider_detail,
+        staged_s3_provider_label, stored_s3_configuration_state,
     };
     use crate::public_api::NookAccessCheckSource;
     use nook_core::{S3ConnectionDraft, S3ProviderConfig, StoredS3Configuration};
@@ -211,6 +223,10 @@ mod tests {
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?,
             "S3 · nook-dev/e2e"
         );
+        let detail = staged_s3_provider_detail(&typed(&configuration()?)?)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(detail, "127.0.0.1:8333 · device-a");
+        assert!(!detail.contains(SECRET));
         let args = draft_s3_storage_args(&typed(&configuration()?)?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?
             .to_rust()
@@ -222,6 +238,59 @@ mod tests {
                 .starts_with(nook_core::S3_CONNECT_TARGET_V1_PREFIX)
         );
         assert!(!args.repo.contains(SECRET));
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::list_s3_vaults;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use js_sys::Reflect;
+    use nook_core::{LocalVaultOccupancy, S3ConnectionDraft, S3ProviderConfig};
+    use tsify::Tsify;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_403_from_the_server_rejects_the_listing_with_the_refused_key_code()
+    -> anyhow::Result<()> {
+        let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let configuration = S3ProviderConfig::try_from(S3ConnectionDraft {
+            endpoint: "http://127.0.0.1:8333".to_owned(),
+            region: "us-east-1".to_owned(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix: "e2e".to_owned(),
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
+        })?;
+        let rejected = list_s3_vaults(
+            &Tsify::into_ts(&configuration).map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            &Tsify::into_ts(&LocalVaultOccupancy::Closed)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        )
+        .await;
+        let Err(failure) = rejected else {
+            anyhow::bail!("a refused key fails the listing");
+        };
+        let code = Reflect::get(&failure, &JsValue::from_str("code"))
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .as_string();
+        assert_eq!(code.as_deref(), Some("s3-key-access-denied"));
+        assert_eq!(
+            failure.name().as_string().as_deref(),
+            Some("NookProviderFailure")
+        );
         Ok(())
     }
 }

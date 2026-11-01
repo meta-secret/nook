@@ -658,6 +658,72 @@ mod tests {
 
     use crate::identity_control::test_fixtures::*;
 
+    /// An S3 mount record with its four strings.
+    struct S3Mount {
+        endpoint: &'static str,
+        region: &'static str,
+        bucket: &'static str,
+        key_prefix: &'static str,
+    }
+
+    impl S3Mount {
+        const TEAM: Self = Self {
+            endpoint: "https://s3.example.com",
+            region: "us-east-1",
+            bucket: "nook-vaults",
+            key_prefix: "team",
+        };
+
+        fn target(&self) -> super::IdentityMountTarget {
+            super::IdentityMountTarget::S3 {
+                endpoint: self.endpoint.to_owned(),
+                region: self.region.to_owned(),
+                bucket: self.bucket.to_owned(),
+                key_prefix: self.key_prefix.to_owned(),
+            }
+        }
+    }
+
+    #[test]
+    fn s3_mounts_name_one_location_by_endpoint_bucket_and_prefix_alone() {
+        let team = S3Mount::TEAM.target();
+        let elsewhere_signed = S3Mount {
+            region: "eu-central-1",
+            ..S3Mount::TEAM
+        }
+        .target();
+        assert!(team.names_same_location(&elsewhere_signed));
+        assert!(elsewhere_signed.names_same_location(&team));
+        for other in [
+            S3Mount {
+                endpoint: "https://s3.other.example.com",
+                ..S3Mount::TEAM
+            },
+            S3Mount {
+                bucket: "nook-other",
+                ..S3Mount::TEAM
+            },
+            S3Mount {
+                key_prefix: "",
+                ..S3Mount::TEAM
+            },
+        ] {
+            assert!(!team.names_same_location(&other.target()));
+        }
+        // Another provider kind never names the same location, even with
+        // the same text.
+        let github = super::IdentityMountTarget::Github {
+            repository: "nook-vaults".to_owned(),
+        };
+        assert!(!team.names_same_location(&github));
+        assert!(!github.names_same_location(&team));
+        assert!(github.names_same_location(&github.clone()));
+        let folder = super::IdentityMountTarget::LocalFolder {
+            directory_name: "nook-vaults".to_owned(),
+        };
+        assert!(!github.names_same_location(&folder));
+    }
+
     #[test]
     fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;

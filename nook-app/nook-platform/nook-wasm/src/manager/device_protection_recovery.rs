@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
-use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare};
+use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare, PreparedS3Connection};
 use crate::storage::identity_record::MemberSigner;
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
@@ -39,6 +39,8 @@ impl NookVaultManager {
         self.storage.remote_path.clear();
         self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
         self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
+        // Dropping the prepared S3 connection wipes its secret access key.
+        self.storage.s3_connection = PreparedS3Connection::Unprepared;
         self.storage.mode = StorageMode::Local;
     }
 
@@ -142,6 +144,17 @@ mod tests {
         manager.storage.remote_ref = "owner/repo".to_owned();
         manager.storage.remote_path = "vault.yaml".to_owned();
         manager.storage.mode = StorageMode::Github;
+        manager.storage.s3_connection = PreparedS3Connection::Connection(
+            nook_core::S3ProviderConfig::try_from(nook_core::S3ConnectionDraft {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: String::new(),
+                access_key_id: "device-a".to_owned(),
+                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
+            })?
+            .connection()?,
+        );
 
         manager.quiesce_for_local_recovery();
 
@@ -152,6 +165,10 @@ mod tests {
         assert!(manager.storage.remote_ref.is_empty());
         assert!(manager.storage.remote_path.is_empty());
         assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert!(matches!(
+            manager.storage.s3_connection,
+            PreparedS3Connection::Unprepared
+        ));
         Ok(())
     }
 }

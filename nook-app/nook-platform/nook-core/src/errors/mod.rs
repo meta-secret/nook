@@ -14,7 +14,7 @@ pub use nook_auth2::{
     ValidationResult, VaultCryptoError,
 };
 pub use nook_event_log::{EventError, EventResult};
-pub use provider_failure::ProviderFailureCause;
+pub use provider_failure::{ProviderFailureCause, ProviderFailureCode};
 pub use session::{SessionError, SessionResult};
 pub use vault_epoch::{VaultEpochError, VaultEpochResult};
 pub use vault_format::{VaultFormatError, VaultFormatResult};
