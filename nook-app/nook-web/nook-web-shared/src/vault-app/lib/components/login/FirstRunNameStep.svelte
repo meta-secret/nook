@@ -4,13 +4,18 @@ in to or on this browser only. Only its members see the name. Kept on this
 browser, it asks next whether to create a first vault.
 -->
 <script lang="ts">
-  import { Cloud, MonitorSmartphone, RefreshCw } from '@lucide/svelte'
+  import {
+    Archive,
+    Cloud,
+    MonitorSmartphone,
+    RefreshCw,
+  } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import FirstRunBackLink from './FirstRunBackLink.svelte'
   import FirstRunProgress from './FirstRunProgress.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { FirstRunActions } from '$lib/vault/first-run'
+  import { FirstRunActions, FirstRunSyncSource } from '$lib/vault/first-run'
   import { FirstRunPlace, FirstRunStage } from '$lib/vault/state/ui.svelte'
 
   let { vault }: { vault: VaultState } = $props()
@@ -24,11 +29,30 @@ browser, it asks next whether to create a first vault.
   const onProvider = $derived(
     vault.firstRunPlace === FirstRunPlace.SyncProvider,
   )
-  const where = $derived(
-    vault.firstRunPlace === FirstRunPlace.SyncProvider
-      ? vault.t(I18N_KEYS.FirstRunNameOnProvider)
-      : vault.t(I18N_KEYS.FirstRunNameOnBrowser),
-  )
+  const syncSource = $derived(actions.syncSource())
+  const where = $derived.by(() => {
+    switch (vault.firstRunPlace) {
+      case FirstRunPlace.ThisBrowser:
+        return vault.t(I18N_KEYS.FirstRunNameOnBrowser)
+      case FirstRunPlace.SyncProvider:
+        return providerPlace()
+    }
+  })
+
+  /** The sync provider the identity is kept on, as the line names it. */
+  function providerPlace(): string {
+    switch (syncSource) {
+      case FirstRunSyncSource.GoogleDrive:
+        return vault.t(I18N_KEYS.FirstRunNameOnProvider)
+      case FirstRunSyncSource.S3: {
+        const request: Parameters<typeof vault.t>[0] = {
+          key: I18N_KEYS.FirstRunNameOnS3,
+          replacements: { location: vault.stagedProviderLabel() },
+        }
+        return vault.t(request)
+      }
+    }
+  }
 </script>
 
 <section
@@ -94,7 +118,9 @@ browser, it asks next whether to create a first vault.
     class="nk-spec flex items-center justify-center gap-2"
     data-testid="first-run-name-place"
   >
-    {#if onProvider}
+    {#if onProvider && syncSource === FirstRunSyncSource.S3}
+      <Archive class="size-3.5" aria-hidden="true" />
+    {:else if onProvider}
       <Cloud class="size-3.5" aria-hidden="true" />
     {:else}
       <MonitorSmartphone class="size-3.5" aria-hidden="true" />

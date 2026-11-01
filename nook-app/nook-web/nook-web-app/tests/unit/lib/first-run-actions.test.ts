@@ -13,8 +13,11 @@ import type { DeviceIdentityInitializationSnapshot } from '$lib/vault/action-con
 import {
   FirstRunActions,
   FirstRunIdentityAction,
+  FirstRunSyncSource,
   type FirstRunIdentityRun,
 } from '$lib/vault/first-run'
+import { S3_PROVIDER_TYPE } from '$lib/auth/providers'
+import { S3ConnectionFixture } from '../s3-connection-fixture'
 import { FirstRunJoinKind } from '$lib/vault/identity-join-wait'
 import { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 import { GoogleVaultFolderOrigin, VaultOAuthActions } from '$lib/vault/oauth'
@@ -24,7 +27,11 @@ import {
   FirstRunStage,
   WorkspaceSection,
 } from '$lib/vault/state/ui.svelte'
-import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+import {
+  LoginSetupKind,
+  OAuthFileDraftKind,
+  S3DraftKind,
+} from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -304,6 +311,92 @@ describe('first-run setup settles the identity before any vault', () => {
 
     expect(setup.created).toEqual([])
     expect(setup.vault.firstRun).toBe(FirstRunStage.Off)
+  })
+})
+
+describe('first-run setup on S3 storage', () => {
+  test('S3 takes the place of Google Drive, and Google Drive can take it back', () => {
+    const setup = new Setup().at(FirstRunStage.Sync)
+    const actions = new FirstRunActions(setup.vault)
+    actions.beginGoogleDrive()
+
+    actions.beginS3()
+    setup.vault.configureS3(S3ConnectionFixture.configuration())
+
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.S3)
+    expect(setup.vault.loginSetup).toEqual({
+      kind: LoginSetupKind.Active,
+      providerType: S3_PROVIDER_TYPE,
+    })
+    expect(setup.vault.oauthFileDraft.kind).toBe(
+      OAuthFileDraftKind.NotConfigured,
+    )
+
+    actions.beginGoogleDrive()
+
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.GoogleDrive)
+    // The S3 connection, its secret included, goes with the S3 setup.
+    expect(setup.vault.s3Draft.kind).toBe(S3DraftKind.NotConfigured)
+  })
+
+  test('a new identity on S3 is made here first, then S3 connects with the same location', async () => {
+    const setup = new Setup().at(FirstRunStage.Name)
+    setup.vault.firstRunPlace = FirstRunPlace.SyncProvider
+    setup.names()
+    const actions = new FirstRunActions(setup.vault)
+    actions.beginS3()
+    setup.vault.configureS3(S3ConnectionFixture.configuration())
+    const stagedAtCreation: LoginSetupKind[] = []
+    vi.spyOn(setup.vault, 'createLocalVaultWithDeviceKeys').mockImplementation(
+      () => {
+        stagedAtCreation.push(setup.vault.loginSetup.kind)
+        setup.vault.isAuthenticated = true
+        return Promise.resolve()
+      },
+    )
+
+    await actions.createNamed('Family')
+
+    // Nothing was staged while the vault was made on this browser.
+    expect(stagedAtCreation).toEqual([LoginSetupKind.Inactive])
+    expect(setup.vault.firstRun).toBe(FirstRunStage.Connect)
+    expect(actions.syncSource()).toBe(FirstRunSyncSource.S3)
+    expect(setup.vault.s3Draft).toEqual({
+      kind: S3DraftKind.Configured,
+      config: S3ConnectionFixture.configuration(),
+    })
+  })
+
+  test('an S3 keyring is saved and synced with no Drive folder to bind', async () => {
+    const vault = VaultStateTestFixture.create()
+    const actions = new FirstRunActions(vault)
+    actions.beginS3()
+    vault.configureS3(S3ConnectionFixture.configuration())
+    const order: string[] = []
+    const folder = vi.spyOn(
+      VaultOAuthActions.prototype,
+      'connectGoogleVaultFolder',
+    )
+    vi.spyOn(vault, 'ensureProviderSaved').mockImplementation(() => {
+      order.push('save')
+      return Promise.resolve(ok(ProviderSaveOutcome.Saved))
+    })
+    vi.spyOn(vault.identityControl, 'syncWithMounts').mockImplementation(() => {
+      order.push('sync')
+      return Promise.resolve(ok(IdentityActionOutcome.Completed))
+    })
+    vi.spyOn(vault.identityControl, 'grantedVaultElsewhere').mockReturnValue(
+      false,
+    )
+    vi.spyOn(vault, 'openSection').mockImplementation(() => {})
+    vault.firstRun = FirstRunStage.Connect
+
+    const connected = await actions.connectProvider()
+
+    expect(connected).toBe(true)
+    expect(order).toEqual(['save', 'sync'])
+    expect(folder).not.toHaveBeenCalled()
+    expect(vault.firstRun).toBe(FirstRunStage.Off)
   })
 })
 

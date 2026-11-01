@@ -1,8 +1,13 @@
 import { err, ok, type Result } from "neverthrow";
 import type { NookProviderSource, ProviderIdentityChoice } from "$app-wasm";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
+  GITHUB_PROVIDER_TYPE,
   GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  LOCAL_FOLDER_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  S3_PROVIDER_TYPE,
   type ProviderSetupRequest,
 } from "$lib/auth/providers";
 import { IdentityDecisionText } from "$lib/components/provider-vaults/identity-plan.svelte";
@@ -20,7 +25,12 @@ import {
   type IdentityPlanRun,
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
-import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
+import {
+  OAuthFileDraftKind,
+  S3DraftKind,
+  type OAuthFileDraft,
+  type S3Draft,
+} from "$lib/vault/state/provider.svelte";
 import {
   FirstRunPlace,
   FirstRunStage,
@@ -57,6 +67,34 @@ enum FirstRunNamingOutcome {
 /** The identity could not be named. */
 class FirstRunNamingFailure {
   readonly translationKey = I18N_KEYS.FirstRunNameFailed;
+}
+
+/** The sync provider first run lists keyrings from and connects. */
+export enum FirstRunSyncSource {
+  GoogleDrive = "google-drive",
+  S3 = "s3",
+}
+
+/** The provider the new identity was named on, staged before its vault
+ * was made on this browser. */
+type FirstRunStagedProvider = {
+  readonly source: FirstRunSyncSource;
+  readonly oauthFile: OAuthFileDraft;
+  readonly s3: S3Draft;
+};
+
+/** Whether the named identity's provider is staged again to connect. */
+enum FirstRunRestage {
+  Staged = "staged",
+  NothingStaged = "nothing-staged",
+}
+
+/** What connecting needed before the provider is saved. */
+enum FirstRunProviderBinding {
+  /** Google Drive's Nook folder is opened or created. */
+  FolderBound = "folder-bound",
+  /** An S3 location names everything already. */
+  NothingToBind = "nothing-to-bind",
 }
 
 /**
@@ -105,6 +143,26 @@ export class FirstRunActions {
     this.vault.beginProviderSetup(request);
   }
 
+  /** Stage S3 in place of Google Drive; its form supplies the connection. */
+  beginS3(): void {
+    const request: ProviderSetupRequest = { type: S3_PROVIDER_TYPE };
+    this.vault.beginProviderSetup(request);
+  }
+
+  /** S3 once its row was picked, Google Drive otherwise. The storage mode
+   * stays S3 after the provider is saved, so a retried connect keeps it. */
+  syncSource(): FirstRunSyncSource {
+    switch (this.vault.storageMode) {
+      case S3_PROVIDER_TYPE:
+        return FirstRunSyncSource.S3;
+      case LOCAL_PROVIDER_TYPE:
+      case LOCAL_FOLDER_PROVIDER_TYPE:
+      case GITHUB_PROVIDER_TYPE:
+      case OAUTH_FILE_PROVIDER_TYPE:
+        return FirstRunSyncSource.GoogleDrive;
+    }
+  }
+
   /** Name a new identity next: on the signed-in sync provider, or on this
    * browser only. */
   nameNew(place: FirstRunPlace): void {
@@ -138,7 +196,11 @@ export class FirstRunActions {
       vault.firstRun = FirstRunStage.Vault;
       return;
     }
-    const draft = vault.oauthFileDraft;
+    const staged: FirstRunStagedProvider = {
+      source: this.syncSource(),
+      oauthFile: vault.oauthFileDraft,
+      s3: vault.s3Draft,
+    };
     vault.firstRunVaultName = label;
     // The vault is made on this browser first. A sign-in still staged would
     // be saved with it as a Google Drive provider without its Nook folder,
@@ -148,14 +210,32 @@ export class FirstRunActions {
     if (!vault.isAuthenticated) return;
     if (
       vault.firstRunPlace === FirstRunPlace.SyncProvider &&
-      draft.kind === OAuthFileDraftKind.Configured
+      this.restage(staged) === FirstRunRestage.Staged
     ) {
-      this.beginGoogleDrive();
-      vault.configureOauthFile(draft.config);
       vault.firstRun = FirstRunStage.Connect;
       return;
     }
     vault.firstRun = FirstRunStage.Off;
+  }
+
+  /** Stage the provider the identity was named on again, so the Connect
+   * step connects it without another sign-in or form. */
+  private restage(staged: FirstRunStagedProvider): FirstRunRestage {
+    const vault = this.vault;
+    switch (staged.source) {
+      case FirstRunSyncSource.GoogleDrive:
+        if (staged.oauthFile.kind !== OAuthFileDraftKind.Configured)
+          return FirstRunRestage.NothingStaged;
+        this.beginGoogleDrive();
+        vault.configureOauthFile(staged.oauthFile.config);
+        return FirstRunRestage.Staged;
+      case FirstRunSyncSource.S3:
+        if (staged.s3.kind !== S3DraftKind.Configured)
+          return FirstRunRestage.NothingStaged;
+        this.beginS3();
+        vault.configureS3(staged.s3.config);
+        return FirstRunRestage.Staged;
+    }
   }
 
   /** The identity kept on this browser gets its first vault, named here. */
@@ -269,11 +349,9 @@ export class FirstRunActions {
   async connectProvider(): Promise<boolean> {
     const vault = this.vault;
     vault.errorMsg = "";
-    const folder = await new VaultOAuthActions(
-      vault,
-    ).connectGoogleVaultFolder();
-    if (folder.isErr()) {
-      vault.errorMsg = vault.t(folder.error.translationKey);
+    const bound = await this.bindProvider();
+    if (bound.isErr()) {
+      vault.errorMsg = vault.t(bound.error.translationKey);
       return false;
     }
     const saved = await vault.ensureProviderSaved();
@@ -298,6 +376,23 @@ export class FirstRunActions {
     vault.openSection(WorkspaceSection.Identities);
     if (away !== false) vault.vaultPanelStoreId = away.storeId;
     return true;
+  }
+
+  /** Google Drive opens or creates its Nook folder before the provider is
+   * saved; an S3 location names everything already. */
+  private async bindProvider(): Promise<
+    Result<FirstRunProviderBinding, OAuthFailure>
+  > {
+    switch (this.syncSource()) {
+      case FirstRunSyncSource.GoogleDrive: {
+        const folder = await new VaultOAuthActions(
+          this.vault,
+        ).connectGoogleVaultFolder();
+        return folder.map(() => FirstRunProviderBinding.FolderBound);
+      }
+      case FirstRunSyncSource.S3:
+        return ok(FirstRunProviderBinding.NothingToBind);
+    }
   }
 
   private intent({ choice, source }: FirstRunIdentity): IdentityJoinIntent {
