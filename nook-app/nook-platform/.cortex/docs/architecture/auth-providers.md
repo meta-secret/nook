@@ -599,8 +599,7 @@ reports copy it.
   - **Invite code:** a device invite carries the inviter's connection and key
     inside its passphrase-encrypted code, as it carries a GitHub token.
 - **Refused key:** any `403` is one typed failure, whatever its code. A refused
-  key, an unknown key, a wrong secret or region, and a missing permission look
-  alike.
+  key, an unknown key, a wrong secret, and a missing permission look alike.
   - Every export rejects with a message that holds the
     `errors.s3_key_access_denied` translation key. `provider_failure_code`
     classifies it as `s3-key-access-denied`, so the web never matches message

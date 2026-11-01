@@ -291,7 +291,10 @@ retry it.
    - The same bytes mean the event is already stored. The write succeeds.
    - Different bytes are corruption. The write fails and names the event.
    - A missing object is an unresolved conflict. The write fails.
-3. Any other answer fails with its category and status only.
+3. A `403` answer is the typed key refusal that
+   [the S3 provider](../../../../.cortex/docs/architecture/auth-providers.md#s3-compatible-storage)
+   describes.
+4. Any other answer fails with its category and status only.
 
 **Prohibited:** overwrite a taken key with the new bytes, or send the `PUT`
 again until the key looks free.
