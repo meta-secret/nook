@@ -242,7 +242,10 @@ mod tests {
         manager.storage.access_token = "prior-identity-token".to_owned();
         manager.storage.remote_ref = "owner/repository".to_owned();
         manager.storage.remote_path = "events".to_owned();
-        manager.sync_outbox.access_token = "prior-outbox-token".to_owned();
+        manager.sync_outbox.connection = nook_core::StorageConnection::Github {
+            token: "prior-outbox-token".to_owned(),
+            repo: "owner/repository".to_owned(),
+        };
 
         manager.reset_local_identity_session();
 
@@ -250,7 +253,10 @@ mod tests {
         assert!(manager.storage.access_token.is_empty());
         assert!(manager.storage.remote_ref.is_empty());
         assert!(manager.storage.remote_path.is_empty());
-        assert!(manager.sync_outbox.access_token.is_empty());
+        assert_eq!(
+            manager.sync_outbox.connection,
+            nook_core::StorageConnection::Local
+        );
     }
 }
 

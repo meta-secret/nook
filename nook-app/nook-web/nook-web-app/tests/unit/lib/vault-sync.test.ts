@@ -38,9 +38,7 @@ function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
           'GitHub',
           'local',
           'remote',
-          'github',
-          'token',
-          'owner/repo',
+          { mode: 'github', token: 'token', repo: 'owner/repo' },
           revision,
           'store-local',
           'store-remote',
@@ -52,9 +50,7 @@ function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
           'remote',
           1,
           1,
-          'github',
-          'token',
-          'owner/repo',
+          { mode: 'github', token: 'token', repo: 'owner/repo' },
           revision,
         )
   } finally {

@@ -483,9 +483,7 @@ export class SyncConflictActions {
               try {
                 return storageOk(
                   await admittedManager.value.import_provider_event_log_as_local_vault(
-                    conflict.mode,
-                    conflict.pat,
-                    conflict.repo,
+                    conflict.connection,
                   ),
                 );
               } catch (nativeFailure) {

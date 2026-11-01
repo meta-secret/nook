@@ -1,12 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
-  DriveFileIdentityKind,
   configuredOAuthFile,
   defaultOAuthFileConfig,
   findDuplicateSyncProvider,
   findDuplicateSyncProviderExcluding,
-  formatDriveStorageRef,
   GithubPatDisplayKind,
   maskGithubPat,
   providerDefaultLabel,
@@ -147,41 +145,6 @@ describe('providerStorageDetail', () => {
     expect(
       providerStorageDetail(providerStorageDescriptionRequest(drive)),
     ).toBe('me@example.com')
-  })
-})
-
-describe('formatDriveStorageRef', () => {
-  test('includes cached file id when present', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.Existing, fileId: 'abc123' },
-        fileName: 'work.yaml',
-      }),
-    ).toBe('abc123\twork.yaml')
-  })
-
-  test('omits empty file id for new vaults', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.New },
-        fileName: 'work.yaml',
-      }),
-    ).toBe('work.yaml')
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.New },
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }),
-    ).toBe(DEFAULT_DRIVE_BACKUP_NAME)
-  })
-
-  test('formats without validating draft file names', () => {
-    expect(
-      formatDriveStorageRef({
-        identity: { kind: DriveFileIdentityKind.Existing, fileId: ' abc ' },
-        fileName: ' work vault.yaml ',
-      }),
-    ).toBe('abc\twork vault.yaml')
   })
 })
 

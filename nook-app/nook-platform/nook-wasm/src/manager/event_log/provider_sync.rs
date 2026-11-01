@@ -251,17 +251,15 @@ impl NookVaultManager {
         if self.sync_outbox.provider_id.is_empty() {
             return Ok(());
         }
-        let mode = self.sync_outbox.storage_mode.to_string();
-        let pat = self.sync_outbox.access_token.clone();
-        let repo = self.sync_outbox.repo_arg.clone();
+        let connection = self.sync_outbox.connection.clone();
         let sync_result = async {
-            self.prepare_storage_preserving_vault_metadata(&mode, &pat, &repo)
+            self.prepare_storage_preserving_vault_metadata(&connection)
                 .await?;
             self.flush_event_outbox().await
         }
         .await;
         let restore_result = self
-            .prepare_storage_preserving_vault_metadata("local", "", "")
+            .prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::Local)
             .await;
         sync_result.and(restore_result)
     }

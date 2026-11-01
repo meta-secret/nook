@@ -9,7 +9,7 @@ import {
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
-  type NookStorageConnectArgs,
+  type NookStorageConnection,
   type NookSyncConflictReview,
   read_local_vault_yaml,
 } from "$app-wasm";
@@ -53,7 +53,7 @@ interface ProviderConflictPersistence {
 }
 
 interface StagedProviderSyncIssueAssessment {
-  readonly args: NookStorageConnectArgs;
+  readonly args: NookStorageConnection;
 }
 
 const log = browserLogRuntime.createLogger("vault-sync");
@@ -203,9 +203,7 @@ export class ProviderConflictActions {
           state.stagedProviderLabel(),
           localYaml,
           "",
-          args.mode,
-          args.pat,
-          args.repo,
+          args,
           revision,
           localStoreId,
           remoteStoreId,

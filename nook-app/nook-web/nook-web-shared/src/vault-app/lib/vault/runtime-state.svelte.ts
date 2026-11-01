@@ -7,7 +7,7 @@ import {
 } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import {
   DeviceProtectionStatus,
   NookManualProviderSyncState,
@@ -241,13 +241,13 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     );
   }
 
-  wasmStorageArgs(): NookStorageConnectArgs {
+  wasmStorageArgs(): NookStorageConnection {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).wasmStorageArgs();
   }
 
-  connectStorageArgs(): NookStorageConnectArgs {
+  connectStorageArgs(): NookStorageConnection {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).connectStorageArgs();
@@ -354,7 +354,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     ).showLoginVaultPicker();
   }
 
-  providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs {
+  providerWasmArgs(provider: StorageProvider): NookStorageConnection {
     return new StorageProviderPresentation(
       $state.snapshot(provider),
     ).storageArgs();

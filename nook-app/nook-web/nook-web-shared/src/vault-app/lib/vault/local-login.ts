@@ -22,6 +22,7 @@ import {
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
   type NookLocalVaultEntry,
+  type NookStorageConnection,
   type StoreId,
 } from "$app-wasm";
 import {
@@ -482,10 +483,10 @@ export class VaultLoginActions {
       const connected = await state.enqueueStorage(async () => {
         const manager = state.admitManager();
         if (manager.isErr()) return storageErr(manager.error);
+        const local: NookStorageConnection = { mode: "local" };
         try {
-          if (creatingAdditionalVault)
-            await manager.value.connect_fresh("local", "", "");
-          else await manager.value.connect("local", "", "");
+          if (creatingAdditionalVault) await manager.value.connect_fresh(local);
+          else await manager.value.connect(local);
           return storageOk(VaultChangeOutcome.Completed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));

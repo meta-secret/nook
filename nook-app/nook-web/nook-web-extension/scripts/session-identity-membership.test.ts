@@ -7,6 +7,7 @@ import initNookWasm, {
   type IdentityControlSnapshot,
   type IdentityVaultPairingPlan,
   type NookPairedVaults,
+  type NookStorageConnection,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -52,11 +53,9 @@ function githubProvider(id: string): StorageProvider {
   }
 }
 
-type SyncedProvider = { mode: string; pat: string; repo: string }
-
 /** The offscreen session's WASM manager, as far as membership uses it. */
 class MembershipManager {
-  readonly synced: SyncedProvider[] = []
+  readonly synced: NookStorageConnection[] = []
   readonly paired: NookPairedVaults[] = []
   readonly started: string[] = []
   constructor(
@@ -88,8 +87,8 @@ class MembershipManager {
       },
       identity_replication_providers: () =>
         Promise.resolve(this.snapshot(this.mounts)),
-      sync_identity_log_with_provider: (mode, pat, repo) => {
-        this.synced.push({ mode, pat, repo })
+      sync_identity_log_with_provider: (connection) => {
+        this.synced.push(connection)
         if (this.syncFails)
           return Promise.reject(new Error('GitHub authentication failed.'))
         return Promise.resolve({
@@ -148,7 +147,7 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
     expect(manager.synced).toEqual([
       {
         mode: 'github',
-        pat: 'github_pat_session_secret',
+        token: 'github_pat_session_secret',
         repo: 'family/vaults',
       },
     ])
@@ -172,11 +171,12 @@ describe('refreshing the unlocked identity in the offscreen session', () => {
 
     const refreshed = await refresh(manager)
 
-    expect(manager.synced).toHaveLength(1)
-    const [synced] = manager.synced
-    expect(synced?.mode).toBe(S3_PROVIDER_TYPE)
-    expect(synced?.pat).toBe(S3ProviderFixture.SECRET)
-    expect(synced?.repo).not.toContain(S3ProviderFixture.SECRET)
+    expect(manager.synced).toEqual([
+      {
+        mode: S3_PROVIDER_TYPE,
+        connection: S3ProviderFixture.row(S3ProviderFixture.SECRET).s3.config,
+      },
+    ])
     expect(refreshed._unsafeUnwrap()).toMatchObject({
       mountProviderIds: [S3ProviderFixture.ID],
     })

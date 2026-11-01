@@ -282,7 +282,10 @@ mod tests {
             manager.device.identity_private_key = self.identity.secret_string().as_str().to_owned();
             manager.storage.access_token = "configured-test-provider".to_owned();
             manager.event_log.signing_seed = "ephemeral-test-seed".to_owned();
-            manager.sync_outbox.access_token = "pending-test-token".to_owned();
+            manager.sync_outbox.connection = nook_core::StorageConnection::Github {
+                token: "pending-test-token".to_owned(),
+                repo: "owner/repository".to_owned(),
+            };
             Ok(manager)
         }
 
@@ -307,7 +310,10 @@ mod tests {
             assert!(manager.event_log.signing_seed.is_empty());
             assert!(manager.event_log.key_epoch.is_empty());
             assert!(manager.event_log.heads.is_empty());
-            assert!(manager.sync_outbox.access_token.is_empty());
+            assert_eq!(
+                manager.sync_outbox.connection,
+                nook_core::StorageConnection::Local
+            );
             assert_eq!(manager.storage.access_token, "configured-test-provider");
             assert_eq!(
                 manager.device.identity_private_key,

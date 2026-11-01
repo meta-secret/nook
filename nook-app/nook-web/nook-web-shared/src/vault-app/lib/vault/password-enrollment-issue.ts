@@ -208,9 +208,7 @@ export class IdentityEnrollmentIssue {
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
             await admittedManager.value.flush_event_outbox_for_provider(
-              targetArgs.mode,
-              targetArgs.pat,
-              targetArgs.repo,
+              targetArgs,
             );
             const flush: ProviderEventOutboxFlush = {
               providerType: selectedProvider.type,

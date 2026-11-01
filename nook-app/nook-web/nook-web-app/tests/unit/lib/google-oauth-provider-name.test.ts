@@ -125,9 +125,12 @@ describe('Google OAuth provider name persistence', () => {
     const staged = providerActions.stagedRemoteStorageArgs()
     expect(staged.kind).toBe(StagedRemoteStorageKind.Available)
     if (staged.kind === StagedRemoteStorageKind.Available) {
-      expect(staged.args.repo).toBe(
-        `shared:vault-folder\t${DEFAULT_DRIVE_BACKUP_NAME}`,
-      )
+      expect(staged.args).toEqual({
+        mode: 'google-drive',
+        token: GOOGLE_TOKENS.accessToken,
+        folderId: 'vault-folder',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      })
     }
 
     vi.spyOn(state, 'persistProviders').mockImplementation(async (opts) => {

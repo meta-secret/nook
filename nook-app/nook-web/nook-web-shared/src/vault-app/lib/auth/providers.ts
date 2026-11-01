@@ -1,4 +1,4 @@
-import { provider_wasm_args, type NookStorageConnectArgs } from "$app-wasm";
+import { provider_wasm_args, type NookStorageConnection } from "$app-wasm";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -21,8 +21,6 @@ import {
   default_github_repo,
   find_duplicate_sync_provider,
   find_duplicate_sync_provider_excluding,
-  format_drive_storage_ref,
-  format_new_drive_storage_ref,
   mask_github_pat_hint,
   oauth_access_token,
   localize_provider_label,
@@ -93,36 +91,14 @@ export { bind_google_drive_shared_folder };
 export type { DuplicateSyncProvider } from "$app-wasm";
 export { oauth_access_token, missing_oauth_access_token };
 
-export enum DriveFileIdentityKind {
-  New = "new",
-  Existing = "existing",
-}
-
 export enum OAuthAccessTokenKind {
   Available = "available",
 }
 
-export type DriveFileIdentity =
-  | { kind: DriveFileIdentityKind.New }
-  | { kind: DriveFileIdentityKind.Existing; fileId: string };
-
-export type DriveStorageReference = {
-  readonly identity: DriveFileIdentity;
-  readonly fileName: string;
-};
 export type OAuthFileDefaults = {
   readonly preset: OAuthFilePreset;
   readonly fileName: string;
 };
-
-export function formatDriveStorageRef({
-  identity,
-  fileName,
-}: DriveStorageReference): string {
-  return identity.kind === DriveFileIdentityKind.Existing
-    ? format_drive_storage_ref(identity.fileId, fileName)
-    : format_new_drive_storage_ref(fileName);
-}
 
 export {
   GITHUB_PROVIDER_TYPE,
@@ -644,7 +620,7 @@ export class LocalFolderPresentation {
 
 export class StorageProviderPresentation {
   constructor(private readonly value: StorageProvider) {}
-  storageArgs(): NookStorageConnectArgs {
+  storageArgs(): NookStorageConnection {
     return provider_wasm_args(this.value);
   }
   isICloudProvider(): boolean {

@@ -111,16 +111,7 @@ export async function refreshExtensionIdentityVaults({
           ).providers
     try {
       for (const mount of mounts) {
-        const args = provider_wasm_args(mount)
-        try {
-          await manager.sync_identity_log_with_provider(
-            args.mode,
-            args.pat,
-            args.repo,
-          )
-        } finally {
-          args.pat = ''
-        }
+        await manager.sync_identity_log_with_provider(provider_wasm_args(mount))
       }
       const paired: NookPairedVaults = {
         storeIds: message.payload.pairedVaultStoreIds,

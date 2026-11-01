@@ -84,7 +84,7 @@ import {
   stored_s3_configuration_state,
   update_oauth_remote_ref,
   local_vault_storage_args,
-  type NookStorageConnectArgs,
+  type NookStorageConnection,
   type ActiveProviderCredentialsRequest,
   type AuthProvidersSnapshot,
 } from "$app-wasm";
@@ -115,7 +115,7 @@ export {
 const log = browserLogRuntime.createLogger("vault-providers");
 
 export interface VaultConnectAssessmentRequest {
-  readonly args: NookStorageConnectArgs;
+  readonly args: NookStorageConnection;
 }
 
 type VaultConnectStatusDiscoveryCompletion = {
@@ -201,7 +201,7 @@ export class VaultProviderActions {
       : state.storageMode;
   }
 
-  wasmStorageArgs(): NookStorageConnectArgs {
+  wasmStorageArgs(): NookStorageConnection {
     const state = this.state;
     const syncProvider = new ProviderSelectionActions(state).syncProviders()[0];
     if (state.localVaultPresent) {
@@ -230,7 +230,7 @@ export class VaultProviderActions {
     return draft_local_storage_args();
   }
 
-  connectStorageArgs(): NookStorageConnectArgs {
+  connectStorageArgs(): NookStorageConnection {
     const state = this.state;
     if (this.shouldUseJoinProviderForConnect()) {
       const [syncProvider] = new ProviderSelectionActions(
@@ -426,13 +426,7 @@ export class VaultProviderActions {
         Result<VaultAccessStatus, StorageOperationFailure>
       > = (async () => {
         try {
-          return storageOk(
-            await admitted.value.assess_vault_connect(
-              args.mode,
-              args.pat,
-              args.repo,
-            ),
-          );
+          return storageOk(await admitted.value.assess_vault_connect(args));
         } catch (nativeFailure) {
           const failure = new NativeVaultStorageFailure(nativeFailure);
           const failureRequest: Parameters<

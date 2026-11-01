@@ -67,7 +67,7 @@ pub use scope::{
     RemoteEventFlushProviderRequest,
 };
 pub use state::*;
-pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs};
+pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnection};
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
 ///

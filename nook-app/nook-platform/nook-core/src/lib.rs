@@ -411,7 +411,7 @@ pub use sync_provider_store::{
     ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
     RemoteEventFlushProviderRequest, SharedEnrollmentAudience, SharedGrantProviderSelection,
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
-    StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,
+    StorageConnection, StorageProvider, StorageProviderData, StoredGithubPat,
     StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
     StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
@@ -420,15 +420,14 @@ pub use sync_provider_store::{
 };
 pub use validation::{
     ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
-    DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
+    DRIVE_SHARED_FOLDER_REF_PREFIX, DriveBackupName, DriveEventParent,
     ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
     GoogleDriveFolderId, ICloudShareRole, ICloudSharedTarget, LocalFolderSyncTarget,
     OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
     ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel, ProviderTargetKey,
-    S3_CONNECT_TARGET_V1_PREFIX, S3ConnectReference, S3ConnectSlots, S3Connection,
-    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3SecretAccessKey,
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
-    SyncProviderTargetIdentity,
+    S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
+    S3SecretAccessKey, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
+    SyncProviderTarget, SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,

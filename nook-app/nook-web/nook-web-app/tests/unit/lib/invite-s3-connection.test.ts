@@ -27,11 +27,10 @@ describe('joining through an invite that carries an S3 connection', () => {
 
     expect(staged.isOk()).toBe(true)
     if (staged.isErr()) return
-    expect(staged.value.mode).toBe('s3')
-    expect(staged.value.pat).toBe(S3ConnectionFixture.SECRET)
-    // The reference names the location and key id, never the secret.
-    expect(staged.value.repo.startsWith('s3-target-v1:')).toBe(true)
-    expect(staged.value.repo).not.toContain(S3ConnectionFixture.SECRET)
+    expect(staged.value).toEqual({
+      mode: 's3',
+      connection: S3ConnectionFixture.configuration(),
+    })
     // The save after the join keeps this S3 setup.
     expect(vault.storageMode).toBe(S3_PROVIDER_TYPE)
     expect(vault.loginSetup).toEqual({

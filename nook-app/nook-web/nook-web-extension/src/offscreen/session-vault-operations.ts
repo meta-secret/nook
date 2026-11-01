@@ -330,16 +330,9 @@ export async function flushPasskeyEventToProviders({
     const providers = select_remote_event_flush_providers(selection)
     const deliveries = await Promise.allSettled(
       providers.map(async (provider) => {
-        const args = provider_wasm_args(provider)
-        try {
-          await activeManager.flush_event_outbox_for_provider(
-            args.mode,
-            args.pat,
-            args.repo,
-          )
-        } finally {
-          args.pat = ''
-        }
+        await activeManager.flush_event_outbox_for_provider(
+          provider_wasm_args(provider),
+        )
       }),
     )
     if (deliveries.some((delivery) => delivery.status === 'rejected'))

@@ -154,16 +154,16 @@ impl NookVaultManager {
     )]
     pub async fn connect_identity_vault(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         store_id: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         let (event_log_remote, records) = self.load_password_unlock_records("", true).await?;
         let opening = IdentityVaultOpening {
@@ -195,7 +195,8 @@ impl NookVaultManager {
     ) -> Result<NookSecretPage, JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         let store_id = StoreId::parse(&store_id)?;
-        self.prepare_storage("local", "", "").await?;
+        self.prepare_storage(&nook_core::StorageConnection::Local)
+            .await?;
         let keys = self.enter_identity_vault(&store_id).await?;
         // The records name their vault; they must be this one's.
         self.vault.store_id = String::new();

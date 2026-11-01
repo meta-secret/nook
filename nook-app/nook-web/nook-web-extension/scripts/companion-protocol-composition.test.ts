@@ -414,7 +414,7 @@ beforeAll(() => {
     } finally {
       setup.free()
     }
-    await extension.connect_fresh('local', '', '')
+    await extension.connect_fresh({ mode: 'local' })
     await extension.set_vault_name('Composition Vault')
     extensionAppId = extension.device_id
     extensionSigningPublicKey = await extension.device_signing_public_key_js()

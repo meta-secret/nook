@@ -8,27 +8,16 @@
 //! The block holds one [`S3Connection`]: the location and this device's access
 //! key. The secret access key is sealed to the device key at rest exactly like
 //! `githubPat`; while the row is open in memory it holds the plaintext, which
-//! only the connect arguments' credential slot and a credential-bearing invite
-//! ever carry onward.
+//! only its storage connection and a credential-bearing invite ever carry
+//! onward.
 
 use nook_event_log::IdentityMountTarget;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::{StorageConnectArgs, ValidationError, ValidationResult};
-use crate::{EnrollmentProviderSecret, S3Connection, S3EnrollmentConnection, StorageMode};
+use crate::{EnrollmentProviderSecret, S3Connection, S3EnrollmentConnection};
 
 impl S3Connection {
-    /// Positional connect arguments: `s3`, the secret, and the versioned
-    /// reference that names everything else.
-    pub fn connect_args(&self) -> ValidationResult<StorageConnectArgs> {
-        Ok(StorageConnectArgs {
-            mode: StorageMode::S3.as_str().to_owned(),
-            pat: self.secret_access_key.expose().to_owned(),
-            repo: self.connect_reference()?.into_inner(),
-        })
-    }
-
     /// Where the row's objects live, as its label shows it: the bucket and
     /// the key prefix below it.
     #[must_use]
@@ -86,21 +75,10 @@ pub enum StoredS3Configuration {
     Configured(S3Connection),
 }
 
-impl StoredS3Configuration {
-    /// Connect arguments of an S3 row. A row without its S3 block cannot
-    /// connect.
-    pub fn connect_args(&self) -> ValidationResult<StorageConnectArgs> {
-        match self {
-            Self::Configured(connection) => connection.connect_args(),
-            Self::NotApplicable => Err(ValidationError::S3StorageTargetInvalid),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::StoredS3Configuration;
-    use crate::{S3_CONNECT_TARGET_V1_PREFIX, S3ConnectSlots, S3Connection};
+    use crate::S3Connection;
     use serde_json::json;
 
     const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
@@ -148,23 +126,6 @@ mod tests {
         };
         assert_eq!(connection.secret_access_key.expose(), SEALED);
         assert_eq!(serde_json::to_value(&sealed)?, stored("nook-dev", SEALED));
-        Ok(())
-    }
-
-    #[test]
-    fn secrets_stay_out_of_debug_and_the_reference_slot() -> anyhow::Result<()> {
-        let connection = S3Connection::fixture()?;
-        assert!(!format!("{connection:?}").contains(SECRET));
-        let args = StoredS3Configuration::Configured(connection.clone()).connect_args()?;
-        assert_eq!(args.mode, "s3");
-        assert_eq!(args.pat, SECRET);
-        assert!(args.repo.starts_with(S3_CONNECT_TARGET_V1_PREFIX));
-        assert!(!args.repo.contains(SECRET));
-        let read = S3Connection::from_connect_slots(S3ConnectSlots {
-            credential: &args.pat,
-            reference: &args.repo,
-        })?;
-        assert_eq!(read, connection);
         Ok(())
     }
 }

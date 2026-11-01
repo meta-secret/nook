@@ -29,9 +29,9 @@ use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudSharedTarget, MultiDeviceError,
-    SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
-    VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
-    i18n_keys,
+    SelfRosterSync, SentinelGenesisPhase, StorageConnection, StorageMode, SymmetricKey,
+    VaultCrypto, VaultNameRef, VaultSessionProjection, VaultStoreIdentityRef, VaultType,
+    VaultUnlock, VaultVersionWrite, i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState, VaultOperation};
 use std::mem;
@@ -520,29 +520,24 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn prepare_storage(
         &mut self,
-        storage_mode: &str,
-        github_pat: &str,
-        github_repo_name: &str,
+        connection: &StorageConnection,
     ) -> Result<(), NookError> {
-        // Parse the incoming tag once at the boundary so the rest of the
-        // method pattern-matches on `StorageMode` instead of comparing
-        // strings.
-        let mode = StorageMode::parse(storage_mode)?;
+        let mode = connection.mode();
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
         self.storage.forget_namespaces();
 
-        match mode {
-            StorageMode::Local => {
+        match connection {
+            StorageConnection::Local => {
                 self.storage.access_token = String::new();
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
                 self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
-            StorageMode::Github => {
-                self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
-                let repo_name = nook_core::GithubRepoName::parse(github_repo_name)?;
+            StorageConnection::Github { token, repo } => {
+                self.storage.access_token = nook_core::GithubPat::parse(token)?.to_string();
+                let repo_name = nook_core::GithubRepoName::parse(repo)?;
                 drop(self.status.tx.send("GITHUB_USER_FETCH".to_owned()));
                 let username = GitHubStorageClient::new(&self.storage.access_token)
                     .fetch_github_username()
@@ -561,13 +556,15 @@ impl NookVaultManager {
                     .ensure_github_repo_exists(&self.storage.remote_ref)
                     .await?;
             }
-            StorageMode::GoogleDrive => {
-                self.storage.access_token =
-                    nook_core::OauthAccessToken::parse(github_pat)?.to_string();
-                let (known_folder, file_name) =
-                    nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
+            StorageConnection::GoogleDrive {
+                token,
+                folder_id,
+                file_name,
+            } => {
+                self.storage.access_token = nook_core::OauthAccessToken::parse(token)?.to_string();
+                let file_name = nook_core::DriveBackupName::parse(file_name)?;
                 // Every Drive provider targets its shareable vault folder.
-                let parent = DriveEventParent::parse_storage_id(&known_folder)?;
+                let parent = DriveEventParent::parse_folder_id(folder_id)?;
                 self.storage.remote_path = file_name.to_string();
                 drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
                 DriveStorageClient::new(&self.storage.access_token)
@@ -578,34 +575,30 @@ impl NookVaultManager {
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
                 self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
-            StorageMode::ICloud => {
-                self.storage.access_token =
-                    nook_core::OauthAccessToken::parse(github_pat)?.to_string();
-                let (known_target, file_name) =
-                    nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
+            StorageConnection::ICloud {
+                token,
+                share_target,
+                file_name,
+            } => {
+                self.storage.access_token = nook_core::OauthAccessToken::parse(token)?.to_string();
+                let file_name = nook_core::DriveBackupName::parse(file_name)?;
                 // Every iCloud provider targets its `CloudKit` share.
-                let target = ICloudSharedTarget::from_storage_id(&known_target)?;
+                let target = ICloudSharedTarget::from_storage_id(share_target)?;
                 self.storage.remote_path = file_name.to_string();
-                self.storage.remote_ref = known_target;
+                self.storage.remote_ref = share_target.trim().to_owned();
                 self.storage.icloud_event_target = PreparedICloudShare::Share(target);
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
-            StorageMode::S3 => {
-                // The secret takes the credential slot and the versioned
-                // reference names the location and key id; both are validated
-                // again here. The cache reference names the location only.
-                let connection =
-                    nook_core::S3Connection::from_connect_slots(nook_core::S3ConnectSlots {
-                        credential: github_pat,
-                        reference: github_repo_name,
-                    })?;
-                self.storage.access_token = github_pat.trim().to_owned();
+            StorageConnection::S3 { connection } => {
+                // The connection was validated when it crossed the boundary;
+                // the cache reference names the location only.
+                self.storage.access_token = String::new();
                 self.storage.remote_ref = connection.location_identity();
                 self.storage.remote_path.clear();
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Connection(connection);
+                self.storage.s3_connection = PreparedS3Connection::Connection(connection.clone());
             }
         }
 
@@ -617,9 +610,7 @@ impl NookVaultManager {
 
         if mode != StorageMode::Local {
             self.sync_outbox.provider_id = self.local_cache_ref();
-            self.sync_outbox.storage_mode = mode;
-            self.sync_outbox.access_token = self.storage.access_token.clone();
-            self.sync_outbox.repo_arg = github_repo_name.to_owned();
+            self.sync_outbox.connection = connection.clone();
         }
 
         Ok(())
@@ -627,15 +618,12 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn prepare_storage_preserving_vault_metadata(
         &mut self,
-        storage_mode: &str,
-        github_pat: &str,
-        github_repo_name: &str,
+        connection: &StorageConnection,
     ) -> Result<(), NookError> {
         let password_entries = self.vault.password_entries.clone();
         let unlock = self.vault.unlock.clone();
         let vault_name = self.vault.vault_name.clone();
-        self.prepare_storage(storage_mode, github_pat, github_repo_name)
-            .await?;
+        self.prepare_storage(connection).await?;
         self.vault.password_entries = password_entries;
         self.vault.unlock = unlock;
         self.vault.vault_name = vault_name;
@@ -815,20 +803,21 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn s3_storage_is_prepared_from_its_connect_arguments_alone() -> anyhow::Result<()> {
-        let args = nook_core::S3Connection::try_from(nook_core::S3ConnectionDraft {
-            endpoint: "http://127.0.0.1:8333".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "nook-dev".to_owned(),
-            key_prefix: "e2e".to_owned(),
-            access_key_id: "device-a".to_owned(),
-            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-        })?
-        .connect_args()?;
+    async fn s3_storage_is_prepared_from_its_connection_alone() -> anyhow::Result<()> {
+        let connection = StorageConnection::S3 {
+            connection: nook_core::S3Connection::try_from(nook_core::S3ConnectionDraft {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: "e2e".to_owned(),
+                access_key_id: "device-a".to_owned(),
+                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+            })?,
+        };
         let mut manager = NookVaultManager::new();
         // Preparing S3 reads nothing yet: the first request signs with the key.
         manager
-            .prepare_storage(&args.mode, &args.pat, &args.repo)
+            .prepare_storage(&connection)
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert_eq!(manager.storage.mode, StorageMode::S3);
@@ -842,14 +831,11 @@ mod tests {
             "s3:http://127.0.0.1:8333/nook-dev/e2e"
         );
         assert_eq!(manager.sync_outbox.provider_id, manager.local_cache_ref());
+        assert_eq!(manager.sync_outbox.connection, connection);
         assert!(!manager.local_cache_ref().contains("device-a"));
 
-        let damaged = manager
-            .prepare_storage("s3", &args.pat, "s3-target-v1:{}")
-            .await;
-        assert!(damaged.is_err());
         manager
-            .prepare_storage("local", "", "")
+            .prepare_storage(&StorageConnection::Local)
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert!(matches!(

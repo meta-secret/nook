@@ -12,7 +12,7 @@ import {
   type IdentityVaultView,
   type NookEnrollmentIssueInput,
   type NookSecretPage,
-  type NookStorageConnectArgs,
+  type NookStorageConnection,
   type NookVaultManager,
   type PasswordGenerationOptions,
   type StorageProvider,
@@ -264,12 +264,7 @@ export class IdentityControlModel {
     }
     const args = this.vault.providerWasmArgs(provider);
     return this.withManager((manager) =>
-      manager.delete_removed_vault_at_provider(
-        storeId,
-        args.mode,
-        args.pat,
-        args.repo,
-      ),
+      manager.delete_removed_vault_at_provider(storeId, args),
     );
   }
 
@@ -286,14 +281,14 @@ export class IdentityControlModel {
       );
       return synced.map(() => IdentityActionOutcome.Completed);
     }
-    let args: NookStorageConnectArgs;
+    let args: NookStorageConnection;
     try {
       args = this.vault.providerWasmArgs(provider);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
     const synced = await this.withManager((manager) =>
-      manager.sync_identity_log_with_provider(args.mode, args.pat, args.repo),
+      manager.sync_identity_log_with_provider(args),
     );
     return synced.map(() => IdentityActionOutcome.Completed);
   }
@@ -512,7 +507,7 @@ export class IdentityControlModel {
       manager.identity_vault_provider(providers, storeId),
     );
     if (row.isErr()) return err(row.error);
-    let args: NookStorageConnectArgs;
+    let args: NookStorageConnection;
     try {
       args = this.vault.providerWasmArgs(row.value);
     } catch (failure) {
@@ -520,13 +515,7 @@ export class IdentityControlModel {
     }
     const pageSize = this.vault.secretPageSize;
     const page = await this.withManager((manager) =>
-      manager.connect_identity_vault(
-        args.mode,
-        args.pat,
-        args.repo,
-        storeId,
-        pageSize,
-      ),
+      manager.connect_identity_vault(args, storeId, pageSize),
     );
     if (page.isErr()) return err(page.error);
     return this.completeVaultConnect(page.value);

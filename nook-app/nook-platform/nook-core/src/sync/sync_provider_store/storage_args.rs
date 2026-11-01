@@ -4,37 +4,74 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+use zeroize::Zeroize;
+
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, ICloudSharedTarget,
-    OAuthRemoteStorageReference, OAuthStorageReference, OauthFilePreset,
-    ProviderReplicationCapability, ReplicationType, StorageMode, StorageProviderData,
-    StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredICloudShareTarget,
-    StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    OAuthRemoteStorageReference, OauthFilePreset, ProviderReplicationCapability, ReplicationType,
+    StorageMode, StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+    StoredGoogleDriveFolder, StoredICloudShareTarget, StoredOAuthAccessCredential,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName, StoredS3Configuration,
     ValidationError, ValidationResult,
 };
-use crate::{DriveBackupName, ProviderOauthPreset};
+use crate::{ProviderOauthPreset, S3Connection};
 
-/// Positional connect arguments expected by the current wasm manager boundary:
-/// storage mode, credential/token, and remote reference/repo.
-///
-/// An S3 connection crosses as `mode = "s3"`, its secret access key as the
-/// credential (`pat`), and the `s3-target-v1:` reference naming the endpoint,
-/// region, bucket, key prefix, and access key id as `repo`; see
-/// [`crate::S3Connection::from_connect_slots`].
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, tsify::Tsify)]
-pub struct StorageConnectArgs {
-    pub mode: String,
-    pub pat: String,
-    pub repo: String,
+/// Where the manager opens a vault: the provider and everything it connects
+/// with, validated again when the manager prepares its storage. It crosses
+/// the WASM boundary as one value tagged by its [`StorageMode`]; only the
+/// token and the S3 connection carry a secret.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "mode",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum StorageConnection {
+    /// `IndexedDB` on this device only.
+    Local,
+    /// A repository of the token's GitHub account.
+    Github { token: String, repo: String },
+    /// The event file in the vault's shared Google Drive folder.
+    GoogleDrive {
+        token: String,
+        folder_id: String,
+        file_name: String,
+    },
+    /// The event file in a `CloudKit` share, named by its storage id.
+    #[serde(rename = "icloud")]
+    ICloud {
+        token: String,
+        share_target: String,
+        file_name: String,
+    },
+    /// An S3-compatible location and this device's key.
+    S3 { connection: S3Connection },
 }
 
-impl StorageConnectArgs {
+impl StorageConnection {
     #[must_use]
-    pub fn local() -> Self {
-        Self {
-            mode: StorageMode::Local.as_str().to_owned(),
-            pat: String::new(),
-            repo: String::new(),
+    pub const fn mode(&self) -> StorageMode {
+        match self {
+            Self::Local => StorageMode::Local,
+            Self::Github { .. } => StorageMode::Github,
+            Self::GoogleDrive { .. } => StorageMode::GoogleDrive,
+            Self::ICloud { .. } => StorageMode::ICloud,
+            Self::S3 { .. } => StorageMode::S3,
+        }
+    }
+}
+
+/// Wipes the credential the connection carries.
+impl Zeroize for StorageConnection {
+    fn zeroize(&mut self) {
+        match self {
+            Self::Github { token, .. }
+            | Self::GoogleDrive { token, .. }
+            | Self::ICloud { token, .. } => token.zeroize(),
+            Self::S3 { connection } => connection.secret_access_key.zeroize(),
+            Self::Local => {}
         }
     }
 }
@@ -50,15 +87,24 @@ impl super::OAuthFileConfig {
         }
     }
 
-    /// Every OAuth-file provider connects through its shared target: the Drive
-    /// vault folder or the `CloudKit` share. A provider without one is not
-    /// connectable yet.
-    fn connection_storage_id(&self) -> ValidationResult<OAuthStorageReference> {
-        match self.remote_storage_ref() {
-            OAuthRemoteStorageReference::Resolved(storage_id) => Ok(storage_id),
-            OAuthRemoteStorageReference::Unresolved => {
-                Err(ValidationError::SharedStorageTargetRequired)
-            }
+    /// The shared target an OAuth-file provider connects through: the Drive
+    /// vault folder id or the `CloudKit` share's storage id. A provider
+    /// without one is not connectable yet.
+    #[must_use]
+    pub fn connection_target(&self) -> OAuthRemoteStorageReference {
+        let target = match self.preset {
+            OauthFilePreset::GoogleDrive => match &self.folder_id {
+                StoredGoogleDriveFolder::FolderId(folder) => folder.trim(),
+                StoredGoogleDriveFolder::Root => "",
+            },
+            OauthFilePreset::ICloud => match &self.icloud_share_target {
+                StoredICloudShareTarget::SharedTarget(target) => target.trim(),
+                StoredICloudShareTarget::Unbound => "",
+            },
+        };
+        match target {
+            "" => OAuthRemoteStorageReference::Unresolved,
+            target => OAuthRemoteStorageReference::Resolved(target.into()),
         }
     }
 }
@@ -84,22 +130,28 @@ pub struct ProviderLabelLabels {
 }
 
 impl StorageProviderData {
-    pub fn connection_args(&self) -> ValidationResult<StorageConnectArgs> {
-        let args = match self.provider_type {
+    pub fn connection_args(&self) -> ValidationResult<StorageConnection> {
+        match self.provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                return Ok(StorageConnectArgs::local());
+                Ok(StorageConnection::Local)
             }
-            StorageProviderType::Github => self.github_connection_args(),
-            StorageProviderType::OauthFile => self.oauth_file_connection_args()?,
-            StorageProviderType::S3 => self.s3.connect_args()?,
-        };
-        Ok(args)
+            StorageProviderType::Github => Ok(self.github_connection_args()),
+            StorageProviderType::OauthFile => self.oauth_file_connection_args(),
+            // A row without its S3 block cannot connect.
+            StorageProviderType::S3 => match &self.s3 {
+                StoredS3Configuration::Configured(connection) => Ok(StorageConnection::S3 {
+                    connection: connection.clone(),
+                }),
+                StoredS3Configuration::NotApplicable => {
+                    Err(ValidationError::S3StorageTargetInvalid)
+                }
+            },
+        }
     }
 
-    fn github_connection_args(&self) -> StorageConnectArgs {
-        StorageConnectArgs {
-            mode: StorageMode::Github.as_str().to_owned(),
-            pat: match &self.github_pat {
+    fn github_connection_args(&self) -> StorageConnection {
+        StorageConnection::Github {
+            token: match &self.github_pat {
                 StoredGithubPat::Token(pat) => pat.trim().to_owned(),
                 StoredGithubPat::Missing => String::new(),
             },
@@ -113,30 +165,33 @@ impl StorageProviderData {
         }
     }
 
-    fn oauth_file_connection_args(&self) -> ValidationResult<StorageConnectArgs> {
+    fn oauth_file_connection_args(&self) -> ValidationResult<StorageConnection> {
         let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file else {
-            return Ok(StorageConnectArgs {
-                mode: StorageMode::GoogleDrive.as_str().to_owned(),
-                pat: String::new(),
-                repo: DEFAULT_DRIVE_BACKUP_NAME.to_owned(),
+            return Ok(StorageConnection::GoogleDrive {
+                token: String::new(),
+                folder_id: String::new(),
+                file_name: DEFAULT_DRIVE_BACKUP_NAME.to_owned(),
             });
         };
-        let storage_id = oauth.connection_storage_id()?;
-        let mode = match oauth.preset {
-            OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
-            OauthFilePreset::ICloud => StorageMode::ICloud,
+        let OAuthRemoteStorageReference::Resolved(target) = oauth.connection_target() else {
+            return Err(ValidationError::SharedStorageTargetRequired);
         };
         let token = match &oauth.access_token {
             StoredOAuthAccessCredential::SignedOut => String::new(),
             StoredOAuthAccessCredential::AccessToken(token) => token.trim().to_owned(),
         };
-        Ok(StorageConnectArgs {
-            mode: mode.as_str().to_owned(),
-            pat: token,
-            repo: DriveBackupName::format_storage_ref_raw(
-                storage_id.as_str(),
-                oauth.backup_file_name(),
-            ),
+        let file_name = oauth.backup_file_name().to_owned();
+        Ok(match oauth.preset {
+            OauthFilePreset::GoogleDrive => StorageConnection::GoogleDrive {
+                token,
+                folder_id: target.as_str().to_owned(),
+                file_name,
+            },
+            OauthFilePreset::ICloud => StorageConnection::ICloud {
+                token,
+                share_target: target.as_str().to_owned(),
+                file_name,
+            },
         })
     }
 
@@ -202,10 +257,10 @@ mod tests {
         StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredS3Configuration,
     };
 
-    use super::StorageConnectArgs;
+    use super::StorageConnection;
     use crate::{
         DEFAULT_GITHUB_REPO_NAME, OAuthFileConfigData, OauthFilePreset, ReplicationType,
-        StorageProviderData, StorageProviderType, ValidationError,
+        S3Connection, StorageMode, StorageProviderData, StorageProviderType, ValidationError,
     };
     use crate::{
         DraftStorageConnection, GithubStorageDraft, OAuthRemoteStorageReference, OAuthStorageDraft,
@@ -221,6 +276,8 @@ mod tests {
         StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection,
         StagedStorageConnection,
     };
+    use serde_json::json;
+    use zeroize::Zeroize;
 
     impl StorageProviderData {
         fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
@@ -301,9 +358,8 @@ mod tests {
         assert_eq!(
             (StorageProviderData::github_provider("gh", " team-vault ", " pat "))
                 .connection_args()?,
-            StorageConnectArgs {
-                mode: "github".to_owned(),
-                pat: "pat".to_owned(),
+            StorageConnection::Github {
+                token: "pat".to_owned(),
                 repo: "team-vault".to_owned(),
             }
         );
@@ -318,27 +374,126 @@ mod tests {
                 oauth.folder_id = StoredGoogleDriveFolder::FolderId(" folder-1 ".to_owned());
             })?
             .connection_args()?,
-            StorageConnectArgs {
-                mode: "google-drive".to_owned(),
-                pat: "token".to_owned(),
-                repo: "shared:folder-1\tevents".to_owned(),
+            StorageConnection::GoogleDrive {
+                token: "token".to_owned(),
+                folder_id: "folder-1".to_owned(),
+                file_name: "events".to_owned(),
             }
         );
         assert_eq!(
             (StorageProviderData::local_folder_provider("folder", "handle-1")).connection_args()?,
-            StorageConnectArgs::local()
+            StorageConnection::Local
         );
         Ok(())
     }
 
     #[test]
-    fn an_s3_row_connects_with_its_secret_and_versioned_reference() -> anyhow::Result<()> {
-        let config = crate::S3Connection::fixture()?;
+    fn each_connection_crosses_the_wire_tagged_by_its_mode() -> anyhow::Result<()> {
+        let token = || "user-token".to_owned();
+        for (connection, wire) in [
+            (StorageConnection::Local, json!({ "mode": "local" })),
+            (
+                StorageConnection::Github {
+                    token: token(),
+                    repo: "vault".to_owned(),
+                },
+                json!({ "mode": "github", "token": "user-token", "repo": "vault" }),
+            ),
+            (
+                StorageConnection::GoogleDrive {
+                    token: token(),
+                    folder_id: "folder-1".to_owned(),
+                    file_name: "events".to_owned(),
+                },
+                json!({
+                    "mode": "google-drive",
+                    "token": "user-token",
+                    "folderId": "folder-1",
+                    "fileName": "events",
+                }),
+            ),
+            (
+                StorageConnection::ICloud {
+                    token: token(),
+                    share_target: "icloud-share-v1:{}".to_owned(),
+                    file_name: "events".to_owned(),
+                },
+                json!({
+                    "mode": "icloud",
+                    "token": "user-token",
+                    "shareTarget": "icloud-share-v1:{}",
+                    "fileName": "events",
+                }),
+            ),
+        ] {
+            assert_eq!(serde_json::to_value(&connection)?, wire);
+            assert_eq!(wire.get("mode"), Some(&json!(connection.mode().as_str())));
+            assert_eq!(
+                serde_json::from_value::<StorageConnection>(wire)?,
+                connection
+            );
+            let mut wiped = connection.clone();
+            wiped.zeroize();
+            assert!(!serde_json::to_string(&wiped)?.contains("user-token"));
+        }
+        // A local folder is not a storage mode the manager prepares.
+        assert!(
+            serde_json::from_value::<StorageConnection>(json!({ "mode": "local-folder" })).is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_connection_carries_its_secret_in_its_own_field_alone() -> anyhow::Result<()> {
+        const SECRET: &str = "TEST-ONLY-device-a-secret-not-real";
+        let connection = StorageConnection::S3 {
+            connection: S3Connection::fixture()?,
+        };
+        assert_eq!(connection.mode(), StorageMode::S3);
+        let wire = serde_json::to_value(&connection)?;
+        assert_eq!(
+            wire,
+            json!({
+                "mode": "s3",
+                "connection": {
+                    "endpoint": "http://127.0.0.1:8333",
+                    "region": "us-east-1",
+                    "bucket": "nook-dev",
+                    "keyPrefix": "e2e/run-1",
+                    "accessKeyId": "device-a",
+                    "secretAccessKey": SECRET,
+                },
+            })
+        );
+        assert_eq!(wire.to_string().matches(SECRET).count(), 1);
+        assert!(!format!("{connection:?}").contains(SECRET));
+        // Reading it back validates the location as the setup form does.
+        assert_eq!(
+            serde_json::from_value::<StorageConnection>(wire.clone())?,
+            connection
+        );
+        let mut damaged = wire;
+        if let Some(bucket) = damaged.pointer_mut("/connection/bucket") {
+            *bucket = json!("nook/dev");
+        }
+        assert!(serde_json::from_value::<StorageConnection>(damaged).is_err());
+        let mut wiped = connection;
+        wiped.zeroize();
+        assert!(!serde_json::to_string(&wiped)?.contains(SECRET));
+        Ok(())
+    }
+
+    #[test]
+    fn an_s3_row_connects_with_its_connection() -> anyhow::Result<()> {
+        let config = S3Connection::fixture()?;
         let mut row = StorageProviderData::github_provider("s3", "", "");
         row.provider_type = StorageProviderType::S3;
         row.github_pat = StoredGithubPat::Missing;
         row.s3 = StoredS3Configuration::Configured(config.clone());
-        assert_eq!(row.connection_args()?, config.connect_args()?);
+        assert_eq!(
+            row.connection_args()?,
+            StorageConnection::S3 { connection: config }
+        );
         assert!(row.validate_replication(ReplicationType::Personal).is_ok());
         assert!(!row.supports_replication(ReplicationType::Shared));
         row.s3 = StoredS3Configuration::NotApplicable;
@@ -381,31 +536,50 @@ mod tests {
         });
         assert_eq!(
             oauth.project(),
-            StorageConnectArgs {
-                mode: "icloud".to_owned(),
-                pat: "token".to_owned(),
-                repo: "file-id\trepo-fallback".to_owned()
+            StorageConnection::ICloud {
+                token: "token".to_owned(),
+                share_target: "file-id".to_owned(),
+                file_name: "repo-fallback".to_owned(),
+            }
+        );
+        // A Drive draft without its folder still projects; preparing it fails.
+        assert_eq!(
+            DraftStorageConnection::OAuth(OAuthStorageDraft {
+                preset: OauthFilePreset::GoogleDrive,
+                credential: &StoredOAuthAccessCredential::SignedOut,
+                remote_reference: OAuthRemoteStorageReference::Unresolved,
+                file_name: &StoredOAuthRemoteFileName::Unresolved,
+                alternate_name: &StoredOAuthRemoteFileName::Unresolved,
+            })
+            .project(),
+            StorageConnection::GoogleDrive {
+                token: String::new(),
+                folder_id: String::new(),
+                file_name: "nook-events".to_owned(),
             }
         );
         let provider = StorageProviderData::github_provider("gh", "team-vault", "pat");
         assert_eq!(
             VaultStorageConnection::LocalCache.project()?,
-            StorageConnectArgs::local()
+            StorageConnection::Local
         );
         assert_eq!(
-            VaultStorageConnection::AuthenticatedProvider(&provider)
-                .project()?
-                .repo,
-            "team-vault"
+            VaultStorageConnection::AuthenticatedProvider(&provider).project()?,
+            StorageConnection::Github {
+                token: "pat".to_owned(),
+                repo: "team-vault".to_owned(),
+            }
         );
         assert_eq!(
             VaultStorageConnection::Draft(DraftStorageConnection::Github(GithubStorageDraft {
                 credential: &StoredGithubPat::Token("draft-pat".to_owned()),
                 repository: &StoredGithubRepository::Repository("draft-repo".to_owned()),
             }))
-            .project()?
-            .repo,
-            "draft-repo"
+            .project()?,
+            StorageConnection::Github {
+                token: "draft-pat".to_owned(),
+                repo: "draft-repo".to_owned(),
+            }
         );
         Ok(())
     }
@@ -533,10 +707,14 @@ mod tests {
                 target.clone()
             ))
         );
-        let args = icloud.connection_args()?;
-        assert_eq!(args.mode, "icloud");
-        assert_eq!(args.pat, "token");
-        assert_eq!(args.repo, format!("{target}\tnook-events"));
+        assert_eq!(
+            icloud.connection_args()?,
+            StorageConnection::ICloud {
+                token: "token".to_owned(),
+                share_target: target,
+                file_name: "nook-events".to_owned(),
+            }
+        );
         Ok(())
     }
 
@@ -560,9 +738,11 @@ mod tests {
                 repository: &StoredGithubRepository::Repository((" owner/repo ").to_owned())
             })
             .project()?
-            .ready()?
-            .repo,
-            "owner/repo"
+            .ready()?,
+            StorageConnection::Github {
+                token: "pat".to_owned(),
+                repo: "owner/repo".to_owned(),
+            }
         );
 
         let mut oauth = OAuthFileConfigData {
@@ -588,9 +768,12 @@ mod tests {
                 file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned()),
             })
             .project()?
-            .ready()?
-            .repo,
-            "shared:shared-folder\tstored-name"
+            .ready()?,
+            StorageConnection::GoogleDrive {
+                token: "token".to_owned(),
+                folder_id: "shared-folder".to_owned(),
+                file_name: "stored-name".to_owned(),
+            }
         );
 
         let icloud = OAuthFileConfigData {
@@ -606,9 +789,12 @@ mod tests {
                 file_name: &StoredOAuthRemoteFileName::FileName((" draft-name ").to_owned()),
             })
             .project()?
-            .ready()?
-            .repo,
-            "share\tdraft-name"
+            .ready()?,
+            StorageConnection::ICloud {
+                token: "token".to_owned(),
+                share_target: "share".to_owned(),
+                file_name: "draft-name".to_owned(),
+            }
         );
         Ok(())
     }
@@ -621,8 +807,13 @@ mod tests {
                 repository: &StoredGithubRepository::Repository(repo.to_owned()),
             })
             .project();
-            assert_eq!(draft.pat, pat);
-            assert_eq!(draft.repo, repo);
+            assert_eq!(
+                draft,
+                StorageConnection::Github {
+                    token: pat.to_owned(),
+                    repo: repo.to_owned(),
+                }
+            );
             let staged = StagedRemoteConnection::Github(StagedGithubConnection {
                 credential: &StoredGithubPat::Token((pat).to_owned()),
                 repository: &StoredGithubRepository::Repository((repo).to_owned()),
@@ -631,9 +822,13 @@ mod tests {
             if pat.trim().is_empty() {
                 assert_eq!(staged, StagedStorageConnection::Incomplete);
             } else {
-                let staged = staged.ready()?;
-                assert_eq!(staged.pat, pat.trim());
-                assert_eq!(staged.repo, repo.trim());
+                assert_eq!(
+                    staged.ready()?,
+                    StorageConnection::Github {
+                        token: pat.trim().to_owned(),
+                        repo: repo.trim().to_owned(),
+                    }
+                );
             }
         }
         let staged = StagedRemoteConnection::Github(StagedGithubConnection {
@@ -642,7 +837,13 @@ mod tests {
         })
         .project()?
         .ready()?;
-        assert_eq!(staged.repo, DEFAULT_GITHUB_REPO_NAME);
+        assert_eq!(
+            staged,
+            StorageConnection::Github {
+                token: "pat".to_owned(),
+                repo: DEFAULT_GITHUB_REPO_NAME.to_owned(),
+            }
+        );
         Ok(())
     }
 
@@ -727,7 +928,7 @@ mod tests {
         );
     }
     impl StagedStorageConnection {
-        fn ready(self) -> anyhow::Result<StorageConnectArgs> {
+        fn ready(self) -> anyhow::Result<StorageConnection> {
             match self {
                 Self::Ready(args) => Ok(args),
                 Self::Incomplete => anyhow::bail!("staged connection is incomplete"),

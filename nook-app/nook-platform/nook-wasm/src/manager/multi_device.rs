@@ -56,13 +56,13 @@ impl NookVaultManager {
     /// Device B requests access without decrypting the vault (writes join record only).
     pub async fn request_vault_access(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         _requested_at: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -109,14 +109,14 @@ impl NookVaultManager {
     /// Device B enrolls with out-of-band `secrets_key` and `members_key`, then unlocks the vault.
     pub async fn enroll_and_connect(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
         secrets_key: String,
         members_key: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        self.prepare_storage(&connection).await?;
         let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -902,27 +902,18 @@ mod browser_tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
+        let local = tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
 
         assert!(
             manager
-                .request_vault_access(
-                    "local".to_owned(),
-                    String::new(),
-                    String::new(),
-                    "2026-09-07T00:00:00Z".to_owned(),
-                )
+                .request_vault_access(&local, "2026-09-07T00:00:00Z".to_owned())
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .enroll_and_connect(
-                    "local".to_owned(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                )
+                .enroll_and_connect(&local, String::new(), String::new())
                 .await
                 .is_err()
         );

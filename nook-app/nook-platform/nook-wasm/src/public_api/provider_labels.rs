@@ -1,5 +1,4 @@
 use super::wasm_bindgen;
-use nook_core::DriveBackupName;
 use nook_core::{
     OAuthProviderLabel, OauthFilePreset, ProviderLabel, ProviderOauthPreset, StorageProviderType,
     StoredGithubRepository, StoredLocalFolderDirectory, StoredOAuthRemoteFileName,
@@ -17,16 +16,6 @@ use wasm_bindgen::JsError;
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_drive_backup_name() -> String {
     nook_core::DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
-    DriveBackupName::format_storage_ref_raw(file_id, file_name)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn format_new_drive_storage_ref(file_name: &str) -> String {
-    DriveBackupName::format_storage_ref_raw("", file_name)
 }
 
 #[wasm_bindgen]
@@ -201,11 +190,6 @@ mod tests {
     fn provider_label_exports_cover_defaults_and_details() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(default_github_repo(), "nook");
         assert_eq!(default_drive_backup_name(), "nook-events");
-        assert_eq!(
-            format_drive_storage_ref(" file-id ", " events.json "),
-            "file-id\tevents.json"
-        );
-        assert_eq!(format_new_drive_storage_ref(""), "nook-events");
 
         assert_eq!(
             wasm_storage_mode_for_provider(

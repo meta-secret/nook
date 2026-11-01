@@ -1,4 +1,4 @@
-use super::{NookStorageConnectArgs, wasm_bindgen};
+use super::{NookStorageConnection, wasm_bindgen};
 use nook_core::GithubPat;
 use nook_core::OAuthAccessToken;
 use nook_core::StoredGithubPat;
@@ -6,7 +6,7 @@ use nook_core::StoredGithubRepository;
 use nook_core::StoredOAuthRemoteFileName;
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
-    StorageConnectArgs, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    StorageConnection, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
 };
 use nook_core::{
     DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
@@ -333,7 +333,7 @@ impl NookStagedStorageArgs {
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn args(&self) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+    pub fn args(&self) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
         let result = match &self.0 {
             StagedStorageConnection::Ready(args) => Ok(args.clone()),
             StagedStorageConnection::Incomplete => {
@@ -390,9 +390,9 @@ impl NookGithubPatHint {
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
+pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError>
 {
-    let result = { StorageConnectArgs::local() };
+    let result = { StorageConnection::Local };
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
@@ -404,7 +404,7 @@ pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, w
 )]
 pub fn authenticated_vault_storage_args(
     provider: &tsify::Ts<nook_core::StorageProviderData>,
-) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
     let provider = provider
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
@@ -416,7 +416,7 @@ pub fn authenticated_vault_storage_args(
 #[wasm_bindgen]
 
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str,
-github_repo: &str) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+github_repo: &str) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
 
 let result = {
     DraftStorageConnection::Github(GithubStorageDraft {
@@ -436,7 +436,7 @@ Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be
 )]
 pub fn draft_oauth_storage_args(
     config: &tsify::Ts<nook_core::OAuthFileConfigData>,
-) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
     let config = config
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;
@@ -444,7 +444,7 @@ pub fn draft_oauth_storage_args(
         DraftStorageConnection::OAuth(OAuthStorageDraft {
             preset: config.preset,
             credential: &config.access_token,
-            remote_reference: config.remote_storage_ref(),
+            remote_reference: config.connection_target(),
             file_name: &config.file_name,
             alternate_name: &StoredOAuthRemoteFileName::Unresolved,
         })
@@ -458,7 +458,7 @@ pub fn draft_oauth_storage_args(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn draft_local_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
+pub fn draft_local_storage_args() -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError>
 {
     let result = { DraftStorageConnection::Local.project() };
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
@@ -493,7 +493,7 @@ mod tests {
     use nook_core::LocalFolderConfigData;
     use nook_core::OAuthAccessToken;
     use nook_core::OAuthFileConfigData;
-    use nook_core::StorageConnectArgs;
+    use nook_core::StorageConnection;
     use nook_core::StorageProviderType;
     use nook_core::StoredGithubPat;
     use nook_core::StoredOAuthAccessCredential;
@@ -663,41 +663,41 @@ mod tests {
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
         let ready =
-            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnectArgs::local()));
+            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnection::Local));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert!(ready.args().is_ok());
 
         assert_eq!(
-            local_vault_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
+            local_vault_storage_args().and_then(|value| value
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?,
+            StorageConnection::Local
         );
         assert_eq!(
-            draft_local_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
+            draft_local_storage_args().and_then(|value| value
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?,
+            StorageConnection::Local
         );
         let github_args = draft_github_storage_args("pat", "owner/repo").and_then(|value| {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
         })?;
-        assert_eq!(github_args.mode, "github");
-        assert_eq!(github_args.pat, "pat");
-        assert_eq!(github_args.repo, "owner/repo");
+        assert_eq!(
+            github_args,
+            StorageConnection::Github {
+                token: "pat".to_owned(),
+                repo: "owner/repo".to_owned(),
+            }
+        );
         assert_eq!(
             draft_oauth_storage_args(&Tsify::into_ts(&(config))?)
                 .and_then(|value| value
                     .to_rust()
                     .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "google-drive"
+                .mode(),
+            nook_core::StorageMode::GoogleDrive
         );
 
         let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
@@ -718,7 +718,7 @@ mod browser_tests {
     use crate::public_api;
     use nook_core::OAuthAccessToken;
     use nook_core::OauthFilePreset;
-    use nook_core::StorageConnectArgs;
+    use nook_core::StorageConnection;
     use nook_core::StoredGithubPat;
     use nook_core::StoredGoogleDriveFolder;
     use nook_core::StoredOAuthAccessCredential;
@@ -810,15 +810,14 @@ mod browser_tests {
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
         let ready =
-            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnectArgs::local()));
+            NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnection::Local));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert_eq!(
             ready
                 .args()?
                 .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .mode,
-            "local"
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            StorageConnection::Local
         );
 
         let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
@@ -831,29 +830,29 @@ mod browser_tests {
         assert_eq!(hint.value()?, "ghp_123456…");
 
         assert_eq!(
-            local_vault_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
+            local_vault_storage_args().and_then(|value| value
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?,
+            StorageConnection::Local
         );
         assert_eq!(
-            draft_local_storage_args()
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
-                .mode,
-            "local"
+            draft_local_storage_args().and_then(|value| value
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?,
+            StorageConnection::Local
         );
         let github = draft_github_storage_args("pat", "owner/repo").and_then(|value| {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
         })?;
-        assert_eq!(github.mode, "github");
-        assert_eq!(github.pat, "pat");
-        assert_eq!(github.repo, "owner/repo");
+        assert_eq!(
+            github,
+            StorageConnection::Github {
+                token: "pat".to_owned(),
+                repo: "owner/repo".to_owned(),
+            }
+        );
         let oauth = draft_oauth_storage_args(&Tsify::into_ts(&(configured.clone()))?).and_then(
             |value| {
                 value
@@ -861,7 +860,7 @@ mod browser_tests {
                     .map_err(|_| JsError::new("Typed test output could not be decoded."))
             },
         )?;
-        assert_eq!(oauth.mode, "google-drive");
+        assert_eq!(oauth.mode(), nook_core::StorageMode::GoogleDrive);
 
         let drive = nook_core::OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
@@ -877,16 +876,20 @@ mod browser_tests {
                     .to_rust()
                     .map_err(|_| JsError::new("Typed test output could not be decoded."))
             })?;
-        assert_eq!(draft_args.repo, "shared:vault-folder\tVault.yaml");
+        let drive_connection = StorageConnection::GoogleDrive {
+            token: "token".to_owned(),
+            folder_id: "vault-folder".to_owned(),
+            file_name: "Vault.yaml".to_owned(),
+        };
+        assert_eq!(draft_args, drive_connection);
         let staged_args =
             public_api::staged_oauth_remote_storage_args(&Tsify::into_ts(&(drive.clone()))?)?;
         assert_eq!(
             staged_args
                 .args()?
                 .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .repo,
-            "shared:vault-folder\tVault.yaml"
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            drive_connection
         );
         let updated =
             public_api::update_oauth_remote_ref(&Tsify::into_ts(&(drive.clone()))?, "file-1")?;

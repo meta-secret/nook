@@ -602,11 +602,7 @@ export class VaultSecretActions {
       const args = state.wasmStorageArgs();
       try {
         return storageOk(
-          await manager.value.fetch_vault_password_entries(
-            args.mode,
-            args.pat,
-            args.repo,
-          ),
+          await manager.value.fetch_vault_password_entries(args),
         );
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));

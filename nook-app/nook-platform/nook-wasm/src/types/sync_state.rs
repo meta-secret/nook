@@ -181,18 +181,10 @@ impl NookSyncConflictReview {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn mode(&self) -> Result<String, wasm_bindgen::JsError> {
-        Ok(self.conflict()?.mode())
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn pat(&self) -> Result<String, wasm_bindgen::JsError> {
-        Ok(self.conflict()?.pat())
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn repo(&self) -> Result<String, wasm_bindgen::JsError> {
-        Ok(self.conflict()?.repo())
+    pub fn connection(
+        &self,
+    ) -> Result<tsify::Ts<super::NookStorageConnection>, wasm_bindgen::JsError> {
+        self.conflict()?.connection()
     }
 
     #[wasm_bindgen(getter, js_name = remoteRevision)]
@@ -396,9 +388,10 @@ mod tests {
         assert_eq!(review.provider_label().unwrap(), "GitHub");
         assert_eq!(review.local_yaml().unwrap(), "");
         assert_eq!(review.remote_yaml().unwrap(), "remote-vault");
-        assert_eq!(review.mode().unwrap(), "");
-        assert_eq!(review.pat().unwrap(), "");
-        assert_eq!(review.repo().unwrap(), "");
+        assert_eq!(
+            review.connection().unwrap().to_rust().unwrap(),
+            nook_core::StorageConnection::Local
+        );
         assert_eq!(review.content_local_version().unwrap(), 2);
         assert_eq!(review.content_remote_version().unwrap(), 3);
         assert!(review.local_store_id().is_err());

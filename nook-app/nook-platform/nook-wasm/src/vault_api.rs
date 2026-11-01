@@ -907,7 +907,9 @@ mod projection_tests {
         let identity = DeviceIdentity::generate()?;
         manager.set_test_device_identity(&identity);
         manager
-            .connect_fresh("local".to_owned(), String::new(), String::new())
+            .connect_fresh(&tsify::Tsify::into_ts(
+                &nook_core::StorageConnection::Local,
+            )?)
             .await?;
         let store_id = manager.vault_store_id();
         let content = match NookDatabase::load_vault_blob(&store_id)

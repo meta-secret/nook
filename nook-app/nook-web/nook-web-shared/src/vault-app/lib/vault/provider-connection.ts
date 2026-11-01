@@ -122,11 +122,7 @@ export class ProviderConnectionActions {
           const admitted = state.admitManager();
           if (admitted.isErr()) return storageErr(admitted.error);
           try {
-            const discovered = await admitted.value.discover_remote_vault(
-              args.mode,
-              args.pat,
-              args.repo,
-            );
+            const discovered = await admitted.value.discover_remote_vault(args);
             state.remoteVaultChoices =
               discovered.state === "several" ? discovered.vaults : [];
             return storageOk(

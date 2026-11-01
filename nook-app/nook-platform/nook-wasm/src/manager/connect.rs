@@ -25,13 +25,13 @@ use crate::storage::identity_record::VerifiedPreviousEpoch;
 
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 
-use crate::NookError;
 use crate::storage::identity_record;
+use crate::{NookError, NookStorageConnection};
 use js_sys::Error as JsNativeError;
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
-    IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
+    IdentityVaultEventId, StorageConnection, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -111,23 +111,23 @@ mod tests {
         use nook_core::{ProviderFailureCode, S3Connection, S3ConnectionDraft};
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", "127.0.0.1:8333", 403)])
             .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let args = S3Connection::try_from(S3ConnectionDraft {
-            endpoint: "http://127.0.0.1:8333".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "nook-dev".to_owned(),
-            key_prefix: "e2e".to_owned(),
-            access_key_id: "device-a".to_owned(),
-            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
-        })?
-        .connect_args()?;
+        let connection = StorageConnection::S3 {
+            connection: S3Connection::try_from(S3ConnectionDraft {
+                endpoint: "http://127.0.0.1:8333".to_owned(),
+                region: "us-east-1".to_owned(),
+                bucket: "nook-dev".to_owned(),
+                key_prefix: "e2e".to_owned(),
+                access_key_id: "device-a".to_owned(),
+                secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned(),
+            })?,
+        };
         let mut manager = NookVaultManager::new();
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().as_str().to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        let Err(failure) = manager
-            .assess_vault_connect(args.mode, args.pat, args.repo)
-            .await
-        else {
+        let connection =
+            tsify::Tsify::into_ts(&connection).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let Err(failure) = manager.assess_vault_connect(&connection).await else {
             anyhow::bail!("a refused key fails the assessment");
         };
         // The assessment rejects like every other export: its message is the
@@ -160,9 +160,11 @@ mod tests {
         manager.storage.mode = StorageMode::GoogleDrive;
         manager.storage.access_token = "rejected-token".to_owned();
         manager.sync_outbox.provider_id = "rejected-provider".to_owned();
-        manager.sync_outbox.storage_mode = StorageMode::GoogleDrive;
-        manager.sync_outbox.access_token = "rejected-token".to_owned();
-        manager.sync_outbox.repo_arg = "rejected-file".to_owned();
+        manager.sync_outbox.connection = StorageConnection::GoogleDrive {
+            token: "rejected-token".to_owned(),
+            folder_id: "rejected-folder".to_owned(),
+            file_name: "rejected-file".to_owned(),
+        };
         manager.vault.vault_name = VaultNameState::Named("Local vault".to_owned());
 
         manager.restore_local_after_provider_assessment().await?;
@@ -170,9 +172,7 @@ mod tests {
         assert_eq!(manager.storage.mode, StorageMode::Local);
         assert!(manager.storage.access_token.is_empty());
         assert!(manager.sync_outbox.provider_id.is_empty());
-        assert_eq!(manager.sync_outbox.storage_mode, StorageMode::Local);
-        assert!(manager.sync_outbox.access_token.is_empty());
-        assert!(manager.sync_outbox.repo_arg.is_empty());
+        assert_eq!(manager.sync_outbox.connection, StorageConnection::Local);
         assert!(matches!(
             &manager.vault.vault_name,
             VaultNameState::Named(name) if name == "Local vault"
@@ -198,7 +198,7 @@ mod tests {
 
         assert_eq!(
             manager
-                .assess_vault_connect("local".to_owned(), String::new(), String::new())
+                .assess_vault_connect(&tsify::Tsify::into_ts(&StorageConnection::Local)?)
                 .await
                 .expect("local assessment succeeds"),
             VaultAccessStatus::NewVault
@@ -288,10 +288,9 @@ mod tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().as_str().to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
+        let local = tsify::Tsify::into_ts(&StorageConnection::Local)?;
 
-        manager
-            .connect_fresh("local".to_owned(), String::new(), String::new())
-            .await?;
+        manager.connect_fresh(&local).await?;
         assert!(manager.vault.meta.secrets.is_empty());
         assert!(!manager.vault.store_id.is_empty());
         assert!(manager.event_log.enabled);
@@ -301,7 +300,7 @@ mod tests {
         resumed.device.id = identity.device_id().as_str().to_owned();
         resumed.device.identity_private_key = identity.secret_string().into_inner();
         let status = resumed
-            .assess_vault_connect("local".to_owned(), String::new(), String::new())
+            .assess_vault_connect(&local)
             .await
             .expect("resumed local assessment succeeds");
         assert_ne!(status, VaultAccessStatus::NewVault);
@@ -325,7 +324,7 @@ mod tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().as_str().to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.prepare_storage("local", "", "").await?;
+        manager.prepare_storage(&StorageConnection::Local).await?;
 
         if manager
             .connect_existing_content(&identity, "legacy vault content")
@@ -370,12 +369,9 @@ mod tests {
 impl NookVaultManager {
     async fn assess_vault_connect_inner(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &StorageConnection,
     ) -> Result<VaultAccessStatus, NookError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(connection).await?;
         let identity = self.ensure_device_identity()?;
         if self.storage.mode != StorageMode::Local {
             self.sync_events_from_current_provider().await?;
@@ -438,7 +434,7 @@ impl NookVaultManager {
         tracing::info!(
             scope = "wasm-connect",
             status = %status,
-            storage = %storage_mode,
+            storage = %connection.mode(),
             "assess_vault_connect"
         );
         Ok(status)
@@ -450,11 +446,12 @@ impl NookVaultManager {
     /// Return the typed, core-owned connect status for the selected provider.
     pub async fn assess_vault_connect(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<nook_core::VaultAccessStatus, JsNativeError> {
-        self.assess_vault_connect_inner(storage_mode, github_pat, github_repo)
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsNativeError::new("Invalid typed WASM input."))?;
+        self.assess_vault_connect_inner(&connection)
             .await
             .map_err(|error| JsNativeError::new(&error.to_string()))
     }
@@ -464,7 +461,7 @@ impl NookVaultManager {
     /// the destination for later local event-log outbox entries.
     #[wasm_bindgen]
     pub async fn restore_local_after_provider_assessment(&mut self) -> Result<(), JsError> {
-        self.prepare_storage_preserving_vault_metadata("local", "", "")
+        self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
             .await?;
         self.sync_outbox.reset();
         Ok(())
@@ -475,33 +472,25 @@ impl NookVaultManager {
     // decrypts every record.
     pub async fn connect(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<(), JsError> {
-        self.connect_internal(
-            storage_mode,
-            github_pat,
-            github_repo,
-            nook_core::VaultGenesisIntent::DetectExisting,
-        )
-        .await
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        self.connect_internal(&connection, nook_core::VaultGenesisIntent::DetectExisting)
+            .await
     }
 
     /// Replace storage with a fresh genesis vault for this device.
     pub async fn connect_fresh(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
     ) -> Result<(), JsError> {
-        self.connect_internal(
-            storage_mode,
-            github_pat,
-            github_repo,
-            nook_core::VaultGenesisIntent::ForceFresh,
-        )
-        .await
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+        self.connect_internal(&connection, nook_core::VaultGenesisIntent::ForceFresh)
+            .await
     }
 
     /// Next `connect` loads the browser-local vault cache and recreates the
@@ -518,20 +507,17 @@ impl NookVaultManager {
 
     async fn connect_internal(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &StorageConnection,
         genesis_intent: nook_core::VaultGenesisIntent,
     ) -> Result<(), JsError> {
         drop(self.status.tx.send("CONNECT_START".to_owned()));
         tracing::info!(
             scope = "wasm-connect",
-            storage = %storage_mode,
+            storage = %connection.mode(),
             force_genesis = matches!(genesis_intent, nook_core::VaultGenesisIntent::ForceFresh),
             "connect started"
         );
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(connection).await?;
         let identity = self.ensure_device_identity()?;
 
         let (content, remote_content_missing) = self.load_connect_content().await?;
@@ -601,7 +587,7 @@ impl NookVaultManager {
         drop(self.status.tx.send("READY".to_owned()));
         tracing::info!(
             scope = "wasm-connect",
-            storage = %storage_mode,
+            storage = %connection.mode(),
             genesis = use_genesis,
             secrets = self.vault.meta.secrets.len(),
             "connect complete"

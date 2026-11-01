@@ -10,7 +10,7 @@ use crate::NookDatabase;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 
-use crate::{NookError, NookSecretPage};
+use crate::{NookError, NookSecretPage, NookStorageConnection};
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
     RosterAddMemberRequest, VaultMember,
@@ -38,16 +38,16 @@ impl NookVaultManager {
     )]
     pub async fn connect_with_password(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<NookStorageConnection>,
         entry_id: String,
         password: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
         drop(self.status.tx.send("CONNECT_START".to_owned()));
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         // A backup password is an alternate vault-key credential. After an
         // explicit Lock the wrapped device identity stays protected, but the
         // password must still be able to open the local vault without first
@@ -213,9 +213,8 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
                 password_entry.id,
                 "correct horse battery staple".to_owned(),
                 50,
@@ -265,9 +264,8 @@ mod browser_tests {
         let mut manager = NookVaultManager::new();
         let result = manager
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
                 String::new(),
                 "correct horse battery staple".to_owned(),
                 50,
@@ -309,9 +307,8 @@ mod browser_tests {
         let mut recovered = NookVaultManager::new();
         let page = recovered
             .connect_with_password(
-                "local".to_owned(),
-                String::new(),
-                String::new(),
+                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
                 "unknown-entry-id".to_owned(),
                 "correct horse battery staple".to_owned(),
                 50,

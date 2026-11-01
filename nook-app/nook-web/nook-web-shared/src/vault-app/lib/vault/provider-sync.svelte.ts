@@ -94,10 +94,7 @@ export class ProviderSyncActions {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    const args =
-      provider.type === "local-folder"
-        ? { mode: "local-folder", pat: "", repo: "" }
-        : this.state.providerWasmArgs(provider);
+    const args = this.state.providerWasmArgs(provider);
     const revision = NookProviderSyncRevision.untracked();
     try {
       let conflict: NookPendingSyncConflict;
@@ -107,9 +104,7 @@ export class ProviderSyncActions {
           provider.label,
           localYaml,
           "",
-          args.mode,
-          args.pat,
-          args.repo,
+          args,
           revision,
           localStoreId,
           remoteStoreId,
@@ -306,7 +301,7 @@ export class ProviderSyncActions {
           return await this.presentFailure(failurePresentation);
         }
       } else {
-        const { mode, pat, repo } = state.providerWasmArgs(provider);
+        const connection = state.providerWasmArgs(provider);
         const synced = await state.enqueueStorage(async () => {
           const admitted = state.admitManager();
           if (admitted.isErr()) return err(admitted.error);
@@ -314,9 +309,7 @@ export class ProviderSyncActions {
             typeof VaultStorageSynchronization
           >[0] = {
             manager: admitted.value,
-            mode,
-            pat,
-            repo,
+            connection,
           };
           const timeoutRequest: ProviderSyncTimeoutRequest = {
             promise: new VaultStorageSynchronization(synchronizationArgs).run(),

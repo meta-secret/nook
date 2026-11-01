@@ -25,7 +25,7 @@ use nook_core::{
     IdentityControlSnapshotRequest, IdentityControlState, IdentityEventInsertStatus,
     IdentityEventSigning, IdentityId, IdentityMemberKeys, IsoTimestamp, MemberLabel,
     MemberLabelState, ReplicatedIdentityMembership, ReplicatedIdentityStanding,
-    ReplicatedMembershipRequest, StorageMode,
+    ReplicatedMembershipRequest, StorageConnection, StorageMode,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -242,20 +242,17 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn sync_identity_log_with_provider(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<tsify::Ts<NookIdentityLogSyncOutcome>, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let restore_local = self.storage.mode == StorageMode::Local;
         let result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
+            self.prepare_storage_preserving_vault_metadata(&connection)
+                .await?;
             let (log, outcome) = self
                 .union_identity_log_with_current_provider(&identity_id)
                 .await?;
@@ -267,7 +264,7 @@ impl NookVaultManager {
         }
         .await;
         if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
                 .await?;
         }
         Tsify::into_ts(&result?).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
@@ -398,7 +395,10 @@ mod browser_tests {
             Founder::js(manager.finish_pin_device_protection(pin.to_owned()).await)?;
             Founder::js(
                 manager
-                    .connect_fresh("local".to_owned(), String::new(), String::new())
+                    .connect_fresh(
+                        &Tsify::into_ts(&StorageConnection::Local)
+                            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                    )
                     .await,
             )?;
             Ok(Self { manager })
@@ -630,7 +630,10 @@ mod browser_tests {
         Founder::js(
             founder
                 .manager
-                .sync_identity_log_with_provider("local".to_owned(), String::new(), String::new())
+                .sync_identity_log_with_provider(
+                    &Tsify::into_ts(&StorageConnection::Local)
+                        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                )
                 .await,
         )?;
 
@@ -665,9 +668,8 @@ mod browser_tests {
                 .join_identity_with_invite(
                     code,
                     INVITE_PASSPHRASE.to_owned(),
-                    "local".to_owned(),
-                    String::new(),
-                    String::new(),
+                    &Tsify::into_ts(&StorageConnection::Local)
+                        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
                 )
                 .await,
         )?;

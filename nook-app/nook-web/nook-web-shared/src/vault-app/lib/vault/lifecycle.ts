@@ -418,11 +418,7 @@ export class VaultInitializationActions {
         const operation = (async () => {
           try {
             if (creatingAdditionalVault) admitted.value.reset_vault_session();
-            await admitted.value.connect_fresh(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
-            );
+            await admitted.value.connect_fresh(storageArgs);
             return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));

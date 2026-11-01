@@ -2,7 +2,7 @@ import { err, ok, type Result } from "neverthrow";
 import {
   draft_s3_storage_args,
   type NookEnrollmentProvider,
-  type NookStorageConnectArgs,
+  type NookStorageConnection,
   type S3Connection,
 } from "$app-wasm";
 import { S3_PROVIDER_TYPE } from "$lib/auth/providers";
@@ -27,7 +27,7 @@ export class InviteS3Connection {
 
   stage(
     provider: InviteS3Provider,
-  ): Result<NookStorageConnectArgs, VaultStorageFailure> {
+  ): Result<NookStorageConnection, VaultStorageFailure> {
     const read = this.configuration(provider);
     if (read.isErr()) return err(read.error);
     const state = this.state;

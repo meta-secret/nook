@@ -8,8 +8,8 @@ use crate::ProviderOauthPreset;
 use std::fmt;
 
 use super::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, OauthFilePreset,
-    StorageMode, StorageProviderType, ValidationError, ValidationResult,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OauthFilePreset, StorageMode,
+    StorageProviderType, ValidationError, ValidationResult,
 };
 
 mod github;
@@ -17,8 +17,8 @@ mod s3;
 
 pub use github::*;
 pub use s3::{
-    S3_CONNECT_TARGET_V1_PREFIX, S3ConnectReference, S3ConnectSlots, S3Connection,
-    S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation, S3SecretAccessKey,
+    S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError, S3DraftValidation,
+    S3SecretAccessKey,
 };
 
 /// Validated Google Drive app-data vault file name.
@@ -149,23 +149,6 @@ impl AsRef<str> for OauthAccessToken {
     }
 }
 
-/// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
-/// or `fileName` alone when no cached file id exists yet.
-///
-/// Shared Google Drive provider folder ids are encoded as `shared:<folderId>` in the
-/// `fileId` slot so connect args stay a 3-tuple.
-impl DriveBackupName {
-    /// Parse the Drive storage reference from the web layer: `fileId\tfileName`
-    /// or `fileName` alone when no cached file id exists yet.
-    pub fn parse_storage_ref(value: &str) -> ValidationResult<(String, Self)> {
-        if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
-            Ok((file_id.trim().to_owned(), Self::parse(file_name)?))
-        } else {
-            Ok((String::new(), Self::parse(value)?))
-        }
-    }
-}
-
 /// Prefix used in Drive storage refs for the vault's shareable folder.
 pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
 
@@ -187,43 +170,12 @@ impl DriveEventParent {
         }
     }
 
-    /// Parse the `shared:<folderId>` reference slot of Drive connect args.
-    /// A reference without a folder is not connectable.
-    pub fn parse_storage_id(storage_id: &str) -> ValidationResult<Self> {
-        let folder_id = storage_id
-            .trim()
-            .strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX)
-            .map(str::trim)
-            .filter(|folder_id| !folder_id.is_empty())
-            .ok_or(ValidationError::SharedStorageTargetRequired)?;
-        Ok(Self::shared_folder_id(folder_id))
-    }
-
-    #[must_use]
-    pub fn encode_storage_id(&self) -> String {
-        format!("{DRIVE_SHARED_FOLDER_REF_PREFIX}{}", self.folder_id.trim())
-    }
-}
-
-impl DriveBackupName {
-    #[must_use]
-    pub fn format_storage_ref(file_id: &str, file_name: &Self) -> String {
-        Self::format_storage_ref_raw(file_id, file_name.as_str())
-    }
-
-    #[must_use]
-    pub fn format_storage_ref_raw(file_id: &str, file_name: &str) -> String {
-        let id = file_id.trim();
-        let name = file_name.trim();
-        let name = if name.is_empty() {
-            DEFAULT_DRIVE_BACKUP_NAME
-        } else {
-            name
-        };
-        if id.is_empty() {
-            name.to_owned()
-        } else {
-            format!("{id}{DRIVE_STORAGE_REF_SEP}{name}")
+    /// The vault folder a Drive connection names. A connection without one is
+    /// not connectable.
+    pub fn parse_folder_id(folder_id: &str) -> ValidationResult<Self> {
+        match folder_id.trim() {
+            "" => Err(ValidationError::SharedStorageTargetRequired),
+            folder_id => Ok(Self::shared_folder_id(folder_id)),
         }
     }
 }

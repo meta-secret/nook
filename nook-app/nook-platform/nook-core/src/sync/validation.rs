@@ -129,10 +129,6 @@ pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
 pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 
-/// Separator between optional known Drive file id and vault file name in the
-/// wasm connect `github_repo` argument for `google-drive` mode.
-pub const DRIVE_STORAGE_REF_SEP: char = '\t';
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum StorageProviderType {
@@ -519,44 +515,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_drive_storage_ref_splits_file_id_and_name() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::parse_storage_ref("abc123\twork-vault.yaml")?,
-            (
-                "abc123".to_owned(),
-                DriveBackupName::parse("work-vault.yaml")?
-            )
-        );
-        assert_eq!(
-            DriveBackupName::parse_storage_ref("nook-events")?,
-            (String::new(), DriveBackupName::parse("nook-events")?)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn format_drive_storage_ref_omits_empty_file_id() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::format_storage_ref("", &DriveBackupName::parse("nook-events")?),
-            "nook-events"
-        );
-        assert_eq!(
-            DriveBackupName::format_storage_ref("abc", &DriveBackupName::parse("work.yaml")?),
-            "abc\twork.yaml"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn format_drive_storage_ref_raw_does_not_validate_file_name() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveBackupName::format_storage_ref_raw(" abc ", " work vault.yaml "),
-            "abc\twork vault.yaml"
-        );
-        Ok(())
-    }
-
-    #[test]
     fn validate_oauth_access_token_rejects_empty() -> anyhow::Result<()> {
         assert!(OauthAccessToken::parse(" ").is_err());
         assert_eq!(OauthAccessToken::parse(" token ")?.as_str(), "token");
@@ -574,39 +532,26 @@ mod tests {
             StorageMode::GoogleDrive.cache_ref("file-id", ""),
             "drive:file-id"
         );
-        let first_target = DriveEventParent::shared_folder_id("folder-a").encode_storage_id();
-        let second_target = DriveEventParent::shared_folder_id("folder-b").encode_storage_id();
         assert_ne!(
-            StorageMode::GoogleDrive.cache_ref(&first_target, "vault.yaml"),
-            StorageMode::GoogleDrive.cache_ref(&second_target, "vault.yaml")
+            StorageMode::GoogleDrive.cache_ref("folder-a", "vault.yaml"),
+            StorageMode::GoogleDrive.cache_ref("folder-b", "vault.yaml")
         );
         Ok(())
     }
 
     #[test]
-    fn drive_target_refs_require_the_shared_folder() -> anyhow::Result<()> {
+    fn drive_connections_require_the_shared_folder() -> anyhow::Result<()> {
         assert_eq!(
-            DriveEventParent::parse_storage_id(" shared: my-drive-folder ")?,
+            DriveEventParent::parse_folder_id(" my-drive-folder ")?,
             DriveEventParent::shared_folder_id("my-drive-folder")
         );
-        // Every Drive provider is shared: no ref falls back to a hidden folder.
-        for unnamed in [
-            "",
-            "file-id",
-            "shared:",
-            "private-folder-v2:child-folder-id",
-        ] {
-            assert!(DriveEventParent::parse_storage_id(unnamed).is_err());
+        // Every Drive provider is shared: no connection falls back to a hidden folder.
+        for unnamed in ["", " \t "] {
+            assert_eq!(
+                DriveEventParent::parse_folder_id(unnamed),
+                Err(ValidationError::SharedStorageTargetRequired)
+            );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn drive_event_parents_encode_their_target_prefix() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveEventParent::shared_folder_id(" folder-xyz ").encode_storage_id(),
-            "shared:folder-xyz"
-        );
         Ok(())
     }
 

@@ -108,7 +108,7 @@ impl NookClientRunModeUtil {
 }
 
 #[tsify::declare]
-pub type NookStorageConnectArgs = nook_core::StorageConnectArgs;
+pub type NookStorageConnection = nook_core::StorageConnection;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -305,9 +305,6 @@ impl NookRuntimeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_core::StorageConnectArgs;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -326,11 +323,6 @@ mod tests {
             NookClientRunModeUtil::parse("prod")?,
             NookClientRunMode::Prod
         );
-
-        let args = NookStorageConnectArgs::from(StorageConnectArgs::local());
-        assert_eq!(args.mode, "local");
-        assert_eq!(args.pat, "");
-        assert_eq!(args.repo, "");
 
         let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned(), true);
         assert_eq!(folder.id(), "folder-1");
@@ -396,15 +388,6 @@ mod browser_tests {
             assert_eq!(NookClientRunModeUtil::parse(raw).unwrap(), expected);
         }
         assert!(NookClientRunModeUtil::parse("unknown").is_err());
-
-        let args = NookStorageConnectArgs::from(nook_core::StorageConnectArgs {
-            mode: "github".into(),
-            pat: "pat".into(),
-            repo: "owner/repo".into(),
-        });
-        assert_eq!(args.mode, "github");
-        assert_eq!(args.pat, "pat");
-        assert_eq!(args.repo, "owner/repo");
 
         let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into(), false);
         assert_eq!(folder.id(), "folder");

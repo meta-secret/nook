@@ -1,4 +1,4 @@
-use super::{NookLocalFolderConfig, NookStorageConnectArgs, wasm_bindgen};
+use super::{NookLocalFolderConfig, NookStorageConnection, wasm_bindgen};
 use crate::BrowserPasskeyRequestOptions;
 use crate::VaultSessionLock;
 use crate::storage::local_folder::LocalFolderHandles;
@@ -692,9 +692,11 @@ mod browser_tests {
         assert_eq!(
             ProviderFixture::decode(super::provider_wasm_args(&ProviderFixture::wire(
                 &provider
-            )?)?)?
-            .mode,
-            "github"
+            )?)?)?,
+            nook_core::StorageConnection::Github {
+                token: "ghp_1234567890ABCDEF".to_owned(),
+                repo: "work-vault".to_owned(),
+            }
         );
 
         let empty = AuthProvidersSnapshotData::default();

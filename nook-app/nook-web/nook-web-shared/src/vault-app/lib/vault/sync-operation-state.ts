@@ -1,4 +1,4 @@
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth/providers";
 
 export enum EventOutboxTargetKind {
@@ -15,7 +15,7 @@ export type EventOutboxTarget =
     }
   | {
       kind: EventOutboxTargetKind.Remote;
-      args: NookStorageConnectArgs;
+      args: NookStorageConnection;
     };
 
 export enum EventOutboxRequestKind {

@@ -17,8 +17,8 @@ use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity, DeviceKeyProtectionSetup,
     DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection, SigningIdentity,
-    StorageMode, VaultApplication, VaultArchitecture, VaultNameRef, VaultOperation,
-    VaultStoreIdentity, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
+    VaultApplication, VaultArchitecture, VaultNameRef, VaultOperation, VaultStoreIdentity,
+    VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
 };
 use wasm_bindgen_test::*;
 
@@ -575,9 +575,10 @@ async fn replacement_manager(
     replacement.event_log.signing_seed = "previous-signing-seed".to_owned();
     replacement.event_log.key_epoch = "previous-key-epoch".to_owned();
     replacement.sync_outbox.provider_id = "previous-provider".to_owned();
-    replacement.sync_outbox.storage_mode = StorageMode::Github;
-    replacement.sync_outbox.access_token = "previous-access-token".to_owned();
-    replacement.sync_outbox.repo_arg = "previous/repository".to_owned();
+    replacement.sync_outbox.connection = nook_core::StorageConnection::Github {
+        token: "previous-access-token".to_owned(),
+        repo: "previous/repository".to_owned(),
+    };
     Ok((replacement, previous_store_id))
 }
 
@@ -590,7 +591,13 @@ async fn assert_rollback(
     assert_eq!(manager.vault.members_key, "previous-members-key");
     assert_eq!(manager.event_log.signing_seed, "previous-signing-seed");
     assert_eq!(manager.event_log.key_epoch, "previous-key-epoch");
-    assert_eq!(manager.sync_outbox.access_token, "previous-access-token");
+    assert_eq!(
+        manager.sync_outbox.connection,
+        nook_core::StorageConnection::Github {
+            token: "previous-access-token".to_owned(),
+            repo: "previous/repository".to_owned(),
+        }
+    );
     assert_eq!(
         NookDatabase::get_active_vault_id().await?,
         ActiveVaultScope::StoreId(previous_store_id.to_owned())

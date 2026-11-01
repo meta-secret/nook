@@ -74,7 +74,10 @@ pub mod tests {
             .await
             .map_err(|error| anyhow::anyhow!("protect browser: {error:?}"))?;
         manager
-            .connect_fresh("local".to_owned(), String::new(), String::new())
+            .connect_fresh(
+                &tsify::Tsify::into_ts(&nook_core::StorageConnection::Local)
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            )
             .await
             .map_err(|error| anyhow::anyhow!("create vault: {error:?}"))?;
         let extension = AppKey::generate()?;

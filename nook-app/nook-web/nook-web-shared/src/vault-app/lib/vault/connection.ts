@@ -8,7 +8,7 @@ import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import { VaultChangeOutcome } from "$lib/vault/vault-change-outcome";
 
 import { VaultRecoveryErrorKind } from "$app-wasm";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { VaultAccessStatus } from "$lib/nook";
@@ -38,7 +38,7 @@ type StorageConnection =
   | { kind: StorageConnectionKind.Configured }
   | {
       kind: StorageConnectionKind.RemoteRecovery;
-      args: NookStorageConnectArgs;
+      args: NookStorageConnection;
     };
 
 const log = browserLogRuntime.createLogger("connect");
@@ -238,17 +238,8 @@ export class VaultConnectionActions {
         const operation = (async () => {
           try {
             if (recovery === RemoteVaultRecoveryState.ConnectFresh)
-              await admitted.value.connect_fresh(
-                connectArgs.mode,
-                connectArgs.pat,
-                connectArgs.repo,
-              );
-            else
-              await admitted.value.connect(
-                connectArgs.mode,
-                connectArgs.pat,
-                connectArgs.repo,
-              );
+              await admitted.value.connect_fresh(connectArgs);
+            else await admitted.value.connect(connectArgs);
             return storageOk(VaultChangeOutcome.Completed);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));

@@ -780,16 +780,16 @@ does it load providers, apply `activeProvider` credentials to `storageMode` /
 connect/enroll/join. Backup-password unlock may hydrate the local vault session
 without those provider steps; sealed-provider sync remains paused.
 
-WASM still receives `(storageMode, githubPat)` per call for the active connect
-path. Provider persistence and shaping live in `nook-wasm`/`nook-core`; the web
-layer maps snapshots onto `VaultState` via
+WASM receives one typed `StorageConnection` per call for the active connect
+path. Rust produces it from the provider row or draft, and the web layer passes
+it through unchanged; only the local connection, `{ mode: "local" }`, is built
+in TypeScript. Provider persistence and shaping live in `nook-wasm`/`nook-core`;
+the web layer maps snapshots onto `VaultState` via
 `manager.load_auth_providers_snapshot()` /
 `manager.save_auth_providers_snapshot()` (wrapped by `auth/providers.ts`).
 
-For S3, the credential slot carries the secret access key. The reference slot
-carries `s3-target-v1:` followed by JSON that names the endpoint, region,
-bucket, key prefix, and access key ID. The reference never holds the secret,
-and preparing S3 storage makes no network call.
+An S3 connection carries the validated `S3Connection`. Its secret access key is
+the only secret field, and preparing S3 storage makes no network call.
 
 ---
 

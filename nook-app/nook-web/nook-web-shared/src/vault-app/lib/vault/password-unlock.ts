@@ -306,9 +306,7 @@ export class VaultPasswordActions {
         try {
           return storageOk(
             await admittedManager.value.connect_with_password(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
+              storageArgs,
               entryId,
               password,
               state.secretPageSize,

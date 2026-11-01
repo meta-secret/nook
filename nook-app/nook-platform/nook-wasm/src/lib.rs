@@ -80,7 +80,7 @@ pub use types::{
     NookSecretHistory, NookSecretOriginDeviceState, NookSecretPage, NookSecretRevisionState,
     NookSecurityConflict, NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
-    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
+    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnection,
     NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
     NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,

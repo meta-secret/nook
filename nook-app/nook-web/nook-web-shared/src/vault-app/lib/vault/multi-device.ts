@@ -51,9 +51,7 @@ export class VaultDeviceActions {
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           await admittedManager.value.enroll_and_connect(
-            storageArgs.mode,
-            storageArgs.pat,
-            storageArgs.repo,
+            storageArgs,
             secretsKey,
             membersKey,
           );

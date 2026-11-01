@@ -1,7 +1,7 @@
 //! Staged connections preserve provider-specific configuration and readiness.
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, OAuthRemoteStorageReference,
-    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageConnectArgs, StorageMode,
+    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageConnection,
     StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
     StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
     StoredOAuthRemoteFileName, StoredS3Configuration, ValidationResult,
@@ -25,7 +25,7 @@ pub enum StagedRemoteConnection<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StagedStorageConnection {
     Incomplete,
-    Ready(StorageConnectArgs),
+    Ready(StorageConnection),
 }
 impl StagedRemoteConnection<'_> {
     pub fn project(self) -> ValidationResult<StagedStorageConnection> {
@@ -46,9 +46,8 @@ impl StagedRemoteConnection<'_> {
                     StoredGithubRepository::Repository(_)
                     | StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME,
                 };
-                Ok(StagedStorageConnection::Ready(StorageConnectArgs {
-                    mode: StorageMode::Github.as_str().to_owned(),
-                    pat: pat.to_owned(),
+                Ok(StagedStorageConnection::Ready(StorageConnection::Github {
+                    token: pat.to_owned(),
                     repo: repo.to_owned(),
                 }))
             }
@@ -107,9 +106,11 @@ impl StagedRemoteConnection<'_> {
             Self::S3(StoredS3Configuration::NotApplicable) => {
                 Ok(StagedStorageConnection::Incomplete)
             }
-            Self::S3(StoredS3Configuration::Configured(connection)) => connection
-                .connect_args()
-                .map(StagedStorageConnection::Ready),
+            Self::S3(StoredS3Configuration::Configured(connection)) => {
+                Ok(StagedStorageConnection::Ready(StorageConnection::S3 {
+                    connection: connection.clone(),
+                }))
+            }
         }
     }
 }
@@ -117,7 +118,7 @@ impl StagedRemoteConnection<'_> {
 #[cfg(test)]
 mod tests {
     use super::{StagedRemoteConnection, StagedStorageConnection};
-    use crate::{S3Connection, StoredS3Configuration};
+    use crate::{S3Connection, StorageConnection, StoredS3Configuration};
 
     #[test]
     fn a_staged_s3_block_is_ready_once_configured() -> anyhow::Result<()> {
@@ -129,7 +130,7 @@ mod tests {
         assert_eq!(
             StagedRemoteConnection::S3(&StoredS3Configuration::Configured(connection.clone()))
                 .project()?,
-            StagedStorageConnection::Ready(connection.connect_args()?)
+            StagedStorageConnection::Ready(StorageConnection::S3 { connection })
         );
         Ok(())
     }

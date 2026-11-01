@@ -8,7 +8,7 @@
 //! An [`S3Connection`] names where the objects live (endpoint, region,
 //! bucket, key prefix) and the key this device signs with. It is built only by
 //! validating an [`S3ConnectionDraft`], the setup form's raw fields, which is
-//! also how every stored row, invite, and connect reference reads one back.
+//! also how every stored row, invite, and storage connection reads one back.
 //! Validation stays minimal: the server refuses anything else.
 
 use std::fmt;
@@ -20,10 +20,6 @@ use url::{Host, Url};
 use zeroize::Zeroize;
 
 use crate::errors::{ValidationError, ValidationResult};
-
-mod connect_target;
-
-pub use connect_target::{S3_CONNECT_TARGET_V1_PREFIX, S3ConnectReference, S3ConnectSlots};
 
 /// The secret half of an access key: the plaintext while its row is open, the
 /// age armor sealed to a device key at rest, as the GitHub token is. Never
@@ -50,7 +46,7 @@ impl S3SecretAccessKey {
     }
 
     /// The stored text, for the signer, the sealing transitions, and the
-    /// credential slots of the connect arguments and an invite.
+    /// credential of an invite.
     pub(crate) fn expose(&self) -> &str {
         let Self(text) = self;
         text

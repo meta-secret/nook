@@ -1,4 +1,4 @@
-use super::{NookProviderSelection, NookStorageConnectArgs, wasm_bindgen};
+use super::{NookProviderSelection, NookStorageConnection, wasm_bindgen};
 use crate::types::NookManagerStoreScope;
 use nook_core::ProviderSelection;
 use nook_core::{ActiveVaultScope, LocalProviderSelection, ManagerStoreScopeRef, ProviderRows};
@@ -13,7 +13,7 @@ use wasm_bindgen::JsError;
 )]
 pub fn provider_wasm_args(
     provider: &tsify::Ts<nook_core::StorageProviderData>,
-) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<NookStorageConnection>, wasm_bindgen::JsError> {
     let provider = provider
         .to_rust()
         .map_err(|_| JsError::new("Invalid typed WASM input."))?;

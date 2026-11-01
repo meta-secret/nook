@@ -127,15 +127,15 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn import_provider_event_log_as_local_vault(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<String, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
         let (prior_store_id, prior_blob_existed) =
             Self::snapshot_prior_local_vault(&self.vault.store_id).await?;
         self.reset_vault_session();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         self.sync_events_from_current_provider().await?;
         if self.vault.store_id.trim().is_empty() {
             return Err(NookError::Database(

@@ -5,7 +5,7 @@ import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
@@ -250,7 +250,7 @@ export class PasswordEnrollmentActions {
             return;
           }
 
-          let enrollmentStorageArgs: NookStorageConnectArgs;
+          let enrollmentStorageArgs: NookStorageConnection;
           if (enrollmentProvider.type === GITHUB_PROVIDER_TYPE) {
             const githubPat = enrollmentProvider.githubPat;
             const githubRepo = enrollmentProvider.githubRepo;
@@ -638,9 +638,7 @@ export class PasswordEnrollmentActions {
               await admittedManager.value.join_identity_with_invite(
                 code,
                 password,
-                enrollmentStorageArgs.mode,
-                enrollmentStorageArgs.pat,
-                enrollmentStorageArgs.repo,
+                enrollmentStorageArgs,
               );
               return storageOk(IdentityInviteJoinOutcome.Joined);
             } catch (nativeFailure) {

@@ -53,10 +53,11 @@ impl NookVaultManager {
     pub async fn delete_removed_vault_at_provider(
         &mut self,
         store_id: String,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<bool, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new(super::INVALID_TYPED_INPUT))?;
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
         if !state.removed_vaults.contains(&store_id) {
@@ -67,18 +68,14 @@ impl NookVaultManager {
         }
         let restore_local = self.storage.mode == StorageMode::Local;
         let result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
+            self.prepare_storage_preserving_vault_metadata(&connection)
+                .await?;
             self.delete_provider_namespace_at(&EventLogLocation::Vault(store_id))
                 .await
         }
         .await;
         if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
+            self.prepare_storage_preserving_vault_metadata(&nook_core::StorageConnection::Local)
                 .await?;
         }
         Ok(result?)

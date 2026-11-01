@@ -200,16 +200,16 @@ describe('vault connection', () => {
       })
       expect(scenario.assessVaultConnectStatus).toHaveBeenCalledTimes(2)
       expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(1)
-      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(2, {
+      const connection = {
         mode: 'github',
-        pat: 'github-token',
+        token: 'github-token',
         repo: 'owner/vault',
-      })
-      expect(scenario.manager.connect).toHaveBeenCalledWith(
-        'github',
-        'github-token',
-        'owner/vault',
+      }
+      expect(scenario.assessVaultConnectStatus).toHaveBeenNthCalledWith(
+        2,
+        connection,
       )
+      expect(scenario.manager.connect).toHaveBeenCalledWith(connection)
       expect(scenario.state.markVaultUnlocked).toHaveBeenCalledOnce()
       expect(scenario.state.isAuthenticated).toBe(true)
       expect(scenario.state.syncFromStorage).toHaveBeenCalledWith(

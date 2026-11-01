@@ -112,7 +112,8 @@ impl OAuthFileConfigData {
         Ok(bound)
     }
 
-    /// Resolve the remote reference passed to the manager connect tuple.
+    /// The shared target as an invite carries it: `shared:<folderId>` for a
+    /// Drive folder, the `CloudKit` share's storage id for iCloud.
     #[must_use]
     pub fn remote_storage_ref(&self) -> OAuthRemoteStorageReference {
         match self.preset {

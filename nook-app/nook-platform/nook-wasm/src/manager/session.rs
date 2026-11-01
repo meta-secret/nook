@@ -1,7 +1,7 @@
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, EventGraph, ICloudSharedTarget, SentinelConfiguration, SentinelGenesisPhase,
-    SentinelPolicy, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
+    SentinelPolicy, StorageConnection, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
     VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultSessionProjection, VaultType,
     VaultUnlock, VaultUserRecordBatch,
 };
@@ -482,18 +482,15 @@ impl EventLogSessionState {
 
 pub(in crate::manager) struct SyncOutboxState {
     pub(in crate::manager) provider_id: String,
-    pub(in crate::manager) storage_mode: nook_core::StorageMode,
-    pub(in crate::manager) access_token: String,
-    pub(in crate::manager) repo_arg: String,
+    /// The provider a local session pushes its outbox to.
+    pub(in crate::manager) connection: StorageConnection,
 }
 
 impl Default for SyncOutboxState {
     fn default() -> Self {
         Self {
             provider_id: String::new(),
-            storage_mode: StorageMode::Local,
-            access_token: String::new(),
-            repo_arg: String::new(),
+            connection: StorageConnection::Local,
         }
     }
 }
@@ -501,9 +498,8 @@ impl Default for SyncOutboxState {
 impl SyncOutboxState {
     pub(in crate::manager) fn reset(&mut self) {
         self.provider_id.clear();
-        self.storage_mode = StorageMode::Local;
-        self.access_token.zeroize();
-        self.repo_arg.clear();
+        self.connection.zeroize();
+        self.connection = StorageConnection::Local;
     }
 }
 
@@ -663,15 +659,14 @@ mod tests {
 
         let mut outbox = SyncOutboxState {
             provider_id: "provider".to_owned(),
-            storage_mode: StorageMode::Github,
-            access_token: "token".to_owned(),
-            repo_arg: "owner/repo".to_owned(),
+            connection: StorageConnection::Github {
+                token: "token".to_owned(),
+                repo: "owner/repo".to_owned(),
+            },
         };
         outbox.reset();
         assert!(outbox.provider_id.is_empty());
-        assert!(matches!(outbox.storage_mode, StorageMode::Local));
-        assert!(outbox.access_token.is_empty());
-        assert!(outbox.repo_arg.is_empty());
+        assert_eq!(outbox.connection, StorageConnection::Local);
     }
 
     #[wasm_bindgen_test]

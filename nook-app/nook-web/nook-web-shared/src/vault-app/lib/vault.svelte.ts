@@ -28,7 +28,7 @@ import type {
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
-  NookStorageConnectArgs,
+  NookStorageConnection,
 } from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -402,7 +402,7 @@ export class VaultState extends VaultRuntimeState {
     ).confirmCreateFreshRemoteVault();
   }
 
-  async assessVaultConnectStatus(argsOverride?: NookStorageConnectArgs) {
+  async assessVaultConnectStatus(argsOverride?: NookStorageConnection) {
     const [args = this.connectStorageArgs()] = [argsOverride];
 
     return new providersActions.VaultProviderActions(
@@ -648,7 +648,7 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  async stageStagedProviderSyncIssue(args: NookStorageConnectArgs) {
+  async stageStagedProviderSyncIssue(args: NookStorageConnection) {
     const stagedProviderSyncIssueAssessment: Parameters<
       typeof providerConflictActions.ProviderConflictActions.prototype.stageStagedProviderSyncIssue
     >[0] = { args };

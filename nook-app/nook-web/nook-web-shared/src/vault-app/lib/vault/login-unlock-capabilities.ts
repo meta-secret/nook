@@ -3,7 +3,7 @@ import {
   NativeVaultStorageFailure,
   type VaultStorageFailure,
 } from "$lib/runtime/storage-failure";
-import type { NookStorageConnectArgs } from "$app-wasm";
+import type { NookStorageConnection } from "$app-wasm";
 import {
   VaultAccessStatus,
   login_unlock_decision,
@@ -18,7 +18,7 @@ type LoginUnlockCapabilityState = {
   loginPasswordPrompt: boolean;
   passwordEntries: readonly NookPasswordEntrySummary[];
   assessVaultConnectStatus(
-    args: NookStorageConnectArgs,
+    args: NookStorageConnection,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
 };
 
@@ -38,11 +38,7 @@ export class LoginUnlockPresentation {
       return ok(LoginUnlockRefreshOutcome.DefaultCapabilityApplied);
     }
     const connectRequest: Parameters<typeof state.assessVaultConnectStatus>[0] =
-      {
-        mode: "local",
-        pat: "",
-        repo: "",
-      };
+      { mode: "local" };
     const accessStatus = await state.assessVaultConnectStatus(connectRequest);
     if (accessStatus.isErr()) return err(accessStatus.error);
     try {

@@ -52,9 +52,12 @@ describe('provider storage wiring', () => {
       expect(actions.wasmStorageArgs()).toEqual(
         draft_oauth_storage_args(config),
       )
-      expect(actions.wasmStorageArgs().repo).toBe(
-        'shared:vault-folder\tvault.yaml',
-      )
+      expect(actions.wasmStorageArgs()).toEqual({
+        mode: 'google-drive',
+        token: 'test-access-token',
+        folderId: 'vault-folder',
+        fileName: 'vault.yaml',
+      })
       expect(actions.stagedRemoteStorageArgs()).toEqual({
         kind: StagedRemoteStorageKind.Available,
         args: expectedStaged.args,

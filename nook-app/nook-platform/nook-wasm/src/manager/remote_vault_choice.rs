@@ -256,13 +256,13 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn discover_remote_vault(
         &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
+        connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<tsify::Ts<NookRemoteVaultDiscovery>, JsError> {
+        let connection = connection
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
         self.reset_vault_session();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
+        self.prepare_storage(&connection).await?;
         let discovery = if self.storage.mode == StorageMode::Local {
             NookRemoteVaultDiscovery::Empty
         } else {
@@ -343,7 +343,7 @@ mod tests {
         manager.vault.vault_name = VaultNameState::Named("Stale vault".to_owned());
 
         let discovered = manager
-            .discover_remote_vault("local".to_owned(), String::new(), String::new())
+            .discover_remote_vault(&Tsify::into_ts(&nook_core::StorageConnection::Local)?)
             .await?
             .to_rust()
             .map_err(|_| JsError::new("discovery must decode"))?;
