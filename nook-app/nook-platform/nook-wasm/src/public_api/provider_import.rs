@@ -103,6 +103,7 @@ mod wasm_tests {
             "githubRepo": { "state": "repository", "value": "owner/repo" },
             "oauthFile": { "state": "notApplicable" },
             "localFolder": { "state": "notApplicable" },
+            "s3": { "state": "notApplicable" },
             "storeId": { "state": "unscoped" },
             "createdAt": "2026-08-08T00:00:00.000Z"
         }],
@@ -118,6 +119,7 @@ mod wasm_tests {
             "githubRepo": { "state": "repository", "value": "owner/repo" },
             "oauthFile": { "state": "notApplicable" },
             "localFolder": { "state": "notApplicable" },
+            "s3": { "state": "notApplicable" },
             "storeId": { "state": "unscoped" },
             "createdAt": "2026-08-08T00:00:00.000Z"
         }],
@@ -176,7 +178,7 @@ mod extension_pairing_provider_tests {
     impl ProviderFixture {
         fn json(github_pat: &str) -> String {
             format!(
-                r#"{{"id":"github","type":"github","label":"GitHub","githubPat":{{"state":"token","value":"{github_pat}"}},"githubRepo":{{"state":"repository","value":"owner/repo"}},"oauthFile":{{"state":"notApplicable"}},"localFolder":{{"state":"notApplicable"}},"storeId":{{"state":"unscoped"}},"syncCheckpoint":{{"state":"neverSynced"}},"createdAt":"2026-08-08T00:00:00.000Z"}}"#
+                r#"{{"id":"github","type":"github","label":"GitHub","githubPat":{{"state":"token","value":"{github_pat}"}},"githubRepo":{{"state":"repository","value":"owner/repo"}},"oauthFile":{{"state":"notApplicable"}},"localFolder":{{"state":"notApplicable"}},"s3":{{"state":"notApplicable"}},"storeId":{{"state":"unscoped"}},"syncCheckpoint":{{"state":"neverSynced"}},"createdAt":"2026-08-08T00:00:00.000Z"}}"#
             )
         }
     }
