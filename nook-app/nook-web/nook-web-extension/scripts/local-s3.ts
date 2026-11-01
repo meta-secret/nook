@@ -6,6 +6,7 @@
 //
 //   bun scripts/local-s3.ts        serve the persistent dev data until stopped
 //   bun scripts/local-s3.ts reset  delete that data while no server runs
+import { spawn } from 'node:child_process'
 import { mkdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -122,15 +123,19 @@ const resetDevData = async (): Promise<number> => {
 const serveDevData = async (): Promise<number> => {
   await mkdir(devDataDir(), { recursive: true })
   // `task s3:dev` and the dev loop serve the local extension channel.
-  const weed = Bun.spawn(
-    ['weed', ...weedArguments('-logtostderr', devDataDir(), 'local')],
+  const weed = spawn(
+    'weed',
+    weedArguments('-logtostderr', devDataDir(), 'local'),
     { cwd: extensionRoot, stdio: ['ignore', 'inherit', 'inherit'] },
   )
   // The first stop signal goes on to weed, whose own shutdown frees the ports.
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => weed.kill(signal))
   }
-  return weed.exited
+  return new Promise((resolve, reject) => {
+    weed.once('error', reject)
+    weed.once('exit', (code) => resolve(code ?? 1))
+  })
 }
 
 if (import.meta.main) {
