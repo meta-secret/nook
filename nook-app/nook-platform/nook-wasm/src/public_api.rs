@@ -48,6 +48,8 @@ mod authorized_accounts;
 pub use authorized_accounts::*;
 mod provider_vault_listing;
 pub use provider_vault_listing::*;
+mod s3_provider;
+pub use s3_provider::*;
 
 #[wasm_bindgen]
 #[must_use]

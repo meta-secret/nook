@@ -58,6 +58,26 @@ impl PreparedICloudShare {
     }
 }
 
+/// The S3 connection of the prepared S3 provider: its location and this
+/// device's key.
+#[derive(Debug, Clone, Default)]
+pub(in crate::manager) enum PreparedS3Connection {
+    #[default]
+    Unprepared,
+    Connection(nook_core::S3Connection),
+}
+
+impl PreparedS3Connection {
+    pub(in crate::manager) fn connection(&self) -> Result<&nook_core::S3Connection, NookError> {
+        match self {
+            Self::Connection(connection) => Ok(connection),
+            Self::Unprepared => Err(NookError::Database(
+                "S3 storage is not prepared.".to_owned(),
+            )),
+        }
+    }
+}
+
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
     /// The vault to open when the prepared provider holds several.
@@ -74,6 +94,7 @@ pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) remote_path: String,
     pub(in crate::manager) drive_event_parent: PreparedDriveFolder,
     pub(in crate::manager) icloud_event_target: PreparedICloudShare,
+    pub(in crate::manager) s3_connection: PreparedS3Connection,
     pub(in crate::manager) github_root_empty: bool,
     pub(in crate::manager) use_local_cache_for_connect: bool,
 }
@@ -134,6 +155,7 @@ impl Default for StorageSession {
             remote_path: String::new(),
             drive_event_parent: PreparedDriveFolder::Unprepared,
             icloud_event_target: PreparedICloudShare::Unprepared,
+            s3_connection: PreparedS3Connection::Unprepared,
             github_root_empty: false,
             use_local_cache_for_connect: false,
         }

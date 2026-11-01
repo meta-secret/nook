@@ -111,6 +111,17 @@ impl NookEnrollmentProvider {
         }
     }
 
+    /// The S3 block a joiner saves from an invite carrying an S3 connection:
+    /// the inviter's location and key, validated again field by field.
+    #[wasm_bindgen(getter, js_name = s3Configuration)]
+    pub fn s3_configuration(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::StoredS3Configuration>, wasm_bindgen::JsError> {
+        let config = nook_core::EnrollmentS3ConfigurationRequest { provider: &self.0 }.project()?;
+        Tsify::into_ts(&nook_core::StoredS3Configuration::Configured(config))
+            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    }
+
     #[wasm_bindgen(getter, js_name = oauthPreset)]
     pub fn oauth_preset(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {

@@ -15,6 +15,7 @@ use crate::storage::remote_event::RemoteEventRead;
 use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::drive_namespace::DriveNamespace;
 use crate::storage::identity_record;
+use crate::storage::s3::{S3EventStore, S3Storage};
 use nook_core::{
     DriveEventParent, EventLogLocation, EventLogNamespaceKind, IsoTimestamp, MemberLabel,
     PlacedNamespace, StorageMode, StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion,
@@ -159,7 +160,17 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(Vec::new()),
-            StorageMode::S3 => Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                let location = EventLogLocation::Vault(store_id.clone());
+                Ok(S3Storage {
+                    connection: self.storage.s3_connection.connection()?,
+                }
+                .namespaces(EventLogNamespaceKind::Vault)
+                .await?
+                .into_iter()
+                .filter(|placed| *placed.location() == location)
+                .collect())
+            }
         }
     }
 
@@ -247,7 +258,16 @@ impl NookVaultManager {
                 .await?
             }
             StorageMode::Local => Vec::new(),
-            StorageMode::S3 => return Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                return (S3EventStore {
+                    storage: S3Storage {
+                        connection: self.storage.s3_connection.connection()?,
+                    },
+                    placed: &placed,
+                })
+                .event_ids()
+                .await;
+            }
         };
         raw_ids
             .into_iter()
@@ -307,7 +327,16 @@ impl NookVaultManager {
                 }
             }
             StorageMode::Local => Ok(RemoteEventRead::Unavailable),
-            StorageMode::S3 => Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                (S3EventStore {
+                    storage: S3Storage {
+                        connection: self.storage.s3_connection.connection()?,
+                    },
+                    placed: &placed,
+                })
+                .read(event_id)
+                .await
+            }
         }
     }
 
@@ -364,7 +393,16 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(()),
-            StorageMode::S3 => Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                (S3EventStore {
+                    storage: S3Storage {
+                        connection: self.storage.s3_connection.connection()?,
+                    },
+                    placed: &placed,
+                })
+                .put_if_absent(event_id, bytes)
+                .await
+            }
         }
     }
 
@@ -404,7 +442,15 @@ impl NookVaultManager {
             .await?
                 > 0),
             StorageMode::Local => Ok(false),
-            StorageMode::S3 => Self::s3_storage_unwired(),
+            StorageMode::S3 => Ok((S3EventStore {
+                storage: S3Storage {
+                    connection: self.storage.s3_connection.connection()?,
+                },
+                placed: &placed,
+            })
+            .delete_events()
+            .await?
+                > 0),
         }
     }
 
@@ -440,7 +486,13 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::Local => Ok(Vec::new()),
-            StorageMode::S3 => Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                S3Storage {
+                    connection: self.storage.s3_connection.connection()?,
+                }
+                .namespaces(kind)
+                .await
+            }
         }
     }
 

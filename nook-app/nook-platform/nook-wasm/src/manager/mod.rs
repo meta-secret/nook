@@ -80,8 +80,9 @@ mod grant_authority;
 
 pub(in crate::manager) use session::{
     CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
-    PreparedDriveFolder, PreparedICloudShare, SearchCatalogRestore, SearchCatalogState,
-    StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState, VaultSessionState,
+    PreparedDriveFolder, PreparedICloudShare, PreparedS3Connection, SearchCatalogRestore,
+    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
+    VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -527,10 +528,6 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = StorageMode::parse(storage_mode)?;
-        // Refused before any state changes while S3 requests are unwired.
-        if let StorageMode::S3 = mode {
-            return Self::s3_storage_unwired();
-        }
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
@@ -541,6 +538,7 @@ impl NookVaultManager {
                 self.storage.access_token = String::new();
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
+                self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
             StorageMode::Github => {
                 self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
@@ -557,6 +555,7 @@ impl NookVaultManager {
                 self.storage.remote_path.clear();
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
+                self.storage.s3_connection = PreparedS3Connection::Unprepared;
                 drop(self.status.tx.send("GITHUB_REPO_ENSURE".to_owned()));
                 GitHubStorageClient::new(&self.storage.access_token)
                     .ensure_github_repo_exists(&self.storage.remote_ref)
@@ -577,6 +576,7 @@ impl NookVaultManager {
                 self.storage.remote_ref = parent.folder_id.clone();
                 self.storage.drive_event_parent = PreparedDriveFolder::Folder(parent);
                 self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
+                self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
             StorageMode::ICloud => {
                 self.storage.access_token =
@@ -589,8 +589,24 @@ impl NookVaultManager {
                 self.storage.remote_ref = known_target;
                 self.storage.icloud_event_target = PreparedICloudShare::Share(target);
                 self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
+                self.storage.s3_connection = PreparedS3Connection::Unprepared;
             }
-            StorageMode::S3 => return Self::s3_storage_unwired(),
+            StorageMode::S3 => {
+                // The secret takes the credential slot and the versioned
+                // reference names the location and key id; both are validated
+                // again here. The cache reference names the location only.
+                let connection =
+                    nook_core::S3Connection::from_connect_slots(nook_core::S3ConnectSlots {
+                        credential: github_pat,
+                        reference: github_repo_name,
+                    })?;
+                self.storage.access_token = github_pat.trim().to_owned();
+                self.storage.remote_ref = connection.location.storage_identity().to_string();
+                self.storage.remote_path.clear();
+                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
+                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
+                self.storage.s3_connection = PreparedS3Connection::Connection(connection);
+            }
         }
 
         if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
@@ -660,15 +676,6 @@ impl NookVaultManager {
             }
         };
         Ok(content)
-    }
-
-    /// S3 requests are not wired into the manager yet. Until they are, every
-    /// S3 operation fails closed with the typed unknown-storage-mode error.
-    pub(in crate::manager) fn s3_storage_unwired<T>() -> Result<T, NookError> {
-        Err(nook_core::ValidationError::UnknownStorageMode {
-            mode: StorageMode::S3.as_str().to_owned(),
-        }
-        .into())
     }
 }
 
@@ -805,6 +812,51 @@ mod tests {
             PreparedDriveFolder::Folder(DriveEventParent::shared_folder_id("folder-b"));
         manager.storage.remote_ref = "folder-b".to_owned();
         assert_ne!(first_folder_cache, manager.local_cache_ref());
+    }
+
+    #[wasm_bindgen_test]
+    async fn s3_storage_is_prepared_from_its_connect_arguments_alone() -> anyhow::Result<()> {
+        let args = nook_core::S3ProviderConfig::try_from(nook_core::S3ConnectionDraft {
+            endpoint: "http://127.0.0.1:8333".to_owned(),
+            region: "us-east-1".to_owned(),
+            bucket: "nook-dev".to_owned(),
+            key_prefix: "e2e".to_owned(),
+            access_key_id: "device-a".to_owned(),
+            secret_access_key: "TEST-ONLY-device-a-secret-not-real".to_owned().into(),
+        })?
+        .connect_args()?;
+        let mut manager = NookVaultManager::new();
+        // Preparing S3 reads nothing yet: the first request signs with the key.
+        manager
+            .prepare_storage(&args.mode, &args.pat, &args.repo)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert_eq!(manager.storage.mode, StorageMode::S3);
+        assert!(matches!(
+            manager.storage.s3_connection,
+            PreparedS3Connection::Connection(_)
+        ));
+        // The cache and the outbox name the location, never the key.
+        assert_eq!(
+            manager.local_cache_ref(),
+            "s3:http://127.0.0.1:8333/nook-dev/e2e"
+        );
+        assert_eq!(manager.sync_outbox.provider_id, manager.local_cache_ref());
+        assert!(!manager.local_cache_ref().contains("device-a"));
+
+        let damaged = manager
+            .prepare_storage("s3", &args.pat, "s3-target-v1:{}")
+            .await;
+        assert!(damaged.is_err());
+        manager
+            .prepare_storage("local", "", "")
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(matches!(
+            manager.storage.s3_connection,
+            PreparedS3Connection::Unprepared
+        ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]

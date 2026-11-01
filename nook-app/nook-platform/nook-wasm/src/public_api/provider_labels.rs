@@ -87,10 +87,8 @@ pub fn provider_default_label(
             file_name: &StoredOAuthRemoteFileName::FileName(detail.to_owned()),
         })
         .render(),
-        // S3 rows take their label from their saved connection.
-        StorageProviderType::S3 => {
-            ProviderLabel::S3(&StoredS3Configuration::NotApplicable).render()
-        }
+        // An S3 detail is its location label, `bucket[/prefix]`.
+        StorageProviderType::S3 => ProviderLabel::S3Location(detail).render(),
     })
 }
 

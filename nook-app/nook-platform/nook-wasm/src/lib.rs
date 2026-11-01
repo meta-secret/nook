@@ -196,6 +196,14 @@ pub enum NookError {
     #[error("iCloud error: {0}")]
     ICloud(String),
 
+    /// An S3 answer, as its typed failure: a refused key, or a category and
+    /// status without the request or the body.
+    #[error(transparent)]
+    S3Request(#[from] nook_core::S3RequestFailure),
+
+    #[error(transparent)]
+    S3Signing(#[from] nook_core::S3SigningError),
+
     #[error("Decryption failed: {0}")]
     Decryption(String),
 

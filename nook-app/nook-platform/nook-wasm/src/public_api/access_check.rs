@@ -1,13 +1,14 @@
 //! Check which vaults a passkey or a backup password opens, read-only.
 //!
-//! A source is this browser, a Google Drive account's Nook root, or a local
-//! folder the user picked. Its identity logs and vault logs are read, the
-//! checked key or password is tried against them in memory, and the result
-//! says which vaults it opens by name. Nothing is stored, imported, or
+//! A source is this browser, a Google Drive account's Nook root, a local
+//! folder the user picked, or an S3 location. Its identity logs and vault logs
+//! are read, the checked key or password is tried against them in memory, and
+//! the result says which vaults it opens by name. Nothing is stored, imported, or
 //! written, and the passkey's re-derived app key is dropped afterwards.
 use super::wasm_bindgen;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::DriveVaultListing;
+use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use nook_core::{
     BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
@@ -33,6 +34,10 @@ pub enum NookAccessCheckSource {
     /// A local folder the user picked, by its stored handle.
     #[serde(rename_all = "camelCase")]
     LocalFolder { handle_id: String },
+    /// An S3 location with this device's key.
+    S3 {
+        configuration: nook_core::S3ProviderConfig,
+    },
 }
 
 /// A source's identity logs and vaults, read without any key.
@@ -90,6 +95,18 @@ impl NookAccessCheckSource {
                 })
             }
             Self::LocalFolder { handle_id } => Self::folder_contents(handle_id).await,
+            Self::S3 { configuration } => {
+                let connection = configuration.connection()?;
+                let location = S3VaultListing {
+                    storage: S3Storage {
+                        connection: &connection,
+                    },
+                };
+                Ok(SourceContents {
+                    identity_logs: location.identity_log_events().await?,
+                    vaults: location.all_vault_events().await?,
+                })
+            }
         }
     }
 

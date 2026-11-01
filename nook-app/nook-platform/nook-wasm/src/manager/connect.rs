@@ -31,21 +31,22 @@ use js_sys::Error as JsNativeError;
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
-    IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
+    IdentityVaultEventId, S3RequestFailure, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsCast, JsError};
 
 #[wasm_bindgen]
 extern "C" {
+    /// A provider failure with the stable code the web maps to its message.
     #[wasm_bindgen(extends = JsNativeError, typescript_type = "Error & { code: string }")]
-    type GitHubProviderError;
+    type NativeProviderError;
 
     #[wasm_bindgen(method, getter, structural, js_name = code)]
-    fn github_provider_error_code(error: &GitHubProviderError) -> js_sys::JsString;
+    fn native_provider_error_code(error: &NativeProviderError) -> js_sys::JsString;
 
     #[wasm_bindgen(method, setter, structural, js_name = code)]
-    fn set_github_provider_error_code(error: &GitHubProviderError, code: &str);
+    fn set_native_provider_error_code(error: &NativeProviderError, code: &str);
 }
 
 impl NookError {
@@ -65,6 +66,7 @@ impl NookError {
 mod tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use nook_core::{ProviderFailureCause, S3HttpStatus, i18n_keys};
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -127,8 +129,8 @@ mod tests {
 
         assert_eq!(
             failure
-                .unchecked_ref::<GitHubProviderError>()
-                .github_provider_error_code()
+                .unchecked_ref::<NativeProviderError>()
+                .native_provider_error_code()
                 .as_string()
                 .as_deref(),
             Some("github-token-rejected")
@@ -140,6 +142,47 @@ mod tests {
         assert_eq!(
             failure.name().as_string().as_deref(),
             Some("NookProviderFailure")
+        );
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn a_refused_s3_key_projects_its_code_and_translated_message_key() {
+        let failure = NookVaultManager::assessment_failure_js_error(NookError::S3Request(
+            S3RequestFailure::KeyAccessDenied,
+        ));
+        assert_eq!(
+            failure
+                .unchecked_ref::<NativeProviderError>()
+                .native_provider_error_code()
+                .as_string()
+                .as_deref(),
+            Some("s3-key-access-denied")
+        );
+        assert_eq!(
+            failure.message().as_string().as_deref(),
+            Some(i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED)
+        );
+        assert_eq!(
+            failure.name().as_string().as_deref(),
+            Some("NookProviderFailure")
+        );
+        // Any other S3 failure keeps only its status in the message.
+        let other = NookVaultManager::assessment_failure_js_error(NookError::S3Request(
+            S3RequestFailure::Provider {
+                cause: ProviderFailureCause::ProviderError,
+                status: S3HttpStatus::from(503),
+            },
+        ));
+        assert_eq!(
+            other.message().as_string().as_deref(),
+            Some("S3 request failed with status 503")
         );
     }
 
@@ -441,18 +484,31 @@ impl NookVaultManager {
         Ok(status)
     }
 
-    fn assessment_failure_js_error(error: NookError) -> JsNativeError {
+    /// A provider failure as a JS error: a rejected GitHub token or a refused
+    /// S3 key carries its stable code, every other failure its message.
+    pub(crate) fn assessment_failure_js_error(error: NookError) -> JsNativeError {
         match error {
-            NookError::GitHubTokenRejected => {
-                let js_error = JsNativeError::new("GitHub authentication failed.");
-                js_error.set_name("NookProviderFailure");
-                js_error
-                    .unchecked_ref::<GitHubProviderError>()
-                    .set_github_provider_error_code("github-token-rejected");
-                js_error
+            NookError::GitHubTokenRejected => Self::coded_provider_failure(
+                "GitHub authentication failed.",
+                "github-token-rejected",
+            ),
+            NookError::S3Request(S3RequestFailure::KeyAccessDenied) => {
+                Self::coded_provider_failure(
+                    &S3RequestFailure::KeyAccessDenied.to_string(),
+                    S3RequestFailure::KEY_ACCESS_DENIED_CODE,
+                )
             }
             other => JsNativeError::new(&other.to_string()),
         }
+    }
+
+    fn coded_provider_failure(message: &str, code: &str) -> JsNativeError {
+        let js_error = JsNativeError::new(message);
+        js_error.set_name("NookProviderFailure");
+        js_error
+            .unchecked_ref::<NativeProviderError>()
+            .set_native_provider_error_code(code);
+        js_error
     }
 }
 

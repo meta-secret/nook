@@ -1,8 +1,8 @@
 //! Where the manager reads a provider's identities and vaults from, and the
 //! access checks against them. The current provider (iCloud, GitHub, Google
-//! Drive, or a local folder this session is connected to or has staged for a
-//! recovery) is read with the session's credentials; a Drive account or a
-//! folder can also be read on its own. Checks write nothing.
+//! Drive, S3, or a local folder this session is connected to or has staged for
+//! a recovery) is read with the session's credentials; a Drive account, a
+//! folder, or an S3 location can also be read on its own. Checks write nothing.
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -37,6 +37,11 @@ pub enum NookProviderSource {
     /// A local folder the user picked, by its stored handle.
     #[serde(rename_all = "camelCase")]
     LocalFolder { handle_id: String },
+    /// An S3 location with this device's key: a validated setup draft, or
+    /// a saved row's S3 block.
+    S3 {
+        configuration: nook_core::S3ProviderConfig,
+    },
 }
 
 impl NookVaultManager {
@@ -57,6 +62,13 @@ impl NookVaultManager {
             NookProviderSource::LocalFolder { handle_id } => {
                 NookAccessCheckSource::LocalFolder {
                     handle_id: handle_id.clone(),
+                }
+                .contents()
+                .await
+            }
+            NookProviderSource::S3 { configuration } => {
+                NookAccessCheckSource::S3 {
+                    configuration: configuration.clone(),
                 }
                 .contents()
                 .await

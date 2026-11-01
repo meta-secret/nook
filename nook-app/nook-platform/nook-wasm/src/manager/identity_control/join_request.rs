@@ -41,6 +41,7 @@ use crate::storage::identity_record::{
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
 use crate::storage::provider_vault_listing::DriveVaultListing;
 use crate::storage::remote_event::RemoteEventRead;
+use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{
     BrowserPasskeyClient, BrowserPasskeyRequestOptions, DriveStorageClient,
     IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError,
@@ -85,6 +86,7 @@ enum OpenedIdentitySource<'a> {
         root: DriveEventParent,
     },
     LocalFolder(OpenedLocalFolder),
+    S3(nook_core::S3Connection),
 }
 
 /// One identity's log at an opened source.
@@ -123,6 +125,9 @@ impl NookVaultManager {
             NookProviderSource::LocalFolder { handle_id } => OpenedIdentitySource::LocalFolder(
                 LocalFolderHandles::current().open_folder(handle_id).await?,
             ),
+            NookProviderSource::S3 { configuration } => {
+                OpenedIdentitySource::S3(configuration.connection()?)
+            }
         })
     }
 
@@ -202,6 +207,13 @@ impl NookVaultManager {
                 .into_iter()
                 .map(|file| EventStorageBytes::from(file.content.into_bytes()))
                 .collect()),
+            OpenedIdentitySource::S3(connection) => {
+                S3VaultListing {
+                    storage: S3Storage { connection },
+                }
+                .identity_events(at.identity_id)
+                .await
+            }
         }
     }
 
@@ -241,6 +253,13 @@ impl NookVaultManager {
                         }],
                     )
                     .await
+            }
+            OpenedIdentitySource::S3(connection) => {
+                S3VaultListing {
+                    storage: S3Storage { connection },
+                }
+                .put_identity_event(at.identity_id, event_id, bytes.as_ref())
+                .await
             }
         }
     }

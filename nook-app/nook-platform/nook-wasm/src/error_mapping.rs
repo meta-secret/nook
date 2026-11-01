@@ -42,6 +42,10 @@ impl From<nook_core::EventError> for NookError {
 }
 
 impl From<nook_core::ValidationError> for NookError {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the mapping names every validation error, so each new one is a compile-time choice of its group"
+    )]
     fn from(err: nook_core::ValidationError) -> Self {
         use nook_core::ValidationError;
         match err {
