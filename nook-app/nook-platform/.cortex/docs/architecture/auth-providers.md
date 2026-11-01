@@ -581,8 +581,8 @@ owns the object keys, the create-only writes, and the listings.
   request unchanged.
   - The secret enters only the signing-key derivation. It appears in no URL,
     header, log line, error, or `Debug` output.
-  - A failure keeps its category and status. An error body is read for its code
-    only, because its message can name keys.
+  - Any failure other than the key refusal below keeps its category and status.
+    An error body is read for its code only, because its message can name keys.
 
 **Prohibited:** presign each request as a query string so the browser can fetch
 a plain URL.
