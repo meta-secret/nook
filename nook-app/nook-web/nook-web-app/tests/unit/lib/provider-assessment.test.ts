@@ -91,18 +91,13 @@ describe('S3 provider assessment failure', () => {
     mockLogger.warnWithContext.mockClear()
   })
 
-  test('a refused key keeps its typed code, says what to check, and logs no secret', async () => {
+  test('a refused key says what to check and logs no secret', async () => {
     const state = VaultStateTestFixture.create()
     const manager = new NookVaultManager()
     state.openManager(manager)
     VaultStateTestFixture.runStorageImmediately(state)
-    const refusal = Object.assign(
-      new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
-      {
-        name: 'NookProviderFailure',
-        code: NativeProviderFailureCode.S3KeyAccessDenied,
-      },
-    )
+    // Rust rejects a refused S3 key with this message and no code.
+    const refusal = new Error(I18N_KEYS.ErrorsS3KeyAccessDenied)
     vi.spyOn(manager, 'assess_vault_connect').mockRejectedValue(refusal)
     const args = draft_s3_storage_args(S3ConnectionFixture.configuration())
 
@@ -134,7 +129,7 @@ describe('S3 provider assessment failure', () => {
     manager.free()
   })
 
-  test('a refusal another export reports by message alone keeps the same kind', () => {
+  test('only the Rust reading of the message names an S3 refusal', () => {
     const failure = new NativeVaultStorageFailure(
       new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
     )

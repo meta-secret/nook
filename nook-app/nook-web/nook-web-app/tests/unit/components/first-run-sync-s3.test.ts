@@ -3,7 +3,6 @@ import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ProviderVaultListing, ProviderVaultSummary } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { NativeProviderFailureCode } from '$lib/runtime/storage-failure'
 import {
   S3ListingFailure,
   S3VaultInventoryKind,
@@ -148,15 +147,11 @@ describe('first-run Sync step on S3 storage', () => {
   })
 
   test('a refused key stays on the form and says what to check', async () => {
-    const refusal = Object.assign(
-      new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
-      {
-        code: NativeProviderFailureCode.S3KeyAccessDenied,
-      },
-    )
     const read: S3VaultRead = {
       kind: S3VaultInventoryKind.Failed,
-      failure: new S3ListingFailure(refusal),
+      failure: new S3ListingFailure(
+        new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
+      ),
     }
     const fixture = new SyncStepFixture(read)
     const view = fixture.render()
