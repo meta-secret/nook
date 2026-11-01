@@ -81,7 +81,6 @@ describe('S3 provider setup wizard', () => {
     const alert = await vi.waitFor(() =>
       view.getByTestId('s3-connection-error'),
     )
-    expect(alert.dataset.failure).toBe('other')
     expect(alert.textContent?.trim()).toBe('The key was refused.')
   })
 

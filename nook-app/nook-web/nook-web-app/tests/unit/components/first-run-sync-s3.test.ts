@@ -3,35 +3,37 @@ import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ProviderVaultListing, ProviderVaultSummary } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import {
-  S3ListingFailure,
-  S3VaultInventoryKind,
-  S3VaultInventoryReader,
-  type S3VaultRead,
-} from '$lib/components/provider-vaults/s3-vault-inventory'
 import { S3DraftKind } from '$lib/vault/state/provider.svelte'
 import { FirstRunStage } from '$lib/vault/state/ui.svelte'
 import FirstRunSyncStep from '../../../../nook-web-shared/src/vault-app/lib/components/login/FirstRunSyncStep.svelte'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
-afterEach(() => vi.restoreAllMocks())
+const wasm = vi.hoisted(() => ({ listS3Vaults: vi.fn() }))
+
+vi.mock('$app-wasm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$app-wasm')>()),
+  list_s3_vaults: wasm.listS3Vaults,
+}))
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  wasm.listS3Vaults.mockReset()
+})
 
 /** What the first-run helpers read from the rendered step. */
 type StepView = {
   readonly getByTestId: (testId: string) => HTMLElement
 }
 
-/** The Sync step on a fresh browser, with translation keys as its text and
- * an S3 location whose listing the test decides. */
+/** The Sync step on a fresh browser, with translation keys as its text. */
 class SyncStepFixture {
   readonly vault = VaultStateTestFixture.create()
 
-  constructor(read: S3VaultRead) {
+  constructor() {
     vi.spyOn(this.vault, 't').mockImplementation((request) =>
       typeof request === 'string' ? request : request.key,
     )
-    vi.spyOn(S3VaultInventoryReader.prototype, 'read').mockResolvedValue(read)
     this.vault.firstRun = FirstRunStage.Sync
   }
 
@@ -88,17 +90,13 @@ function strangerVault(): ProviderVaultSummary {
   }
 }
 
-function listed(vaults: ProviderVaultSummary[]): S3VaultRead {
-  const listing: ProviderVaultListing = {
-    vaults,
-    replacement: { state: 'unavailable' },
-  }
-  return { kind: S3VaultInventoryKind.Loaded, listing }
+function listing(vaults: ProviderVaultSummary[]): ProviderVaultListing {
+  return { vaults, replacement: { state: 'unavailable' } }
 }
 
 describe('first-run Sync step on S3 storage', () => {
   test('S3 swaps the providers for its form, and Change provider brings them back', async () => {
-    const fixture = new SyncStepFixture(listed([]))
+    const fixture = new SyncStepFixture()
     const view = fixture.render()
 
     await fireEvent.click(view.getByTestId('first-run-s3-option'))
@@ -114,8 +112,9 @@ describe('first-run Sync step on S3 storage', () => {
     expect(view.getByTestId('first-run-google-sign-in')).toBeTruthy()
   })
 
-  test('a listed location says where it is, without the secret, and lists its keyrings', async () => {
-    const fixture = new SyncStepFixture(listed([strangerVault()]))
+  test('a listed location is staged once, says where it is without the secret, and offers its keyrings', async () => {
+    wasm.listS3Vaults.mockResolvedValue(listing([strangerVault()]))
+    const fixture = new SyncStepFixture()
     const view = fixture.render()
 
     await fixture.connect(view)
@@ -123,16 +122,25 @@ describe('first-run Sync step on S3 storage', () => {
     const location = await vi.waitFor(() =>
       view.getByTestId('first-run-s3-location'),
     )
+    expect(wasm.listS3Vaults).toHaveBeenCalledOnce()
+    expect(wasm.listS3Vaults.mock.calls[0]?.[0]).toEqual(
+      S3ConnectionFixture.configuration(),
+    )
+    expect(fixture.vault.s3Draft).toEqual({
+      kind: S3DraftKind.Configured,
+      config: S3ConnectionFixture.configuration(),
+    })
     expect(location.textContent).toContain('S3 · nook-dev/e2e')
     expect(location.textContent).toContain('127.0.0.1:8333 · device-a')
-    expect(location.textContent).not.toContain(S3ConnectionFixture.SECRET)
+    expect(view.container.innerHTML).not.toContain(S3ConnectionFixture.SECRET)
     expect(view.getAllByTestId('setup-identity')).toHaveLength(1)
     expect(view.getByTestId('setup-identity-join')).toBeTruthy()
-    expect(fixture.vault.s3Draft.kind).toBe(S3DraftKind.Configured)
+    expect(view.getByTestId('first-run-create-new-identity')).toBeTruthy()
   })
 
   test('an empty location leads with creating the keyring', async () => {
-    const fixture = new SyncStepFixture(listed([]))
+    wasm.listS3Vaults.mockResolvedValue(listing([]))
+    const fixture = new SyncStepFixture()
     const view = fixture.render()
 
     await fixture.connect(view)
@@ -147,13 +155,11 @@ describe('first-run Sync step on S3 storage', () => {
   })
 
   test('a refused key stays on the form and says what to check', async () => {
-    const read: S3VaultRead = {
-      kind: S3VaultInventoryKind.Failed,
-      failure: new S3ListingFailure(
-        new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
-      ),
-    }
-    const fixture = new SyncStepFixture(read)
+    // Rust rejects a refused key with its translation key as the message.
+    wasm.listS3Vaults.mockRejectedValue(
+      new Error(I18N_KEYS.ErrorsS3KeyAccessDenied),
+    )
+    const fixture = new SyncStepFixture()
     const view = fixture.render()
 
     await fixture.connect(view)
@@ -161,7 +167,6 @@ describe('first-run Sync step on S3 storage', () => {
     const alert = await vi.waitFor(() =>
       view.getByTestId('s3-connection-error'),
     )
-    expect(alert.dataset.failure).toBe('access-denied')
     expect(alert.textContent?.trim()).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
     expect(view.getByTestId('first-run-s3-setup')).toBeTruthy()
     // Nothing is staged until the location lists.

@@ -167,10 +167,9 @@ test.describe('S3-compatible storage as the sync provider', () => {
     })
 
     const alert = page.getByTestId('s3-connection-error')
-    await expect(alert).toHaveAttribute('data-failure', 'access-denied', {
+    await expect(alert).toHaveText(enLocale.errors.s3_key_access_denied, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(alert).toHaveText(enLocale.errors.s3_key_access_denied)
     // Nothing is staged: the form stays, and no location lists.
     await expect(page.getByTestId('first-run-s3-setup')).toBeVisible()
     await expect(page.getByTestId('first-run-s3-location')).toHaveCount(0)

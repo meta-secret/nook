@@ -2,18 +2,9 @@ import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import {
-  S3ConnectAvailability,
-  S3ConnectionAlertKind,
-  S3ConnectionFailureKind,
-  S3ConnectionFrame,
-  S3ConnectionProgress,
-  S3ConnectionSubmit,
-  type S3ConnectionAlert,
-} from '$lib/components/s3-connection-form'
 import S3ConnectionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/S3ConnectionPanel.svelte'
 import { S3ConnectionFixture } from '../s3-connection-fixture'
-import { requireButtonElement, requireInputElement } from '../test-dom-helpers'
+import { requireInputElement } from '../test-dom-helpers'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
@@ -25,11 +16,8 @@ type FormView = {
   readonly getByTestId: (testId: string) => HTMLElement
 }
 
-/** The S3 form on the first-run step, with translation keys as its text. */
+/** The S3 form, with translation keys as its text. */
 class PanelFixture {
-  static readonly NO_ALERT: S3ConnectionAlert = {
-    kind: S3ConnectionAlertKind.None,
-  }
   readonly vault = VaultStateTestFixture.create()
   readonly onConnect = vi.fn<PanelProps['onConnect']>()
 
@@ -39,21 +27,19 @@ class PanelFixture {
     )
   }
 
-  props(alert: S3ConnectionAlert): PanelProps {
-    return {
+  render(error: string) {
+    const props: PanelProps = {
       vault: this.vault,
       idPrefix: 'unit',
-      frame: S3ConnectionFrame.Panel,
-      submit: S3ConnectionSubmit.Connect,
-      progress: S3ConnectionProgress.Idle,
-      availability: S3ConnectAvailability.Available,
-      alert,
+      framed: true,
+      submitLabel: 'connect',
+      submitTestId: 's3-connect',
+      busy: false,
+      busyLabel: 'connecting',
+      error,
       onConnect: this.onConnect,
     }
-  }
-
-  render(alert: S3ConnectionAlert) {
-    return render(S3ConnectionPanel, this.props(alert))
+    return render(S3ConnectionPanel, props)
   }
 
   /** Types the fixture's whole connection into the form. */
@@ -73,11 +59,11 @@ class PanelFixture {
 }
 
 describe('S3 connection form', () => {
-  test('Rust names every wrong field at once, focus goes to the first, and nothing connects', async () => {
+  test('Rust names each wrong field under it, focus goes to the first, and nothing connects', async () => {
     const fixture = new PanelFixture()
-    const view = fixture.render(PanelFixture.NO_ALERT)
+    const view = fixture.render('')
 
-    await fireEvent.click(view.getByTestId('first-run-s3-connect'))
+    await fireEvent.click(view.getByTestId('s3-connect'))
 
     expect(fixture.onConnect).not.toHaveBeenCalled()
     expect(view.getByTestId('s3-endpoint-error').textContent?.trim()).toBe(
@@ -94,30 +80,17 @@ describe('S3 connection form', () => {
     const endpoint = view.getByTestId('s3-endpoint-input')
     expect(document.activeElement).toBe(endpoint)
     expect(endpoint.getAttribute('aria-invalid')).toBe('true')
-    expect(endpoint.getAttribute('aria-describedby')).toContain(
-      'unit-s3-endpoint-error',
+    expect(endpoint.getAttribute('aria-describedby')).toBe(
+      view.getByTestId('s3-endpoint-error').id,
     )
-  })
-
-  test('editing a field clears its own error and no other', async () => {
-    const fixture = new PanelFixture()
-    const view = fixture.render(PanelFixture.NO_ALERT)
-    await fireEvent.click(view.getByTestId('first-run-s3-connect'))
-
-    await fireEvent.input(view.getByTestId('s3-endpoint-input'), {
-      target: { value: 'https://s3.example.com' },
-    })
-
-    expect(view.queryAllByTestId('s3-endpoint-error')).toHaveLength(0)
-    expect(view.getByTestId('s3-region-error')).toBeTruthy()
   })
 
   test('a valid form hands Rust’s configuration to the host once', async () => {
     const fixture = new PanelFixture()
-    const view = fixture.render(PanelFixture.NO_ALERT)
+    const view = fixture.render('')
     await fixture.fillIn(view)
 
-    await fireEvent.click(view.getByTestId('first-run-s3-connect'))
+    await fireEvent.click(view.getByTestId('s3-connect'))
 
     expect(fixture.onConnect).toHaveBeenCalledOnce()
     expect(fixture.onConnect).toHaveBeenCalledWith(
@@ -128,7 +101,7 @@ describe('S3 connection form', () => {
 
   test('the secret is a password input with no reveal, and never in the markup', async () => {
     const fixture = new PanelFixture()
-    const view = fixture.render(PanelFixture.NO_ALERT)
+    const view = fixture.render('')
     await fixture.fillIn(view)
 
     const secret = requireInputElement(
@@ -136,59 +109,20 @@ describe('S3 connection form', () => {
     )
     expect(secret.type).toBe('password')
     expect(secret.autocomplete).toBe('off')
-    expect(secret.getAttribute('aria-describedby')).toContain(
-      'unit-s3-secret-note',
-    )
     for (const input of view.container.querySelectorAll('input'))
       expect(input.hasAttribute('name')).toBe(false)
-    // The form's only buttons are Connect; nothing reveals the secret.
+    // The form's only button is its action; nothing reveals the secret.
     expect(view.getAllByRole('button')).toHaveLength(1)
     expect(view.container.innerHTML).not.toContain(S3ConnectionFixture.SECRET)
   })
 
-  test('a refused key alerts beside Connect and points the key inputs at it', () => {
+  test('a refused key is said in one alert beside the action', () => {
     const fixture = new PanelFixture()
-    const view = fixture.render({
-      kind: S3ConnectionAlertKind.Shown,
-      failure: S3ConnectionFailureKind.AccessDenied,
-      message: 'refused',
-    })
+    const view = fixture.render(I18N_KEYS.ErrorsS3KeyAccessDenied)
 
     const alert = view.getByTestId('s3-connection-error')
     expect(alert.getAttribute('role')).toBe('alert')
-    expect(alert.dataset.failure).toBe('access-denied')
-    expect(alert.textContent?.trim()).toBe('refused')
-    for (const testId of [
-      's3-access-key-id-input',
-      's3-secret-access-key-input',
-    ]) {
-      const input = view.getByTestId(testId)
-      expect(input.getAttribute('aria-invalid')).toBe('true')
-      expect(input.getAttribute('aria-describedby')).toContain(
-        'unit-s3-connection-error',
-      )
-    }
-    // The same refusal may mean a bucket the key cannot reach: the
-    // location inputs are not marked wrong.
-    expect(
-      view.getByTestId('s3-bucket-input').getAttribute('aria-invalid'),
-    ).toBe('false')
-  })
-
-  test('while connecting, the form waits and Connect says so', () => {
-    const fixture = new PanelFixture()
-    const view = render(S3ConnectionPanel, {
-      ...fixture.props(PanelFixture.NO_ALERT),
-      progress: S3ConnectionProgress.Connecting,
-    })
-
-    const connect = requireButtonElement(
-      view.getByTestId('first-run-s3-connect'),
-    )
-    expect(connect.disabled).toBe(true)
-    expect(connect.textContent?.trim()).toBe(I18N_KEYS.CommonConnecting)
-    expect(
-      requireInputElement(view.getByTestId('s3-endpoint-input')).disabled,
-    ).toBe(true)
+    expect(alert.textContent?.trim()).toBe(I18N_KEYS.ErrorsS3KeyAccessDenied)
+    expect(view.getAllByRole('alert')).toHaveLength(1)
   })
 })

@@ -1,62 +1,55 @@
 <!--
 The S3 setup form: endpoint, region, bucket, an optional key prefix, the
-access key ID and the secret access key, then one action. Rust validates the
-whole form at once and names each wrong field; the form only shows what it
-says. The secret is a password input with no reveal, and the typed values
-live in this component until it unmounts. Inputs have no name, so a native
-submission could never carry them into a URL.
+access key ID and the secret access key, then the host's one action. Rust
+validates the whole form at once and names each wrong field; the form only
+shows what it says. The secret is a password input with no reveal, and the
+typed values live in this component until it unmounts. Inputs have no name,
+so a native submission could never carry them into a URL.
 -->
 <script lang="ts">
-  import { onMount, tick, type Snippet } from 'svelte'
-  import { RefreshCw, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import { onMount, tick, type Component, type Snippet } from 'svelte'
+  import { RefreshCw, TriangleAlert } from '@lucide/svelte'
   import {
     validate_s3_connection_draft,
+    type S3Connection,
     type S3ConnectionDraft,
     type S3DraftField,
-    type S3Connection,
+    type S3DraftFieldError,
   } from '$app-wasm'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
-  import {
-    S3ConnectAvailability,
-    S3ConnectionAlertKind,
-    S3ConnectionFailureKind,
-    S3ConnectionForm,
-    S3ConnectionFrame,
-    S3ConnectionProgress,
-    S3ConnectionSubmit,
-    S3FieldPlaceholderKind,
-    S3FieldRequirement,
-    S3FieldRole,
-    S3InputType,
-    type S3ConnectionAlert,
-    type S3FieldErrors,
-    type S3FormField,
-  } from '$lib/components/s3-connection-form'
   import type { VaultState } from '$lib/vault.svelte'
-
-  type S3InputEvent = Event & {
-    readonly currentTarget: EventTarget & HTMLInputElement
-  }
 
   let {
     vault,
     idPrefix,
-    frame,
-    submit,
-    progress,
-    availability,
-    alert,
+    framed = false,
+    submitLabel,
+    submitIcon: SubmitIcon,
+    submitTestId,
+    busy,
+    busyLabel,
+    submitDisabled = false,
+    error,
     onConnect,
     beforeConnect,
   }: {
     vault: VaultState
     idPrefix: string
-    frame: S3ConnectionFrame
-    submit: S3ConnectionSubmit
-    progress: S3ConnectionProgress
-    availability: S3ConnectAvailability
-    alert: S3ConnectionAlert
+    /** First run: the form is the panel the user acts in. A wizard step
+     * already is that panel. */
+    framed?: boolean
+    submitLabel: string
+    submitIcon?: Component
+    submitTestId: string
+    /** An attempt or the vault engine is running: the form waits. */
+    busy: boolean
+    /** The submit button's words while the form waits. */
+    busyLabel: string
+    /** A question above the action is still unanswered. */
+    submitDisabled?: boolean
+    /** Why the last attempt failed, in the user's words; empty if none did. */
+    error: string
     onConnect: (configuration: S3Connection) => void | Promise<void>
     beforeConnect?: Snippet
   } = $props()
@@ -69,85 +62,43 @@ submission could never carry them into a URL.
     accessKeyId: '',
     secretAccessKey: '',
   })
-  let fieldErrors = $state.raw<S3FieldErrors>([])
-  const form = $derived(new S3ConnectionForm(idPrefix))
-  const pending = $derived(progress !== S3ConnectionProgress.Idle)
-  const refused = $derived(
-    alert.kind === S3ConnectionAlertKind.Shown &&
-      alert.failure === S3ConnectionFailureKind.AccessDenied,
-  )
-  const frameClass = $derived.by(() => {
-    switch (frame) {
-      case S3ConnectionFrame.Panel:
-        return 'nk-panel min-w-0 space-y-4 p-4 sm:p-5'
-      case S3ConnectionFrame.Step:
-        return 'min-w-0 space-y-4'
-    }
-  })
-  const action = $derived.by(() => {
-    switch (submit) {
-      case S3ConnectionSubmit.Connect:
-        return {
-          testId: 'first-run-s3-connect',
-          label: I18N_KEYS.CommonConnect,
-          pending: I18N_KEYS.CommonConnecting,
-        }
-      case S3ConnectionSubmit.ConnectAndSync:
-        return {
-          testId: 'connect-provider-btn',
-          label: I18N_KEYS.AuthStorageConnectAndSync,
-          pending: I18N_KEYS.AuthStorageSyncConnecting,
-        }
-    }
-  })
+  /** The fields Rust found wrong, each once, in form order. */
+  let fieldErrors = $state.raw<readonly S3DraftFieldError[]>([])
+  const noteId = $derived(`${idPrefix}-s3-secret-note`)
 
-  function placeholder(field: S3FormField): string {
-    switch (field.placeholder.kind) {
-      case S3FieldPlaceholderKind.Sample:
-        return vault.t(field.placeholder.key)
-      case S3FieldPlaceholderKind.None:
-        return ''
-    }
+  function inputId(field: S3DraftField): string {
+    return `${idPrefix}-s3-${field}`
   }
 
-  /** The ids that describe one input: its error, the secret's note, and
-   * the alert a refused key points the key inputs at. */
-  function describedBy(field: S3FormField): string {
-    const ids: string[] = []
-    if (fieldErrors.some((error) => error.field === field.name))
-      ids.push(form.errorId(field))
-    switch (field.type) {
-      case S3InputType.Password:
-        ids.push(form.noteId)
-        break
-      case S3InputType.Text:
-        break
-    }
-    switch (field.role) {
-      case S3FieldRole.Key:
-        if (refused) ids.push(form.alertId)
-        break
-      case S3FieldRole.Location:
-        break
-    }
+  function errorId(field: S3DraftField): string {
+    return `${inputId(field)}-error`
+  }
+
+  /** Rust's translation key for why the field is wrong; empty if it is not. */
+  function errorOf(field: S3DraftField): string {
+    const found = fieldErrors.find((candidate) => candidate.field === field)
+    return found ? found.errorKey : ''
+  }
+
+  /** The ids describing a field: its error, and the secret's note. */
+  function describedBy(field: S3DraftField): string {
+    const ids = errorOf(field) ? [errorId(field)] : []
+    if (field === 'secretAccessKey') ids.push(noteId)
     return ids.join(' ')
   }
 
-  /** The input handler of one field: it keeps the value and drops that
-   * field's error, so a corrected field stops saying it is wrong. */
-  function editing(field: S3FormField): (event: S3InputEvent) => void {
-    return (event) => {
-      draft[field.name] = event.currentTarget.value
-      fieldErrors = fieldErrors.filter((error) => error.field !== field.name)
-    }
+  function inputClass(field: S3DraftField): string {
+    const border = errorOf(field) ? 'border-destructive' : 'border-input'
+    return `flex h-11 w-full rounded-none border bg-background px-3 font-mono text-sm sm:h-10 focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring disabled:opacity-60 ${border}`
   }
 
-  function focusInput(name: S3DraftField): void {
-    const field = S3ConnectionForm.FIELDS.find(
-      (candidate) => candidate.name === name,
-    )
-    if (!field) return
-    const input = document.getElementById(form.inputId(field))
+  /** A corrected field stops saying it is wrong; the others keep theirs. */
+  function edited(field: S3DraftField): void {
+    fieldErrors = fieldErrors.filter((candidate) => candidate.field !== field)
+  }
+
+  function focus(field: S3DraftField): void {
+    const input = document.getElementById(inputId(field))
     if (input instanceof HTMLInputElement) input.focus()
   }
 
@@ -159,7 +110,7 @@ submission could never carry them into a URL.
         fieldErrors = validation.fields
         await tick()
         const [first] = validation.fields
-        if (first) focusInput(first.field)
+        if (first) focus(first.field)
         return
       }
       case 'valid':
@@ -169,80 +120,183 @@ submission could never carry them into a URL.
     }
   }
 
-  onMount(() => focusInput('endpoint'))
+  onMount(() => focus('endpoint'))
 </script>
 
-<form novalidate class="space-y-4" aria-busy={pending} onsubmit={connect}>
-  <fieldset class={frameClass}>
+{#snippet fieldError(field: S3DraftField, testId: string)}
+  {#if errorOf(field)}
+    <p
+      id={errorId(field)}
+      role="alert"
+      class="text-xs text-destructive"
+      data-testid={testId}
+    >
+      {vault.t(errorOf(field))}
+    </p>
+  {/if}
+{/snippet}
+
+<form novalidate class="space-y-4" aria-busy={busy} onsubmit={connect}>
+  <fieldset
+    class={framed
+      ? 'nk-panel min-w-0 space-y-4 p-4 sm:p-5'
+      : 'min-w-0 space-y-4'}
+  >
     <legend class="sr-only">{vault.t(I18N_KEYS.ProviderPickerS3)}</legend>
     <div class="grid gap-4 sm:grid-cols-2">
-      {#each S3ConnectionForm.FIELDS as field (field.name)}
-        {@const error = fieldErrors.find(
-          (candidate) => candidate.field === field.name,
-        )}
-        {@const keyRefused = refused && field.role === S3FieldRole.Key}
-        <div class="min-w-0 space-y-1.5 {field.width}">
-          <div class="flex items-baseline justify-between gap-2">
-            <label class="nk-field-label" for={form.inputId(field)}>
-              {vault.t(field.label)}
-            </label>
-            {#if field.requirement === S3FieldRequirement.Optional}
-              <span class="nk-tag text-muted-foreground">
-                {vault.t(I18N_KEYS.CommonOptional)}
-              </span>
-            {/if}
-          </div>
-          <input
-            id={form.inputId(field)}
-            type={field.type}
-            inputmode={field.inputMode}
-            value={draft[field.name]}
-            placeholder={placeholder(field)}
-            autocomplete="off"
-            spellcheck="false"
-            autocapitalize="none"
-            disabled={pending}
-            aria-invalid={Boolean(error) || keyRefused}
-            aria-describedby={describedBy(field)}
-            data-testid="s3-{field.slug}-input"
-            class="flex h-11 w-full rounded-none border bg-background px-3 font-mono text-sm sm:h-10 focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring disabled:opacity-60"
-            class:border-input={!error}
-            class:border-destructive={Boolean(error)}
-            oninput={editing(field)}
-          />
-          {#if field.type === S3InputType.Password}
-            <p id={form.noteId} class="text-xs text-muted-foreground">
-              {vault.t(I18N_KEYS.ProviderSetupS3SecretNote)}
-            </p>
-          {/if}
-          {#if error}
-            <p
-              id={form.errorId(field)}
-              role="alert"
-              class="text-xs text-destructive"
-              data-testid="s3-{field.slug}-error"
-            >
-              {vault.t(error.errorKey)}
-            </p>
-          {/if}
+      <div class="min-w-0 space-y-1.5 sm:col-span-2">
+        <label class="nk-field-label block" for={inputId('endpoint')}>
+          {vault.t(I18N_KEYS.ProviderSetupS3EndpointLabel)}
+        </label>
+        <input
+          id={inputId('endpoint')}
+          type="text"
+          inputmode="url"
+          placeholder={vault.t(I18N_KEYS.ProviderSetupS3EndpointPlaceholder)}
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('endpoint'))}
+          aria-describedby={describedBy('endpoint')}
+          data-testid="s3-endpoint-input"
+          class={inputClass('endpoint')}
+          bind:value={draft.endpoint}
+          oninput={() => edited('endpoint')}
+        />
+        {@render fieldError('endpoint', 's3-endpoint-error')}
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-1">
+        <label class="nk-field-label block" for={inputId('region')}>
+          {vault.t(I18N_KEYS.ProviderSetupS3RegionLabel)}
+        </label>
+        <input
+          id={inputId('region')}
+          type="text"
+          placeholder={vault.t(I18N_KEYS.ProviderSetupS3RegionPlaceholder)}
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('region'))}
+          aria-describedby={describedBy('region')}
+          data-testid="s3-region-input"
+          class={inputClass('region')}
+          bind:value={draft.region}
+          oninput={() => edited('region')}
+        />
+        {@render fieldError('region', 's3-region-error')}
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-1">
+        <label class="nk-field-label block" for={inputId('bucket')}>
+          {vault.t(I18N_KEYS.ProviderSetupS3BucketLabel)}
+        </label>
+        <input
+          id={inputId('bucket')}
+          type="text"
+          placeholder={vault.t(I18N_KEYS.ProviderSetupS3BucketPlaceholder)}
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('bucket'))}
+          aria-describedby={describedBy('bucket')}
+          data-testid="s3-bucket-input"
+          class={inputClass('bucket')}
+          bind:value={draft.bucket}
+          oninput={() => edited('bucket')}
+        />
+        {@render fieldError('bucket', 's3-bucket-error')}
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-2">
+        <div class="flex items-baseline justify-between gap-2">
+          <label class="nk-field-label" for={inputId('keyPrefix')}>
+            {vault.t(I18N_KEYS.ProviderSetupS3KeyPrefixLabel)}
+          </label>
+          <span class="nk-tag text-muted-foreground">
+            {vault.t(I18N_KEYS.CommonOptional)}
+          </span>
         </div>
-      {/each}
+        <input
+          id={inputId('keyPrefix')}
+          type="text"
+          placeholder={vault.t(I18N_KEYS.ProviderSetupS3KeyPrefixPlaceholder)}
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('keyPrefix'))}
+          aria-describedby={describedBy('keyPrefix')}
+          data-testid="s3-key-prefix-input"
+          class={inputClass('keyPrefix')}
+          bind:value={draft.keyPrefix}
+          oninput={() => edited('keyPrefix')}
+        />
+        {@render fieldError('keyPrefix', 's3-key-prefix-error')}
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-2">
+        <label class="nk-field-label block" for={inputId('accessKeyId')}>
+          {vault.t(I18N_KEYS.ProviderSetupS3AccessKeyIdLabel)}
+        </label>
+        <input
+          id={inputId('accessKeyId')}
+          type="text"
+          placeholder={vault.t(I18N_KEYS.ProviderSetupS3AccessKeyIdPlaceholder)}
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('accessKeyId'))}
+          aria-describedby={describedBy('accessKeyId')}
+          data-testid="s3-access-key-id-input"
+          class={inputClass('accessKeyId')}
+          bind:value={draft.accessKeyId}
+          oninput={() => edited('accessKeyId')}
+        />
+        {@render fieldError('accessKeyId', 's3-access-key-id-error')}
+      </div>
+
+      <div class="min-w-0 space-y-1.5 sm:col-span-2">
+        <label class="nk-field-label block" for={inputId('secretAccessKey')}>
+          {vault.t(I18N_KEYS.ProviderSetupS3SecretAccessKeyLabel)}
+        </label>
+        <input
+          id={inputId('secretAccessKey')}
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="none"
+          disabled={busy}
+          aria-invalid={Boolean(errorOf('secretAccessKey'))}
+          aria-describedby={describedBy('secretAccessKey')}
+          data-testid="s3-secret-access-key-input"
+          class={inputClass('secretAccessKey')}
+          bind:value={draft.secretAccessKey}
+          oninput={() => edited('secretAccessKey')}
+        />
+        <p id={noteId} class="text-xs text-muted-foreground">
+          {vault.t(I18N_KEYS.ProviderSetupS3SecretNote)}
+        </p>
+        {@render fieldError('secretAccessKey', 's3-secret-access-key-error')}
+      </div>
     </div>
   </fieldset>
 
-  {#if alert.kind === S3ConnectionAlertKind.Shown}
+  {#if error}
     <p
-      id={form.alertId}
       class="nk-banner nk-banner-destructive flex items-start gap-2 px-3 py-2 text-xs text-foreground"
       role="alert"
       data-testid="s3-connection-error"
-      data-failure={alert.failure}
     >
       <TriangleAlert
         class="mt-0.5 size-3.5 shrink-0 text-destructive"
         aria-hidden="true"
       />
-      <span class="min-w-0 flex-1 text-pretty">{alert.message}</span>
+      <span class="min-w-0 flex-1 text-pretty">{error}</span>
     </p>
   {/if}
 
@@ -252,21 +306,17 @@ submission could never carry them into a URL.
     <Button
       type="submit"
       class="h-11 w-full sm:h-10 sm:w-auto sm:min-w-[180px]"
-      data-testid={action.testId}
-      disabled={pending ||
-        availability === S3ConnectAvailability.AwaitingRecoveryAnswer}
+      data-testid={submitTestId}
+      disabled={busy || submitDisabled}
     >
-      {#if progress === S3ConnectionProgress.LoadingEngine}
+      {#if busy}
         <RefreshCw class="size-4 animate-spin motion-reduce:animate-none" />
-        {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-      {:else if progress === S3ConnectionProgress.Connecting}
-        <RefreshCw class="size-4 animate-spin motion-reduce:animate-none" />
-        {vault.t(action.pending)}
+        {busyLabel}
       {:else}
-        {#if submit === S3ConnectionSubmit.ConnectAndSync}
-          <ShieldCheck class="size-4" />
+        {#if SubmitIcon}
+          <SubmitIcon class="size-4" />
         {/if}
-        {vault.t(action.label)}
+        {submitLabel}
       {/if}
     </Button>
   </div>

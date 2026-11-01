@@ -6,20 +6,11 @@ stays beside the form, where the user acted.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import { Archive, ShieldCheck } from '@lucide/svelte'
   import type { S3Connection } from '$app-wasm'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import S3ConnectionPanel from '$lib/components/S3ConnectionPanel.svelte'
-  import S3ProviderHeading from '$lib/components/S3ProviderHeading.svelte'
-  import {
-    S3ConnectAvailability,
-    S3ConnectionAlertKind,
-    S3ConnectionFailureKind,
-    S3ConnectionFrame,
-    S3ConnectionProgress,
-    S3ConnectionSubmit,
-    type S3ConnectionAlert,
-  } from '$lib/components/s3-connection-form'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -44,45 +35,27 @@ stays beside the form, where the user acted.
     beforeConnect?: Snippet
   } = $props()
 
-  const availability = $derived.by(() => {
-    switch (connectDisabled) {
-      case true:
-        return S3ConnectAvailability.AwaitingRecoveryAnswer
-      case false:
-        return S3ConnectAvailability.Available
-    }
-  })
-
   let stepOpen = $state(true)
   /** This wizard's own attempt: the Sync page connects without a busy flag. */
-  let attempt = $state<S3ConnectionProgress>(S3ConnectionProgress.Idle)
-  let alert = $state.raw<S3ConnectionAlert>({
-    kind: S3ConnectionAlertKind.None,
-  })
-  const progress = $derived.by(() => {
-    if (isInitializing) return S3ConnectionProgress.LoadingEngine
-    if (isVerifying) return S3ConnectionProgress.Connecting
-    return attempt
-  })
+  let connecting = $state(false)
+  /** The failure the host reported for the last attempt; empty if none. */
+  let error = $state('')
+  const busy = $derived(isInitializing || isVerifying || connecting)
 
   async function connect(configuration: S3Connection): Promise<void> {
-    alert = { kind: S3ConnectionAlertKind.None }
+    error = ''
     const revision = vault.errorMsgRevision
     vault.configureS3(configuration)
-    attempt = S3ConnectionProgress.Connecting
+    connecting = true
     try {
       await onConnect()
     } finally {
-      attempt = S3ConnectionProgress.Idle
+      connecting = false
     }
     // The host takes over once the provider connects. A failure it
     // reported stays here, in its own words.
     if (vault.errorMsgRevision !== revision && vault.errorMsg)
-      alert = {
-        kind: S3ConnectionAlertKind.Shown,
-        failure: S3ConnectionFailureKind.Other,
-        message: vault.errorMsg,
-      }
+      error = vault.errorMsg
   }
 </script>
 
@@ -91,7 +64,21 @@ stays beside the form, where the user acted.
 {/snippet}
 
 <div class="space-y-4" data-testid="s3-setup">
-  <S3ProviderHeading {vault} {progress} onChangeProvider={onCancelSetup} />
+  <div class="flex items-center gap-2 text-sm">
+    <Archive class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    <span class="font-medium text-foreground"
+      >{vault.t(I18N_KEYS.ProviderPickerS3)}</span
+    >
+    <button
+      type="button"
+      class="ml-auto text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+      data-testid="cancel-provider-setup"
+      disabled={busy}
+      onclick={onCancelSetup}
+    >
+      {vault.t(I18N_KEYS.ProviderSetupChangeProvider)}
+    </button>
+  </div>
   <SetupWizardStep
     stepNumber={1}
     title={vault.t(I18N_KEYS.LoginWizardConnectionStep)}
@@ -102,11 +89,17 @@ stays beside the form, where the user acted.
     <S3ConnectionPanel
       {vault}
       {idPrefix}
-      frame={S3ConnectionFrame.Step}
-      submit={S3ConnectionSubmit.ConnectAndSync}
-      {progress}
-      {availability}
-      {alert}
+      submitLabel={vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
+      submitIcon={ShieldCheck}
+      submitTestId="connect-provider-btn"
+      {busy}
+      busyLabel={vault.t(
+        isInitializing
+          ? I18N_KEYS.OnboardingLoadingEngine
+          : I18N_KEYS.AuthStorageSyncConnecting,
+      )}
+      submitDisabled={connectDisabled}
+      {error}
       onConnect={connect}
       beforeConnect={hostQuestion}
     />

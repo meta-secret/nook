@@ -1,5 +1,10 @@
 import { err, ok, type Result } from "neverthrow";
-import type { NookProviderSource, ProviderIdentityChoice } from "$app-wasm";
+import {
+  list_s3_vaults,
+  type NookProviderSource,
+  type ProviderIdentityChoice,
+  type ProviderVaultSummary,
+} from "$app-wasm";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   GOOGLE_DRIVE_OAUTH_FILE_PRESET,
@@ -7,7 +12,12 @@ import {
   S3_PROVIDER_TYPE,
   type ProviderSetupRequest,
 } from "$lib/auth/providers";
+import { listedVaults } from "$lib/components/provider-vaults/drive-vault-inventory";
 import { IdentityDecisionText } from "$lib/components/provider-vaults/identity-plan.svelte";
+import {
+  NativeProviderFailure,
+  NativeProviderFailureKind,
+} from "$lib/runtime/storage-failure";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   FirstRunJoinKind,
@@ -22,6 +32,7 @@ import {
   type IdentityPlanRun,
 } from "$lib/vault/identity-plan-actions";
 import { VaultOAuthActions } from "$lib/vault/oauth";
+import { ProviderVaultActions } from "$lib/vault/provider-vaults";
 import {
   OAuthFileDraftKind,
   S3DraftKind,
@@ -34,7 +45,36 @@ import {
   FirstRunSyncSource,
   WorkspaceSection,
 } from "$lib/vault/state/ui.svelte";
-import { I18N_KEYS } from "../../../generated/i18n-keys";
+import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
+
+/** Where first run lists keyrings from: the signed-in Google account, or an
+ * S3 location, which is staged only once it lists. */
+export type FirstRunProviderSource = Extract<
+  NookProviderSource,
+  { readonly kind: "googleDrive" | "s3" }
+>;
+
+export enum FirstRunInventoryKind {
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
+
+/** One read of the sync provider's keyrings. */
+export type FirstRunVaultRead =
+  | {
+      readonly kind: FirstRunInventoryKind.Loaded;
+      readonly vaults: readonly ProviderVaultSummary[];
+    }
+  | {
+      readonly kind: FirstRunInventoryKind.Failed;
+      /** Why, in the user's words. */
+      readonly failure: I18nKey;
+    };
+
+/** What the Sync step knows about the sync provider's keyrings. */
+export type FirstRunInventory =
+  { readonly kind: FirstRunInventoryKind.Loading } | FirstRunVaultRead;
 
 /** One identity a sync provider holds, and the provider it was read from. */
 export type FirstRunIdentity = {
@@ -148,6 +188,48 @@ export class FirstRunActions {
    * on the same provider. */
   syncSource(): FirstRunSyncSource {
     return this.vault.firstRunSyncSource;
+  }
+
+  /** The keyrings a sync provider holds, read without saving or connecting
+   * it. Google Drive reads with the staged sign-in the source's token comes
+   * from. An S3 key the server refuses says so; Rust reads the refusal. */
+  async listVaults(source: FirstRunProviderSource): Promise<FirstRunVaultRead> {
+    const vault = this.vault;
+    const localVault = new ProviderVaultActions(vault).localVaultOccupancy();
+    switch (source.kind) {
+      case "googleDrive": {
+        const listed = await new VaultOAuthActions(vault).listGoogleDriveVaults(
+          localVault,
+        );
+        if (listed.isErr())
+          return {
+            kind: FirstRunInventoryKind.Failed,
+            failure: listed.error.translationKey,
+          };
+        return {
+          kind: FirstRunInventoryKind.Loaded,
+          vaults: listedVaults(listed.value),
+        };
+      }
+      case "s3":
+        try {
+          const listing = await list_s3_vaults(
+            source.configuration,
+            localVault,
+          );
+          return { kind: FirstRunInventoryKind.Loaded, vaults: listing.vaults };
+        } catch (cause) {
+          const refused =
+            new NativeProviderFailure(cause).kind() ===
+            NativeProviderFailureKind.S3KeyAccessDenied;
+          return {
+            kind: FirstRunInventoryKind.Failed,
+            failure: refused
+              ? I18N_KEYS.ErrorsS3KeyAccessDenied
+              : I18N_KEYS.ProviderSetupS3ListFailed,
+          };
+        }
+    }
   }
 
   /** Name a new identity next: on the signed-in sync provider, or on this
