@@ -126,9 +126,10 @@ pub use enrollment::{
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
-    MultiDeviceError, PasswordError, ProviderFailureCause, ProviderFailureCode, SecretPayloadError,
-    SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
-    VaultRecoveryErrorKind, VaultResult, VaultSyncError,
+    MultiDeviceError, PasswordError, ProviderFailureCause, ProviderFailureCode,
+    ProviderFailureMessageRequest, SecretPayloadError, SessionError, ValidationError,
+    VaultCryptoError, VaultEpochError, VaultError, VaultFormatError, VaultRecoveryErrorKind,
+    VaultResult, VaultSyncError,
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
@@ -425,8 +426,8 @@ pub use validation::{
     LocalFolderSyncTarget, OAuthFilePreset, OAuthProviderLabel, OauthAccessToken, OauthFilePreset,
     OauthFileSyncTarget, ProviderCredentialEvidence, ProviderCredentialReadiness, ProviderLabel,
     ProviderTargetKey, S3Connection, S3ConnectionDraft, S3DraftField, S3DraftFieldError,
-    S3DraftValidation, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
-    SyncProviderTarget, SyncProviderTargetIdentity,
+    S3DraftValidation, StorageMode, StorageProviderType, SyncProviderTarget,
+    SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,

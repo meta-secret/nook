@@ -200,7 +200,7 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_SECRET_ACCESS_KEY_REQUIRED)]
     S3SecretAccessKeyRequired,
 
-    /// The versioned S3 connect reference is missing, unknown, or malformed.
+    /// An S3 provider or invite has no usable connection.
     #[error("{}", i18n_keys::ERRORS_VALIDATION_S3_STORAGE_TARGET_INVALID)]
     S3StorageTargetInvalid,
 

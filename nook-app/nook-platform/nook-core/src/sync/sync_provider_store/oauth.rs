@@ -244,8 +244,7 @@ mod tests {
             file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        let bound = config
-            .bound_google_drive_folder("https://drive.google.com/drive/folders/folder-team")?;
+        let bound = config.bound_google_drive_folder("folder-team")?;
         assert_eq!(
             bound.folder_id,
             StoredGoogleDriveFolder::FolderId("folder-team".to_owned())

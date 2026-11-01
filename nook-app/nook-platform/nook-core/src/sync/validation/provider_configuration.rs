@@ -60,31 +60,21 @@ impl DriveBackupName {
 pub struct GoogleDriveFolderId(String);
 
 impl GoogleDriveFolderId {
+    /// A Drive folder id: at most 256 ASCII letters, digits, `-`, and `_`.
+    /// Every flow passes the id Drive returned, so a pasted folder URL is no
+    /// id.
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return Err(ValidationError::SharedStorageTargetRequired);
+        match raw.trim() {
+            "" => Err(ValidationError::SharedStorageTargetRequired),
+            id if id.len() > 256
+                || !id.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+                }) =>
+            {
+                Err(ValidationError::SharedStorageTargetInvalid)
+            }
+            id => Ok(Self(id.to_owned())),
         }
-        let without_suffix = trimmed
-            .split(['?', '#'])
-            .next()
-            .unwrap_or_default()
-            .trim_end_matches('/');
-        let candidate = if let Some((_, tail)) = without_suffix.rsplit_once("/folders/") {
-            tail.rsplit('/').next().unwrap_or_default()
-        } else {
-            without_suffix
-        }
-        .trim();
-        if candidate.is_empty()
-            || candidate.len() > 256
-            || !candidate.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
-            })
-        {
-            return Err(ValidationError::SharedStorageTargetInvalid);
-        }
-        Ok(Self(candidate.to_owned()))
     }
 
     #[must_use]

@@ -98,13 +98,22 @@ pub enum S3DraftValidation {
     Invalid { fields: Vec<S3DraftFieldError> },
 }
 
+/// What validating one form field found.
+enum S3DraftFieldCheck {
+    Valid,
+    Invalid(S3DraftFieldError),
+}
+
 impl S3DraftField {
-    /// This field's error, when its value does not validate.
-    fn error<T>(self, validated: ValidationResult<T>) -> Option<S3DraftFieldError> {
-        validated.err().map(|error| S3DraftFieldError {
-            field: self,
-            error_key: error.to_string(),
-        })
+    /// This field's check of its validated value.
+    fn check<T>(self, validated: ValidationResult<T>) -> S3DraftFieldCheck {
+        match validated {
+            Ok(_) => S3DraftFieldCheck::Valid,
+            Err(error) => S3DraftFieldCheck::Invalid(S3DraftFieldError {
+                field: self,
+                error_key: error.to_string(),
+            }),
+        }
     }
 }
 
@@ -113,18 +122,22 @@ impl S3ConnectionDraft {
     #[must_use]
     pub fn validate(self) -> S3DraftValidation {
         let fields = [
-            S3DraftField::Endpoint.error(S3Connection::parse_endpoint(&self.endpoint)),
-            S3DraftField::Region.error(S3Connection::parse_region(&self.region)),
-            S3DraftField::Bucket.error(S3Connection::parse_bucket(&self.bucket)),
-            S3DraftField::KeyPrefix.error(S3KeyPrefix::parse(&self.key_prefix)),
-            S3DraftField::AccessKeyId.error(S3Connection::parse_access_key_id(&self.access_key_id)),
-            S3DraftField::SecretAccessKey.error(S3Connection::parse_secret_access_key(
+            S3DraftField::Endpoint.check(S3Connection::parse_endpoint(&self.endpoint)),
+            S3DraftField::Region.check(S3Connection::parse_region(&self.region)),
+            S3DraftField::Bucket.check(S3Connection::parse_bucket(&self.bucket)),
+            S3DraftField::KeyPrefix.check(S3KeyPrefix::parse(&self.key_prefix)),
+            S3DraftField::AccessKeyId.check(S3Connection::parse_access_key_id(&self.access_key_id)),
+            S3DraftField::SecretAccessKey.check(S3Connection::parse_secret_access_key(
                 &self.secret_access_key,
             )),
         ]
         .into_iter()
-        .flatten()
-        .collect();
+        .fold(Vec::new(), |mut fields, check| {
+            if let S3DraftFieldCheck::Invalid(error) = check {
+                fields.push(error);
+            }
+            fields
+        });
         match S3Connection::try_from(self) {
             Ok(configuration) => S3DraftValidation::Valid { configuration },
             Err(_) => S3DraftValidation::Invalid { fields },

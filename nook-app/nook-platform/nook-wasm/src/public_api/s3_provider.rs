@@ -4,7 +4,7 @@
 //!
 //! Rust validates every field and reads the location; the web only renders
 //! the typed results. A refused key rejects like every export, with the
-//! message `provider_failure_code` classifies as `s3-key-access-denied`.
+//! message `provider_failure_code` classifies as `S3KeyAccessDenied`.
 use super::wasm_bindgen;
 use super::{NookStagedStorageArgs, NookStorageConnection};
 use crate::NookError;
@@ -332,11 +332,10 @@ mod browser_tests {
             .message()
             .as_string()
             .unwrap_or_default();
-        let code = provider_failure_code(&message)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(code, ProviderFailureCode::S3KeyAccessDenied);
+        assert_eq!(
+            provider_failure_code(&message),
+            ProviderFailureCode::S3KeyAccessDenied
+        );
         Ok(())
     }
 }

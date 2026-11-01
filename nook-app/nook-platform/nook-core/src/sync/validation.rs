@@ -72,11 +72,6 @@ impl fmt::Display for StorageMode {
     }
 }
 
-/// String tags retained for places where a `&'static str` is more
-/// convenient than the enum (test fixtures, JSON keys). New code should
-/// prefer `StorageMode::Local.as_str()` / `StorageMode::Github.as_str()`.
-pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
-pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
 pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 
@@ -364,13 +359,6 @@ mod tests {
     }
 
     #[test]
-    fn storage_mode_consts_match_enum() -> anyhow::Result<()> {
-        assert_eq!(STORAGE_MODE_LOCAL, StorageMode::Local.as_str());
-        assert_eq!(STORAGE_MODE_GITHUB, StorageMode::Github.as_str());
-        Ok(())
-    }
-
-    #[test]
     fn validate_drive_backup_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
         assert_eq!(
             DriveBackupName::parse("  ")?.as_str(),
@@ -446,19 +434,28 @@ mod tests {
     }
 
     #[test]
-    fn normalize_google_drive_folder_ref_accepts_id_and_folder_url() -> anyhow::Result<()> {
+    fn a_drive_folder_id_is_an_id_and_never_a_folder_url() -> anyhow::Result<()> {
         assert_eq!(
             GoogleDriveFolderId::parse(" folder_ABC-123 ")?.as_str(),
             "folder_ABC-123"
         );
         assert_eq!(
-            GoogleDriveFolderId::parse(
-                "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key"
-            )?
-            .as_str(),
-            "folder_ABC-123"
+            GoogleDriveFolderId::parse(" "),
+            Err(ValidationError::SharedStorageTargetRequired)
         );
-        assert!(GoogleDriveFolderId::parse("https://example.com/not-a-folder").is_err());
+        for pasted in [
+            "https://drive.google.com/drive/u/1/folders/folder_ABC-123?resourcekey=key",
+            "https://drive.google.com/drive/folders/folder_ABC-123",
+            "folders/folder_ABC-123",
+            "folder ABC",
+            &"a".repeat(257),
+        ] {
+            assert_eq!(
+                GoogleDriveFolderId::parse(pasted),
+                Err(ValidationError::SharedStorageTargetInvalid),
+                "{pasted}"
+            );
+        }
         Ok(())
     }
 }

@@ -8,18 +8,19 @@
 //! A failure the web must tell apart carries a stable [`ProviderFailureCode`],
 //! classified here from the message every WASM export rejects with.
 
+use http::StatusCode;
 use nook_app_common::i18n_keys;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The stable code of a provider failure the web tells apart from others.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProviderFailureCode {
-    /// GitHub rejected this device's token: `github-token-rejected`.
-    #[serde(rename = "github-token-rejected")]
+    /// GitHub rejected this device's token.
     GitHubTokenRejected,
-    /// The S3 server refused this device's key: `s3-key-access-denied`.
+    /// The S3 server refused this device's key.
     S3KeyAccessDenied,
     /// Any other failure; its message says what happened.
     Unclassified,
@@ -37,6 +38,34 @@ impl ProviderFailureCode {
         } else {
             Self::Unclassified
         }
+    }
+
+    /// The message a failure shows: a refusal names what to fix, and any
+    /// other failure says what its operation could not do.
+    #[must_use]
+    pub const fn translation_key(self, operation_failed: &str) -> &str {
+        match self {
+            Self::GitHubTokenRejected => i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
+            Self::S3KeyAccessDenied => i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
+            Self::Unclassified => operation_failed,
+        }
+    }
+}
+
+/// One caught failure and the translation key of its operation's own
+/// failure message.
+#[derive(Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProviderFailureMessageRequest {
+    pub message: String,
+    pub operation_failed_key: String,
+}
+
+impl ProviderFailureMessageRequest {
+    /// The key of the message this failure shows.
+    #[must_use]
+    pub fn translation_key(&self) -> &str {
+        ProviderFailureCode::classify(&self.message).translation_key(&self.operation_failed_key)
     }
 }
 
@@ -80,16 +109,14 @@ impl ProviderFailureCause {
 
     fn classify_described(message: &str) -> Self {
         let normalized = message.to_ascii_lowercase();
-        if let Some(status) = Self::http_status(&normalized) {
-            return match status {
-                401 => Self::Unauthorized,
-                403 => Self::Forbidden,
-                404 => Self::NotFound,
-                429 => Self::RateLimited,
-                500..=599 => Self::ProviderError,
-                _ => Self::Other,
-            };
+        match ReportedStatus::read(&normalized) {
+            ReportedStatus::Reported(status) => Self::from(status),
+            ReportedStatus::Unreported => Self::classify_layer(&normalized),
         }
+    }
+
+    /// A failure that reports no HTTP answer keeps the layer that failed.
+    fn classify_layer(normalized: &str) -> Self {
         if normalized.contains("recursive use of an object") {
             Self::EngineBusy
         } else if normalized.contains("network request failed")
@@ -122,16 +149,43 @@ impl ProviderFailureCause {
             Self::Other => "other",
         }
     }
+}
 
+/// The one status table: what each HTTP answer a provider gave means.
+impl From<StatusCode> for ProviderFailureCause {
+    fn from(status: StatusCode) -> Self {
+        match status.as_u16() {
+            401 => Self::Unauthorized,
+            403 => Self::Forbidden,
+            404 => Self::NotFound,
+            429 => Self::RateLimited,
+            500..=599 => Self::ProviderError,
+            _ => Self::Other,
+        }
+    }
+}
+
+/// Whether a failure message reports the HTTP status a provider answered.
+enum ReportedStatus {
+    Reported(StatusCode),
+    Unreported,
+}
+
+impl ReportedStatus {
     /// The three-digit status after the first "status" in the message.
-    fn http_status(normalized: &str) -> Option<u16> {
-        let (_, after) = normalized.split_once("status")?;
+    fn read(normalized: &str) -> Self {
+        let Some((_, after)) = normalized.split_once("status") else {
+            return Self::Unreported;
+        };
         let digits = after
             .trim_start_matches(|character: char| !character.is_ascii_digit())
             .chars()
             .take_while(char::is_ascii_digit)
             .collect::<String>();
-        (digits.len() == 3).then(|| digits.parse().ok()).flatten()
+        match (digits.len(), StatusCode::from_bytes(digits.as_bytes())) {
+            (3, Ok(status)) => Self::Reported(status),
+            _ => Self::Unreported,
+        }
     }
 }
 
@@ -168,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn refusals_have_stable_codes_and_log_by_their_status() -> anyhow::Result<()> {
+    fn refusals_have_stable_codes_and_log_by_their_status() {
         for (refused, code, cause) in [
             (
                 i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
@@ -196,14 +250,73 @@ mod tests {
                 "{other}"
             );
         }
-        assert_eq!(
-            serde_json::to_value(ProviderFailureCode::S3KeyAccessDenied)?,
-            serde_json::json!("s3-key-access-denied")
+    }
+
+    #[test]
+    fn a_refusal_shows_what_to_fix_and_any_other_failure_its_operation() -> anyhow::Result<()> {
+        let operation_failed = i18n_keys::PROVIDER_SETUP_S3_LIST_FAILED;
+        for (message, shown) in [
+            (
+                i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
+                i18n_keys::ERRORS_S3_KEY_ACCESS_DENIED,
+            ),
+            (
+                i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
+                i18n_keys::AUTH_STORAGE_GITHUB_TOKEN_REJECTED,
+            ),
+            ("S3 request failed with status 503", operation_failed),
+            ("", operation_failed),
+        ] {
+            let request: ProviderFailureMessageRequest =
+                serde_json::from_value(serde_json::json!({
+                    "message": format!("Database error: {message}"),
+                    "operationFailedKey": operation_failed,
+                }))?;
+            assert_eq!(request.translation_key(), shown, "{message}");
+        }
+        assert!(
+            serde_json::from_value::<ProviderFailureMessageRequest>(serde_json::json!({
+                "message": "",
+                "operationFailedKey": operation_failed,
+                "fallbackKey": operation_failed,
+            }))
+            .is_err()
         );
-        assert_eq!(
-            serde_json::to_value(ProviderFailureCode::GitHubTokenRejected)?,
-            serde_json::json!("github-token-rejected")
-        );
+        Ok(())
+    }
+
+    #[test]
+    fn one_status_table_classifies_answers_and_reported_statuses() -> anyhow::Result<()> {
+        for (status, cause) in [
+            (401, ProviderFailureCause::Unauthorized),
+            (403, ProviderFailureCause::Forbidden),
+            (404, ProviderFailureCause::NotFound),
+            (429, ProviderFailureCause::RateLimited),
+            (500, ProviderFailureCause::ProviderError),
+            (599, ProviderFailureCause::ProviderError),
+            (301, ProviderFailureCause::Other),
+            (412, ProviderFailureCause::Other),
+        ] {
+            assert_eq!(
+                ProviderFailureCause::from(StatusCode::from_u16(status)?),
+                cause
+            );
+            assert_eq!(
+                ProviderFailureCause::classify(&format!("GitHub error: status {status}")),
+                cause
+            );
+        }
+        // A message without a three-digit status keeps the layer that failed.
+        for (message, cause) in [
+            (
+                "failed to fetch, status unknown",
+                ProviderFailureCause::Network,
+            ),
+            ("status 4040 failed to fetch", ProviderFailureCause::Network),
+            ("no status here", ProviderFailureCause::Other),
+        ] {
+            assert_eq!(ProviderFailureCause::classify(message), cause, "{message}");
+        }
         Ok(())
     }
 

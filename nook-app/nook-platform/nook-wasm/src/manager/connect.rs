@@ -133,11 +133,10 @@ mod tests {
         // The assessment rejects like every other export: its message is the
         // refusal's translation key, which classifies into the stable code.
         let message = failure.message().as_string().unwrap_or_default();
-        let code = provider_failure_code(&message)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            .to_rust()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(code, ProviderFailureCode::S3KeyAccessDenied);
+        assert_eq!(
+            provider_failure_code(&message),
+            ProviderFailureCode::S3KeyAccessDenied
+        );
         assert!(
             Reflect::get(&failure, &"code".into())
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?

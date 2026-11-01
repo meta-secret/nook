@@ -104,41 +104,102 @@ struct ListedFolderXml {
     prefix: String,
 }
 
-/// The parts of `ListBucketResult` a listing uses; other elements are skipped.
+/// One element of a `ListBucketResult`, in document order.
 #[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
+enum ListBucketElement {
+    IsTruncated(bool),
+    NextContinuationToken(String),
+    Contents(ListedObjectXml),
+    CommonPrefixes(ListedFolderXml),
+    /// Every element a listing does not use.
+    #[serde(other)]
+    Unrelated,
+}
+
+/// A `ListBucketResult`: its elements, whichever it holds.
+#[derive(Deserialize)]
 struct ListBucketResultXml {
-    is_truncated: bool,
-    #[serde(default)]
-    next_continuation_token: String,
-    #[serde(default)]
-    contents: Vec<ListedObjectXml>,
-    #[serde(default)]
-    common_prefixes: Vec<ListedFolderXml>,
+    #[serde(rename = "$value")]
+    elements: Vec<ListBucketElement>,
+}
+
+/// What a page has said about its truncation so far.
+enum PageTruncation {
+    Unstated,
+    Stated(bool),
+}
+
+/// The continuation token a page has carried so far.
+enum PageToken {
+    Absent,
+    Present(String),
+}
+
+/// A listing page as its elements are read.
+struct S3ListingPage {
+    keys: Vec<String>,
+    folders: Vec<String>,
+    truncation: PageTruncation,
+    token: PageToken,
+}
+
+impl S3ListingPage {
+    const EMPTY: Self = Self {
+        keys: Vec::new(),
+        folders: Vec::new(),
+        truncation: PageTruncation::Unstated,
+        token: PageToken::Absent,
+    };
+
+    fn with(mut self, element: ListBucketElement) -> Self {
+        match element {
+            ListBucketElement::IsTruncated(truncated) => {
+                self.truncation = PageTruncation::Stated(truncated);
+            }
+            ListBucketElement::NextContinuationToken(token) => {
+                self.token = PageToken::Present(token);
+            }
+            ListBucketElement::Contents(object) => self.keys.push(object.key),
+            ListBucketElement::CommonPrefixes(folder) => self.folders.push(folder.prefix),
+            ListBucketElement::Unrelated => {}
+        }
+        self
+    }
+
+    /// A page must say whether it is truncated, and a truncated page must
+    /// carry a token to continue it.
+    fn finish(self) -> Result<S3ObjectListing, S3RequestFailure> {
+        let continuation = match (self.truncation, self.token) {
+            (PageTruncation::Stated(false), _) => S3ListingContinuation::Complete,
+            (PageTruncation::Stated(true), PageToken::Present(token)) => match token.as_str() {
+                "" => return Err(S3RequestFailure::MalformedResponse),
+                _ => S3ListingContinuation::Continues(token),
+            },
+            (PageTruncation::Stated(true), PageToken::Absent) | (PageTruncation::Unstated, _) => {
+                return Err(S3RequestFailure::MalformedResponse);
+            }
+        };
+        Ok(S3ObjectListing {
+            keys: self.keys,
+            folders: self.folders,
+            continuation,
+        })
+    }
 }
 
 impl S3ObjectListing {
-    /// Read one page. A body that is not this XML, or a truncated page
-    /// without a token to continue it, is malformed.
+    /// Read one page. A body that is not this XML, a page that does not say
+    /// whether it is truncated, or a truncated page without a token to
+    /// continue it, is malformed.
     fn parse(body: &[u8]) -> Result<Self, S3RequestFailure> {
         let page: ListBucketResultXml = str::from_utf8(body)
             .ok()
             .and_then(|text| de::from_str(text).ok())
             .ok_or(S3RequestFailure::MalformedResponse)?;
-        let continuation = match (page.is_truncated, page.next_continuation_token.as_str()) {
-            (false, _) => S3ListingContinuation::Complete,
-            (true, "") => return Err(S3RequestFailure::MalformedResponse),
-            (true, token) => S3ListingContinuation::Continues(token.to_owned()),
-        };
-        Ok(Self {
-            keys: page.contents.into_iter().map(|object| object.key).collect(),
-            folders: page
-                .common_prefixes
-                .into_iter()
-                .map(|folder| folder.prefix)
-                .collect(),
-            continuation,
-        })
+        page.elements
+            .into_iter()
+            .fold(S3ListingPage::EMPTY, S3ListingPage::with)
+            .finish()
     }
 }
 
@@ -146,17 +207,11 @@ impl S3Response {
     /// Every `403` is the key's failure, whatever its body says; every other
     /// failure keeps the category of its status.
     fn failure(&self) -> S3RequestFailure {
-        match self.status.as_u16() {
-            403 => S3RequestFailure::KeyAccessDenied,
+        match self.status {
+            StatusCode::FORBIDDEN => S3RequestFailure::KeyAccessDenied,
             status => S3RequestFailure::Provider {
-                cause: match status {
-                    401 => ProviderFailureCause::Unauthorized,
-                    404 => ProviderFailureCause::NotFound,
-                    429 => ProviderFailureCause::RateLimited,
-                    500..=599 => ProviderFailureCause::ProviderError,
-                    _ => ProviderFailureCause::Other,
-                },
-                status: self.status,
+                cause: ProviderFailureCause::from(status),
+                status,
             },
         }
     }
@@ -406,14 +461,39 @@ mod tests {
             );
         }
 
+        // The token may come before the truncation flag; a complete page
+        // ignores a token it carries.
+        for (body, continuation) in [
+            (
+                "<ListBucketResult><NextContinuationToken>t</NextContinuationToken>\
+                 <IsTruncated>true</IsTruncated></ListBucketResult>",
+                S3ListingContinuation::Continues("t".to_owned()),
+            ),
+            (
+                "<ListBucketResult><IsTruncated>false</IsTruncated>\
+                 <NextContinuationToken>t</NextContinuationToken></ListBucketResult>",
+                S3ListingContinuation::Complete,
+            ),
+        ] {
+            let page = answer(200, body.as_bytes())?.into_listing()?;
+            assert_eq!(page.continuation, continuation, "{body}");
+            assert!(page.keys.is_empty() && page.folders.is_empty());
+        }
+
         let no_token = TRUNCATED_PAGE.replace(
             "<NextContinuationToken>1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=</NextContinuationToken>",
             "",
         );
+        let empty_token = TRUNCATED_PAGE.replace(
+            "1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J/wm36Hy4vbOwM=</NextContinuationToken>",
+            "</NextContinuationToken>",
+        );
         for body in [
             no_token.as_bytes(),
+            empty_token.as_bytes(),
             b"",
             b"not xml",
+            b"<ListBucketResult/>",
             b"<ListBucketResult><Name>bucket</Name></ListBucketResult>",
             &[0xff, 0xfe, 0x00],
         ] {

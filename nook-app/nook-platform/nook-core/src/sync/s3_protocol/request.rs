@@ -235,11 +235,13 @@ mod tests {
         }
     }
 
-    fn header<'a>(request: &'a S3HttpRequest, name: &str) -> Option<&'a str> {
-        request
+    /// The text of a header the request carries.
+    fn header<'a>(request: &'a S3HttpRequest, name: &str) -> anyhow::Result<&'a str> {
+        let value = request
             .headers()
             .get(name)
-            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| anyhow::anyhow!("the request carries no {name} header"))?;
+        Ok(value.to_str()?)
     }
 
     #[test]
@@ -265,12 +267,10 @@ mod tests {
                 .body(Bytes::new()),
         )?;
         assert_eq!(
-            header(&signed, "authorization"),
-            Some(
-                "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, \
-                 SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, \
-                 Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"
-            )
+            header(&signed, "authorization")?,
+            "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, \
+             SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, \
+             Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"
         );
         Ok(())
     }
@@ -297,23 +297,21 @@ mod tests {
         assert_eq!(put.method(), Method::PUT);
         assert_eq!(put.uri().to_string(), url);
         assert_eq!(put.body().as_ref(), b"event: first\n");
-        assert_eq!(header(&put, "if-none-match"), Some("*"));
+        assert_eq!(header(&put, "if-none-match")?, "*");
         // The SHA-256 of `event: first\n`.
         assert_eq!(
-            header(&put, "x-amz-content-sha256"),
-            Some("634e0e87464f7ec2b8293a0b8fb86169f62a1b5086d76dc9bd3a92b799ed41cf")
+            header(&put, "x-amz-content-sha256")?,
+            "634e0e87464f7ec2b8293a0b8fb86169f62a1b5086d76dc9bd3a92b799ed41cf"
         );
-        assert_eq!(header(&put, "x-amz-date"), Some("20261031T220725Z"));
+        assert_eq!(header(&put, "x-amz-date")?, "20261031T220725Z");
         // Computed independently from the canonical request `PUT`, the URL
         // path, an empty query, the `host:127.0.0.1:8333`, `if-none-match:*`,
         // `x-amz-content-sha256`, and `x-amz-date` lines, and the body hash.
         assert_eq!(
-            header(&put, "authorization"),
-            Some(
-                "AWS4-HMAC-SHA256 Credential=device-a/20261031/us-east-1/s3/aws4_request, \
-                 SignedHeaders=host;if-none-match;x-amz-content-sha256;x-amz-date, \
-                 Signature=3092bda55ca4107d3b8da51c00caab0cc43f0d539d311a351056df02e0040426"
-            )
+            header(&put, "authorization")?,
+            "AWS4-HMAC-SHA256 Credential=device-a/20261031/us-east-1/s3/aws4_request, \
+             SignedHeaders=host;if-none-match;x-amz-content-sha256;x-amz-date, \
+             Signature=3092bda55ca4107d3b8da51c00caab0cc43f0d539d311a351056df02e0040426"
         );
         let shown = format!("{put:?}");
         assert!(!shown.contains(SECRET), "{shown}");
@@ -328,7 +326,7 @@ mod tests {
             assert_eq!(request.method(), method);
             assert_eq!(request.uri().to_string(), url);
             assert!(request.body().is_empty());
-            assert_eq!(header(&request, "if-none-match"), None);
+            assert!(!request.headers().contains_key("if-none-match"));
         }
 
         let unwritable = S3RequestSigner {
