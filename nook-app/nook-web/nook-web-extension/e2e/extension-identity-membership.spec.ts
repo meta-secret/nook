@@ -10,6 +10,7 @@ import {
   setupPasskeyExtensionPopup,
   simpleVaultBaseUrl,
   reuseNookTabForConnect,
+  showKeyringConsent,
 } from './helpers/extension-smoke-runtime'
 import {
   connectGithubSyncProviderFromSettings,
@@ -98,28 +99,7 @@ test('the extension joins the keyring from the approval without reaching its pro
       nookPage: vaultPage,
       connect: () => pairPopup.getByTestId('connect-simple-vault-btn').click(),
     })
-    const consent = connectPage.getByTestId('extension-connect-consent')
-    // The request unlocks the keyring, not a vault; the consent follows in
-    // place with no vault opened.
-    const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
-    // The page may unlock the keyring by itself as it loads; otherwise the
-    // request's unlock does. Either way the consent replaces the request.
-    await expect
-      .poll(
-        async () => {
-          if (await consent.isVisible()) return true
-          if (
-            (await unlockKeyring.isVisible()) &&
-            (await unlockKeyring.isEnabled())
-          ) {
-            await unlockKeyring.click({ timeout: 2_000 }).catch(() => false)
-          }
-          return consent.isVisible()
-        },
-        { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-      )
-      .toBe(true)
-    await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    const consent = await showKeyringConsent(connectPage)
     // The extension joins the keyring, never one vault alone.
     await expect(
       consent.getByTestId('extension-connect-diagram-keyring'),

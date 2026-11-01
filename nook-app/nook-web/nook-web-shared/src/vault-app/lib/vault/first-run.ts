@@ -4,6 +4,7 @@ import {
   type NookProviderSource,
   type ProviderIdentityChoice,
   type ProviderVaultSummary,
+  type S3Connection,
 } from "$app-wasm";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
@@ -49,10 +50,9 @@ import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
 
 /** Where first run lists keyrings from: the signed-in Google account, or an
  * S3 location, which is staged only once it lists. */
-export type FirstRunProviderSource = Extract<
-  NookProviderSource,
-  { readonly kind: "googleDrive" | "s3" }
->;
+export type FirstRunProviderSource =
+  | Extract<NookProviderSource, { readonly accessToken: string }>
+  | Extract<NookProviderSource, { readonly configuration: S3Connection }>;
 
 export enum FirstRunInventoryKind {
   Loading = "loading",

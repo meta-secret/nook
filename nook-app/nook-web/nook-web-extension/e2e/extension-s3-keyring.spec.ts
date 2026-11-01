@@ -18,6 +18,7 @@ import {
   reuseNookTabForConnect,
   setupPasskeyExtensionPopup,
   setupStorageKey,
+  showKeyringConsent,
   simpleVaultBaseUrl,
 } from './helpers/extension-smoke-runtime'
 import {
@@ -115,15 +116,7 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       nookPage: vaultPage,
       connect: () => connectButton.click(),
     })
-    // The connect route opens with the keyring locked. Its request unlocks
-    // the keyring, not a vault, and the consent follows in place.
-    const unlockKeyring = connectPage.getByTestId('extension-request-unlock')
-    await expect(unlockKeyring).toBeEnabled({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    await unlockKeyring.click()
-    const consent = connectPage.getByTestId('extension-connect-consent')
-    await expect(consent).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    await showKeyringConsent(connectPage)
     await approveExtensionConnect(connectPage)
     await waitForExtensionPairingReady(
       connectPage,

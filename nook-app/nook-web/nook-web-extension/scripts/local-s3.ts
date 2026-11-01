@@ -134,7 +134,7 @@ const serveDevData = async (): Promise<number> => {
   }
   return new Promise((resolve, reject) => {
     weed.once('error', reject)
-    weed.once('exit', (code) => resolve(code ?? 1))
+    weed.once('exit', (code) => resolve(typeof code === 'number' ? code : 1))
   })
 }
 
