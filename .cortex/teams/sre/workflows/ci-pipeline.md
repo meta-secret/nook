@@ -444,8 +444,12 @@ lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
 PR web solves use browser-free `web-base`. The job itself uses a digest-pinned,
 source-free Debian Trixie `web-e2e-base` infrastructure image with system
-Chromium, ffmpeg and Xvfb. The ABI matches the exported Rust reporter.
-Publish this stable runner only on tooling changes, never per PR.
+Chromium, ffmpeg and Xvfb. It also carries the pinned SeaweedFS `weed` binary,
+which Playwright starts as the local S3 server. The ABI matches the exported
+Rust reporter.
+Publish this stable runner only on tooling changes, never per PR. A tooling
+change such as `weed` needs the trusted remote `ci:pr:runner:publish` task and
+a new `NOOK_PR_RUNNER_IMAGE` digest before the dependent PR opens.
 The ARC S3 health probe is a separate uncached solve. It retries once only when
 the Dockerfile frontend vertex itself reports a transient authorization TLS
 timeout. Later build vertices and genuine S3 health failures fail closed.
@@ -508,8 +512,9 @@ artifact when direct dependencies are outdated. Updates are handled manually.
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
 - Each test gets a fresh browser context → separate IndexedDB / `localStorage`.
-- Local e2e sync uses `page.route()` with a unique remote id per suite — no shared remote state.
-- The Nook server is stateless; vault data never lives on the server in e2e.
+- Local-provider e2e sync uses `page.route()` with a unique remote id per suite, so it shares no remote state.
+- S3 e2e is the exception: one local S3 server per Playwright run, a second `webServer` entry on a fresh temporary data directory. Each test isolates itself with a key prefix of its own in the shared bucket.
+- The Nook server is stateless; vault data never lives on the Nook server in e2e.
 
 Do **not** spin up multiple Nook servers for parallel e2e unless debugging port conflicts locally with `reuseExistingServer`.
 

@@ -439,7 +439,7 @@ from the control log; the code carries only their DEKs.
 Provider rows stay in the app-scoped `providers:{app_id}` snapshot, which is
 already one local identity's storage.
 
-- **Remote rows (GitHub, Google Drive, iCloud, local folder)**
+- **Remote rows (GitHub, Google Drive, iCloud, local folder, S3)**
   - Are identity mounts: each replicates the identity log and every vault the
     identity owns.
   - Keep every vault in its own namespace, so vaults of other identities in

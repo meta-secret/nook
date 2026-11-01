@@ -64,24 +64,33 @@ A future incompatible persisted shape must ship an explicit, documented
 forward migration in the same change. A domain-type refactor alone never
 authorizes a wire format change.
 
+- **Migration decision for `s3`:** the required `s3` block changes the stored
+  row shape. Nook has no released versions, so this change ships no migration
+  and no compatibility branch.
+  - A stored snapshot whose rows lack the block is rejected like any other
+    unrecognized shape.
+  - Local data from earlier development builds is created again.
+
 ### Rows and vaults
 
-- **Remote rows** (`github`, `oauth-file`, `local-folder`) are identity mounts:
-  each replicates the identity control log and every vault the identity owns,
-  each in its own namespace. Their `storeId` is `unscoped`.
+- **Remote rows** (`github`, `oauth-file`, `local-folder`, `s3`) are identity
+  mounts. Each replicates the identity control log and every vault the identity
+  owns, each in its own namespace. Their `storeId` is `unscoped`.
 - **Browser rows** (`local`) hold one vault in this browser's own store and are
   scoped to that vault's `storeId`.
 
 ### Wire fields (`StorageProvider`, camelCase)
 
 - **`id`, `type`, `label`, `createdAt`**
-  - **Notes:** `type`: `local` \| `github` \| `oauth-file` \| `local-folder`
+  - **Notes:** `type`: `local` \| `github` \| `oauth-file` \| `local-folder` \| `s3`
 - **`githubPat`, `githubRepo`**
   - **Notes:** GitHub only — PAT sealed at rest
 - **`oauthFile`**
   - **Notes:** Drive/iCloud block — see below
 - **`localFolder`**
   - **Notes:** File System Access directory handle metadata (`directoryName`, `handleId`)
+- **`s3`**
+  - **Notes:** Required on every row. S3-compatible storage block — see below
 - **`storeId`**
   - **Notes:** The vault a browser row holds (`store_{token}`); `unscoped` for
     identity mounts. See [secret-store-identity.md](../../../nook-core/.cortex/docs/architecture/secret-store-identity.md)
@@ -104,6 +113,22 @@ authorizes a wire format change.
   - **Notes:** iCloud share target; credential-free CloudKit routing, unbound
     until the share is created or accepted
 
+### Wire fields (`s3`)
+
+- **`state`**
+  - **Notes:** `notApplicable` on every other provider type, `configured` on
+    an S3 row. Only a configured block carries `config`
+- **`config.endpoint`, `config.region`, `config.bucket`, `config.keyPrefix`**
+  - **Notes:** The location. The endpoint is an origin, see the
+    [endpoint rule](#s3-compatible-storage). The region signs requests, and
+    the identity log's mount record leaves it out. An empty prefix is the
+    bucket root
+- **`config.accessKeyId`**
+  - **Notes:** Names this app's key. It is not secret, so the row detail line
+    shows it
+- **`config.secretAccessKey`**
+  - **Notes:** Sealed at rest, like `githubPat`
+
 ### Ownership
 
 **Persistence + credential crypto live in Rust/WASM.** Snapshot shaping and
@@ -120,11 +145,20 @@ wasm; the web shim is adapters + i18n only.
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`
 - **Authorized-account list, invite, and joiner rules**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/authorized_accounts.rs`
+- **S3 block, setup-form validation, and location rules**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/s3.rs`
+    and `nook-app/nook-platform/nook-core/src/sync/validation/provider_configuration/s3/`
+- **S3 protocol without I/O: object keys, signing, requests, and answers**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/s3_protocol/`
 
 **WASM storage and manager APIs**
 
 - **`nook_auth` IndexedDB I/O (rexie) and load pipeline**
   - **Home:** `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`
+- **Send S3 requests and list an S3 location**
+  - **Home:** `nook-app/nook-platform/nook-wasm/src/storage/s3.rs` and
+    `s3/vault_listing.rs`, with typed exports in
+    `nook-app/nook-platform/nook-wasm/src/public_api/s3_provider.rs`
 - **Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)**
   - **Home:** `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`
 - **Delete the auth-provider database with `delete_auth_providers_db`**
@@ -167,8 +201,8 @@ TypeScript owns browser integration:
 - persisting the resulting snapshot.
 
 - **Credential storage:** Seal secret fields at rest with the device key.
-  - Secret fields are `githubPat`, `oauthFile.accessToken`, and
-    `oauthFile.refreshToken`.
+  - Secret fields are `githubPat`, `oauthFile.accessToken`,
+    `oauthFile.refreshToken`, and `s3.config.secretAccessKey`.
   - Seal them inside `save_auth_providers` / `seal_provider_credentials` and
     unseal them inside the `load_auth_providers` pipeline.
   - Keep non-secret labels, repositories, and timestamps plaintext.
@@ -189,10 +223,13 @@ TypeScript owns browser integration:
 - **Extension pairing:** `seal_auth_providers_for_device_public_key` can seal a
   snapshot for another device's public key without writing IndexedDB.
   - Use it when staging credentials for the browser extension.
+  - It seals an S3 row's `s3.config.secretAccessKey` like any other credential
+    field.
 - **Plaintext rows:** Reject stored **plaintext** provider rows instead of
   loading them.
   - This fail-closed boundary prevents an unsealed credential from remaining
     usable or appearing to be trusted encrypted state.
+  - An S3 row whose secret access key is not sealed is such a row.
   - Require users to re-enter the credential so the normal save path persists
     it sealed.
 - **Provider switch:** Changing the active saved provider calls
@@ -333,9 +370,12 @@ before an identity is unlocked: the header, the first-run screen, and the
 unlock screen link to it, and so does Manage → Sync providers.
 
 - **Sources:** this browser's identities and vaults, a Google Drive account
-  (signed in for this page only), a local folder, or, once unlocked, the
-  connected sync provider (iCloud, GitHub, Drive, or folder) with the
-  session's own credentials.
+  (signed in for this page only), or a local folder.
+  - Once unlocked, the connected sync provider (iCloud, GitHub, Drive, S3, or
+    folder) is a source too. It is read with the session's own credentials.
+  - A `NookProviderSource` also names an S3 location, which setup and recovery
+    read. The page offers no S3 source of its own, because a connected S3
+    provider is the connected sync provider.
 - **Checks:** one passkey or one backup password at a time
   (`check_passkey_access`, `check_backup_password_access`, and the
   manager's `check_passkey_access_from` and
@@ -472,7 +512,7 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   carries the provider's shared target (`shared:{folderId}` or the
   `icloud-share-v1:` reference). The companion projects it back into
   `folderId` or `iCloudShareTarget`.
-- GitHub, local, and local-folder invites still follow the vault's
+- GitHub, S3, local, and local-folder invites still follow the vault's
   `replication_type`.
 
 **Rust typestates**
@@ -483,7 +523,7 @@ joiner dispatches on `PersonalCredentialTransfer` versus `SharedProviderGrant`.
 Rust models those as sealed typestates in `nook-auth2`:
 
 - `TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local,
-  GitHub, or credential-bearing OAuth data; and
+  GitHub, S3, or credential-bearing OAuth data; and
 - `TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google
   Drive folder target or an iCloud share target, each with its
   `joiner_identity`.
@@ -506,6 +546,170 @@ provider picker must gate this option with `is_local_folder_backup_supported()` 
 show it as unavailable when the browser cannot grant writable folder access; do
 not let unsupported browsers enter setup and surface the lower-level
 WASM/database error.
+
+### S3-compatible storage
+
+An S3 provider syncs the identity log and every vault the identity owns to one
+bucket of an S3-compatible service. Its row is an identity mount, and its
+`storeId` is `unscoped`. The mount record in the identity log holds the
+endpoint, bucket, and key prefix, and never a key or a region. The
+[vault event log](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md#s3-objects-and-create-only-writes)
+owns the object keys, the create-only writes, and the listings.
+
+- **Location:** the endpoint, bucket, and key prefix identify one mount,
+  whatever key or region a row signs with. A second row for the same location
+  is a duplicate.
+  - The label is `S3 · bucket[/prefix]`. The detail line is
+    `host[:port] · accessKeyId`. Neither names the secret.
+  - The local cache and the sync outbox are named after the location, never
+    after a key.
+- **Validation:** Rust validates the form in one call,
+  `validate_s3_connection_draft`. It reports every wrong field once, in form
+  order, with an `errors.validation.s3_*` translation key. The web renders the
+  result and adds no rule.
+- **Endpoint rule:** HTTPS is required. Plain HTTP is accepted only for the
+  loopback hosts `localhost`, `127.0.0.1`, and `[::1]`, which the local
+  development server uses.
+  - The endpoint is an origin: no credentials, path, query, or fragment.
+  - The production CSP is unchanged. Its `connect-src 'self' https:` admits
+    HTTPS endpoints.
+  - Loopback HTTP works only where no CSP applies. Vite's dev, preview, and e2e
+    servers send none, and the extension pages set no `connect-src`.
+- **Signing:** Rust signs each request with AWS Signature Version 4 in the
+  `Authorization` header. The URLs are path-style, the body's real SHA-256 is
+  signed, and the browser clock supplies the time. `nook-wasm` sends the
+  request unchanged.
+  - The secret enters only the signing-key derivation. It appears in no URL,
+    header, log line, error, or `Debug` output.
+  - A failure keeps its category and status. An error body is read for its code
+    only, because its message can name keys.
+
+**Prohibited:** presign each request as a query string so the browser can fetch
+a plain URL.
+
+**Required:** sign in the `Authorization` header. A presigned URL carries the
+access key ID and a replayable signature in every URL, where logs and error
+reports copy it.
+
+- **Keys:** each app signs with its own key. Nook copies a key in two cases
+  only.
+  - **Extension staging:** `seal_auth_providers_for_device_public_key` seals the
+    web vault's S3 row to the extension's key, and the extension opens its
+    vault with it.
+  - **Invite code:** a device invite carries the inviter's connection and key
+    inside its passphrase-encrypted code, as it carries a GitHub token.
+- **Refused key:** any `403` is one typed failure, whatever its code. A refused
+  key, an unknown key, a wrong secret or region, and a missing permission look
+  alike.
+  - Every export rejects with a message that holds the
+    `errors.s3_key_access_denied` translation key. `provider_failure_code`
+    classifies it as `s3-key-access-denied`, so the web never matches message
+    text.
+  - A rejected GitHub token still carries its own attached code,
+    `github-token-rejected`.
+  - The web shows the translated message beside the action that failed: under
+    the S3 form or under the first-run list.
+
+### S3 setup and invites
+
+Setup connects a location with this app's own key. An invite brings the
+inviter's connection and key instead.
+
+- **Provider picker:** an **S3-compatible storage** option beside GitHub on the
+  Sync page, the login gate, and the recovery screen. A vault with shared
+  replication disables it, as for GitHub.
+- **First run:** the Sync step keeps the Google Drive sign-in as its lead. S3 is
+  a quiet second row that opens the connection form.
+  - **Connect** validates the form. `list_s3_vaults` then reads the location
+    with this app's key, before anything is saved.
+  - Rust lists the identities there, as for Drive, and decides each card's one
+    [setup action](provider-identity-decisions.md#setup-action).
+  - An empty location leads with **Create a new identity**.
+  - A second app with a key of its own sees an identity it is no member of as
+    **Request to join**. A device of the identity approves the request, and
+    **Check again** on the Join step finishes joining.
+- **Sync page and login wizard:** one step, **Connect & sync**, with no identity
+  list. On the recovery screen, the recovery list follows the connection, as
+  for GitHub.
+- **Invite:** a `PersonalCredentialTransfer` payload built from the inviter's
+  row. It needs a vault with personal replication and a row whose secret is
+  open.
+  - Rust validates a decrypted code again with the setup form's rules, so a code
+    cannot add a plain-HTTP remote endpoint.
+  - The joiner joins through that connection, then saves it as a row, which
+    seals its secret.
+  - A shared-provider grant never carries S3. Sentinel onboarding refuses an S3
+    row.
+- **Development and e2e:** the host-native loop and Playwright start a pinned
+  local S3 server on `http://127.0.0.1:8333` with test-only keys, as the
+  [extension README](../../../../nook-web/nook-web-extension/README.md)
+  describes.
+
+### S3 administrator note
+
+Give each app its own key, scoped to the key prefix that every app uses. Nook
+writes only below `[prefix/]meta-secret-nook/` and does not create keys.
+
+- **Permissions:** list, read, create, and delete objects below the prefix. With
+  an empty key prefix, scope the key to `meta-secret-nook/`.
+- **Conditional create:** the service must answer `412` to a `PUT` with
+  `If-None-Match: *` for an existing key.
+- **CORS:** a web vault sends every request cross-origin, and the
+  `Authorization` header forces a preflight.
+  - Allow the exact origin of each web vault that connects, with no wildcard.
+  - The local dev and e2e server also lists the extension's
+    `chrome-extension://{extension id}` origin. An administrator may need to
+    add that origin for the extension.
+  - Allow the methods `GET`, `PUT`, and `DELETE`.
+  - Allow the request headers `authorization`, `x-amz-content-sha256`,
+    `x-amz-date`, and `if-none-match`.
+  - Send the CORS headers on `403`, `404`, and `412` answers too, because Nook
+    reads those statuses.
+  - Expose no response header. Nook reads the status and the body only.
+
+An AWS-style policy for one app's key follows the IAM policy grammar. Nook's
+tests have not exercised it against AWS.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::BUCKET",
+      "Condition": { "StringLike": { "s3:prefix": "PREFIX/*" } }
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::BUCKET/PREFIX/*"
+    }
+  ]
+}
+```
+
+SeaweedFS scopes an action with the `Action:bucket/prefix/*` form. Nook's tests
+use that form only for the local server's readiness probe, which lists
+`nook-dev/ready-probe/*`.
+
+```json
+{
+  "identities": [
+    {
+      "name": "web-vault",
+      "credentials": [
+        { "accessKey": "ACCESS_KEY_ID", "secretKey": "SECRET_ACCESS_KEY" }
+      ],
+      "actions": [
+        "Read:BUCKET/PREFIX/*",
+        "Write:BUCKET/PREFIX/*",
+        "List:BUCKET/PREFIX/*"
+      ]
+    }
+  ]
+}
+```
 
 ---
 
@@ -582,6 +786,11 @@ layer maps snapshots onto `VaultState` via
 `manager.load_auth_providers_snapshot()` /
 `manager.save_auth_providers_snapshot()` (wrapped by `auth/providers.ts`).
 
+For S3, the credential slot carries the secret access key. The reference slot
+carries `s3-target-v1:` followed by JSON that names the endpoint, region,
+bucket, key prefix, and access key ID. The reference never holds the secret,
+and preparing S3 storage makes no network call.
+
 ---
 
 ## 5. Sync replication (status)
@@ -612,10 +821,10 @@ provider sync path.
 
 ## 6. Security notes
 
-- Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with
-  the device's age X25519 key** (in Rust/WASM) before hitting IndexedDB. They are
-  never stored as plaintext. A raw `nook_auth` dump exposes age-armored
-  ciphertext, not tokens.
+- Provider credentials (GitHub PAT, OAuth access/refresh tokens, S3 secret
+  access key) are **sealed with the device's age X25519 key** (in Rust/WASM)
+  before hitting IndexedDB. They are never stored as plaintext. A raw
+  `nook_auth` dump exposes age-armored ciphertext, not tokens.
 - The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped`
   with AES-256-GCM. The preferred wrapping key is derived in Rust/WASM from a
   WebAuthn PRF result with HKDF-SHA256. On PRF-missing platforms, a versioned PIN
@@ -628,6 +837,9 @@ provider sync path.
 - GitHub PAT in IndexedDB is **storage convenience**, not vault encryption.
   Compromise exposes GitHub repo access, not plaintext vault secrets. Vault
   secrets remain independently encrypted in the vault file.
+- An S3 secret access key is storage convenience in the same way. Compromise
+  exposes the bucket access that key's policy grants, not plaintext vault
+  secrets.
 - Reusing the existing local device key means no extra key material and no new
   key-management surface. That key already gates current vault-key envelopes.
 - The local device key and encrypted vault blob remain in a separate IDB database
@@ -706,6 +918,9 @@ Browser OAuth providers are origin-bound.
   - A CSP that allows only `'self'` scripts fails before any OAuth client-ID or
     origin check. Treat **Failed to load Google Identity Services** or CloudKit
     JS as an app-header bug, not a provider-console misconfiguration.
+  - `connect-src 'self' https:` already admits HTTPS S3 endpoints. Do not widen
+    it for S3. A loopback HTTP endpoint is a development and e2e transport,
+    as the [S3 endpoint rule](#s3-compatible-storage) describes.
 - **CloudKit diagnostics:** A `421` response from `/public/users/caller` usually
   means CloudKit issued the unauthenticated web-auth challenge.
   - It does not by itself prove the API token or origin is wrong.

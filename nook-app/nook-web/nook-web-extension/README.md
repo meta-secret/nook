@@ -201,7 +201,8 @@ task extension:dev
 ```
 
 It builds dev WASM with the host Rust toolchain, serves the unified web app at
-`https://localhost:5173` through Vite, builds the extension with the pinned Bun
+`https://localhost:5173` through Vite, starts the local S3 server described
+below, builds the extension with the pinned Bun
 (installed once under `~/.nook/bun/<version>`), and opens Brave on an isolated
 dev profile with the extension unpacked. Rust changes rebuild WASM and the
 extension; extension or shared web changes rebuild the extension. Each rebuild
@@ -212,6 +213,40 @@ Brave stays open, and rerunning the task reattaches to it. Pairing state persist
 in the profile, so device setup and vault pairing are done once by hand. To
 start over with no extension or vault data, run `task extension:dev:fresh`: it
 closes Brave, deletes the dev profile, and starts the same loop.
+
+The loop also runs a local S3-compatible server. A keyring can then sync to it,
+and the extension can open its vault through it, with no Google sign-in and no
+folder picker. `task extension:dev` and `task s3:dev` install the pinned
+SeaweedFS release (`weed mini`) once under `~/.nook/seaweedfs/<version>`, after
+checking its SHA-256. The pin covers macOS arm64 and Linux x86-64 hosts, and
+Vite and the server stop together. Run only the server, or delete its data:
+
+```bash
+task s3:dev        # serve until Ctrl+C
+task s3:dev:reset  # delete the data; refuses while a server answers on port 8333
+```
+
+- **Connection:** endpoint `http://127.0.0.1:8333`, region `us-east-1`, bucket
+  `nook-dev`. Choose S3-compatible storage in the web vault and enter these
+  with one of the keys below.
+- **Keys:** `device-a`, `device-b`, and `device-c` have full access to the
+  bucket. `no-access` is refused, so it shows the "no access" failure. Give
+  each browser's web vault a different key, such as `device-a` in the first and
+  `device-b` in a second browser. The extension reuses the key of its web
+  vault.
+- **TEST-ONLY secrets:** `scripts/local-s3-identities.json` holds them. They
+  work only against this loopback server.
+- **Data:** `~/Library/Application Support/Nook/s3-dev` on macOS, and
+  `$XDG_DATA_HOME/nook/s3-dev` (default `~/.local/share/nook/s3-dev`) on Linux.
+  It persists until `task s3:dev:reset`. `task extension:dev:fresh` clears the
+  Brave profile only, so reset the S3 data too for a fully empty start.
+- **CORS:** the server allows exactly `https://localhost:5173`,
+  `http://127.0.0.1:5173`, `http://127.0.0.1:5174`, and the loop's own
+  extension origin.
+- **Playwright and CI:** the web app and extension Playwright configs start the
+  same server through a `webServer` entry, on a fresh temporary data directory
+  that the run deletes. The e2e image installs the same pinned `weed` binary in
+  `/usr/local/bin`.
 
 `extension:run:*` only installs and launches the browser; it does not create a
 vault or approve pairing. Use `extension:setup:brave` for that bootstrap, or

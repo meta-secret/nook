@@ -115,10 +115,17 @@ text stays only for a requirement, a consequence, or a promise.
   - **Check again** for a request asked earlier.
   - **Create a new identity** in that Drive, or **Keep it on this browser
     only**, leads to Name.
+  - **S3-compatible storage** is a quiet second row under the Drive sign-in.
+    It opens the connection form: endpoint, region, bucket, an optional key
+    prefix, an access key ID, and a secret access key. **Connect** reads the
+    location with this browser's key and lists its identities with the same
+    cards and actions. An empty location leads with **Create a new identity**
+    as the primary button. A second browser with its own key finds the
+    identity there and asks to join it.
 - **Name**: "Name your identity", one field (empty takes the suggested
   name). Only members see the name. On the Drive path, its first vault is
   created under the same name and the signed-in Drive connects next without
-  another sign-in.
+  another sign-in. The S3 path does the same with the connection just entered.
 - **Vault** (kept on this browser): "Create your first vault?" with the
   vault's name, or **Not now**. Not now ends setup with the identity and no
   vault: the identities page shows its card with New vault, never the Start
@@ -139,6 +146,9 @@ on this device lands here with the link filled in. The waiting-for-approval
 state shows on the hub after submitting. Signing in to the invite's provider
 is part of joining: an invite kept in iCloud shows the Apple sign-in only
 once Join reaches it, never as an option up front.
+
+An invite kept in S3 carries the inviter's connection and key inside the
+passphrase-protected code, so joining shows no sign-in.
 
 ### Recovery
 
@@ -202,6 +212,8 @@ the defaults suit nearly everyone.
   the task, and the sign-in step draws This device → the provider ← Your
   other devices above its sign-in button, with one line that the sign-in
   stays in this browser. Connect & sync does not draw it again.
+  - S3-compatible storage is one step, **Connect & sync**. It lists no
+    identities and syncs the identity in use.
 - **Devices** lists the identity's apps (rename, revoke), approves or denies
   join requests, syncs the identity log, and creates invites (Add an app,
   with the same diagram as the join screen, this device filled in).
