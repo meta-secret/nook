@@ -298,40 +298,6 @@ impl DriveNamespace<'_> {
             .collect())
     }
 
-    /// Delete this namespace's folder and every event in it (a vault deleted
-    /// everywhere). Nothing to do when the folder does not exist; a duplicate
-    /// fails closed.
-    pub(crate) async fn delete(&self) -> Result<bool, NookError> {
-        let Some(identity_folder) = self
-            .existing(self.parent, self.placed.identity().as_str())
-            .await?
-        else {
-            return Ok(false);
-        };
-        let Some(folder) = self
-            .existing(&identity_folder, self.placed.folder_name())
-            .await?
-        else {
-            return Ok(false);
-        };
-        let response = Client::new()
-            .delete(format!(
-                "https://www.googleapis.com/drive/v3/files/{}",
-                urlencoding::encode(&folder.folder_id)
-            ))
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
-            .query(&[("supportsAllDrives", "true")])
-            .send()
-            .await?;
-        if !response.status().is_success() {
-            return Err(NookError::Drive(format!(
-                "Google Drive namespace deletion failed with status {}",
-                response.status()
-            )));
-        }
-        Ok(true)
-    }
-
     /// Resolve or create the namespace's folder inside its identity's folder;
     /// a duplicate at either level fails closed.
     pub(crate) async fn resolve(&self) -> Result<DriveEventParent, NookError> {
@@ -380,8 +346,14 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod fetch_tests {
     use super::*;
+    use crate::storage::checked_event_write::tests::EventFixture;
+    use crate::storage::drive_events::DriveEventStore;
+    use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::storage::remote_event::RemoteEventRead;
     use nook_core::StoreId;
+    use nook_core::{EventId, EventLogLocation};
+    use std::str;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const FILES: &str = "drive/v3/files";
@@ -605,39 +577,75 @@ mod fetch_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn delete_removes_the_one_namespace_folder() -> anyhow::Result<()> {
+    async fn deleting_a_namespace_removes_its_folder() -> anyhow::Result<()> {
         let placed = placed()?;
-        let namespace = DriveNamespace {
+        // The store's parent is the namespace folder itself.
+        let store = DriveEventStore {
             token: "drive-token",
-            parent: &DriveEventParent::shared_folder_id("root-folder"),
-            placed: &placed,
+            parent: &DriveEventParent::shared_folder_id("doomed"),
+            location: placed.location(),
+        };
+        let stub = FetchStub::install(vec![FetchRoute::ok("DELETE", "drive/v3/files/doomed", "")])?;
+        store.delete_events().await?;
+        assert_eq!(stub.calls().len(), 1);
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing(
+            "DELETE",
+            "drive/v3/files/doomed",
+            500,
+        )])?;
+        assert!(store.delete_events().await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn an_event_with_no_file_reads_as_unavailable() -> anyhow::Result<()> {
+        let placed = placed()?;
+        let store = DriveEventStore {
+            token: "drive-token",
+            parent: &DriveEventParent::shared_folder_id("vault"),
+            location: placed.location(),
+        };
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let _stub = FetchStub::install(vec![FetchRoute::ok("GET", LIST, r#"{"files":[]}"#)])?;
+        assert_eq!(store.read(&event_id).await?, RemoteEventRead::Unavailable);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_stored_event_settles_its_write_without_an_upload() -> anyhow::Result<()> {
+        let fixture = EventFixture::new()?;
+        let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
+        let store = DriveEventStore {
+            token: "drive-token",
+            parent: &DriveEventParent::shared_folder_id("vault"),
+            location: &location,
         };
         let stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[folder("doomed", STORE)])),
-            FetchRoute::ok("DELETE", "drive/v3/files/doomed", ""),
+            FetchRoute::ok("GET", LIST, r#"{"files":[{"id":"event-file"}]}"#),
+            FetchRoute::ok(
+                "GET",
+                "files/event-file?alt=media",
+                str::from_utf8(&fixture.bytes)?,
+            ),
         ])?;
-        assert!(namespace.delete().await?);
-        assert!(stub.calls()[2].starts_with("DELETE"));
-        drop(stub);
-
-        // Nothing to delete without the identity folder or the vault folder.
-        let stub = FetchStub::install(vec![FetchRoute::ok("GET", LIST, &listing(&[]))])?;
-        assert!(!namespace.delete().await?);
-        drop(stub);
-        let stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[])),
-        ])?;
-        assert!(!namespace.delete().await?);
-        drop(stub);
-
-        let _stub = FetchStub::install(vec![
-            FetchRoute::ok("GET", LIST, &listing(&[folder("identity", IDENTITY)])),
-            FetchRoute::ok("GET", LIST, &listing(&[folder("doomed", STORE)])),
-            FetchRoute::failing("DELETE", "drive/v3/files/doomed", 500),
-        ])?;
-        assert!(namespace.delete().await.is_err());
+        store.put_checked(fixture.checked(&location)?).await?;
+        assert!(stub.calls().iter().all(|call| call.starts_with("GET")));
         Ok(())
     }
 }

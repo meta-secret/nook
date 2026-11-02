@@ -6,11 +6,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::StoreId;
+use nook_core::{EventLogLocation, StoreId};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use super::NookVaultManager;
+use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::provider_vault_listing::DriveVaultListing;
 
 #[wasm_bindgen]
@@ -45,9 +46,15 @@ impl NookVaultManager {
             created_at: &created_at,
         }
         .build()?;
-        listing
-            .put_vault_event(&store_id, &request.id()?, bytes.as_ref())
-            .await?;
+        let event_id = request.id()?;
+        let location = EventLogLocation::Vault(store_id);
+        let event = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes: bytes.as_ref(),
+            event_id: &event_id,
+            location: &location,
+            provider: "Drive",
+        })?;
+        listing.put_vault_event(event).await?;
         Ok(())
     }
 }

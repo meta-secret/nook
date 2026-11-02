@@ -10,13 +10,13 @@ use crate::GitHubStorageClient;
 use crate::GitHubStorageClientFetchGithubVault;
 use crate::GitHubStorageClientWriteGithubTextFile;
 use nook_core::EventId;
-#[cfg(test)]
-use nook_core::{GenesisImportRequest, VaultEvent};
 use reqwest::{Client, StatusCode};
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::str;
 
-use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
+use super::checked_event_write::CheckedEventWrite;
+use super::event_store::EventStore;
 use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
 
@@ -167,14 +167,6 @@ impl GitHubEventStore<'_> {
         TreeEvent::Unrelated
     }
 
-    pub(crate) async fn list_github_event_ids(&self) -> Result<Vec<String>, NookError> {
-        let root = self.placed.root();
-        Ok(Self::event_ids_from_tree(
-            &self.tree_entries(&root).await?,
-            &root,
-        ))
-    }
-
     /// Every namespace of one kind among the repository's blobs, each in
     /// the identity folder that files it.
     fn namespaces_from_tree(
@@ -264,19 +256,6 @@ impl GitHubEventStore<'_> {
         Ok(tree.tree)
     }
 
-    pub(crate) async fn fetch_github_event(
-        &self,
-        event_id: &EventId,
-    ) -> Result<Vec<u8>, NookError> {
-        match self.read_github_event(event_id).await? {
-            RemoteEventRead::Retrieved(bytes) => Ok(bytes.into()),
-            RemoteEventRead::Unavailable => Err(NookError::GitHub(format!(
-                "Event file missing at {}",
-                event_id.as_str()
-            ))),
-        }
-    }
-
     async fn read_github_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let pat = self.pat;
         let repo = self.repo;
@@ -295,22 +274,27 @@ impl GitHubEventStore<'_> {
     }
 }
 
-/// Append-only event upload. Retries branch conflicts; never overwrites different content.
-impl GitHubEventStore<'_> {
-    pub(crate) async fn put_github_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location: self.placed.location(),
-            provider: "GitHub",
-        })?;
-        self.put_checked(checked).await
+impl EventStore for GitHubEventStore<'_> {
+    /// The events in the namespace's folder of the default branch's tree.
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        let root = self.placed.root();
+        Self::event_ids_from_tree(&self.tree_entries(&root).await?, &root)
+            .iter()
+            .map(|raw| Ok(EventId::parse(raw)?))
+            .collect()
     }
 
+    /// A contents answer of 404 is an event the namespace does not hold.
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        self.read_github_event(event_id).await
+    }
+
+    async fn delete_events(&self) -> Result<(), NookError> {
+        self.delete_github_namespace().await
+    }
+
+    /// Append-only event upload. Retries branch conflicts; never overwrites
+    /// different content.
     async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
         let pat = self.pat;
         let repo = self.repo;
@@ -377,7 +361,6 @@ impl GitHubEventStore<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -636,51 +619,6 @@ mod tests {
         ));
         Ok(())
     }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
-        let (identity, _) = SigningIdentity::generate()?;
-        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
-            store_id: &StoreId::parse("store_testtoken11")?,
-            actor_id: &identity.actor_id()?,
-            key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-            payload: GenesisImportPayload {
-                source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                secrets: vec![],
-                password_entries: vec![],
-            },
-            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            signing_key: identity.signing_key(),
-        })?;
-        let bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&event)?.into();
-        let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let store = GitHubEventStore {
-            pat: "",
-            repo: "",
-            placed: &nook_core::PlacedNamespace::vault(
-                nook_core::IdentityId::parse("idn_abcdefghijk")?,
-                nook_core::StoreId::parse("store_abcdefghijk")?,
-            ),
-        };
-        let Err(error) = store
-            .put_github_event_if_absent(&requested_id, &bytes)
-            .await
-        else {
-            anyhow::bail!("mismatched event id must fail before network");
-        };
-        assert!(matches!(
-            error,
-            NookError::Serialization(message) if message.contains("GitHub event id mismatch")
-        ));
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -826,8 +764,8 @@ mod fetch_tests {
             placed: &location,
         };
         assert_eq!(
-            store.list_github_event_ids().await?,
-            [fixture.event_id.to_string()]
+            store.event_ids().await?,
+            BTreeSet::from([fixture.event_id.clone()])
         );
         assert_eq!(stub.calls().len(), 2);
         Ok(())
@@ -853,8 +791,8 @@ mod fetch_tests {
         let stub =
             FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes))])?;
         assert_eq!(
-            store.fetch_github_event(&fixture.event_id).await?,
-            fixture.bytes
+            store.read(&fixture.event_id).await?,
+            RemoteEventRead::Retrieved(fixture.bytes.clone().into())
         );
         drop(stub);
 
@@ -863,7 +801,7 @@ mod fetch_tests {
             FetchRoute::ok("PUT", CONTENTS, r#"{"content":{"sha":"written"}}"#),
         ])?;
         store
-            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert!(stub.calls()[1].starts_with("PUT"));
         drop(stub);
@@ -871,7 +809,7 @@ mod fetch_tests {
         let stub =
             FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes))])?;
         store
-            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert_eq!(stub.calls().len(), 1);
         drop(stub);
@@ -879,14 +817,17 @@ mod fetch_tests {
         let stub = FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(b"other"))])?;
         assert!(
             store
-                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );
         drop(stub);
 
         let _stub = FetchStub::install(vec![FetchRoute::failing("GET", CONTENTS, 404)])?;
-        assert!(store.fetch_github_event(&fixture.event_id).await.is_err());
+        assert_eq!(
+            store.read(&fixture.event_id).await?,
+            RemoteEventRead::Unavailable
+        );
         Ok(())
     }
 
@@ -912,7 +853,7 @@ mod fetch_tests {
             FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes)),
         ])?;
         store
-            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .put_checked(fixture.checked(location.location())?)
             .await?;
         assert_eq!(stub.calls().len(), 3);
         drop(stub);
@@ -924,7 +865,7 @@ mod fetch_tests {
         ])?;
         assert!(
             store
-                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );
@@ -936,7 +877,7 @@ mod fetch_tests {
         ])?;
         assert!(
             store
-                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .put_checked(fixture.checked(location.location())?)
                 .await
                 .is_err()
         );

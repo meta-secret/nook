@@ -55,7 +55,7 @@ impl NookVaultManager {
         &mut self,
         store_id: String,
         connection: &tsify::Ts<crate::NookStorageConnection>,
-    ) -> Result<bool, JsError> {
+    ) -> Result<(), JsError> {
         let connection = connection.decode()?;
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
@@ -86,7 +86,7 @@ impl NookVaultManager {
         &mut self,
         store_id: String,
         handle_id: String,
-    ) -> Result<bool, JsError> {
+    ) -> Result<(), JsError> {
         let store_id = StoreId::parse(&store_id)?;
         let state = self.current_identity_state().await?;
         if !state.removed_vaults.contains(&store_id) {
@@ -101,7 +101,7 @@ impl NookVaultManager {
         let nook_core::VaultPlacement::Filed(placed) =
             folder.placement(&EventLogLocation::Vault(store_id)).await?
         else {
-            return Ok(false);
+            return Ok(());
         };
         Ok(folder.delete_namespace(&placed).await?)
     }

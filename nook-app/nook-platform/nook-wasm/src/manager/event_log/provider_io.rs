@@ -14,6 +14,7 @@ use crate::storage::remote_event::RemoteEventRead;
 
 use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::drive_namespace::DriveNamespace;
+use crate::storage::event_store::EventStore;
 use crate::storage::identity_record;
 use crate::storage::s3::{S3EventStore, S3Storage};
 use nook_core::{
@@ -27,18 +28,6 @@ use super::{
     DriveEventStore, EventId, GitHubEventStore, ICloudEventStore, NookError, NookVaultManager,
     VaultOperation,
 };
-
-impl NookError {
-    fn is_github_event_missing(&self) -> bool {
-        matches!(self, Self::GitHub(message) if message.contains("Event file missing at"))
-    }
-}
-
-impl NookError {
-    fn is_icloud_event_missing(&self) -> bool {
-        matches!(self, Self::ICloud(message) if message.contains("is missing."))
-    }
-}
 
 #[derive(Clone, Copy)]
 enum GenesisContext<'a> {
@@ -228,15 +217,15 @@ impl NookVaultManager {
         let VaultPlacement::Filed(placed) = self.placed_at_current_provider(location).await? else {
             return Ok(BTreeSet::new());
         };
-        let raw_ids = match self.storage.mode {
+        match self.storage.mode {
             StorageMode::Github => {
                 (GitHubEventStore {
                     pat: &self.storage.access_token,
                     repo: &self.storage.remote_ref,
                     placed: &placed,
                 })
-                .list_github_event_ids()
-                .await?
+                .event_ids()
+                .await
             }
             StorageMode::GoogleDrive => {
                 let parent = self.drive_parent_for(&placed).await?;
@@ -245,8 +234,8 @@ impl NookVaultManager {
                     parent: &parent,
                     location,
                 })
-                .list_drive_event_ids()
-                .await?
+                .event_ids()
+                .await
             }
             StorageMode::ICloud => {
                 (ICloudEventStore {
@@ -254,25 +243,21 @@ impl NookVaultManager {
                     target: self.storage.icloud_event_target.target()?,
                     placed: &placed,
                 })
-                .list_icloud_event_ids()
-                .await?
+                .event_ids()
+                .await
             }
-            StorageMode::Local => Vec::new(),
+            StorageMode::Local => Ok(BTreeSet::new()),
             StorageMode::S3 => {
-                return (S3EventStore {
+                (S3EventStore {
                     storage: S3Storage {
                         connection: self.storage.s3_connection.connection()?,
                     },
                     placed: &placed,
                 })
                 .event_ids()
-                .await;
+                .await
             }
-        };
-        raw_ids
-            .into_iter()
-            .map(|raw| EventId::parse(&raw).map_err(NookError::from))
-            .collect()
+        }
     }
 
     pub(in crate::manager) async fn read_provider_event_at(
@@ -285,20 +270,13 @@ impl NookVaultManager {
         };
         match self.storage.mode {
             StorageMode::Github => {
-                match (GitHubEventStore {
+                (GitHubEventStore {
                     pat: &self.storage.access_token,
                     repo: &self.storage.remote_ref,
                     placed: &placed,
                 })
-                .fetch_github_event(event_id)
+                .read(event_id)
                 .await
-                {
-                    Ok(bytes) => Ok(RemoteEventRead::Retrieved(bytes.into())),
-                    Err(error) if error.is_github_event_missing() => {
-                        Ok(RemoteEventRead::Unavailable)
-                    }
-                    Err(err) => Err(err),
-                }
             }
             StorageMode::GoogleDrive => {
                 let parent = self.drive_parent_for(&placed).await?;
@@ -307,24 +285,17 @@ impl NookVaultManager {
                     parent: &parent,
                     location,
                 })
-                .read_drive_event(event_id)
+                .read(event_id)
                 .await
             }
             StorageMode::ICloud => {
-                match (ICloudEventStore {
+                (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: self.storage.icloud_event_target.target()?,
                     placed: &placed,
                 })
-                .fetch_icloud_event(event_id)
+                .read(event_id)
                 .await
-                {
-                    Ok(bytes) => Ok(RemoteEventRead::Retrieved(bytes.into())),
-                    Err(error) if error.is_icloud_event_missing() => {
-                        Ok(RemoteEventRead::Unavailable)
-                    }
-                    Err(err) => Err(err),
-                }
             }
             StorageMode::Local => Ok(RemoteEventRead::Unavailable),
             StorageMode::S3 => {
@@ -354,8 +325,8 @@ impl NookVaultManager {
             StorageMode::S3 => "S3",
         };
         // A malformed event is refused before any network call, placement
-        // included.
-        CheckedEventWrite::parse(CheckedEventWriteRequest {
+        // included; the checked event is what the store writes.
+        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
             bytes,
             event_id,
             location,
@@ -369,7 +340,7 @@ impl NookVaultManager {
                     repo: &self.storage.remote_ref,
                     placed: &placed,
                 })
-                .put_github_event_if_absent(event_id, bytes)
+                .put_checked(checked)
                 .await
             }
             StorageMode::GoogleDrive => {
@@ -379,9 +350,8 @@ impl NookVaultManager {
                     parent: &parent,
                     location,
                 })
-                .put_drive_event_if_absent(event_id, bytes)
+                .put_checked(checked)
                 .await
-                .map(|_| ())
             }
             StorageMode::ICloud => {
                 (ICloudEventStore {
@@ -389,7 +359,7 @@ impl NookVaultManager {
                     target: self.storage.icloud_event_target.target()?,
                     placed: &placed,
                 })
-                .put_icloud_event_if_absent(event_id, bytes)
+                .put_checked(checked)
                 .await
             }
             StorageMode::Local => Ok(()),
@@ -400,57 +370,61 @@ impl NookVaultManager {
                     },
                     placed: &placed,
                 })
-                .put_if_absent(event_id, bytes)
+                .put_checked(checked)
                 .await
             }
         }
     }
 
     /// Delete one namespace (a vault deleted everywhere) at the prepared
-    /// provider. Returns whether anything was there.
+    /// provider. A namespace the provider does not hold leaves nothing to do.
     pub(in crate::manager) async fn delete_provider_namespace_at(
         &self,
         location: &EventLogLocation,
-    ) -> Result<bool, NookError> {
+    ) -> Result<(), NookError> {
         let VaultPlacement::Filed(placed) = self.placed_at_current_provider(location).await? else {
-            return Ok(false);
+            return Ok(());
         };
         match self.storage.mode {
-            StorageMode::Github => Ok((GitHubEventStore {
-                pat: &self.storage.access_token,
-                repo: &self.storage.remote_ref,
-                placed: &placed,
-            })
-            .delete_github_namespace()
-            .await?
-                > 0),
-            StorageMode::GoogleDrive => {
-                (DriveNamespace {
-                    token: &self.storage.access_token,
-                    parent: self.storage.drive_event_parent.parent()?,
+            StorageMode::Github => {
+                (GitHubEventStore {
+                    pat: &self.storage.access_token,
+                    repo: &self.storage.remote_ref,
                     placed: &placed,
                 })
-                .delete()
+                .delete_events()
                 .await
             }
-            StorageMode::ICloud => Ok((ICloudEventStore {
-                web_auth_token: &self.storage.access_token,
-                target: self.storage.icloud_event_target.target()?,
-                placed: &placed,
-            })
-            .delete_icloud_namespace()
-            .await?
-                > 0),
-            StorageMode::Local => Ok(false),
-            StorageMode::S3 => Ok((S3EventStore {
-                storage: S3Storage {
-                    connection: self.storage.s3_connection.connection()?,
-                },
-                placed: &placed,
-            })
-            .delete_events()
-            .await?
-                > 0),
+            StorageMode::GoogleDrive => {
+                let parent = self.drive_parent_for(&placed).await?;
+                (DriveEventStore {
+                    token: &self.storage.access_token,
+                    parent: &parent,
+                    location,
+                })
+                .delete_events()
+                .await
+            }
+            StorageMode::ICloud => {
+                (ICloudEventStore {
+                    web_auth_token: &self.storage.access_token,
+                    target: self.storage.icloud_event_target.target()?,
+                    placed: &placed,
+                })
+                .delete_events()
+                .await
+            }
+            StorageMode::Local => Ok(()),
+            StorageMode::S3 => {
+                (S3EventStore {
+                    storage: S3Storage {
+                        connection: self.storage.s3_connection.connection()?,
+                    },
+                    placed: &placed,
+                })
+                .delete_events()
+                .await
+            }
         }
     }
 
@@ -806,23 +780,6 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn provider_missing_event_errors_are_classified_by_their_storage() {
-        assert!(
-            NookError::GitHub("Event file missing at path".to_owned()).is_github_event_missing()
-        );
-        assert!(!NookError::GitHub("provider unavailable".to_owned()).is_github_event_missing());
-        assert!(NookError::ICloud("event is missing.".to_owned()).is_icloud_event_missing());
-        assert!(!NookError::ICloud("provider unavailable".to_owned()).is_icloud_event_missing());
-    }
 
     #[wasm_bindgen_test]
     #[cfg_attr(

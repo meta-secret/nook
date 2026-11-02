@@ -11,11 +11,12 @@ use futures_util::{StreamExt, TryStreamExt, stream};
 use nook_core::GenesisImportRequest;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str;
 
-use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest, ParsedLogEvent};
+use super::checked_event_write::{CheckedEventWrite, ParsedLogEvent};
 use super::drive::wire::{CreatedTime, FileIdentity, FileName, PageCompletion};
+use super::event_store::{EventStore, StoredEventRead};
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
 
@@ -67,10 +68,7 @@ struct ListedEventRead<'a> {
     file_ids: Vec<String>,
 }
 
-/// How many Drive downloads one namespace keeps in flight at once.
-const DRIVE_READ_CONCURRENCY: usize = 8;
-
-use nook_core::{DriveEventParent, EventId, EventLogLocation};
+use nook_core::{DriveEventParent, EventId, EventLogLocation, LocalEventWrite};
 
 /// Event IO under an already resolved namespace parent; see `DriveNamespace`.
 pub(crate) struct DriveEventStore<'a> {
@@ -120,7 +118,6 @@ struct DriveEventMetadata<'a> {
     app_properties: DriveEventProperties,
 }
 
-const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 const SHA256_BASE64URL_LEN: usize = 43;
 
 impl DriveEventStore<'_> {
@@ -246,15 +243,6 @@ impl DriveEventStore<'_> {
         parent.folder_id.as_str()
     }
 
-    pub(crate) async fn list_drive_event_ids(&self) -> Result<Vec<String>, NookError> {
-        Ok(self
-            .list_drive_events()
-            .await?
-            .into_iter()
-            .map(|listed| listed.event_id)
-            .collect())
-    }
-
     /// When Drive created each event file in this namespace: one entry per
     /// event, read from the listing alone. Duplicate files of one event
     /// count once.
@@ -317,9 +305,7 @@ impl DriveEventStore<'_> {
     /// Every event in this namespace, from one listing: each event downloads
     /// from the files the listing names, several at a time, instead of one
     /// name lookup and one download per event in turn.
-    pub(crate) async fn read_drive_events(
-        &self,
-    ) -> Result<Vec<(EventId, RemoteEventRead)>, NookError> {
+    async fn read_drive_events(&self) -> Result<Vec<StoredEventRead>, NookError> {
         let client = Client::new();
         stream::iter(Self::files_by_event(self.list_drive_events().await?))
             .map(|(raw_id, file_ids)| {
@@ -329,7 +315,7 @@ impl DriveEventStore<'_> {
                     file_ids,
                 })
             })
-            .buffered(DRIVE_READ_CONCURRENCY)
+            .buffered(<Self as EventStore>::READ_CONCURRENCY)
             .try_collect()
             .await
     }
@@ -337,7 +323,7 @@ impl DriveEventStore<'_> {
     async fn read_listed_event(
         &self,
         read: ListedEventRead<'_>,
-    ) -> Result<(EventId, RemoteEventRead), NookError> {
+    ) -> Result<StoredEventRead, NookError> {
         let event_id = EventId::parse(&read.raw_id)?;
         let token = self.token.trim();
         let mut candidates = Vec::with_capacity(read.file_ids.len());
@@ -349,20 +335,13 @@ impl DriveEventStore<'_> {
             location: self.location,
             candidates,
         })?;
-        Ok((event_id, selected))
+        Ok(StoredEventRead {
+            event_id,
+            read: selected,
+        })
     }
 
-    pub(crate) async fn fetch_drive_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
-        match self.read_drive_event(event_id).await? {
-            RemoteEventRead::Retrieved(bytes) => Ok(bytes.into()),
-            RemoteEventRead::Unavailable => Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned())),
-        }
-    }
-
-    pub(crate) async fn read_drive_event(
-        &self,
-        event_id: &EventId,
-    ) -> Result<RemoteEventRead, NookError> {
+    async fn read_drive_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let token = self.token;
         let parent = self.parent;
         let token = token.trim();
@@ -458,36 +437,23 @@ impl DriveEventStore<'_> {
         Ok(bytes.to_vec())
     }
 
-    pub(crate) async fn put_drive_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<String, NookError> {
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location: self.location,
-            provider: "Drive",
-        })?;
-        self.put_checked(checked).await
-    }
-
-    async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<String, NookError> {
+    /// The same event already stored is a success; other bytes fail. The
+    /// created file's id is required in Drive's answer.
+    async fn put_drive_event(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
         let token = self.token.trim();
         let parent = self.parent;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
-        match self.fetch_drive_event(event_id).await {
-            Ok(existing) if checked.matches(&existing) => {
-                return Ok(String::new());
+        match self.read_drive_event(event_id).await? {
+            RemoteEventRead::Retrieved(existing) if checked.matches(existing.as_ref()) => {
+                return Ok(());
             }
-            Ok(_) => {
+            RemoteEventRead::Retrieved(_) => {
                 return Err(NookError::Drive(
                     "Drive event path already exists with different bytes.".to_owned(),
                 ));
             }
-            Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
-            Err(err) => return Err(err),
+            RemoteEventRead::Unavailable => {}
         }
         let file_name = format!("{}.yaml", event_id.encoded_digest());
         let content = str::from_utf8(bytes)
@@ -518,7 +484,7 @@ impl DriveEventStore<'_> {
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         match parsed.id {
-            FileIdentity::Reported(id) => Ok(id),
+            FileIdentity::Reported(_) => Ok(()),
             FileIdentity::Unreported => Err(NookError::Drive(
                 "Drive event create response missing file id.".to_owned(),
             )),
@@ -552,6 +518,57 @@ impl DriveEventStore<'_> {
         body.push_str(boundary);
         body.push_str("--");
         Ok((boundary.to_owned(), body))
+    }
+}
+
+impl EventStore for DriveEventStore<'_> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        self.list_drive_events()
+            .await?
+            .into_iter()
+            .map(|listed| Ok(EventId::parse(&listed.event_id)?))
+            .collect()
+    }
+
+    /// No file of the event's name in the namespace folder reads as an
+    /// event the namespace does not hold.
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        self.read_drive_event(event_id).await
+    }
+
+    async fn put_checked(&self, event: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        self.put_drive_event(event).await
+    }
+
+    /// Delete the namespace folder, which is this store's parent.
+    async fn delete_events(&self) -> Result<(), NookError> {
+        let response = Client::new()
+            .delete(format!(
+                "https://www.googleapis.com/drive/v3/files/{}",
+                urlencoding::encode(self.parent.folder_id.as_str())
+            ))
+            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .query(&[("supportsAllDrives", "true")])
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Google Drive namespace deletion failed with status {}",
+                response.status()
+            )));
+        }
+        Ok(())
+    }
+
+    /// One listing and several downloads at once, instead of one name lookup
+    /// and one download per event.
+    async fn events(&self) -> Result<Vec<LocalEventWrite>, NookError> {
+        Ok(self
+            .read_drive_events()
+            .await?
+            .into_iter()
+            .flat_map(StoredEventRead::into_events)
+            .collect())
     }
 }
 
@@ -720,34 +737,6 @@ mod tests {
         assert!(body.contains(&format!("\"event_id\":\"{}\"", event_id)));
         assert!(body.contains("Content-Type: application/x-yaml"));
         assert!(body.contains("\r\n\r\nevent: yaml\r\n--nook_event_boundary--"));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
-        let EventFixture(_, _, bytes) = EventFixture::new()?;
-        let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let store = DriveEventStore {
-            token: "",
-            parent: &DriveEventParent::shared_folder_id("vault-folder"),
-            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-                "store_abcdefghijk",
-            )?),
-        };
-        let Err(error) = store.put_drive_event_if_absent(&requested_id, &bytes).await else {
-            anyhow::bail!("mismatched event id must fail before network");
-        };
-        assert!(matches!(
-            error,
-            NookError::Serialization(message) if message.contains("Drive event id mismatch")
-        ));
         Ok(())
     }
 

@@ -462,7 +462,7 @@ impl OpenedLocalFolder {
     pub(crate) async fn delete_namespace(
         &self,
         placed: &nook_core::PlacedNamespace,
-    ) -> Result<bool, NookError> {
+    ) -> Result<(), NookError> {
         let root = placed.root();
         let parts = root.split('/').collect::<Vec<_>>();
         let [parents @ .., name, _events] = parts.as_slice() else {
@@ -473,7 +473,7 @@ impl OpenedLocalFolder {
         let mut current = FolderDirectory::Opened(self.root.clone());
         for part in parents {
             let FolderDirectory::Opened(parent) = current else {
-                return Ok(false);
+                return Ok(());
             };
             current = FolderObject::new(&parent)
                 .child_directory(ChildLookupRequest {
@@ -483,7 +483,7 @@ impl OpenedLocalFolder {
                 .await?;
         }
         let FolderDirectory::Opened(parent) = current else {
-            return Ok(false);
+            return Ok(());
         };
         if let FolderDirectory::Unavailable = FolderObject::new(&parent)
             .child_directory(ChildLookupRequest {
@@ -492,7 +492,7 @@ impl OpenedLocalFolder {
             })
             .await?
         {
-            return Ok(false);
+            return Ok(());
         }
         let FolderMethod::Callable(function) = FolderObject::new(&parent).method("removeEntry")?
         else {
@@ -519,7 +519,7 @@ impl OpenedLocalFolder {
         }
         .resolve("removeEntry failed")
         .await?;
-        Ok(true)
+        Ok(())
     }
 }
 

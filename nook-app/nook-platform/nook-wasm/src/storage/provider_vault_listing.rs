@@ -25,9 +25,10 @@ use nook_core::{
 
 use futures_util::{StreamExt, TryStreamExt, stream};
 
+use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use super::drive_events::DriveEventStore;
 use super::drive_namespace::{DriveNamespace, ListedNamespaceFolder};
-use super::remote_event::RemoteEventRead;
+use super::event_store::EventStore;
 use crate::{NookDatabase, NookError};
 
 /// The vault namespaces under one Google Drive Nook root.
@@ -46,6 +47,9 @@ const FOLDER_CONCURRENCY: usize = 4;
 pub(crate) trait ProviderLocation {
     /// One namespace as the location lists it.
     type Namespace;
+
+    /// Names the location in a refused write ("Drive event parse: …").
+    const PROVIDER: &'static str;
 
     /// Every namespace of one kind at the location.
     async fn namespaces(
@@ -72,13 +76,8 @@ pub(crate) trait ProviderLocation {
     /// The namespace of one identity's control log the location holds.
     async fn identity_log(&self, identity_id: &IdentityId) -> Result<Self::Namespace, NookError>;
 
-    /// Write one event into a namespace the location holds.
-    async fn put_event(
-        &self,
-        namespace: &Self::Namespace,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError>;
+    /// Write one checked event into a namespace the location holds.
+    async fn put_event(&self, write: NamespaceWrite<'_, Self::Namespace>) -> Result<(), NookError>;
 
     /// Every vault namespace with the vault it holds.
     async fn vaults(&self) -> Result<Vec<(StoreId, Self::Namespace)>, NookError> {
@@ -159,15 +158,27 @@ pub(crate) trait ProviderLocation {
             .collect())
     }
 
-    /// Write one event into an identity's log the location already holds.
+    /// Write one event into an identity's log the location already holds. A
+    /// malformed event is refused before any request.
     async fn put_identity_event(
         &self,
         identity_id: &IdentityId,
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
+        let location = EventLogLocation::Identity(identity_id.clone());
+        let event = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location: &location,
+            provider: Self::PROVIDER,
+        })?;
         let log = self.identity_log(identity_id).await?;
-        self.put_event(&log, event_id, bytes).await
+        self.put_event(NamespaceWrite {
+            namespace: &log,
+            event,
+        })
+        .await
     }
 
     /// Every vault namespace with the identity filing it and its events,
@@ -214,8 +225,15 @@ pub(crate) trait ProviderLocation {
     }
 }
 
+/// One checked event and the namespace it goes into.
+pub(crate) struct NamespaceWrite<'a, N> {
+    pub(crate) namespace: &'a N,
+    pub(crate) event: CheckedEventWrite<'a>,
+}
+
 impl ProviderLocation for DriveVaultListing<'_> {
     type Namespace = ListedNamespaceFolder;
+    const PROVIDER: &'static str = "Drive";
 
     async fn namespaces(
         &self,
@@ -260,20 +278,13 @@ impl ProviderLocation for DriveVaultListing<'_> {
         &self,
         folder: &ListedNamespaceFolder,
     ) -> Result<Vec<LocalEventWrite>, NookError> {
-        let read = DriveEventStore {
+        DriveEventStore {
             token: self.token,
             parent: &folder.folder,
             location: folder.placed.location(),
         }
-        .read_drive_events()
-        .await?;
-        Ok(read
-            .into_iter()
-            .filter_map(|(event_id, event)| match event {
-                RemoteEventRead::Retrieved(bytes) => Some(LocalEventWrite { event_id, bytes }),
-                RemoteEventRead::Unavailable => None,
-            })
-            .collect())
+        .events()
+        .await
     }
 
     /// The one folder under the root that holds the identity's control log.
@@ -301,18 +312,15 @@ impl ProviderLocation for DriveVaultListing<'_> {
 
     async fn put_event(
         &self,
-        folder: &ListedNamespaceFolder,
-        event_id: &EventId,
-        bytes: &[u8],
+        write: NamespaceWrite<'_, ListedNamespaceFolder>,
     ) -> Result<(), NookError> {
         DriveEventStore {
             token: self.token,
-            parent: &folder.folder,
-            location: folder.placed.location(),
+            parent: &write.namespace.folder,
+            location: write.namespace.placed.location(),
         }
-        .put_drive_event_if_absent(event_id, bytes)
-        .await?;
-        Ok(())
+        .put_checked(write.event)
+        .await
     }
 }
 
@@ -369,15 +377,23 @@ impl DriveVaultListing<'_> {
         }
     }
 
-    /// Write one event into a vault's subfolder the root already holds.
+    /// Write one checked event into a vault's subfolder the root already
+    /// holds.
     pub(crate) async fn put_vault_event(
         &self,
-        store_id: &StoreId,
-        event_id: &EventId,
-        bytes: &[u8],
+        event: CheckedEventWrite<'_>,
     ) -> Result<(), NookError> {
+        let EventLogLocation::Vault(store_id) = event.location() else {
+            return Err(NookError::Drive(
+                "Only a vault's events go into a vault folder.".to_owned(),
+            ));
+        };
         let folder = self.vault_folder(store_id).await?;
-        self.put_event(&folder, event_id, bytes).await
+        self.put_event(NamespaceWrite {
+            namespace: &folder,
+            event,
+        })
+        .await
     }
 
     /// One vault's events, read without its keys.

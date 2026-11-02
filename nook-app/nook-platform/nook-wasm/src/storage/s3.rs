@@ -20,11 +20,13 @@ use js_sys::Date;
 use nook_core::{
     EventId, EventLogNamespaceKind, EventStorageBytes, PlacedNamespace, S3Connection,
     S3EventAddress, S3ExistingEvent, S3HttpRequest, S3IdentityFolder, S3ListObjects, S3ListPage,
-    S3ListedEvent, S3ListedKey, S3ListedNamespace, S3ListingContinuation, S3ObjectDeletion,
-    S3ObjectRead, S3ObjectUpload, S3ObjectWrite, S3RequestSigner, S3Response,
+    S3ListedEvent, S3ListedKey, S3ListedNamespace, S3ListingContinuation, S3ObjectRead,
+    S3ObjectUpload, S3ObjectWrite, S3RequestSigner, S3Response,
 };
 use reqwest::{Client, Request};
 
+use super::checked_event_write::CheckedEventWrite;
+use super::event_store::EventStore;
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
 
@@ -139,10 +141,10 @@ pub(crate) struct S3EventStore<'a> {
     pub(crate) placed: &'a PlacedNamespace,
 }
 
-impl S3EventStore<'_> {
+impl EventStore for S3EventStore<'_> {
     /// The events the namespace holds, read from the event keys directly in
     /// its `events/` folder.
-    pub(crate) async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
         let connection = self.storage.connection;
         let listed = self
             .storage
@@ -164,7 +166,7 @@ impl S3EventStore<'_> {
     }
 
     /// One event's stored bytes, or that the namespace does not hold it.
-    pub(crate) async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let request = self.storage.signer().get_object(S3EventAddress {
             placed: self.placed,
             event_id,
@@ -177,16 +179,13 @@ impl S3EventStore<'_> {
 
     /// Create one event object. A key already taken is read back: the same
     /// bytes mean the event is stored, any other bytes fail the write.
-    pub(crate) async fn put_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
+    async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        let event_id = checked.event_id();
         let event = S3EventAddress {
             placed: self.placed,
             event_id,
         };
-        let requested = EventStorageBytes::from(bytes.to_vec());
+        let requested = EventStorageBytes::from(checked.bytes().to_vec());
         let request = self.storage.signer().put_object_if_absent(S3ObjectUpload {
             event,
             body: &requested,
@@ -206,20 +205,17 @@ impl S3EventStore<'_> {
         }
     }
 
-    /// Delete every event the namespace holds; returns how many went.
-    pub(crate) async fn delete_events(&self) -> Result<usize, NookError> {
-        let mut outcomes = Vec::new();
+    /// Delete every event the namespace holds. An object already gone is
+    /// deleted as well.
+    async fn delete_events(&self) -> Result<(), NookError> {
         for event_id in self.event_ids().await? {
             let request = self.storage.signer().delete_object(S3EventAddress {
                 placed: self.placed,
                 event_id: &event_id,
             })?;
-            outcomes.push(S3Storage::send(request).await?.into_object_deletion()?);
+            S3Storage::send(request).await?.into_object_deletion()?;
         }
-        Ok(outcomes
-            .iter()
-            .filter(|outcome| **outcome == S3ObjectDeletion::Deleted)
-            .count())
+        Ok(())
     }
 }
 
@@ -227,24 +223,28 @@ impl S3EventStore<'_> {
 mod browser_tests {
     use super::{S3EventStore, S3Storage};
     use crate::NookError;
+    use crate::storage::checked_event_write::tests::EventFixture;
+    use crate::storage::event_store::EventStore;
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use crate::storage::remote_event::RemoteEventRead;
     use crate::test_fixtures::WasmFixture;
     use nook_core::{
-        EventId, EventLogNamespaceKind, IdentityId, PlacedNamespace, S3Connection,
-        S3RequestFailure, StoreId,
+        EventLogNamespaceKind, IdentityId, PlacedNamespace, S3Connection, S3RequestFailure, StoreId,
     };
+    use std::str;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    /// The digest of an event the listing names but no object holds.
     const DIGEST: &str = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
-    const EVENTS: &str = "/nook-dev/e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events";
+    const EVENTS: &str = "/nook-dev/e2e/meta-secret-nook/idn_abcdefghijk/store_testtoken11/events";
+    const KEYS: &str = "e2e/meta-secret-nook/idn_abcdefghijk/store_testtoken11/events";
 
     struct Fixture {
         connection: S3Connection,
         vault: PlacedNamespace,
-        event_id: EventId,
+        event: EventFixture,
     }
 
     impl Fixture {
@@ -253,10 +253,18 @@ mod browser_tests {
                 connection: WasmFixture::s3_connection()?,
                 vault: PlacedNamespace::vault(
                     IdentityId::parse("idn_abcdefghijk")?,
-                    StoreId::parse("store_abcdefghijk")?,
+                    StoreId::parse("store_testtoken11")?,
                 ),
-                event_id: EventId::parse(&format!("sha256u:{DIGEST}"))?,
+                event: EventFixture::new()?,
             })
+        }
+
+        fn digest(&self) -> &str {
+            self.event.event_id.encoded_digest()
+        }
+
+        fn body(&self) -> anyhow::Result<&str> {
+            Ok(str::from_utf8(&self.event.bytes)?)
         }
 
         fn store(&self) -> S3EventStore<'_> {
@@ -296,8 +304,8 @@ mod browser_tests {
     )]
     async fn an_s3_namespace_lists_reads_and_settles_its_event_objects() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
-        let key =
-            format!("e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/{DIGEST}.yaml");
+        let digest = fixture.digest();
+        let key = format!("{KEYS}/{digest}.yaml");
         let stub = FetchStub::install(vec![
             answer(
                 "GET",
@@ -311,21 +319,21 @@ mod browser_tests {
             ),
             answer(
                 "GET",
-                &format!("{EVENTS}/{DIGEST}.yaml"),
+                &format!("{EVENTS}/{digest}.yaml"),
                 200,
-                "event: first\n",
+                fixture.body()?,
             ),
             answer(
                 "PUT",
-                &format!("{EVENTS}/{DIGEST}.yaml"),
+                &format!("{EVENTS}/{digest}.yaml"),
                 412,
                 "<Error><Code>PreconditionFailed</Code></Error>",
             ),
             answer(
                 "GET",
-                &format!("{EVENTS}/{DIGEST}.yaml"),
+                &format!("{EVENTS}/{digest}.yaml"),
                 200,
-                "event: first\n",
+                fixture.body()?,
             ),
         ])
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -336,18 +344,18 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert_eq!(
             ids.into_iter().collect::<Vec<_>>(),
-            vec![fixture.event_id.clone()]
+            vec![fixture.event.event_id.clone()]
         );
         assert_eq!(
             store
-                .read(&fixture.event_id)
+                .read(&fixture.event.event_id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            RemoteEventRead::Retrieved(b"event: first\n".to_vec().into())
+            RemoteEventRead::Retrieved(fixture.event.bytes.clone().into())
         );
         // A taken key holding the same bytes is the event already stored.
         store
-            .put_if_absent(&fixture.event_id, b"event: first\n")
+            .put_checked(fixture.event.checked(fixture.vault.location())?)
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let calls = stub.calls();
@@ -368,6 +376,7 @@ mod browser_tests {
     )]
     async fn a_refused_key_and_diverged_bytes_fail_without_the_request() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
+        let digest = fixture.digest();
         let _stub = FetchStub::install(vec![
             answer(
                 "GET",
@@ -375,16 +384,16 @@ mod browser_tests {
                 403,
                 "<Error><Code>AccessDenied</Code></Error>",
             ),
-            answer("PUT", &format!("{EVENTS}/{DIGEST}.yaml"), 412, ""),
+            answer("PUT", &format!("{EVENTS}/{digest}.yaml"), 412, ""),
             answer(
                 "GET",
-                &format!("{EVENTS}/{DIGEST}.yaml"),
+                &format!("{EVENTS}/{digest}.yaml"),
                 200,
                 "event: other\n",
             ),
             answer(
                 "GET",
-                &format!("{EVENTS}/{DIGEST}.yaml"),
+                &format!("{EVENTS}/{digest}.yaml"),
                 404,
                 "<Error><Code>NoSuchKey</Code></Error>",
             ),
@@ -400,7 +409,7 @@ mod browser_tests {
             "{refused:?}"
         );
         let diverged = store
-            .put_if_absent(&fixture.event_id, b"event: first\n")
+            .put_checked(fixture.event.checked(fixture.vault.location())?)
             .await;
         assert!(
             matches!(
@@ -413,7 +422,7 @@ mod browser_tests {
         );
         assert_eq!(
             store
-                .read(&fixture.event_id)
+                .read(&fixture.event.event_id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             RemoteEventRead::Unavailable
@@ -429,30 +438,75 @@ mod browser_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn deleting_a_namespace_deletes_only_its_event_objects() -> anyhow::Result<()> {
+    async fn every_listed_event_is_read_and_a_vanished_one_left_out() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
-        let key =
-            format!("e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/{DIGEST}.yaml");
+        let digest = fixture.digest();
         let stub = FetchStub::install(vec![
             answer(
                 "GET",
                 "list-type=2",
                 200,
                 &listing(&[
-                    key.clone(),
-                    "e2e/meta-secret-nook/idn_abcdefghijk/store_abcdefghijk/events/../x.yaml"
-                        .to_owned(),
+                    format!("{KEYS}/{digest}.yaml"),
+                    format!("{KEYS}/{DIGEST}.yaml"),
                 ]),
             ),
-            answer("DELETE", &format!("{EVENTS}/{DIGEST}.yaml"), 204, ""),
+            answer(
+                "GET",
+                &format!("{EVENTS}/{digest}.yaml"),
+                200,
+                fixture.body()?,
+            ),
+            answer(
+                "GET",
+                &format!("{EVENTS}/{DIGEST}.yaml"),
+                404,
+                "<Error><Code>NoSuchKey</Code></Error>",
+            ),
         ])
         .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let deleted = fixture
+        let events = fixture
+            .store()
+            .events()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert_eq!(events.len(), 1);
+        assert!(
+            events
+                .iter()
+                .all(|event| event.event_id == fixture.event.event_id)
+        );
+        assert_eq!(stub.calls().len(), 3);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn deleting_a_namespace_deletes_only_its_event_objects() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let digest = fixture.digest();
+        let key = format!("{KEYS}/{digest}.yaml");
+        let stub = FetchStub::install(vec![
+            answer(
+                "GET",
+                "list-type=2",
+                200,
+                &listing(&[key.clone(), format!("{KEYS}/../x.yaml")]),
+            ),
+            answer("DELETE", &format!("{EVENTS}/{digest}.yaml"), 204, ""),
+        ])
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        fixture
             .store()
             .delete_events()
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
-        assert_eq!(deleted, 1);
         // The listed `..` key is never echoed into a request.
         let calls = stub.calls();
         assert_eq!(

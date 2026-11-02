@@ -13,14 +13,17 @@
 //! event. Nothing is decrypted.
 
 use nook_core::{
-    EventError, EventId, EventLogNamespaceKind, IdentityId, LocalEventWrite, PlacedNamespace,
+    EventError, EventLogNamespaceKind, IdentityId, LocalEventWrite, PlacedNamespace,
     ProviderVaultObservation, StoreId,
 };
 
 use super::{S3EventStore, S3Storage};
 use crate::NookError;
-use crate::storage::provider_vault_listing::{CountedVaultNamespace, ProviderLocation};
-use crate::storage::remote_event::RemoteEventRead;
+use crate::storage::provider_vault_listing::{
+    CountedVaultNamespace, NamespaceWrite, ProviderLocation,
+};
+
+use crate::storage::event_store::EventStore;
 
 /// The namespaces at one S3 location.
 #[derive(Clone, Copy)]
@@ -30,6 +33,7 @@ pub(crate) struct S3VaultListing<'a> {
 
 impl ProviderLocation for S3VaultListing<'_> {
     type Namespace = PlacedNamespace;
+    const PROVIDER: &'static str = "S3";
 
     async fn namespaces(
         &self,
@@ -71,17 +75,12 @@ impl ProviderLocation for S3VaultListing<'_> {
     }
 
     async fn events(&self, placed: &PlacedNamespace) -> Result<Vec<LocalEventWrite>, NookError> {
-        let store = S3EventStore {
+        S3EventStore {
             storage: self.storage,
             placed,
-        };
-        let mut events = Vec::new();
-        for event_id in store.event_ids().await? {
-            if let RemoteEventRead::Retrieved(bytes) = store.read(&event_id).await? {
-                events.push(LocalEventWrite { event_id, bytes });
-            }
         }
-        Ok(events)
+        .events()
+        .await
     }
 
     /// The identity's log, which the location holds only with an event in it.
@@ -99,17 +98,12 @@ impl ProviderLocation for S3VaultListing<'_> {
         }
     }
 
-    async fn put_event(
-        &self,
-        placed: &PlacedNamespace,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
+    async fn put_event(&self, write: NamespaceWrite<'_, PlacedNamespace>) -> Result<(), NookError> {
         S3EventStore {
             storage: self.storage,
-            placed,
+            placed: write.namespace,
         }
-        .put_if_absent(event_id, bytes)
+        .put_checked(write.event)
         .await
     }
 }

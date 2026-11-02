@@ -121,9 +121,9 @@ impl GitHubEventStore<'_> {
             .collect()
     }
 
-    /// Delete every file of this namespace in one commit. Returns how many
-    /// went; nothing to do when the namespace holds none.
-    pub(crate) async fn delete_github_namespace(&self) -> Result<usize, NookError> {
+    /// Delete every file of this namespace in one commit; nothing to do when
+    /// the namespace holds none.
+    pub(crate) async fn delete_github_namespace(&self) -> Result<(), NookError> {
         let client = Client::new();
         let repo: RepoInfo = Self::github_json(self.github_api(GitHubCall {
             client: &client,
@@ -158,7 +158,7 @@ impl GitHubEventStore<'_> {
         let root = self.placed.root();
         let paths = Self::namespace_paths(&listing.tree, &root);
         if paths.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
         let tree: ShaObject = Self::github_json(
             self.github_api(GitHubCall {
@@ -206,7 +206,7 @@ impl GitHubEventStore<'_> {
             }),
         )
         .await?;
-        Ok(paths.len())
+        Ok(())
     }
 }
 
@@ -330,14 +330,13 @@ mod fetch_tests {
             ),
         ]);
         let stub = FetchStub::install(routes)?;
-        let deleted = GitHubEventStore {
+        GitHubEventStore {
             pat: " pat ",
             repo: "owner/repo",
             placed: &location,
         }
         .delete_github_namespace()
         .await?;
-        assert_eq!(deleted, 2);
         let calls = stub.calls();
         assert_eq!(calls.len(), 7);
         assert!(calls[6].starts_with("PATCH"));
@@ -360,7 +359,7 @@ mod fetch_tests {
             placed: &location,
         };
         let stub = FetchStub::install(head_routes(r#"{"truncated":false,"tree":[]}"#))?;
-        assert_eq!(store.delete_github_namespace().await?, 0);
+        store.delete_github_namespace().await?;
         assert!(stub.calls().iter().all(|call| call.starts_with("GET")));
         drop(stub);
 

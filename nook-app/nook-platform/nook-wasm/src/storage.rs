@@ -17,6 +17,7 @@ pub(crate) mod drive_events;
 pub(crate) mod drive_namespace;
 pub(crate) mod drive_shared;
 pub(crate) mod event_db;
+pub(crate) mod event_store;
 pub(crate) mod extension_state;
 pub(crate) mod github;
 pub(crate) mod github_events;

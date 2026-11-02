@@ -146,8 +146,8 @@ impl ICloudEventStore<'_> {
         Ok(placed)
     }
 
-    /// Delete every record of this store's log. Returns how many went.
-    pub(crate) async fn delete_icloud_namespace(&self) -> Result<usize, NookError> {
+    /// Delete every record of this store's log.
+    pub(super) async fn delete_icloud_namespace(&self) -> Result<(), NookError> {
         let token = nook_core::OauthAccessToken::parse(self.web_auth_token)?;
         let namespace = self.namespace();
         let records = Self::query_records(RecordQuery {
@@ -199,7 +199,7 @@ impl ICloudEventStore<'_> {
             deleted = records.len(),
             "CloudKit namespace deleted"
         );
-        Ok(records.len())
+        Ok(())
     }
 }
 
@@ -314,7 +314,7 @@ mod fetch_tests {
             FetchRoute::ok("POST", QUERY, &records),
             FetchRoute::ok("POST", MODIFY, r#"{"records":[]}"#),
         ])?;
-        assert_eq!(store.delete_icloud_namespace().await?, 2);
+        store.delete_icloud_namespace().await?;
         assert!(stub.calls()[1].contains(MODIFY));
         drop(stub);
 
@@ -330,7 +330,7 @@ mod fetch_tests {
         drop(stub);
 
         let stub = FetchStub::install(vec![FetchRoute::ok("POST", QUERY, r#"{"records":[]}"#)])?;
-        assert_eq!(store.delete_icloud_namespace().await?, 0);
+        store.delete_icloud_namespace().await?;
         assert_eq!(stub.calls().len(), 1);
         Ok(())
     }

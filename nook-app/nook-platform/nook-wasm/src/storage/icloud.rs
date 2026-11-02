@@ -11,9 +11,13 @@ use reqwest::Client;
 use std::collections;
 use std::str;
 
+use super::checked_event_write::CheckedEventWrite;
+use super::event_store::EventStore;
+use super::remote_event::RemoteEventRead;
 use crate::NookError;
 use nook_core::{EventId, ICloudShareRole, ICloudSharedTarget, PlacedNamespace};
 use serde::Serialize;
+use std::collections::BTreeSet;
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
@@ -271,10 +275,9 @@ impl ICloudEventStore<'_> {
         Ok(event_ids)
     }
 
-    pub(crate) async fn fetch_icloud_event(
-        &self,
-        event_id: &EventId,
-    ) -> Result<Vec<u8>, NookError> {
+    /// A lookup answered with no record reads as an event the namespace does
+    /// not hold.
+    async fn read_icloud_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
@@ -293,11 +296,7 @@ impl ICloudEventStore<'_> {
         .await?
         {
             RecordLookup::Loaded(record) => record,
-            RecordLookup::Missing => {
-                return Err(NookError::ICloud(format!(
-                    "CloudKit event record {record_name} is missing."
-                )));
-            }
+            RecordLookup::Missing => return Ok(RemoteEventRead::Unavailable),
         };
         let stored_event_id = match record.event_id() {
             EventIdentity::Declared(id) => id,
@@ -328,7 +327,29 @@ impl ICloudEventStore<'_> {
             content_len = content.len(),
             "CloudKit event fetch completed"
         );
-        Ok(content.into_bytes())
+        Ok(RemoteEventRead::Retrieved(content.into_bytes().into()))
+    }
+}
+
+impl EventStore for ICloudEventStore<'_> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        self.list_icloud_event_ids()
+            .await?
+            .iter()
+            .map(|raw| Ok(EventId::parse(raw)?))
+            .collect()
+    }
+
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        self.read_icloud_event(event_id).await
+    }
+
+    async fn put_checked(&self, event: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        self.put_icloud_event(event).await
+    }
+
+    async fn delete_events(&self) -> Result<(), NookError> {
+        self.delete_icloud_namespace().await
     }
 }
 
@@ -484,13 +505,7 @@ mod browser_tests {
         };
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         assert!(store.list_icloud_event_ids().await.is_err());
-        assert!(store.fetch_icloud_event(&event_id).await.is_err());
-        assert!(
-            store
-                .put_icloud_event_if_absent(&event_id, b"event: test")
-                .await
-                .is_err()
-        );
+        assert!(store.read(&event_id).await.is_err());
         Ok(())
     }
 }
@@ -587,11 +602,18 @@ mod fetch_tests {
             event_record(wanted.as_str(), "body")
         );
         let stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &found)])?;
-        assert_eq!(store.fetch_icloud_event(&wanted).await?, b"body");
+        assert_eq!(
+            store.read(&wanted).await?,
+            RemoteEventRead::Retrieved(b"body".to_vec().into())
+        );
+        drop(stub);
+
+        // CloudKit answers an absent record with no record.
+        let stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, r#"{"records":[]}"#)])?;
+        assert_eq!(store.read(&wanted).await?, RemoteEventRead::Unavailable);
         drop(stub);
 
         for response in [
-            r#"{"records":[]}"#.to_owned(),
             format!(
                 r#"{{"records":[{}]}}"#,
                 event_record(other.as_str(), "body")
@@ -603,10 +625,10 @@ mod fetch_tests {
             ),
         ] {
             let _stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &response)])?;
-            assert!(store.fetch_icloud_event(&wanted).await.is_err());
+            assert!(store.read(&wanted).await.is_err());
         }
         let _stub = FetchStub::install(vec![FetchRoute::failing("POST", LOOKUP, 500)])?;
-        assert!(store.fetch_icloud_event(&wanted).await.is_err());
+        assert!(store.read(&wanted).await.is_err());
         Ok(())
     }
 }
