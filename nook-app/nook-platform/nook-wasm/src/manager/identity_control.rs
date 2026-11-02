@@ -31,7 +31,8 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use super::NookVaultManager;
+use super::{NookVaultManager, PreparedProvider};
+use crate::storage::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::remote_event::RemoteEventRead;
@@ -218,8 +219,17 @@ impl NookVaultManager {
             if remote_ids.contains(&event_id) {
                 continue;
             }
-            self.put_provider_event_at(&location, &event_id, bytes.as_ref())
-                .await?;
+            // This browser's own store accepts and drops the event; each is
+            // checked before any request.
+            if let PreparedProvider::Remote(remote) = &self.storage.provider {
+                let event = CheckedEventWrite::parse(CheckedEventWriteRequest {
+                    bytes: bytes.as_ref(),
+                    event_id: &event_id,
+                    location: &location,
+                    provider: remote.label(),
+                })?;
+                self.put_provider_event_at(remote, event).await?;
+            }
             pushed = true;
         }
         Ok((

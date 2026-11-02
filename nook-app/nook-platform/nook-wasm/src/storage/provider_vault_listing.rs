@@ -37,7 +37,23 @@ use crate::{NookDatabase, NookError};
 /// The vault namespaces under one Google Drive Nook root.
 pub(crate) struct DriveVaultListing<'a> {
     pub(crate) token: &'a ProviderSecretText,
-    pub(crate) root: &'a DriveEventParent,
+    pub(crate) root: DriveEventParent,
+}
+
+/// A location's identity logs and vaults, read without any key.
+pub(crate) struct SourceContents {
+    pub(crate) identity_logs: Vec<ProviderIdentityLogEvents>,
+    pub(crate) vaults: Vec<CheckedVaultEvents>,
+}
+
+impl SourceContents {
+    /// What a source with no identity and no vault holds.
+    pub(crate) fn empty() -> Self {
+        Self {
+            identity_logs: Vec::new(),
+            vaults: Vec::new(),
+        }
+    }
 }
 
 /// How many namespace folders a listing reads at once; each also keeps its
@@ -223,6 +239,17 @@ pub(crate) trait ProviderLocation {
             .try_fold(InspectedVaults::default(), InspectedVaults::record)
     }
 
+    /// Every identity log and every vault the location holds, read side by
+    /// side without any key.
+    async fn contents(&self) -> Result<SourceContents, NookError> {
+        let (identity_logs, vaults) =
+            try_join(self.identity_log_events(), self.all_vault_events()).await?;
+        Ok(SourceContents {
+            identity_logs,
+            vaults,
+        })
+    }
+
     /// What the location holds, related to this browser's keys and the vault
     /// it has open. The vaults and the identity logs are read side by side;
     /// only the vaults no identity here holds are then inspected.
@@ -284,7 +311,7 @@ impl ProviderLocation for DriveVaultListing<'_> {
         &self,
         kind: EventLogNamespaceKind,
     ) -> Result<Vec<ListedNamespaceFolder>, NookError> {
-        DriveNamespace::list_folders(self.token, self.root, kind).await
+        DriveNamespace::list_folders(self.token, &self.root, kind).await
     }
 
     fn placed(folder: &ListedNamespaceFolder) -> &PlacedNamespace {
@@ -401,7 +428,7 @@ impl DriveVaultListing<'_> {
     /// The subfolder that holds one vault's events.
     async fn vault_folder(&self, store_id: &StoreId) -> Result<ListedNamespaceFolder, NookError> {
         let mut folders =
-            DriveNamespace::list_folders(self.token, self.root, EventLogNamespaceKind::Vault)
+            DriveNamespace::list_folders(self.token, &self.root, EventLogNamespaceKind::Vault)
                 .await?
                 .into_iter()
                 .filter(|folder| {

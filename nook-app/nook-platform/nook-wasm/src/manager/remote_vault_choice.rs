@@ -12,25 +12,16 @@
 )]
 
 use crate::{TypedInput, TypedOutput};
-use nook_core::{
-    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, ListedIdentityLog,
-    ListingIdentity, LocalEventWrite, LocalVaultOccupancy, PlacedNamespace,
-    ProviderIdentityLogEvents, ProviderVaultObservation, ProviderVaultSummary, StorageMode,
-    StoreId, VaultEvent,
-};
+use nook_core::{LocalVaultOccupancy, ProviderVaultSummary, StorageMode, StoreId};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::event_log::VaultDiscovery;
-use super::{ChosenProviderVault, NookVaultManager, PreparedProvider, RemoteProvider};
+use super::{ChosenProviderVault, NookVaultManager, PreparedProvider};
 use crate::NookError;
-use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, CountedVaultNamespace, DriveVaultListing, InspectedVault, InspectedVaults,
-    ProviderLocation, VaultInspection, VaultListingParts,
-};
-use crate::storage::remote_event::RemoteEventRead;
+use crate::storage::local_folder::{LocalFolderHandles, LocalFolderLocation};
+use crate::storage::opened_location::OpenedLocation;
 
 /// The vaults a staged sync provider holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -51,227 +42,14 @@ pub enum NookRemoteVaultDiscovery {
     },
 }
 
-/// Where the several vaults of a discovery were listed.
-enum DiscoveredVaultSource<'a> {
-    CurrentProvider,
-    BackupFolder(&'a str),
-}
-
 impl NookVaultManager {
-    /// Transport observations for the discovered vaults of one source.
-    async fn discovered_vault_observations(
-        &self,
-        source: &DiscoveredVaultSource<'_>,
-        store_ids: &[StoreId],
-    ) -> Result<Vec<ProviderVaultObservation>, NookError> {
-        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
-            (source, &self.storage.provider)
-            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
-        {
-            let observations = DriveVaultListing {
-                token: &drive.token,
-                root: &drive.root,
-            }
-            .observations()
-            .await?;
-            return Ok(observations
-                .into_iter()
-                .filter(|observation| store_ids.contains(&observation.store_id))
-                .collect());
-        }
-        let mut observations = Vec::new();
-        for store_id in store_ids {
-            let location = EventLogLocation::Vault(store_id.clone());
-            let (placement, event_count) = match source {
-                DiscoveredVaultSource::CurrentProvider => (
-                    self.placed_at_current_provider(&location).await?,
-                    self.list_provider_event_ids_at(&location).await?.len(),
-                ),
-                DiscoveredVaultSource::BackupFolder(handle_id) => {
-                    let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
-                    match folder.placement(&location).await? {
-                        nook_core::VaultPlacement::Filed(placed) => {
-                            let count = folder.count_events(&placed).await?;
-                            (nook_core::VaultPlacement::Filed(placed), count)
-                        }
-                        nook_core::VaultPlacement::Unfiled => {
-                            (nook_core::VaultPlacement::Unfiled, 0)
-                        }
-                    }
-                }
-            };
-            // Discovery lists only the vaults the target files somewhere.
-            let nook_core::VaultPlacement::Filed(placed) = placement else {
-                return Err(NookError::Database(format!(
-                    "Vault {store_id} disappeared from the provider during discovery."
-                )));
-            };
-            observations.push(
-                CountedVaultNamespace {
-                    store_id: store_id.clone(),
-                    identity: placed.identity().clone(),
-                    event_count,
-                }
-                .observation(),
-            );
-        }
-        Ok(observations)
-    }
-
-    /// What the discovered vaults' events tell without their keys.
-    async fn inspect_discovered_vaults(
-        &self,
-        source: &DiscoveredVaultSource<'_>,
-        inspection: VaultInspection<'_>,
-    ) -> Result<InspectedVaults, NookError> {
-        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
-            (source, &self.storage.provider)
-            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
-        {
-            return DriveVaultListing {
-                token: &drive.token,
-                root: &drive.root,
-            }
-            .inspect_vaults(inspection)
-            .await;
-        }
-        let mut inspected = InspectedVaults::default();
-        for store_id in inspection.store_ids {
-            let location = EventLogLocation::Vault(store_id.clone());
-            let events = match source {
-                DiscoveredVaultSource::CurrentProvider => {
-                    let mut events = Vec::new();
-                    for event_id in self.list_provider_event_ids_at(&location).await? {
-                        if let RemoteEventRead::Retrieved(bytes) =
-                            self.read_provider_event_at(&location, &event_id).await?
-                        {
-                            events.push(LocalEventWrite { event_id, bytes });
-                        }
-                    }
-                    events
-                }
-                DiscoveredVaultSource::BackupFolder(handle_id) => {
-                    NookVaultManager::read_external_local_folder_records(handle_id, &location)
-                        .await?
-                        .into_iter()
-                        .map(|record| {
-                            Ok(LocalEventWrite {
-                                event_id: record.event.id()?,
-                                bytes: VaultEvent::serialize_event_storage_yaml(&record.event)?,
-                            })
-                        })
-                        .collect::<Result<Vec<_>, NookError>>()?
-                }
-            };
-            inspected = inspected.record(InspectedVault {
-                store_id: store_id.clone(),
-                events,
-                this_browser: inspection.this_browser,
-            })?;
-        }
-        Ok(inspected)
-    }
-
-    /// The public control logs of the identities that file the discovered
-    /// vaults, read and verified; nothing in them is encrypted.
-    async fn discovered_identity_logs(
-        &self,
-        source: &DiscoveredVaultSource<'_>,
-        this_browser: &ListingIdentity,
-    ) -> Result<Vec<ListedIdentityLog>, NookError> {
-        // Every identity log the source holds, as Check access reads it, not
-        // only those of identities that file a discovered vault.
-        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
-            (source, &self.storage.provider)
-            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
-        {
-            return DriveVaultListing {
-                token: &drive.token,
-                root: &drive.root,
-            }
-            .identity_logs(this_browser)
-            .await;
-        }
-        let logs_held = match source {
-            DiscoveredVaultSource::CurrentProvider => {
-                self.list_namespaces_at_current_provider(EventLogNamespaceKind::Identity)
-                    .await?
-            }
-            DiscoveredVaultSource::BackupFolder(handle_id) => {
-                LocalFolderHandles::current()
-                    .open_folder(handle_id)
-                    .await?
-                    .list_namespaces(EventLogNamespaceKind::Identity)
-                    .await?
-            }
-        };
-        let identities: Vec<IdentityId> =
-            logs_held.iter().map(|log| log.identity().clone()).collect();
-        let mut logs = Vec::new();
-        for identity_id in identities {
-            let location = EventLogLocation::Identity(identity_id.clone());
-            let events = match source {
-                DiscoveredVaultSource::CurrentProvider => {
-                    let mut events = Vec::new();
-                    for event_id in self.list_provider_event_ids_at(&location).await? {
-                        if let RemoteEventRead::Retrieved(bytes) =
-                            self.read_provider_event_at(&location, &event_id).await?
-                        {
-                            events.push(bytes);
-                        }
-                    }
-                    events
-                }
-                DiscoveredVaultSource::BackupFolder(handle_id) => LocalFolderHandles::current()
-                    .open_folder(handle_id)
-                    .await?
-                    .read_events(&PlacedNamespace::identity_log(identity_id.clone()))
-                    .await?
-                    .into_iter()
-                    .map(|file| EventStorageBytes::from(file.content.into_bytes()))
-                    .collect(),
-            };
-            logs.push(
-                ProviderIdentityLogEvents {
-                    identity_id,
-                    events,
-                }
-                .read(this_browser)?,
-            );
-        }
-        Ok(logs)
-    }
-
-    /// The several vaults a discovery found, summarized and related to the
-    /// local identity. Discovery runs with no vault open.
+    /// The several vaults a location holds, summarized and related to the
+    /// local identity, with every identity it holds for the recovery
+    /// screen's cards. Discovery runs with no vault open.
     async fn several_discovered_vaults(
-        &self,
-        source: DiscoveredVaultSource<'_>,
-        store_ids: &[StoreId],
+        location: OpenedLocation<'_>,
     ) -> Result<NookRemoteVaultDiscovery, NookError> {
-        let observations = self
-            .discovered_vault_observations(&source, store_ids)
-            .await?;
-        let held = BrowserHeldVaults::load().await?;
-        let unheld = held.unheld(&observations);
-        let inspected = self
-            .inspect_discovered_vaults(
-                &source,
-                VaultInspection {
-                    store_ids: &unheld,
-                    this_browser: &held.identity,
-                },
-            )
-            .await?;
-        let identity_logs = self
-            .discovered_identity_logs(&source, &held.identity)
-            .await?;
-        let listing = held.listing(VaultListingParts {
-            observations,
-            inspected: &inspected,
-            identity_logs: &identity_logs,
-            local_vault: &LocalVaultOccupancy::Closed,
-        });
+        let listing = location.listing(&LocalVaultOccupancy::Closed).await?;
         Ok(NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
             identities: listing.identities,
@@ -302,13 +80,12 @@ impl NookVaultManager {
                         store_id: self.vault.store_id.clone(),
                     }
                 }
-                VaultDiscovery::Several(store_ids) => {
-                    self.several_discovered_vaults(
-                        DiscoveredVaultSource::CurrentProvider,
-                        &store_ids,
-                    )
-                    .await?
-                }
+                VaultDiscovery::Several(_) => match &self.storage.provider {
+                    PreparedProvider::Remote(remote) => {
+                        Self::several_discovered_vaults(remote.location()).await?
+                    }
+                    PreparedProvider::ThisBrowser => NookRemoteVaultDiscovery::Empty,
+                },
             }
         };
         Ok(discovery.encode()?)
@@ -330,11 +107,10 @@ impl NookVaultManager {
                     store_id: self.vault.store_id.clone(),
                 }
             }
-            VaultDiscovery::Several(store_ids) => {
-                self.several_discovered_vaults(
-                    DiscoveredVaultSource::BackupFolder(handle_id),
-                    &store_ids,
-                )
+            VaultDiscovery::Several(_) => {
+                Self::several_discovered_vaults(OpenedLocation::LocalFolder(LocalFolderLocation {
+                    folder: LocalFolderHandles::current().open_folder(handle_id).await?,
+                }))
                 .await?
             }
         };
@@ -353,6 +129,7 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::storage::provider_vault_listing::CountedVaultNamespace;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

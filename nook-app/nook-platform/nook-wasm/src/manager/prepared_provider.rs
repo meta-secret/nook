@@ -15,8 +15,10 @@ use crate::storage::drive_events::DriveEventStore;
 use crate::storage::drive_namespace::DriveNamespace;
 use crate::storage::event_store::RemoteEventStore;
 use crate::storage::github_events::{GitHubEventStore, GitHubRepository};
-use crate::storage::icloud::ICloudEventStore;
-use crate::storage::s3::{S3EventStore, S3Storage};
+use crate::storage::icloud::{ICloudEventStore, ICloudLocation};
+use crate::storage::opened_location::OpenedLocation;
+use crate::storage::provider_vault_listing::DriveVaultListing;
+use crate::storage::s3::{S3EventStore, S3Storage, S3VaultListing};
 #[cfg(test)]
 use crate::test_fixtures::WasmFixture;
 use crate::{DriveStorageClient, GitHubStorageClient};
@@ -194,10 +196,6 @@ impl PreparedProvider {
 }
 
 impl PreparedRemote {
-    pub(in crate::manager) fn provider(&self) -> &RemoteProvider {
-        &self.provider
-    }
-
     pub(in crate::manager) fn mode(&self) -> StorageMode {
         match &self.provider {
             RemoteProvider::Github(_) => StorageMode::Github,
@@ -216,6 +214,29 @@ impl PreparedRemote {
             RemoteProvider::ICloud(icloud) => format!("icloud:{}", icloud.target.as_str()),
             RemoteProvider::S3(s3) => format!("s3:{}", s3.connection.location_identity()),
         })
+    }
+
+    /// The provider as a location the listings, checks and joins read.
+    pub(in crate::manager) fn location(&self) -> OpenedLocation<'_> {
+        match &self.provider {
+            RemoteProvider::Github(github) => OpenedLocation::Github(GitHubRepository {
+                token: &github.token,
+                repo: github.repository.as_str(),
+            }),
+            RemoteProvider::GoogleDrive(drive) => OpenedLocation::GoogleDrive(DriveVaultListing {
+                token: &drive.token,
+                root: drive.root.clone(),
+            }),
+            RemoteProvider::ICloud(icloud) => OpenedLocation::ICloud(ICloudLocation {
+                token: &icloud.token,
+                share: &icloud.share,
+            }),
+            RemoteProvider::S3(s3) => OpenedLocation::S3(S3VaultListing {
+                storage: S3Storage {
+                    connection: &s3.connection,
+                },
+            }),
+        }
     }
 
     /// Names the provider in a refused write ("GitHub event parse: …").
@@ -415,5 +436,48 @@ impl ProviderCacheRef {
     /// A cache name a test owns, so its outbox rows stay its own.
     pub(in crate::manager) fn fixture(name: &str) -> Self {
         Self(name.to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn each_prepared_provider_reads_as_its_own_location() -> anyhow::Result<()> {
+        let github = PreparedProvider::github_fixture("github-token", "owner/repo")?;
+        let drive = PreparedProvider::drive_fixture("drive-token", "root-folder")?;
+        let s3 = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
+        let PreparedProvider::Remote(github) = &github else {
+            anyhow::bail!("a GitHub fixture is remote");
+        };
+        assert!(matches!(
+            github.location(),
+            OpenedLocation::Github(GitHubRepository {
+                repo: "owner/repo",
+                ..
+            })
+        ));
+        let PreparedProvider::Remote(drive) = &drive else {
+            anyhow::bail!("a Drive fixture is remote");
+        };
+        assert!(matches!(
+            drive.location(),
+            OpenedLocation::GoogleDrive(DriveVaultListing { root, .. })
+                if root == DriveEventParent::shared_folder_id("root-folder")
+        ));
+        let PreparedProvider::Remote(s3) = &s3 else {
+            anyhow::bail!("an S3 fixture is remote");
+        };
+        assert!(matches!(s3.location(), OpenedLocation::S3(_)));
+        Ok(())
     }
 }

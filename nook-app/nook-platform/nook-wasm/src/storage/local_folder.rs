@@ -18,9 +18,11 @@ mod handles;
 pub(crate) use handles::LocalFolderHandles;
 mod event_write;
 pub(crate) use event_write::LocalFolderEventWrite;
+mod vault_listing;
 use handles::{
     ChildLookup, ChildLookupRequest, FolderFailure, FolderMethod, FolderObject, FolderPromise,
 };
+pub(crate) use vault_listing::LocalFolderLocation;
 
 #[wasm_bindgen]
 #[derive(Clone)]

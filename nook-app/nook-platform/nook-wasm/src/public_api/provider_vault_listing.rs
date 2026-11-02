@@ -45,7 +45,7 @@ pub enum NookGoogleDriveVaultListing {
             NookGoogleDriveVaultListing::Found {
                 listing: DriveVaultListing {
                     token: &token,
-                    root: &root,
+                    root,
                 }
                 .listing(&local_vault)
                 .await?,

@@ -32,7 +32,7 @@ impl NookVaultManager {
             .await?;
         let listing = DriveVaultListing {
             token: &token,
-            root: &root,
+            root,
         };
         let events = listing.vault_events(&store_id).await?;
         let app_key = self.device_identity()?;

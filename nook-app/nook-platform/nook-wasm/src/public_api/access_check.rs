@@ -6,17 +6,18 @@
 //! the result says which vaults it opens by name. Nothing is stored, imported, or
 //! written, and the passkey's re-derived app key is dropped afterwards.
 use super::wasm_bindgen;
-use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
+use crate::storage::local_folder::{LocalFolderHandles, LocalFolderLocation};
+use crate::storage::opened_location::OpenedLocation;
+use crate::storage::provider_vault_listing::{DriveVaultListing, SourceContents};
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
-    EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, LocalFolderHandleId,
-    PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput,
-    PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText, SigningSeedHex, StoreId,
-    WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
+    BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity,
+    LocalFolderHandleId, PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner,
+    PasskeyRecoveryInput, PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText,
+    SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
+    WrappedDeviceIdentity,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -50,12 +51,6 @@ pub enum NookRemoteSource {
     S3 {
         configuration: nook_core::S3Connection,
     },
-}
-
-/// A source's identity logs and vaults, read without any key.
-pub(crate) struct SourceContents {
-    pub(crate) identity_logs: Vec<ProviderIdentityLogEvents>,
-    pub(crate) vaults: Vec<CheckedVaultEvents>,
 }
 
 impl SourceContents {
@@ -93,43 +88,33 @@ impl NookAccessCheckSource {
     pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
         match self {
             Self::ThisBrowser => Self::browser_contents().await,
-            Self::Remote(source) => source.contents().await,
+            Self::Remote(source) => source.open().await?.contents().await,
         }
     }
 }
 
 impl NookRemoteSource {
-    /// The location's identity logs and vaults, read without any key.
-    pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
-        match self {
-            Self::GoogleDrive { access_token } => {
-                let root = DriveStorageClient::new(access_token)
+    /// Open the location with the credential it carries: a Drive account's
+    /// existing Nook root, the picked folder, or the S3 location.
+    pub(crate) async fn open(&self) -> Result<OpenedLocation<'_>, NookError> {
+        Ok(match self {
+            Self::GoogleDrive { access_token } => OpenedLocation::GoogleDrive(DriveVaultListing {
+                token: access_token,
+                root: DriveStorageClient::new(access_token)
                     .existing_nook_root()
-                    .await?;
-                let drive = DriveVaultListing {
-                    token: access_token,
-                    root: &root,
-                };
-                Ok(SourceContents {
-                    identity_logs: drive.identity_log_events().await?,
-                    vaults: drive.all_vault_events().await?,
-                })
-            }
-            Self::LocalFolder { handle_id } => {
-                NookAccessCheckSource::folder_contents(handle_id.as_str()).await
-            }
-            Self::S3 { configuration } => {
-                let location = S3VaultListing {
-                    storage: S3Storage {
-                        connection: configuration,
-                    },
-                };
-                Ok(SourceContents {
-                    identity_logs: location.identity_log_events().await?,
-                    vaults: location.all_vault_events().await?,
-                })
-            }
-        }
+                    .await?,
+            }),
+            Self::LocalFolder { handle_id } => OpenedLocation::LocalFolder(LocalFolderLocation {
+                folder: LocalFolderHandles::current()
+                    .open_folder(handle_id.as_str())
+                    .await?,
+            }),
+            Self::S3 { configuration } => OpenedLocation::S3(S3VaultListing {
+                storage: S3Storage {
+                    connection: configuration,
+                },
+            }),
+        })
     }
 }
 
@@ -163,47 +148,6 @@ impl NookAccessCheckSource {
                 events: NookDatabase::load_local_event_writes(store_id.as_str()).await?,
                 filed_under: owner.identity_id.clone(),
                 store_id,
-            });
-        }
-        Ok(SourceContents {
-            identity_logs,
-            vaults,
-        })
-    }
-
-    async fn folder_contents(handle_id: &str) -> Result<SourceContents, NookError> {
-        let folder = LocalFolderHandles::current().open_folder(handle_id).await?;
-        let mut identity_logs = Vec::new();
-        for placed in folder
-            .list_namespaces(EventLogNamespaceKind::Identity)
-            .await?
-        {
-            identity_logs.push(ProviderIdentityLogEvents {
-                identity_id: placed.identity().clone(),
-                events: folder
-                    .read_events(&placed)
-                    .await?
-                    .into_iter()
-                    .map(|file| EventStorageBytes::from(file.content.into_bytes()))
-                    .collect(),
-            });
-        }
-        let mut vaults = Vec::new();
-        for placed in folder.list_namespaces(EventLogNamespaceKind::Vault).await? {
-            let nook_core::EventLogLocation::Vault(store_id) = placed.location().clone() else {
-                continue;
-            };
-            let mut events = Vec::new();
-            for file in folder.read_events(&placed).await? {
-                events.push(LocalEventWrite {
-                    event_id: EventId::parse(&file.event_id)?,
-                    bytes: file.content.into_bytes().into(),
-                });
-            }
-            vaults.push(CheckedVaultEvents {
-                store_id,
-                filed_under: placed.identity().clone(),
-                events,
             });
         }
         Ok(SourceContents {

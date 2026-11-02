@@ -10,20 +10,17 @@
 )]
 
 use crate::TypedInput;
-use nook_core::{
-    CheckedVaultEvents, CredentialCheckReport, EventLogLocation, EventLogNamespaceKind,
-    LocalEventWrite, ProviderIdentityLogEvents, VaultPlacement,
-};
+use nook_core::CredentialCheckReport;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::NookVaultManager;
+use super::{NookVaultManager, PreparedProvider};
 use crate::NookError;
-use crate::public_api::{NookRemoteSource, SourceContents};
-use crate::storage::remote_event::RemoteEventRead;
+use crate::public_api::NookRemoteSource;
+use crate::storage::provider_vault_listing::SourceContents;
 
 /// Where an identity operation or a check reads identities and vaults from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -42,63 +39,16 @@ impl NookVaultManager {
         &self,
         source: &NookProviderSource,
     ) -> Result<SourceContents, NookError> {
-        match source {
-            NookProviderSource::CurrentProvider => self.current_provider_contents().await,
-            NookProviderSource::Remote(source) => source.contents().await,
-        }
-    }
-
-    /// Every vault the current provider files, with the identity filing it,
-    /// and the control log of every identity the provider holds, whether or
-    /// not it files a vault there.
-    async fn current_provider_contents(&self) -> Result<SourceContents, NookError> {
-        let mut vaults = Vec::new();
-        for store_id in self.list_vault_ids_at_current_provider().await? {
-            let location = EventLogLocation::Vault(store_id.clone());
-            let VaultPlacement::Filed(placed) = self.placed_at_current_provider(&location).await?
-            else {
-                return Err(NookError::Database(format!(
-                    "Vault {store_id} disappeared from the provider during the check."
-                )));
-            };
-            let mut events = Vec::new();
-            for event_id in self.list_provider_event_ids_at(&location).await? {
-                if let RemoteEventRead::Retrieved(bytes) =
-                    self.read_provider_event_at(&location, &event_id).await?
-                {
-                    events.push(LocalEventWrite { event_id, bytes });
-                }
+        match (source, &self.storage.provider) {
+            // This browser's own store is no provider: nothing to check.
+            (NookProviderSource::CurrentProvider, PreparedProvider::ThisBrowser) => {
+                Ok(SourceContents::empty())
             }
-            vaults.push(CheckedVaultEvents {
-                store_id,
-                filed_under: placed.identity().clone(),
-                events,
-            });
-        }
-        let mut identity_logs = Vec::new();
-        for log in self
-            .list_namespaces_at_current_provider(EventLogNamespaceKind::Identity)
-            .await?
-        {
-            let identity_id = log.identity().clone();
-            let location = EventLogLocation::Identity(identity_id.clone());
-            let mut events = Vec::new();
-            for event_id in self.list_provider_event_ids_at(&location).await? {
-                if let RemoteEventRead::Retrieved(bytes) =
-                    self.read_provider_event_at(&location, &event_id).await?
-                {
-                    events.push(bytes);
-                }
+            (NookProviderSource::CurrentProvider, PreparedProvider::Remote(remote)) => {
+                remote.location().contents().await
             }
-            identity_logs.push(ProviderIdentityLogEvents {
-                identity_id,
-                events,
-            });
+            (NookProviderSource::Remote(source), _) => source.open().await?.contents().await,
         }
-        Ok(SourceContents {
-            identity_logs,
-            vaults,
-        })
     }
 }
 

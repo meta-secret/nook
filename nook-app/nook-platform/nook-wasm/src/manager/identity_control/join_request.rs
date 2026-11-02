@@ -16,14 +16,13 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AppId, AppKey, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
-    IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
-    IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
-    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityMemberKeys,
-    KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition, PasskeyRegistration,
-    PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
-    ProviderIdentityKeyInUse, ProviderIdentityLogEvents, ProviderSecretText, SigningIdentity,
-    StorageMode, WebAuthnPrfInput, WebAuthnPrfOutput,
+    AppId, AppKey, EventStorageBytes, IdentityConnectionKey, IdentityControlLog,
+    IdentityControlState, IdentityId, IdentityInvitationBinding, IdentityInvitationBindingRequest,
+    IdentityJoinAnswer, IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey,
+    IdentityJoinRequestPlan, IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode,
+    PasskeyIdentityAddition, PasskeyRegistration, PasskeyRegistrationInput,
+    ProviderIdentityJoinRequest, ProviderIdentityKeyInUse, ProviderIdentityLogEvents,
+    SigningIdentity, WebAuthnPrfInput, WebAuthnPrfOutput,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -33,21 +32,17 @@ use zeroize::Zeroizing;
 use super::connection::NookIdentityConnectionStart;
 use super::passkey_addition::NookIdentityAdded;
 use crate::manager::NookVaultManager;
+use crate::manager::PreparedProvider;
 use crate::manager::access_check::NookProviderSource;
-use crate::public_api::NookRemoteSource;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::{
     KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, StoredIdentityProtection,
 };
-use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
-use crate::storage::provider_vault_listing::{
-    DriveVaultListing, IdentityEventPut, ProviderLocation,
-};
-use crate::storage::remote_event::RemoteEventRead;
-use crate::storage::s3::{S3Storage, S3VaultListing};
+use crate::storage::opened_location::OpenedLocation;
+use crate::storage::provider_vault_listing::IdentityEventPut;
 use crate::{
-    BrowserPasskeyClient, BrowserPasskeyRequestOptions, DriveStorageClient,
-    IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookError,
+    BrowserPasskeyClient, BrowserPasskeyRequestOptions, IdentityDbEnsureLocalIdentityForAppKey,
+    NookDatabase, NookError,
 };
 
 /// A join request written into an identity's log at a provider.
@@ -81,56 +76,22 @@ struct IdentityJoinLog<'a> {
     events: &'a [EventStorageBytes],
 }
 
-/// An identity log's home at one source, opened once per operation.
-enum OpenedIdentitySource<'a> {
-    CurrentProvider,
-    GoogleDrive {
-        access_token: &'a ProviderSecretText,
-        root: DriveEventParent,
-    },
-    LocalFolder(OpenedLocalFolder),
-    S3(nook_core::S3Connection),
-}
-
-/// One identity's log at an opened source.
-struct IdentityLogAtSource<'a> {
-    source: &'a OpenedIdentitySource<'a>,
-    identity_id: &'a IdentityId,
-}
-
 impl NookVaultManager {
-    async fn open_identity_source<'a>(
-        &self,
+    /// The location an identity's log is read from and written to, opened
+    /// once per operation. This browser's own store holds no provider log.
+    async fn identity_source<'a>(
+        &'a self,
         source: &'a NookProviderSource,
-    ) -> Result<OpenedIdentitySource<'a>, NookError> {
-        Ok(match source {
-            NookProviderSource::CurrentProvider => {
-                if self.storage.mode() == StorageMode::Local {
-                    return Err(NookError::Database(
-                        "Connect a sync provider to reach this identity.".to_owned(),
-                    ));
-                }
-                OpenedIdentitySource::CurrentProvider
+    ) -> Result<OpenedLocation<'a>, NookError> {
+        match (source, &self.storage.provider) {
+            (NookProviderSource::CurrentProvider, PreparedProvider::ThisBrowser) => Err(
+                NookError::Database("Connect a sync provider to reach this identity.".to_owned()),
+            ),
+            (NookProviderSource::CurrentProvider, PreparedProvider::Remote(remote)) => {
+                Ok(remote.location())
             }
-            NookProviderSource::Remote(NookRemoteSource::GoogleDrive { access_token }) => {
-                OpenedIdentitySource::GoogleDrive {
-                    access_token,
-                    root: DriveStorageClient::new(access_token)
-                        .existing_nook_root()
-                        .await?,
-                }
-            }
-            NookProviderSource::Remote(NookRemoteSource::LocalFolder { handle_id }) => {
-                OpenedIdentitySource::LocalFolder(
-                    LocalFolderHandles::current()
-                        .open_folder(handle_id.as_str())
-                        .await?,
-                )
-            }
-            NookProviderSource::Remote(NookRemoteSource::S3 { configuration }) => {
-                OpenedIdentitySource::S3(configuration.clone())
-            }
-        })
+            (NookProviderSource::Remote(source), _) => source.open().await,
+        }
     }
 
     /// Verify the identity's log and complete the join it records for this
@@ -175,99 +136,6 @@ impl NookVaultManager {
                 NookIdentityJoinCompletion::Approved
             }
         })
-    }
-
-    /// The identity's control log events at the source, not yet verified.
-    async fn identity_events_at(
-        &self,
-        at: &IdentityLogAtSource<'_>,
-    ) -> Result<Vec<EventStorageBytes>, NookError> {
-        match at.source {
-            OpenedIdentitySource::CurrentProvider => {
-                let location = EventLogLocation::Identity(at.identity_id.clone());
-                let mut events = Vec::new();
-                for event_id in self.list_provider_event_ids_at(&location).await? {
-                    if let RemoteEventRead::Retrieved(bytes) =
-                        self.read_provider_event_at(&location, &event_id).await?
-                    {
-                        events.push(bytes);
-                    }
-                }
-                Ok(events)
-            }
-            OpenedIdentitySource::GoogleDrive { access_token, root } => {
-                DriveVaultListing {
-                    token: access_token,
-                    root,
-                }
-                .identity_events(at.identity_id)
-                .await
-            }
-            OpenedIdentitySource::LocalFolder(folder) => Ok(folder
-                .read_events(&PlacedNamespace::identity_log(at.identity_id.clone()))
-                .await?
-                .into_iter()
-                .map(|file| EventStorageBytes::from(file.content.into_bytes()))
-                .collect()),
-            OpenedIdentitySource::S3(connection) => {
-                S3VaultListing {
-                    storage: S3Storage { connection },
-                }
-                .identity_events(at.identity_id)
-                .await
-            }
-        }
-    }
-
-    /// Put one signed event into the identity's log at the source.
-    async fn put_identity_event_at(
-        &self,
-        source: &OpenedIdentitySource<'_>,
-        put: IdentityEventPut<'_>,
-    ) -> Result<(), NookError> {
-        let IdentityEventPut {
-            identity_id,
-            event_id,
-            bytes,
-        } = put;
-        match source {
-            OpenedIdentitySource::CurrentProvider => {
-                self.put_provider_event_at(
-                    &EventLogLocation::Identity(identity_id.clone()),
-                    event_id,
-                    bytes.as_ref(),
-                )
-                .await
-            }
-            OpenedIdentitySource::GoogleDrive { access_token, root } => {
-                DriveVaultListing {
-                    token: access_token,
-                    root,
-                }
-                .put_identity_event(put)
-                .await
-            }
-            OpenedIdentitySource::LocalFolder(folder) => {
-                let content = String::from_utf8(bytes.as_ref().to_vec())
-                    .map_err(|error| NookError::Serialization(error.to_string()))?;
-                folder
-                    .write_events(
-                        &PlacedNamespace::identity_log(identity_id.clone()),
-                        &[LocalFolderEventWrite {
-                            event_id: event_id.as_str().to_owned(),
-                            content,
-                        }],
-                    )
-                    .await
-            }
-            OpenedIdentitySource::S3(connection) => {
-                S3VaultListing {
-                    storage: S3Storage { connection },
-                }
-                .put_identity_event(put)
-                .await
-            }
-        }
     }
 }
 
@@ -333,14 +201,10 @@ impl NookVaultManager {
             )
             .into());
         }
-        let opened = self.open_identity_source(&source).await?;
-        let at = IdentityLogAtSource {
-            source: &opened,
-            identity_id: &identity_id,
-        };
-        let events = self.identity_events_at(&at).await?;
         let member = self.own_identity_member_keys(&app_key).await?;
         let signing = self.ensure_signing_identity().await?;
+        let location = self.identity_source(&source).await?;
+        let events = location.identity_events(&identity_id).await?;
         let created_at = Self::identity_event_time()?;
         let plan = ProviderIdentityJoinRequest {
             identity_id: &identity_id,
@@ -352,15 +216,13 @@ impl NookVaultManager {
         .plan()?;
         let requested_at = match plan {
             IdentityJoinRequestPlan::Write(write) => {
-                self.put_identity_event_at(
-                    &opened,
-                    IdentityEventPut {
+                location
+                    .put_identity_event(IdentityEventPut {
                         identity_id: &identity_id,
                         event_id: &write.event_id,
                         bytes: &write.bytes,
-                    },
-                )
-                .await?;
+                    })
+                    .await?;
                 write.requested_at
             }
             IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested_at,
@@ -387,12 +249,10 @@ impl NookVaultManager {
         let source = source.decode()?;
         let identity_id = IdentityId::parse(&identity_id)?;
         let app_key = self.unlocked_app_key()?;
-        let opened = self.open_identity_source(&source).await?;
         let events = self
-            .identity_events_at(&IdentityLogAtSource {
-                source: &opened,
-                identity_id: &identity_id,
-            })
+            .identity_source(&source)
+            .await?
+            .identity_events(&identity_id)
             .await?;
         if events.is_empty() {
             return Err(NookError::Database(
@@ -473,12 +333,8 @@ impl NookVaultManager {
         let key_in_use = self.unlocked_app_key()?;
         let in_use_member = self.own_identity_member_keys(&key_in_use).await?;
         let key_in_use_signing = self.ensure_signing_identity().await?;
-        let opened = self.open_identity_source(&source).await?;
-        let at = IdentityLogAtSource {
-            source: &opened,
-            identity_id: &identity_id,
-        };
-        let mut events = self.identity_events_at(&at).await?;
+        let location = self.identity_source(&source).await?;
+        let mut events = location.identity_events(&identity_id).await?;
         let membership = ProviderIdentityKeyInUse {
             identity_id: &identity_id,
             events: &events,
@@ -539,15 +395,13 @@ impl NookVaultManager {
             directory: &NookDatabase::load_identity_directory().await?,
         }
         .add()?;
-        self.put_identity_event_at(
-            &opened,
-            IdentityEventPut {
+        location
+            .put_identity_event(IdentityEventPut {
                 identity_id: &identity_id,
                 event_id: &write.event_id,
                 bytes: &write.bytes,
-            },
-        )
-        .await?;
+            })
+            .await?;
         let selection =
             NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
                 app_key: &new_key,
@@ -602,6 +456,8 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::public_api::NookRemoteSource;
+    use crate::storage::local_folder::LocalFolderHandles;
     use nook_core::LocalFolderHandleId;
     use nook_core::{AppKey, EventId, IdentityMemberKeys, MemberLabel, SigningIdentity};
     use wasm_bindgen_test::*;

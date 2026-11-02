@@ -94,23 +94,6 @@ impl NookVaultManager {
         Ok(EventLogLocation::Vault(store_id))
     }
 
-    /// Where one log already sits at the prepared provider. This browser's
-    /// own store files only identity logs, which need no lookup.
-    pub(in crate::manager) async fn placed_at_current_provider(
-        &self,
-        location: &EventLogLocation,
-    ) -> Result<VaultPlacement, NookError> {
-        match (&self.storage.provider, location) {
-            (PreparedProvider::Remote(remote), _) => remote.placement(location).await,
-            (PreparedProvider::ThisBrowser, EventLogLocation::Identity(identity)) => Ok(
-                VaultPlacement::Filed(PlacedNamespace::identity_log(identity.clone())),
-            ),
-            (PreparedProvider::ThisBrowser, EventLogLocation::Vault(_)) => {
-                Ok(VaultPlacement::Unfiled)
-            }
-        }
-    }
-
     /// Where a write of one log goes: where the provider already files it, or,
     /// for a vault it does not hold yet, a new folder under the identity of
     /// this installation's unlocked app key, which the provider remembers.
@@ -160,30 +143,15 @@ impl NookVaultManager {
         remote.event_store(&placed).await?.read(event_id).await
     }
 
-    /// Write one event at the prepared provider. This browser's own store
-    /// accepts and drops it; a malformed event is refused before placement or
-    /// any request, and the checked event is what the store writes.
+    /// Write one checked event at the prepared provider, in the namespace
+    /// that files its log.
     pub(in crate::manager) async fn put_provider_event_at(
         &self,
-        location: &EventLogLocation,
-        event_id: &EventId,
-        bytes: &[u8],
+        remote: &PreparedRemote,
+        event: CheckedEventWrite<'_>,
     ) -> Result<(), NookError> {
-        let PreparedProvider::Remote(remote) = &self.storage.provider else {
-            return Ok(());
-        };
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location,
-            provider: remote.label(),
-        })?;
-        let placed = self.placed_for_write(remote, location).await?;
-        remote
-            .event_store(&placed)
-            .await?
-            .put_checked(checked)
-            .await
+        let placed = self.placed_for_write(remote, event.location()).await?;
+        remote.event_store(&placed).await?.put_checked(event).await
     }
 
     /// Delete one namespace (a vault deleted everywhere) at the prepared
@@ -246,13 +214,24 @@ impl NookVaultManager {
         self.read_provider_event_at(&location, event_id).await
     }
 
-    pub(super) async fn put_current_provider_event_if_absent(
+    pub(in crate::manager) async fn put_current_provider_event_if_absent(
         &self,
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
         let location = self.current_vault_location()?;
-        self.put_provider_event_at(&location, event_id, bytes).await
+        // This browser's own store accepts and drops the event; a malformed
+        // event is refused before placement or any request.
+        let PreparedProvider::Remote(remote) = &self.storage.provider else {
+            return Ok(());
+        };
+        let event = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location: &location,
+            provider: remote.label(),
+        })?;
+        self.put_provider_event_at(remote, event).await
     }
 
     pub(in crate::manager) async fn bootstrap_event_log_genesis(

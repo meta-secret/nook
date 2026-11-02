@@ -23,6 +23,7 @@ use super::github::{GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
 
 mod namespace;
+mod vault_listing;
 use crate::NookError;
 #[derive(Clone, Copy)]
 struct RepositoryResponse<'a> {

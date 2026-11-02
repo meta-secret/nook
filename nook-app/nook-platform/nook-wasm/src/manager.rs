@@ -81,7 +81,6 @@ mod grant_authority;
 pub(in crate::manager) use prepared_provider::ProviderCacheRef;
 pub(in crate::manager) use prepared_provider::{
     NextConnect, PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
-    RemoteProvider,
 };
 pub(in crate::manager) use session::{
     CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState, OutboxTarget,
@@ -796,11 +795,11 @@ mod tests {
         use crate::storage::fetch_stub::FetchStub;
         let mut manager = NookVaultManager::new();
         manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
-        let location = nook_core::EventLogLocation::Vault(nook_core::StoreId::generate()?);
+        manager.vault.store_id = nook_core::StoreId::generate()?.as_str().to_owned();
         let stub = FetchStub::install(Vec::new()).map_err(|error| anyhow::anyhow!("{error}"))?;
         let event_id = nook_core::EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         match manager
-            .put_provider_event_at(&location, &event_id, b"not an event")
+            .put_current_provider_event_if_absent(&event_id, b"not an event")
             .await
         {
             Err(NookError::Serialization(message)) => {

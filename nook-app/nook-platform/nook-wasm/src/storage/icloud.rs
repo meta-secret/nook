@@ -30,6 +30,8 @@ pub(crate) struct ICloudEventStore<'a> {
 mod diagnostics;
 mod event_write;
 mod namespace;
+mod vault_listing;
+pub(crate) use vault_listing::ICloudLocation;
 mod wire;
 use wire::{
     EventIdentity, FieldText, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage,
