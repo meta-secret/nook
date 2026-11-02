@@ -32,8 +32,8 @@ mod namespace;
 mod wire;
 use wire::{
     EventIdentity, FieldText, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage,
-    ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
-    QueryCompletion, QueryContinuation, RecordLookup,
+    ICloudQueryResponse, ICloudRecordReference, ICloudRecordsResponse, ICloudRequest,
+    ICloudTextField, ICloudZone, QueryCompletion, QueryContinuation, RecordLookup,
 };
 #[cfg(test)]
 use wire::{ICloudFieldValue, ICloudRecord, RecordFields};
@@ -241,26 +241,29 @@ impl ICloudEventStore<'_> {
                 Self::log_icloud_error_body(OPERATION, PATH, status, &body, token.as_ref());
                 return Err(Self::icloud_error(status, &body));
             }
-            let parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
+            let ICloudQueryResponse {
+                records,
+                continuation_marker: completion,
+            } = response.json().await.map_err(|e| {
                 NookError::Serialization(format!("Failed to parse CloudKit event query: {e}"))
             })?;
+            let records = records.into_rows();
             tracing::info!(
                 scope = "wasm-icloud",
                 operation = OPERATION,
                 path = PATH,
-                returned_records = parsed.records.len(),
-                continuation_returned =
-                    matches!(parsed.continuation_marker, QueryCompletion::Continue(_)),
+                returned_records = records.len(),
+                continuation_returned = matches!(completion, QueryCompletion::Continue(_)),
                 "CloudKit event query parsed"
             );
-            for record in &parsed.records {
+            for record in &records {
                 if let EventIdentity::Declared(event_id) = record.event_id()
                     && EventId::parse(&event_id).is_ok()
                 {
                     event_ids.push(event_id);
                 }
             }
-            continuation_marker = match parsed.continuation_marker {
+            continuation_marker = match completion {
                 QueryCompletion::Complete => break,
                 QueryCompletion::Continue(marker) => QueryContinuation::Continue(marker),
             };
@@ -359,6 +362,46 @@ mod tests {
     use nook_core::ICloudSharedTarget;
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    /// `CloudKit`'s answers: a query page may omit its records and its marker,
+    /// a record may omit its fields; a lookup or modify answer always names
+    /// its records, and a field object always carries its value.
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn cloudkit_answers_decode_documented_absence_and_refuse_the_rest() -> anyhow::Result<()> {
+        let last: ICloudQueryResponse = serde_json::from_str("{}")?;
+        assert!(last.records.into_rows().is_empty());
+        assert_eq!(last.continuation_marker, QueryCompletion::Complete);
+        let more: ICloudQueryResponse = serde_json::from_str(
+            r#"{"records":[{"recordName":"r"}],"continuationMarker":"next"}"#,
+        )?;
+        assert_eq!(
+            more.continuation_marker,
+            QueryCompletion::Continue("next".to_owned())
+        );
+        let rows = more.records.into_rows();
+        assert!(matches!(
+            rows.first().map(|record| &record.fields),
+            Some(RecordFields::Undisclosed)
+        ));
+        let null: ICloudQueryResponse =
+            serde_json::from_str(r#"{"records":null,"continuationMarker":null}"#)?;
+        assert_eq!(null.continuation_marker, QueryCompletion::Complete);
+        assert!(serde_json::from_str::<ICloudRecordsResponse>("{}").is_err());
+        assert!(
+            serde_json::from_str::<ICloudRecordsResponse>(
+                r#"{"records":[{"recordName":"r","fields":{"content":{}}}]}"#
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
     struct SharedTargetFixture(ICloudSharedTarget);
 
     impl SharedTargetFixture {
@@ -447,19 +490,19 @@ mod tests {
                 (
                     ICLOUD_CONTENT_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text("encrypted".to_owned()),
+                        value: "encrypted".to_owned(),
                     },
                 ),
                 (
                     ICLOUD_EVENT_ID_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text(event_id.to_string()),
+                        value: event_id.to_string(),
                     },
                 ),
                 (
                     ICLOUD_LOCATION_FIELD.to_owned(),
                     ICloudFieldValue {
-                        value: FieldText::Text("vault:store_abcdefghijk".to_owned()),
+                        value: "vault:store_abcdefghijk".to_owned(),
                     },
                 ),
             ])),

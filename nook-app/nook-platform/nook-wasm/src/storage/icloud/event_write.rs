@@ -318,7 +318,7 @@ mod tests {
                 .get(ICLOUD_CONTENT_FIELD)
                 .ok_or_else(|| anyhow::anyhow!("content field must be present"))?
                 .value,
-            FieldText::Text("encrypted-event".to_owned())
+            "encrypted-event"
         );
         // The record names the log it belongs to, so a vault can be listed and
         // deleted on its own.
@@ -328,7 +328,7 @@ mod tests {
                 .get(ICLOUD_LOCATION_FIELD)
                 .ok_or_else(|| anyhow::anyhow!("location field must be present"))?
                 .value,
-            FieldText::Text("vault:store_abcdefghijk".to_owned())
+            "vault:store_abcdefghijk"
         );
         Ok(())
     }

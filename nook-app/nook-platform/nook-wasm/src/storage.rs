@@ -26,6 +26,7 @@ pub(crate) mod identity_log;
 pub(crate) mod identity_record;
 pub(crate) mod indexed_db;
 pub(crate) mod local_folder;
+mod omittable_list;
 pub(crate) mod provider_vault_listing;
 pub(crate) mod remote_event;
 pub(crate) mod s3;

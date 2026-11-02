@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::storage::omittable_list::OmittableList;
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ICloudZone {
@@ -98,45 +100,65 @@ impl QueryContinuation {
         matches!(self, Self::FirstPage)
     }
 }
-#[derive(Default, Deserialize)]
-#[serde(untagged)]
+/// Boundary conversion: `CloudKit`'s optional `continuationMarker`, read here as continue or complete.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(from = "Option<String>")]
 pub(super) enum QueryCompletion {
     Continue(String),
-    #[default]
     Complete,
 }
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
+impl From<Option<String>> for QueryCompletion {
+    fn from(marker: Option<String>) -> Self {
+        match marker {
+            Some(marker) => Self::Continue(marker),
+            None => Self::Complete,
+        }
+    }
+}
+/// One record field's text, or that the record does not carry the field.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum FieldText {
     Text(String),
-    #[default]
     Unset,
 }
+/// A field object always carries its value.
 #[derive(Deserialize)]
 pub(super) struct ICloudFieldValue {
-    #[serde(default)]
-    pub(super) value: FieldText,
+    pub(super) value: String,
 }
-#[derive(Default, Deserialize)]
-#[serde(untagged)]
+/// Boundary conversion: `CloudKit`'s optional record `fields`, read here as declared or undisclosed.
+#[derive(Deserialize)]
+#[serde(from = "Option<HashMap<String, ICloudFieldValue>>")]
 pub(super) enum RecordFields {
     Declared(HashMap<String, ICloudFieldValue>),
-    #[default]
     Undisclosed,
+}
+impl From<Option<HashMap<String, ICloudFieldValue>>> for RecordFields {
+    fn from(fields: Option<HashMap<String, ICloudFieldValue>>) -> Self {
+        match fields {
+            Some(fields) => Self::Declared(fields),
+            None => Self::Undisclosed,
+        }
+    }
 }
 #[derive(Deserialize)]
 pub(super) struct ICloudRecord {
     #[serde(rename = "recordName")]
     pub(super) record_name: String,
-    #[serde(default)]
     pub(super) fields: RecordFields,
 }
+/// One page of a `records/query` answer.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ICloudQueryResponse {
+    pub(super) records: OmittableList<ICloudRecord>,
+    pub(super) continuation_marker: QueryCompletion,
+}
+/// A `records/lookup` or `records/modify` answer: one result per requested
+/// record or operation, so `records` is always there.
 #[derive(Deserialize)]
 pub(super) struct ICloudRecordsResponse {
-    #[serde(default)]
     pub(super) records: Vec<ICloudRecord>,
-    #[serde(rename = "continuationMarker", default)]
-    pub(super) continuation_marker: QueryCompletion,
 }
 pub(super) enum RecordLookup {
     Missing,
@@ -155,7 +177,7 @@ impl ICloudRecord {
         match &self.fields {
             RecordFields::Undisclosed => FieldText::Unset,
             RecordFields::Declared(fields) => match fields.get(name) {
-                Some(field) => field.value.clone(),
+                Some(field) => FieldText::Text(field.value.clone()),
                 None => FieldText::Unset,
             },
         }

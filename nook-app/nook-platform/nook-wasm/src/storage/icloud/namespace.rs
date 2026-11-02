@@ -5,7 +5,7 @@ use reqwest::Client;
 
 use super::wire::{
     FieldText, ICloudDelete, ICloudDeleteOperation, ICloudFilter, ICloudQuery, ICloudQueryPage,
-    ICloudRecord, ICloudRecordReference, ICloudRecordsResponse, ICloudTextField, QueryCompletion,
+    ICloudQueryResponse, ICloudRecord, ICloudRecordReference, ICloudTextField, QueryCompletion,
     QueryContinuation,
 };
 use super::{ICLOUD_EVENT_RECORD_TYPE, ICLOUD_LOCATION_FIELD, ICloudEventStore};
@@ -77,10 +77,10 @@ impl ICloudEventStore<'_> {
                 Self::log_icloud_error_body(OPERATION, PATH, status, &body, web_auth_token);
                 return Err(Self::icloud_error(status, &body));
             }
-            let parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
+            let parsed: ICloudQueryResponse = response.json().await.map_err(|e| {
                 NookError::Serialization(format!("Failed to parse CloudKit query: {e}"))
             })?;
-            records.extend(parsed.records);
+            records.extend(parsed.records.into_rows());
             continuation_marker = match parsed.continuation_marker {
                 QueryCompletion::Complete => break,
                 QueryCompletion::Continue(marker) => QueryContinuation::Continue(marker),
