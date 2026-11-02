@@ -414,8 +414,8 @@ impl NookVaultManager {
         content: &str,
         vault_missing: bool,
     ) -> Result<(bool, Vec<nook_core::StoredSecretRecord>), NookError> {
-        let event_log_remote =
-            self.storage.mode != StorageMode::Local && (vault_missing || content.trim().is_empty());
+        let event_log_remote = self.storage.mode() != StorageMode::Local
+            && (vault_missing || content.trim().is_empty());
         if event_log_remote {
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {

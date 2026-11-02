@@ -73,7 +73,7 @@ use nook_core::{DriveEventParent, EventId, EventLogLocation, LocalEventWrite};
 /// Event IO under an already resolved namespace parent; see `DriveNamespace`.
 pub(crate) struct DriveEventStore<'a> {
     pub(crate) token: &'a str,
-    pub(crate) parent: &'a DriveEventParent,
+    pub(crate) parent: DriveEventParent,
     pub(crate) location: &'a EventLogLocation,
 }
 
@@ -258,7 +258,7 @@ impl DriveEventStore<'_> {
 
     async fn list_drive_events(&self) -> Result<Vec<ListedDriveEvent>, NookError> {
         let token = self.token;
-        let parent = self.parent;
+        let parent = &self.parent;
         let token = token.trim();
         let query = format!(
             "name contains '.yaml' and {} and trashed=false",
@@ -343,7 +343,7 @@ impl DriveEventStore<'_> {
 
     async fn read_drive_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let token = self.token;
-        let parent = self.parent;
+        let parent = &self.parent;
         let token = token.trim();
         let file_ids = Self::lookup_drive_event_file_ids(
             token,
@@ -441,7 +441,7 @@ impl DriveEventStore<'_> {
     /// created file's id is required in Drive's answer.
     async fn put_drive_event(&self, checked: CheckedEventWrite<'_>) -> Result<(), NookError> {
         let token = self.token.trim();
-        let parent = self.parent;
+        let parent = &self.parent;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
         match self.read_drive_event(event_id).await? {

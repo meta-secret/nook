@@ -109,7 +109,7 @@ impl NookVaultManager {
     ) -> Result<OpenedIdentitySource<'a>, NookError> {
         Ok(match source {
             NookProviderSource::CurrentProvider => {
-                if self.storage.mode == StorageMode::Local {
+                if self.storage.mode() == StorageMode::Local {
                     return Err(NookError::Database(
                         "Connect a sync provider to reach this identity.".to_owned(),
                     ));

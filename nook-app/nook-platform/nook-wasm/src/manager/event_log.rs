@@ -28,10 +28,7 @@ pub(in crate::manager) use security_epoch::SecurityEpochRotationFailure;
 
 use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
 
-use crate::storage::drive_events::DriveEventStore;
 use crate::storage::event_db::{EventAppend, VaultEventPersistence};
-use crate::storage::github_events::GitHubEventStore;
-use crate::storage::icloud::ICloudEventStore;
 
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{

@@ -244,7 +244,7 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let result = async {
             self.prepare_storage_preserving_vault_metadata(&connection)
                 .await?;

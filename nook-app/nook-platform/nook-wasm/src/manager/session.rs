@@ -1,12 +1,12 @@
+use super::prepared_provider::{NextConnect, PreparedProvider, ProviderCacheRef};
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, EventGraph, ICloudSharedTarget, SentinelConfiguration, SentinelGenesisPhase,
-    SentinelPolicy, StorageConnection, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultSessionProjection, VaultType,
-    VaultUnlock, VaultUserRecordBatch,
+    EventGraph, SentinelConfiguration, SentinelGenesisPhase, SentinelPolicy, StorageConnection,
+    StorageMode, StoreId, StoredSecretRecord, VaultArchitecture, VaultMetaGraphProjection,
+    VaultMetaState, VaultProjection, VaultSessionProjection, VaultType, VaultUnlock,
+    VaultUserRecordBatch,
 };
-use std::cell::RefCell;
-use std::collections::BTreeMap;
+
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -20,145 +20,19 @@ pub(in crate::manager) enum ChosenProviderVault {
     Chosen(StoreId),
 }
 
-/// The shared Drive vault folder of the prepared Google Drive provider.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(in crate::manager) enum PreparedDriveFolder {
-    #[default]
-    Unprepared,
-    Folder(DriveEventParent),
-}
-
-impl PreparedDriveFolder {
-    pub(in crate::manager) fn parent(&self) -> Result<&DriveEventParent, NookError> {
-        match self {
-            Self::Folder(parent) => Ok(parent),
-            Self::Unprepared => Err(NookError::Drive(
-                "Google Drive vault folder is not prepared.".to_owned(),
-            )),
-        }
-    }
-}
-
-/// The `CloudKit` share of the prepared iCloud provider.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(in crate::manager) enum PreparedICloudShare {
-    #[default]
-    Unprepared,
-    Share(ICloudSharedTarget),
-}
-
-impl PreparedICloudShare {
-    pub(in crate::manager) fn target(&self) -> Result<&ICloudSharedTarget, NookError> {
-        match self {
-            Self::Share(target) => Ok(target),
-            Self::Unprepared => Err(NookError::ICloud(
-                "iCloud share is not prepared.".to_owned(),
-            )),
-        }
-    }
-}
-
-/// The S3 connection of the prepared S3 provider: its location and this
-/// device's key.
-#[derive(Debug, Clone, Default)]
-pub(in crate::manager) enum PreparedS3Connection {
-    #[default]
-    Unprepared,
-    Connection(nook_core::S3Connection),
-}
-
-impl PreparedS3Connection {
-    pub(in crate::manager) fn connection(&self) -> Result<&nook_core::S3Connection, NookError> {
-        match self {
-            Self::Connection(connection) => Ok(connection),
-            Self::Unprepared => Err(NookError::Database(
-                "S3 storage is not prepared.".to_owned(),
-            )),
-        }
-    }
-}
-
+/// The storage of one session: what it reads and writes, the vault it opens
+/// when the provider holds several, and where the next connect reads from.
+#[derive(Default)]
 pub(in crate::manager) struct StorageSession {
-    pub(in crate::manager) mode: nook_core::StorageMode,
+    pub(in crate::manager) provider: PreparedProvider,
     /// The vault to open when the prepared provider holds several.
     pub(in crate::manager) chosen_vault: ChosenProviderVault,
-    /// Resolved Drive folders for placed event-log namespaces.
-    pub(in crate::manager) drive_namespaces:
-        RefCell<BTreeMap<nook_core::PlacedNamespace, DriveEventParent>>,
-    /// The identity folder each vault was found in or filed under at the
-    /// prepared provider.
-    pub(in crate::manager) vault_placements:
-        RefCell<BTreeMap<nook_core::StoreId, nook_core::PlacedNamespace>>,
-    pub(in crate::manager) access_token: String,
-    pub(in crate::manager) remote_ref: String,
-    pub(in crate::manager) remote_path: String,
-    pub(in crate::manager) drive_event_parent: PreparedDriveFolder,
-    pub(in crate::manager) icloud_event_target: PreparedICloudShare,
-    pub(in crate::manager) s3_connection: PreparedS3Connection,
-    pub(in crate::manager) github_root_empty: bool,
-    pub(in crate::manager) use_local_cache_for_connect: bool,
+    pub(in crate::manager) next_connect: NextConnect,
 }
 
 impl StorageSession {
-    pub(in crate::manager) fn drive_namespace_parent(
-        &self,
-        placed: &nook_core::PlacedNamespace,
-    ) -> Option<nook_core::DriveEventParent> {
-        self.drive_namespaces.borrow().get(placed).cloned()
-    }
-
-    pub(in crate::manager) fn remember_drive_namespace(
-        &self,
-        placed: &nook_core::PlacedNamespace,
-        parent: &nook_core::DriveEventParent,
-    ) {
-        self.drive_namespaces
-            .borrow_mut()
-            .insert(placed.clone(), parent.clone());
-    }
-
-    pub(in crate::manager) fn vault_placement(
-        &self,
-        store_id: &nook_core::StoreId,
-    ) -> Option<nook_core::PlacedNamespace> {
-        self.vault_placements.borrow().get(store_id).cloned()
-    }
-
-    pub(in crate::manager) fn remember_vault_placement(
-        &self,
-        store_id: &nook_core::StoreId,
-        placed: &nook_core::PlacedNamespace,
-    ) {
-        self.vault_placements
-            .borrow_mut()
-            .insert(store_id.clone(), placed.clone());
-    }
-}
-
-impl StorageSession {
-    /// Forget folder lookups resolved for the previously prepared row.
-    pub(in crate::manager) fn forget_namespaces(&mut self) {
-        self.drive_namespaces.get_mut().clear();
-        self.vault_placements.get_mut().clear();
-    }
-}
-
-impl Default for StorageSession {
-    fn default() -> Self {
-        Self {
-            mode: StorageMode::Local,
-            chosen_vault: ChosenProviderVault::Unchosen,
-            drive_namespaces: RefCell::default(),
-            vault_placements: RefCell::default(),
-            access_token: String::new(),
-            remote_ref: String::new(),
-            remote_path: String::new(),
-            drive_event_parent: PreparedDriveFolder::Unprepared,
-            icloud_event_target: PreparedICloudShare::Unprepared,
-            s3_connection: PreparedS3Connection::Unprepared,
-            github_root_empty: false,
-            use_local_cache_for_connect: false,
-        }
+    pub(in crate::manager) fn mode(&self) -> StorageMode {
+        self.provider.mode()
     }
 }
 
@@ -480,27 +354,21 @@ impl EventLogSessionState {
     }
 }
 
-pub(in crate::manager) struct SyncOutboxState {
-    pub(in crate::manager) provider_id: String,
-    /// The provider a local session pushes its outbox to.
+/// Where a session that keeps its vault in this browser also pushes new
+/// events: nowhere, or the sync provider it last prepared.
+#[derive(Default)]
+pub(in crate::manager) enum SyncOutbox {
+    #[default]
+    Unbound,
+    Bound(OutboxTarget),
+}
+
+/// The provider an outbox pushes to. Replacing the target drops its
+/// connection, whose credential wipes itself.
+pub(in crate::manager) struct OutboxTarget {
+    /// Names the outbox rows.
+    pub(in crate::manager) provider: ProviderCacheRef,
     pub(in crate::manager) connection: StorageConnection,
-}
-
-impl Default for SyncOutboxState {
-    fn default() -> Self {
-        Self {
-            provider_id: String::new(),
-            connection: StorageConnection::Local,
-        }
-    }
-}
-
-impl SyncOutboxState {
-    pub(in crate::manager) fn reset(&mut self) {
-        self.provider_id.clear();
-        // Replacing the connection drops its credential, which wipes itself.
-        self.connection = StorageConnection::Local;
-    }
 }
 
 #[wasm_bindgen]
@@ -516,13 +384,12 @@ pub struct NookVaultManager {
     pub(in crate::manager) pending_sentinel_genesis_request:
         CeremonyState<nook_core::SentinelGenesisRequest>,
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
-    pub(in crate::manager) sync_outbox: SyncOutboxState,
+    pub(in crate::manager) sync_outbox: SyncOutbox,
     pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
 }
 
 impl Drop for NookVaultManager {
     fn drop(&mut self) {
-        self.storage.access_token.zeroize();
         self.vault.reset();
         self.device.identity_private_key.zeroize();
         self.event_log.reset();
@@ -530,7 +397,7 @@ impl Drop for NookVaultManager {
         self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
-        self.sync_outbox.reset();
+        self.sync_outbox = SyncOutbox::Unbound;
         self.event_log_sync_issue = EventLogSyncIssueState::Clear;
     }
 }
@@ -550,7 +417,7 @@ impl NookVaultManager {
             sentinel_genesis_phase: SentinelGenesisPhase::Inactive,
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,
-            sync_outbox: SyncOutboxState::default(),
+            sync_outbox: SyncOutbox::Unbound,
             event_log_sync_issue: EventLogSyncIssueState::Clear,
         }
     }
@@ -559,7 +426,6 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_fixtures::WasmFixture;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -657,14 +523,6 @@ mod tests {
         assert_eq!(device.public_app_id(), "app-id");
         device.id.clear();
         assert!(device.public_app_id().is_empty());
-
-        let mut outbox = SyncOutboxState {
-            provider_id: "provider".to_owned(),
-            connection: WasmFixture::github_connection("token", "owner/repo")?,
-        };
-        outbox.reset();
-        assert!(outbox.provider_id.is_empty());
-        assert_eq!(outbox.connection, StorageConnection::Local);
         Ok(())
     }
 

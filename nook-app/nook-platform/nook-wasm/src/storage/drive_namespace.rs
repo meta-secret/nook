@@ -582,7 +582,7 @@ mod fetch_tests {
         // The store's parent is the namespace folder itself.
         let store = DriveEventStore {
             token: "drive-token",
-            parent: &DriveEventParent::shared_folder_id("doomed"),
+            parent: DriveEventParent::shared_folder_id("doomed"),
             location: placed.location(),
         };
         let stub = FetchStub::install(vec![FetchRoute::ok("DELETE", "drive/v3/files/doomed", "")])?;
@@ -611,7 +611,7 @@ mod fetch_tests {
         let placed = placed()?;
         let store = DriveEventStore {
             token: "drive-token",
-            parent: &DriveEventParent::shared_folder_id("vault"),
+            parent: DriveEventParent::shared_folder_id("vault"),
             location: placed.location(),
         };
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
@@ -633,7 +633,7 @@ mod fetch_tests {
         let location = EventLogLocation::Vault(StoreId::parse("store_testtoken11")?);
         let store = DriveEventStore {
             token: "drive-token",
-            parent: &DriveEventParent::shared_folder_id("vault"),
+            parent: DriveEventParent::shared_folder_id("vault"),
             location: &location,
         };
         let stub = FetchStub::install(vec![

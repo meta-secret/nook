@@ -34,7 +34,6 @@ impl NookVaultManager {
 
     fn reset_local_identity_session(&mut self) {
         self.reset_vault_session();
-        self.storage.access_token.zeroize();
         self.storage = StorageSession::default();
         self.event_log_sync_issue = EventLogSyncIssueState::Clear;
     }
@@ -211,8 +210,8 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manager::{OutboxTarget, PreparedProvider, SyncOutbox};
     use crate::test_fixtures::WasmFixture;
-    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -239,23 +238,20 @@ mod tests {
     #[wasm_bindgen_test]
     fn identity_transition_clears_provider_session_state() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
-        manager.storage.access_token = "prior-identity-token".to_owned();
-        manager.storage.remote_ref = "owner/repository".to_owned();
-        manager.storage.remote_path = "events".to_owned();
-        manager.sync_outbox.connection =
-            WasmFixture::github_connection("prior-outbox-token", "owner/repository")?;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("prior-identity-token", "owner/repository")?;
+        manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+            provider: manager.storage.provider.cache_ref(),
+            connection: WasmFixture::github_connection("prior-outbox-token", "owner/repository")?,
+        });
 
         manager.reset_local_identity_session();
 
-        assert_eq!(manager.storage.mode, StorageMode::Local);
-        assert!(manager.storage.access_token.is_empty());
-        assert!(manager.storage.remote_ref.is_empty());
-        assert!(manager.storage.remote_path.is_empty());
-        assert_eq!(
-            manager.sync_outbox.connection,
-            nook_core::StorageConnection::Local
-        );
+        assert!(matches!(
+            manager.storage.provider,
+            PreparedProvider::ThisBrowser
+        ));
+        assert!(matches!(manager.sync_outbox, SyncOutbox::Unbound));
         Ok(())
     }
 }

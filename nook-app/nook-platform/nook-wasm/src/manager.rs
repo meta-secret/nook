@@ -20,16 +20,14 @@
 use crate::VaultSnapshotLookup;
 
 use crate::AuthProviderDatabase;
-use crate::DriveStorageClient;
-use crate::GitHubStorageClient;
 use crate::LoggerState;
 use crate::NookDatabase;
 use crate::NookError;
 use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
-    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, MultiDeviceError, SelfRosterSync,
-    SentinelGenesisPhase, StorageConnection, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
+    DeviceIdentity, DeviceIdentitySecret, MultiDeviceError, SelfRosterSync, SentinelGenesisPhase,
+    StorageConnection, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
     VaultSessionProjection, VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite,
     i18n_keys,
 };
@@ -55,6 +53,7 @@ mod passkeys;
 mod password;
 mod password_unlock;
 mod personal_fill;
+mod prepared_provider;
 mod remote_vault_choice;
 mod search_catalog;
 mod secrets;
@@ -78,11 +77,16 @@ pub use sentinel::NookSentinelStoredDeliveriesRequest;
 pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameState};
 mod grant_authority;
 
+#[cfg(test)]
+pub(in crate::manager) use prepared_provider::ProviderCacheRef;
+pub(in crate::manager) use prepared_provider::{
+    NextConnect, PreparedProvider, PreparedRemote, ProviderPreparation, ProviderSwitch,
+    RemoteProvider,
+};
 pub(in crate::manager) use session::{
-    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
-    PreparedDriveFolder, PreparedICloudShare, PreparedS3Connection, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState, OutboxTarget,
+    SearchCatalogRestore, SearchCatalogState, StorageSession, SyncOutbox, VaultCryptoState,
+    VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -101,7 +105,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
-        self.storage.mode.to_string()
+        self.storage.mode().to_string()
     }
 
     #[wasm_bindgen(getter, js_name = vaultApplication)]
@@ -227,25 +231,18 @@ impl NookVaultManager {
             .unwrap_or_default()
     }
 
-    /// GitHub repo (`owner/name`) or Google Drive file id, depending on mode.
-    #[wasm_bindgen(getter)]
-    pub fn storage_remote_ref(&self) -> String {
-        self.storage.remote_ref.clone()
-    }
-
     /// Drop in-memory vault session state when switching storage providers.
     /// Device identity and configured storage credentials are preserved.
     #[wasm_bindgen]
     pub fn reset_vault_session(&mut self) {
         self.vault.reset();
-        self.storage.github_root_empty = false;
-        self.storage.use_local_cache_for_connect = false;
+        self.storage.next_connect = NextConnect::FromProvider;
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
-        self.sync_outbox.reset();
+        self.sync_outbox = SyncOutbox::Unbound;
     }
 
     /// Zeroize the active session and clear every Nook-owned browser database.
@@ -253,7 +250,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn delete_local_browser_data(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
-        self.storage.access_token.zeroize();
+        // Replacing the session drops the prepared provider, whose
+        // credential wipes itself.
         self.storage = StorageSession::default();
         self.device.id.clear();
         self.device.identity_private_key.zeroize();
@@ -371,9 +369,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {
-        self.storage
-            .mode
-            .cache_ref(&self.storage.remote_ref, &self.storage.remote_path)
+        self.storage.provider.cache_ref().as_str().to_owned()
     }
 
     pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
@@ -518,97 +514,33 @@ impl NookVaultManager {
         )
     }
 
+    /// Prepare one connection as the session's storage. The prepared
+    /// provider is assigned once, so a failed prepare keeps the previous one;
+    /// the provider it replaces drops, and its credential wipes itself.
     pub(in crate::manager) async fn prepare_storage(
         &mut self,
         connection: &StorageConnection,
     ) -> Result<(), NookError> {
-        let mode = connection.mode();
-        let previous_mode = self.storage.mode;
-        let previous_remote_ref = self.storage.remote_ref.clone();
-        self.storage.mode = mode;
-        self.storage.forget_namespaces();
-
-        match connection {
-            StorageConnection::Local => {
-                self.storage.access_token = String::new();
-                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
-                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Unprepared;
-            }
-            StorageConnection::Github { token, repo } => {
-                self.storage.access_token =
-                    nook_core::GithubPat::parse(token.expose())?.to_string();
-                let repo_name = nook_core::GithubRepoName::parse(repo)?;
-                drop(self.status.tx.send("GITHUB_USER_FETCH".to_owned()));
-                let username = GitHubStorageClient::new(&self.storage.access_token)
-                    .fetch_github_username()
-                    .await?;
-                let new_repo = format!("{}/{}", username, repo_name);
-                if self.storage.remote_ref != new_repo {
-                    self.storage.github_root_empty = false;
-                }
-                self.storage.remote_ref = new_repo;
-                self.storage.remote_path.clear();
-                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
-                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Unprepared;
-                drop(self.status.tx.send("GITHUB_REPO_ENSURE".to_owned()));
-                GitHubStorageClient::new(&self.storage.access_token)
-                    .ensure_github_repo_exists(&self.storage.remote_ref)
-                    .await?;
-            }
-            StorageConnection::GoogleDrive { token, folder_id } => {
-                self.storage.access_token =
-                    nook_core::OauthAccessToken::parse(token.expose())?.to_string();
-                // Every Drive provider targets its shareable vault folder.
-                let parent = DriveEventParent::shared_folder_id(folder_id.as_str());
-                self.storage.remote_path.clear();
-                drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
-                DriveStorageClient::new(&self.storage.access_token)
-                    .verify_drive_access()
-                    .await?;
-                self.storage.remote_ref = parent.folder_id.clone();
-                self.storage.drive_event_parent = PreparedDriveFolder::Folder(parent);
-                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Unprepared;
-            }
-            StorageConnection::ICloud {
-                token,
-                share_target,
-            } => {
-                self.storage.access_token =
-                    nook_core::OauthAccessToken::parse(token.expose())?.to_string();
-                // Every iCloud provider targets its `CloudKit` share.
-                let target = share_target.target()?;
-                self.storage.remote_path.clear();
-                self.storage.remote_ref = share_target.as_str().to_owned();
-                self.storage.icloud_event_target = PreparedICloudShare::Share(target);
-                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Unprepared;
-            }
-            StorageConnection::S3 { connection } => {
-                // The connection was validated when it crossed the boundary;
-                // the cache reference names the location only.
-                self.storage.access_token = String::new();
-                self.storage.remote_ref = connection.location_identity();
-                self.storage.remote_path.clear();
-                self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
-                self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-                self.storage.s3_connection = PreparedS3Connection::Connection(connection.clone());
-            }
-        }
-
-        if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
+        let prepared = PreparedProvider::prepare(ProviderPreparation {
+            connection,
+            status: &self.status.tx,
+        })
+        .await?;
+        let previous = mem::replace(&mut self.storage.provider, prepared);
+        if let ProviderSwitch::OtherStorage = previous
+            .cache_ref()
+            .switch_to(&self.storage.provider.cache_ref())
+        {
             self.vault.password_entries.clear();
             self.vault.unlock = VaultUnlock::Keys;
             self.vault.vault_name = VaultNameState::Unnamed;
         }
-
-        if mode != StorageMode::Local {
-            self.sync_outbox.provider_id = self.local_cache_ref();
-            self.sync_outbox.connection = connection.clone();
+        if let PreparedProvider::Remote(remote) = &self.storage.provider {
+            self.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+                provider: remote.cache_ref(),
+                connection: connection.clone(),
+            });
         }
-
         Ok(())
     }
 
@@ -641,7 +573,7 @@ impl NookVaultManager {
         &mut self,
         remote_content_missing: &mut bool,
     ) -> Result<String, NookError> {
-        let content = match self.storage.mode {
+        let content = match self.storage.mode() {
             StorageMode::Local => {
                 drop(self.status.tx.send("IDB_LOAD_START".to_owned()));
                 let stored = NookDatabase::load_from_indexed_db().await?;
@@ -700,30 +632,28 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn reset_session_keeps_device_and_provider_configuration() -> Result<(), NookError> {
+    fn reset_session_keeps_device_and_provider_configuration() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         let identity = DeviceIdentity::generate()?;
         manager.device.id = "device-stable".to_owned();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.storage.access_token = "provider-token".to_owned();
-        manager.storage.remote_ref = "owner/repo".to_owned();
-        manager.storage.remote_path = "vault.yaml".to_owned();
-        manager.storage.github_root_empty = true;
-        manager.storage.use_local_cache_for_connect = true;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("provider-token", "owner/repo")?;
+        manager.storage.next_connect = NextConnect::FromLocalCache;
         manager.vault.store_id = "store_sessionreset1".to_owned();
-        manager.sync_outbox.provider_id = "provider-cache".to_owned();
+        manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+            provider: manager.storage.provider.cache_ref(),
+            connection: StorageConnection::Local,
+        });
 
         manager.reset_vault_session();
 
         assert_eq!(manager.device.id, "device-stable");
         assert!(!manager.device.identity_private_key.is_empty());
-        assert_eq!(manager.storage.access_token, "provider-token");
-        assert_eq!(manager.storage.remote_ref, "owner/repo");
-        assert_eq!(manager.storage.remote_path, "vault.yaml");
-        assert!(!manager.storage.github_root_empty);
-        assert!(!manager.storage.use_local_cache_for_connect);
+        assert_eq!(manager.local_cache_ref(), "github:owner/repo:");
+        assert_eq!(manager.storage.next_connect, NextConnect::FromProvider);
         assert!(manager.vault.store_id.is_empty());
-        assert!(manager.sync_outbox.provider_id.is_empty());
+        assert!(matches!(manager.sync_outbox, SyncOutbox::Unbound));
         Ok(())
     }
 
@@ -778,25 +708,22 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn local_cache_reference_tracks_provider_mode_and_path() {
+    /// The cache names stay the ones this browser has always stored under.
+    fn local_cache_reference_names_each_prepared_storage() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
-        manager.storage.remote_ref = "owner/repo".to_owned();
-        manager.storage.remote_path = "vault.yaml".to_owned();
+        assert_eq!(manager.local_cache_ref(), "local");
+        manager.storage.provider = PreparedProvider::github_fixture("token", "owner/repo")?;
+        assert_eq!(manager.local_cache_ref(), "github:owner/repo:");
+        manager.storage.provider = PreparedProvider::drive_fixture("token", "folder-a")?;
+        assert_eq!(manager.local_cache_ref(), "drive:folder-a");
+        manager.storage.provider = PreparedProvider::drive_fixture("token", "folder-b")?;
+        assert_eq!(manager.local_cache_ref(), "drive:folder-b");
+        manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
         assert_eq!(
             manager.local_cache_ref(),
-            StorageMode::Github.cache_ref("owner/repo", "vault.yaml")
+            "s3:http://127.0.0.1:8333/nook-dev/e2e"
         );
-
-        manager.storage.mode = StorageMode::GoogleDrive;
-        manager.storage.drive_event_parent =
-            PreparedDriveFolder::Folder(DriveEventParent::shared_folder_id("folder-a"));
-        manager.storage.remote_ref = "folder-a".to_owned();
-        let first_folder_cache = manager.local_cache_ref();
-        manager.storage.drive_event_parent =
-            PreparedDriveFolder::Folder(DriveEventParent::shared_folder_id("folder-b"));
-        manager.storage.remote_ref = "folder-b".to_owned();
-        assert_ne!(first_folder_cache, manager.local_cache_ref());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -810,18 +737,17 @@ mod tests {
             .prepare_storage(&connection)
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
-        assert_eq!(manager.storage.mode, StorageMode::S3);
-        assert!(matches!(
-            manager.storage.s3_connection,
-            PreparedS3Connection::Connection(_)
-        ));
+        assert_eq!(manager.storage.mode(), StorageMode::S3);
         // The cache and the outbox name the location, never the key.
         assert_eq!(
             manager.local_cache_ref(),
             "s3:http://127.0.0.1:8333/nook-dev/e2e"
         );
-        assert_eq!(manager.sync_outbox.provider_id, manager.local_cache_ref());
-        assert_eq!(manager.sync_outbox.connection, connection);
+        let SyncOutbox::Bound(target) = &manager.sync_outbox else {
+            anyhow::bail!("preparing a provider binds the outbox");
+        };
+        assert_eq!(target.provider.as_str(), manager.local_cache_ref());
+        assert_eq!(target.connection, connection);
         assert!(!manager.local_cache_ref().contains("device-a"));
 
         manager
@@ -829,9 +755,80 @@ mod tests {
             .await
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert!(matches!(
-            manager.storage.s3_connection,
-            PreparedS3Connection::Unprepared
+            manager.storage.provider,
+            PreparedProvider::ThisBrowser
         ));
+        // A local session keeps pushing to the provider it last prepared.
+        assert!(matches!(manager.sync_outbox, SyncOutbox::Bound(_)));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn moving_to_other_storage_resets_vault_metadata_unless_preserved() -> anyhow::Result<()>
+    {
+        let s3 = StorageConnection::S3 {
+            connection: WasmFixture::s3_connection()?,
+        };
+        let mut manager = NookVaultManager::new();
+        manager.vault.vault_name = VaultNameState::Named("Kept".to_owned());
+        manager
+            .prepare_storage_preserving_vault_metadata(&s3)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(matches!(&manager.vault.vault_name, VaultNameState::Named(name) if name == "Kept"));
+        // The same storage again is no move.
+        manager
+            .prepare_storage(&s3)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(matches!(&manager.vault.vault_name, VaultNameState::Named(name) if name == "Kept"));
+        manager
+            .prepare_storage(&StorageConnection::Local)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg(feature = "browser-wasm-tests")]
+    async fn a_malformed_event_reaches_no_prepared_provider() -> anyhow::Result<()> {
+        use crate::storage::fetch_stub::FetchStub;
+        let mut manager = NookVaultManager::new();
+        manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
+        let location = nook_core::EventLogLocation::Vault(nook_core::StoreId::generate()?);
+        let stub = FetchStub::install(Vec::new()).map_err(|error| anyhow::anyhow!("{error}"))?;
+        let event_id = nook_core::EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        match manager
+            .put_provider_event_at(&location, &event_id, b"not an event")
+            .await
+        {
+            Err(NookError::Serialization(message)) => {
+                assert!(message.starts_with("S3 event parse:"));
+            }
+            Err(_) => anyhow::bail!("unexpected refusal"),
+            Ok(()) => anyhow::bail!("a malformed event was written"),
+        }
+        assert!(stub.calls().is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg(feature = "browser-wasm-tests")]
+    async fn a_failed_prepare_keeps_the_previous_provider() -> anyhow::Result<()> {
+        use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+        let mut manager = NookVaultManager::new();
+        manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
+        let _stub =
+            FetchStub::install(vec![FetchRoute::failing("GET", "api.github.com/user", 401)])
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let github = WasmFixture::github_connection("rejected-token", "repo")?;
+        assert!(manager.prepare_storage(&github).await.is_err());
+        assert_eq!(manager.storage.mode(), StorageMode::S3);
+        assert_eq!(
+            manager.local_cache_ref(),
+            "s3:http://127.0.0.1:8333/nook-dev/e2e"
+        );
         Ok(())
     }
 

@@ -27,7 +27,7 @@ impl NookVaultManager {
             storage = %storage_mode,
             "sync_vault_from_storage started"
         );
-        let initial_storage_mode = self.storage.mode;
+        let initial_storage_mode = self.storage.mode();
         // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
         // switch (it assumes a *different* vault). A same-vault sync only
         // toggles the local-cache/remote tag, so preserve the backup-password
@@ -139,6 +139,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::manager::PreparedProvider;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -224,7 +225,7 @@ mod browser_tests {
             .await?;
         assert!(!result.changed());
         assert!(result.access_status().is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
 
         NookDatabase::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
@@ -232,9 +233,11 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn event_log_sync_propagates_github_403_and_restores_local_storage() {
+    async fn event_log_sync_propagates_github_403_and_restores_local_storage() -> anyhow::Result<()>
+    {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("TEST-ONLY-token", "owner/repo")?;
         let forbidden = crate::GitHubStorageClient::github_api_failure(
             reqwest::StatusCode::FORBIDDEN,
             "GitHub event tree listing failed with status 403 Forbidden".to_owned(),
@@ -249,6 +252,7 @@ mod browser_tests {
             .await;
 
         assert!(result.is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
+        Ok(())
     }
 }

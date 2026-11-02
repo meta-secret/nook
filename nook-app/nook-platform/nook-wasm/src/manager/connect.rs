@@ -15,7 +15,7 @@
 mod identity_completion;
 
 use super::verified_access::VerifiedVaultAccessFlow;
-use super::{NookVaultManager, VaultNameState};
+use super::{NextConnect, NookVaultManager, SyncOutbox, VaultNameState};
 use crate::IdentityDbEnsureLocalIdentityForAppKey;
 use crate::NookDatabase;
 use crate::TypedInput;
@@ -34,6 +34,7 @@ use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageConnection, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
+use std::mem;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -55,6 +56,7 @@ mod tests {
     use super::*;
     use crate::TypedOutput;
     use crate::manager::VaultNameState;
+    use crate::manager::{OutboxTarget, PreparedProvider};
     use crate::test_fixtures::WasmFixture;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -149,23 +151,29 @@ mod tests {
         )
     )]
     async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox()
-    -> Result<(), JsError> {
+    -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::GoogleDrive;
-        manager.storage.access_token = "rejected-token".to_owned();
-        manager.sync_outbox.provider_id = "rejected-provider".to_owned();
-        manager.sync_outbox.connection = StorageConnection::GoogleDrive {
-            token: WasmFixture::secret("rejected-token")?,
-            folder_id: nook_core::GoogleDriveFolderId::parse("rejected-folder")?,
-        };
+        manager.storage.provider =
+            PreparedProvider::drive_fixture("rejected-token", "rejected-folder")?;
+        manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+            provider: manager.storage.provider.cache_ref(),
+            connection: StorageConnection::GoogleDrive {
+                token: WasmFixture::secret("rejected-token")?,
+                folder_id: nook_core::GoogleDriveFolderId::parse("rejected-folder")?,
+            },
+        });
         manager.vault.vault_name = VaultNameState::Named("Local vault".to_owned());
 
-        manager.restore_local_after_provider_assessment().await?;
+        manager
+            .restore_local_after_provider_assessment()
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
 
-        assert_eq!(manager.storage.mode, StorageMode::Local);
-        assert!(manager.storage.access_token.is_empty());
-        assert!(manager.sync_outbox.provider_id.is_empty());
-        assert_eq!(manager.sync_outbox.connection, StorageConnection::Local);
+        assert!(matches!(
+            manager.storage.provider,
+            PreparedProvider::ThisBrowser
+        ));
+        assert!(matches!(manager.sync_outbox, SyncOutbox::Unbound));
         assert!(matches!(
             &manager.vault.vault_name,
             VaultNameState::Named(name) if name == "Local vault"
@@ -197,11 +205,11 @@ mod tests {
             VaultAccessStatus::NewVault
         );
         manager.prepare_connect_from_local_cache();
-        assert!(manager.storage.use_local_cache_for_connect);
+        assert_eq!(manager.storage.next_connect, NextConnect::FromLocalCache);
         manager.clear_connect_recovery();
-        assert!(!manager.storage.use_local_cache_for_connect);
+        assert_eq!(manager.storage.next_connect, NextConnect::FromProvider);
         manager.restore_local_after_provider_assessment().await?;
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
 
         manager.delete_local_browser_data().await?;
         Ok(())
@@ -366,7 +374,7 @@ impl NookVaultManager {
     ) -> Result<VaultAccessStatus, NookError> {
         self.prepare_storage(connection).await?;
         let identity = self.ensure_device_identity()?;
-        if self.storage.mode != StorageMode::Local {
+        if self.storage.mode() != StorageMode::Local {
             self.sync_events_from_current_provider().await?;
             if !self.vault.store_id.is_empty() && self.event_log_has_events().await? {
                 let status = VaultAccessStatus::from(VaultMetaState::assess_connect_access(
@@ -378,7 +386,7 @@ impl NookVaultManager {
                 drop(
                     self.status
                         .tx
-                        .send(format!("ASSESS_{}_{}", self.storage.mode, status)),
+                        .send(format!("ASSESS_{}_{}", self.storage.mode(), status)),
                 );
                 return Ok(status);
             }
@@ -422,7 +430,7 @@ impl NookVaultManager {
         drop(
             self.status
                 .tx
-                .send(format!("ASSESS_{}_{}", self.storage.mode, status)),
+                .send(format!("ASSESS_{}_{}", self.storage.mode(), status)),
         );
         tracing::info!(
             scope = "wasm-connect",
@@ -456,7 +464,7 @@ impl NookVaultManager {
     pub async fn restore_local_after_provider_assessment(&mut self) -> Result<(), JsError> {
         self.prepare_storage_preserving_vault_metadata(&StorageConnection::Local)
             .await?;
-        self.sync_outbox.reset();
+        self.sync_outbox = SyncOutbox::Unbound;
         Ok(())
     }
 
@@ -486,12 +494,12 @@ impl NookVaultManager {
     /// remote file after a successful unlock.
     #[wasm_bindgen]
     pub fn prepare_connect_from_local_cache(&mut self) {
-        self.storage.use_local_cache_for_connect = true;
+        self.storage.next_connect = NextConnect::FromLocalCache;
     }
 
     #[wasm_bindgen]
     pub fn clear_connect_recovery(&mut self) {
-        self.storage.use_local_cache_for_connect = false;
+        self.storage.next_connect = NextConnect::FromProvider;
     }
 
     async fn connect_internal(
@@ -623,8 +631,10 @@ impl NookVaultManager {
     }
 
     async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
-        if self.storage.use_local_cache_for_connect {
-            self.storage.use_local_cache_for_connect = false;
+        // The local-cache recovery serves one connect only.
+        if let NextConnect::FromLocalCache =
+            mem::replace(&mut self.storage.next_connect, NextConnect::FromProvider)
+        {
             let cached = match NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
             {
                 VaultSnapshotLookup::Stored(cache) if !cache.trim().is_empty() => cache,
@@ -637,7 +647,7 @@ impl NookVaultManager {
             return Ok((cached, true));
         }
 
-        if self.storage.mode != StorageMode::Local {
+        if self.storage.mode() != StorageMode::Local {
             self.sync_events_from_current_provider().await?;
             return Ok((String::new(), false));
         }
@@ -673,7 +683,7 @@ impl NookVaultManager {
     ) -> Result<bool, NookError> {
         if matches!(genesis_intent, nook_core::VaultGenesisIntent::ForceFresh)
             || !content.trim().is_empty()
-            || self.storage.mode == StorageMode::Local
+            || self.storage.mode() == StorageMode::Local
         {
             return Ok(false);
         }

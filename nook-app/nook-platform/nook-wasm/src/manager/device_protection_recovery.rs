@@ -2,14 +2,14 @@
 
 use super::NookVaultManager;
 use crate::AuthProviderDatabase;
-use crate::manager::session::{PreparedDriveFolder, PreparedICloudShare, PreparedS3Connection};
+use crate::manager::PreparedProvider;
 use crate::storage::identity_record::MemberSigner;
 use crate::storage::identity_record::{
     LocalIdentityRecoveryRequest, ProtectedIdentityLookup, ProtectedLocalIdentity,
 };
 use crate::storage::identity_record::{RecoveryTarget, RetiredInstallation};
 use crate::{NookDatabase, NookError};
-use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, PasskeyMemberSigner, StorageMode};
+use nook_core::{AppId, DeviceIdentity, DeviceProtectionStatus, PasskeyMemberSigner};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -34,14 +34,8 @@ impl NookVaultManager {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();
         self.device.id.clear();
-        self.storage.access_token.zeroize();
-        self.storage.remote_ref.clear();
-        self.storage.remote_path.clear();
-        self.storage.drive_event_parent = PreparedDriveFolder::Unprepared;
-        self.storage.icloud_event_target = PreparedICloudShare::Unprepared;
-        // Dropping the prepared S3 connection wipes its secret access key.
-        self.storage.s3_connection = PreparedS3Connection::Unprepared;
-        self.storage.mode = StorageMode::Local;
+        // Dropping the prepared provider wipes its credential.
+        self.storage.provider = PreparedProvider::ThisBrowser;
     }
 
     /// Destructive local recovery: forget the inaccessible identity and its
@@ -132,34 +126,25 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use crate::test_fixtures::WasmFixture;
-    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn quiesce_clears_sensitive_session_state() -> Result<(), NookError> {
+    fn quiesce_clears_sensitive_session_state() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.device.id = "device-id".to_owned();
         manager.device.identity_private_key = "private-key".to_owned();
         manager.event_log.signing_seed = "signing-seed".to_owned();
-        manager.storage.access_token = "provider-token".to_owned();
-        manager.storage.remote_ref = "owner/repo".to_owned();
-        manager.storage.remote_path = "vault.yaml".to_owned();
-        manager.storage.mode = StorageMode::Github;
-        manager.storage.s3_connection =
-            PreparedS3Connection::Connection(WasmFixture::s3_connection()?);
+        manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
 
         manager.quiesce_for_local_recovery();
 
         assert!(manager.device.id.is_empty());
         assert!(manager.device.identity_private_key.is_empty());
         assert!(manager.event_log.signing_seed.is_empty());
-        assert!(manager.storage.access_token.is_empty());
-        assert!(manager.storage.remote_ref.is_empty());
-        assert!(manager.storage.remote_path.is_empty());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        // The prepared provider, with its key, is gone.
         assert!(matches!(
-            manager.storage.s3_connection,
-            PreparedS3Connection::Unprepared
+            manager.storage.provider,
+            PreparedProvider::ThisBrowser
         ));
         Ok(())
     }

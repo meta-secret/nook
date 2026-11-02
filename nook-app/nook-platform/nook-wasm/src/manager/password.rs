@@ -625,6 +625,7 @@ mod wasm_tests {
     use super::*;
     use crate::TypedOutput;
     use crate::manager::VaultNameState;
+    use crate::manager::{OutboxTarget, ProviderCacheRef, SyncOutbox};
     use crate::test_fixtures::WasmFixture;
 
     use nook_core::{
@@ -722,9 +723,10 @@ mod wasm_tests {
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
-        manager.sync_outbox.provider_id = "configured-provider".to_owned();
-        manager.sync_outbox.connection =
-            WasmFixture::github_connection("invalid-token", "invalid-repository")?;
+        manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+            provider: ProviderCacheRef::fixture("configured-provider"),
+            connection: WasmFixture::github_connection("invalid-token", "invalid-repository")?,
+        });
 
         assert!(manager.set_vault_name("   ").await.is_err());
         manager

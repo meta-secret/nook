@@ -2,6 +2,7 @@ use super::*;
 use crate::EventDbRemoveEventFixture;
 use crate::VaultSnapshotLookup;
 use crate::identity_record::NookIdentityDirectorySelectionKind;
+use crate::manager::{OutboxTarget, ProviderCacheRef, SyncOutbox};
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::test_fixtures::WasmFixture;
@@ -575,9 +576,10 @@ async fn replacement_manager(
     replacement.vault.members_key = "previous-members-key".to_owned();
     replacement.event_log.signing_seed = "previous-signing-seed".to_owned();
     replacement.event_log.key_epoch = "previous-key-epoch".to_owned();
-    replacement.sync_outbox.provider_id = "previous-provider".to_owned();
-    replacement.sync_outbox.connection =
-        WasmFixture::github_connection("previous-access-token", "previous/repository")?;
+    replacement.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+        provider: ProviderCacheRef::fixture("previous-provider"),
+        connection: WasmFixture::github_connection("previous-access-token", "previous/repository")?,
+    });
     Ok((replacement, previous_store_id))
 }
 
@@ -590,8 +592,12 @@ async fn assert_rollback(
     assert_eq!(manager.vault.members_key, "previous-members-key");
     assert_eq!(manager.event_log.signing_seed, "previous-signing-seed");
     assert_eq!(manager.event_log.key_epoch, "previous-key-epoch");
+    let SyncOutbox::Bound(target) = &manager.sync_outbox else {
+        anyhow::bail!("the rollback keeps the previous outbox");
+    };
+    assert_eq!(target.provider.as_str(), "previous-provider");
     assert_eq!(
-        manager.sync_outbox.connection,
+        target.connection,
         WasmFixture::github_connection("previous-access-token", "previous/repository")?
     );
     assert_eq!(

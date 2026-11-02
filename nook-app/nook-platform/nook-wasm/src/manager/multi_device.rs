@@ -99,7 +99,7 @@ impl NookVaultManager {
             label: MemberLabel::from_trusted(String::new()),
         }])
         .await?;
-        if self.storage.mode != StorageMode::Local {
+        if self.storage.mode() != StorageMode::Local {
             self.flush_event_outbox().await?;
         }
         Ok(())

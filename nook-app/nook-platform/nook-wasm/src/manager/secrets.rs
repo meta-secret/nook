@@ -349,7 +349,7 @@ impl NookVaultManager {
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
         let connection = connection.decode()?;
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&connection)
             .await?;
         self.sync_events_from_current_provider().await?;
@@ -366,7 +366,7 @@ impl NookVaultManager {
         connection: &tsify::Ts<crate::NookStorageConnection>,
     ) -> Result<(), JsError> {
         let connection = connection.decode()?;
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let flush_result = async {
             self.prepare_storage_preserving_vault_metadata(&connection)
                 .await?;
@@ -896,14 +896,17 @@ mod projection_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod outbox_browser_tests {
     use super::*;
+    use crate::manager::PreparedProvider;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn flush_event_outbox_propagates_github_403_and_restores_local_storage() {
+    async fn flush_event_outbox_propagates_github_403_and_restores_local_storage()
+    -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("TEST-ONLY-token", "owner/repo")?;
         let forbidden = crate::GitHubStorageClient::github_api_failure(
             reqwest::StatusCode::FORBIDDEN,
             "GitHub event write failed with status 403 Forbidden".to_owned(),
@@ -918,6 +921,7 @@ mod outbox_browser_tests {
             .await;
 
         assert!(result.is_err());
-        assert_eq!(manager.storage.mode, StorageMode::Local);
+        assert_eq!(manager.storage.mode(), StorageMode::Local);
+        Ok(())
     }
 }

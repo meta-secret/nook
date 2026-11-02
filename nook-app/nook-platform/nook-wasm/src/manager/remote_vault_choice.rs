@@ -22,7 +22,7 @@ use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::event_log::VaultDiscovery;
-use super::{ChosenProviderVault, NookVaultManager};
+use super::{ChosenProviderVault, NookVaultManager, PreparedProvider, RemoteProvider};
 use crate::NookError;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::{
@@ -58,12 +58,13 @@ impl NookVaultManager {
         source: &DiscoveredVaultSource<'_>,
         store_ids: &[StoreId],
     ) -> Result<Vec<ProviderVaultObservation>, NookError> {
-        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
-            (source, self.storage.mode)
+        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
+            (source, &self.storage.provider)
+            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             let observations = DriveVaultListing {
-                token: &self.storage.access_token,
-                root: self.storage.drive_event_parent.parent()?,
+                token: drive.token.expose(),
+                root: &drive.root,
             }
             .observations()
             .await?;
@@ -118,12 +119,13 @@ impl NookVaultManager {
         store_ids: &[StoreId],
         app_id: Option<&nook_core::AppId>,
     ) -> Result<InspectedVaults, NookError> {
-        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
-            (source, self.storage.mode)
+        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
+            (source, &self.storage.provider)
+            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             return DriveVaultListing {
-                token: &self.storage.access_token,
-                root: self.storage.drive_event_parent.parent()?,
+                token: drive.token.expose(),
+                root: &drive.root,
             }
             .inspect_vaults(store_ids, app_id)
             .await;
@@ -175,12 +177,13 @@ impl NookVaultManager {
                 identities.push(observation.identity.clone());
             }
         }
-        if let (DiscoveredVaultSource::CurrentProvider, StorageMode::GoogleDrive) =
-            (source, self.storage.mode)
+        if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
+            (source, &self.storage.provider)
+            && let RemoteProvider::GoogleDrive(drive) = remote.provider()
         {
             return Ok(DriveVaultListing {
-                token: &self.storage.access_token,
-                root: self.storage.drive_event_parent.parent()?,
+                token: drive.token.expose(),
+                root: &drive.root,
             }
             .identity_logs(this_browser)
             .await?
@@ -262,7 +265,7 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         self.reset_vault_session();
         self.prepare_storage(&connection).await?;
-        let discovery = if self.storage.mode == StorageMode::Local {
+        let discovery = if self.storage.mode() == StorageMode::Local {
             NookRemoteVaultDiscovery::Empty
         } else {
             match self.discover_provider_vault().await? {

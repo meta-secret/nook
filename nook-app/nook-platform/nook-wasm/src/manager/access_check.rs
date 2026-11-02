@@ -167,8 +167,7 @@ mod browser_tests {
     use crate::public_api::{NookAccessCheckSource, check_backup_password_access};
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
     use nook_core::{
-        CheckedCredential, DriveVaultFolderLookup, IdentityCheckOutcome, StorageMode,
-        VaultCheckOutcome,
+        CheckedCredential, DriveVaultFolderLookup, IdentityCheckOutcome, VaultCheckOutcome,
     };
     use wasm_bindgen_test::*;
 
@@ -278,8 +277,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn a_session_without_a_sync_provider_has_nothing_to_check() -> anyhow::Result<()> {
-        let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Local;
+        let manager = NookVaultManager::new();
 
         let source = NookProviderSource::CurrentProvider.encode()?;
         let report: CredentialCheckReport = manager

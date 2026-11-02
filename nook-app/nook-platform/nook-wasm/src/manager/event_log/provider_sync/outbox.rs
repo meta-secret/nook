@@ -67,8 +67,8 @@ impl PublishedOutboxEvent<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manager::PreparedProvider;
     use crate::{EventDbAppendOutboxIndex, EventDbQueueOutboxEntry};
-    use nook_core::StorageMode;
     use wasm_bindgen_test::wasm_bindgen_test;
     impl OutboxFixture {
         async fn queue(&self) -> Result<PendingOutboxEvent<'_>, NookError> {
@@ -111,7 +111,8 @@ mod tests {
             bytes: b"invalid event fixture".to_vec(),
         };
         let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
+        manager.storage.provider =
+            PreparedProvider::github_fixture("TEST-ONLY-token", "owner/repo")?;
         manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         match fixture.queue().await?.publish(&manager).await {
             Err(NookError::Serialization(message)) => {

@@ -261,7 +261,7 @@ impl ProviderLocation for DriveVaultListing<'_> {
     ) -> Result<ProviderVaultObservation, NookError> {
         let events = DriveEventStore {
             token: self.token,
-            parent: &folder.folder,
+            parent: folder.folder.clone(),
             location: folder.placed.location(),
         }
         .list_drive_event_times()
@@ -280,7 +280,7 @@ impl ProviderLocation for DriveVaultListing<'_> {
     ) -> Result<Vec<LocalEventWrite>, NookError> {
         DriveEventStore {
             token: self.token,
-            parent: &folder.folder,
+            parent: folder.folder.clone(),
             location: folder.placed.location(),
         }
         .events()
@@ -316,7 +316,7 @@ impl ProviderLocation for DriveVaultListing<'_> {
     ) -> Result<(), NookError> {
         DriveEventStore {
             token: self.token,
-            parent: &write.namespace.folder,
+            parent: write.namespace.folder.clone(),
             location: write.namespace.placed.location(),
         }
         .put_checked(write.event)

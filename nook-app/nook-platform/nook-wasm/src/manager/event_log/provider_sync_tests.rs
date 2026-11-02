@@ -1,6 +1,7 @@
 use crate::manager::session::NookEventLogSyncIssueState;
 
 use super::*;
+use crate::manager::{OutboxTarget, PreparedProvider, ProviderCacheRef, SyncOutbox};
 use nook_core::{
     DeviceIdentity, IsoTimestamp, SigningIdentity, VaultEvent, VaultEventBody,
     VaultEventSchemaVersion, VaultMetaState, VaultOperation,
@@ -262,11 +263,8 @@ fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Resul
 )]
 fn drive_vault_folder_target_keeps_store_id_mismatch_fail_closed() -> anyhow::Result<()> {
     let mut manager = NookVaultManager::new();
-    manager.storage.mode = StorageMode::GoogleDrive;
-    manager.storage.drive_event_parent = crate::manager::PreparedDriveFolder::Folder(
-        nook_core::DriveEventParent::shared_folder_id("stable-vault-folder"),
-    );
-    manager.storage.remote_ref = "stable-vault-folder".to_owned();
+    manager.storage.provider =
+        PreparedProvider::drive_fixture("TEST-ONLY-token", "stable-vault-folder")?;
     let classification = RemoteEventLogClassification::DifferentStore {
         local_store_id: "store_local12345".to_owned(),
         remote_store_id: "store_remote1234".to_owned(),
@@ -413,13 +411,15 @@ async fn wasm_sentinel_epoch_adoption_fails_closed_before_key_lookup() -> anyhow
 async fn local_outbox_queue_is_noop_without_a_provider_and_persists_with_one() -> anyhow::Result<()>
 {
     let mut manager = NookVaultManager::new();
-    manager.storage.mode = StorageMode::Local;
     let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
 
     manager
         .queue_event_outbox_for_current_provider(&event_id, b"no provider")
         .await?;
-    manager.sync_outbox.provider_id = "local-outbox-test".to_owned();
+    manager.sync_outbox = SyncOutbox::Bound(OutboxTarget {
+        provider: ProviderCacheRef::fixture("local-outbox-test"),
+        connection: nook_core::StorageConnection::Local,
+    });
     manager
         .queue_event_outbox_for_current_provider(&event_id, b"queued")
         .await?;

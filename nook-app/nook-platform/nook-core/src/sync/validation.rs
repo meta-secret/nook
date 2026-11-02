@@ -45,20 +45,6 @@ impl StorageMode {
             Self::S3 => "s3",
         }
     }
-
-    /// The local cache and outbox key of the prepared provider. For S3 the
-    /// remote reference is [`crate::S3Connection::location_identity`],
-    /// which holds no credential.
-    #[must_use]
-    pub fn cache_ref(self, remote_ref: &str, path: &str) -> String {
-        match self {
-            Self::Local => "local".to_owned(),
-            Self::Github => format!("github:{remote_ref}:{path}"),
-            Self::GoogleDrive => format!("drive:{remote_ref}"),
-            Self::ICloud => format!("icloud:{remote_ref}"),
-            Self::S3 => format!("s3:{remote_ref}"),
-        }
-    }
 }
 
 impl fmt::Display for StorageMode {
@@ -409,35 +395,9 @@ mod tests {
     }
 
     #[test]
-    fn the_s3_mode_keys_its_cache_by_location() {
-        assert_eq!(
-            StorageMode::S3.cache_ref("http://127.0.0.1:8333/nook-dev", ""),
-            "s3:http://127.0.0.1:8333/nook-dev"
-        );
-    }
-
-    #[test]
     fn validate_oauth_access_token_rejects_empty() -> anyhow::Result<()> {
         assert!(OauthAccessToken::parse(" ").is_err());
         assert_eq!(OauthAccessToken::parse(" token ")?.as_str(), "token");
-        Ok(())
-    }
-
-    #[test]
-    fn sync_provider_cache_ref_is_stable() -> anyhow::Result<()> {
-        assert_eq!(StorageMode::Local.cache_ref("", ""), "local");
-        assert_eq!(
-            StorageMode::Github.cache_ref("user/repo", "nook-log/v1/events"),
-            "github:user/repo:nook-log/v1/events"
-        );
-        assert_eq!(
-            StorageMode::GoogleDrive.cache_ref("file-id", ""),
-            "drive:file-id"
-        );
-        assert_ne!(
-            StorageMode::GoogleDrive.cache_ref("folder-a", "vault.yaml"),
-            StorageMode::GoogleDrive.cache_ref("folder-b", "vault.yaml")
-        );
         Ok(())
     }
 

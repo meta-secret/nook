@@ -6,7 +6,11 @@ use nook_core::{EventId, LocalEventWrite};
 use std::collections::BTreeSet;
 
 use super::checked_event_write::CheckedEventWrite;
+use super::drive_events::DriveEventStore;
+use super::github_events::GitHubEventStore;
+use super::icloud::ICloudEventStore;
 use super::remote_event::RemoteEventRead;
+use super::s3::S3EventStore;
 use crate::NookError;
 
 /// One namespace's events at a provider.
@@ -60,6 +64,62 @@ impl StoredEventRead {
                 bytes,
             }],
             RemoteEventRead::Unavailable => Vec::new(),
+        }
+    }
+}
+
+/// The store a prepared provider picked for one namespace; its operations
+/// only delegate.
+pub(crate) enum RemoteEventStore<'a> {
+    Github(GitHubEventStore<'a>),
+    GoogleDrive(DriveEventStore<'a>),
+    ICloud(ICloudEventStore<'a>),
+    S3(S3EventStore<'a>),
+}
+
+impl EventStore for RemoteEventStore<'_> {
+    async fn event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        match self {
+            Self::Github(store) => store.event_ids().await,
+            Self::GoogleDrive(store) => store.event_ids().await,
+            Self::ICloud(store) => store.event_ids().await,
+            Self::S3(store) => store.event_ids().await,
+        }
+    }
+
+    async fn read(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        match self {
+            Self::Github(store) => store.read(event_id).await,
+            Self::GoogleDrive(store) => store.read(event_id).await,
+            Self::ICloud(store) => store.read(event_id).await,
+            Self::S3(store) => store.read(event_id).await,
+        }
+    }
+
+    async fn put_checked(&self, event: CheckedEventWrite<'_>) -> Result<(), NookError> {
+        match self {
+            Self::Github(store) => store.put_checked(event).await,
+            Self::GoogleDrive(store) => store.put_checked(event).await,
+            Self::ICloud(store) => store.put_checked(event).await,
+            Self::S3(store) => store.put_checked(event).await,
+        }
+    }
+
+    async fn delete_events(&self) -> Result<(), NookError> {
+        match self {
+            Self::Github(store) => store.delete_events().await,
+            Self::GoogleDrive(store) => store.delete_events().await,
+            Self::ICloud(store) => store.delete_events().await,
+            Self::S3(store) => store.delete_events().await,
+        }
+    }
+
+    async fn events(&self) -> Result<Vec<LocalEventWrite>, NookError> {
+        match self {
+            Self::Github(store) => store.events().await,
+            Self::GoogleDrive(store) => store.events().await,
+            Self::ICloud(store) => store.events().await,
+            Self::S3(store) => store.events().await,
         }
     }
 }

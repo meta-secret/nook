@@ -217,7 +217,7 @@ impl NookVaultManager {
         let connection = connection.decode()?;
         let normalized = EnrollmentLinkInput { input: &code }.normalize();
         let payload = CheckedEnrollmentEnvelope::parse(&normalized)?.decrypt(&passphrase)?;
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let restore_local = self.storage.mode() == StorageMode::Local;
         let result = async {
             self.prepare_storage_preserving_vault_metadata(&connection)
                 .await?;
