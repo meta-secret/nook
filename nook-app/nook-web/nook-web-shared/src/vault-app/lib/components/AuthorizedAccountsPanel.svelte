@@ -37,7 +37,7 @@ for a device invite; accounts are managed on the Sync page it links to.
     payload,
     shareTitle,
     selectable = false,
-    selection = $bindable(),
+    selection = $bindable(SharedJoinerSelections.NONE),
     disabled = false,
     onManageAccounts,
   }: {

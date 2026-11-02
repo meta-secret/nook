@@ -21,6 +21,10 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    SetupDraftForm,
+    SetupDraftViews,
+  } from '$lib/components/setup-draft-view'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -443,7 +447,7 @@
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   /** Rust keeps the draft's kind equal to the setup's, so the draft picks
    * the wizard and each wizard gets exactly its own draft. */
-  const setupDraft = $derived(vault.providerDraft)
+  const setupView = $derived(SetupDraftViews.of(vault.providerDraft))
   function setupIs(type: ProviderKind['type']): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
@@ -755,26 +759,26 @@
       {:else if showSetup}
         {#if vault.remoteVaultChoices.vaults.length > 0}
           <RemoteVaultChoice {vault} busy={isVerifying} onApplied={onUnlock} />
-        {:else if setupDraft.type === 'oauth-file'}
+        {:else if setupView.kind === SetupDraftForm.OAuth}
           <OAuthProviderSetupWizard
             {vault}
-            draft={setupDraft}
+            draft={setupView.draft}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onUnlock}
           />
-        {:else if setupDraft.type === 'github'}
+        {:else if setupView.kind === SetupDraftForm.Github}
           <GitHubProviderSetupWizard
             {vault}
-            draft={setupDraft}
+            draft={setupView.draft}
             {isVerifying}
             {isInitializing}
             question={recoveryQuestion}
             {onCancelSetup}
             onConnect={onUnlock}
           />
-        {:else if setupDraft.type === 's3'}
+        {:else if setupView.kind === SetupDraftForm.S3}
           <S3ProviderSetupWizard
             {vault}
             idPrefix="login"
@@ -784,10 +788,10 @@
             {onCancelSetup}
             onConnect={onUnlock}
           />
-        {:else if setupDraft.type === 'local-folder'}
+        {:else if setupView.kind === SetupDraftForm.LocalFolder}
           <LocalFolderProviderSetupWizard
             {vault}
-            folder={setupDraft}
+            folder={setupView.draft}
             idPrefix="login"
             {isVerifying}
             {isInitializing}

@@ -4,7 +4,9 @@ import {
   provider_draft_credential_readiness,
   provider_failure_translation_key,
   type NookProviderSource,
+  type LocalFolderHandleId,
   type NookRemoteSource,
+  type S3Connection,
   type ProviderDraft,
   type ProviderIdentityChoice,
 } from "$app-wasm";
@@ -46,10 +48,24 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** Where first run lists keyrings from: the signed-in Google account, or an
  * S3 location, which is staged only once it lists. */
-export type FirstRunProviderSource = Extract<
+export type FirstRunProviderSource = Exclude<
   NookRemoteSource,
-  { readonly kind: "googleDrive" } | { readonly kind: "s3" }
+  { readonly handleId: LocalFolderHandleId }
 >;
+
+export enum FirstRunS3LocationKind {
+  /** The picked provider is not a listed S3 location. */
+  Absent = "absent",
+  Shown = "shown",
+}
+
+/** The S3 location the Sync step names once it listed. */
+export type FirstRunS3Location =
+  | { readonly kind: FirstRunS3LocationKind.Absent }
+  | {
+      readonly kind: FirstRunS3LocationKind.Shown;
+      readonly configuration: S3Connection;
+    };
 
 export enum FirstRunConnectionKind {
   NotConnected = "not-connected",
@@ -199,6 +215,28 @@ export class FirstRunActions {
       case "local-folder":
       case "github":
         this.beginGoogleDrive();
+    }
+  }
+
+  /** The listed S3 location the connection reads from, if it is one. */
+  static s3Location(connection: FirstRunConnection): FirstRunS3Location {
+    switch (connection.kind) {
+      case FirstRunConnectionKind.NotConnected:
+        return { kind: FirstRunS3LocationKind.Absent };
+      case FirstRunConnectionKind.Connected:
+        return FirstRunActions.listedS3(connection.source);
+    }
+  }
+
+  private static listedS3(source: FirstRunProviderSource): FirstRunS3Location {
+    switch (source.kind) {
+      case "s3":
+        return {
+          kind: FirstRunS3LocationKind.Shown,
+          configuration: source.configuration,
+        };
+      case "googleDrive":
+        return { kind: FirstRunS3LocationKind.Absent };
     }
   }
 

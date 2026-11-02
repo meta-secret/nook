@@ -8,6 +8,10 @@
     Plus,
     Settings2,
   } from '@lucide/svelte'
+  import {
+    ProviderRowGlyph,
+    ProviderRowGlyphs,
+  } from '$lib/components/provider-row-glyph'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import BackButton from '$lib/components/workspace/BackButton.svelte'
   import FirstRunDiagram from '$lib/components/login/FirstRunDiagram.svelte'
@@ -168,10 +172,11 @@
           data-testid="login-manage-providers-list"
         >
           {#each providers as provider (provider.id)}
+            {@const glyph = ProviderRowGlyphs.of(provider.provider)}
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if provider.provider.type === 'github' || provider.provider.type === 'oauth-file'}
+              {#if glyph === ProviderRowGlyph.Cloud}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              {:else if provider.provider.type === 's3'}
+              {:else if glyph === ProviderRowGlyph.Archive}
                 <Archive
                   class="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 />

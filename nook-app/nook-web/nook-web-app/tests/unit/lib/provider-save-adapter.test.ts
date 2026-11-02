@@ -101,8 +101,9 @@ function projectionState(provider: StorageProvider): ProjectionState {
 function persistedRows(
   state: AdapterState,
 ): ReadonlyArray<readonly [string, string]> {
-  const [options] = state.persistProviders.mock.calls[0] ?? []
-  if (!options) throw new Error('expected the providers to be persisted')
+  const [call] = state.persistProviders.mock.calls
+  if (!call) throw new Error('expected the providers to be persisted')
+  const [options] = call
   return options.providers.map((row) => [row.label, row.provider.type] as const)
 }
 
@@ -132,8 +133,10 @@ describe('provider save web adapter', () => {
       ).applyActiveProviderCredentials()
 
       expect(state.stageProviderDraft).toHaveBeenCalledOnce()
-      const [staged] = state.stageProviderDraft.mock.calls[0] ?? []
-      expect(staged?.type).toBe(row.provider.type)
+      const [call] = state.stageProviderDraft.mock.calls
+      if (!call) throw new Error('expected a staged draft')
+      const [staged] = call
+      expect(staged.type).toBe(row.provider.type)
     },
   )
 

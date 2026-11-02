@@ -50,6 +50,7 @@ its location lists, its keyrings show the same way.
     FirstRunConnectionKind,
     FirstRunIdentityAction,
     FirstRunInventoryKind,
+    FirstRunS3LocationKind,
     type FirstRunIdentityRun,
     type FirstRunInventory,
     type FirstRunProviderSource,
@@ -86,10 +87,8 @@ its location lists, its keyrings show the same way.
   /** Where the keyrings are read from: the staged S3 location, or the
    * signed-in Google account, once the picked provider can list. */
   const connection = $derived(actions.connection())
-  const onS3 = $derived(
-    connection.kind === FirstRunConnectionKind.Connected &&
-      connection.source.kind === 's3',
-  )
+  const s3Location = $derived(FirstRunActions.s3Location(connection))
+  const onS3 = $derived(s3Location.kind === FirstRunS3LocationKind.Shown)
   const connected = $derived(
     connection.kind === FirstRunConnectionKind.Connected,
   )
@@ -331,7 +330,7 @@ its location lists, its keyrings show the same way.
       </button>
     </div>
   {:else}
-    {#if connection.kind === FirstRunConnectionKind.Connected && connection.source.kind === 's3'}
+    {#if s3Location.kind === FirstRunS3LocationKind.Shown}
       {@const label = provider_draft_label(vault.providerDraft)}
       <p
         class="nk-spec flex min-w-0 items-baseline gap-2"
@@ -341,7 +340,7 @@ its location lists, its keyrings show the same way.
           >{label}</span
         >
         <span class="shrink-0 text-muted-foreground"
-          >{staged_s3_provider_detail(connection.source.configuration)}</span
+          >{staged_s3_provider_detail(s3Location.configuration)}</span
         >
       </p>
     {:else}

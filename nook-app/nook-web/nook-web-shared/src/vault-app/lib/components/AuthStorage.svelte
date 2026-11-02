@@ -49,6 +49,14 @@
   } from '$lib/vault/architecture-model'
   import { ProviderSyncStatusView } from '$lib/auth/provider-sync-status'
   import {
+    ProviderRowGlyph,
+    ProviderRowGlyphs,
+  } from '$lib/components/provider-row-glyph'
+  import {
+    SetupDraftForm,
+    SetupDraftViews,
+  } from '$lib/components/setup-draft-view'
+  import {
     LoginSetupKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
@@ -210,39 +218,37 @@
       class="space-y-4"
     >
       {#if showSetup}
-        <!-- Rust keeps the draft's kind equal to the setup's, so the draft
-             picks the wizard and each wizard gets exactly its own draft. -->
-        {@const draft = vault.providerDraft}
-        {#if draft.type === 'oauth-file'}
+        {@const setupView = SetupDraftViews.of(vault.providerDraft)}
+        {#if setupView.kind === SetupDraftForm.OAuth}
           <OAuthProviderSetupWizard
             {vault}
-            {draft}
+            draft={setupView.draft}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if draft.type === 'github'}
+        {:else if setupView.kind === SetupDraftForm.Github}
           <GitHubProviderSetupWizard
             {vault}
-            {draft}
+            draft={setupView.draft}
             question={ConnectQuestions.NONE}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if draft.type === 'local-folder'}
+        {:else if setupView.kind === SetupDraftForm.LocalFolder}
           <LocalFolderProviderSetupWizard
             {vault}
-            folder={draft}
+            folder={setupView.draft}
             idPrefix="settings"
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if draft.type === 'local'}
+        {:else if setupView.kind === SetupDraftForm.ThisBrowser}
           <ProviderSetupFields {vault} {onCancelSetup} />
         {/if}
       {:else if addProviderOpen}
@@ -298,15 +304,16 @@
                   ) === ReplicationSupport.Supported}
                 {@const sharedAccounts = SharedProviderAccountsOf.row(provider)}
                 {@const providerLabel = providerTitle(provider)}
+                {@const glyph = ProviderRowGlyphs.of(provider.provider)}
                 <li class="nk-panel grid gap-4 p-3 sm:p-4">
                   <div class="flex items-center gap-2">
                     <div
                       class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
                       data-testid="settings-provider-{provider.provider.type}"
                     >
-                      {#if provider.provider.type === 'github' || provider.provider.type === 'oauth-file'}
+                      {#if glyph === ProviderRowGlyph.Cloud}
                         <Cloud class="size-4 shrink-0 text-primary" />
-                      {:else if provider.provider.type === 's3'}
+                      {:else if glyph === ProviderRowGlyph.Archive}
                         <Archive class="size-4 shrink-0 text-primary" />
                       {:else}
                         <HardDrive class="size-4 shrink-0 text-primary" />

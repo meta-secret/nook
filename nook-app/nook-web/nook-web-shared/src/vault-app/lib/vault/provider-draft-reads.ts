@@ -1,5 +1,9 @@
 import type {
+  GithubDraft,
   GoogleDriveAccess,
+  LocalFolderDraft,
+  OAuthFileDraft,
+  S3Draft,
   GoogleDriveSignIn,
   ICloudSignIn,
   ProviderDraft,
@@ -7,7 +11,7 @@ import type {
 } from "$app-wasm";
 
 /** A draft of an OAuth file provider, Google Drive or iCloud. */
-export type OAuthProviderDraft = Extract<ProviderDraft, { type: "oauth-file" }>;
+export type OAuthProviderDraft = Extract<ProviderDraft, OAuthFileDraft>;
 
 export enum DraftDriveSignInKind {
   /** The draft is not a Google Drive draft, or it awaits its sign-in. */
@@ -93,13 +97,10 @@ export class ProviderDraftReads {
 }
 
 /** A GitHub provider draft. */
-export type GithubProviderDraft = Extract<ProviderDraft, { type: "github" }>;
+export type GithubProviderDraft = Extract<ProviderDraft, GithubDraft>;
 
 /** A local-folder provider draft. */
-export type LocalFolderProviderDraft = Extract<
-  ProviderDraft,
-  { type: "local-folder" }
->;
+export type LocalFolderProviderDraft = Extract<ProviderDraft, LocalFolderDraft>;
 
 export enum DraftS3ConnectionKind {
   /** The draft is not an S3 draft, or its form has not connected yet. */
@@ -115,7 +116,7 @@ export type DraftS3Connection =
     };
 
 /** An S3 provider draft. */
-type S3ProviderDraft = Extract<ProviderDraft, { type: "s3" }>;
+type S3ProviderDraft = Extract<ProviderDraft, S3Draft>;
 
 /** Reads the connection an S3 draft holds once Rust validated its form. */
 export class S3DraftReads {
