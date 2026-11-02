@@ -131,7 +131,8 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
 export const setupStorageKey = 'nook:extension-setup'
-export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
+export const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
+export const pairingGrantStorageKey = `${PAIRING_GRANT_PREFIX}store-e2e`
 export const connectedSetupState = {
   status: 'ready',
   deviceLabel: 'Nook Extension - Chromium test profile',

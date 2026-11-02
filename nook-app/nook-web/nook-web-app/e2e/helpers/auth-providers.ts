@@ -10,7 +10,7 @@ import {
   type StorageProvider,
 } from '$app-wasm'
 import { E2E_GOOGLE_ACCOUNT_EMAIL } from '../google-identity-stub'
-import { readLocalVaultYamlFromIdb } from './local-sync'
+import { readLocalVaultYamlFromIdb, storeIdOfVaultYaml } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 
 export enum AuthProviderSeedScopeKind {
@@ -362,14 +362,9 @@ export async function seedExtraOauthFileProviders(
 }
 
 async function activeVaultSeedScope(page: Page) {
-  const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
-  const storeIdMatch = vaultYaml.match(/^store_id:\s*(\S+)/m)
-  if (!storeIdMatch) {
-    throw new Error('E2E OAuth provider seeding requires an active vault')
-  }
-  const storeId = storeIdMatch[1]
-  if (!storeId) throw new Error('E2E OAuth provider store id is unavailable')
-  return activeAuthProviderSeedScope(storeId)
+  return activeAuthProviderSeedScope(
+    storeIdOfVaultYaml(await readLocalVaultYamlFromIdb(page)),
+  )
 }
 
 /** One iCloud provider bound to a CloudKit share (`icloud-share-v1:{…}`). */

@@ -270,10 +270,11 @@ tasks:
 
   extension:dev:fresh:
     desc: >-
-      Run extension:dev from an empty Brave dev profile, deleting its extension pairing,
-      device key, and localhost vault data first.
+      Run extension:dev from an empty Brave dev profile and an empty local S3 server, deleting
+      its extension pairing, device key, localhost vault data, and S3 dev data first.
     interactive: true
     cmds:
+      - task: s3:dev:reset
       - task: extension:dev
         vars: { FRESH: '1' }
 

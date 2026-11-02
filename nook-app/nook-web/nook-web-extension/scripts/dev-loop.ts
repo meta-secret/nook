@@ -8,6 +8,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type { Subprocess } from 'bun'
+import { extensionIdFromManifestKey } from './channel-identity'
 
 const extensionRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(extensionRoot, '..')
@@ -116,16 +117,6 @@ const startLocalS3 = (): Subprocess =>
     stdout: 'inherit',
     stderr: 'inherit',
   })
-
-// Chromium derives an unpacked extension's ID from the manifest key.
-const extensionIdFromManifestKey = (manifestKey: string): string => {
-  const digest = new Bun.CryptoHasher('sha256')
-    .update(Buffer.from(manifestKey, 'base64'))
-    .digest('hex')
-  return [...digest.slice(0, 32)]
-    .map((nibble) => String.fromCharCode(97 + Number.parseInt(nibble, 16)))
-    .join('')
-}
 
 enum JsonFieldKind {
   Missing = 'missing',

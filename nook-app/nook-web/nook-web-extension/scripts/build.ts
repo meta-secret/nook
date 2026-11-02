@@ -17,7 +17,10 @@ import {
   type CreateExtensionManifestArgs,
   ExtensionManifestBuildKind,
 } from '../src/manifest'
-import { extensionChannelIdentity } from './channel-identity'
+import {
+  extensionChannelIdentity,
+  resolveExtensionChannel,
+} from './channel-identity'
 import {
   ExtensionDiagnosticBuildAvailability,
   ExtensionDiagnosticBuildPolicy,
@@ -47,9 +50,7 @@ const simpleVaultBaseUrl = normalize_simple_vault_base_url(
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
 }
-const deployment = extensionChannelIdentity(
-  process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production',
-)
+const deployment = extensionChannelIdentity(resolveExtensionChannel())
 const extensionDiagnosticBuildPolicy = new ExtensionDiagnosticBuildPolicy()
 const extensionDiagnosticsEnabled =
   extensionDiagnosticBuildPolicy.availability({

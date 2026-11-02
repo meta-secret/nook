@@ -5,6 +5,7 @@ import { zipSync, type ZipOptions, type Zippable } from 'fflate'
 import {
   extensionIdFromManifestKey,
   parseExtensionChannel,
+  resolveExtensionChannel,
   type ExtensionChannel,
 } from './channel-identity'
 
@@ -180,9 +181,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   const extensionDist = join(projectRoot, 'dist')
   const siteDist = resolve(projectRoot, '../nook-web-app/dist/site')
   const downloads = join(siteDist, 'downloads')
-  const channel = parseExtensionChannel(
-    process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production',
-  )
+  const channel = parseExtensionChannel(resolveExtensionChannel())
   const version = process.env.NOOK_EXTENSION_VERSION?.trim() || '1.0.0'
   const commit = process.env.NOOK_EXTENSION_COMMIT?.trim() || ''
   if (!/^[0-9a-f]{40}$/.test(commit)) {

@@ -12,7 +12,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { PlaywrightTestConfig } from '@playwright/test'
-import { extensionChannelIdentity } from './channel-identity'
+import {
+  extensionChannelIdentity,
+  resolveExtensionChannel,
+} from './channel-identity'
 import identities from './local-s3-identities.json' with { type: 'json' }
 
 export const LOCAL_S3_ENDPOINT = 'http://127.0.0.1:8333'
@@ -75,17 +78,17 @@ type PlaywrightWebServers = Extract<
 >
 
 /** The webServer entry both Playwright configs append. Each run starts from
- * an empty scratch directory. */
+ * its own empty temporary directory. */
 export const localS3WebServer = (
   isCi: boolean,
 ): PlaywrightWebServers[number] => {
-  const dataDir = '.local-s3-e2e'
-  // scripts/build.ts gives the extension build the same default channel.
-  const channel = process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production'
+  // The shell expands `$d` to the directory `mktemp -d` made.
+  const scratchDir = '"$d"'
+  const channel = resolveExtensionChannel()
   return {
     name: 'local-s3',
     // `exec` lets Playwright's graceful shutdown wait for weed itself.
-    command: `rm -rf ${dataDir} && mkdir ${dataDir} && exec weed ${weedArguments(`-logdir=${dataDir}`, dataDir, channel).join(' ')}`,
+    command: `d="$(mktemp -d)" && exec weed ${weedArguments(`-logdir=${scratchDir}`, scratchDir, channel).join(' ')}`,
     cwd: extensionRoot,
     // 404 until weed has created the bucket: the fixture's anonymous
     // identity may list only this empty prefix.

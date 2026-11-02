@@ -28,6 +28,14 @@ class ExtensionChannelAdmission {
   }
 }
 
+/** The channel the build environment names, `production` when it names none. */
+export function resolveExtensionChannel(): string {
+  return (
+    process.env.NOOK_EXTENSION_CHANNEL?.trim() ||
+    ExtensionReleaseChannel.Production
+  )
+}
+
 export type ExtensionChannelIdentity = {
   channel: ExtensionChannel
   extensionId: string

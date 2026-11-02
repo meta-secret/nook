@@ -211,7 +211,8 @@ that profile) and refreshes open web tabs; Vite reloads the vault page itself.
 Press `r` to rebuild everything, `e` to rebuild the extension, `q` to stop.
 Brave stays open, and rerunning the task reattaches to it. Pairing state persists
 in the profile, so device setup and vault pairing are done once by hand. To
-start over with no extension or vault data, run `task extension:dev:fresh`: it
+start over with no extension, vault, or S3 data, run `task extension:dev:fresh`: it
+deletes the local S3 dev data (refusing while a server answers on port 8333),
 closes Brave, deletes the dev profile, and starts the same loop.
 
 The loop also runs a local S3-compatible server. A keyring can then sync to it,
@@ -238,8 +239,8 @@ task s3:dev:reset  # delete the data; refuses while a server answers on port 833
   work only against this loopback server.
 - **Data:** `~/Library/Application Support/Nook/s3-dev` on macOS, and
   `$XDG_DATA_HOME/nook/s3-dev` (default `~/.local/share/nook/s3-dev`) on Linux.
-  It persists until `task s3:dev:reset`. `task extension:dev:fresh` clears the
-  Brave profile only, so reset the S3 data too for a fully empty start.
+  It persists until `task s3:dev:reset`. `task extension:dev:fresh` resets it
+  and clears the Brave profile.
 - **CORS:** the server allows exactly `https://localhost:5173`,
   `http://127.0.0.1:5173`, `http://127.0.0.1:5174`, and the loop's own
   extension origin.

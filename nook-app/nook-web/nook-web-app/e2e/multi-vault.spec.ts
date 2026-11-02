@@ -17,16 +17,9 @@ import {
   switchToVaultFromIdentities,
   ManagePage,
   listLocalVaultEntries,
+  storeIdOfVaultYaml,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
-
-function parseStoreId(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
-  if (!storeId) {
-    throw new Error('store_id missing from vault yaml')
-  }
-  return storeId
-}
 
 type ViewportBox = {
   x: number
@@ -110,7 +103,7 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
-    const storeA = parseStoreId(vaultAYaml)
+    const storeA = storeIdOfVaultYaml(vaultAYaml)
 
     await openIdentitiesPage(page)
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(1)
@@ -122,13 +115,13 @@ test.describe('multi-vault on one browser profile', () => {
       .poll(
         async () => {
           const yaml = await readLocalVaultYamlFromIdb(page)
-          return parseStoreId(yaml)
+          return storeIdOfVaultYaml(yaml)
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
-    const storeB = parseStoreId(vaultBYaml)
+    const storeB = storeIdOfVaultYaml(vaultBYaml)
     await openManagePage(page, ManagePage.Vaults)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
@@ -220,12 +213,12 @@ test.describe('multi-vault on one browser profile', () => {
     await switchToVaultFromIdentities(page, storeA)
 
     let activeYaml = await readLocalVaultYamlFromIdb(page)
-    expect(parseStoreId(activeYaml)).toEqual(storeA)
+    expect(storeIdOfVaultYaml(activeYaml)).toEqual(storeA)
 
     await openIdentitiesPage(page)
     await switchToVaultFromIdentities(page, storeB)
     activeYaml = await readLocalVaultYamlFromIdb(page)
-    expect(parseStoreId(activeYaml)).toEqual(storeB)
+    expect(storeIdOfVaultYaml(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
     await openManagePage(page, ManagePage.Sync)

@@ -11,6 +11,7 @@ import {
   installMockPasskeyRuntime,
   isHostedSmoke,
   launchExtensionContext,
+  PAIRING_GRANT_PREFIX,
   readExtensionStorage,
   reuseNookTabForConnect,
   setupPasskeyExtensionPopup,
@@ -33,16 +34,10 @@ import {
   triggerVaultSyncRefresh,
   uniqueS3KeyPrefix,
   uniqueSecretKey,
+  storeIdOfVaultYaml,
 } from '../../nook-web-app/e2e/helpers'
 
 const KEYRING_NAME = 'S3 keyring'
-const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
-
-function storeIdOf(yaml: string): string {
-  const storeId = yaml.match(/^store_id:\s*(\S+)/mu)?.[1]
-  if (!storeId) throw new Error('store_id missing from vault yaml')
-  return storeId
-}
 
 function itemCount(count: number): string {
   return enLocale.extension.companion.item_count.replace(
@@ -93,7 +88,9 @@ test('the extension joins a keyring on S3 and reads its vault through the local 
       's3-extension-secret-value',
     )
     await triggerVaultSyncRefresh(vaultPage)
-    const storeId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
+    const storeId = storeIdOfVaultYaml(
+      await readLocalVaultYamlFromIdb(vaultPage),
+    )
     // While the vault is open, its member invites another app: the code
     // carries the open vault's key.
     const issued = await issueIdentityEnrollmentCode(vaultPage)
