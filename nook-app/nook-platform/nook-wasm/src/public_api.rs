@@ -642,6 +642,7 @@ mod browser_tests {
     }
 }
 
+#[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn login_unlock_decision(
     access: nook_core::VaultAccessStatus,
     passwords: nook_core::PasswordEntryPresence,
