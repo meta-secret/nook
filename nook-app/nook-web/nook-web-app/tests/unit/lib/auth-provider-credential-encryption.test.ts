@@ -164,12 +164,6 @@ function persistedDriveAccessToken(rawSnapshot: unknown): string {
   return payload.authorization.accessToken
 }
 
-/** The tagged payload of a loaded row. */
-function loadedPayload(provider: StorageProvider | undefined) {
-  if (!provider) throw new Error('expected a loaded provider')
-  return provider.provider
-}
-
 describe('sync provider credential encryption (wasm + IndexedDB)', () => {
   beforeAll(async () => {
     await initNookWasm()
@@ -210,10 +204,9 @@ describe('sync provider credential encryption (wasm + IndexedDB)', () => {
     })
 
     const loaded = await manager.load_auth_providers_snapshot()
-    expect(loadedPayload(loaded.providers[0])).toMatchObject({
-      type: 'github',
-      token: pat,
-    })
+    expect(loaded.providers).toMatchObject([
+      { provider: { type: 'github', token: pat } },
+    ])
   })
 
   test('loadAuthProviders rejects plaintext credentials', async () => {
@@ -281,9 +274,13 @@ describe('sync provider credential encryption (wasm + IndexedDB)', () => {
     expect(JSON.stringify(raw)).not.toContain(access)
 
     const loaded = await manager.load_auth_providers_snapshot()
-    expect(loadedPayload(loaded.providers[0])).toMatchObject({
-      type: 'oauth-file',
-      authorization: { accessToken: access },
-    })
+    expect(loaded.providers).toMatchObject([
+      {
+        provider: {
+          type: 'oauth-file',
+          authorization: { accessToken: access },
+        },
+      },
+    ])
   })
 })
