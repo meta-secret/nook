@@ -52,7 +52,7 @@ how provider transports relate independently to identities and vaults.
 The persisted object is a structured-clone JS object (not a JSON string) in the
 tagged shape the Rust types serialize. Rust owns the contract: semantic enums
 are used in memory and exported through Tsify/`$app-wasm`, and
-`AuthProvidersSnapshotData::from_storage` decodes the stored value. Nothing
+`AuthProvidersSnapshot::from_storage` decodes the stored value. Nothing
 stored yet is an empty snapshot; any other shape is rejected rather than
 guessed at. There is no singleton record, rollback projection, or schema
 marker.
@@ -64,11 +64,19 @@ A future incompatible persisted shape must ship an explicit, documented
 forward migration in the same change. A domain-type refactor alone never
 authorizes a wire format change.
 
-- **Migration decision for `s3`:** the required `s3` block changes the stored
-  row shape. Nook has no released versions, so this change ships no migration
-  and no compatibility branch.
-  - A stored snapshot whose rows lack the block is rejected like any other
-    unrecognized shape.
+- **Migration decision: none: new format only.** Nook has no released
+  versions, so the provider restructure ships no migration, no old-format
+  reader, and no compatibility branch.
+  - **What changed shape:** the stored row (a common part plus one nested
+    `provider` field), the save and active-credential requests, the stored
+    `nook_auth` snapshot, the extension pairing manifest digest, and the
+    personal-OAuth invite payload. That payload drops `refresh` and
+    `remote_file` and carries a typed target: a Drive `folder_id` or an
+    iCloud `share_target`.
+  - A stored snapshot, request, digest, or invite code in an earlier shape is
+    rejected like any other unrecognized shape. Rows are decoded with
+    `deny_unknown_fields`, so a row that mixes providers or lacks its
+    provider's required field fails to decode.
   - Local data from earlier development builds is created again.
 
 ### Rows and vaults
@@ -81,53 +89,100 @@ authorizes a wire format change.
 
 ### Wire fields (`StorageProvider`, camelCase)
 
-- **`id`, `type`, `label`, `createdAt`**
-  - **Notes:** `type`: `local` \| `github` \| `oauth-file` \| `local-folder` \| `s3`
-- **`githubPat`, `githubRepo`**
-  - **Notes:** GitHub only — PAT sealed at rest
-- **`oauthFile`**
-  - **Notes:** Drive/iCloud block — see below
-- **`localFolder`**
-  - **Notes:** File System Access directory handle metadata (`directoryName`, `handleId`)
-- **`s3`**
-  - **Notes:** Required on every row. S3-compatible storage block — see below
+A row holds what every provider has plus one nested `provider` field. The
+`provider` field is a serde enum tagged by `type`, and each variant carries
+exactly its own required fields and secrets. The row does not flatten the
+variant, and no field is present on a row that does not use it.
+
+- **`id`, `label`, `createdAt`**
+  - **Notes:** Row identity, display label, and creation time
 - **`storeId`**
   - **Notes:** The vault a browser row holds (`store_{token}`); `unscoped` for
     identity mounts. See [secret-store-identity.md](../../../nook-core/.cortex/docs/architecture/secret-store-identity.md)
 - **`syncCheckpoint`**
   - **Notes:** Sync bookkeeping
+- **`provider`**
+  - **Notes:** The provider and its settings, tagged by `type`: `local` \|
+    `local-folder` \| `github` \| `oauth-file` \| `s3`. The variants follow
 
-### Wire fields (`oauthFile`)
+### Wire fields (`provider` by `type`)
 
-- **`preset`**
-  - **Notes:** `google-drive` \| `icloud`
-- **`accessToken`, `refreshToken`**
+- **`local`**
+  - **Notes:** No fields. It holds this browser's own vault
+- **`local-folder`**
+  - **Notes:** `directoryName` and `handleId`, the File System Access
+    directory handle's metadata
+- **`github`**
+  - **Notes:** `repository` is `defaultRepository` or
+    `repository` with a name. `token` is the PAT, sealed at rest
+- **`oauth-file`**
+  - **Notes:** Tagged again by `preset`: `google-drive` or `icloud`. See below
+- **`s3`**
+  - **Notes:** The S3-compatible location and this app's key. See below
+
+### Wire fields (`oauth-file`)
+
+- **`preset: google-drive`**
+  - **Notes:** `authorization`, `account`, and `folderId`
+- **`authorization.accessToken`**
   - **Notes:** Sealed at rest
-- **`expiresAt`, `fileId`, `fileName`, `accountEmail`**
-  - **Notes:** Non-secret metadata; `fileName` is the internal event-log
-    backup name, never a Drive folder name
+- **`authorization.expiresAt`**
+  - **Notes:** When the access token stops working. Rust decides whether
+    it is current or due for renewal. No refresh token is stored: a due token
+    is renewed by the silent Google sign-in
 - **`folderId`**
-  - **Notes:** The account's Google Drive Nook root; unset until the root is
-    created or connected
-- **`iCloudShareTarget`**
-  - **Notes:** iCloud share target; credential-free CloudKit routing, unbound
-    until the share is created or accepted
+  - **Notes:** The account's Google Drive Nook root. A saved row always holds
+    one
+- **`preset: icloud`**
+  - **Notes:** `webAuthToken`, `account`, and `shareTarget`
+- **`webAuthToken`**
+  - **Notes:** The CloudKit web-auth token, sealed at rest
+- **`shareTarget`**
+  - **Notes:** The `icloud-share-v1:` reference, credential-free CloudKit routing
+- **`account`**
+  - **Notes:** `unknown`, or `email` with the signed-in account's address
+
+No `oauth-file` field names a file. The iCloud detail line shows the display
+constant `nook-events`.
 
 ### Wire fields (`s3`)
 
-- **`state`**
-  - **Notes:** `notApplicable` on every other provider type, `configured` on
-    an S3 row. Only a configured block carries `config`
-- **`config.endpoint`, `config.region`, `config.bucket`, `config.keyPrefix`**
+- **`endpoint`, `region`, `bucket`**
   - **Notes:** The location. The endpoint is an origin, see the
     [endpoint rule](#s3-compatible-storage). The region signs requests, and
-    the identity log's mount record leaves it out. An empty prefix is the
-    bucket root
-- **`config.accessKeyId`**
+    the identity log's mount record leaves it out
+- **`keyPrefix`**
+  - **Notes:** Where the objects start in the bucket, in one of two states.
+    `bucketRoot` keeps them at the root. `prefix` carries the path as
+    segments joined by `/`, with no slash around them and no empty, `.`, or
+    `..` segment. The setup form's text is trimmed and its surrounding
+    slashes dropped, and text with no segment left is `bucketRoot`. An empty
+    string is never stored: it fails to decode
+- **`accessKeyId`**
   - **Notes:** Names this app's key. It is not secret, so the row detail line
     shows it
-- **`config.secretAccessKey`**
-  - **Notes:** Sealed at rest, like `githubPat`
+- **`secretAccessKey`**
+  - **Notes:** Sealed at rest, like `token`
+
+### Rows are complete; drafts carry the gaps
+
+A saved row is complete. It cannot hold a placeholder for a missing token, a
+Drive folder, a share target, or an S3 location, because each variant requires
+them. A row that lacks one fails to decode.
+
+Setup state lives in the provider draft, which is tagged by the same `type`.
+A draft carries what the user has entered so far, and its credentials are
+`Ready` or `Required` with a typed gap:
+
+- `LocalFolder`: no directory is chosen;
+- `GithubToken`: no token is entered;
+- `OAuthSignIn`: the browser is not signed in;
+- `SharedTarget`: a signed-in Drive or iCloud draft has no folder or share;
+- `S3Connection`: the form is not validated.
+
+A draft with a gap cannot connect or save. Its staged connection reports
+`Incomplete` with the gap, and Rust picks the translation key. Saving turns a
+complete draft into a complete row.
 
 ### Ownership
 
@@ -145,9 +200,11 @@ wasm; the web shim is adapters + i18n only.
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`
 - **Authorized-account list, invite, and joiner rules**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/authorized_accounts.rs`
-- **S3 block, setup-form validation, and location rules**
-  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/s3.rs`
-    and `nook-app/nook-platform/nook-core/src/sync/validation/provider_configuration/s3/`
+- **Provider variants (the row's `provider` field)**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/provider.rs`
+    and `provider/`
+- **S3 connection, setup-form validation, and location rules**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/validation/provider_configuration/s3.rs`
 - **S3 protocol without I/O: object keys, signing, requests, and answers**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/s3_protocol/`
 
@@ -201,8 +258,10 @@ TypeScript owns browser integration:
 - persisting the resulting snapshot.
 
 - **Credential storage:** Seal secret fields at rest with the device key.
-  - Secret fields are `githubPat`, `oauthFile.accessToken`,
-    `oauthFile.refreshToken`, and `s3.config.secretAccessKey`.
+  - Secret fields are `provider.token`,
+    `provider.authorization.accessToken`, `provider.webAuthToken`, and
+    `provider.secretAccessKey`. Each uses one secret text type, and one walk
+    over the row's variant lists them.
   - Seal them inside `save_auth_providers` / `seal_provider_credentials` and
     unseal them inside the `load_auth_providers` pipeline.
   - Keep non-secret labels, repositories, and timestamps plaintext.
@@ -223,7 +282,7 @@ TypeScript owns browser integration:
 - **Extension pairing:** `seal_auth_providers_for_device_public_key` can seal a
   snapshot for another device's public key without writing IndexedDB.
   - Use it when staging credentials for the browser extension.
-  - It seals an S3 row's `s3.config.secretAccessKey` like any other credential
+  - It seals an S3 row's `provider.secretAccessKey` like any other credential
     field.
 - **Plaintext rows:** Reject stored **plaintext** provider rows instead of
   loading them.
@@ -283,9 +342,9 @@ the root.
     `DriveVaultFolderLookup` owns this decision.
   - Folders with any other name, such as the per-connect `nook-events`
     folders of earlier builds, are ignored. Nothing migrates them.
-- **Incomplete rows:** A signed-in Drive provider without a folder is not
-  connectable. Its staged connection reports `Incomplete`, and connect
-  arguments for a saved row fail with `SharedStorageTargetRequired`.
+- **Draft gap:** A signed-in Drive draft without a folder is not connectable.
+  Its staged connection reports `Incomplete` with the `SharedTarget` gap.
+  A saved row always holds its folder.
 - **Credentials:** Each authorized account saves a separate OAuth token for
   its own Google account. Tokens never move between accounts.
 
@@ -397,14 +456,14 @@ Every iCloud provider is shared. It syncs under one CloudKit share. Setup
 either creates a custom record zone with a shareable root record in the
 owner's private database or accepts an existing share.
 
-- **Target:** `iCloudShareTarget` stores an `icloud-share-v1:` reference with
+- **Target:** `shareTarget` stores an `icloud-share-v1:` reference with
   the routing role, zone name, zone owner record name, root record name, and
   short GUID.
 - **Routing:** The owner reaches the zone through its private database. Each
   participant reaches the same hierarchy through its shared database after
   accepting the share. Every event record is a child of the share root.
-- **Incomplete rows:** A signed-in iCloud provider without a share target is
-  not connectable, as for Drive.
+- **Draft gap:** A signed-in iCloud draft without a share target is not
+  connectable, as for Drive. A saved row always holds its share target.
 - **Credentials:** The target never contains the owner's CloudKit web-auth
   token. Each account signs into Apple and accepts the share with its own
   account before sync.
@@ -494,8 +553,8 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   authorized account picked from the provider's list.
 - Issuing an invite grants no access. The named account must already be on
   the list with write access.
-- Codes never carry the owner's OAuth access token, refresh token, or CloudKit
-  web-auth token.
+- Codes never carry the owner's OAuth access token or CloudKit web-auth
+  token.
 - **Drive joiner:** The joining browser signs into Google with `login_hint`
   set to the invited account. `verify_joiner_account` requires the signed-in
   email to match, or the join fails with `JoinerAccountMismatch`. Folder access
@@ -508,10 +567,10 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   credentials.
 - **Companion handoff:** The only credential-bearing OAuth payload is the
   same-browser extension companion handoff: `EnrollmentAudience::Personal` in
-  a vault whose `replication_type` is `personal`. Its `remote_file.file_id`
-  carries the provider's shared target (`shared:{folderId}` or the
-  `icloud-share-v1:` reference). The companion projects it back into
-  `folderId` or `iCloudShareTarget`.
+  a vault whose `replication_type` is `personal`. Its payload is the row's
+  own `oauth-file` data: this browser's sign-in and a typed target, the Drive
+  `folder_id` or the iCloud `share_target`. It has no refresh token and no
+  `remote_file` field.
 - GitHub, S3, local, and local-folder invites still follow the vault's
   `replication_type`.
 
@@ -529,13 +588,12 @@ Rust models those as sealed typestates in `nook-auth2`:
   `joiner_identity`.
 
 The encrypted wire payload records the onboarding type beside its correspondingly
-typed provider data. A shared wire tag paired with the legacy OAuth shape fails
-deserialization. Legacy OAuth codes are classified as personal only. A shared
+typed provider data. A shared wire tag paired with a personal OAuth payload
+fails deserialization. A shared
 iCloud grant without a plausible `joiner_identity` or an `icloud-share-v1:`
 target fails validation as a malformed shared-provider grant.
 
-Shared-target types have no PAT, OAuth access-token, or refresh-token fields or
-constructors. The credential-free rule is enforced by Rust construction and
+Shared-target types have no PAT or OAuth access-token fields or constructors. The credential-free rule is enforced by Rust construction and
 deserialization rather than a TypeScript convention or a late runtime branch.
 
 ### Local-folder provider availability
@@ -803,7 +861,7 @@ provider sync path.
 
 ## 6. Security notes
 
-- Provider credentials (GitHub PAT, OAuth access/refresh tokens, S3 secret
+- Provider credentials (GitHub PAT, OAuth access tokens, S3 secret
   access key) are **sealed with the device's age X25519 key** (in Rust/WASM)
   before hitting IndexedDB. They are never stored as plaintext. A raw
   `nook_auth` dump exposes age-armored ciphertext, not tokens.

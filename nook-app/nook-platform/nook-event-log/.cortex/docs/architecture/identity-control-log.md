@@ -101,8 +101,10 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
     registration.
 - **`provider-mounted`** and **`provider-unmounted`**
   - Add or remove one credential-free mount record.
-  - An S3 target is `kind: s3` with `endpoint`, `bucket`, and `key_prefix`. An
-    empty prefix is the bucket root.
+  - An S3 target is `kind: s3` with `endpoint`, `bucket`, and `key_prefix`.
+    The prefix has two states: `{ state: bucketRoot }` for the bucket root, and
+    `{ state: prefix, value }` with the path as segments joined by `/`. An
+    empty string is not a state and fails to decode.
   - It holds no region, no access key ID, and no secret. Each app signs with
     its own key and region.
   - A provider row matches its mount by this record, whatever region the row
