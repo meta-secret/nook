@@ -169,7 +169,7 @@
         >
           {#each providers as provider (provider.id)}
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if provider.provider.type === 'github'}
+              {#if provider.provider.type === 'github' || provider.provider.type === 'oauth-file'}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               {:else if provider.provider.type === 's3'}
                 <Archive
