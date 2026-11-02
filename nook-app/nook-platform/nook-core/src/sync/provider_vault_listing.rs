@@ -653,7 +653,7 @@ mod tests {
             keys: ProviderVaultKeyholding {
                 identity_vaults: slice::from_ref(&own),
                 password_vaults: slice::from_ref(&backed),
-                identity_in_use: true,
+                session: crate::IdentitySession::IdentityInUse,
                 ..ProviderVaultKeyholding::NONE
             },
             names: BrowserNames::NONE,
@@ -708,7 +708,7 @@ mod tests {
                 keys: ProviderVaultKeyholding {
                     identity_vaults: &identity_vaults,
                     password_vaults,
-                    identity_in_use: true,
+                    session: crate::IdentitySession::IdentityInUse,
                     ..ProviderVaultKeyholding::NONE
                 },
                 names: BrowserNames::NONE,

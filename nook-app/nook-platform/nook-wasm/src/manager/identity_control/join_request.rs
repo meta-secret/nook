@@ -16,12 +16,12 @@
 
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
-    AppId, AppKey, DriveEventParent, EventId, EventLogLocation, EventStorageBytes,
-    IdentityConnectionKey, IdentityControlLog, IdentityControlState, IdentityId,
-    IdentityInvitationBinding, IdentityInvitationBindingRequest, IdentityJoinAnswer,
-    IdentityJoinCompletion, IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan,
-    IdentityMemberKeys, KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition,
-    PasskeyRegistration, PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
+    AppId, AppKey, DriveEventParent, EventLogLocation, EventStorageBytes, IdentityConnectionKey,
+    IdentityControlLog, IdentityControlState, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentityJoinAnswer, IdentityJoinCompletion,
+    IdentityJoinCompletionPlan, IdentityJoinKey, IdentityJoinRequestPlan, IdentityMemberKeys,
+    KeyInUseAddition, PasskeyDeviceProtectionMode, PasskeyIdentityAddition, PasskeyRegistration,
+    PasskeyRegistrationInput, PlacedNamespace, ProviderIdentityJoinRequest,
     ProviderIdentityKeyInUse, ProviderIdentityLogEvents, ProviderSecretText, SigningIdentity,
     StorageMode, WebAuthnPrfInput, WebAuthnPrfOutput,
 };
@@ -40,7 +40,9 @@ use crate::storage::identity_record::{
     KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, StoredIdentityProtection,
 };
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles, OpenedLocalFolder};
-use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
+use crate::storage::provider_vault_listing::{
+    DriveVaultListing, IdentityEventPut, ProviderLocation,
+};
 use crate::storage::remote_event::RemoteEventRead;
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{
@@ -94,13 +96,6 @@ enum OpenedIdentitySource<'a> {
 struct IdentityLogAtSource<'a> {
     source: &'a OpenedIdentitySource<'a>,
     identity_id: &'a IdentityId,
-}
-
-/// One signed identity event to put at a source.
-#[derive(Clone, Copy)]
-struct IdentityEventPut<'a> {
-    event_id: &'a EventId,
-    bytes: &'a EventStorageBytes,
 }
 
 impl NookVaultManager {
@@ -227,14 +222,18 @@ impl NookVaultManager {
     /// Put one signed event into the identity's log at the source.
     async fn put_identity_event_at(
         &self,
-        at: &IdentityLogAtSource<'_>,
-        event: &IdentityEventPut<'_>,
+        source: &OpenedIdentitySource<'_>,
+        put: IdentityEventPut<'_>,
     ) -> Result<(), NookError> {
-        let IdentityEventPut { event_id, bytes } = *event;
-        match at.source {
+        let IdentityEventPut {
+            identity_id,
+            event_id,
+            bytes,
+        } = put;
+        match source {
             OpenedIdentitySource::CurrentProvider => {
                 self.put_provider_event_at(
-                    &EventLogLocation::Identity(at.identity_id.clone()),
+                    &EventLogLocation::Identity(identity_id.clone()),
                     event_id,
                     bytes.as_ref(),
                 )
@@ -245,7 +244,7 @@ impl NookVaultManager {
                     token: access_token,
                     root,
                 }
-                .put_identity_event(at.identity_id, event_id, bytes.as_ref())
+                .put_identity_event(put)
                 .await
             }
             OpenedIdentitySource::LocalFolder(folder) => {
@@ -253,7 +252,7 @@ impl NookVaultManager {
                     .map_err(|error| NookError::Serialization(error.to_string()))?;
                 folder
                     .write_events(
-                        &PlacedNamespace::identity_log(at.identity_id.clone()),
+                        &PlacedNamespace::identity_log(identity_id.clone()),
                         &[LocalFolderEventWrite {
                             event_id: event_id.as_str().to_owned(),
                             content,
@@ -265,7 +264,7 @@ impl NookVaultManager {
                 S3VaultListing {
                     storage: S3Storage { connection },
                 }
-                .put_identity_event(at.identity_id, event_id, bytes.as_ref())
+                .put_identity_event(put)
                 .await
             }
         }
@@ -353,11 +352,15 @@ impl NookVaultManager {
         .plan()?;
         let requested_at = match plan {
             IdentityJoinRequestPlan::Write(write) => {
-                let put = IdentityEventPut {
-                    event_id: &write.event_id,
-                    bytes: &write.bytes,
-                };
-                self.put_identity_event_at(&at, &put).await?;
+                self.put_identity_event_at(
+                    &opened,
+                    IdentityEventPut {
+                        identity_id: &identity_id,
+                        event_id: &write.event_id,
+                        bytes: &write.bytes,
+                    },
+                )
+                .await?;
                 write.requested_at
             }
             IdentityJoinRequestPlan::AlreadyPending { requested_at } => requested_at,
@@ -521,10 +524,6 @@ impl NookVaultManager {
             signing: &key_in_use_signing,
             created_at: &Self::identity_event_time()?,
         })?;
-        let put = IdentityEventPut {
-            event_id: &write.event_id,
-            bytes: &write.bytes,
-        };
         events.push(write.bytes.clone());
         let identity_logs = [ProviderIdentityLogEvents {
             identity_id: identity_id.clone(),
@@ -540,7 +539,15 @@ impl NookVaultManager {
             directory: &NookDatabase::load_identity_directory().await?,
         }
         .add()?;
-        self.put_identity_event_at(&at, &put).await?;
+        self.put_identity_event_at(
+            &opened,
+            IdentityEventPut {
+                identity_id: &identity_id,
+                event_id: &write.event_id,
+                bytes: &write.bytes,
+            },
+        )
+        .await?;
         let selection =
             NookDatabase::save_added_passkey_identity(KeyringDbSaveAddedPasskeyIdentity {
                 app_key: &new_key,

@@ -14,8 +14,9 @@
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
     EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, ListedIdentityLog,
-    LocalEventWrite, LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents,
-    ProviderVaultObservation, ProviderVaultSummary, StorageMode, StoreId, VaultEvent,
+    ListingIdentity, LocalEventWrite, LocalVaultOccupancy, PlacedNamespace,
+    ProviderIdentityLogEvents, ProviderVaultObservation, ProviderVaultSummary, StorageMode,
+    StoreId, VaultEvent,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -26,8 +27,8 @@ use super::{ChosenProviderVault, NookVaultManager, PreparedProvider, RemoteProvi
 use crate::NookError;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, CountedVaultNamespace, DriveVaultListing, InspectedVaults,
-    LocalVaultClassification, ProviderLocation,
+    BrowserHeldVaults, CountedVaultNamespace, DriveVaultListing, InspectedVault, InspectedVaults,
+    ProviderLocation, VaultInspection, VaultListingParts,
 };
 use crate::storage::remote_event::RemoteEventRead;
 
@@ -121,8 +122,7 @@ impl NookVaultManager {
     async fn inspect_discovered_vaults(
         &self,
         source: &DiscoveredVaultSource<'_>,
-        store_ids: &[StoreId],
-        app_id: Option<&nook_core::AppId>,
+        inspection: VaultInspection<'_>,
     ) -> Result<InspectedVaults, NookError> {
         if let (DiscoveredVaultSource::CurrentProvider, PreparedProvider::Remote(remote)) =
             (source, &self.storage.provider)
@@ -132,11 +132,11 @@ impl NookVaultManager {
                 token: &drive.token,
                 root: &drive.root,
             }
-            .inspect_vaults(store_ids, app_id)
+            .inspect_vaults(inspection)
             .await;
         }
         let mut inspected = InspectedVaults::default();
-        for store_id in store_ids {
+        for store_id in inspection.store_ids {
             let location = EventLogLocation::Vault(store_id.clone());
             let events = match source {
                 DiscoveredVaultSource::CurrentProvider => {
@@ -163,7 +163,11 @@ impl NookVaultManager {
                         .collect::<Result<Vec<_>, NookError>>()?
                 }
             };
-            inspected.record(store_id.clone(), events, app_id)?;
+            inspected = inspected.record(InspectedVault {
+                store_id: store_id.clone(),
+                events,
+                this_browser: inspection.this_browser,
+            })?;
         }
         Ok(inspected)
     }
@@ -173,7 +177,7 @@ impl NookVaultManager {
     async fn discovered_identity_logs(
         &self,
         source: &DiscoveredVaultSource<'_>,
-        this_browser: Option<&nook_core::ListingAppKey>,
+        this_browser: &ListingIdentity,
     ) -> Result<Vec<ListedIdentityLog>, NookError> {
         // Every identity log the source holds, as Check access reads it, not
         // only those of identities that file a discovered vault.
@@ -249,16 +253,25 @@ impl NookVaultManager {
             .discovered_vault_observations(&source, store_ids)
             .await?;
         let held = BrowserHeldVaults::load().await?;
+        let unheld = held.unheld(&observations);
         let inspected = self
-            .inspect_discovered_vaults(&source, &held.unheld(&observations), held.app_id.as_ref())
+            .inspect_discovered_vaults(
+                &source,
+                VaultInspection {
+                    store_ids: &unheld,
+                    this_browser: &held.identity,
+                },
+            )
             .await?;
         let identity_logs = self
-            .discovered_identity_logs(&source, held.listing_key.as_ref())
+            .discovered_identity_logs(&source, &held.identity)
             .await?;
-        let listing = LocalVaultClassification {
+        let listing = held.listing(VaultListingParts {
+            observations,
+            inspected: &inspected,
+            identity_logs: &identity_logs,
             local_vault: &LocalVaultOccupancy::Closed,
-        }
-        .listing(observations, &held, &inspected, &identity_logs);
+        });
         Ok(NookRemoteVaultDiscovery::Several {
             vaults: listing.vaults,
             identities: listing.identities,

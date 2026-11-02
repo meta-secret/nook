@@ -365,7 +365,7 @@ pub use provider_identity_join::{
     IdentityJoinRequestPlan, IdentityJoinRequestWrite, ProviderIdentityJoinRequest,
 };
 pub use provider_identity_log::{
-    ListedIdentityLog, ListingAppKey, ListingLocalIdentity, ProviderIdentityJoin,
+    ListedIdentityLog, ListingAppKey, ListingIdentity, ListingLocalIdentity, ProviderIdentityJoin,
     ProviderIdentityLog, ProviderIdentityLogEvents, ProviderLogCount,
 };
 pub use provider_vault_access::{

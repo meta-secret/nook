@@ -6,10 +6,7 @@
 //! the typed results. A refused key rejects like every export, with the
 //! message `provider_failure_code` classifies as `S3KeyAccessDenied`.
 use super::wasm_bindgen;
-use crate::NookError;
-use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, LocalVaultClassification, ProviderLocation,
-};
+use crate::storage::provider_vault_listing::ProviderLocation;
 use crate::storage::s3::{S3Storage, S3VaultListing};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
@@ -47,39 +44,14 @@ use wasm_bindgen::JsError;
 ) -> Result<tsify::Ts<ProviderVaultListing>, JsError> {
     let configuration = configuration.decode()?;
     let local_vault = local_vault.decode()?;
-    let listing = S3ProviderListing {
-        connection: &configuration,
-        local_vault: &local_vault,
+    let listing = S3VaultListing {
+        storage: S3Storage {
+            connection: &configuration,
+        },
     }
-    .listing()
+    .listing(&local_vault)
     .await?;
     Ok(listing.encode()?)
-}
-
-/// One S3 location and the vault open on this device.
-struct S3ProviderListing<'a> {
-    connection: &'a S3Connection,
-    local_vault: &'a LocalVaultOccupancy,
-}
-
-impl S3ProviderListing<'_> {
-    async fn listing(self) -> Result<ProviderVaultListing, NookError> {
-        let location = S3VaultListing {
-            storage: S3Storage {
-                connection: self.connection,
-            },
-        };
-        let held = BrowserHeldVaults::load().await?;
-        let observations = location.observations().await?;
-        let identity_logs = location.identity_logs(held.listing_key.as_ref()).await?;
-        let inspected = location
-            .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
-            .await?;
-        Ok(LocalVaultClassification {
-            local_vault: self.local_vault,
-        }
-        .listing(observations, &held, &inspected, &identity_logs))
-    }
 }
 
 #[cfg(test)]

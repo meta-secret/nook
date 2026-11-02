@@ -6,11 +6,8 @@
 //! and any other vault's name stays sealed under its key.
 use super::wasm_bindgen;
 use crate::DriveStorageClient;
-use crate::storage::provider_vault_listing::{
-    BrowserHeldVaults, DriveVaultListing, LocalVaultClassification, ProviderLocation,
-};
+use crate::storage::provider_vault_listing::{DriveVaultListing, ProviderLocation};
 use crate::{TypedInput, TypedOutput};
-use futures_util::future::try_join;
 use nook_core::{
     DriveEventParent, DriveVaultFolderSelection, LocalVaultOccupancy, ProviderVaultListing,
 };
@@ -45,25 +42,13 @@ pub enum NookGoogleDriveVaultListing {
         DriveVaultFolderSelection::Create => NookGoogleDriveVaultListing::Absent,
         DriveVaultFolderSelection::Existing(folder_id) => {
             let root = DriveEventParent::shared_folder_id(folder_id.as_str());
-            let drive = DriveVaultListing {
-                token: &token,
-                root: &root,
-            };
-            let held = BrowserHeldVaults::load().await?;
-            // The vault folders and the identity logs are read side by side.
-            let (observations, identity_logs) = try_join(
-                drive.observations(),
-                drive.identity_logs(held.listing_key.as_ref()),
-            )
-            .await?;
-            let inspected = drive
-                .inspect_vaults(&held.unheld(&observations), held.app_id.as_ref())
-                .await?;
             NookGoogleDriveVaultListing::Found {
-                listing: LocalVaultClassification {
-                    local_vault: &local_vault,
+                listing: DriveVaultListing {
+                    token: &token,
+                    root: &root,
                 }
-                .listing(observations, &held, &inspected, &identity_logs),
+                .listing(&local_vault)
+                .await?,
             }
         }
     };

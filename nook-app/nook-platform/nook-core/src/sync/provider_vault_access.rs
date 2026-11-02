@@ -14,9 +14,10 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    AppId, IdentityDirectory, IdentitySelection, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
-    ListingAppKey, ListingLocalIdentity, LocalEventStore, LocalEventWrite, LocalIdentityKeyring,
-    LocalIdentityLog, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    IdentityDirectory, IdentitySelection, IdentitySession, IdentityVaultAppGrant,
+    IdentityVaultAppGrantKind, ListingAppKey, ListingIdentity, ListingLocalIdentity,
+    LocalEventStore, LocalEventWrite, LocalIdentityKeyring, LocalIdentityLog, StoreId,
+    VaultMetaGraphProjection, VaultMetaState, VaultProjection,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -51,28 +52,23 @@ impl BrowserVaultKeys<'_> {
             .collect()
     }
 
-    /// This browser's app key under the identity in use, which asks for and
-    /// receives access to other vaults.
-    #[must_use]
-    pub fn identity_app_id(&self) -> Option<AppId> {
-        let IdentitySelection::Selected(selected) = self.directory.selection() else {
-            return None;
-        };
-        self.keyring
-            .entries()
-            .iter()
-            .find(|entry| entry.identity_id() == selected)
-            .map(|entry| entry.app_id().clone())
-    }
-
-    /// The identity in use and its app key, which a listing relates every
-    /// identity's log to: whether it holds the identity, or asked to join it.
+    /// The identity in use and this browser's app key under it, which a
+    /// listing relates every identity's log and every vault to: whether it
+    /// holds the identity, asked to join it, or asked for a vault's access.
     /// `local_log` is the identity in use's own control log here; with it,
     /// or with vaults, the key can no longer take another identity's id.
     #[must_use]
-    pub fn listing_key(&self, local_log: LocalIdentityLog) -> Option<ListingAppKey> {
+    pub fn listing_identity(&self, local_log: LocalIdentityLog) -> ListingIdentity {
         let IdentitySelection::Selected(selected) = self.directory.selection() else {
-            return None;
+            return ListingIdentity::NoIdentityInUse;
+        };
+        let Some(entry) = self
+            .keyring
+            .entries()
+            .iter()
+            .find(|entry| entry.identity_id() == selected)
+        else {
+            return ListingIdentity::NoIdentityInUse;
         };
         let fresh = self
             .directory
@@ -80,8 +76,8 @@ impl BrowserVaultKeys<'_> {
             .iter()
             .find(|identity| &identity.identity_id == selected)
             .is_some_and(|identity| identity.is_fresh_local_identity(local_log));
-        self.identity_app_id().map(|app_id| ListingAppKey {
-            app_id,
+        ListingIdentity::InUse(ListingAppKey {
+            app_id: entry.app_id().clone(),
             identity_id: selected.clone(),
             local: if fresh {
                 ListingLocalIdentity::Fresh
@@ -164,7 +160,7 @@ impl ProviderVaultEvents<'_> {
     /// Read whether a backup password opens the vault and whether this
     /// device's app key asked for or was granted access. Password envelopes
     /// and membership are readable without the vault keys.
-    pub fn inspect(self, app_id: Option<&AppId>) -> VaultResult<ProviderVaultInspection> {
+    pub fn inspect(self, this_browser: &ListingIdentity) -> VaultResult<ProviderVaultInspection> {
         let store = self
             .events
             .into_iter()
@@ -175,12 +171,16 @@ impl ProviderVaultEvents<'_> {
             .is_empty();
         let mut meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
-        let standing = match app_id {
-            Some(app_id) if meta.enrolled_devices.contains_key(app_id) => {
+        let standing = match this_browser {
+            ListingIdentity::InUse(key) if meta.enrolled_devices.contains_key(&key.app_id) => {
                 ProviderVaultStanding::Granted
             }
-            Some(app_id) if meta.joins.contains_key(app_id) => ProviderVaultStanding::Requested,
-            Some(_) | None => ProviderVaultStanding::Stranger,
+            ListingIdentity::InUse(key) if meta.joins.contains_key(&key.app_id) => {
+                ProviderVaultStanding::Requested
+            }
+            ListingIdentity::InUse(_) | ListingIdentity::NoIdentityInUse => {
+                ProviderVaultStanding::Stranger
+            }
         };
         Ok(ProviderVaultInspection {
             backup_password,
@@ -205,7 +205,7 @@ pub struct ProviderVaultKeyholding<'a> {
     /// Whether an identity is in use on this browser. Without one nothing
     /// here was checked: the user's passkey may still recover the identity
     /// that owns a vault.
-    pub identity_in_use: bool,
+    pub session: IdentitySession,
 }
 
 impl ProviderVaultKeyholding<'_> {
@@ -216,7 +216,7 @@ impl ProviderVaultKeyholding<'_> {
         granted_vaults: &[],
         password_vaults: &[],
         requested_vaults: &[],
-        identity_in_use: false,
+        session: IdentitySession::NoIdentity,
     };
 
     /// The way this device can open one listed vault.
@@ -240,7 +240,7 @@ impl ProviderVaultKeyholding<'_> {
         if self.password_vaults.contains(store_id) {
             return ProviderVaultAccess::BackupPassword;
         }
-        if !self.identity_in_use {
+        if self.session == IdentitySession::NoIdentity {
             return ProviderVaultAccess::Unchecked;
         }
         if self.requested_vaults.contains(store_id) {
@@ -366,7 +366,7 @@ mod tests {
             granted_vaults: &granted_vaults,
             password_vaults: &password_vaults,
             requested_vaults: &requested_vaults,
-            identity_in_use: true,
+            session: IdentitySession::IdentityInUse,
         };
         assert_eq!(keys.access(&granted), ProviderVaultAccess::Granted);
         assert_eq!(keys.access(&asked), ProviderVaultAccess::Requested);
@@ -530,8 +530,11 @@ mod tests {
             keys.identity_vaults(),
             slice::from_ref(&browser.personal_vault)
         );
+        let ListingIdentity::InUse(key) = keys.listing_identity(LocalIdentityLog::Empty) else {
+            anyhow::bail!("the selected identity has its app key here");
+        };
         assert_eq!(
-            keys.identity_app_id().as_ref(),
+            Some(&key.app_id),
             browser
                 .keyring
                 .entries()
@@ -605,7 +608,7 @@ mod tests {
                 store_id: &store_id,
                 events: vec![genesis(vec![password])?],
             }
-            .inspect(None)?
+            .inspect(&ListingIdentity::NoIdentityInUse)?
             .backup_password
         );
         assert!(
@@ -613,10 +616,19 @@ mod tests {
                 store_id: &store_id,
                 events: vec![genesis(vec![])?],
             }
-            .inspect(None)?
+            .inspect(&ListingIdentity::NoIdentityInUse)?
             .backup_password
         );
         Ok(())
+    }
+
+    /// An identity in use here whose key is `app_id`.
+    fn in_use_with(app_id: &crate::AppId) -> anyhow::Result<ListingIdentity> {
+        Ok(ListingIdentity::InUse(ListingAppKey {
+            app_id: app_id.clone(),
+            identity_id: crate::IdentityId::parse("idn_joinerjoine")?,
+            local: ListingLocalIdentity::InUse,
+        }))
     }
 
     #[test]
@@ -683,7 +695,7 @@ mod tests {
             },
         )?;
         let standing = |events: &[&crate::VaultEvent],
-                        app_id: Option<&AppId>|
+                        this_browser: &ListingIdentity|
          -> anyhow::Result<ProviderVaultStanding> {
             let writes = events
                 .iter()
@@ -698,10 +710,11 @@ mod tests {
                 store_id: &store_id,
                 events: writes,
             }
-            .inspect(app_id)?
+            .inspect(this_browser)?
             .standing)
         };
-        let app_id = Some(joiner_app.device_id());
+        let app_id = &in_use_with(joiner_app.device_id())?;
+        let nobody = &ListingIdentity::NoIdentityInUse;
         assert_eq!(
             standing(&[&genesis], app_id)?,
             ProviderVaultStanding::Stranger
@@ -716,7 +729,7 @@ mod tests {
         );
         // Without an app key on this browser, nothing is requested or granted.
         assert_eq!(
-            standing(&[&genesis, &requested, &approved], None)?,
+            standing(&[&genesis, &requested, &approved], nobody)?,
             ProviderVaultStanding::Stranger
         );
         Ok(())

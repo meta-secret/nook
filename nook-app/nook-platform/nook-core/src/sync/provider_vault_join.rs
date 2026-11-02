@@ -61,8 +61,8 @@ impl ProviderVaultAccessRequest<'_> {
 mod tests {
     use super::*;
     use crate::{
-        EventId, GenesisImportPayload, GenesisImportRequest, ProviderVaultEvents,
-        ProviderVaultStanding,
+        EventId, GenesisImportPayload, GenesisImportRequest, IdentityId, ListingAppKey,
+        ListingIdentity, ListingLocalIdentity, ProviderVaultEvents, ProviderVaultStanding,
     };
 
     #[test]
@@ -111,7 +111,11 @@ mod tests {
                 },
             ],
         }
-        .inspect(Some(app_key.device_id()))?;
+        .inspect(&ListingIdentity::InUse(ListingAppKey {
+            app_id: app_key.device_id().clone(),
+            identity_id: IdentityId::parse("idn_requesterrq")?,
+            local: ListingLocalIdentity::InUse,
+        }))?;
         assert_eq!(inspection.standing, ProviderVaultStanding::Requested);
         Ok(())
     }

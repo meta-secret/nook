@@ -14,13 +14,12 @@
 
 use nook_core::{
     EventLogNamespaceKind, IdentityId, LocalEventWrite, PlacedNamespace, ProviderVaultObservation,
-    StoreId,
 };
 
 use super::{S3EventStore, S3Storage};
 use crate::NookError;
 use crate::storage::provider_vault_listing::{
-    CountedVaultNamespace, NamespaceWrite, ProviderLocation,
+    CountedVaultNamespace, ListedVault, NamespaceWrite, ProviderLocation,
 };
 use std::future::{self, Future};
 
@@ -50,19 +49,18 @@ impl ProviderLocation for S3VaultListing<'_> {
     /// A vault, by how many event objects it holds.
     async fn observation(
         &self,
-        store_id: StoreId,
-        vault: PlacedNamespace,
+        vault: ListedVault<PlacedNamespace>,
     ) -> Result<ProviderVaultObservation, NookError> {
         let event_count = S3EventStore {
             storage: self.storage,
-            placed: &vault,
+            placed: &vault.namespace,
         }
         .event_ids()
         .await?
         .len();
         Ok(CountedVaultNamespace {
-            store_id,
-            identity: vault.identity().clone(),
+            identity: vault.namespace.identity().clone(),
+            store_id: vault.store_id,
             event_count,
         }
         .observation())
@@ -103,9 +101,10 @@ mod browser_tests {
 
     use super::{ProviderLocation, S3VaultListing};
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::storage::provider_vault_listing::IdentityEventPut;
     use crate::storage::s3::S3Storage;
     use crate::test_fixtures::WasmFixture;
-    use nook_core::{EventId, IdentityId, StoreId};
+    use nook_core::{EventId, EventStorageBytes, IdentityId, StoreId};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -191,7 +190,11 @@ mod browser_tests {
         // A malformed event is refused before any request.
         assert!(
             location
-                .put_identity_event(&stranger, &event_id, b"kind: join\n")
+                .put_identity_event(IdentityEventPut {
+                    identity_id: &stranger,
+                    event_id: &event_id,
+                    bytes: &EventStorageBytes::from(b"kind: join\n".to_vec()),
+                })
                 .await
                 .is_err()
         );
