@@ -13,8 +13,8 @@
 //! event. Nothing is decrypted.
 
 use nook_core::{
-    EventError, EventLogNamespaceKind, IdentityId, LocalEventWrite, PlacedNamespace,
-    ProviderVaultObservation, StoreId,
+    EventLogNamespaceKind, IdentityId, LocalEventWrite, PlacedNamespace, ProviderVaultObservation,
+    StoreId,
 };
 
 use super::{S3EventStore, S3Storage};
@@ -22,6 +22,7 @@ use crate::NookError;
 use crate::storage::provider_vault_listing::{
     CountedVaultNamespace, NamespaceWrite, ProviderLocation,
 };
+use std::future::{self, Future};
 
 use crate::storage::event_store::EventStore;
 
@@ -44,13 +45,6 @@ impl ProviderLocation for S3VaultListing<'_> {
 
     fn placed(namespace: &PlacedNamespace) -> &PlacedNamespace {
         namespace
-    }
-
-    fn filed_twice(store_id: &StoreId) -> NookError {
-        EventError::VaultFiledTwice {
-            store_id: store_id.as_str().to_owned(),
-        }
-        .into()
     }
 
     /// A vault, by how many event objects it holds.
@@ -83,19 +77,14 @@ impl ProviderLocation for S3VaultListing<'_> {
         .await
     }
 
-    /// The identity's log, which the location holds only with an event in it.
-    async fn identity_log(&self, identity_id: &IdentityId) -> Result<PlacedNamespace, NookError> {
-        let log = PlacedNamespace::identity_log(identity_id.clone());
-        let store = S3EventStore {
-            storage: self.storage,
-            placed: &log,
-        };
-        match store.event_ids().await?.first() {
-            Some(_) => Ok(log),
-            None => Err(NookError::Database(
-                "The identity is not at this S3 location.".to_owned(),
-            )),
-        }
+    /// The identity's log, named by its path with no request: a log the
+    /// location does not hold reads as empty, and core refuses an empty log
+    /// before any flow writes into it.
+    fn identity_log(
+        &self,
+        identity_id: &IdentityId,
+    ) -> impl Future<Output = Result<PlacedNamespace, NookError>> {
+        future::ready(Ok(PlacedNamespace::identity_log(identity_id.clone())))
     }
 
     async fn put_event(&self, write: NamespaceWrite<'_, PlacedNamespace>) -> Result<(), NookError> {
@@ -167,7 +156,8 @@ mod browser_tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn an_identity_log_is_read_only_where_the_location_holds_it() -> anyhow::Result<()> {
+    async fn an_identity_log_is_listed_once_per_read_and_an_absent_one_is_empty()
+    -> anyhow::Result<()> {
         let connection = WasmFixture::s3_connection()?;
         let location = S3VaultListing {
             storage: S3Storage {
@@ -176,14 +166,9 @@ mod browser_tests {
         };
         let held = IdentityId::parse("idn_abcdefghijk")?;
         let key = format!("{ROOT}/idn_abcdefghijk/log/events/{DIGEST}.yaml");
-        // The held log is listed once to find it there and once to read it.
+        // Each read lists the log once; nothing lists it first to find it.
         let stub = FetchStub::install(vec![
             listed("idn_strangerabc%2Flog%2Fevents%2F", page(&[], &[])),
-            listed("idn_strangerabc%2Flog%2Fevents%2F", page(&[], &[])),
-            listed(
-                "idn_abcdefghijk%2Flog%2Fevents%2F",
-                page(slice::from_ref(&key), &[]),
-            ),
             listed("idn_abcdefghijk%2Flog%2Fevents%2F", page(&[key], &[])),
             FetchRoute::ok(
                 "GET",
@@ -193,9 +178,17 @@ mod browser_tests {
         ])
         .map_err(|error| anyhow::anyhow!("{error}"))?;
         let stranger = IdentityId::parse("idn_strangerabc")?;
-        assert!(location.identity_events(&stranger).await.is_err());
+        // A log the location does not hold reads as empty; core refuses an
+        // empty log before any flow writes into it.
+        assert!(
+            location
+                .identity_events(&stranger)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+                .is_empty()
+        );
         let event_id = EventId::parse(&format!("sha256u:{DIGEST}"))?;
-        // Writing into a log the location does not hold is refused unsent.
+        // A malformed event is refused before any request.
         assert!(
             location
                 .put_identity_event(&stranger, &event_id, b"kind: join\n")
@@ -208,6 +201,7 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert_eq!(events.len(), 1);
         let calls = stub.calls();
+        assert_eq!(calls.len(), 3, "{calls:?}");
         assert!(
             calls.iter().all(|call| !call.starts_with("PUT ")),
             "{calls:?}"

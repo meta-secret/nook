@@ -14,16 +14,17 @@
 )]
 
 use nook_core::{
-    AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent, EventId,
-    EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId, IdentitySelection,
-    KnownIdentityName, KnownVaultName, ListedIdentityLog, ListingAppKey, LocalEventWrite,
-    LocalIdentityLog, LocalVaultOccupancy, PlacedNamespace, ProviderIdentityLogEvents,
-    ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
+    AppId, BrowserIdentityVault, BrowserVaultKeys, CheckedVaultEvents, DriveEventParent,
+    EventError, EventId, EventLogLocation, EventLogNamespaceKind, EventStorageBytes, IdentityId,
+    IdentitySelection, KnownIdentityName, KnownVaultName, ListedIdentityLog, ListingAppKey,
+    LocalEventWrite, LocalIdentityLog, LocalVaultOccupancy, PlacedNamespace,
+    ProviderIdentityLogEvents, ProviderVaultEvents, ProviderVaultKeyholding, ProviderVaultListing,
     ProviderVaultListingRequest, ProviderVaultObservation, ProviderVaultStanding,
     ProviderVaultTime, StoreId,
 };
 
 use futures_util::{StreamExt, TryStreamExt, stream};
+use std::collections::BTreeSet;
 
 use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use super::drive_events::DriveEventStore;
@@ -60,9 +61,6 @@ pub(crate) trait ProviderLocation {
     /// The identity folder and event log of a listed namespace.
     fn placed(namespace: &Self::Namespace) -> &PlacedNamespace;
 
-    /// The failure of a vault listed in two namespaces.
-    fn filed_twice(store_id: &StoreId) -> NookError;
-
     /// What the location reports about one vault's namespace.
     async fn observation(
         &self,
@@ -98,12 +96,15 @@ pub(crate) trait ProviderLocation {
     /// One observation per vault namespace. A vault listed twice, under two
     /// identities or duplicated by hand, fails closed, as sync does.
     async fn observations(&self) -> Result<Vec<ProviderVaultObservation>, NookError> {
-        let mut vaults: Vec<(StoreId, Self::Namespace)> = Vec::new();
-        for (store_id, vault) in self.vaults().await? {
-            if vaults.iter().any(|(listed, _)| *listed == store_id) {
-                return Err(Self::filed_twice(&store_id));
+        let vaults = self.vaults().await?;
+        let mut listed = BTreeSet::new();
+        for (store_id, _) in &vaults {
+            if !listed.insert(store_id) {
+                return Err(EventError::VaultFiledTwice {
+                    store_id: store_id.as_str().to_owned(),
+                }
+                .into());
             }
-            vaults.push((store_id, vault));
         }
         stream::iter(vaults)
             .map(|(store_id, vault)| self.observation(store_id, vault))
@@ -244,13 +245,6 @@ impl ProviderLocation for DriveVaultListing<'_> {
 
     fn placed(folder: &ListedNamespaceFolder) -> &PlacedNamespace {
         &folder.placed
-    }
-
-    fn filed_twice(_: &StoreId) -> NookError {
-        NookError::Drive(
-            "Google Drive contains ambiguous namespace folders; sync stopped before choosing one."
-                .to_owned(),
-        )
     }
 
     /// A vault folder, by when Drive created it and each of its event files.
