@@ -560,7 +560,13 @@ mod browser_tests {
         .namespaces(EventLogNamespaceKind::Vault)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
-        assert_eq!(vaults, vec![fixture.vault.clone()]);
+        assert_eq!(
+            vaults,
+            vec![PlacedNamespace::vault(
+                IdentityId::parse("idn_abcdefghijk")?,
+                StoreId::parse("store_abcdefghijk")?,
+            )]
+        );
         Ok(())
     }
 }
