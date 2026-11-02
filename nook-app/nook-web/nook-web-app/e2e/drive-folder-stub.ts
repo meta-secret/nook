@@ -2,6 +2,9 @@ import type { Route } from '@playwright/test'
 import { parseJson, requireRecord } from './helpers/guards'
 
 export const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+/** Drive answers `createdTime` whenever a listing asks for it; the stubs
+ * report one fixed time for every folder and event file. */
+export const DRIVE_STUB_CREATED_TIME = '2026-01-01T00:00:00.000Z'
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 const DEFAULT_VAULT_FOLDER_NAME = 'meta-secret-nook'
 const CORS_HEADERS = { 'access-control-allow-origin': '*' }
