@@ -22,6 +22,7 @@ import {
   openManagePage,
   ManagePage,
   expectLoginGateAfterLoad,
+  E2E_UNKNOWN_ACCOUNT,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -354,6 +355,7 @@ test.describe('vault connect flow', () => {
           label: 'Google Drive (e2e)',
           fileName: 'nook-e2e-remove.yaml',
           accessToken: 'ya29.e2e_stub_access_token',
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
     })

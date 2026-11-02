@@ -17,6 +17,7 @@ import {
   waitForLoadedSyncProviders,
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
+  E2E_UNKNOWN_ACCOUNT,
 } from './helpers'
 import {
   createSyncTarget,
@@ -50,6 +51,7 @@ test.describe('remote vault recovery (local-first sync)', () => {
           label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
       sharedStub: target.stub,

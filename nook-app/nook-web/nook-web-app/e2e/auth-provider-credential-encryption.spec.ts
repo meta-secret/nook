@@ -3,14 +3,19 @@ import {
   clearBrowserVault,
   connectLocalVault,
   disableVaultIdleLock,
+  e2eAccount,
   e2eDriveFolderId,
   expectSealedCredential,
   flushNookLogPersistQueue,
   fetchAppLogs,
   AuthProviderBrowserFixture,
+  RawCredentialKind,
+  rawDriveAccessToken,
+  rawGithubToken,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
-  storePlaintextGithubPat,
+  SeededProviderKind,
+  storePlaintextGithubToken,
   unselectedAuthProviderSeedScope,
   waitForAuthProvidersE2eHook,
   waitForStorageChainIdle,
@@ -39,12 +44,12 @@ test.describe('sync provider credential encryption', () => {
       {
         providers: [
           {
+            kind: SeededProviderKind.Github,
             id: 'gh-e2e-save',
-            type: 'github',
             label: 'GitHub',
-            githubPat: pat,
-            githubRepo: 'nook',
-            createdAt: new Date().toISOString(),
+            repository: 'nook',
+            token: pat,
+            scope: unselectedAuthProviderSeedScope(),
           },
         ],
       },
@@ -52,15 +57,18 @@ test.describe('sync provider credential encryption', () => {
     )
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expectSealedCredential(raw.providers[0]?.githubPat, pat, 'token')
+    expectSealedCredential(rawGithubToken(raw, 'gh-e2e-save'), pat)
 
     const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
     if (decrypted.isOk())
-      expect(decrypted.value.providers[0]?.githubPat).toEqual({
-        state: 'token',
-        value: pat,
-      })
+      expect(decrypted.value.providers.map((row) => row.provider)).toEqual([
+        {
+          type: 'github',
+          repository: { state: 'repository', value: 'nook' },
+          token: pat,
+        },
+      ])
   })
 
   test('replacement conflict refresh avoids recursive wasm closure use', async ({
@@ -102,18 +110,18 @@ test.describe('sync provider credential encryption', () => {
       {
         providers: [
           {
+            kind: SeededProviderKind.Github,
             id: 'gh-e2e-plain',
-            type: 'github',
             label: 'GitHub',
-            githubPat: 'github_pat_sealed_first',
-            githubRepo: 'nook',
-            createdAt: new Date().toISOString(),
+            repository: 'nook',
+            token: 'github_pat_sealed_first',
+            scope: unselectedAuthProviderSeedScope(),
           },
         ],
       },
       unselectedAuthProviderSeedScope(),
     )
-    await storePlaintextGithubPat(page, 'gh-e2e-plain', pat)
+    await storePlaintextGithubToken(page, 'gh-e2e-plain', pat)
 
     const admission = await new AuthProviderBrowserFixture(page).load()
     expect(admission.isErr()).toBe(true)
@@ -121,35 +129,28 @@ test.describe('sync provider credential encryption', () => {
       expect(admission.error).toBe(AUTH_PROVIDER_HOOK_READ_FAILED)
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expect(
-      raw.providers.find((p) => p.id === 'gh-e2e-plain')?.githubPat,
-    ).toEqual({ state: 'token', value: pat })
+    expect(rawGithubToken(raw, 'gh-e2e-plain')).toEqual({
+      kind: RawCredentialKind.Text,
+      text: pat,
+    })
   })
 
-  test('OAuth access and refresh tokens are sealed at rest', async ({
-    page,
-  }) => {
+  test('OAuth access token is sealed at rest', async ({ page }) => {
     // Credentials are sealed with this browser's key, made in first run.
     await createFirstRunKey(page)
     const access = 'ya29.e2e-oauth-access-token'
-    const refresh = '1//e2e-refresh-token-secret'
     await saveAuthProvidersInBrowser(
       page,
       {
         providers: [
           {
+            kind: SeededProviderKind.GoogleDrive,
             id: 'gd-e2e-oauth',
-            type: 'oauth-file',
             label: 'Google Drive',
-            oauthFile: {
-              accessToken: access,
-              refreshToken: refresh,
-              preset: 'google-drive',
-              fileName: 'nook-events',
-              folderId: e2eDriveFolderId('nook-events'),
-              accountEmail: 'me@example.com',
-            },
-            createdAt: new Date().toISOString(),
+            accessToken: access,
+            fileName: 'nook-events',
+            account: e2eAccount('me@example.com'),
+            scope: unselectedAuthProviderSeedScope(),
           },
         ],
       },
@@ -157,21 +158,22 @@ test.describe('sync provider credential encryption', () => {
     )
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    const oauth = raw.providers[0]?.oauthFile
-    expectSealedCredential(oauth?.accessToken, access, 'accessToken')
-    expectSealedCredential(oauth?.refreshToken, refresh, 'token')
+    expectSealedCredential(rawDriveAccessToken(raw, 'gd-e2e-oauth'), access)
 
     const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
     if (decrypted.isOk())
-      expect(decrypted.value.providers[0]?.oauthFile).toEqual(
-        expect.objectContaining({
-          state: 'configured',
-          config: expect.objectContaining({
-            accessToken: { state: 'accessToken', value: access },
-            refreshToken: { state: 'token', value: refresh },
-          }),
-        }),
-      )
+      expect(decrypted.value.providers.map((row) => row.provider)).toEqual([
+        {
+          type: 'oauth-file',
+          preset: 'google-drive',
+          authorization: {
+            accessToken: access,
+            expiresAt: expect.any(String),
+          },
+          account: { state: 'email', email: 'me@example.com' },
+          folderId: e2eDriveFolderId('nook-events'),
+        },
+      ])
   })
 })

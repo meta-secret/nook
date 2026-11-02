@@ -12,7 +12,7 @@ import {
   E2E_OAUTH_ONBOARD_PROVIDER,
   seedExtraGithubProviders,
   seedExtraOauthFileProviders,
-  type E2eOauthSyncProvider,
+  type SeededDriveProviderInput,
 } from './auth-providers'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, sleep } from './environment'
@@ -562,7 +562,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
   await seedExtraGithubProviders(page, providers)
   for (const provider of providers) {
     await stubGithubVaultForLocalE2e(page, {
-      repoName: provider.githubRepo,
+      repoName: provider.repository,
       vaultYaml,
     })
   }
@@ -602,7 +602,7 @@ export async function reloadUnlockWithSyncProvider(
   opts?: {
     password?: string
     entryLabel?: string
-    providers?: E2eOauthSyncProvider[]
+    providers?: SeededDriveProviderInput[]
     sharedStub?: E2eOauthFileStub
   },
 ) {

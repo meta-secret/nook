@@ -9,6 +9,7 @@ import {
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
   openIdentitiesPage,
+  e2eAccount,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -150,7 +151,7 @@ test.describe('sync conflict resolution', () => {
           label: 'Shared File A',
           fileName,
           accessToken: 'ya29.e2e_file_sync_token',
-          accountEmail: 'shared-a@example.test',
+          account: e2eAccount('shared-a@example.test'),
         },
       ],
       stub,

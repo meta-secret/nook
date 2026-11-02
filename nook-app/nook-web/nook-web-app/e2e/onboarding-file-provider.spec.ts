@@ -441,9 +441,8 @@ test.describe('iCloud provider setup', () => {
       {
         id: 'e2e-icloud-share-owner',
         label: 'iCloud share',
-        fileName: 'icloud-share-events',
-        accessToken: 'ck-web-auth-e2e-share-owner',
-        iCloudShareTarget: e2eICloudShareTarget('owner'),
+        webAuthToken: 'ck-web-auth-e2e-share-owner',
+        shareTarget: e2eICloudShareTarget('owner'),
       },
     ])
     await invokeInitializedVaultProviderReload(page)

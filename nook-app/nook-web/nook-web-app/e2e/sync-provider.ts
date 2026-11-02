@@ -325,6 +325,7 @@ export async function connectSyncGenesisDevice(
       triggerVaultSyncRefresh,
       disableVaultIdleLock,
       ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      E2E_UNKNOWN_ACCOUNT,
     } = await import('./helpers')
     const genesisReadiness: Locator = page
       .getByTestId('login-create-vault-chooser')
@@ -359,6 +360,7 @@ export async function connectSyncGenesisDevice(
           label: e2eSyncProviderDef(target.providerId).label,
           fileName: target.repoName,
           accessToken: target.pat,
+          account: E2E_UNKNOWN_ACCOUNT,
         },
       ],
       sharedStub: remote,

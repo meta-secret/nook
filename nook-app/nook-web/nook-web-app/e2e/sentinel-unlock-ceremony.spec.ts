@@ -10,6 +10,7 @@ import {
   readPersistedAppLogs,
   UI_TIMEOUT_MS,
   parseJson,
+  PROVIDER_CREDENTIAL_KEYS,
   readStringProperty,
   requireRecord,
   SENTINEL_APP,
@@ -222,10 +223,13 @@ test.describe(
         'Sentinel delivery payload',
       )
       expect(memberStoreId.length).toBeGreaterThan(0)
-      expect(deviceBDelivery).not.toContain('githubPat')
-      expect(deviceBDelivery).not.toContain('oauthFile')
-      expect(deviceCDelivery).not.toContain('githubPat')
-      expect(deviceCDelivery).not.toContain('oauthFile')
+      for (const delivery of [deviceBDelivery, deviceCDelivery]) {
+        // The credential keys of every provider variant: GitHub `token`, Drive
+        // `accessToken`, iCloud `webAuthToken` and S3 `secretAccessKey`.
+        for (const credentialKey of PROVIDER_CREDENTIAL_KEYS) {
+          expect(delivery).not.toContain(`"${credentialKey}"`)
+        }
+      }
 
       async function receiveParticipantShare(
         participantDevice: Page,

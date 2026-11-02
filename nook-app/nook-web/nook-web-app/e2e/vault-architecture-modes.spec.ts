@@ -34,6 +34,8 @@ import {
   requireRecord,
   createFirstRunKey,
   answerPasskeyPrompt,
+  E2E_GOOGLE_ACCOUNT,
+  e2eAccount,
 } from './helpers'
 
 const SIMPLE_SECRET_VALUE = 'architecture-simple-secret-value'
@@ -45,15 +47,15 @@ const SHARED_JOINER_TOKEN = 'ya29.architecture-shared-joiner-token'
 const PERSONAL_ONLY_PROVIDER = {
   id: 'architecture-personal-only-github',
   label: 'Personal-only GitHub',
-  githubRepo: 'personal-only-vault',
-  githubPat: 'ghp_architecture_personal_only',
+  repository: 'personal-only-vault',
+  token: 'ghp_architecture_personal_only',
 }
 const SHARED_PROVIDER = {
   id: 'architecture-shared-provider',
   label: 'Shared architecture drive',
   fileName: 'architecture-shared.yaml',
   accessToken: 'ya29.architecture-shared-provider-token',
-  accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
+  account: E2E_GOOGLE_ACCOUNT,
 }
 
 async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
@@ -742,7 +744,7 @@ test.describe('vault architecture modes', () => {
       .getByTestId('authorized-accounts')
     await expect(
       accounts.getByTestId(
-        `authorized-account-pick-${SHARED_PROVIDER.accountEmail}`,
+        `authorized-account-pick-${E2E_GOOGLE_ACCOUNT_EMAIL}`,
       ),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(
@@ -782,7 +784,7 @@ test.describe('vault architecture modes', () => {
     if (!sharedFolder) throw new Error('shared Drive folder was not available.')
     expect(sharedFolder.id).toBe(e2eDriveFolderId(SHARED_PROVIDER.fileName))
     expect(sharedFolder.writers).toEqual([
-      SHARED_PROVIDER.accountEmail,
+      E2E_GOOGLE_ACCOUNT_EMAIL,
       SHARED_JOINER_IDENTITY,
     ])
     await joinerPick.click()
@@ -820,7 +822,7 @@ test.describe('vault architecture modes', () => {
     expect(JSON.stringify(envelope)).not.toContain(ONBOARD_PASSWORD)
     await assertAppLogsDoNotLeak(page, [
       SHARED_PROVIDER.accessToken,
-      PERSONAL_ONLY_PROVIDER.githubPat,
+      PERSONAL_ONLY_PROVIDER.token,
       ONBOARD_PASSWORD,
       code,
       SHARED_SECRET_VALUE,
@@ -850,8 +852,7 @@ test.describe('vault architecture modes', () => {
           label: 'Joiner shared architecture drive',
           fileName: SHARED_PROVIDER.fileName,
           accessToken: SHARED_JOINER_TOKEN,
-          accountEmail: SHARED_JOINER_IDENTITY,
-          folderId: sharedFolder.id,
+          account: e2eAccount(SHARED_JOINER_IDENTITY),
         },
       ])
       const localLink = localizeAppLinkForE2e(joiner, link)
@@ -939,7 +940,7 @@ test.describe('vault architecture modes', () => {
     ).toHaveCount(0)
     const [sharedFolder] = driveStub.getSharedFolders()
     if (!sharedFolder) throw new Error('shared Drive folder was not available.')
-    expect(sharedFolder.writers).toEqual([SHARED_PROVIDER.accountEmail])
+    expect(sharedFolder.writers).toEqual([E2E_GOOGLE_ACCOUNT_EMAIL])
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
   })
 

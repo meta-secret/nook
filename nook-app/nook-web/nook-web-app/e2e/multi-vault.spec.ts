@@ -5,10 +5,11 @@ import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableLoginAutoUnlock,
-  e2eDriveFolderId,
+  E2E_GOOGLE_ACCOUNT,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   saveAuthProvidersInBrowser,
+  SeededProviderKind,
   unlockVaultOnLogin,
   openVaultPage,
   openManagePage,
@@ -18,7 +19,6 @@ import {
   listLocalVaultEntries,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
-import { E2E_GOOGLE_ACCOUNT_EMAIL } from './google-identity-stub'
 
 function parseStoreId(yaml: string): string {
   const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
@@ -71,32 +71,22 @@ async function seedScopedSyncProviders(
     {
       providers: [
         {
+          kind: SeededProviderKind.GoogleDrive,
           id: 'provider-a',
-          type: 'oauth-file',
           label: 'File · nook-multi-vault-a',
-          oauthFile: {
-            preset: 'google-drive',
-            accessToken: 'ya29.e2e_file_sync_token',
-            fileName: 'nook-multi-vault-a.yaml',
-            folderId: e2eDriveFolderId('nook-multi-vault-a.yaml'),
-            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
-          },
-          storeId: storeA,
-          createdAt: new Date().toISOString(),
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-a.yaml',
+          account: E2E_GOOGLE_ACCOUNT,
+          scope: activeAuthProviderSeedScope(storeA),
         },
         {
+          kind: SeededProviderKind.GoogleDrive,
           id: 'provider-b',
-          type: 'oauth-file',
           label: 'File · nook-multi-vault-b',
-          oauthFile: {
-            preset: 'google-drive',
-            accessToken: 'ya29.e2e_file_sync_token',
-            fileName: 'nook-multi-vault-b.yaml',
-            folderId: e2eDriveFolderId('nook-multi-vault-b.yaml'),
-            accountEmail: E2E_GOOGLE_ACCOUNT_EMAIL,
-          },
-          storeId: storeB,
-          createdAt: new Date().toISOString(),
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-b.yaml',
+          account: E2E_GOOGLE_ACCOUNT,
+          scope: activeAuthProviderSeedScope(storeB),
         },
       ],
     },

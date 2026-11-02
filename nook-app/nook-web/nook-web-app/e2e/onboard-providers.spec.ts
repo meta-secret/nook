@@ -13,6 +13,7 @@ import {
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
   readLocalVaultYamlFromIdb,
+  e2eAccount,
 } from './helpers'
 
 test.describe('identity onboarding provider picker', () => {
@@ -85,14 +86,14 @@ test.describe('identity onboarding provider picker', () => {
         label: 'File · personal',
         fileName: 'personal.yaml',
         accessToken: personalToken,
-        accountEmail: 'personal@example.com',
+        account: e2eAccount('personal@example.com'),
       },
       {
         id: 'file-work',
         label: 'File · work',
         fileName: 'work.yaml',
         accessToken: workToken,
-        accountEmail: 'work@example.com',
+        account: e2eAccount('work@example.com'),
       },
     ]
 
