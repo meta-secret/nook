@@ -13,10 +13,10 @@ use crate::{BrowserPasskeyClient, DriveStorageClient, NookDatabase, NookError};
 use crate::{TypedInput, TypedOutput};
 use nook_core::{
     BackupPasswordAccessCheck, CheckedVaultEvents, CredentialCheckReport, DeviceIdentity, EventId,
-    EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, PasskeyAccessCheck,
-    PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput, PasskeyRecoveryRequest,
-    ProviderIdentityLogEvents, SigningSeedHex, StoreId, WebAuthnCredentialId, WebAuthnPrfOutput,
-    WebAuthnUserHandle, WrappedDeviceIdentity,
+    EventLogNamespaceKind, EventStorageBytes, LocalEventWrite, LocalFolderHandleId,
+    PasskeyAccessCheck, PasskeyAccessProfile, PasskeyMemberSigner, PasskeyRecoveryInput,
+    PasskeyRecoveryRequest, ProviderIdentityLogEvents, ProviderSecretText, SigningSeedHex, StoreId,
+    WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -25,17 +25,28 @@ use zeroize::Zeroize;
 
 /// Where a check reads identity logs and vaults from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", content = "source", rename_all = "camelCase")]
 pub enum NookAccessCheckSource {
     /// The identities and vaults stored on this browser.
     ThisBrowser,
+    /// One provider location the page names.
+    Remote(NookRemoteSource),
+}
+
+/// A provider location the page names, read with the credential it carries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NookRemoteSource {
     /// A signed-in Google account's Nook root.
-    #[serde(rename_all = "camelCase")]
-    GoogleDrive { access_token: String },
+    GoogleDrive { access_token: ProviderSecretText },
     /// A local folder the user picked, by its stored handle.
-    #[serde(rename_all = "camelCase")]
-    LocalFolder { handle_id: String },
-    /// An S3 location with this device's key.
+    LocalFolder { handle_id: LocalFolderHandleId },
+    /// An S3 location with this device's key: a validated setup draft, or a
+    /// saved row's S3 block.
     S3 {
         configuration: nook_core::S3Connection,
     },
@@ -82,12 +93,21 @@ impl NookAccessCheckSource {
     pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
         match self {
             Self::ThisBrowser => Self::browser_contents().await,
+            Self::Remote(source) => source.contents().await,
+        }
+    }
+}
+
+impl NookRemoteSource {
+    /// The location's identity logs and vaults, read without any key.
+    pub(crate) async fn contents(&self) -> Result<SourceContents, NookError> {
+        match self {
             Self::GoogleDrive { access_token } => {
-                let root = DriveStorageClient::new(access_token)
+                let root = DriveStorageClient::new(access_token.expose())
                     .existing_nook_root()
                     .await?;
                 let drive = DriveVaultListing {
-                    token: access_token,
+                    token: access_token.expose(),
                     root: &root,
                 };
                 Ok(SourceContents {
@@ -95,7 +115,9 @@ impl NookAccessCheckSource {
                     vaults: drive.all_vault_events().await?,
                 })
             }
-            Self::LocalFolder { handle_id } => Self::folder_contents(handle_id).await,
+            Self::LocalFolder { handle_id } => {
+                NookAccessCheckSource::folder_contents(handle_id.as_str()).await
+            }
             Self::S3 { configuration } => {
                 let location = S3VaultListing {
                     storage: S3Storage {
@@ -109,7 +131,9 @@ impl NookAccessCheckSource {
             }
         }
     }
+}
 
+impl NookAccessCheckSource {
     async fn browser_contents() -> Result<SourceContents, NookError> {
         let directory = NookDatabase::load_identity_directory().await?;
         let mut identity_logs = Vec::new();
@@ -307,9 +331,9 @@ mod browser_tests {
         // vault, so a backup password has nothing to open in either.
         for source in [
             NookAccessCheckSource::ThisBrowser,
-            NookAccessCheckSource::LocalFolder {
-                handle_id: folder.clone(),
-            },
+            NookAccessCheckSource::Remote(NookRemoteSource::LocalFolder {
+                handle_id: LocalFolderHandleId::try_from(folder.clone())?,
+            }),
         ] {
             let source = source.encode()?;
             let report =

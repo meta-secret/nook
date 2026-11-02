@@ -11,8 +11,8 @@
 
 use crate::TypedInput;
 use nook_core::{
-    CheckedVaultEvents, CredentialCheckReport, EventLogLocation, IdentityId, LocalEventWrite,
-    ProviderIdentityLogEvents, VaultPlacement,
+    CheckedVaultEvents, CredentialCheckReport, EventLogLocation, EventLogNamespaceKind,
+    LocalEventWrite, ProviderIdentityLogEvents, VaultPlacement,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
@@ -22,27 +22,18 @@ use tsify::Tsify;
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::public_api::{NookAccessCheckSource, SourceContents};
+use crate::public_api::{NookRemoteSource, SourceContents};
 use crate::storage::remote_event::RemoteEventRead;
 
 /// Where an identity operation or a check reads identities and vaults from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", content = "source", rename_all = "camelCase")]
 pub enum NookProviderSource {
     /// The provider this session is connected to or has staged for a
     /// recovery, read with the credentials the session already holds.
     CurrentProvider,
-    /// A signed-in Google account's Nook root.
-    #[serde(rename_all = "camelCase")]
-    GoogleDrive { access_token: String },
-    /// A local folder the user picked, by its stored handle.
-    #[serde(rename_all = "camelCase")]
-    LocalFolder { handle_id: String },
-    /// An S3 location with this device's key: a validated setup draft, or
-    /// a saved row's S3 block.
-    S3 {
-        configuration: nook_core::S3Connection,
-    },
+    /// One provider location the page names.
+    Remote(NookRemoteSource),
 }
 
 impl NookVaultManager {
@@ -53,35 +44,15 @@ impl NookVaultManager {
     ) -> Result<SourceContents, NookError> {
         match source {
             NookProviderSource::CurrentProvider => self.current_provider_contents().await,
-            NookProviderSource::GoogleDrive { access_token } => {
-                NookAccessCheckSource::GoogleDrive {
-                    access_token: access_token.clone(),
-                }
-                .contents()
-                .await
-            }
-            NookProviderSource::LocalFolder { handle_id } => {
-                NookAccessCheckSource::LocalFolder {
-                    handle_id: handle_id.clone(),
-                }
-                .contents()
-                .await
-            }
-            NookProviderSource::S3 { configuration } => {
-                NookAccessCheckSource::S3 {
-                    configuration: configuration.clone(),
-                }
-                .contents()
-                .await
-            }
+            NookProviderSource::Remote(source) => source.contents().await,
         }
     }
 
     /// Every vault the current provider files, with the identity filing it,
-    /// and those identities' control logs.
+    /// and the control log of every identity the provider holds, whether or
+    /// not it files a vault there.
     async fn current_provider_contents(&self) -> Result<SourceContents, NookError> {
         let mut vaults = Vec::new();
-        let mut identities: Vec<IdentityId> = Vec::new();
         for store_id in self.list_vault_ids_at_current_provider().await? {
             let location = EventLogLocation::Vault(store_id.clone());
             let VaultPlacement::Filed(placed) = self.placed_at_current_provider(&location).await?
@@ -98,9 +69,6 @@ impl NookVaultManager {
                     events.push(LocalEventWrite { event_id, bytes });
                 }
             }
-            if !identities.contains(placed.identity()) {
-                identities.push(placed.identity().clone());
-            }
             vaults.push(CheckedVaultEvents {
                 store_id,
                 filed_under: placed.identity().clone(),
@@ -108,7 +76,11 @@ impl NookVaultManager {
             });
         }
         let mut identity_logs = Vec::new();
-        for identity_id in identities {
+        for log in self
+            .list_namespaces_at_current_provider(EventLogNamespaceKind::Identity)
+            .await?
+        {
+            let identity_id = log.identity().clone();
             let location = EventLogLocation::Identity(identity_id.clone());
             let mut events = Vec::new();
             for event_id in self.list_provider_event_ids_at(&location).await? {
@@ -164,8 +136,12 @@ impl NookVaultManager {
 mod browser_tests {
     use super::*;
     use crate::TypedOutput;
-    use crate::public_api::{NookAccessCheckSource, check_backup_password_access};
+    use crate::manager::PreparedProvider;
+    use crate::public_api::{
+        NookAccessCheckSource, NookRemoteSource, check_backup_password_access,
+    };
     use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use crate::test_fixtures::WasmFixture;
     use nook_core::{
         CheckedCredential, DriveVaultFolderLookup, IdentityCheckOutcome, VaultCheckOutcome,
     };
@@ -257,9 +233,9 @@ mod browser_tests {
             FetchRoute::ok("GET", LIST, empty),
             FetchRoute::ok("GET", LIST, empty),
         ])?;
-        let source = NookAccessCheckSource::GoogleDrive {
-            access_token: "drive-access-token".to_owned(),
-        }
+        let source = NookAccessCheckSource::Remote(NookRemoteSource::GoogleDrive {
+            access_token: WasmFixture::secret("drive-access-token")?,
+        })
         .encode()?;
 
         let report: CredentialCheckReport = check_backup_password_access(&source, "any".to_owned())
@@ -272,6 +248,53 @@ mod browser_tests {
         let calls = stub.calls();
         assert!(!calls.is_empty());
         assert!(calls.iter().all(|call| call.starts_with("GET ")));
+        Ok(())
+    }
+
+    /// Decision 3: Check access lists every identity the provider holds,
+    /// one that keeps no vault there included.
+    #[wasm_bindgen_test]
+    async fn the_current_provider_reports_an_identity_that_files_no_vault() -> anyhow::Result<()> {
+        let root = "<ListBucketResult><IsTruncated>false</IsTruncated>\
+             <CommonPrefixes><Prefix>e2e/meta-secret-nook/idn_abcdefghijk/</Prefix></CommonPrefixes>\
+             </ListBucketResult>";
+        let identity_folder = "<ListBucketResult><IsTruncated>false</IsTruncated>\
+             <CommonPrefixes><Prefix>e2e/meta-secret-nook/idn_abcdefghijk/log/</Prefix></CommonPrefixes>\
+             </ListBucketResult>";
+        let empty = "<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>";
+        let listing = |contains: &str, body: &str| FetchRoute {
+            method: "GET",
+            url_contains: contains.to_owned(),
+            status: 200,
+            body: body.to_owned(),
+        };
+        // The vault namespaces, then the identity namespaces, each read from
+        // the root and the identity folder; then the identity log's events.
+        let _stub = FetchStub::install(vec![
+            listing("prefix=e2e%2Fmeta-secret-nook%2F", root),
+            listing(
+                "prefix=e2e%2Fmeta-secret-nook%2Fidn_abcdefghijk%2F",
+                identity_folder,
+            ),
+            listing("prefix=e2e%2Fmeta-secret-nook%2F", root),
+            listing(
+                "prefix=e2e%2Fmeta-secret-nook%2Fidn_abcdefghijk%2F",
+                identity_folder,
+            ),
+            listing("idn_abcdefghijk%2Flog%2F", empty),
+        ])?;
+        let mut manager = NookVaultManager::new();
+        manager.storage.provider = PreparedProvider::s3_fixture(WasmFixture::s3_connection()?);
+        let contents = manager
+            .provider_source_contents(&NookProviderSource::CurrentProvider)
+            .await?;
+        assert!(contents.vaults.is_empty());
+        let identities: Vec<&str> = contents
+            .identity_logs
+            .iter()
+            .map(|log| log.identity_id.as_str())
+            .collect();
+        assert_eq!(identities, ["idn_abcdefghijk"]);
         Ok(())
     }
 

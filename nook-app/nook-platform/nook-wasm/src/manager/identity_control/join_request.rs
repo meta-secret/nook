@@ -34,6 +34,7 @@ use super::connection::NookIdentityConnectionStart;
 use super::passkey_addition::NookIdentityAdded;
 use crate::manager::NookVaultManager;
 use crate::manager::access_check::NookProviderSource;
+use crate::public_api::NookRemoteSource;
 use crate::storage::identity_log::IdentityLogWrite;
 use crate::storage::identity_record::{
     KeyringDbRebindLocalIdentity, KeyringDbSaveAddedPasskeyIdentity, StoredIdentityProtection,
@@ -116,16 +117,22 @@ impl NookVaultManager {
                 }
                 OpenedIdentitySource::CurrentProvider
             }
-            NookProviderSource::GoogleDrive { access_token } => OpenedIdentitySource::GoogleDrive {
-                access_token,
-                root: DriveStorageClient::new(access_token)
-                    .existing_nook_root()
-                    .await?,
-            },
-            NookProviderSource::LocalFolder { handle_id } => OpenedIdentitySource::LocalFolder(
-                LocalFolderHandles::current().open_folder(handle_id).await?,
-            ),
-            NookProviderSource::S3 { configuration } => {
+            NookProviderSource::Remote(NookRemoteSource::GoogleDrive { access_token }) => {
+                OpenedIdentitySource::GoogleDrive {
+                    access_token: access_token.expose(),
+                    root: DriveStorageClient::new(access_token.expose())
+                        .existing_nook_root()
+                        .await?,
+                }
+            }
+            NookProviderSource::Remote(NookRemoteSource::LocalFolder { handle_id }) => {
+                OpenedIdentitySource::LocalFolder(
+                    LocalFolderHandles::current()
+                        .open_folder(handle_id.as_str())
+                        .await?,
+                )
+            }
+            NookProviderSource::Remote(NookRemoteSource::S3 { configuration }) => {
                 OpenedIdentitySource::S3(configuration.clone())
             }
         })
@@ -588,6 +595,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::LocalFolderHandleId;
     use nook_core::{AppKey, EventId, IdentityMemberKeys, MemberLabel, SigningIdentity};
     use wasm_bindgen_test::*;
 
@@ -598,9 +606,9 @@ mod browser_tests {
     }
 
     fn folder_source(handle_id: &str) -> anyhow::Result<tsify::Ts<NookProviderSource>> {
-        let source = NookProviderSource::LocalFolder {
-            handle_id: handle_id.to_owned(),
-        };
+        let source = NookProviderSource::Remote(NookRemoteSource::LocalFolder {
+            handle_id: LocalFolderHandleId::try_from(handle_id.to_owned())?,
+        });
         Ok(source.encode()?)
     }
 

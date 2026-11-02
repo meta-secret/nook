@@ -86,7 +86,7 @@ impl S3ProviderListing<'_> {
 mod tests {
     use super::staged_s3_provider_detail;
     use crate::public_api::{
-        NookAccessCheckSource, NookStagedStorageArgsState, draft_storage_args,
+        NookAccessCheckSource, NookRemoteSource, NookStagedStorageArgsState, draft_storage_args,
         provider_draft_label, s3_provider_draft, staged_storage_args,
     };
     use crate::test_fixtures::WasmFixture;
@@ -109,12 +109,14 @@ mod tests {
     )]
     fn an_s3_source_names_its_validated_configuration() -> anyhow::Result<()> {
         // The provider source of setup, recovery, and joins has the same shape.
-        let source = serde_json::to_value(NookAccessCheckSource::S3 {
+        let source = serde_json::to_value(NookAccessCheckSource::Remote(NookRemoteSource::S3 {
             configuration: WasmFixture::s3_connection()?,
-        })?;
+        }))?;
         assert_eq!(
             source,
             serde_json::json!({
+                "kind": "remote",
+                "source": {
                 "kind": "s3",
                 "configuration": {
                     "endpoint": "http://127.0.0.1:8333",
@@ -123,6 +125,7 @@ mod tests {
                     "keyPrefix": { "state": "prefix", "value": "e2e" },
                     "accessKeyId": "device-a",
                     "secretAccessKey": WasmFixture::S3_SECRET,
+                },
                 },
             })
         );
