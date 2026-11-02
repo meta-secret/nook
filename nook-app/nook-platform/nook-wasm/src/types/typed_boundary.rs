@@ -43,7 +43,6 @@ impl<T: Tsify + Serialize> TypedOutput for T {}
 mod tests {
     use super::*;
     use nook_core::ProviderKind;
-    use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -54,13 +53,14 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn malformed_input_fails_with_the_fixed_text_only() {
+    fn malformed_input_fails_with_the_fixed_text_only() -> Result<(), wasm_bindgen::JsError> {
         let secret = "TEST-ONLY-not-a-provider-kind";
-        let malformed = Ts::<ProviderKind>::new_unchecked(JsValue::from_str(secret));
+        let malformed = Ts::<ProviderKind>::new_unchecked(serde_wasm_bindgen::to_value(secret)?);
         assert!(matches!(malformed.decode(), Err(TypedBoundaryError::Input)));
         let text = TypedBoundaryError::Input.to_string();
         assert_eq!(text, "Invalid typed WASM input.");
         assert!(!text.contains(secret));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
